@@ -14,8 +14,6 @@ Every conversion follows one route:
 source file -> reader adapter -> CadDocument -> writer adapter -> destination file
 ```
 
-The neutral model and adapter contract are documented in [docs/architecture.md](docs/architecture.md) and [docs/adapter-authoring.md](docs/adapter-authoring.md).
-
 ## Supported formats:
 - .SLDPRT
 - .SLDASM
