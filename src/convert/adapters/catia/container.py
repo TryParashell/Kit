@@ -146,6 +146,8 @@ class Cfv2Archive:
                 directory = _parse_directory(data, position, absolute, length)
             except Cfv2FormatError:
                 continue
+            if not _owns_nested_stream(outer, position, absolute + length):
+                raise Cfv2FormatError("nested CFV2 container has no owning stream")
             nested.append(directory)
         return cls(data, outer, tuple(nested))
 
@@ -271,7 +273,9 @@ def _parse_directory(
         marker,
     )
     if sequential is not None:
-        return Cfv2Directory(physical_base, offset, length, sequential)
+        result = Cfv2Directory(physical_base, offset, length, sequential)
+        _validate_extent_layout(result)
+        return result
     streams: list[Cfv2Stream] = []
     seen_offsets: set[int] = set()
     for count_offset in range(len(DIRECTORY_MAGIC), len(directory) - 3):
@@ -332,7 +336,9 @@ def _parse_directory(
     if not streams:
         raise Cfv2FormatError("CFV2 directory has no valid stream descriptors")
     streams.sort(key=lambda stream: stream.descriptor_offset)
-    return Cfv2Directory(physical_base, offset, length, tuple(streams))
+    result = Cfv2Directory(physical_base, offset, length, tuple(streams))
+    _validate_extent_layout(result)
+    return result
 
 
 def _sequential_streams(
@@ -405,6 +411,48 @@ def _sequential_name(data: bytes, offset: int) -> str:
     except UnicodeDecodeError:
         return ""
     return name if 3 <= len(name) <= 32 else ""
+
+
+def _validate_extent_layout(directory: Cfv2Directory) -> None:
+    ranges: list[tuple[int, int]] = []
+    payload_start = directory.physical_base + 16
+    for stream in directory.streams:
+        for extent in stream.extents:
+            start = directory.physical_base + extent.physical_offset
+            end = start + extent.physical_length
+            if start < payload_start or end > directory.offset:
+                raise Cfv2FormatError("CFV2 extent is outside the payload region")
+            ranges.append((start, end))
+    ranges.sort()
+    for prior, current in zip(ranges, ranges[1:]):
+        if current[0] < prior[1]:
+            raise Cfv2FormatError("CFV2 stream extents overlap")
+
+
+def _owns_nested_stream(
+    directory: Cfv2Directory, nested_start: int, nested_end: int
+) -> bool:
+    for stream in directory.streams:
+        extents = sorted(stream.extents, key=lambda extent: extent.logical_offset)
+        if not extents:
+            continue
+        ranges = tuple(
+            (
+                directory.physical_base + extent.physical_offset,
+                directory.physical_base
+                + extent.physical_offset
+                + extent.physical_length,
+            )
+            for extent in extents
+        )
+        if ranges[0][0] != nested_start or ranges[-1][1] != nested_end:
+            continue
+        if any(current[0] != prior[1] for prior, current in zip(ranges, ranges[1:])):
+            continue
+        if sum(end - start for start, end in ranges) != stream.logical_length:
+            continue
+        return True
+    return False
 
 
 def _descriptor_name(data: bytes, offset: int) -> str:
