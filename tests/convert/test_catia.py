@@ -50,6 +50,12 @@ def test_real_catia_corpus_uses_valid_cfv2_directories() -> None:
         "CATStdCont",
         "CATCGRCont",
     )
+    fragmented_geometry = {
+        "4784.CATPart",
+        "4876.CATPart",
+        "4876_1.CATPart",
+        "Pedal_Body.CATPart",
+    }
     for path in parts:
         source = path.read_bytes()
         archive = Cfv2Archive.from_bytes(source)
@@ -73,6 +79,13 @@ def test_real_catia_corpus_uses_valid_cfv2_directories() -> None:
         assert archive.nested[0].offset + archive.nested[0].length == (
             cgr_stream.extents[0].physical_offset + cgr_stream.logical_length
         )
+        cgm_declaration = next(
+            item for item in declarations if item.class_name == "CGMGeom"
+        )
+        cgm_stream = archive.outer.stream(cgm_declaration.stream_name)
+        assert cgm_stream is not None
+        assert len(cgm_stream.extents) == (3 if path.name in fragmented_geometry else 1)
+        assert len(archive.stream_bytes(cgm_stream)) == cgm_stream.logical_length
         part_declaration = next(
             item for item in declarations if item.class_name == "CATPrtCont"
         )
@@ -132,6 +145,13 @@ def test_native_catpart_retains_declared_geometry_and_feature_graphs() -> None:
     assert cgm.data == archive.stream_bytes(cgm_stream)
     assert cgm.sha256 == hashlib.sha256(cgm.data or b"").hexdigest()
     assert cgm.source_stream == cgm_declaration.stream_name
+    cgm_metadata = next(
+        item
+        for item in document.metadata["catia.container_declarations"]
+        if item["class_name"] == "CGMGeom"
+    )
+    assert cgm_metadata["sha256"] == cgm.sha256
+    assert cgm_metadata["logical_length"] == len(cgm.data or b"")
     feature_graph = document.brep_payloads[2]
     assert feature_graph.kind == "native_feature_graph"
     assert OsmxArchive.from_bytes(feature_graph.data or b"").version == "V5R28SP6HF0"
@@ -146,9 +166,7 @@ def test_native_catpart_retains_declared_geometry_and_feature_graphs() -> None:
     )
     assert Capability.PARAMETRIC_HISTORY in document.capabilities
     assert Capability.BREP in document.capabilities
-    without_data = CatiaAdapter().read(
-        source, ReadOptions(include_brep=False)
-    )
+    without_data = CatiaAdapter().read(source, ReadOptions(include_brep=False))
     assert without_data.brep_payloads[0].data is None
     assert {payload.kind for payload in without_data.brep_payloads[1:]} == {
         "native_feature_graph",
@@ -167,6 +185,48 @@ def test_native_catproduct_retains_product_occurrences() -> None:
         "Brake_bias_90_degree_coupler!I_Brake_bias_90_degree_coupler.1",
     ]
     assert len(document.assembly.definitions) == 4
+    assert Capability.BREP not in document.capabilities
+
+
+def test_pedal_body_exposes_native_parametric_symbols() -> None:
+    document = open_document(CATPARTS / "Pedal_Body.CATPart")
+    assert document.metadata["catia.product_name"] == "Brake_pedal"
+    assert document.metadata["catia.internal_part_name"] == "Part2"
+    assert document.metadata["catia.body_name"] == "Brake_pedal"
+    assert document.metadata["catia.native_feature_classes"] == (
+        "GSMPoint",
+        "GSMPointCoord",
+        "GSMAxisToAxis",
+        "GSMTranslate",
+    )
+    assert document.feature_timeline[0].attributes["native_classes"] == (
+        "GSMPoint",
+        "GSMPointCoord",
+        "GSMAxisToAxis",
+        "GSMTranslate",
+    )
+    assert document.feature_timeline[0].provenance is not None
+    assert document.bodies[0].provenance is not None
+
+
+def test_native_catpart_retains_declared_cgr_tessellation_on_request() -> None:
+    source = CATPARTS / "Banjo.CATPart"
+    archive = Cfv2Archive.from_bytes(source.read_bytes())
+    document = CatiaAdapter().read(
+        source,
+        ReadOptions(include_brep=False, include_tessellation=True),
+    )
+    payload = next(
+        item for item in document.brep_payloads if item.format_id == "catia.cgr"
+    )
+    declaration = next(
+        item for item in archive.declarations() if item.class_name == "CATCGRCont"
+    )
+    stream = archive.outer.stream(declaration.stream_name)
+    assert stream is not None
+    assert payload.data == archive.stream_bytes(stream)
+    assert payload.schema == "CATCGRCont"
+    assert Capability.TESSELLATION in document.capabilities
     assert Capability.BREP not in document.capabilities
 
 
@@ -293,6 +353,14 @@ def test_embedded_manifest_rejects_unknown_configuration(tmp_path: Path) -> None
         )
 
 
+def test_native_catpart_rejects_unknown_configuration() -> None:
+    with pytest.raises(CatiaAdapterError, match="configuration"):
+        CatiaAdapter().read(
+            CATPARTS / "Banjo.CATPart",
+            ReadOptions(configuration="missing-configuration"),
+        )
+
+
 def test_conversion_result_reports_selected_catia_reader(tmp_path: Path) -> None:
     catpart = tmp_path / "Reader.CATPart"
     output = tmp_path / "Reader.json"
@@ -320,6 +388,26 @@ def test_changed_cgm_bytes_disable_exact_native_replay(tmp_path: Path) -> None:
     assert result.metadata["mode"] == "generated_cfv2"
 
 
+def test_swapped_native_document_cannot_exact_replay() -> None:
+    document = open_document(CATPARTS / "Banjo.CATPart")
+    replacement = (CATPARTS / "Bolt_M5x40.CATPart").read_bytes()
+    changed = replace(
+        document,
+        brep_payloads=(
+            replace(
+                document.brep_payloads[0],
+                data=replacement,
+                sha256=hashlib.sha256(replacement).hexdigest(),
+            ),
+            *document.brep_payloads[1:],
+        ),
+    )
+    output = BytesIO()
+    result = write_catia(changed, output, allow_non_native=True)
+    assert result.metadata["mode"] == "generated_cfv2"
+    assert output.getvalue() != replacement
+
+
 def test_native_catpart_replays_across_solidworks_carrier(tmp_path: Path) -> None:
     source_path = CATPARTS / "Banjo.CATPart"
     source = open_document(source_path)
@@ -344,4 +432,45 @@ def test_cfv2_rejects_inconsistent_outer_directory() -> None:
     data = bytearray((CATPARTS / "Banjo.CATPart").read_bytes())
     data[15] ^= 1
     with pytest.raises(Cfv2FormatError):
+        Cfv2Archive.from_bytes(data)
+
+
+def test_cfv2_rejects_extent_inside_directory() -> None:
+    data = bytearray((CATPARTS / "Banjo.CATPart").read_bytes())
+    archive = Cfv2Archive.from_bytes(data)
+    stream = archive.outer.stream("Data")
+    assert stream is not None
+    struct.pack_into(">I", data, stream.descriptor_offset + 0x54, archive.outer.offset)
+    with pytest.raises(Cfv2FormatError, match="payload region"):
+        Cfv2Archive.from_bytes(data)
+
+
+def test_cfv2_rejects_overlapping_extents() -> None:
+    data = bytearray((CATPARTS / "Banjo.CATPart").read_bytes())
+    archive = Cfv2Archive.from_bytes(data)
+    first = archive.outer.stream("Format")
+    second = archive.outer.stream("GesToler")
+    assert first is not None
+    assert second is not None
+    struct.pack_into(
+        ">I",
+        data,
+        second.descriptor_offset + 0x54,
+        first.extents[0].physical_offset,
+    )
+    with pytest.raises(Cfv2FormatError, match="overlap"):
+        Cfv2Archive.from_bytes(data)
+
+
+def test_cfv2_rejects_unowned_nested_container() -> None:
+    data = bytearray((CATPARTS / "Banjo.CATPart").read_bytes())
+    archive = Cfv2Archive.from_bytes(data)
+    preview = archive.outer.stream("CATPreview")
+    assert preview is not None
+    assert len(preview.extents) == 1
+    injected = build_cfv2((("Injected", b"value"),))
+    assert len(injected) < preview.logical_length
+    start = preview.extents[0].physical_offset
+    data[start : start + len(injected)] = injected
+    with pytest.raises(Cfv2FormatError, match="owning stream"):
         Cfv2Archive.from_bytes(data)
