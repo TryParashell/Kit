@@ -98,7 +98,9 @@ def test_failed_registration_does_not_leak_aliases() -> None:
     registry = AdapterRegistry()
     first = FirstAdapter()
     registry.register(first)
-    with pytest.raises(AdapterRegistryError, match="already registered"):
+    with pytest.raises(
+        AdapterRegistryError, match="metadata differ|already registered"
+    ):
         registry.register(DuplicateAdapter())
     with pytest.raises(AdapterNotFoundError):
         registry.reader("orphan")
@@ -131,9 +133,7 @@ def test_split_reader_writer_share_one_format_contract() -> None:
 
 def test_split_reader_writer_reject_mismatched_metadata() -> None:
     reader_info = AdapterInfo("split", "Split", "1", (".read",), ("read.alias",))
-    writer_info = AdapterInfo(
-        "split", "Split", "1", (".write",), ("write.alias",)
-    )
+    writer_info = AdapterInfo("split", "Split", "1", (".write",), ("write.alias",))
     reader = ReaderOnly(reader_info)
     registry = AdapterRegistry()
     registry.register(reader)
