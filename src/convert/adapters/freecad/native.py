@@ -1072,9 +1072,11 @@ def _mate_value(
             parameter_id,
             f"{_string(obj, 'Label', obj.name)}.{property_name}",
             value,
-            expression=Expression(expression_source, language="freecad")
-            if expression_source
-            else None,
+            expression=(
+                Expression(expression_source, language="freecad")
+                if expression_source
+                else None
+            ),
             owner_id=mate_id,
             attributes={
                 "freecad_path": property_name,
@@ -1092,11 +1094,7 @@ def _parse_assembly(
     consumed_expressions: set[tuple[str, str]],
 ) -> AssemblyData | None:
     root = next(
-        (
-            obj
-            for obj in native.objects
-            if obj.type_id == "Assembly::AssemblyObject"
-        ),
+        (obj for obj in native.objects if obj.type_id == "Assembly::AssemblyObject"),
         None,
     )
     if root is None:
@@ -1153,17 +1151,21 @@ def _parse_assembly(
             definitions.append(
                 ComponentDefinition(
                     definition_id,
-                    _string(target_obj, "Label", target)
-                    if target_obj is not None
-                    else target,
+                    (
+                        _string(target_obj, "Label", target)
+                        if target_obj is not None
+                        else target
+                    ),
                     ComponentKind.PART,
                     source_path=str(linked["file"]),
                     source_format_id="freecad.fcstd",
                     provenance=Provenance("freecad.fcstd", target),
                     attributes={
-                        "freecad": _native_object_data(target_obj)
-                        if target_obj is not None
-                        else {},
+                        "freecad": (
+                            _native_object_data(target_obj)
+                            if target_obj is not None
+                            else {}
+                        ),
                         "brep_payload_ids": owner_payloads.get(target, []),
                         "linked_object": linked,
                     },
@@ -1187,9 +1189,7 @@ def _parse_assembly(
                     "freecad": _native_object_data(link_obj),
                     "linked_object": linked,
                     "link_placement": list(
-                        _placement_matrix(
-                            _placement_element(link_obj, "LinkPlacement")
-                        )
+                        _placement_matrix(_placement_element(link_obj, "LinkPlacement"))
                     ),
                 },
             )
@@ -1247,9 +1247,11 @@ def _parse_assembly(
                         MateEntity(
                             entity_id,
                             root_definition_id,
-                            (instance_ids[component_name],)
-                            if component_name in instance_ids
-                            else (),
+                            (
+                                (instance_ids[component_name],)
+                                if component_name in instance_ids
+                                else ()
+                            ),
                             _mate_entity_kind(source_entity_id),
                             source_entity_id=source_entity_id,
                             frame=Matrix4(
@@ -1309,9 +1311,11 @@ def _parse_assembly(
         groups = (
             MateGroup(
                 group_id,
-                _string(joint_group, "Label", joint_group.name)
-                if joint_group is not None
-                else "Joints",
+                (
+                    _string(joint_group, "Label", joint_group.name)
+                    if joint_group is not None
+                    else "Joints"
+                ),
                 root_definition_id,
                 ordered_mate_ids,
                 provenance=Provenance(
@@ -1319,9 +1323,11 @@ def _parse_assembly(
                     joint_group.name if joint_group is not None else "Joints",
                 ),
                 attributes={
-                    "freecad": _native_object_data(joint_group)
-                    if joint_group is not None
-                    else {}
+                    "freecad": (
+                        _native_object_data(joint_group)
+                        if joint_group is not None
+                        else {}
+                    )
                 },
             ),
         )
@@ -1482,6 +1488,7 @@ def read_native_fcstd(data: bytes, source_path: str = "") -> CadDocument:
                 attributes={"freecad_generated": True},
             )
         )
+    assembly = _parse_assembly(native, owner_payloads, parameters, consumed_expressions)
     _remaining_expressions(native.objects, parameters, consumed_expressions)
     capabilities = {Capability.ROUNDTRIP_METADATA}
     if features:
@@ -1492,6 +1499,8 @@ def read_native_fcstd(data: bytes, source_path: str = "") -> CadDocument:
         capabilities.add(Capability.EXPRESSIONS)
     if brep_payloads:
         capabilities.update({Capability.BREP, Capability.NATIVE_PAYLOADS})
+    if assembly is not None:
+        capabilities.add(Capability.ASSEMBLIES)
     native_feature_types = sorted(
         {
             obj.type_id
@@ -1539,6 +1548,7 @@ def read_native_fcstd(data: bytes, source_path: str = "") -> CadDocument:
                 "objects": [_native_object_data(obj) for obj in native.objects],
             }
         },
+        assembly=assembly,
     )
     document.assert_valid()
     return document
