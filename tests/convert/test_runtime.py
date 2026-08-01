@@ -7,6 +7,7 @@ import tokenize
 
 
 SOURCE = Path(__file__).parents[2] / "src"
+DYNAMIC_IMPORT_PATH = SOURCE / "convert" / "adapters" / "registry.py"
 FORBIDDEN_ROOTS = {
     "FreeCAD",
     "Part",
@@ -67,6 +68,8 @@ def test_runtime_has_no_cad_or_process_dependencies() -> None:
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name):
                     assert node.func.id not in FORBIDDEN_NAMES, (path, node.func.id)
+                    if node.func.id == "import_module":
+                        assert path == DYNAMIC_IMPORT_PATH, path
                 if isinstance(node.func, ast.Attribute):
                     assert node.func.attr not in FORBIDDEN_ATTRIBUTES, (
                         path,
