@@ -22,6 +22,5 @@ source file -> reader adapter -> CadDocument -> writer adapter -> destination fi
 - .SLDPRT
 - .SLDASM
 - .FCStd
-- .FCAsm
 - .CATPart
 - .CATProduct
