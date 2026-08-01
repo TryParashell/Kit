@@ -468,7 +468,7 @@ wp-content/plugins/hello.php
 /sitemap.xml
 /sitemap.xml.gz
 
-*.FCStd
+/examples/Random/
 
 ### Drupal ###
 # Ignore configuration files that may contain sensitive information.
