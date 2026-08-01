@@ -31,8 +31,10 @@ def test_public_api_uses_interchange_between_independent_adapters(tmp_path) -> N
 
 def test_package_exposes_one_sdk_entry_point() -> None:
     installed = entry_points(group="kit")
-    assert [(item.name, item.value) for item in installed] == [("sdk", "convert")]
-    assert next(iter(installed)).load().__name__ == "convert"
+    assert [(item.name, item.value) for item in installed] == [
+        ("convert", "convert:convert")
+    ]
+    assert next(iter(installed)).load() is convert
 
 
 def test_package_metadata_is_internal_and_matches_supported_sdk() -> None:
@@ -40,7 +42,7 @@ def test_package_metadata_is_internal_and_matches_supported_sdk() -> None:
     project = metadata["project"]
     assert project["name"] == "kit"
     assert project["classifiers"][0] == "Private :: Do Not Upload"
-    assert project["entry-points"] == {"kit": {"sdk": "convert"}}
+    assert project["entry-points"] == {"kit": {"convert": "convert:convert"}}
     assert project["license"] == "LicenseRef-PolyForm-Strict-1.0.0"
     assert project["license-files"] == ["LICENSE"]
     assert project["urls"]["Repository"] == "https://github.com/TryParashell/Kit"
