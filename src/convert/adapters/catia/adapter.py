@@ -55,6 +55,7 @@ from .container import (
 _FORMAT_ID = "catia.v5"
 _MANIFEST_NAME = "KitInterchange"
 _MANIFEST_MAGIC = b"KITCFV2\x01"
+_MAX_MANIFEST_BYTES = 256 * 1024 * 1024
 _PART_STREAM = "1000_00000002_2"
 _PRODUCT_STREAM = "1000_00000001_1"
 _PART_SUFFIX = ".catpart"
@@ -118,12 +119,9 @@ class CatiaAdapter:
             capabilities=frozenset(
                 {
                     Capability.PARAMETRIC_HISTORY,
-                    Capability.EDITABLE_SKETCHES,
-                    Capability.EXPRESSIONS,
                     Capability.BREP,
                     Capability.TESSELLATION,
                     Capability.ASSEMBLIES,
-                    Capability.MATERIALS,
                     Capability.NATIVE_PAYLOADS,
                     Capability.ROUNDTRIP_METADATA,
                 }
@@ -425,6 +423,8 @@ def _summary_stream(document_type: str) -> bytes:
 
 def _pack_manifest(document: CadDocument) -> bytes:
     raw = document.to_json(indent=None).encode("utf-8")
+    if len(raw) > _MAX_MANIFEST_BYTES:
+        raise CatiaAdapterError("CATIA Kit manifest exceeds the size limit")
     compressed = zlib.compress(raw, level=9)
     return b"".join(
         (
@@ -441,8 +441,17 @@ def _unpack_manifest(data: bytes) -> str:
     if len(data) < header or not data.startswith(_MANIFEST_MAGIC):
         raise ValueError("invalid CATIA Kit manifest header")
     length = struct.unpack_from(">Q", data, len(_MANIFEST_MAGIC))[0]
+    if length > _MAX_MANIFEST_BYTES:
+        raise ValueError("CATIA Kit manifest exceeds the size limit")
     expected = data[len(_MANIFEST_MAGIC) + 8 : header]
-    raw = zlib.decompress(data[header:])
+    decompressor = zlib.decompressobj()
+    raw = decompressor.decompress(data[header:], length + 1)
+    if len(raw) > length or decompressor.unconsumed_tail:
+        raise ValueError("CATIA Kit manifest exceeds its declared length")
+    if not decompressor.eof:
+        raise ValueError("CATIA Kit manifest compression stream is incomplete")
+    if decompressor.unused_data:
+        raise ValueError("CATIA Kit manifest has trailing compressed data")
     if len(raw) != length or hashlib.sha256(raw).digest() != expected:
         raise ValueError("CATIA Kit manifest checksum mismatch")
     return raw.decode("utf-8")
@@ -482,7 +491,7 @@ def _embedded_document(
     try:
         embedded = CadDocument.from_json(_unpack_manifest(manifest))
     except (TypeError, ValueError, zlib.error) as exc:
-        raise CatiaAdapterError("invalid Kit document in V5_CFV2") from exc
+        raise CatiaAdapterError(f"invalid Kit document in V5_CFV2: {exc}") from exc
     configurations = _selected_configurations(
         embedded.configurations, settings.configuration
     )
@@ -514,15 +523,13 @@ def _embedded_document(
         retained = tuple(
             payload
             for payload in embedded.brep_payloads
-            if not (
-                payload.format_id == "catia.v5.cfv2"
-                and payload.kind == "native_document"
-            )
+            if payload.kind not in {"native_document", "native_document_binding"}
         )
         physical = _native_document_payload(
             archive, data, document_type, include_data=True
         )
-        payloads = (*retained, physical)
+        binding = _native_document_binding(data)
+        payloads = (*retained, binding, physical)
     else:
         payloads = ()
     capabilities = set(embedded.capabilities)
@@ -611,6 +618,13 @@ def _document_type(archive: Cfv2Archive, label: str) -> str:
             return "CATPart"
         if b"CATProduct" in format_stream:
             return "CATProduct"
+    product_table_detected = True
+    try:
+        decode_product_table(archive)
+    except Cfv2FormatError:
+        product_table_detected = False
+    if product_table_detected:
+        return "CATProduct"
     raise CatiaAdapterError("cannot distinguish CATPart from CATProduct")
 
 
@@ -941,7 +955,8 @@ def _native_payloads(
             data,
             document_type,
             include_data=settings.include_brep,
-        )
+        ),
+        _native_document_binding(data),
     ]
     if document_type != "CATPart":
         return tuple(payloads)
@@ -1039,6 +1054,24 @@ def _native_document_payload(
     )
 
 
+def _native_document_binding(data: bytes) -> BrepPayload:
+    native_digest = hashlib.sha256(data).digest()
+    return BrepPayload(
+        "catia:native-document-binding",
+        "catia.v5.sha256",
+        "native_document_binding",
+        "sha256",
+        hashlib.sha256(native_digest).hexdigest(),
+        native_digest,
+        source_stream="V5_CFV2",
+        provenance=Provenance(
+            adapter=_FORMAT_ID,
+            native_id=hashlib.sha256(data).hexdigest(),
+            spans=(ProvenanceSpan("V5_CFV2", 0, len(data), "native-document-binding"),),
+        ),
+    )
+
+
 def _application_version(data: bytes) -> str:
     match = re.search(rb"V5R\d+(?:SP\d+)?(?:HF\d+)?", data)
     return match.group().decode("ascii") if match else "CATIA V5"
@@ -1075,10 +1108,14 @@ def _native_payload_matches_document(
         archive = Cfv2Archive.from_bytes(data)
         if _document_type(archive, f"candidate.{document_type}") != document_type:
             return False
+        if not _native_document_binding_matches(document, data):
+            return False
         manifest = _manifest_bytes(archive)
         if manifest is not None:
             embedded = CadDocument.from_json(_unpack_manifest(manifest))
-            return _semantic_digest(embedded) == _semantic_digest(document)
+            return _carrier_semantic_digest(embedded) == _carrier_semantic_digest(
+                document
+            )
         if document_type == "CATProduct":
             table = decode_product_table(archive)
             assembly = document.assembly
@@ -1093,8 +1130,7 @@ def _native_payload_matches_document(
                 for item in assembly.instances
             )
             actual = tuple(
-                (item.definition_name, item.instance_name)
-                for item in table.occurrences
+                (item.definition_name, item.instance_name) for item in table.occurrences
             )
             return expected == actual
         include_tessellation = any(
@@ -1113,6 +1149,7 @@ def _native_payload_matches_document(
     except (CatiaAdapterError, Cfv2FormatError, TypeError, ValueError, zlib.error):
         return False
     native_ids = {
+        "catia:native-document-binding",
         "catia:native-cgm",
         "catia:native-feature-graph",
         "catia:native-product-graph",
@@ -1148,6 +1185,7 @@ def _native_payload_matches_document(
         if payload.id in native_ids
     }
     return expected == actual and {
+        "catia:native-document-binding",
         "catia:native-cgm",
         "catia:native-feature-graph",
         "catia:native-product-graph",
@@ -1155,7 +1193,37 @@ def _native_payload_matches_document(
     }.issubset(actual)
 
 
+def _native_document_binding_matches(document: CadDocument, data: bytes) -> bool:
+    matches = tuple(
+        payload
+        for payload in document.brep_payloads
+        if payload.id == "catia:native-document-binding"
+        and payload.format_id == "catia.v5.sha256"
+        and payload.kind == "native_document_binding"
+        and payload.schema == "sha256"
+    )
+    if len(matches) != 1:
+        return False
+    payload = matches[0]
+    native_digest = hashlib.sha256(data).digest()
+    return (
+        payload.data == native_digest
+        and payload.sha256 == hashlib.sha256(native_digest).hexdigest()
+    )
+
+
 def _semantic_digest(document: CadDocument) -> str:
+    return _document_digest(document, frozenset({"native_document"}))
+
+
+def _carrier_semantic_digest(document: CadDocument) -> str:
+    return _document_digest(
+        document,
+        frozenset({"native_document", "native_document_binding"}),
+    )
+
+
+def _document_digest(document: CadDocument, ignored_kinds: frozenset[str]) -> str:
     payloads = tuple(
         replace(
             payload,
@@ -1170,7 +1238,7 @@ def _semantic_digest(document: CadDocument) -> str:
             attributes=frozen_mapping(),
         )
         for payload in document.brep_payloads
-        if payload.kind != "native_document"
+        if payload.kind not in ignored_kinds
     )
     value = replace(
         document,
