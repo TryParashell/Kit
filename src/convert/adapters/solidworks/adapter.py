@@ -284,7 +284,7 @@ class SldprtAdapter:
 
     def supports(self, document: CadDocument, destination: Destination) -> bool:
         path = _destination_path(destination)
-        return path is None or path.suffix.casefold() == _document_suffix(document)
+        return path is None or path.suffix.casefold() in {".sldprt", ".sldasm"}
 
     def write(
         self,
@@ -296,17 +296,18 @@ class SldprtAdapter:
         if settings.validate:
             document.assert_valid()
         if not self.supports(document, destination):
-            raise ValueError(
-                "SOLIDWORKS assembly destination must end in .SLDASM"
-                if document.assembly is not None
-                else "SOLIDWORKS part destination must end in .SLDPRT"
-            )
+            raise ValueError("SOLIDWORKS destination must end in .SLDPRT or .SLDASM")
         path = _destination_path(destination)
-        preserved = _preserved_source(document, path)
+        format_id = _destination_format_id(document, path)
+        preserved = (
+            None
+            if settings.values.get("portable") is True and document.assembly is not None
+            else _preserved_source(document, path)
+        )
         diagnostics = document.diagnostics
         if preserved is None:
             template = _source_template(document, path)
-            if settings.values.get("allow_non_native") is not True:
+            if settings.values.get("allow_non_native", True) is not True:
                 kind = "edited native-backed" if template is not None else "source-less"
                 raise SldprtFormatError(
                     f"{kind} SOLIDWORKS writing requires "
@@ -364,13 +365,13 @@ class SldprtAdapter:
         archive = SldprtArchive.from_bytes(data, output or "<memory>")
         return WriteResult(
             path=output,
-            adapter=_document_format_id(document),
+            adapter=format_id,
             bytes_written=len(data),
             diagnostics=diagnostics,
             metadata=frozen_mapping(
                 {
                     "mode": mode,
-                    "format_id": _document_format_id(document),
+                    "format_id": format_id,
                     "compatibility": compatibility,
                     "native_content": native_content,
                     "neutral_edits_are_native": mode == "exact",
@@ -406,7 +407,7 @@ def write_sldprt(
     *,
     overwrite: bool = False,
     validate: bool = True,
-    allow_non_native: bool = False,
+    allow_non_native: bool = True,
 ) -> WriteResult:
     return SldprtAdapter().write(
         document,
@@ -646,12 +647,14 @@ def _parasolid_payload(document: CadDocument) -> bytes | None:
     return max(candidates, key=len) if candidates else None
 
 
-def _document_format_id(document: CadDocument) -> str:
+def _destination_format_id(document: CadDocument, destination: Path | None) -> str:
+    if destination is not None:
+        return (
+            _ASSEMBLY_FORMAT_ID
+            if destination.suffix.casefold() == ".sldasm"
+            else _FORMAT_ID
+        )
     return _ASSEMBLY_FORMAT_ID if document.assembly is not None else _FORMAT_ID
-
-
-def _document_suffix(document: CadDocument) -> str:
-    return ".sldasm" if document.assembly is not None else ".sldprt"
 
 
 def _destination_path(destination: Destination) -> Path | None:
