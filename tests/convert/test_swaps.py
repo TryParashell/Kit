@@ -6,6 +6,7 @@ import gc
 import hashlib
 from pathlib import Path
 import re
+import shutil
 import struct
 
 import pytest
@@ -229,6 +230,7 @@ def _assert_truthful_vendor_result(
         assert metadata["native_geometry"] is False
         assert metadata["native_history"] is False
         assert metadata["native_assembly"] is False
+        assert metadata["native_self_contained"] is False
 
 
 @lru_cache(maxsize=len(MATRIX_SOURCES))
@@ -280,7 +282,9 @@ def test_every_valid_format_swap_runs_both_directions(
     reverse = tmp_path / f"{name}_reversed{source_suffix}"
     reverse_result = convert(destination, reverse)
     reversed_document = open_document(reverse)
+    assert reverse_result.source_format == FORMAT_BY_SUFFIX[destination_suffix]
     assert reverse_result.destination_format == FORMAT_BY_SUFFIX[source_suffix]
+    assert reverse_result.output.bytes_written == reverse.stat().st_size
     assert reversed_document.validate() == ()
     assert _document_signature(reversed_document) == original_signature
     _assert_target(reversed_document, source_suffix, reverse, is_assembly)
@@ -348,3 +352,5 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
         _assert_target(reversed_document, source_suffix, reverse, is_assembly)
         del reversed_document
         gc.collect()
+        shutil.rmtree(forward_directory)
+        shutil.rmtree(reverse_directory)
