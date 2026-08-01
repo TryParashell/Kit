@@ -22,7 +22,7 @@ from interchange import (
     frozen_mapping,
 )
 
-from .container import Cfv2Archive, Cfv2FormatError
+from .container import Cfv2Archive, Cfv2FormatError, Cfv2Stream
 
 
 _FORMAT_ID = "catia.v5"
@@ -81,7 +81,7 @@ ComponentReader = Callable[[Path, ReadOptions], CadDocument]
 
 
 def decode_product_table(archive: Cfv2Archive) -> NativeProductTable:
-    candidates: list[tuple[object, tuple[NativeProductToken, ...]]] = []
+    candidates: list[tuple[Cfv2Stream, tuple[NativeProductToken, ...]]] = []
     for stream in archive.outer.streams:
         data = archive.stream_bytes(stream, archive.outer)
         tokens = _product_tokens(data)
@@ -108,6 +108,54 @@ def decode_product_table(archive: Cfv2Archive) -> NativeProductTable:
         tokens=tokens,
         occurrences=occurrences,
     )
+
+
+def _physical_spans(
+    archive: Cfv2Archive,
+    table: NativeProductTable,
+    logical_offset: int,
+    length: int,
+    record_kind: str,
+) -> tuple[ProvenanceSpan, ...]:
+    stream = next(
+        (
+            item
+            for item in archive.outer.streams
+            if item.descriptor_offset == table.stream_descriptor_offset
+        ),
+        None,
+    )
+    if stream is None:
+        raise Cfv2FormatError("CATIA product stream descriptor is unavailable")
+    logical_end = logical_offset + length
+    spans: list[ProvenanceSpan] = []
+    covered = 0
+    for extent in stream.extents:
+        extent_start = extent.logical_offset
+        extent_end = extent_start + extent.physical_length
+        overlap_start = max(logical_offset, extent_start)
+        overlap_end = min(logical_end, extent_end)
+        if overlap_start >= overlap_end:
+            continue
+        physical_offset = (
+            archive.outer.physical_base
+            + extent.physical_offset
+            + overlap_start
+            - extent_start
+        )
+        overlap_length = overlap_end - overlap_start
+        spans.append(
+            ProvenanceSpan(
+                table.stream_name,
+                physical_offset,
+                overlap_length,
+                record_kind,
+            )
+        )
+        covered += overlap_length
+    if covered != length:
+        raise Cfv2FormatError("CATIA product token crosses an unavailable extent")
+    return tuple(spans)
 
 
 def native_product_assembly(
@@ -275,13 +323,13 @@ def native_product_assembly(
         diagnostics.append(
             Diagnostic(
                 "catia.product.transforms_unresolved",
-                "CATProduct occurrence order and names are decoded; proprietary position records remain byte-exact in the native payload and identity matrices are placeholders.",
+                "CATProduct occurrence order and names are decoded; proprietary position records remain byte-exact in the native payload and unresolved transforms retain the identity default.",
                 Severity.WARNING,
                 attributes=frozen_mapping(
                     {
                         "instance_count": len(instances),
                         "resolved_count": 0,
-                        "placeholder": "identity",
+                        "unresolved_default": "identity",
                     }
                 ),
             )
@@ -451,7 +499,11 @@ def _component_reference_index(
         source = _source_path(label)
         if source is None:
             return {}
-        root = source.parent
+        root = (
+            source.parent.parent
+            if source.parent.name.casefold() in {".catproduct", "catproduct"}
+            else source.parent
+        )
     if not root.is_dir():
         return {}
     references: defaultdict[str, list[NativeProductReference]] = defaultdict(list)
