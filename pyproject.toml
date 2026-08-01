@@ -12,10 +12,10 @@ license = "LicenseRef-PolyForm-Strict-1.0.0"
 license-files = ["LICENSE"]
 authors = [
     { name = "Parashell, Inc." },
-    { name = "Odin Glynn-Martin", email = "odin.glynn[at]parashell[dot]cloud" },
+    { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
 maintainers = [
-    { name = "Odin Glynn-Martin", email = "odin.glynn[at]parashell[dot]cloud" },
+    { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
 ]
 keywords = ["cad"]
 classifiers = [
