@@ -65,6 +65,11 @@ def test_runtime_has_no_cad_or_process_dependencies() -> None:
             if isinstance(node, ast.ImportFrom) and node.module:
                 root = node.module.split(".", 1)[0]
                 assert root not in FORBIDDEN_ROOTS, (path, root)
+                if node.module == "importlib":
+                    for alias in node.names:
+                        if alias.name == "import_module":
+                            assert path == DYNAMIC_IMPORT_PATH, path
+                            assert alias.asname is None, path
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name):
                     assert node.func.id not in FORBIDDEN_NAMES, (path, node.func.id)
