@@ -49,6 +49,7 @@ from .container import (
     Cfv2FormatError,
     Cfv2Stream,
     OsmxArchive,
+    OsmxSymbol,
     build_cfv2,
     build_declaration,
     extract_ascii_values,
@@ -855,15 +856,19 @@ def _part_planes(
 def _symbol_provenance(
     directory: Cfv2Directory,
     stream: Cfv2Stream,
-    symbol: object,
+    symbol: OsmxSymbol,
     record_kind: str,
 ) -> Provenance:
-    offset = int(getattr(symbol, "offset"))
-    value = str(getattr(symbol, "value"))
     return Provenance(
         adapter=_FORMAT_ID,
-        native_id=f"{stream.name}:{offset}",
-        spans=_logical_spans(directory, stream, offset, len(value), record_kind),
+        native_id=f"{stream.name}:{symbol.offset}",
+        spans=_logical_spans(
+            directory,
+            stream,
+            symbol.offset,
+            len(symbol.value),
+            record_kind,
+        ),
     )
 
 
