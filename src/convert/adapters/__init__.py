@@ -12,6 +12,7 @@ from .base import (
 )
 from .registry import (
     AdapterBinding,
+    AdapterDiscoveryError,
     AdapterNotFoundError,
     AdapterRegistry,
     AdapterRegistryError,
