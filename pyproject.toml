@@ -31,7 +31,7 @@ Issues = "https://github.com/TryParashell/Kit/issues"
 dev = ["pytest>=8.3"]
 
 [project.entry-points."kit"]
-sdk = "convert"
+convert = "convert:convert"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/interchange", "src/convert"]
