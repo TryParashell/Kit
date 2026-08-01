@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from io import TextIOBase
 from pathlib import Path
 from typing import Any, BinaryIO, Mapping, Protocol, TextIO, runtime_checkable
 
 from interchange import CadDocument, Capability, Diagnostic, frozen_mapping
 
 
-Source = str | Path | bytes | bytearray | BinaryIO
+Source = str | Path | bytes | bytearray | BinaryIO | TextIO
 Destination = str | Path | BinaryIO | TextIO
+
+
+def is_binary_destination(destination: Destination) -> bool:
+    if isinstance(destination, (str, Path, TextIOBase)):
+        return False
+    writer = getattr(destination, "write", None)
+    return callable(writer) and getattr(destination, "encoding", None) is None
 
 
 @dataclass(frozen=True, slots=True)
