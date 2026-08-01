@@ -26,6 +26,371 @@ FREECAD_EXAMPLES = (
 )
 
 
+def _native_property(
+    name: str,
+    type_id: str,
+    tag: str,
+    attributes: dict[str, str] | None = None,
+) -> ET.Element:
+    node = ET.Element("Property", {"name": name, "type": type_id})
+    ET.SubElement(node, tag, attributes or {})
+    return node
+
+
+def _native_placement(name: str = "Placement") -> ET.Element:
+    return _native_property(
+        name,
+        "App::PropertyPlacement",
+        "PropertyPlacement",
+        {
+            "Px": "0",
+            "Py": "0",
+            "Pz": "0",
+            "Q0": "0",
+            "Q1": "0",
+            "Q2": "0",
+            "Q3": "1",
+        },
+    )
+
+
+def _native_link_list(name: str, values: tuple[str, ...]) -> ET.Element:
+    node = _native_property(
+        name, "App::PropertyLinkList", "LinkList", {"count": str(len(values))}
+    )
+    for value in values:
+        ET.SubElement(node[0], "Link", {"value": value})
+    return node
+
+
+def _native_xlink(
+    name: str, target: str, subelements: tuple[str, ...] = ()
+) -> ET.Element:
+    node = _native_property(
+        name,
+        "App::PropertyXLinkSubHidden" if subelements else "App::PropertyXLink",
+        "XLink",
+        {
+            "file": "",
+            "stamp": "",
+            "name": target,
+            "count": str(len(subelements)),
+        },
+    )
+    for subelement in subelements:
+        ET.SubElement(node[0], "Sub", {"value": subelement})
+    return node
+
+
+def _native_archive(
+    objects: tuple[
+        tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...
+    ],
+    entries: dict[str, bytes],
+) -> bytes:
+    root = ET.Element(
+        "Document",
+        {"SchemaVersion": "4", "ProgramVersion": "1.0", "FileVersion": "1"},
+    )
+    declarations = ET.SubElement(
+        root, "Objects", {"Count": str(len(objects)), "Dependencies": "1"}
+    )
+    for name, _, dependencies, _ in objects:
+        dependency_node = ET.SubElement(
+            declarations,
+            "ObjectDeps",
+            {"Name": name, "Count": str(len(dependencies))},
+        )
+        for dependency in dependencies:
+            ET.SubElement(dependency_node, "Dep", {"Name": dependency})
+    for index, (name, type_id, _, _) in enumerate(objects, start=1):
+        ET.SubElement(
+            declarations,
+            "Object",
+            {"type": type_id, "name": name, "id": str(index)},
+        )
+    data = ET.SubElement(root, "ObjectData", {"Count": str(len(objects))})
+    for name, _, _, properties in objects:
+        object_node = ET.SubElement(data, "Object", {"name": name})
+        property_node = ET.SubElement(object_node, "Properties", {"Count": "0"})
+        property_node.extend(properties)
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "Document.xml", ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        )
+        for name, value in entries.items():
+            archive.writestr(name, value)
+    return stream.getvalue()
+
+
+def _native_part_fixture() -> bytes:
+    plane_properties = (
+        _native_property("Label", "App::PropertyString", "String", {"value": "XY"}),
+        _native_placement(),
+    )
+    attachment = _native_property(
+        "AttachmentSupport",
+        "App::PropertyLinkSubList",
+        "LinkSubList",
+        {"count": "1"},
+    )
+    ET.SubElement(attachment[0], "Link", {"obj": "XY_Plane", "sub": ""})
+    geometry = _native_property(
+        "Geometry", "Part::PropertyGeometryList", "GeometryList", {"count": "2"}
+    )
+    circle = ET.SubElement(
+        geometry[0],
+        "Geometry",
+        {"type": "Part::GeomCircle", "id": "101", "migrated": "1"},
+    )
+    ET.SubElement(
+        circle,
+        "Circle",
+        {"CenterX": "0", "CenterY": "0", "Radius": "5"},
+    )
+    ET.SubElement(circle, "Construction", {"value": "0"})
+    point = ET.SubElement(
+        geometry[0],
+        "Geometry",
+        {"type": "Part::GeomPoint", "id": "102", "migrated": "1"},
+    )
+    ET.SubElement(point, "GeomPoint", {"X": "2", "Y": "3", "Z": "0"})
+    ET.SubElement(point, "Construction", {"value": "0"})
+    constraints = _native_property(
+        "Constraints",
+        "Sketcher::PropertyConstraintList",
+        "ConstraintList",
+        {"count": "3"},
+    )
+    for attributes in (
+        {
+            "Name": "Diameter",
+            "Type": "18",
+            "Value": "10",
+            "IsDriving": "1",
+            "IsActive": "1",
+            "First": "0",
+            "FirstPos": "3",
+            "Second": "-2000",
+            "SecondPos": "0",
+            "Third": "-2000",
+            "ThirdPos": "0",
+        },
+        {
+            "Name": "Angle",
+            "Type": "9",
+            "Value": "1.5707963267948966",
+            "IsDriving": "1",
+            "IsActive": "1",
+            "First": "0",
+            "FirstPos": "3",
+            "Second": "1",
+            "SecondPos": "1",
+            "Third": "-2000",
+            "ThirdPos": "0",
+        },
+        {
+            "Name": "PointOnObject",
+            "Type": "13",
+            "Value": "0",
+            "IsDriving": "1",
+            "IsActive": "1",
+            "First": "1",
+            "FirstPos": "1",
+            "Second": "0",
+            "SecondPos": "0",
+            "Third": "-2000",
+            "ThirdPos": "0",
+        },
+    ):
+        ET.SubElement(constraints[0], "Constrain", attributes)
+    expressions = _native_property(
+        "ExpressionEngine",
+        "App::PropertyExpressionEngine",
+        "ExpressionEngine",
+        {"count": "1"},
+    )
+    ET.SubElement(
+        expressions[0],
+        "Expression",
+        {"path": "Constraints[0]", "expression": "diameter"},
+    )
+    sketch_properties = (
+        _native_property(
+            "Label", "App::PropertyString", "String", {"value": "Sketch"}
+        ),
+        attachment,
+        geometry,
+        constraints,
+        expressions,
+        _native_property(
+            "FullyConstrained", "App::PropertyBool", "Bool", {"value": "true"}
+        ),
+        _native_placement(),
+    )
+    profile = _native_property(
+        "Profile", "App::PropertyLinkSub", "LinkSub", {"value": "Sketch", "count": "0"}
+    )
+    direction = _native_property(
+        "Direction",
+        "App::PropertyVector",
+        "PropertyVector",
+        {"valueX": "0", "valueY": "0", "valueZ": "1"},
+    )
+    shape = _native_property(
+        "Shape", "Part::PropertyPartShape", "Part", {"file": "Pad.Shape.brp"}
+    )
+    pad_expressions = _native_property(
+        "ExpressionEngine",
+        "App::PropertyExpressionEngine",
+        "ExpressionEngine",
+        {"count": "1"},
+    )
+    ET.SubElement(
+        pad_expressions[0],
+        "Expression",
+        {"path": "Length", "expression": "height"},
+    )
+    pad_properties = (
+        _native_property(
+            "Label", "App::PropertyString", "String", {"value": "Pad"}
+        ),
+        profile,
+        _native_property(
+            "Length", "App::PropertyLength", "Float", {"value": "25"}
+        ),
+        _native_property(
+            "Type", "App::PropertyEnumeration", "Integer", {"value": "0"}
+        ),
+        _native_property(
+            "Reversed", "App::PropertyBool", "Bool", {"value": "false"}
+        ),
+        _native_property(
+            "Midplane", "App::PropertyBool", "Bool", {"value": "false"}
+        ),
+        direction,
+        shape,
+        pad_expressions,
+    )
+    body_properties = (
+        _native_property(
+            "Label", "App::PropertyString", "String", {"value": "Body"}
+        ),
+        _native_link_list("Group", ("Sketch", "Pad")),
+        _native_property(
+            "Tip", "App::PropertyLink", "Link", {"value": "Pad"}
+        ),
+    )
+    brep = b"\nCASCADE Topology V1, (c) Matra-Datavision\nfixture\n"
+    return _native_archive(
+        (
+            ("Body", "PartDesign::Body", ("Sketch", "Pad"), body_properties),
+            ("XY_Plane", "App::Plane", (), plane_properties),
+            ("Sketch", "Sketcher::SketchObject", ("XY_Plane",), sketch_properties),
+            ("Pad", "PartDesign::Pad", ("Sketch", "Body"), pad_properties),
+        ),
+        {"Pad.Shape.brp": brep},
+    )
+
+
+def _native_assembly_fixture() -> bytes:
+    shape_properties = (
+        _native_property(
+            "Label", "App::PropertyString", "String", {"value": "Shape"}
+        ),
+        _native_property(
+            "Shape", "Part::PropertyPartShape", "Part", {"file": "Shape.Shape.brp"}
+        ),
+    )
+    assembly_properties = (
+        _native_property(
+            "Label", "App::PropertyString", "String", {"value": "Assembly"}
+        ),
+        _native_link_list("Group", ("Joints", "PartLink", "Grounded", "Revolute")),
+        _native_placement(),
+    )
+    link_properties = (
+        _native_property(
+            "Label", "App::PropertyString", "String", {"value": "Part 1"}
+        ),
+        _native_xlink("LinkedObject", "Shape"),
+        _native_placement(),
+        _native_placement("LinkPlacement"),
+        _native_property(
+            "Visibility", "App::PropertyBool", "Bool", {"value": "true"}
+        ),
+    )
+    grounded_proxy = _native_property(
+        "Proxy",
+        "App::PropertyPythonObject",
+        "Python",
+        {"value": "bnVsbA==", "encoded": "yes", "module": "JointObject", "class": "GroundedJoint"},
+    )
+    grounded_properties = (
+        _native_property(
+            "Label", "App::PropertyString", "String", {"value": "Grounded"}
+        ),
+        grounded_proxy,
+        _native_property(
+            "ObjectToGround", "App::PropertyLink", "Link", {"value": "PartLink"}
+        ),
+        _native_placement(),
+    )
+    joint_type = _native_property(
+        "JointType",
+        "App::PropertyEnumeration",
+        "Integer",
+        {"value": "1", "CustomEnum": "true"},
+    )
+    enum_list = ET.SubElement(joint_type, "CustomEnumList", {"count": "2"})
+    ET.SubElement(enum_list, "Enum", {"value": "Fixed"})
+    ET.SubElement(enum_list, "Enum", {"value": "Revolute"})
+    joint_proxy = _native_property(
+        "Proxy",
+        "App::PropertyPythonObject",
+        "Python",
+        {"value": "bnVsbA==", "encoded": "yes", "module": "JointObject", "class": "Joint"},
+    )
+    joint_properties = (
+        _native_property(
+            "Label", "App::PropertyString", "String", {"value": "Revolute"}
+        ),
+        joint_proxy,
+        joint_type,
+        _native_xlink("Reference1", "Assembly", ("PartLink.Face1", "PartLink.Edge1")),
+        _native_xlink("Reference2", "Assembly", ("PartLink.Face2",)),
+        _native_placement("Placement1"),
+        _native_placement("Placement2"),
+        _native_property(
+            "Suppressed", "App::PropertyBool", "Bool", {"value": "false"}
+        ),
+    )
+    joint_group_properties = (
+        _native_property(
+            "Label", "App::PropertyString", "String", {"value": "Joints"}
+        ),
+        _native_link_list("Group", ("Grounded", "Revolute")),
+    )
+    brep = b"\nCASCADE Topology V1, (c) Matra-Datavision\nassembly fixture\n"
+    return _native_archive(
+        (
+            ("Shape", "Part::Feature", (), shape_properties),
+            (
+                "Assembly",
+                "Assembly::AssemblyObject",
+                ("Joints", "PartLink", "Grounded", "Revolute"),
+                assembly_properties,
+            ),
+            ("Joints", "Assembly::JointGroup", ("Grounded", "Revolute"), joint_group_properties),
+            ("PartLink", "App::Link", ("Shape",), link_properties),
+            ("Grounded", "App::FeaturePython", ("Assembly", "PartLink"), grounded_properties),
+            ("Revolute", "App::FeaturePython", ("Assembly",), joint_properties),
+        ),
+        {"Shape.Shape.brp": brep},
+    )
+
+
 def test_direct_fcstd_roundtrip_preserves_interchange_and_brep(tmp_path) -> None:
     output = tmp_path / "example.FCStd"
     result = convert(SAMPLE, output)
