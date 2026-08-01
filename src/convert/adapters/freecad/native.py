@@ -986,6 +986,356 @@ def _build_brep_payloads(
     return tuple(payloads), owner_payloads
 
 
+def _proxy_class(obj: _NativeObject) -> str:
+    node = obj.properties.get("Proxy")
+    if node is None:
+        return ""
+    value = node.find("./Python")
+    return "" if value is None else value.get("class", "")
+
+
+def _enumeration_choice(obj: _NativeObject, name: str) -> str:
+    node = obj.properties.get(name)
+    if node is None:
+        return ""
+    selected = node.find("./Integer")
+    if selected is None:
+        return ""
+    index = _integer(selected.get("value"), -1)
+    choices = [
+        child.get("value", "") for child in node.findall("./CustomEnumList/Enum")
+    ]
+    return choices[index] if 0 <= index < len(choices) else str(index)
+
+
+def _xlink_data(obj: _NativeObject, name: str) -> dict[str, Any]:
+    node = obj.properties.get(name)
+    if node is None:
+        return {"file": "", "stamp": "", "name": "", "subelements": []}
+    value = node.find("./XLink")
+    if value is None:
+        return {"file": "", "stamp": "", "name": "", "subelements": []}
+    return {
+        "file": value.get("file", ""),
+        "stamp": value.get("stamp", ""),
+        "name": value.get("name", ""),
+        "subelements": [
+            subelement
+            for child in value.findall("./Sub")
+            if (subelement := child.get("value", ""))
+        ],
+    }
+
+
+def _mate_entity_kind(value: str) -> MateEntityKind:
+    token = value.rsplit(".", 1)[-1]
+    if token.startswith("Face"):
+        return MateEntityKind.FACE
+    if token.startswith("Edge"):
+        return MateEntityKind.EDGE
+    if token.startswith("Vertex"):
+        return MateEntityKind.VERTEX
+    if token.startswith("Axis"):
+        return MateEntityKind.AXIS
+    if token.startswith("Plane"):
+        return MateEntityKind.PLANE
+    return MateEntityKind.NATIVE
+
+
+def _mate_value(
+    obj: _NativeObject,
+    kind: MateKind,
+    mate_id: str,
+    parameters: list[Parameter],
+    consumed_expressions: set[tuple[str, str]],
+) -> tuple[ParameterValue | None, tuple[str, ...]]:
+    if kind == MateKind.ANGLE:
+        property_name = "Angle"
+        value = ParameterValue(_float(obj, property_name), ValueKind.ANGLE, "deg")
+    elif kind in {
+        MateKind.DISTANCE,
+        MateKind.RACK_PINION,
+        MateKind.SCREW,
+        MateKind.GEAR,
+        MateKind.BELT,
+    }:
+        property_name = "Distance"
+        value = ParameterValue(_float(obj, property_name), ValueKind.LENGTH, "mm")
+    else:
+        return None, ()
+    parameter_id = f"freecad:parameter:{obj.name}:{property_name}"
+    expression_source = _expressions(obj).get(property_name, "")
+    if expression_source:
+        consumed_expressions.add((obj.name, property_name))
+    parameters.append(
+        Parameter(
+            parameter_id,
+            f"{_string(obj, 'Label', obj.name)}.{property_name}",
+            value,
+            expression=Expression(expression_source, language="freecad")
+            if expression_source
+            else None,
+            owner_id=mate_id,
+            attributes={
+                "freecad_path": property_name,
+                "freecad_property": _element_data(obj.properties[property_name]),
+            },
+        )
+    )
+    return value, (parameter_id,)
+
+
+def _parse_assembly(
+    native: _NativeArchive,
+    owner_payloads: dict[str, list[str]],
+    parameters: list[Parameter],
+    consumed_expressions: set[tuple[str, str]],
+) -> AssemblyData | None:
+    root = next(
+        (
+            obj
+            for obj in native.objects
+            if obj.type_id == "Assembly::AssemblyObject"
+        ),
+        None,
+    )
+    if root is None:
+        return None
+    objects = {obj.name: obj for obj in native.objects}
+    root_definition_id = f"freecad:definition:{root.name}"
+    root_group = _link_list(root, "Group")
+    links = [
+        objects[name]
+        for name in root_group
+        if name in objects and objects[name].type_id == "App::Link"
+    ]
+    if not links:
+        links = [obj for obj in native.objects if obj.type_id == "App::Link"]
+    joint_group = next(
+        (obj for obj in native.objects if obj.type_id == "Assembly::JointGroup"),
+        None,
+    )
+    joint_names = _link_list(joint_group, "Group") if joint_group is not None else ()
+    if not joint_names:
+        joint_names = tuple(
+            obj.name
+            for obj in native.objects
+            if obj.type_id == "App::FeaturePython"
+            and _proxy_class(obj) in {"Joint", "GroundedJoint"}
+        )
+    joint_objects = [objects[name] for name in joint_names if name in objects]
+    grounded_targets = {
+        target
+        for obj in joint_objects
+        if _proxy_class(obj) == "GroundedJoint"
+        and (target := _link(obj, "ObjectToGround"))
+    }
+    definitions: list[ComponentDefinition] = [
+        ComponentDefinition(
+            root_definition_id,
+            _string(root, "Label", root.name),
+            ComponentKind.ASSEMBLY,
+            provenance=Provenance("freecad.fcstd", root.name),
+            attributes={"freecad": _native_object_data(root)},
+        )
+    ]
+    definition_ids: dict[str, str] = {}
+    instances: list[ComponentInstance] = []
+    instance_ids: dict[str, str] = {}
+    for order, link_obj in enumerate(links):
+        linked = _xlink_data(link_obj, "LinkedObject")
+        target = str(linked["name"]) or link_obj.name
+        definition_id = definition_ids.get(target)
+        if definition_id is None:
+            definition_id = f"freecad:definition:{target}"
+            definition_ids[target] = definition_id
+            target_obj = objects.get(target)
+            definitions.append(
+                ComponentDefinition(
+                    definition_id,
+                    _string(target_obj, "Label", target)
+                    if target_obj is not None
+                    else target,
+                    ComponentKind.PART,
+                    source_path=str(linked["file"]),
+                    source_format_id="freecad.fcstd",
+                    provenance=Provenance("freecad.fcstd", target),
+                    attributes={
+                        "freecad": _native_object_data(target_obj)
+                        if target_obj is not None
+                        else {},
+                        "brep_payload_ids": owner_payloads.get(target, []),
+                        "linked_object": linked,
+                    },
+                )
+            )
+        instance_id = f"freecad:instance:{link_obj.name}"
+        instance_ids[link_obj.name] = instance_id
+        instances.append(
+            ComponentInstance(
+                instance_id,
+                _string(link_obj, "Label", link_obj.name),
+                definition_id,
+                root_definition_id,
+                Matrix4(_placement_matrix(_placement_element(link_obj, "Placement"))),
+                order=order,
+                reference_number=str(order + 1),
+                hidden=not _bool(link_obj, "Visibility", True),
+                fixed=link_obj.name in grounded_targets,
+                provenance=Provenance("freecad.fcstd", link_obj.name),
+                attributes={
+                    "freecad": _native_object_data(link_obj),
+                    "linked_object": linked,
+                    "link_placement": list(
+                        _placement_matrix(
+                            _placement_element(link_obj, "LinkPlacement")
+                        )
+                    ),
+                },
+            )
+        )
+    mate_entities: list[MateEntity] = []
+    mates: list[MateConstraint] = []
+    mate_ids_by_name: dict[str, str] = {}
+    for order, obj in enumerate(joint_objects):
+        proxy_class = _proxy_class(obj)
+        mate_id = f"freecad:mate:{obj.name}"
+        mate_ids_by_name[obj.name] = mate_id
+        entity_ids: list[str] = []
+        references: list[dict[str, Any]] = []
+        if proxy_class == "GroundedJoint":
+            target = _link(obj, "ObjectToGround")
+            entity_id = f"freecad:mate-entity:{obj.name}:ground"
+            entity_ids.append(entity_id)
+            mate_entities.append(
+                MateEntity(
+                    entity_id,
+                    root_definition_id,
+                    (instance_ids[target],) if target in instance_ids else (),
+                    MateEntityKind.COORDINATE_SYSTEM,
+                    source_entity_id=target,
+                    frame=Matrix4(
+                        _placement_matrix(_placement_element(obj, "Placement"))
+                    ),
+                    provenance=Provenance("freecad.fcstd", obj.name),
+                    attributes={"object_to_ground": target},
+                )
+            )
+            kind = MateKind.LOCK
+            value = None
+            parameter_ids: tuple[str, ...] = ()
+        else:
+            joint_type = _enumeration_choice(obj, "JointType")
+            kind = _MATE_KINDS.get(joint_type, MateKind.NATIVE)
+            for reference_index, property_name in enumerate(
+                ("Reference1", "Reference2"), start=1
+            ):
+                reference = _xlink_data(obj, property_name)
+                references.append(reference)
+                for sub_index, subelement in enumerate(reference["subelements"]):
+                    component_name, separator, source_entity_id = str(
+                        subelement
+                    ).partition(".")
+                    if not separator:
+                        source_entity_id = component_name
+                        component_name = ""
+                    entity_id = (
+                        f"freecad:mate-entity:{obj.name}:{reference_index}:{sub_index}"
+                    )
+                    entity_ids.append(entity_id)
+                    mate_entities.append(
+                        MateEntity(
+                            entity_id,
+                            root_definition_id,
+                            (instance_ids[component_name],)
+                            if component_name in instance_ids
+                            else (),
+                            _mate_entity_kind(source_entity_id),
+                            source_entity_id=source_entity_id,
+                            frame=Matrix4(
+                                _placement_matrix(
+                                    _placement_element(
+                                        obj, f"Placement{reference_index}"
+                                    )
+                                )
+                            ),
+                            provenance=Provenance(
+                                "freecad.fcstd", f"{obj.name}.{property_name}"
+                            ),
+                            attributes={
+                                "freecad_reference": reference,
+                                "freecad_subelement": subelement,
+                                "reference_property": property_name,
+                            },
+                        )
+                    )
+            value, parameter_ids = _mate_value(
+                obj, kind, mate_id, parameters, consumed_expressions
+            )
+        if not entity_ids:
+            continue
+        mates.append(
+            MateConstraint(
+                mate_id,
+                _string(obj, "Label", obj.name),
+                kind,
+                root_definition_id,
+                tuple(entity_ids),
+                order=order,
+                value=value,
+                parameter_ids=parameter_ids,
+                suppressed=_bool(obj, "Suppressed"),
+                provenance=Provenance("freecad.fcstd", obj.name),
+                attributes={
+                    "freecad": _native_object_data(obj),
+                    "joint_type": _enumeration_choice(obj, "JointType"),
+                    "references": references,
+                },
+            )
+        )
+    groups: tuple[MateGroup, ...] = ()
+    if mates:
+        group_id = (
+            f"freecad:mate-group:{joint_group.name}"
+            if joint_group is not None
+            else "freecad:mate-group:joints"
+        )
+        ordered_mate_ids = tuple(
+            mate_ids_by_name[name]
+            for name in joint_names
+            if name in mate_ids_by_name
+            and any(mate.id == mate_ids_by_name[name] for mate in mates)
+        )
+        groups = (
+            MateGroup(
+                group_id,
+                _string(joint_group, "Label", joint_group.name)
+                if joint_group is not None
+                else "Joints",
+                root_definition_id,
+                ordered_mate_ids,
+                provenance=Provenance(
+                    "freecad.fcstd",
+                    joint_group.name if joint_group is not None else "Joints",
+                ),
+                attributes={
+                    "freecad": _native_object_data(joint_group)
+                    if joint_group is not None
+                    else {}
+                },
+            ),
+        )
+    return AssemblyData(
+        root_definition_id,
+        tuple(definitions),
+        tuple(instances),
+        mate_entities=tuple(mate_entities),
+        mates=tuple(mates),
+        mate_groups=groups,
+        attributes={"freecad": _native_object_data(root)},
+    )
+
+
 def _remaining_expressions(
     objects: tuple[_NativeObject, ...],
     parameters: list[Parameter],
