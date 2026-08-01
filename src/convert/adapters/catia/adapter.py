@@ -20,15 +20,11 @@ from convert.adapters.base import (
     WriteResult,
 )
 from interchange import (
-    AssemblyData,
     Body,
     BrepPayload,
     CadDocument,
     CadSource,
     Capability,
-    ComponentDefinition,
-    ComponentInstance,
-    ComponentKind,
     Configuration,
     Diagnostic,
     FeatureKind,
@@ -42,6 +38,7 @@ from interchange import (
     frozen_mapping,
 )
 
+from .assembly import decode_product_table, native_product_assembly
 from .container import (
     Cfv2Archive,
     Cfv2Declaration,
@@ -52,7 +49,6 @@ from .container import (
     OsmxSymbol,
     build_cfv2,
     build_declaration,
-    extract_ascii_values,
 )
 
 
@@ -160,7 +156,15 @@ class CatiaAdapter:
             return _embedded_document(archive, data, label, manifest, settings)
         document_type = _document_type(archive, label)
         payloads = _native_payloads(archive, data, document_type, settings)
-        assembly, assembly_diagnostics = _native_assembly(data, label, document_type)
+        if document_type == "CATProduct":
+            assembly, assembly_diagnostics = native_product_assembly(
+                archive,
+                label,
+                settings,
+                self.read,
+            )
+        else:
+            assembly, assembly_diagnostics = None, ()
         (
             part_metadata,
             support_planes,
@@ -1040,102 +1044,6 @@ def _application_version(data: bytes) -> str:
     return match.group().decode("ascii") if match else "CATIA V5"
 
 
-def _native_assembly(
-    data: bytes, label: str, document_type: str
-) -> tuple[AssemblyData | None, tuple[Diagnostic, ...]]:
-    if document_type != "CATProduct":
-        return None, ()
-    strings = extract_ascii_values(data, minimum=3)
-    root_name = Path(label).stem
-    try:
-        marker = strings.index("ASMPRODUCT")
-        if marker + 1 < len(strings):
-            root_name = strings[marker + 1]
-    except ValueError:
-        marker = 0
-    instances = _product_instances(strings[marker:])
-    root_id = "catia:assembly:root"
-    definitions: list[ComponentDefinition] = [
-        ComponentDefinition(root_id, root_name, ComponentKind.ASSEMBLY)
-    ]
-    definition_ids: dict[str, str] = {}
-    component_instances: list[ComponentInstance] = []
-    for order, (definition_name, instance_name) in enumerate(instances):
-        definition_id = definition_ids.get(definition_name)
-        if definition_id is None:
-            definition_id = f"catia:definition:{len(definition_ids) + 1}"
-            definition_ids[definition_name] = definition_id
-            definitions.append(
-                ComponentDefinition(
-                    definition_id,
-                    definition_name,
-                    ComponentKind.PART,
-                    source_path=definition_name + ".CATPart",
-                    source_format_id=_FORMAT_ID,
-                )
-            )
-        component_instances.append(
-            ComponentInstance(
-                f"catia:instance:{order + 1}",
-                instance_name,
-                definition_id,
-                root_id,
-                order=order,
-            )
-        )
-    assembly = AssemblyData(
-        root_definition_id=root_id,
-        definitions=tuple(definitions),
-        instances=tuple(component_instances),
-        attributes=frozen_mapping({"native_structure": "ASMPRODUCT"}),
-    )
-    diagnostics = (
-        Diagnostic(
-            "catia.product.transforms_unresolved",
-            "Native CATProduct instance names are retained; proprietary position and constraint records remain in the exact native payload.",
-            Severity.WARNING,
-        ),
-    )
-    return assembly, diagnostics
-
-
-def _product_instances(values: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
-    ignored = {
-        "_InstanceName",
-        "_Position",
-        "_Reps",
-        "PRDREP",
-        "Shape 1",
-        "IsRoot",
-    }
-    candidates = [value for value in values if value not in ignored]
-    results: list[tuple[str, str]] = []
-    prior = ""
-    for value in candidates:
-        if "!I_" in value:
-            definition = value.split("!I_", 1)[0]
-            if definition:
-                results.append((definition, value))
-            prior = value
-            continue
-        prefixed = re.fullmatch(r"I_(.+)\.(\d+)", value)
-        if prefixed:
-            results.append((prefixed.group(1), value))
-            prior = value
-            continue
-        numbered = re.fullmatch(r"(.+)\.(\d+)", value)
-        if numbered and prior == numbered.group(1):
-            results.append((prior, value))
-        prior = value
-    unique: list[tuple[str, str]] = []
-    seen: set[tuple[str, str]] = set()
-    for value in results:
-        if value not in seen:
-            seen.add(value)
-            unique.append(value)
-    return tuple(unique)
-
-
 def _unchanged_native_payload(
     document: CadDocument, document_type: str
 ) -> bytes | None:
@@ -1172,8 +1080,23 @@ def _native_payload_matches_document(
             embedded = CadDocument.from_json(_unpack_manifest(manifest))
             return _semantic_digest(embedded) == _semantic_digest(document)
         if document_type == "CATProduct":
-            assembly, _ = _native_assembly(data, "candidate.CATProduct", document_type)
-            return assembly == document.assembly
+            table = decode_product_table(archive)
+            assembly = document.assembly
+            if assembly is None:
+                return False
+            definitions = {item.id: item for item in assembly.definitions}
+            root = definitions.get(assembly.root_definition_id)
+            if root is None or root.name != table.root_name:
+                return False
+            expected = tuple(
+                (definitions[item.definition_id].name, item.name)
+                for item in assembly.instances
+            )
+            actual = tuple(
+                (item.definition_name, item.instance_name)
+                for item in table.occurrences
+            )
+            return expected == actual
         include_tessellation = any(
             payload.id == "catia:native-tessellation"
             for payload in document.brep_payloads
