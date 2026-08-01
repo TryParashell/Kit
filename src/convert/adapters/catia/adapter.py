@@ -511,7 +511,9 @@ def _embedded_document(
                 and payload.kind == "native_document"
             )
         )
-        physical = _native_payloads(archive, data, document_type, True)[0]
+        physical = _native_document_payload(
+            archive, data, document_type, include_data=True
+        )
         payloads = (*retained, physical)
     else:
         payloads = ()
@@ -578,7 +580,10 @@ def _has_brep_payload(payloads: tuple[BrepPayload, ...]) -> bool:
         "parasolid",
         "parasolid.x_t",
     }
-    return any(payload.format_id.casefold() in formats for payload in payloads)
+    return any(
+        payload.data is not None and payload.format_id.casefold() in formats
+        for payload in payloads
+    )
 
 
 def _document_type(archive: Cfv2Archive, label: str) -> str:
@@ -616,11 +621,309 @@ def _destination_type(document: CadDocument, destination: Destination) -> str:
     return "CATProduct" if suffix == _PRODUCT_SUFFIX else "CATPart"
 
 
+def _container_metadata(archive: Cfv2Archive) -> dict[str, object]:
+    declarations: list[dict[str, object]] = []
+    for declaration in archive.declarations():
+        stream = archive.outer.stream(declaration.stream_name)
+        if stream is None:
+            continue
+        payload = archive.stream_bytes(stream, archive.outer)
+        declarations.append(
+            {
+                "ordinal": declaration.ordinal,
+                "class_name": declaration.class_name,
+                "base_class": declaration.base_class,
+                "stream_name": declaration.stream_name,
+                "descriptor_offset": stream.descriptor_offset,
+                "logical_length": stream.logical_length,
+                "extent_count": len(stream.extents),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            }
+        )
+    outer_streams = tuple(
+        {
+            "index": index,
+            "name": stream.name,
+            "logical_length": stream.logical_length,
+            "descriptor_offset": stream.descriptor_offset,
+            "extents": tuple(
+                {
+                    "physical_offset": archive.outer.physical_base
+                    + extent.physical_offset,
+                    "physical_length": extent.physical_length,
+                    "logical_offset": extent.logical_offset,
+                    "flags": extent.flags,
+                }
+                for extent in stream.extents
+            ),
+        }
+        for index, stream in enumerate(archive.outer.streams)
+    )
+    nested_directories = tuple(
+        {
+            "physical_base": directory.physical_base,
+            "offset": directory.offset,
+            "length": directory.length,
+            "streams": tuple(
+                (stream.name, stream.logical_length) for stream in directory.streams
+            ),
+        }
+        for directory in archive.nested
+    )
+    return {
+        "catia.container_declarations": tuple(declarations),
+        "catia.outer_stream_records": outer_streams,
+        "catia.nested_directories": nested_directories,
+    }
+
+
+def _native_part_data(
+    archive: Cfv2Archive, document_type: str
+) -> tuple[
+    dict[str, object],
+    tuple[SupportPlane, ...],
+    tuple[FeatureStep, ...],
+    tuple[Body, ...],
+    tuple[Diagnostic, ...],
+]:
+    if document_type != "CATPart":
+        return {}, (), (), (), ()
+    part_declaration, part_stream, part_graph = _declared_osmx(
+        archive, "CATPrtCont"
+    )
+    _, product_stream, product_graph = _declared_osmx(archive, "CATProdCont")
+    product_symbol = product_graph.first_after("ASMPRODUCT")
+    part_symbol = part_graph.first_after("MechanicalPart")
+    body_symbol = part_graph.first_after("MMAlias")
+    product_name = product_symbol.value if product_symbol is not None else ""
+    internal_part_name = part_symbol.value if part_symbol is not None else ""
+    body_name = (
+        body_symbol.value
+        if body_symbol is not None and body_symbol.value
+        else product_name or internal_part_name or "PartBody"
+    )
+    native_classes = tuple(
+        dict.fromkeys(
+            symbol.value
+            for symbol in part_graph.symbols
+            if symbol.value in _PART_FEATURE_CLASSES
+        )
+    )
+    planes = _part_planes(archive.outer, part_stream, part_graph)
+    feature_id = "catia:feature:graph"
+    feature = FeatureStep(
+        id=feature_id,
+        name="CATIA native feature graph",
+        kind=FeatureKind.NATIVE,
+        order=0,
+        provenance=_stream_provenance(
+            archive.outer,
+            part_stream,
+            f"{part_declaration.class_name}:{part_declaration.ordinal}",
+            "native-feature-graph",
+        ),
+        attributes=frozen_mapping(
+            {
+                "native_classes": native_classes,
+                "native_payload_id": "catia:native-feature-graph",
+                "symbol_count": len(part_graph.symbols),
+            }
+        ),
+    )
+    body = Body(
+        id="catia:body:1",
+        name=body_name,
+        final_feature_id=feature_id,
+        provenance=(
+            _symbol_provenance(archive.outer, part_stream, body_symbol, "body-alias")
+            if body_symbol is not None
+            else feature.provenance
+        ),
+        attributes=frozen_mapping(
+            {
+                "native_class": "MMAlias",
+                "native_part_name": internal_part_name,
+            }
+        ),
+    )
+    metadata: dict[str, object] = {
+        "catia.product_name": product_name,
+        "catia.internal_part_name": internal_part_name,
+        "catia.body_name": body_name,
+        "catia.native_feature_classes": native_classes,
+        "catia.product_symbols": product_graph.values,
+        "catia.part_symbols": part_graph.values,
+        "catia.osmx_streams": (
+            _osmx_metadata(product_stream, product_graph, "CATProdCont"),
+            _osmx_metadata(part_stream, part_graph, "CATPrtCont"),
+        ),
+    }
+    diagnostic = Diagnostic(
+        "catia.part.native_graph_retained",
+        "The exact CATPrtCont feature graph, symbol table, bodies, and reference planes are retained; proprietary object records remain native.",
+        Severity.INFO,
+        entity_id=feature_id,
+        provenance=feature.provenance,
+        attributes=frozen_mapping(
+            {
+                "native_classes": native_classes,
+                "symbol_count": len(part_graph.symbols),
+            }
+        ),
+    )
+    return metadata, planes, (feature,), (body,), (diagnostic,)
+
+
+def _declared_osmx(
+    archive: Cfv2Archive, class_name: str
+) -> tuple[Cfv2Declaration, Cfv2Stream, OsmxArchive]:
+    matches = tuple(
+        declaration
+        for declaration in archive.declarations()
+        if declaration.class_name == class_name
+    )
+    if len(matches) != 1:
+        raise CatiaAdapterError(
+            f"CATIA container requires one {class_name} declaration"
+        )
+    declaration = matches[0]
+    stream = archive.outer.stream(declaration.stream_name)
+    if stream is None:
+        raise CatiaAdapterError(f"CATIA {class_name} stream is missing")
+    return declaration, stream, OsmxArchive.from_bytes(
+        archive.stream_bytes(stream, archive.outer)
+    )
+
+
+def _osmx_metadata(
+    stream: Cfv2Stream, graph: OsmxArchive, class_name: str
+) -> dict[str, object]:
+    return {
+        "class_name": class_name,
+        "stream_name": stream.name,
+        "logical_length": stream.logical_length,
+        "version": graph.version,
+        "symbol_table_offset": graph.symbol_table_offset,
+        "symbol_data_offset": graph.symbol_data_offset,
+        "symbol_count": len(graph.symbols),
+        "sha256": hashlib.sha256(graph.data).hexdigest(),
+    }
+
+
+def _part_planes(
+    directory: Cfv2Directory, stream: Cfv2Stream, graph: OsmxArchive
+) -> tuple[SupportPlane, ...]:
+    definitions = (
+        (
+            "xy-plane",
+            Transform(),
+        ),
+        (
+            "yz-plane",
+            Transform(
+                x_axis=Vector3(0.0, 1.0, 0.0),
+                y_axis=Vector3(0.0, 0.0, 1.0),
+                z_axis=Vector3(1.0, 0.0, 0.0),
+            ),
+        ),
+        (
+            "zx-plane",
+            Transform(
+                x_axis=Vector3(0.0, 0.0, 1.0),
+                y_axis=Vector3(1.0, 0.0, 0.0),
+                z_axis=Vector3(0.0, 1.0, 0.0),
+            ),
+        ),
+    )
+    symbols = {symbol.value: symbol for symbol in graph.symbols}
+    return tuple(
+        SupportPlane(
+            id=f"catia:plane:{index}",
+            name=name,
+            transform=transform,
+            provenance=_symbol_provenance(
+                directory, stream, symbols[name], "reference-plane"
+            ),
+            attributes=frozen_mapping({"native_class": "GSMPlane"}),
+        )
+        for index, (name, transform) in enumerate(definitions, start=1)
+        if name in symbols
+    )
+
+
+def _symbol_provenance(
+    directory: Cfv2Directory,
+    stream: Cfv2Stream,
+    symbol: object,
+    record_kind: str,
+) -> Provenance:
+    offset = int(getattr(symbol, "offset"))
+    value = str(getattr(symbol, "value"))
+    return Provenance(
+        adapter=_FORMAT_ID,
+        native_id=f"{stream.name}:{offset}",
+        spans=_logical_spans(directory, stream, offset, len(value), record_kind),
+    )
+
+
+def _stream_provenance(
+    directory: Cfv2Directory,
+    stream: Cfv2Stream,
+    native_id: str,
+    record_kind: str,
+) -> Provenance:
+    return Provenance(
+        adapter=_FORMAT_ID,
+        native_id=native_id,
+        spans=tuple(
+            ProvenanceSpan(
+                stream.name,
+                directory.physical_base + extent.physical_offset,
+                extent.physical_length,
+                record_kind,
+            )
+            for extent in stream.extents
+        ),
+    )
+
+
+def _logical_spans(
+    directory: Cfv2Directory,
+    stream: Cfv2Stream,
+    logical_offset: int,
+    length: int,
+    record_kind: str,
+) -> tuple[ProvenanceSpan, ...]:
+    end = logical_offset + length
+    spans: list[ProvenanceSpan] = []
+    for extent in stream.extents:
+        extent_start = extent.logical_offset
+        extent_end = extent_start + extent.physical_length
+        overlap_start = max(logical_offset, extent_start)
+        overlap_end = min(end, extent_end)
+        if overlap_start >= overlap_end:
+            continue
+        spans.append(
+            ProvenanceSpan(
+                stream.name,
+                directory.physical_base
+                + extent.physical_offset
+                + overlap_start
+                - extent_start,
+                overlap_end - overlap_start,
+                record_kind,
+            )
+        )
+    if sum(span.length for span in spans) != length:
+        raise CatiaAdapterError("CATIA logical provenance span is incomplete")
+    return tuple(spans)
+
+
 def _native_payloads(
     archive: Cfv2Archive,
     data: bytes,
     document_type: str,
-    include_data: bool,
+    settings: ReadOptions,
 ) -> tuple[BrepPayload, ...]:
     payloads = [
         BrepPayload(
@@ -629,33 +932,86 @@ def _native_payloads(
             "native_document",
             document_type,
             hashlib.sha256(data).hexdigest(),
-            data if include_data else None,
+            data if settings.include_brep else None,
             source_stream="V5_CFV2",
+            provenance=Provenance(
+                adapter=_FORMAT_ID,
+                native_id=document_type,
+                spans=(
+                    ProvenanceSpan("V5_CFV2", 0, len(data), "native-document"),
+                ),
+            ),
+            attributes=frozen_mapping(
+                {
+                    "outer_directory_offset": archive.outer.offset,
+                    "outer_directory_length": archive.outer.length,
+                }
+            ),
         )
     ]
-    if document_type != "CATPart" or not include_data:
+    if document_type != "CATPart":
         return tuple(payloads)
-    candidates: list[bytes] = []
-    for directory in archive.nested:
-        main = directory.stream("MainDataStream")
-        surface = directory.stream("SurfacicReps")
-        if main is None or surface is None:
+    requested = ["CATPrtCont", "CATProdCont"]
+    if settings.include_brep:
+        requested = ["CGMGeom", *requested, "CATMFBRP"]
+    if settings.include_tessellation:
+        requested.append("CATCGRCont")
+    specifications = {
+        "CGMGeom": ("catia:native-cgm", "catia.cgm", "native_brep"),
+        "CATPrtCont": (
+            "catia:native-feature-graph",
+            "catia.v5.osmx",
+            "native_feature_graph",
+        ),
+        "CATProdCont": (
+            "catia:native-product-graph",
+            "catia.v5.osmx",
+            "native_product_graph",
+        ),
+        "CATMFBRP": (
+            "catia:native-brep-topology",
+            "catia.v5.mfbrp",
+            "brep_topology",
+        ),
+        "CATCGRCont": (
+            "catia:native-tessellation",
+            "catia.cgr",
+            "native_tessellation",
+        ),
+    }
+    declarations = {value.class_name: value for value in archive.declarations()}
+    for class_name in requested:
+        declaration = declarations.get(class_name)
+        if declaration is None:
             continue
-        candidates.append(
-            archive.stream_bytes(main, directory)
-            + archive.stream_bytes(surface, directory)
-        )
-    if candidates:
-        native_brep = max(candidates, key=len)
+        stream = archive.outer.stream(declaration.stream_name)
+        if stream is None:
+            continue
+        payload = archive.stream_bytes(stream, archive.outer)
+        payload_id, format_id, kind = specifications[class_name]
         payloads.append(
             BrepPayload(
-                "catia:native-cgm",
-                "catia.cgm",
-                "native_brep",
-                "V5 standard nested",
-                hashlib.sha256(native_brep).hexdigest(),
-                native_brep,
-                source_stream="MainDataStream+SurfacicReps",
+                payload_id,
+                format_id,
+                kind,
+                class_name,
+                hashlib.sha256(payload).hexdigest(),
+                payload,
+                source_stream=stream.name,
+                provenance=_stream_provenance(
+                    archive.outer,
+                    stream,
+                    f"{class_name}:{declaration.ordinal}",
+                    kind,
+                ),
+                attributes=frozen_mapping(
+                    {
+                        "declaration_ordinal": declaration.ordinal,
+                        "base_class": declaration.base_class,
+                        "logical_length": stream.logical_length,
+                        "extent_count": len(stream.extents),
+                    }
+                ),
             )
         )
     return tuple(payloads)
