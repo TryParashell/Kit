@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import import_module
 from inspect import isabstract, isclass
 from pathlib import Path
@@ -405,9 +405,12 @@ class AdapterRegistry:
             if format_id
             else self.select_writer(document, destination)
         )
-        if options is None or options.validate:
+        selected = options or WriteOptions()
+        if format_id is not None:
+            selected = replace(selected, destination_format=format_id)
+        if selected.validate:
             document.assert_valid()
-        return adapter.write(document, destination, options)
+        return adapter.write(document, destination, selected)
 
     def format_ids(self) -> tuple[str, ...]:
         return tuple(sorted(set(self._bindings) | set(self._aliases)))
