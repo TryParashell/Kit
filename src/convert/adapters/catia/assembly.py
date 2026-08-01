@@ -63,6 +63,7 @@ class NativeProductOccurrence:
 class NativeProductTable:
     root_name: str
     stream_name: str
+    stream_descriptor_offset: int
     table_offset: int
     tokens: tuple[NativeProductToken, ...]
     occurrences: tuple[NativeProductOccurrence, ...]
@@ -80,28 +81,29 @@ ComponentReader = Callable[[Path, ReadOptions], CadDocument]
 
 
 def decode_product_table(archive: Cfv2Archive) -> NativeProductTable:
-    candidates: list[tuple[str, tuple[NativeProductToken, ...]]] = []
+    candidates: list[tuple[object, tuple[NativeProductToken, ...]]] = []
     for stream in archive.outer.streams:
         data = archive.stream_bytes(stream, archive.outer)
         tokens = _product_tokens(data)
         if tokens:
-            candidates.append((stream.name, tokens))
+            candidates.append((stream, tokens))
     if not candidates:
         raise Cfv2FormatError("CATIA product has no ASMPRODUCT table")
     candidates.sort(
         key=lambda item: (
-            item[0] != "Data",
+            item[0].name != "Data",
             -len(item[1]),
-            item[0].casefold(),
+            item[0].name.casefold(),
         )
     )
-    stream_name, tokens = candidates[0]
+    stream, tokens = candidates[0]
     if len(tokens) < 2:
         raise Cfv2FormatError("CATIA ASMPRODUCT table has no product name")
     occurrences = _product_occurrences(tokens)
     return NativeProductTable(
         root_name=tokens[1].value,
-        stream_name=stream_name,
+        stream_name=stream.name,
+        stream_descriptor_offset=stream.descriptor_offset,
         table_offset=tokens[0].offset,
         tokens=tokens,
         occurrences=occurrences,
@@ -140,19 +142,25 @@ def native_product_assembly(
             provenance=Provenance(
                 _FORMAT_ID,
                 "ASMPRODUCT",
-                spans=(
-                    ProvenanceSpan(
-                        table.stream_name,
-                        table.tokens[1].offset,
-                        table.tokens[1].length,
-                        "product-name",
-                    ),
+                spans=_physical_spans(
+                    archive,
+                    table,
+                    table.tokens[1].offset,
+                    table.tokens[1].length,
+                    "product-name",
                 ),
             ),
             attributes=frozen_mapping(
                 {
                     "native_structure": "ASMPRODUCT",
-                    "native_string_table_offset": table.table_offset,
+                    "native_string_table_logical_offset": table.table_offset,
+                    "native_string_table_physical_offset": _physical_spans(
+                        archive,
+                        table,
+                        table.table_offset,
+                        1,
+                        "string-table-prefix",
+                    )[0].offset,
                 }
             ),
         )
@@ -197,13 +205,12 @@ def native_product_assembly(
                 provenance=Provenance(
                     _FORMAT_ID,
                     definition_name,
-                    spans=(
-                        ProvenanceSpan(
-                            table.stream_name,
-                            first_offsets[definition_name],
-                            len(definition_name),
-                            "component-definition",
-                        ),
+                    spans=_physical_spans(
+                        archive,
+                        table,
+                        first_offsets[definition_name],
+                        len(definition_name),
+                        "component-definition",
                     ),
                 ),
                 attributes=frozen_mapping(
@@ -225,19 +232,25 @@ def native_product_assembly(
             provenance=Provenance(
                 _FORMAT_ID,
                 occurrence.instance_name,
-                spans=(
-                    ProvenanceSpan(
-                        table.stream_name,
-                        occurrence.instance_offset,
-                        len(occurrence.instance_name),
-                        "component-instance",
-                    ),
+                spans=_physical_spans(
+                    archive,
+                    table,
+                    occurrence.instance_offset,
+                    len(occurrence.instance_name),
+                    "component-instance",
                 ),
             ),
             attributes=frozen_mapping(
                 {
                     "native_definition_name": occurrence.definition_name,
-                    "native_string_offset": occurrence.instance_offset,
+                    "native_string_logical_offset": occurrence.instance_offset,
+                    "native_string_physical_offset": _physical_spans(
+                        archive,
+                        table,
+                        occurrence.instance_offset,
+                        len(occurrence.instance_name),
+                        "component-instance",
+                    )[0].offset,
                     "transform_resolved": False,
                     "transform_source": "exact_native_payload",
                 }
@@ -289,7 +302,14 @@ def native_product_assembly(
             {
                 "native_structure": "ASMPRODUCT",
                 "native_stream": table.stream_name,
-                "native_string_table_offset": table.table_offset,
+                "native_string_table_logical_offset": table.table_offset,
+                "native_string_table_physical_offset": _physical_spans(
+                    archive,
+                    table,
+                    table.table_offset,
+                    1,
+                    "string-table-prefix",
+                )[0].offset,
                 "native_string_count": len(table.tokens),
                 "native_instance_count": len(instances),
                 "native_definition_count": len(definition_ids),

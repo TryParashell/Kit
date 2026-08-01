@@ -100,6 +100,21 @@ def test_real_catia_corpus_uses_valid_cfv2_directories() -> None:
         assert len(document.support_planes) == 3
         assert len(document.feature_timeline) == 1
         assert len(document.bodies) == 1
+        assert document.metadata["catia.product_name"]
+        assert document.metadata["catia.internal_part_name"]
+        assert len(document.metadata["catia.container_declarations"]) == 8
+        cgm_payload = next(
+            payload
+            for payload in document.brep_payloads
+            if payload.id == "catia:native-cgm"
+        )
+        assert cgm_payload.data == archive.stream_bytes(cgm_stream)
+        feature_payload = next(
+            payload
+            for payload in document.brep_payloads
+            if payload.id == "catia:native-feature-graph"
+        )
+        assert feature_payload.data == archive.stream_bytes(part_stream)
         assert document.validate() == ()
         output = BytesIO()
         result = CatiaAdapter().write(document, output)
