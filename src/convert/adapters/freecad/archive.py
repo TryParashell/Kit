@@ -878,9 +878,17 @@ def _payload_extension(payload: Mapping[str, Any]) -> str:
         return ".x_b"
     if "step" in format_id:
         return ".step"
-    if "brep" in format_id or "opencascade" in format_id or format_id == "occ":
+    if format_id == "catia.cgm":
+        return ".cgm"
+    if _is_open_cascade_payload(format_id):
         return ".brp"
     return ".bin"
+
+
+def _is_open_cascade_payload(format_id: str) -> bool:
+    return format_id in {"brep", "freecad.brep", "occ"} or format_id.startswith(
+        "opencascade"
+    )
 
 
 _IDENTITY_MATRIX = (
@@ -1264,8 +1272,13 @@ def _import_component_document(
         for node in root.findall("./Objects/ObjectDeps")
     }
     metadata_node = data_nodes.get("KitMetadata")
+    external_old = ""
     final_old = ""
     if metadata_node is not None:
+        external = metadata_node.find(
+            "./Properties/Property[@name='ExternalLinkTarget']/String"
+        )
+        external_old = external.get("value", "") if external is not None else ""
         final = metadata_node.find("./Properties/Property[@name='FinalFeature']/String")
         final_old = final.get("value", "") if final is not None else ""
     included = [node for node in object_nodes if node.get("name") != "KitMetadata"]
@@ -1318,7 +1331,7 @@ def _import_component_document(
         )
         graph.objects.append(imported_object)
         imported.append(imported_object.name)
-    target = names.get(final_old, "")
+    target = names.get(external_old, "") or names.get(final_old, "")
     if not target:
         for node in reversed(included):
             old_name = node.get("name", "")
@@ -2897,9 +2910,7 @@ def _document_xml(
             attributes.get("feature_id", attributes.get("final_feature_id"))
         )
         target_name = feature_names.get(target_feature_id, current_name)
-        if target_name and (
-            "brep" in format_id or "opencascade" in format_id or format_id == "occ"
-        ):
+        if target_name and _is_open_cascade_payload(format_id):
             target = next(
                 (item for item in graph.objects if item.name == target_name), None
             )
@@ -2947,7 +2958,13 @@ def _document_xml(
     )
     bodies_group.dependencies.extend(body_objects)
     external_target = (
-        document_meshes[0] if document_meshes else assembly_root or current_name
+        document_meshes[0]
+        if document_meshes
+        else assembly_root
+        or current_name
+        or (bodies_group.name if body_objects else "")
+        or (feature_objects[-1] if feature_objects else "")
+        or bodies_group.name
     )
     target_object = next(
         (item for item in graph.objects if item.name == external_target), None
