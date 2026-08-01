@@ -3,7 +3,7 @@ requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "parakit"
+name = "kit"
 version = "0.1.0"
 description = "Vendor agnostic CAD interchange."
 readme = "README.md"
@@ -16,15 +16,15 @@ dependencies = []
 dev = ["pytest>=8.3"]
 
 [project.scripts]
-parakit = "parakit.cli:main"
+kit = "convert.cli:main"
 
-[project.entry-points."cadbridge.adapters"]
-cadjson = "cadbridge.adapters.cadjson:CadJsonAdapter"
-freecad = "cadbridge.adapters.freecad:FreeCADAdapter"
-sldprt = "cadbridge.adapters.sldprt:SldprtAdapter"
+[project.entry-points."kit.adapters"]
+freecad = "convert.adapters.freecad:FreeCADAdapter"
+json = "convert.adapters.json:JsonAdapter"
+solidworks = "convert.adapters.solidworks:SldprtAdapter"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cadbridge", "src/parakit"]
+packages = ["src/interchange", "src/convert"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
