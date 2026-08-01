@@ -97,6 +97,7 @@ def test_api_has_no_format_specific_registration() -> None:
         type(adapter).__name__
         for adapter in (*introspected.readers(), *introspected.writers())
     }
+    format_names = {name.rsplit(".", 1)[-1] for name in package_names}
     path = ROOT / "src" / "convert" / "api.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     for node in ast.walk(tree):
@@ -116,7 +117,8 @@ def test_api_has_no_format_specific_registration() -> None:
                 for package_name in package_names
             )
             if module_name in {"adapters", "convert.adapters"}:
-                assert not adapter_names & {alias.name for alias in node.names}
+                imported_names = {alias.name for alias in node.names}
+                assert not (adapter_names | format_names) & imported_names
 
 
 def test_empty_format_package_fails_introspection(
