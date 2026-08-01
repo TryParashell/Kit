@@ -281,12 +281,8 @@ def test_solidworks_part_roundtrips_through_generated_catpart(
     source = open_document(SLDPRT)
     output = tmp_path / "example.CATPart"
     with pytest.raises(CatiaAdapterError, match="allow_non_native"):
-        convert(SLDPRT, output)
-    result = convert(
-        SLDPRT,
-        output,
-        write_values={"allow_non_native": True},
-    )
+        convert(SLDPRT, output, write_values={"allow_non_native": False})
+    result = convert(SLDPRT, output)
     assert result.destination_format == "catia.v5"
     assert result.output.metadata["mode"] == "generated_cfv2"
     assert result.output.metadata["compatibility"] == "kit-neutral-only"
