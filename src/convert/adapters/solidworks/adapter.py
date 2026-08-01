@@ -18,6 +18,7 @@ from convert.adapters.base import (
     Source,
     WriteOptions,
     WriteResult,
+    is_binary_destination,
 )
 from interchange import (
     AssemblyData,
@@ -284,7 +285,10 @@ class SldprtAdapter:
 
     def supports(self, document: CadDocument, destination: Destination) -> bool:
         path = _destination_path(destination)
-        return path is None or path.suffix.casefold() in {".sldprt", ".sldasm"}
+        if path is None:
+            return is_binary_destination(destination)
+        expected = ".sldasm" if document.assembly is not None else ".sldprt"
+        return path.suffix.casefold() == expected
 
     def write(
         self,
@@ -296,9 +300,10 @@ class SldprtAdapter:
         if settings.validate:
             document.assert_valid()
         if not self.supports(document, destination):
-            raise ValueError("SOLIDWORKS destination must end in .SLDPRT or .SLDASM")
+            expected = ".SLDASM" if document.assembly is not None else ".SLDPRT"
+            raise ValueError(f"SOLIDWORKS destination must end in {expected}")
         path = _destination_path(destination)
-        format_id = _destination_format_id(document, path)
+        format_id = _destination_format_id(document)
         preserved = (
             None
             if settings.values.get("portable") is True and document.assembly is not None
@@ -348,16 +353,24 @@ class SldprtAdapter:
             data = preserved
             mode = "exact"
             native_content = "exact"
+        retained_compatibility = document.metadata.get(
+            "solidworks.container_compatibility"
+        )
+        native_exact = mode == "exact" and retained_compatibility is None
         compatibility = (
-            "native-exact"
-            if mode == "exact"
+            str(retained_compatibility)
+            if retained_compatibility is not None
             else (
-                "native-source-with-kit-neutral"
-                if mode == "template"
+                "native-exact"
+                if mode == "exact"
                 else (
-                    "parasolid-with-kit-neutral"
-                    if native_content == "parasolid-import"
-                    else "kit-neutral-only"
+                    "native-source-with-kit-neutral"
+                    if mode == "template"
+                    else (
+                        "parasolid-with-kit-neutral"
+                        if native_content == "parasolid-import"
+                        else "kit-neutral-only"
+                    )
                 )
             )
         )
@@ -374,7 +387,11 @@ class SldprtAdapter:
                     "format_id": format_id,
                     "compatibility": compatibility,
                     "native_content": native_content,
-                    "neutral_edits_are_native": mode == "exact",
+                    "neutral_edits_are_native": native_exact,
+                    "vendor_loadable": native_exact,
+                    "native_geometry": native_exact,
+                    "native_history": native_exact,
+                    "native_assembly": native_exact and document.assembly is not None,
                     "container_version": archive.format_version,
                     "file_id": archive.file_id,
                     "stream_count": len(archive.records),
@@ -449,7 +466,7 @@ def _embedded_document(
     original = document.source
     format_id = (
         _ASSEMBLY_FORMAT_ID
-        if Path(label).suffix.casefold() == ".sldasm"
+        if Path(label).suffix.casefold() == ".sldasm" or document.assembly is not None
         else _FORMAT_ID
     )
     metadata = dict(document.metadata)
@@ -461,6 +478,7 @@ def _embedded_document(
             "embedded_source_format_id": original.format_id,
             "embedded_source_path": original.path,
             "embedded_source_sha256": original.sha256,
+            "solidworks.container_compatibility": "kit-neutral-only",
         }
     )
     document = replace(
@@ -647,13 +665,7 @@ def _parasolid_payload(document: CadDocument) -> bytes | None:
     return max(candidates, key=len) if candidates else None
 
 
-def _destination_format_id(document: CadDocument, destination: Path | None) -> str:
-    if destination is not None:
-        return (
-            _ASSEMBLY_FORMAT_ID
-            if destination.suffix.casefold() == ".sldasm"
-            else _FORMAT_ID
-        )
+def _destination_format_id(document: CadDocument) -> str:
     return _ASSEMBLY_FORMAT_ID if document.assembly is not None else _FORMAT_ID
 
 
