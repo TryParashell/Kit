@@ -6,6 +6,9 @@ from .container import (
     Cfv2Extent,
     Cfv2FormatError,
     Cfv2Stream,
+    OsmxArchive,
+    OsmxFormatError,
+    OsmxSymbol,
     build_cfv2,
     build_declaration,
 )
