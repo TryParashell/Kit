@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter
 from functools import lru_cache
-from io import BytesIO
+import gc
 from pathlib import Path
 import re
 
@@ -24,6 +25,20 @@ FORMAT_BY_SUFFIX = {
 PART_SUFFIXES = (".SLDPRT", ".FCStd", ".CATPart")
 ASSEMBLY_SUFFIXES = (".SLDASM", ".FCStd", ".CATProduct")
 SUPPORTED_SUFFIXES = frozenset(FORMAT_BY_SUFFIX)
+EXPECTED_SUFFIX_COUNTS = {
+    ".SLDPRT": 54,
+    ".SLDASM": 3,
+    ".FCStd": 68,
+    ".CATPart": 27,
+    ".CATProduct": 3,
+}
+FCSTD_ASSEMBLIES = frozenset(
+    {
+        EXAMPLES / "Random" / "V8_engine" / "Conrod_2.FCStd",
+        EXAMPLES / "Random" / "V8_engine" / "Piston_2.FCStd",
+        EXAMPLES / "Random" / "V8_engine.FCStd",
+    }
+)
 MATRIX_SOURCES = (
     (
         "sldprt",
@@ -128,6 +143,11 @@ def _target_suffixes(document: CadDocument) -> tuple[str, ...]:
     return ASSEMBLY_SUFFIXES if document.assembly is not None else PART_SUFFIXES
 
 
+def _expected_assembly(source: Path) -> bool:
+    suffix = _suffix(source)
+    return suffix in {".SLDASM", ".CATProduct"} or source in FCSTD_ASSEMBLIES
+
+
 def _assert_target(
     document: CadDocument,
     suffix: str,
@@ -143,7 +163,11 @@ def _assert_target(
         assert registry.select_reader(source).info.format_id == "freecad.fcstd"
 
 
-def _assert_truthful_vendor_result(result, suffix: str) -> None:
+def _assert_truthful_vendor_result(
+    result,
+    suffix: str,
+    is_assembly: bool,
+) -> None:
     if suffix not in {".SLDPRT", ".SLDASM", ".CATPart", ".CATProduct"}:
         return
     metadata = result.output.metadata
@@ -153,7 +177,13 @@ def _assert_truthful_vendor_result(result, suffix: str) -> None:
     assert isinstance(metadata["native_assembly"], bool)
     assert isinstance(metadata["native_self_contained"], bool)
     assert metadata["referenced_files_written"] == 0
-    if metadata["compatibility"] != "native-exact":
+    if metadata["compatibility"] == "native-exact":
+        assert metadata["vendor_loadable"] is True
+        assert metadata["native_geometry"] is True
+        assert metadata["native_history"] is True
+        assert metadata["native_assembly"] is is_assembly
+        assert metadata["native_self_contained"] is (not is_assembly)
+    else:
         assert metadata["vendor_loadable"] is False
         assert metadata["native_geometry"] is False
         assert metadata["native_history"] is False
@@ -173,6 +203,10 @@ def test_swap_formats_match_readme_and_document_kinds() -> None:
     assert set(PART_SUFFIXES) | set(ASSEMBLY_SUFFIXES) == readme_suffixes
     assert set(PART_SUFFIXES) & set(ASSEMBLY_SUFFIXES) == {".FCStd"}
     assert len(SUPPORTED_FILES) == 155
+    counts = Counter(_suffix(path) for path in SUPPORTED_FILES)
+    assert counts == EXPECTED_SUFFIX_COUNTS
+    assert len(FCSTD_ASSEMBLIES) == 3
+    assert FCSTD_ASSEMBLIES <= set(SUPPORTED_FILES)
 
 
 @pytest.mark.parametrize(
@@ -201,7 +235,7 @@ def test_every_valid_format_swap_runs_both_directions(
     assert restored.validate() == ()
     assert _document_signature(restored) == original_signature
     _assert_target(restored, destination_suffix, destination, is_assembly)
-    _assert_truthful_vendor_result(result, destination_suffix)
+    _assert_truthful_vendor_result(result, destination_suffix, is_assembly)
     reverse = tmp_path / f"{name}_reversed{source_suffix}"
     reverse_result = convert(destination, reverse)
     reversed_document = open_document(reverse)
@@ -209,7 +243,7 @@ def test_every_valid_format_swap_runs_both_directions(
     assert reversed_document.validate() == ()
     assert _document_signature(reversed_document) == original_signature
     _assert_target(reversed_document, source_suffix, reverse, is_assembly)
-    _assert_truthful_vendor_result(reverse_result, source_suffix)
+    _assert_truthful_vendor_result(reverse_result, source_suffix, is_assembly)
 
 
 @pytest.mark.parametrize(
@@ -219,42 +253,53 @@ def test_every_valid_format_swap_runs_both_directions(
 )
 def test_every_supported_example_swaps_to_every_valid_format_and_back(
     source: Path,
+    tmp_path: Path,
 ) -> None:
     source_suffix = _suffix(source)
     original = open_document(source)
     is_assembly = original.assembly is not None
+    assert is_assembly is _expected_assembly(source)
     original_signature = _document_signature(original)
-    for destination_suffix in _target_suffixes(original):
-        destination = BytesIO()
+    target_suffixes = _target_suffixes(original)
+    del original
+    gc.collect()
+    for index, destination_suffix in enumerate(target_suffixes):
+        forward_directory = tmp_path / f"forward_{index}"
+        forward_directory.mkdir()
+        destination = forward_directory / f"converted{destination_suffix}"
         forward = convert(
             source,
             destination,
-            destination_format=FORMAT_BY_SUFFIX[destination_suffix],
         )
-        destination_bytes = destination.getvalue()
-        restored = open_document(destination_bytes)
+        restored = open_document(destination)
+        assert forward.source_format == FORMAT_BY_SUFFIX[source_suffix]
         assert forward.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
-        assert forward.output.bytes_written == len(destination_bytes)
+        assert forward.output.bytes_written == destination.stat().st_size
         assert restored.validate() == ()
         assert _document_signature(restored) == original_signature
         _assert_target(
             restored,
             destination_suffix,
-            destination_bytes,
+            destination,
             is_assembly,
         )
-        _assert_truthful_vendor_result(forward, destination_suffix)
-        reverse = BytesIO()
+        _assert_truthful_vendor_result(forward, destination_suffix, is_assembly)
+        del restored, forward
+        gc.collect()
+        reverse_directory = tmp_path / f"reverse_{index}"
+        reverse_directory.mkdir()
+        reverse = reverse_directory / f"converted{source_suffix}"
         backward = convert(
-            destination_bytes,
+            destination,
             reverse,
-            destination_format=FORMAT_BY_SUFFIX[source_suffix],
         )
-        reverse_bytes = reverse.getvalue()
-        reversed_document = open_document(reverse_bytes)
+        reversed_document = open_document(reverse)
+        assert backward.source_format == FORMAT_BY_SUFFIX[destination_suffix]
         assert backward.destination_format == FORMAT_BY_SUFFIX[source_suffix]
-        assert backward.output.bytes_written == len(reverse_bytes)
+        assert backward.output.bytes_written == reverse.stat().st_size
         assert reversed_document.validate() == ()
         assert _document_signature(reversed_document) == original_signature
-        _assert_target(reversed_document, source_suffix, reverse_bytes, is_assembly)
-        _assert_truthful_vendor_result(backward, source_suffix)
+        _assert_target(reversed_document, source_suffix, reverse, is_assembly)
+        _assert_truthful_vendor_result(backward, source_suffix, is_assembly)
+        del reversed_document, backward
+        gc.collect()
