@@ -14,16 +14,12 @@ from .adapters import (
     WriteOptions,
     WriteResult,
 )
-from .adapters.freecad import FreeCADAdapter
-from .adapters.catia import CatiaAdapter
-from .adapters.json import JsonAdapter
-from .adapters.solidworks import SldprtAdapter
 from .engine import ConversionEngine, ConversionResult
 
 
 def _build_registry() -> AdapterRegistry:
     result = AdapterRegistry()
-    result.extend((JsonAdapter(), SldprtAdapter(), FreeCADAdapter(), CatiaAdapter()))
+    result.introspect()
     return result
 
 
