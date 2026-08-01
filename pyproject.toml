@@ -15,6 +15,9 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8.3"]
 
+[project.entry-points."kit"]
+sdk = "convert"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/interchange", "src/convert"]
 
