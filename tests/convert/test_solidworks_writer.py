@@ -54,8 +54,8 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     write_freecad(source, fcstd)
     restored = read_freecad(fcstd)
     with pytest.raises(SldprtFormatError, match="allow_non_native"):
-        write_sldprt(restored, output)
-    result = write_sldprt(restored, output, allow_non_native=True)
+        write_sldprt(restored, output, allow_non_native=False)
+    result = write_sldprt(restored, output)
     archive = SldprtArchive.open(output)
     assert archive.format_version == 4
     assert archive.require("Kit/Interchange")
@@ -87,8 +87,8 @@ def test_semantic_edit_uses_native_template_without_claiming_native_edit(
     )
     output = tmp_path / "edited.SLDPRT"
     with pytest.raises(SldprtFormatError, match="allow_non_native"):
-        write_sldprt(edited, output)
-    result = write_sldprt(edited, output, allow_non_native=True)
+        write_sldprt(edited, output, allow_non_native=False)
+    result = write_sldprt(edited, output)
     original_archive = SldprtArchive.open(SAMPLE)
     edited_archive = SldprtArchive.open(output)
     assert output.read_bytes() != SAMPLE.read_bytes()
@@ -102,7 +102,7 @@ def test_semantic_edit_uses_native_template_without_claiming_native_edit(
     assert result.diagnostics[-1].code == "sldprt.neutral_write"
 
 
-def test_solidworks_alias_and_document_extensions_are_strict(tmp_path) -> None:
+def test_solidworks_alias_and_document_extensions_are_interchangeable(tmp_path) -> None:
     adapter = registry.writer("solidworks.sldprt")
     assert registry.reader("solidworks.sldasm") is registry.reader("solidworks.sldprt")
     assert registry.writer("solidworks.sldasm") is adapter
@@ -110,13 +110,15 @@ def test_solidworks_alias_and_document_extensions_are_strict(tmp_path) -> None:
     part = document()
     assembly = assembly_document()
     assert adapter.supports(part, tmp_path / "part.SLDPRT")
-    assert not adapter.supports(part, tmp_path / "part.SLDASM")
+    assert adapter.supports(part, tmp_path / "part.SLDASM")
     assert adapter.supports(assembly, tmp_path / "assembly.SLDASM")
-    assert not adapter.supports(assembly, tmp_path / "assembly.SLDPRT")
-    with pytest.raises(ValueError, match="part destination"):
-        write_sldprt(part, tmp_path / "wrong.SLDASM", allow_non_native=True)
-    with pytest.raises(ValueError, match="assembly destination"):
-        write_sldprt(assembly, tmp_path / "wrong.SLDPRT", allow_non_native=True)
+    assert adapter.supports(assembly, tmp_path / "assembly.SLDPRT")
+    part_as_assembly = tmp_path / "part_as_assembly.SLDASM"
+    assembly_as_part = tmp_path / "assembly_as_part.SLDPRT"
+    assert write_sldprt(part, part_as_assembly).adapter == "solidworks.sldasm"
+    assert read_sldprt(part_as_assembly).assembly is None
+    assert write_sldprt(assembly, assembly_as_part).adapter == "solidworks.sldprt"
+    assert read_sldprt(assembly_as_part).assembly == assembly.assembly
     result = write_sldprt(
         assembly,
         tmp_path / "assembly.SLDASM",
@@ -134,26 +136,27 @@ def test_solidworks_alias_and_document_extensions_are_strict(tmp_path) -> None:
     assert conversion.destination_format == "solidworks.sldasm"
 
 
-def test_public_sdk_exposes_non_native_write_opt_in(tmp_path) -> None:
+def test_public_sdk_generates_non_native_swaps_by_default(tmp_path) -> None:
     source = document()
     direct = tmp_path / "direct.SLDPRT"
+    blocked = tmp_path / "blocked.SLDPRT"
     with pytest.raises(SldprtFormatError, match="allow_non_native"):
-        write_document(source, direct)
-    written = write_document(
-        source,
-        direct,
-        values={"allow_non_native": True},
-    )
+        write_document(source, blocked, values={"allow_non_native": False})
+    written = write_document(source, direct)
     assert written.metadata["compatibility"] == "kit-neutral-only"
     fcstd = tmp_path / "source.FCStd"
     converted = tmp_path / "converted.SLDPRT"
     write_freecad(source, fcstd)
+    blocked_conversion = tmp_path / "blocked_conversion.SLDPRT"
     with pytest.raises(SldprtFormatError, match="allow_non_native"):
-        convert(fcstd, converted)
+        convert(
+            fcstd,
+            blocked_conversion,
+            write_values={"allow_non_native": False},
+        )
     result = convert(
         fcstd,
         converted,
-        write_values={"allow_non_native": True},
     )
     assert result.destination_format == "solidworks.sldprt"
     assert result.output.metadata["compatibility"] == "kit-neutral-only"
