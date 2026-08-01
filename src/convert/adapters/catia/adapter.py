@@ -258,7 +258,14 @@ class CatiaAdapter:
             document.assert_valid()
         document_type = _destination_type(document, destination)
         native = _unchanged_native_payload(document, document_type)
-        if native is not None and not settings.values.get("rebuild", False):
+        if (
+            native is not None
+            and not settings.values.get("rebuild", False)
+            and not (
+                settings.values.get("portable") is True
+                and document.assembly is not None
+            )
+        ):
             path = _write_bytes(destination, native, settings.overwrite)
             return WriteResult(
                 path,
@@ -272,7 +279,7 @@ class CatiaAdapter:
                     }
                 ),
             )
-        if settings.values.get("allow_non_native") is not True:
+        if settings.values.get("allow_non_native", True) is not True:
             raise CatiaAdapterError(
                 "generated CATIA writing requires "
                 "WriteOptions(values={'allow_non_native': True})"
@@ -636,10 +643,6 @@ def _destination_type(document: CadDocument, destination: Destination) -> str:
     )
     if suffix not in {_PART_SUFFIX, _PRODUCT_SUFFIX}:
         raise ValueError("CATIA destination must end in .CATPart or .CATProduct")
-    if suffix == _PART_SUFFIX and document.assembly is not None:
-        raise ValueError("assembly documents require a .CATProduct destination")
-    if suffix == _PRODUCT_SUFFIX and document.assembly is None:
-        raise ValueError("part documents require a .CATPart destination")
     return "CATProduct" if suffix == _PRODUCT_SUFFIX else "CATPart"
 
 
@@ -1261,7 +1264,7 @@ def write_catia(
     *,
     overwrite: bool = False,
     validate: bool = True,
-    allow_non_native: bool = False,
+    allow_non_native: bool = True,
 ) -> WriteResult:
     return CatiaAdapter().write(
         document,
