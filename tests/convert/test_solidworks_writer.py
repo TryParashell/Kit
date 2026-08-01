@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from io import BytesIO, StringIO
 from pathlib import Path
 
 import pytest
@@ -73,7 +74,16 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     assert result.metadata["native_content"] == "none"
     assert result.metadata["compatibility"] == "kit-neutral-only"
     assert result.metadata["neutral_edits_are_native"] is False
+    assert result.metadata["vendor_loadable"] is False
+    assert result.metadata["native_geometry"] is False
+    assert result.metadata["native_history"] is False
+    assert result.metadata["native_assembly"] is False
     assert [item.code for item in result.diagnostics] == ["sldprt.neutral_write"]
+    replay = BytesIO()
+    replay_result = write_sldprt(reread, replay)
+    assert replay.getvalue() == output.read_bytes()
+    assert replay_result.metadata["compatibility"] == "kit-neutral-only"
+    assert replay_result.metadata["vendor_loadable"] is False
 
 
 def test_semantic_edit_uses_native_template_without_claiming_native_edit(
@@ -102,7 +112,7 @@ def test_semantic_edit_uses_native_template_without_claiming_native_edit(
     assert result.diagnostics[-1].code == "sldprt.neutral_write"
 
 
-def test_solidworks_alias_and_document_extensions_are_interchangeable(tmp_path) -> None:
+def test_solidworks_aliases_enforce_document_kind(tmp_path) -> None:
     adapter = registry.writer("solidworks.sldprt")
     assert registry.reader("solidworks.sldasm") is registry.reader("solidworks.sldprt")
     assert registry.writer("solidworks.sldasm") is adapter
@@ -110,15 +120,15 @@ def test_solidworks_alias_and_document_extensions_are_interchangeable(tmp_path) 
     part = document()
     assembly = assembly_document()
     assert adapter.supports(part, tmp_path / "part.SLDPRT")
-    assert adapter.supports(part, tmp_path / "part.SLDASM")
+    assert not adapter.supports(part, tmp_path / "part.SLDASM")
     assert adapter.supports(assembly, tmp_path / "assembly.SLDASM")
-    assert adapter.supports(assembly, tmp_path / "assembly.SLDPRT")
-    part_as_assembly = tmp_path / "part_as_assembly.SLDASM"
-    assembly_as_part = tmp_path / "assembly_as_part.SLDPRT"
-    assert write_sldprt(part, part_as_assembly).adapter == "solidworks.sldasm"
-    assert read_sldprt(part_as_assembly).assembly is None
-    assert write_sldprt(assembly, assembly_as_part).adapter == "solidworks.sldprt"
-    assert read_sldprt(assembly_as_part).assembly == assembly.assembly
+    assert not adapter.supports(assembly, tmp_path / "assembly.SLDPRT")
+    assert adapter.supports(part, BytesIO())
+    assert not adapter.supports(part, StringIO())
+    with pytest.raises(ValueError, match=r"\.SLDPRT"):
+        write_sldprt(part, tmp_path / "part.SLDASM")
+    with pytest.raises(ValueError, match=r"\.SLDASM"):
+        write_sldprt(assembly, tmp_path / "assembly.SLDPRT")
     result = write_sldprt(
         assembly,
         tmp_path / "assembly.SLDASM",
@@ -134,6 +144,16 @@ def test_solidworks_alias_and_document_extensions_are_interchangeable(tmp_path) 
         write_values={"allow_non_native": True},
     )
     assert conversion.destination_format == "solidworks.sldasm"
+
+
+def test_generated_sldasm_stream_retains_assembly_identity() -> None:
+    source = assembly_document()
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    restored = read_sldprt(output.getvalue())
+    assert result.adapter == "solidworks.sldasm"
+    assert restored.source.format_id == "solidworks.sldasm"
+    assert restored.assembly == source.assembly
 
 
 def test_public_sdk_generates_non_native_swaps_by_default(tmp_path) -> None:

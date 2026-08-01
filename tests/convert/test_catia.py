@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import hashlib
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 import struct
 import zlib
@@ -136,6 +136,10 @@ def test_native_catia_roundtrip_is_byte_exact(source: Path, tmp_path: Path) -> N
     output = tmp_path / source.name
     result = write_document(document, output)
     assert result.metadata["mode"] == "exact_native_roundtrip"
+    assert result.metadata["vendor_loadable"] is True
+    assert result.metadata["native_geometry"] is True
+    assert result.metadata["native_history"] is True
+    assert result.metadata["native_assembly"] is (document.assembly is not None)
     assert output.read_bytes() == source.read_bytes()
 
 
@@ -286,6 +290,10 @@ def test_solidworks_part_roundtrips_through_generated_catpart(
     assert result.destination_format == "catia.v5"
     assert result.output.metadata["mode"] == "generated_cfv2"
     assert result.output.metadata["compatibility"] == "kit-neutral-only"
+    assert result.output.metadata["vendor_loadable"] is False
+    assert result.output.metadata["native_geometry"] is False
+    assert result.output.metadata["native_history"] is False
+    assert result.output.metadata["native_assembly"] is False
     assert result.output.metadata["native_feature_graph"] is False
     archive = Cfv2Archive.from_bytes(output.read_bytes())
     assert [value.class_name for value in archive.declarations()] == [
@@ -346,6 +354,22 @@ def test_solidworks_assembly_roundtrips_through_generated_catproduct(
     assert restored.assembly is not None
     assert restored.assembly == source.assembly
     assert len(restored.assembly.mates) == 6
+
+
+def test_catia_destinations_enforce_document_kind(tmp_path: Path) -> None:
+    adapter = CatiaAdapter()
+    part = open_document(SLDPRT)
+    assembly = open_document(SLDASM)
+    assert adapter.supports(part, tmp_path / "part.CATPart")
+    assert not adapter.supports(part, tmp_path / "part.CATProduct")
+    assert adapter.supports(assembly, tmp_path / "assembly.CATProduct")
+    assert not adapter.supports(assembly, tmp_path / "assembly.CATPart")
+    assert adapter.supports(part, BytesIO())
+    assert not adapter.supports(part, StringIO())
+    with pytest.raises(ValueError, match=r"\.CATPart"):
+        write_catia(part, tmp_path / "part.CATProduct")
+    with pytest.raises(ValueError, match=r"\.CATProduct"):
+        write_catia(assembly, tmp_path / "assembly.CATPart")
 
 
 def test_modified_native_document_rebuilds_instead_of_replaying(
@@ -537,6 +561,8 @@ def test_generated_carrier_binding_rejects_mutated_physical_stream() -> None:
     unchanged = BytesIO()
     result = write_catia(document, unchanged)
     assert result.metadata["mode"] == "exact_native_roundtrip"
+    assert result.metadata["compatibility"] == "kit-neutral-only"
+    assert result.metadata["vendor_loadable"] is False
     assert unchanged.getvalue() == carrier_data
     mutated = bytearray(carrier_data)
     archive = Cfv2Archive.from_bytes(mutated)

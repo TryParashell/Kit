@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from io import BytesIO, StringIO
+
 import pytest
 
+from convert import convert, open_document
 from convert.adapters import (
     AdapterInfo,
     AdapterNotFoundError,
@@ -71,6 +75,16 @@ class WriterOnly:
         return self._delegate.write(value, destination, options)
 
 
+class PartialBytesIO(BytesIO):
+    def write(self, value):
+        return super().write(value[:-1])
+
+
+class PartialStringIO(StringIO):
+    def write(self, value):
+        return super().write(value[:-1])
+
+
 def test_registry_roundtrip(tmp_path) -> None:
     adapter = JsonAdapter()
     registry = AdapterRegistry()
@@ -81,6 +95,52 @@ def test_registry_roundtrip(tmp_path) -> None:
     assert written.path == output.resolve()
     assert restored == document()
     assert registry.format_ids() == ("interchange.json",)
+
+
+@pytest.mark.parametrize("stream_type", (BytesIO, StringIO))
+def test_json_stream_roundtrip_reports_utf8_bytes(stream_type) -> None:
+    adapter = JsonAdapter()
+    value = document()
+    value = replace(value, source=replace(value.source, path="mémoire"))
+    stream = stream_type()
+    result = adapter.write(value, stream)
+    serialized = stream.getvalue()
+    text = serialized.decode("utf-8") if isinstance(serialized, bytes) else serialized
+    assert "mémoire" in text
+    assert result.bytes_written == len(text.encode("utf-8"))
+    assert adapter.read(stream_type(serialized)) == value
+
+
+@pytest.mark.parametrize("stream_type", (PartialBytesIO, PartialStringIO))
+def test_json_stream_rejects_partial_writes(stream_type) -> None:
+    with pytest.raises(OSError, match="short JSON write"):
+        JsonAdapter().write(document(), stream_type())
+
+
+@pytest.mark.parametrize("stream_type", (BytesIO, StringIO))
+def test_json_probe_preserves_stream_position(stream_type) -> None:
+    serialized = document().to_json() + "\n"
+    serialized = "prefix:" + serialized
+    value = serialized.encode("utf-8") if stream_type is BytesIO else serialized
+    stream = stream_type(value)
+    stream.seek(7)
+    assert JsonAdapter().probe(stream).confidence == 1.0
+    assert stream.tell() == 7
+
+
+def test_public_sdk_introspects_json_text_source_and_destination() -> None:
+    value = document()
+    source = StringIO(value.to_json() + "\n")
+    assert open_document(source) == value
+    source.seek(0)
+    destination = StringIO()
+    result = convert(
+        source,
+        destination,
+        destination_format="interchange.json",
+    )
+    assert result.destination_format == "interchange.json"
+    assert JsonAdapter().read(StringIO(destination.getvalue())) == value
 
 
 def test_registry_rejects_canonical_alias_collisions_without_mutation() -> None:
