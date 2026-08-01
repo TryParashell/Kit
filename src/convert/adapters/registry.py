@@ -82,60 +82,118 @@ def _public_adapter_types(module: ModuleType) -> tuple[type[object], ...]:
     )
 
 
+def _validated_info(adapter: object) -> AdapterInfo:
+    info = adapter.info
+    if not isinstance(info, AdapterInfo):
+        raise AdapterRegistryError("adapter info must be AdapterInfo")
+    for field_name in ("format_id", "name", "version"):
+        value = getattr(info, field_name)
+        if not isinstance(value, str) or not value.strip() or value != value.strip():
+            raise AdapterRegistryError(
+                f"adapter {field_name} must be a non-empty string"
+            )
+    for field_name in ("extensions", "aliases", "media_types"):
+        values = getattr(info, field_name)
+        if not isinstance(values, tuple) or any(
+            not isinstance(value, str) or not value for value in values
+        ):
+            raise AdapterRegistryError(f"adapter {field_name} must be a string tuple")
+    if len(set(info.aliases)) != len(info.aliases):
+        raise AdapterRegistryError("adapter aliases must be unique")
+    if info.format_id in info.aliases:
+        raise AdapterRegistryError("adapter alias must differ from its format id")
+    return info
+
+
 class AdapterRegistry:
     def __init__(self) -> None:
         self._bindings: dict[str, AdapterBinding] = {}
         self._aliases: dict[str, str] = {}
 
-    def _register_aliases(self, adapter: object, replace: bool) -> None:
-        info = adapter.info
+    def _validate_namespace(self, info: AdapterInfo) -> None:
+        owner = self._aliases.get(info.format_id)
+        if owner is not None:
+            raise AdapterRegistryError(
+                f"format id is already an alias for {owner}: {info.format_id}"
+            )
         for alias in info.aliases:
-            if not alias or alias == info.format_id:
+            if alias in self._bindings:
                 raise AdapterRegistryError(
-                    "adapter alias must be distinct and non-empty"
+                    f"adapter alias is already a format id: {alias}"
                 )
             existing = self._aliases.get(alias)
-            if alias in self._bindings or (
-                existing is not None and existing != info.format_id
-            ):
-                if not replace:
-                    raise AdapterRegistryError(
-                        f"adapter alias already registered: {alias}"
-                    )
+            if existing is not None and existing != info.format_id:
+                raise AdapterRegistryError(f"adapter alias already registered: {alias}")
+
+    def _register_aliases(self, info: AdapterInfo) -> None:
+        for alias in info.aliases:
             self._aliases[alias] = info.format_id
+
+    def _state(
+        self,
+    ) -> tuple[dict[str, AdapterBinding], dict[str, str]]:
+        return (
+            {
+                name: AdapterBinding(binding.reader, binding.writer)
+                for name, binding in self._bindings.items()
+            },
+            dict(self._aliases),
+        )
+
+    def _restore(self, state: tuple[dict[str, AdapterBinding], dict[str, str]]) -> None:
+        self._bindings, self._aliases = state
 
     def register_reader(
         self, adapter: CadReaderAdapter, *, replace: bool = False
     ) -> None:
-        self._register_aliases(adapter, replace)
-        binding = self._bindings.setdefault(adapter.info.format_id, AdapterBinding())
+        info = _validated_info(adapter)
+        self._validate_namespace(info)
+        binding = self._bindings.get(info.format_id)
+        if binding is None:
+            binding = AdapterBinding()
         if binding.reader is not None and not replace:
+            if type(binding.reader) is type(adapter) and binding.reader.info == info:
+                return
             raise AdapterRegistryError(
-                f"reader already registered for {adapter.info.format_id}"
+                f"reader already registered for {info.format_id}"
             )
+        self._register_aliases(info)
+        self._bindings.setdefault(info.format_id, binding)
         binding.reader = adapter
 
     def register_writer(
         self, adapter: CadWriterAdapter, *, replace: bool = False
     ) -> None:
-        self._register_aliases(adapter, replace)
-        binding = self._bindings.setdefault(adapter.info.format_id, AdapterBinding())
+        info = _validated_info(adapter)
+        self._validate_namespace(info)
+        binding = self._bindings.get(info.format_id)
+        if binding is None:
+            binding = AdapterBinding()
         if binding.writer is not None and not replace:
+            if type(binding.writer) is type(adapter) and binding.writer.info == info:
+                return
             raise AdapterRegistryError(
-                f"writer already registered for {adapter.info.format_id}"
+                f"writer already registered for {info.format_id}"
             )
+        self._register_aliases(info)
+        self._bindings.setdefault(info.format_id, binding)
         binding.writer = adapter
 
     def register(self, adapter: object, *, replace: bool = False) -> None:
+        state = self._state()
         registered = False
-        if isinstance(adapter, CadReaderAdapter):
-            self.register_reader(adapter, replace=replace)
-            registered = True
-        if isinstance(adapter, CadWriterAdapter):
-            self.register_writer(adapter, replace=replace)
-            registered = True
-        if not registered:
-            raise TypeError("adapter implements neither reader nor writer protocol")
+        try:
+            if isinstance(adapter, CadReaderAdapter):
+                self.register_reader(adapter, replace=replace)
+                registered = True
+            if isinstance(adapter, CadWriterAdapter):
+                self.register_writer(adapter, replace=replace)
+                registered = True
+            if not registered:
+                raise TypeError("adapter implements neither reader nor writer protocol")
+        except Exception:
+            self._restore(state)
+            raise
 
     def introspect(self, package_name: str = __package__) -> tuple[str, ...]:
         try:
@@ -205,20 +263,13 @@ class AdapterRegistry:
                         f"{adapter_type.__qualname__}"
                     )
                 instances.append(adapter)
-        bindings = {
-            name: AdapterBinding(binding.reader, binding.writer)
-            for name, binding in self._bindings.items()
-        }
-        aliases = dict(self._aliases)
         try:
             self.extend(instances)
         except Exception as exc:
-            self._bindings = bindings
-            self._aliases = aliases
             raise AdapterDiscoveryError(
                 f"could not register adapters from {package_name}"
             ) from exc
-        return tuple(dict.fromkeys(adapter.info.format_id for adapter in instances))
+        return tuple(sorted({adapter.info.format_id for adapter in instances}))
 
     def readers(self) -> tuple[CadReaderAdapter, ...]:
         return tuple(
@@ -318,8 +369,13 @@ class AdapterRegistry:
         return adapter.write(document, destination, options)
 
     def format_ids(self) -> tuple[str, ...]:
-        return tuple(sorted((*self._bindings, *self._aliases)))
+        return tuple(sorted(set(self._bindings) | set(self._aliases)))
 
     def extend(self, adapters: Iterable[object], *, replace: bool = False) -> None:
-        for adapter in adapters:
-            self.register(adapter, replace=replace)
+        state = self._state()
+        try:
+            for adapter in adapters:
+                self.register(adapter, replace=replace)
+        except Exception:
+            self._restore(state)
+            raise
