@@ -5,12 +5,27 @@ build-backend = "hatchling.build"
 [project]
 name = "kit"
 version = "0.1.0"
-description = "Vendor agnostic CAD interchange."
+description = "CAD interchange SDK by Parashell."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
-authors = [{ name = "Parashell, Inc." }]
+license = "LicenseRef-PolyForm-Strict-1.0.0"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Parashell, Inc." },
+    { name = "Odin Glynn-Martin", email = "odin.glynn[at]parashell[dot]cloud" },
+]
+maintainers = [
+    { name = "Odin Glynn-Martin", email = "odin.glynn[at]parashell[dot]cloud" },
+]
+keywords = ["cad"]
+classifiers = [
+    "Private :: Do Not Upload",
+]
 dependencies = []
+
+[project.urls]
+Repository = "https://github.com/TryParashell/Kit"
+Issues = "https://github.com/TryParashell/Kit/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3"]
