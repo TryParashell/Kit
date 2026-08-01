@@ -11,7 +11,7 @@ import pytest
 
 import convert.adapters as adapter_package
 from convert import available_adapters, convert, extract_brep, open_document
-from convert.adapters import AdapterRegistry
+from convert.adapters import AdapterDiscoveryError, AdapterRegistry
 
 
 SAMPLE = Path(__file__).parents[2] / "examples" / ".SLDPRT" / "example.SLDPRT"
@@ -71,6 +71,9 @@ def test_every_format_package_is_introspected_deterministically() -> None:
     assert first_ids == second_ids == tuple(sorted(first_ids))
     assert tuple(adapter.info.format_id for adapter in readers) == first_ids
     assert tuple(adapter.info.format_id for adapter in writers) == first_ids
+    assert first.introspect() == first_ids
+    assert first.readers() == readers
+    assert first.writers() == writers
     assert all(
         not isabstract(type(adapter))
         and not getattr(type(adapter), "_is_protocol", False)
@@ -79,14 +82,55 @@ def test_every_format_package_is_introspected_deterministically() -> None:
 
 
 def test_api_has_no_format_specific_registration() -> None:
+    package_names = tuple(
+        sorted(
+            item.name
+            for item in iter_modules(
+                adapter_package.__path__, adapter_package.__name__ + "."
+            )
+            if item.ispkg and not item.name.rsplit(".", 1)[-1].startswith("_")
+        )
+    )
+    introspected = AdapterRegistry()
+    introspected.introspect()
+    adapter_names = {
+        type(adapter).__name__
+        for adapter in (*introspected.readers(), *introspected.writers())
+    }
     path = ROOT / "src" / "convert" / "api.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    assert not any(
-        isinstance(node, ast.ImportFrom)
-        and node.module is not None
-        and node.module.startswith("adapters.")
-        for node in ast.walk(tree)
-    )
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert not any(
+                alias.name == package_name or alias.name.startswith(package_name + ".")
+                for alias in node.names
+                for package_name in package_names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module_name = node.module or ""
+            assert not any(
+                module_name == package_name
+                or module_name == package_name.removeprefix("convert.")
+                or module_name.startswith(package_name + ".")
+                or module_name.startswith(package_name.removeprefix("convert.") + ".")
+                for package_name in package_names
+            )
+            if module_name in {"adapters", "convert.adapters"}:
+                assert not adapter_names & {alias.name for alias in node.names}
+
+
+def test_empty_format_package_fails_introspection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package_name = f"kit_empty_{tmp_path.name.replace('-', '_')}"
+    package = tmp_path / package_name
+    format_package = package / "empty"
+    format_package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (format_package / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    with pytest.raises(AdapterDiscoveryError, match="exports no adapter"):
+        AdapterRegistry().introspect(package_name)
 
 
 def test_package_metadata_is_internal_and_matches_supported_sdk() -> None:
