@@ -286,6 +286,9 @@ class CatiaAdapter:
                         "native_history": native_exact,
                         "native_assembly": native_exact
                         and document.assembly is not None,
+                        "native_self_contained": native_exact
+                        and document.assembly is None,
+                        "referenced_files_written": 0,
                         "container": "V5_CFV2",
                         "document_type": document_type,
                     }
@@ -322,6 +325,8 @@ class CatiaAdapter:
                     "native_geometry": False,
                     "native_history": False,
                     "native_assembly": False,
+                    "native_self_contained": False,
+                    "referenced_files_written": 0,
                     "native_feature_graph": False,
                     "container": "V5_CFV2",
                     "document_type": document_type,
