@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
+from io import BytesIO
 from pathlib import Path
+import struct
 
 import pytest
 
@@ -12,6 +15,8 @@ from convert.adapters.catia import (
     CatiaAdapterError,
     Cfv2Archive,
     Cfv2FormatError,
+    OsmxArchive,
+    build_cfv2,
     write_catia,
 )
 from convert.adapters.solidworks import read_sldprt, write_sldprt
@@ -26,14 +31,67 @@ SLDASM = ROOT / "examples" / "Random" / "Pistons" / "Piston.SLDASM"
 
 
 def test_real_catia_corpus_uses_valid_cfv2_directories() -> None:
-    files = tuple(CATPARTS.glob("*.CATPart")) + tuple(CATPRODUCTS.glob("*.CATProduct"))
-    assert len(files) == 30
-    for path in files:
+    parts = tuple(sorted(CATPARTS.glob("*.CATPart")))
+    products = tuple(sorted(CATPRODUCTS.glob("*.CATProduct")))
+    assert len(parts) == 27
+    assert len(products) == 3
+    for path in parts + products:
         archive = Cfv2Archive.from_bytes(path.read_bytes())
         assert archive.outer.offset + archive.outer.length == path.stat().st_size
         assert archive.outer.streams
         assert archive.named_stream("Data")
-    assert Cfv2Archive.from_bytes((CATPARTS / "Banjo.CATPart").read_bytes()).nested
+    expected_classes = (
+        "CATProdCont",
+        "CATPrtCont",
+        "CGMGeom",
+        "CATMFBRP",
+        "CATSeeBodyCont",
+        "CATBRepModeContainer",
+        "CATStdCont",
+        "CATCGRCont",
+    )
+    for path in parts:
+        source = path.read_bytes()
+        archive = Cfv2Archive.from_bytes(source)
+        declarations = archive.declarations()
+        assert len(archive.outer.streams) == 41
+        assert tuple(item.class_name for item in declarations) == expected_classes
+        assert tuple(item.ordinal for item in declarations) == tuple(range(1, 9))
+        assert all(
+            sum(stream.name == item.stream_name for stream in archive.outer.streams)
+            == 2
+            for item in declarations
+        )
+        assert len(archive.nested) == 1
+        cgr_declaration = next(
+            item for item in declarations if item.class_name == "CATCGRCont"
+        )
+        cgr_stream = archive.outer.stream(cgr_declaration.stream_name)
+        assert cgr_stream is not None
+        assert len(cgr_stream.extents) == 1
+        assert archive.nested[0].physical_base == cgr_stream.extents[0].physical_offset
+        assert archive.nested[0].offset + archive.nested[0].length == (
+            cgr_stream.extents[0].physical_offset + cgr_stream.logical_length
+        )
+        part_declaration = next(
+            item for item in declarations if item.class_name == "CATPrtCont"
+        )
+        part_stream = archive.outer.stream(part_declaration.stream_name)
+        assert part_stream is not None
+        graph = OsmxArchive.from_bytes(archive.stream_bytes(part_stream))
+        assert graph.version == "V5R28SP6HF0"
+        assert {"MechanicalPart", "xy-plane", "yz-plane", "zx-plane"} <= set(
+            graph.values
+        )
+        document = open_document(path)
+        assert len(document.support_planes) == 3
+        assert len(document.feature_timeline) == 1
+        assert len(document.bodies) == 1
+        assert document.validate() == ()
+        output = BytesIO()
+        result = CatiaAdapter().write(document, output)
+        assert result.metadata["mode"] == "exact_native_roundtrip"
+        assert output.getvalue() == source
 
 
 @pytest.mark.parametrize(
@@ -51,20 +109,51 @@ def test_native_catia_roundtrip_is_byte_exact(source: Path, tmp_path: Path) -> N
     assert output.read_bytes() == source.read_bytes()
 
 
-def test_native_catpart_retains_nested_cgm_payload() -> None:
-    document = open_document(CATPARTS / "Banjo.CATPart")
+def test_native_catpart_retains_declared_geometry_and_feature_graphs() -> None:
+    source = CATPARTS / "Banjo.CATPart"
+    archive = Cfv2Archive.from_bytes(source.read_bytes())
+    document = open_document(source)
     assert document.source.format_id == "catia.v5"
     assert document.source.application_version == "V5R28SP6HF0"
     assert document.metadata["catia.document_type"] == "CATPart"
     assert [payload.format_id for payload in document.brep_payloads] == [
         "catia.v5.cfv2",
         "catia.cgm",
+        "catia.v5.osmx",
+        "catia.v5.osmx",
+        "catia.v5.mfbrp",
     ]
+    cgm_declaration = next(
+        item for item in archive.declarations() if item.class_name == "CGMGeom"
+    )
+    cgm_stream = archive.outer.stream(cgm_declaration.stream_name)
+    assert cgm_stream is not None
+    cgm = document.brep_payloads[1]
+    assert cgm.data == archive.stream_bytes(cgm_stream)
+    assert cgm.sha256 == hashlib.sha256(cgm.data or b"").hexdigest()
+    assert cgm.source_stream == cgm_declaration.stream_name
+    feature_graph = document.brep_payloads[2]
+    assert feature_graph.kind == "native_feature_graph"
+    assert OsmxArchive.from_bytes(feature_graph.data or b"").version == "V5R28SP6HF0"
+    assert [plane.name for plane in document.support_planes] == [
+        "xy-plane",
+        "yz-plane",
+        "zx-plane",
+    ]
+    assert document.bodies[0].name == "Body.2"
+    assert document.feature_timeline[0].attributes["native_payload_id"] == (
+        feature_graph.id
+    )
+    assert Capability.PARAMETRIC_HISTORY in document.capabilities
     assert Capability.BREP in document.capabilities
     without_data = CatiaAdapter().read(
-        CATPARTS / "Banjo.CATPart", ReadOptions(include_brep=False)
+        source, ReadOptions(include_brep=False)
     )
     assert without_data.brep_payloads[0].data is None
+    assert {payload.kind for payload in without_data.brep_payloads[1:]} == {
+        "native_feature_graph",
+        "native_product_graph",
+    }
     assert Capability.BREP not in without_data.capabilities
 
 
