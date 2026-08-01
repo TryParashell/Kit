@@ -680,9 +680,7 @@ def _container_metadata(archive: Cfv2Archive) -> dict[str, object]:
     }
 
 
-def _native_part_data(
-    archive: Cfv2Archive, document_type: str
-) -> tuple[
+def _native_part_data(archive: Cfv2Archive, document_type: str) -> tuple[
     dict[str, object],
     tuple[SupportPlane, ...],
     tuple[FeatureStep, ...],
@@ -691,9 +689,7 @@ def _native_part_data(
 ]:
     if document_type != "CATPart":
         return {}, (), (), (), ()
-    part_declaration, part_stream, part_graph = _declared_osmx(
-        archive, "CATPrtCont"
-    )
+    part_declaration, part_stream, part_graph = _declared_osmx(archive, "CATPrtCont")
     _, product_stream, product_graph = _declared_osmx(archive, "CATProdCont")
     product_symbol = product_graph.first_after("ASMPRODUCT")
     part_symbol = part_graph.first_after("MechanicalPart")
@@ -793,8 +789,10 @@ def _declared_osmx(
     stream = archive.outer.stream(declaration.stream_name)
     if stream is None:
         raise CatiaAdapterError(f"CATIA {class_name} stream is missing")
-    return declaration, stream, OsmxArchive.from_bytes(
-        archive.stream_bytes(stream, archive.outer)
+    return (
+        declaration,
+        stream,
+        OsmxArchive.from_bytes(archive.stream_bytes(stream, archive.outer)),
     )
 
 
@@ -1021,9 +1019,7 @@ def _native_document_payload(
         provenance=Provenance(
             adapter=_FORMAT_ID,
             native_id=document_type,
-            spans=(
-                ProvenanceSpan("V5_CFV2", 0, len(data), "native-document"),
-            ),
+            spans=(ProvenanceSpan("V5_CFV2", 0, len(data), "native-document"),),
         ),
         attributes=frozen_mapping(
             {
@@ -1170,6 +1166,9 @@ def _native_payload_matches_document(
         if manifest is not None:
             embedded = CadDocument.from_json(_unpack_manifest(manifest))
             return _semantic_digest(embedded) == _semantic_digest(document)
+        if document_type == "CATProduct":
+            assembly, _ = _native_assembly(data, "candidate.CATProduct", document_type)
+            return assembly == document.assembly
         include_tessellation = any(
             payload.id == "catia:native-tessellation"
             for payload in document.brep_payloads
@@ -1197,9 +1196,11 @@ def _native_payload_matches_document(
             payload.format_id,
             payload.kind,
             payload.schema,
-            hashlib.sha256(payload.data).hexdigest()
-            if payload.data is not None
-            else payload.sha256,
+            (
+                hashlib.sha256(payload.data).hexdigest()
+                if payload.data is not None
+                else payload.sha256
+            ),
         )
         for payload in document.brep_payloads
         if payload.id in native_ids
@@ -1209,9 +1210,11 @@ def _native_payload_matches_document(
             payload.format_id,
             payload.kind,
             payload.schema,
-            hashlib.sha256(payload.data).hexdigest()
-            if payload.data is not None
-            else payload.sha256,
+            (
+                hashlib.sha256(payload.data).hexdigest()
+                if payload.data is not None
+                else payload.sha256
+            ),
         )
         for payload in candidate
         if payload.id in native_ids
