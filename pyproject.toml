@@ -15,14 +15,6 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8.3"]
 
-[project.scripts]
-kit = "convert.cli:main"
-
-[project.entry-points."kit.adapters"]
-freecad = "convert.adapters.freecad:FreeCADAdapter"
-json = "convert.adapters.json:JsonAdapter"
-solidworks = "convert.adapters.solidworks:SldprtAdapter"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/interchange", "src/convert"]
 
