@@ -95,9 +95,7 @@ def _validated_info(adapter: object) -> AdapterInfo:
     for field_name in ("extensions", "aliases", "media_types"):
         values = getattr(info, field_name)
         if not isinstance(values, tuple) or any(
-            not isinstance(value, str)
-            or not value.strip()
-            or value != value.strip()
+            not isinstance(value, str) or not value.strip() or value != value.strip()
             for value in values
         ):
             raise AdapterRegistryError(f"adapter {field_name} must be a string tuple")
