@@ -95,7 +95,10 @@ def _validated_info(adapter: object) -> AdapterInfo:
     for field_name in ("extensions", "aliases", "media_types"):
         values = getattr(info, field_name)
         if not isinstance(values, tuple) or any(
-            not isinstance(value, str) or not value for value in values
+            not isinstance(value, str)
+            or not value.strip()
+            or value != value.strip()
+            for value in values
         ):
             raise AdapterRegistryError(f"adapter {field_name} must be a string tuple")
     if len(set(info.aliases)) != len(info.aliases):
@@ -125,7 +128,15 @@ class AdapterRegistry:
             if existing is not None and existing != info.format_id:
                 raise AdapterRegistryError(f"adapter alias already registered: {alias}")
 
-    def _register_aliases(self, info: AdapterInfo) -> None:
+    def _register_aliases(self, info: AdapterInfo, replace: bool) -> None:
+        if replace:
+            stale = tuple(
+                alias
+                for alias, owner in self._aliases.items()
+                if owner == info.format_id and alias not in info.aliases
+            )
+            for alias in stale:
+                del self._aliases[alias]
         for alias in info.aliases:
             self._aliases[alias] = info.format_id
 
@@ -143,53 +154,85 @@ class AdapterRegistry:
     def _restore(self, state: tuple[dict[str, AdapterBinding], dict[str, str]]) -> None:
         self._bindings, self._aliases = state
 
-    def register_reader(
-        self, adapter: CadReaderAdapter, *, replace: bool = False
+    def _register_reader(
+        self,
+        adapter: CadReaderAdapter,
+        replace: bool,
+        coordinated: bool,
     ) -> None:
         info = _validated_info(adapter)
         self._validate_namespace(info)
         binding = self._bindings.get(info.format_id)
         if binding is None:
             binding = AdapterBinding()
+        if (
+            binding.writer is not None
+            and binding.writer.info != info
+            and not coordinated
+        ):
+            raise AdapterRegistryError(
+                f"reader and writer metadata differ for {info.format_id}"
+            )
         if binding.reader is not None and not replace:
             if type(binding.reader) is type(adapter) and binding.reader.info == info:
                 return
             raise AdapterRegistryError(
                 f"reader already registered for {info.format_id}"
             )
-        self._register_aliases(info)
+        self._register_aliases(info, replace)
         self._bindings.setdefault(info.format_id, binding)
         binding.reader = adapter
 
-    def register_writer(
-        self, adapter: CadWriterAdapter, *, replace: bool = False
+    def register_reader(
+        self, adapter: CadReaderAdapter, *, replace: bool = False
+    ) -> None:
+        self._register_reader(adapter, replace, False)
+
+    def _register_writer(
+        self,
+        adapter: CadWriterAdapter,
+        replace: bool,
+        coordinated: bool,
     ) -> None:
         info = _validated_info(adapter)
         self._validate_namespace(info)
         binding = self._bindings.get(info.format_id)
         if binding is None:
             binding = AdapterBinding()
+        if (
+            binding.reader is not None
+            and binding.reader.info != info
+            and not coordinated
+        ):
+            raise AdapterRegistryError(
+                f"reader and writer metadata differ for {info.format_id}"
+            )
         if binding.writer is not None and not replace:
             if type(binding.writer) is type(adapter) and binding.writer.info == info:
                 return
             raise AdapterRegistryError(
                 f"writer already registered for {info.format_id}"
             )
-        self._register_aliases(info)
+        self._register_aliases(info, replace)
         self._bindings.setdefault(info.format_id, binding)
         binding.writer = adapter
 
+    def register_writer(
+        self, adapter: CadWriterAdapter, *, replace: bool = False
+    ) -> None:
+        self._register_writer(adapter, replace, False)
+
     def register(self, adapter: object, *, replace: bool = False) -> None:
         state = self._state()
-        registered = False
+        reader = isinstance(adapter, CadReaderAdapter)
+        writer = isinstance(adapter, CadWriterAdapter)
+        coordinated = reader and writer and replace
         try:
-            if isinstance(adapter, CadReaderAdapter):
-                self.register_reader(adapter, replace=replace)
-                registered = True
-            if isinstance(adapter, CadWriterAdapter):
-                self.register_writer(adapter, replace=replace)
-                registered = True
-            if not registered:
+            if reader:
+                self._register_reader(adapter, replace, coordinated)
+            if writer:
+                self._register_writer(adapter, replace, coordinated)
+            if not reader and not writer:
                 raise TypeError("adapter implements neither reader nor writer protocol")
         except Exception:
             self._restore(state)
