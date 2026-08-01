@@ -94,7 +94,6 @@ _CONSTRAINT_KINDS = {
     10: ConstraintKind.PERPENDICULAR,
     11: ConstraintKind.RADIUS,
     12: ConstraintKind.EQUAL,
-    13: ConstraintKind.MIDPOINT,
     14: ConstraintKind.SYMMETRIC,
     17: ConstraintKind.FIXED,
     18: ConstraintKind.DIAMETER,
@@ -575,7 +574,9 @@ def _geometry(node: ET.Element, entity_id: str) -> tuple[GeometryKind, Any]:
                 _number(value.get("EndAngle")),
             )
     if type_id == "Part::GeomPoint":
-        value = node.find("./GeomPoint") or node.find("./Point")
+        value = node.find("./GeomPoint")
+        if value is None:
+            value = node.find("./Point")
         if value is not None:
             return GeometryKind.POINT, PointGeometry(
                 Vector2(_number(value.get("X")), _number(value.get("Y")))
@@ -597,7 +598,9 @@ def _geometry(node: ET.Element, entity_id: str) -> tuple[GeometryKind, Any]:
                 abs(_number(value.get("MinorRadius"))),
             )
     if type_id in {"Part::GeomBSplineCurve", "Part::GeomBezierCurve"}:
-        value = node.find("./BSplineCurve") or node.find("./BezierCurve")
+        value = node.find("./BSplineCurve")
+        if value is None:
+            value = node.find("./BezierCurve")
         if value is not None:
             points = tuple(
                 Vector2(_number(item.get("X")), _number(item.get("Y")))
@@ -737,7 +740,7 @@ def _parse_sketches(
             if code in _DIMENSIONAL_CONSTRAINTS:
                 parameter_id = f"freecad:parameter:{obj.name}:constraint:{index}"
                 value_kind = ValueKind.ANGLE if code == 9 else ValueKind.LENGTH
-                unit = "deg" if code == 9 else "mm"
+                unit = "rad" if code == 9 else "mm"
                 expression_source = _constraint_expression(expressions, index, name)
                 if expression_source:
                     for path, source in expressions.items():
