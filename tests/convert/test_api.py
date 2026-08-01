@@ -71,6 +71,12 @@ def test_every_format_package_is_introspected_deterministically() -> None:
     assert first_ids == second_ids == tuple(sorted(first_ids))
     assert tuple(adapter.info.format_id for adapter in readers) == first_ids
     assert tuple(adapter.info.format_id for adapter in writers) == first_ids
+    for adapter in readers:
+        for format_id in (adapter.info.format_id, *adapter.info.aliases):
+            assert first.reader(format_id) is adapter
+    for adapter in writers:
+        for format_id in (adapter.info.format_id, *adapter.info.aliases):
+            assert first.writer(format_id) is adapter
     assert first.introspect() == first_ids
     assert first.readers() == readers
     assert first.writers() == writers
