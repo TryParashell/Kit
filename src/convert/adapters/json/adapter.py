@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from io import TextIOBase
 from pathlib import Path
-from typing import BinaryIO, TextIO
 
 from convert.adapters.base import (
     AdapterInfo,
@@ -69,10 +69,27 @@ class JsonAdapter:
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(payload)
             return WriteResult(output, self.info.format_id, len(payload))
-        written = destination.write(payload)
-        if written is None:
-            written = len(payload)
-        return WriteResult(None, self.info.format_id, int(written))
+        text = payload.decode("utf-8")
+        _write_stream(destination, text, payload)
+        return WriteResult(None, self.info.format_id, len(payload))
+
+
+def _write_stream(destination: Destination, text: str, payload: bytes) -> None:
+    writer = getattr(destination, "write", None)
+    if not callable(writer):
+        raise TypeError("JSON destination must be a path or writable stream")
+    if isinstance(destination, TextIOBase):
+        written = writer(text)
+        expected = len(text)
+    else:
+        try:
+            written = writer(payload)
+            expected = len(payload)
+        except TypeError:
+            written = writer(text)
+            expected = len(text)
+    if written is not None and written != expected:
+        raise OSError(f"short JSON write: expected {expected}, wrote {written}")
 
 
 def _read_prefix(source: Source, limit: int) -> bytes:
