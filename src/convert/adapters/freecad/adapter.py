@@ -24,6 +24,7 @@ from convert.adapters.base import (
     Source,
     WriteOptions,
     WriteResult,
+    is_binary_destination,
 )
 from interchange import (
     CadDocument,
@@ -36,6 +37,7 @@ from interchange import (
 )
 
 from .archive import MANIFEST_ENTRY, build_fcstd_archive, extract_manifest_from_fcstd
+from .native import NativeFreeCADError, probe_native_fcstd, read_native_fcstd
 
 
 class FreeCADAdapterError(RuntimeError):
@@ -145,6 +147,13 @@ def _destination_path(destination: Destination) -> Path | None:
     if isinstance(destination, (str, Path)):
         return Path(destination).expanduser().resolve()
     return None
+
+
+def _source_path(source: Source) -> str:
+    if isinstance(source, (str, Path)):
+        return str(Path(source).expanduser().resolve())
+    name = getattr(source, "name", "")
+    return str(name) if isinstance(name, (str, Path)) else ""
 
 
 def _write_bytes(destination: Destination, data: bytes, overwrite: bool) -> Path | None:
@@ -717,11 +726,8 @@ class FreeCADAdapter:
                 if MANIFEST_ENTRY in names and "Document.xml" in names:
                     return ProbeResult(self.info.format_id, 1.0, "Kit FCStd archive")
                 if "Document.xml" in names:
-                    return ProbeResult(
-                        self.info.format_id,
-                        0.0,
-                        "FreeCAD archive has no Kit interchange manifest",
-                    )
+                    confidence, reason = probe_native_fcstd(data)
+                    return ProbeResult(self.info.format_id, confidence, reason)
         except (OSError, TypeError, zipfile.BadZipFile):
             return ProbeResult(self.info.format_id, 0.0, "not a readable FCStd archive")
         return ProbeResult(
@@ -729,20 +735,32 @@ class FreeCADAdapter:
         )
 
     def read(self, source: Source, options: ReadOptions | None = None) -> CadDocument:
-        value = extract_manifest_from_fcstd(_source_bytes(source))
+        data = _source_bytes(source)
         try:
-            document = CadDocument.from_dict(value)
-        except (TypeError, ValueError) as exc:
-            raise FreeCADAdapterError(
-                "embedded neutral document cannot be restored"
-            ) from exc
+            value = extract_manifest_from_fcstd(data)
+        except ValueError as exc:
+            if str(exc) != "FCStd archive has no embedded Kit interchange document":
+                raise FreeCADAdapterError(str(exc)) from exc
+            try:
+                document = read_native_fcstd(data, _source_path(source))
+            except NativeFreeCADError as native_exc:
+                raise FreeCADAdapterError(str(native_exc)) from native_exc
+        else:
+            try:
+                document = CadDocument.from_dict(value)
+            except (TypeError, ValueError) as exc:
+                raise FreeCADAdapterError(
+                    "embedded neutral document cannot be restored"
+                ) from exc
         if options is None or options.strict:
             document.assert_valid()
         return document
 
     def supports(self, document: CadDocument, destination: Destination) -> bool:
         path = _destination_path(destination)
-        return path is None or path.suffix.lower() == ".fcstd"
+        if path is not None:
+            return path.suffix.lower() == ".fcstd"
+        return is_binary_destination(destination)
 
     def write(
         self,
@@ -757,7 +775,9 @@ class FreeCADAdapter:
         if selected.validate:
             document.assert_valid()
         if not self.supports(document, destination):
-            raise ValueError("FreeCAD destination must end in .FCStd")
+            raise FreeCADAdapterError(
+                "FreeCAD destination must be a .FCStd path or writable binary stream"
+            )
         destination_path = _destination_path(destination)
         if (
             destination_path is not None
