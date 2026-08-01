@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .adapters import (
     AdapterRegistry,
@@ -73,7 +73,13 @@ class ConversionEngine:
             if destination_format
             else self.registry.select_writer(document, destination)
         )
-        output = writer.write(document, destination, write_options or WriteOptions())
+        selected_options = write_options or WriteOptions()
+        if destination_format is not None:
+            selected_options = replace(
+                selected_options,
+                destination_format=destination_format,
+            )
+        output = writer.write(document, destination, selected_options)
         source_ids = {reader.info.format_id, *reader.info.aliases}
         return ConversionResult(
             document=document,
