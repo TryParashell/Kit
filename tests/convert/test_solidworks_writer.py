@@ -34,6 +34,8 @@ def test_solidworks_source_replays_exactly_after_freecad_roundtrip(tmp_path) -> 
     assert result.metadata["native_content"] == "exact"
     assert result.metadata["compatibility"] == "native-exact"
     assert result.metadata["neutral_edits_are_native"] is True
+    assert result.metadata["native_self_contained"] is True
+    assert result.metadata["referenced_files_written"] == 0
 
 
 def test_solidworks_source_replays_exactly_after_catia_carrier(tmp_path) -> None:
@@ -78,6 +80,8 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     assert result.metadata["native_geometry"] is False
     assert result.metadata["native_history"] is False
     assert result.metadata["native_assembly"] is False
+    assert result.metadata["native_self_contained"] is False
+    assert result.metadata["referenced_files_written"] == 0
     assert [item.code for item in result.diagnostics] == ["sldprt.neutral_write"]
     replay = BytesIO()
     replay_result = write_sldprt(reread, replay)
@@ -137,6 +141,25 @@ def test_solidworks_aliases_enforce_document_kind(tmp_path) -> None:
     assert result.adapter == "solidworks.sldasm"
     assert result.metadata["format_id"] == "solidworks.sldasm"
     assembly_json = assembly.write_json(tmp_path / "assembly.json")
+    part_json = part.write_json(tmp_path / "part.json")
+    with pytest.raises(ValueError, match="does not support this document kind"):
+        convert(
+            part_json,
+            BytesIO(),
+            destination_format="solidworks.sldasm",
+        )
+    with pytest.raises(ValueError, match="does not support this document kind"):
+        convert(
+            assembly_json,
+            BytesIO(),
+            destination_format="solidworks.sldprt",
+        )
+    with pytest.raises(ValueError, match="does not support this document kind"):
+        convert(
+            part_json,
+            tmp_path / "explicit.SLDPRT",
+            destination_format="solidworks.sldasm",
+        )
     conversion = convert(
         assembly_json,
         tmp_path / "converted.SLDASM",
