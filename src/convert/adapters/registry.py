@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib.metadata import entry_points
+from importlib import import_module
+from inspect import isabstract, isclass
 from pathlib import Path
+from pkgutil import iter_modules
+from types import ModuleType
 from typing import Iterable
 
 from interchange import CadDocument
 
 from .base import (
+    AdapterInfo,
     CadReaderAdapter,
     CadWriterAdapter,
     Destination,
@@ -27,6 +31,10 @@ class AdapterNotFoundError(AdapterRegistryError):
     __slots__ = ()
 
 
+class AdapterDiscoveryError(AdapterRegistryError):
+    __slots__ = ()
+
+
 class AmbiguousAdapterError(AdapterRegistryError):
     __slots__ = ()
 
@@ -35,6 +43,43 @@ class AmbiguousAdapterError(AdapterRegistryError):
 class AdapterBinding:
     reader: CadReaderAdapter | None = None
     writer: CadWriterAdapter | None = None
+
+
+def _adapter_type(value: object, package_name: str) -> type[object] | None:
+    if (
+        not isclass(value)
+        or isabstract(value)
+        or getattr(value, "_is_protocol", False)
+        or not (
+            value.__module__ == package_name
+            or value.__module__.startswith(package_name + ".")
+        )
+        or not hasattr(value, "info")
+    ):
+        return None
+    reader = all(callable(getattr(value, name, None)) for name in ("probe", "read"))
+    writer = all(callable(getattr(value, name, None)) for name in ("supports", "write"))
+    return value if reader or writer else None
+
+
+def _public_adapter_types(module: ModuleType) -> tuple[type[object], ...]:
+    exports = getattr(module, "__all__", ())
+    if not isinstance(exports, (tuple, list)) or not all(
+        isinstance(name, str) for name in exports
+    ):
+        raise AdapterDiscoveryError(f"invalid public exports in {module.__name__}")
+    adapter_types: set[type[object]] = set()
+    for name in sorted(set(exports)):
+        if not hasattr(module, name):
+            raise AdapterDiscoveryError(
+                f"missing public export {module.__name__}.{name}"
+            )
+        adapter_type = _adapter_type(getattr(module, name), module.__name__)
+        if adapter_type is not None:
+            adapter_types.add(adapter_type)
+    return tuple(
+        sorted(adapter_types, key=lambda value: (value.__module__, value.__qualname__))
+    )
 
 
 class AdapterRegistry:
@@ -92,26 +137,100 @@ class AdapterRegistry:
         if not registered:
             raise TypeError("adapter implements neither reader nor writer protocol")
 
-    def discover(self, group: str = "kit.adapters") -> tuple[str, ...]:
-        loaded: list[str] = []
-        for entry_point in entry_points(group=group):
-            factory = entry_point.load()
-            adapter = factory() if isinstance(factory, type) else factory
-            self.register(adapter)
-            loaded.append(entry_point.name)
-        return tuple(loaded)
+    def introspect(self, package_name: str = __package__) -> tuple[str, ...]:
+        try:
+            package = import_module(package_name)
+        except Exception as exc:
+            raise AdapterDiscoveryError(
+                f"could not import adapter package {package_name}"
+            ) from exc
+        paths = getattr(package, "__path__", None)
+        if paths is None:
+            raise AdapterDiscoveryError(f"adapter package has no path: {package_name}")
+        try:
+            packages = tuple(
+                sorted(
+                    item.name
+                    for item in iter_modules(paths, package.__name__ + ".")
+                    if item.ispkg and not item.name.rsplit(".", 1)[-1].startswith("_")
+                )
+            )
+        except Exception as exc:
+            raise AdapterDiscoveryError(
+                f"could not enumerate adapter package {package_name}"
+            ) from exc
+        if not packages:
+            raise AdapterDiscoveryError(f"adapter package is empty: {package_name}")
+        instances: list[object] = []
+        seen_types: set[type[object]] = set()
+        for discovered_name in packages:
+            try:
+                module = import_module(discovered_name)
+            except Exception as exc:
+                raise AdapterDiscoveryError(
+                    f"could not import format package {discovered_name}"
+                ) from exc
+            adapter_types = _public_adapter_types(module)
+            if not adapter_types:
+                raise AdapterDiscoveryError(
+                    f"format package exports no adapter: {discovered_name}"
+                )
+            for adapter_type in adapter_types:
+                if adapter_type in seen_types:
+                    continue
+                seen_types.add(adapter_type)
+                try:
+                    adapter = adapter_type()
+                    info = adapter.info
+                except Exception as exc:
+                    raise AdapterDiscoveryError(
+                        f"could not construct adapter {adapter_type.__module__}."
+                        f"{adapter_type.__qualname__}"
+                    ) from exc
+                reader = isinstance(adapter, CadReaderAdapter) and all(
+                    callable(getattr(adapter, name, None)) for name in ("probe", "read")
+                )
+                writer = isinstance(adapter, CadWriterAdapter) and all(
+                    callable(getattr(adapter, name, None))
+                    for name in ("supports", "write")
+                )
+                if not reader and not writer:
+                    raise AdapterDiscoveryError(
+                        f"invalid adapter {adapter_type.__module__}."
+                        f"{adapter_type.__qualname__}"
+                    )
+                if not isinstance(info, AdapterInfo) or not info.format_id:
+                    raise AdapterDiscoveryError(
+                        f"invalid adapter metadata {adapter_type.__module__}."
+                        f"{adapter_type.__qualname__}"
+                    )
+                instances.append(adapter)
+        bindings = {
+            name: AdapterBinding(binding.reader, binding.writer)
+            for name, binding in self._bindings.items()
+        }
+        aliases = dict(self._aliases)
+        try:
+            self.extend(instances)
+        except Exception as exc:
+            self._bindings = bindings
+            self._aliases = aliases
+            raise AdapterDiscoveryError(
+                f"could not register adapters from {package_name}"
+            ) from exc
+        return tuple(dict.fromkeys(adapter.info.format_id for adapter in instances))
 
     def readers(self) -> tuple[CadReaderAdapter, ...]:
         return tuple(
             binding.reader
-            for binding in self._bindings.values()
+            for _, binding in sorted(self._bindings.items())
             if binding.reader is not None
         )
 
     def writers(self) -> tuple[CadWriterAdapter, ...]:
         return tuple(
             binding.writer
-            for binding in self._bindings.values()
+            for _, binding in sorted(self._bindings.items())
             if binding.writer is not None
         )
 
