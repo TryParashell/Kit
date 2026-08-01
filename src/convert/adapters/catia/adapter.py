@@ -21,6 +21,7 @@ from convert.adapters.base import (
 )
 from interchange import (
     AssemblyData,
+    Body,
     BrepPayload,
     CadDocument,
     CadSource,
@@ -30,13 +31,24 @@ from interchange import (
     ComponentKind,
     Configuration,
     Diagnostic,
+    FeatureKind,
+    FeatureStep,
+    Provenance,
+    ProvenanceSpan,
     Severity,
+    SupportPlane,
+    Transform,
+    Vector3,
     frozen_mapping,
 )
 
 from .container import (
     Cfv2Archive,
+    Cfv2Declaration,
+    Cfv2Directory,
     Cfv2FormatError,
+    Cfv2Stream,
+    OsmxArchive,
     build_cfv2,
     build_declaration,
     extract_ascii_values,
@@ -50,6 +62,48 @@ _PART_STREAM = "1000_00000002_2"
 _PRODUCT_STREAM = "1000_00000001_1"
 _PART_SUFFIX = ".catpart"
 _PRODUCT_SUFFIX = ".catproduct"
+_PART_FEATURE_CLASSES = frozenset(
+    {
+        "BooleanAdd",
+        "BooleanRemove",
+        "Chamfer",
+        "CircPattern",
+        "Draft",
+        "EdgeFillet",
+        "Groove",
+        "GSMBlend",
+        "GSMCircle",
+        "GSMExtrude",
+        "GSMExtract",
+        "GSMFill",
+        "GSMIntersect",
+        "GSMJoin",
+        "GSMLine",
+        "GSMOffset",
+        "GSMPoint",
+        "GSMPointCoord",
+        "GSMRevol",
+        "GSMRotate",
+        "GSMScaling",
+        "GSMShapeFillet",
+        "GSMSplit",
+        "GSMSweep",
+        "GSMSymmetry",
+        "GSMTranslate",
+        "GSMAxisToAxis",
+        "Hole",
+        "Mirror",
+        "Pad",
+        "Pocket",
+        "RectPattern",
+        "Shaft",
+        "Shell",
+        "Sketch",
+        "Sketcher",
+        "ThickSurface",
+        "UserPattern",
+    }
+)
 
 
 class CatiaAdapterError(RuntimeError):
@@ -104,15 +158,32 @@ class CatiaAdapter:
         if manifest is not None:
             return _embedded_document(archive, data, label, manifest, settings)
         document_type = _document_type(archive, label)
-        payloads = _native_payloads(archive, data, document_type, settings.include_brep)
+        payloads = _native_payloads(archive, data, document_type, settings)
         assembly, assembly_diagnostics = _native_assembly(data, label, document_type)
+        (
+            part_metadata,
+            support_planes,
+            feature_timeline,
+            bodies,
+            part_diagnostics,
+        ) = _native_part_data(archive, document_type)
         version = _application_version(data)
         capabilities = {
             Capability.NATIVE_PAYLOADS,
             Capability.ROUNDTRIP_METADATA,
         }
-        if any(payload.format_id == "catia.cgm" for payload in payloads):
+        if _has_brep_payload(payloads):
             capabilities.add(Capability.BREP)
+        if any(
+            payload.kind == "native_feature_graph" and payload.data is not None
+            for payload in payloads
+        ):
+            capabilities.add(Capability.PARAMETRIC_HISTORY)
+        if any(
+            payload.format_id == "catia.cgr" and payload.data is not None
+            for payload in payloads
+        ):
+            capabilities.add(Capability.TESSELLATION)
         if assembly is not None:
             capabilities.add(Capability.ASSEMBLIES)
         metadata = {
@@ -127,6 +198,8 @@ class CatiaAdapter:
                 (value.ordinal, value.class_name, value.base_class, value.stream_name)
                 for value in archive.declarations()
             ),
+            **_container_metadata(archive),
+            **part_metadata,
         }
         document = CadDocument(
             source=CadSource(
@@ -138,13 +211,13 @@ class CatiaAdapter:
             ),
             configurations=(Configuration("catia:default", "Default", active=True),),
             parameters=(),
-            support_planes=(),
+            support_planes=support_planes,
             sketches=(),
             selections=(),
-            feature_timeline=(),
-            bodies=(),
+            feature_timeline=feature_timeline,
+            bodies=bodies,
             brep_payloads=payloads,
-            diagnostics=assembly_diagnostics,
+            diagnostics=assembly_diagnostics + part_diagnostics,
             capabilities=frozenset(capabilities),
             metadata=frozen_mapping(metadata),
             assembly=assembly,

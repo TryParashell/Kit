@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 import struct
 from typing import Iterable, Sequence
 
@@ -8,9 +9,14 @@ from typing import Iterable, Sequence
 MAGIC = b"V5_CFV2\x00"
 DIRECTORY_MAGIC = b"CATIA_V5 CB0001\x00"
 DIRECTORY_END = b"CB__END"
+OSMX_MAGIC = b"OSMX"
 
 
 class Cfv2FormatError(ValueError):
+    __slots__ = ()
+
+
+class OsmxFormatError(ValueError):
     __slots__ = ()
 
 
@@ -53,6 +59,59 @@ class Cfv2Declaration:
     class_name: str
     base_class: str
     stream_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class OsmxSymbol:
+    index: int
+    offset: int
+    value: str
+
+
+@dataclass(frozen=True, slots=True)
+class OsmxArchive:
+    data: bytes
+    version: str
+    symbol_table_offset: int
+    symbol_data_offset: int
+    symbols: tuple[OsmxSymbol, ...]
+
+    @classmethod
+    def from_bytes(cls, source: bytes | bytearray) -> OsmxArchive:
+        data = bytes(source)
+        if len(data) < 0x68 or not data.startswith(OSMX_MAGIC):
+            raise OsmxFormatError("not an OSMX stream")
+        symbol_table_offset = struct.unpack_from("<I", data, 0x64)[0]
+        if symbol_table_offset < 0x68 or symbol_table_offset + 8 > len(data):
+            raise OsmxFormatError("OSMX symbol table offset is outside the stream")
+        if data[symbol_table_offset : symbol_table_offset + 2] != b"\x7c\x02":
+            raise OsmxFormatError("OSMX symbol table marker is missing")
+        section_length = struct.unpack_from("<I", data, symbol_table_offset + 2)[0]
+        if section_length != len(data) - symbol_table_offset:
+            raise OsmxFormatError("OSMX symbol table length is inconsistent")
+        candidates = _osmx_symbol_candidates(data, symbol_table_offset)
+        if len(candidates) != 1:
+            raise OsmxFormatError("OSMX symbol data boundary is ambiguous")
+        symbol_data_offset, symbols = candidates[0]
+        match = re.search(rb"V5R\d+(?:SP\d+)?(?:HF\d+)?", data[:symbol_table_offset])
+        version = match.group().decode("ascii") if match else ""
+        return cls(
+            data,
+            version,
+            symbol_table_offset,
+            symbol_data_offset,
+            symbols,
+        )
+
+    @property
+    def values(self) -> tuple[str, ...]:
+        return tuple(symbol.value for symbol in self.symbols)
+
+    def first_after(self, value: str) -> OsmxSymbol | None:
+        for index, symbol in enumerate(self.symbols[:-1]):
+            if symbol.value == value:
+                return self.symbols[index + 1]
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -432,6 +491,44 @@ def _validate_class_name(name: str) -> None:
         or not all(character.isalnum() or character == "_" for character in name)
     ):
         raise ValueError("CFV2 class names must be ASCII identifiers")
+
+
+def _osmx_symbol_candidates(
+    data: bytes, symbol_table_offset: int
+) -> tuple[tuple[int, tuple[OsmxSymbol, ...]], ...]:
+    results: list[tuple[int, tuple[OsmxSymbol, ...]]] = []
+    start = symbol_table_offset + 6
+    stop = min(symbol_table_offset + 16, len(data))
+    for symbol_data_offset in range(start, stop):
+        cursor = symbol_data_offset
+        symbols: list[OsmxSymbol] = []
+        valid = True
+        while cursor < len(data):
+            stored_length = data[cursor]
+            value_offset = cursor + 1
+            value_length = stored_length - 1
+            value_end = value_offset + value_length
+            if (
+                stored_length == 0
+                or value_end > len(data)
+                or any(
+                    value < 0x20 or value > 0x7E
+                    for value in data[value_offset:value_end]
+                )
+            ):
+                valid = False
+                break
+            symbols.append(
+                OsmxSymbol(
+                    len(symbols),
+                    value_offset,
+                    data[value_offset:value_end].decode("ascii"),
+                )
+            )
+            cursor = value_end
+        if valid and cursor == len(data) and symbols:
+            results.append((symbol_data_offset, tuple(symbols)))
+    return tuple(results)
 
 
 def _u32be(data: bytes, offset: int) -> int:
