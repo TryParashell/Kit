@@ -55,6 +55,7 @@ class WriteOptions:
     configuration: str | None = None
     overwrite: bool = False
     validate: bool = True
+    destination_format: str | None = None
     values: Mapping[str, Any] = field(default_factory=frozen_mapping)
 
 
