@@ -57,7 +57,7 @@ def open_document(
 
 def write_document(
     document: CadDocument,
-    destination: str | Path,
+    destination: Destination,
     *,
     destination_format: str | None = None,
     configuration: str | None = None,
