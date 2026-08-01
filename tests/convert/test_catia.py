@@ -86,9 +86,17 @@ def test_solidworks_part_roundtrips_through_generated_catpart(
 ) -> None:
     source = open_document(SLDPRT)
     output = tmp_path / "example.CATPart"
-    result = convert(SLDPRT, output)
+    with pytest.raises(CatiaAdapterError, match="allow_non_native"):
+        convert(SLDPRT, output)
+    result = convert(
+        SLDPRT,
+        output,
+        write_values={"allow_non_native": True},
+    )
     assert result.destination_format == "catia.v5"
     assert result.output.metadata["mode"] == "generated_cfv2"
+    assert result.output.metadata["compatibility"] == "kit-neutral-only"
+    assert result.output.metadata["native_feature_graph"] is False
     archive = Cfv2Archive.from_bytes(output.read_bytes())
     assert [value.class_name for value in archive.declarations()] == [
         "CATProdCont",
@@ -116,7 +124,11 @@ def test_solidworks_assembly_roundtrips_through_generated_catproduct(
 ) -> None:
     source = open_document(SLDASM)
     output = tmp_path / "Piston.CATProduct"
-    result = convert(SLDASM, output)
+    result = convert(
+        SLDASM,
+        output,
+        write_values={"allow_non_native": True},
+    )
     assert result.source_format == "solidworks.sldasm"
     assert result.destination_format == "catia.v5"
     archive = Cfv2Archive.from_bytes(output.read_bytes())
@@ -141,7 +153,11 @@ def test_modified_native_document_rebuilds_instead_of_replaying(
         configurations=(Configuration("catia:changed", "Changed", active=True),),
     )
     output = tmp_path / "Changed.CATPart"
-    result = write_document(changed, output)
+    result = write_document(
+        changed,
+        output,
+        values={"allow_non_native": True},
+    )
     assert result.metadata["mode"] == "generated_cfv2"
     assert output.read_bytes() != source.read_bytes()
     restored = open_document(output)
@@ -155,7 +171,7 @@ def test_embedded_manifest_applies_read_options_and_replays_exactly(
 ) -> None:
     source = open_document(SLDPRT)
     output = tmp_path / "Filtered.CATPart"
-    convert(SLDPRT, output)
+    convert(SLDPRT, output, write_values={"allow_non_native": True})
     configuration = source.configurations[0]
     filtered = CatiaAdapter().read(
         output,
@@ -180,7 +196,7 @@ def test_embedded_manifest_applies_read_options_and_replays_exactly(
 
 def test_embedded_manifest_rejects_unknown_configuration(tmp_path: Path) -> None:
     output = tmp_path / "Configured.CATPart"
-    convert(SLDPRT, output)
+    convert(SLDPRT, output, write_values={"allow_non_native": True})
     with pytest.raises(CatiaAdapterError, match="configuration"):
         CatiaAdapter().read(
             output,
@@ -191,7 +207,7 @@ def test_embedded_manifest_rejects_unknown_configuration(tmp_path: Path) -> None
 def test_conversion_result_reports_selected_catia_reader(tmp_path: Path) -> None:
     catpart = tmp_path / "Reader.CATPart"
     output = tmp_path / "Reader.json"
-    convert(SLDPRT, catpart)
+    convert(SLDPRT, catpart, write_values={"allow_non_native": True})
     result = convert(catpart, output)
     assert result.source_format == "catia.v5"
     assert result.document.source.format_id == "catia.v5"
@@ -211,7 +227,7 @@ def test_changed_cgm_bytes_disable_exact_native_replay(tmp_path: Path) -> None:
         ),
     )
     output = tmp_path / "ChangedGeometry.CATPart"
-    result = write_catia(changed, output)
+    result = write_catia(changed, output, allow_non_native=True)
     assert result.metadata["mode"] == "generated_cfv2"
 
 

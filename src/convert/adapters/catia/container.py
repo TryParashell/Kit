@@ -204,6 +204,15 @@ def _parse_directory(
     marker = directory.rfind(DIRECTORY_END)
     if marker < 0 or any(directory[marker + len(DIRECTORY_END) :]):
         raise Cfv2FormatError("CFV2 directory end marker is missing")
+    sequential = _sequential_streams(
+        data,
+        directory,
+        physical_base,
+        offset,
+        marker,
+    )
+    if sequential is not None:
+        return Cfv2Directory(physical_base, offset, length, sequential)
     streams: list[Cfv2Stream] = []
     seen_offsets: set[int] = set()
     for count_offset in range(len(DIRECTORY_MAGIC), len(directory) - 3):
@@ -265,6 +274,78 @@ def _parse_directory(
         raise Cfv2FormatError("CFV2 directory has no valid stream descriptors")
     streams.sort(key=lambda stream: stream.descriptor_offset)
     return Cfv2Directory(physical_base, offset, length, tuple(streams))
+
+
+def _sequential_streams(
+    data: bytes,
+    directory: bytes,
+    physical_base: int,
+    directory_offset: int,
+    marker: int,
+) -> tuple[Cfv2Stream, ...] | None:
+    cursor = len(DIRECTORY_MAGIC)
+    streams: list[Cfv2Stream] = []
+    while cursor < marker:
+        count = _u32be(directory, cursor + 0x50)
+        if count < 1 or count > 64:
+            return None
+        end = cursor + 0x54 + 20 * count
+        if end > marker:
+            return None
+        logical_length = _u32be(directory, cursor + 0x0C)
+        logical_offset = 0
+        extents: list[Cfv2Extent] = []
+        for index in range(count):
+            at = cursor + 0x54 + 20 * index
+            physical_offset, physical_length, part_length, stored_offset, flags = (
+                struct.unpack_from(">IIIII", directory, at)
+            )
+            if (
+                physical_length == 0
+                or physical_length != part_length
+                or stored_offset != logical_offset
+                or physical_base + physical_offset + physical_length > len(data)
+            ):
+                return None
+            extents.append(
+                Cfv2Extent(
+                    physical_offset,
+                    physical_length,
+                    stored_offset,
+                    flags,
+                )
+            )
+            logical_offset += part_length
+        name = _sequential_name(directory, cursor)
+        if logical_offset != logical_length or not name:
+            return None
+        streams.append(
+            Cfv2Stream(
+                name,
+                logical_length,
+                directory_offset + cursor,
+                tuple(extents),
+            )
+        )
+        cursor = end
+    return tuple(streams) if cursor == marker and streams else None
+
+
+def _sequential_name(data: bytes, offset: int) -> str:
+    region = data[offset + 0x10 : offset + 0x50]
+    value = bytearray()
+    for index in range(0, len(region), 2):
+        character, high = region[index : index + 2]
+        if character == 0 and high == 0:
+            break
+        if high != 0 or not 0x20 <= character <= 0x7E:
+            return ""
+        value.append(character)
+    try:
+        name = value.decode("ascii")
+    except UnicodeDecodeError:
+        return ""
+    return name if 3 <= len(name) <= 32 else ""
 
 
 def _descriptor_name(data: bytes, offset: int) -> str:

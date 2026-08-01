@@ -39,7 +39,7 @@ def test_solidworks_source_replays_exactly_after_catia_carrier(tmp_path) -> None
     source = read_sldprt(SAMPLE)
     catpart = tmp_path / "source.CATPart"
     output = tmp_path / "source.SLDPRT"
-    write_catia(source, catpart)
+    write_catia(source, catpart, allow_non_native=True)
     restored = read_catia(catpart)
     result = write_sldprt(restored, output)
     assert output.read_bytes() == SAMPLE.read_bytes()

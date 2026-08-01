@@ -193,6 +193,11 @@ class CatiaAdapter:
                     }
                 ),
             )
+        if settings.values.get("allow_non_native") is not True:
+            raise CatiaAdapterError(
+                "generated CATIA writing requires "
+                "WriteOptions(values={'allow_non_native': True})"
+            )
         data = _generated_archive(document, document_type)
         restored = _restore_generated(data)
         if restored != document:
@@ -214,6 +219,8 @@ class CatiaAdapter:
             metadata=MappingProxyType(
                 {
                     "mode": "generated_cfv2",
+                    "compatibility": "kit-neutral-only",
+                    "native_feature_graph": False,
                     "container": "V5_CFV2",
                     "document_type": document_type,
                     "outer_stream_count": len(archive.outer.streams),
@@ -743,9 +750,14 @@ def write_catia(
     *,
     overwrite: bool = False,
     validate: bool = True,
+    allow_non_native: bool = False,
 ) -> WriteResult:
     return CatiaAdapter().write(
         document,
         destination,
-        WriteOptions(overwrite=overwrite, validate=validate),
+        WriteOptions(
+            overwrite=overwrite,
+            validate=validate,
+            values=frozen_mapping({"allow_non_native": allow_non_native}),
+        ),
     )
