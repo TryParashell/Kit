@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections import Counter
 from functools import lru_cache
 import gc
+import hashlib
 from pathlib import Path
 import re
+import struct
 
 import pytest
 
@@ -119,15 +121,54 @@ def _document_signature(document: CadDocument):
         document.selections,
         document.feature_timeline,
         document.bodies,
-        document.meshes,
+        tuple(_mesh_signature(mesh) for mesh in document.meshes),
         tuple(
-            payload
+            _brep_signature(payload)
             for payload in document.brep_payloads
             if payload.kind not in {"native_document", "native_document_binding"}
         ),
         document.units,
         document.schema_version,
         _assembly_signature(document.assembly),
+    )
+
+
+def _mesh_signature(mesh):
+    digest = hashlib.sha256()
+    for vertex in mesh.vertices:
+        digest.update(struct.pack("!ddd", vertex.x, vertex.y, vertex.z))
+    for triangle in mesh.triangles:
+        digest.update(struct.pack("!qqq", *triangle))
+    for normal in mesh.normals:
+        digest.update(struct.pack("!ddd", normal.x, normal.y, normal.z))
+    return (
+        mesh.id,
+        mesh.name,
+        len(mesh.vertices),
+        len(mesh.triangles),
+        len(mesh.normals),
+        digest.hexdigest(),
+        mesh.provenance,
+        mesh.attributes,
+    )
+
+
+def _brep_signature(payload):
+    return (
+        payload.id,
+        payload.format_id,
+        payload.kind,
+        payload.schema,
+        payload.sha256,
+        len(payload.data) if payload.data is not None else None,
+        (
+            hashlib.sha256(payload.data).hexdigest()
+            if payload.data is not None
+            else None
+        ),
+        payload.source_stream,
+        payload.provenance,
+        payload.attributes,
     )
 
 
@@ -271,10 +312,13 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
             source,
             destination,
         )
-        restored = open_document(destination)
         assert forward.source_format == FORMAT_BY_SUFFIX[source_suffix]
         assert forward.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
         assert forward.output.bytes_written == destination.stat().st_size
+        _assert_truthful_vendor_result(forward, destination_suffix, is_assembly)
+        del forward
+        gc.collect()
+        restored = open_document(destination)
         assert restored.validate() == ()
         assert _document_signature(restored) == original_signature
         _assert_target(
@@ -283,8 +327,7 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
             destination,
             is_assembly,
         )
-        _assert_truthful_vendor_result(forward, destination_suffix, is_assembly)
-        del restored, forward
+        del restored
         gc.collect()
         reverse_directory = tmp_path / f"reverse_{index}"
         reverse_directory.mkdir()
@@ -293,13 +336,15 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
             destination,
             reverse,
         )
-        reversed_document = open_document(reverse)
         assert backward.source_format == FORMAT_BY_SUFFIX[destination_suffix]
         assert backward.destination_format == FORMAT_BY_SUFFIX[source_suffix]
         assert backward.output.bytes_written == reverse.stat().st_size
+        _assert_truthful_vendor_result(backward, source_suffix, is_assembly)
+        del backward
+        gc.collect()
+        reversed_document = open_document(reverse)
         assert reversed_document.validate() == ()
         assert _document_signature(reversed_document) == original_signature
         _assert_target(reversed_document, source_suffix, reverse, is_assembly)
-        _assert_truthful_vendor_result(backward, source_suffix, is_assembly)
-        del reversed_document, backward
+        del reversed_document
         gc.collect()
