@@ -5,6 +5,7 @@ import hashlib
 from io import BytesIO
 from pathlib import Path
 import struct
+import zlib
 
 import pytest
 
@@ -16,6 +17,7 @@ from convert.adapters.catia import (
     Cfv2Archive,
     Cfv2FormatError,
     OsmxArchive,
+    OsmxFormatError,
     build_cfv2,
     write_catia,
 )
@@ -146,6 +148,7 @@ def test_native_catpart_retains_declared_geometry_and_feature_graphs() -> None:
     assert document.metadata["catia.document_type"] == "CATPart"
     assert [payload.format_id for payload in document.brep_payloads] == [
         "catia.v5.cfv2",
+        "catia.v5.sha256",
         "catia.cgm",
         "catia.v5.osmx",
         "catia.v5.osmx",
@@ -156,7 +159,11 @@ def test_native_catpart_retains_declared_geometry_and_feature_graphs() -> None:
     )
     cgm_stream = archive.outer.stream(cgm_declaration.stream_name)
     assert cgm_stream is not None
-    cgm = document.brep_payloads[1]
+    cgm = next(
+        payload
+        for payload in document.brep_payloads
+        if payload.id == "catia:native-cgm"
+    )
     assert cgm.data == archive.stream_bytes(cgm_stream)
     assert cgm.sha256 == hashlib.sha256(cgm.data or b"").hexdigest()
     assert cgm.source_stream == cgm_declaration.stream_name
@@ -167,7 +174,11 @@ def test_native_catpart_retains_declared_geometry_and_feature_graphs() -> None:
     )
     assert cgm_metadata["sha256"] == cgm.sha256
     assert cgm_metadata["logical_length"] == len(cgm.data or b"")
-    feature_graph = document.brep_payloads[2]
+    feature_graph = next(
+        payload
+        for payload in document.brep_payloads
+        if payload.id == "catia:native-feature-graph"
+    )
     assert feature_graph.kind == "native_feature_graph"
     assert OsmxArchive.from_bytes(feature_graph.data or b"").version == "V5R28SP6HF0"
     assert [plane.name for plane in document.support_planes] == [
@@ -182,12 +193,31 @@ def test_native_catpart_retains_declared_geometry_and_feature_graphs() -> None:
     assert Capability.PARAMETRIC_HISTORY in document.capabilities
     assert Capability.BREP in document.capabilities
     without_data = CatiaAdapter().read(source, ReadOptions(include_brep=False))
-    assert without_data.brep_payloads[0].data is None
-    assert {payload.kind for payload in without_data.brep_payloads[1:]} == {
+    native_document = next(
+        payload
+        for payload in without_data.brep_payloads
+        if payload.kind == "native_document"
+    )
+    assert native_document.data is None
+    assert {
+        payload.kind
+        for payload in without_data.brep_payloads
+        if payload.kind != "native_document"
+    } == {
+        "native_document_binding",
         "native_feature_graph",
         "native_product_graph",
     }
     assert Capability.BREP not in without_data.capabilities
+
+
+def test_adapter_capabilities_only_report_implemented_native_data() -> None:
+    capabilities = CatiaAdapter().info.capabilities
+    assert Capability.PARAMETRIC_HISTORY in capabilities
+    assert Capability.BREP in capabilities
+    assert Capability.EDITABLE_SKETCHES not in capabilities
+    assert Capability.EXPRESSIONS not in capabilities
+    assert Capability.MATERIALS not in capabilities
 
 
 def test_native_catproduct_retains_product_occurrences() -> None:
@@ -197,9 +227,9 @@ def test_native_catproduct_retains_product_occurrences() -> None:
         "I_4876.2",
         "I_4876.3",
         "I_4784.5",
-        "Brake_bias_90_degree_coupler!I_Brake_bias_90_degree_coupler.1",
+        "I_Brake_bias_90_degree_coupler.1",
     ]
-    assert len(document.assembly.definitions) == 4
+    assert len(document.assembly.definitions) == 5
     assert Capability.BREP not in document.capabilities
 
 
@@ -279,8 +309,23 @@ def test_solidworks_part_roundtrips_through_generated_catpart(
     assert restored.configurations == source.configurations
     assert restored.sketches == source.sketches
     assert restored.feature_timeline == source.feature_timeline
-    assert restored.brep_payloads[:-1] == source.brep_payloads
-    assert restored.brep_payloads[-1].format_id == "catia.v5.cfv2"
+    retained = tuple(
+        payload
+        for payload in restored.brep_payloads
+        if payload.kind not in {"native_document", "native_document_binding"}
+    )
+    assert retained == source.brep_payloads
+    assert (
+        sum(
+            payload.kind == "native_document_binding"
+            for payload in restored.brep_payloads
+        )
+        == 1
+    )
+    assert (
+        sum(payload.kind == "native_document" for payload in restored.brep_payloads)
+        == 1
+    )
 
 
 def test_solidworks_assembly_roundtrips_through_generated_catproduct(
@@ -327,7 +372,28 @@ def test_modified_native_document_rebuilds_instead_of_replaying(
     restored = open_document(output)
     assert restored.source.format_id == "catia.v5"
     assert restored.configurations == changed.configurations
-    assert restored.brep_payloads[:-1] == changed.brep_payloads[1:]
+    retained = tuple(
+        payload
+        for payload in changed.brep_payloads
+        if payload.kind not in {"native_document", "native_document_binding"}
+    )
+    restored_retained = tuple(
+        payload
+        for payload in restored.brep_payloads
+        if payload.kind not in {"native_document", "native_document_binding"}
+    )
+    assert restored_retained == retained
+    assert (
+        sum(
+            payload.kind == "native_document_binding"
+            for payload in restored.brep_payloads
+        )
+        == 1
+    )
+    assert (
+        sum(payload.kind == "native_document" for payload in restored.brep_payloads)
+        == 1
+    )
 
 
 def test_embedded_manifest_applies_read_options_and_replays_exactly(
@@ -390,12 +456,20 @@ def test_conversion_result_reports_selected_catia_reader(tmp_path: Path) -> None
 
 def test_changed_cgm_bytes_disable_exact_native_replay(tmp_path: Path) -> None:
     document = open_document(CATPARTS / "Banjo.CATPart")
-    cgm = document.brep_payloads[1]
+    cgm = next(
+        payload
+        for payload in document.brep_payloads
+        if payload.id == "catia:native-cgm"
+    )
     changed = replace(
         document,
-        brep_payloads=(
-            document.brep_payloads[0],
-            replace(cgm, data=(cgm.data or b"") + b"\x00"),
+        brep_payloads=tuple(
+            (
+                replace(payload, data=(cgm.data or b"") + b"\x00")
+                if payload.id == cgm.id
+                else payload
+            )
+            for payload in document.brep_payloads
         ),
     )
     output = tmp_path / "ChangedGeometry.CATPart"
@@ -408,19 +482,92 @@ def test_swapped_native_document_cannot_exact_replay() -> None:
     replacement = (CATPARTS / "Bolt_M5x40.CATPart").read_bytes()
     changed = replace(
         document,
-        brep_payloads=(
-            replace(
-                document.brep_payloads[0],
-                data=replacement,
-                sha256=hashlib.sha256(replacement).hexdigest(),
-            ),
-            *document.brep_payloads[1:],
+        brep_payloads=tuple(
+            (
+                replace(
+                    payload,
+                    data=replacement,
+                    sha256=hashlib.sha256(replacement).hexdigest(),
+                )
+                if payload.kind == "native_document"
+                else payload
+            )
+            for payload in document.brep_payloads
         ),
     )
     output = BytesIO()
     result = write_catia(changed, output, allow_non_native=True)
     assert result.metadata["mode"] == "generated_cfv2"
     assert output.getvalue() != replacement
+
+
+def test_mutated_native_catproduct_cannot_exact_replay() -> None:
+    source = CATPRODUCTS / "Tilton_Set.CATProduct"
+    document = open_document(source)
+    mutated = bytearray(source.read_bytes())
+    archive = Cfv2Archive.from_bytes(mutated)
+    data_stream = archive.outer.stream("Data")
+    assert data_stream is not None
+    assert len(data_stream.extents) == 1
+    mutated[data_stream.extents[0].physical_offset + 100] ^= 1
+    native = bytes(mutated)
+    changed = replace(
+        document,
+        brep_payloads=tuple(
+            (
+                replace(
+                    payload,
+                    data=native,
+                    sha256=hashlib.sha256(native).hexdigest(),
+                )
+                if payload.kind == "native_document"
+                else payload
+            )
+            for payload in document.brep_payloads
+        ),
+    )
+    output = BytesIO()
+    result = write_catia(changed, output, allow_non_native=True)
+    assert result.metadata["mode"] == "generated_cfv2"
+    assert output.getvalue() != native
+
+
+def test_generated_carrier_binding_rejects_mutated_physical_stream() -> None:
+    source = open_document(SLDPRT)
+    carrier = BytesIO()
+    write_catia(source, carrier, allow_non_native=True)
+    carrier_data = carrier.getvalue()
+    document = CatiaAdapter().read(carrier_data)
+    unchanged = BytesIO()
+    result = write_catia(document, unchanged)
+    assert result.metadata["mode"] == "exact_native_roundtrip"
+    assert unchanged.getvalue() == carrier_data
+    mutated = bytearray(carrier_data)
+    archive = Cfv2Archive.from_bytes(mutated)
+    summary = archive.outer.stream("CATSummaryInformation")
+    assert summary is not None
+    assert len(summary.extents) == 1
+    mutated[summary.extents[0].physical_offset + 10] ^= 1
+    native = bytes(mutated)
+    changed = replace(
+        document,
+        brep_payloads=tuple(
+            (
+                replace(
+                    payload,
+                    data=native,
+                    sha256=hashlib.sha256(native).hexdigest(),
+                )
+                if payload.kind == "native_document"
+                else payload
+            )
+            for payload in document.brep_payloads
+        ),
+    )
+    rebuilt = BytesIO()
+    result = write_catia(changed, rebuilt, allow_non_native=True)
+    assert result.metadata["mode"] == "generated_cfv2"
+    assert rebuilt.getvalue() != native
 
 
 def test_native_catpart_replays_across_solidworks_carrier(tmp_path: Path) -> None:
@@ -489,3 +636,63 @@ def test_cfv2_rejects_unowned_nested_container() -> None:
     data[start : start + len(injected)] = injected
     with pytest.raises(Cfv2FormatError, match="owning stream"):
         Cfv2Archive.from_bytes(data)
+
+
+def test_cfv2_ignores_nested_magic_away_from_stream_boundaries() -> None:
+    data = bytearray((CATPARTS / "Banjo.CATPart").read_bytes())
+    archive = Cfv2Archive.from_bytes(data)
+    preview = archive.outer.stream("CATPreview")
+    assert preview is not None
+    assert len(preview.extents) == 1
+    injected = build_cfv2((("Injected", b"value"),))
+    start = preview.extents[0].physical_offset + 32
+    assert start + len(injected) < (
+        preview.extents[0].physical_offset + preview.logical_length
+    )
+    data[start : start + len(injected)] = injected
+    restored = Cfv2Archive.from_bytes(data)
+    assert len(restored.nested) == 1
+
+
+def test_osmx_rejects_excessive_symbol_count() -> None:
+    symbols = b"\x02A" * 65_550
+    section = b"\x7c\x02" + struct.pack("<I", 6 + len(symbols)) + symbols
+    data = bytearray(0x68)
+    data[:4] = b"OSMX"
+    struct.pack_into("<I", data, 0x64, 0x68)
+    data.extend(section)
+    with pytest.raises(OsmxFormatError, match="safety limit"):
+        OsmxArchive.from_bytes(data)
+
+
+@pytest.mark.parametrize(
+    ("manifest", "message"),
+    (
+        (
+            b"KITCFV2\x01"
+            + struct.pack(">Q", 1 << 63)
+            + bytes(32)
+            + zlib.compress(b""),
+            "size limit",
+        ),
+        (
+            b"KITCFV2\x01"
+            + struct.pack(">Q", 1)
+            + hashlib.sha256(b"ab").digest()
+            + zlib.compress(b"ab"),
+            "declared length",
+        ),
+        (
+            b"KITCFV2\x01"
+            + struct.pack(">Q", 2)
+            + hashlib.sha256(b"{}").digest()
+            + zlib.compress(b"{}")
+            + b"trailing",
+            "trailing compressed data",
+        ),
+    ),
+)
+def test_manifest_decompression_is_bounded(manifest: bytes, message: str) -> None:
+    data = build_cfv2((("KitInterchange", manifest),))
+    with pytest.raises(CatiaAdapterError, match=message):
+        CatiaAdapter().read(data)
