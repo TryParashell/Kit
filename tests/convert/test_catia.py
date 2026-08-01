@@ -140,6 +140,8 @@ def test_native_catia_roundtrip_is_byte_exact(source: Path, tmp_path: Path) -> N
     assert result.metadata["native_geometry"] is True
     assert result.metadata["native_history"] is True
     assert result.metadata["native_assembly"] is (document.assembly is not None)
+    assert result.metadata["native_self_contained"] is (document.assembly is None)
+    assert result.metadata["referenced_files_written"] == 0
     assert output.read_bytes() == source.read_bytes()
 
 
@@ -294,6 +296,8 @@ def test_solidworks_part_roundtrips_through_generated_catpart(
     assert result.output.metadata["native_geometry"] is False
     assert result.output.metadata["native_history"] is False
     assert result.output.metadata["native_assembly"] is False
+    assert result.output.metadata["native_self_contained"] is False
+    assert result.output.metadata["referenced_files_written"] == 0
     assert result.output.metadata["native_feature_graph"] is False
     archive = Cfv2Archive.from_bytes(output.read_bytes())
     assert [value.class_name for value in archive.declarations()] == [
