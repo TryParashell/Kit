@@ -151,6 +151,8 @@ def _assert_truthful_vendor_result(result, suffix: str) -> None:
     assert isinstance(metadata["native_geometry"], bool)
     assert isinstance(metadata["native_history"], bool)
     assert isinstance(metadata["native_assembly"], bool)
+    assert isinstance(metadata["native_self_contained"], bool)
+    assert metadata["referenced_files_written"] == 0
     if metadata["compatibility"] != "native-exact":
         assert metadata["vendor_loadable"] is False
         assert metadata["native_geometry"] is False
