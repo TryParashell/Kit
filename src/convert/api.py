@@ -9,6 +9,7 @@ from interchange import CadDocument, frozen_mapping
 from .adapters import (
     AdapterInfo,
     AdapterRegistry,
+    Destination,
     ReadOptions,
     Source,
     WriteOptions,
@@ -79,7 +80,7 @@ def write_document(
 
 def convert(
     source: Source,
-    destination: str | Path,
+    destination: Destination,
     *,
     source_format: str | None = None,
     destination_format: str | None = None,
@@ -89,6 +90,9 @@ def convert(
     overwrite: bool = False,
     write_values: Mapping[str, Any] | None = None,
 ) -> ConversionResult:
+    values = {"portable": True}
+    if write_values is not None:
+        values.update(write_values)
     return _engine.convert(
         source,
         destination,
@@ -103,7 +107,7 @@ def convert(
             configuration=configuration,
             overwrite=overwrite,
             validate=True,
-            values=frozen_mapping(write_values),
+            values=frozen_mapping(values),
         ),
     )
 
