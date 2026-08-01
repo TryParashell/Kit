@@ -50,7 +50,7 @@ class JsonAdapter:
     def supports(self, document: CadDocument, destination: Destination) -> bool:
         if isinstance(destination, (str, Path)):
             return Path(destination).suffix.lower() == ".json"
-        return hasattr(destination, "write")
+        return callable(getattr(destination, "write", None))
 
     def write(
         self,
