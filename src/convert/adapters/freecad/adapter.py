@@ -760,7 +760,15 @@ class FreeCADAdapter:
         path = _destination_path(destination)
         if path is not None:
             return path.suffix.lower() == ".fcstd"
-        return is_binary_destination(destination)
+        if not is_binary_destination(destination):
+            return False
+        writable = getattr(destination, "writable", None)
+        if callable(writable):
+            try:
+                return bool(writable())
+            except (OSError, ValueError):
+                return False
+        return True
 
     def write(
         self,
