@@ -209,7 +209,10 @@ class CatiaAdapter:
                 container_version="V5_CFV2",
                 application_version=version,
             ),
-            configurations=(Configuration("catia:default", "Default", active=True),),
+            configurations=_selected_configurations(
+                (Configuration("catia:default", "Default", active=True),),
+                settings.configuration,
+            ),
             parameters=(),
             support_planes=support_planes,
             sketches=(),
