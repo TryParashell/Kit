@@ -517,7 +517,7 @@ def _semantic_document(document: CadDocument) -> CadDocument:
         )
         for payload in document.brep_payloads
         if not (
-            payload.kind == "native_document"
+            payload.kind in {"native_document", "native_document_binding"}
             and payload.format_id.casefold() != _FORMAT_ID
         )
     )
