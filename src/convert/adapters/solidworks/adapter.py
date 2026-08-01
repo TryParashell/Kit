@@ -299,6 +299,16 @@ class SldprtAdapter:
         settings = options or WriteOptions()
         if settings.validate:
             document.assert_valid()
+        expected_format = (
+            _ASSEMBLY_FORMAT_ID if document.assembly is not None else _FORMAT_ID
+        )
+        if (
+            settings.destination_format is not None
+            and settings.destination_format != expected_format
+        ):
+            raise ValueError(
+                f"{settings.destination_format} does not support this document kind"
+            )
         if not self.supports(document, destination):
             expected = ".SLDASM" if document.assembly is not None else ".SLDPRT"
             raise ValueError(f"SOLIDWORKS destination must end in {expected}")
@@ -392,6 +402,8 @@ class SldprtAdapter:
                     "native_geometry": native_exact,
                     "native_history": native_exact,
                     "native_assembly": native_exact and document.assembly is not None,
+                    "native_self_contained": native_exact and document.assembly is None,
+                    "referenced_files_written": 0,
                     "container_version": archive.format_version,
                     "file_id": archive.file_id,
                     "stream_count": len(archive.records),
