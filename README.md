@@ -4,11 +4,13 @@
 
 # Kit
 
-Kit is a CAD interchange SDK built for translating messy feature trees with ease. Yes, you heard that right, Kit allows you to do anything from FreeCAD to Solidworks, CATIA to Solidworks, NX to Creo and more.
+Kit by Parashell is an internal CAD interchange SDK for translating part geometry, parametric history, sketches, configurations, assemblies, component references, transforms, mates and more through one shared document model.
 
-## Other info
+## Internal use only
 
-This does not import, launch, or automate SolidWorks, FreeCAD, CATIA, NX, OpenCascade, or any 3rd party application.
+Kit is confidential Parashell software. Do not publish it to PyPI or distribute it outside Parashell. The package metadata includes PyPI's private-package rejection classifier as an additional safeguard.
+
+Kit does not import, launch, or automate SOLIDWORKS, FreeCAD, CATIA, OpenCascade, or any other CAD application. Conversion runs without CAD software installed.
 
 ## Architecture
 
@@ -18,9 +20,8 @@ Every conversion follows one route:
 source file -> reader adapter -> CadDocument -> writer adapter -> destination file
 ```
 
-## Supported formats:
-- .SLDPRT
-- .SLDASM
-- .FCStd
-- .CATPart
-- .CATProduct
+## Supported formats
+
+- SOLIDWORKS `.SLDPRT` and `.SLDASM`
+- FreeCAD `.FCStd`
+- CATIA V5 `.CATPart` and `.CATProduct`
