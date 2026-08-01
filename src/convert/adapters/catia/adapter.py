@@ -926,27 +926,11 @@ def _native_payloads(
     settings: ReadOptions,
 ) -> tuple[BrepPayload, ...]:
     payloads = [
-        BrepPayload(
-            "catia:native-document",
-            "catia.v5.cfv2",
-            "native_document",
+        _native_document_payload(
+            archive,
+            data,
             document_type,
-            hashlib.sha256(data).hexdigest(),
-            data if settings.include_brep else None,
-            source_stream="V5_CFV2",
-            provenance=Provenance(
-                adapter=_FORMAT_ID,
-                native_id=document_type,
-                spans=(
-                    ProvenanceSpan("V5_CFV2", 0, len(data), "native-document"),
-                ),
-            ),
-            attributes=frozen_mapping(
-                {
-                    "outer_directory_offset": archive.outer.offset,
-                    "outer_directory_length": archive.outer.length,
-                }
-            ),
+            include_data=settings.include_brep,
         )
     ]
     if document_type != "CATPart":
@@ -1015,6 +999,36 @@ def _native_payloads(
             )
         )
     return tuple(payloads)
+
+
+def _native_document_payload(
+    archive: Cfv2Archive,
+    data: bytes,
+    document_type: str,
+    include_data: bool,
+) -> BrepPayload:
+    return BrepPayload(
+        "catia:native-document",
+        "catia.v5.cfv2",
+        "native_document",
+        document_type,
+        hashlib.sha256(data).hexdigest(),
+        data if include_data else None,
+        source_stream="V5_CFV2",
+        provenance=Provenance(
+            adapter=_FORMAT_ID,
+            native_id=document_type,
+            spans=(
+                ProvenanceSpan("V5_CFV2", 0, len(data), "native-document"),
+            ),
+        ),
+        attributes=frozen_mapping(
+            {
+                "outer_directory_offset": archive.outer.offset,
+                "outer_directory_length": archive.outer.length,
+            }
+        ),
+    )
 
 
 def _application_version(data: bytes) -> str:
