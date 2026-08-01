@@ -18,6 +18,7 @@ from convert.adapters.base import (
     Source,
     WriteOptions,
     WriteResult,
+    is_binary_destination,
 )
 from interchange import (
     Body,
@@ -241,11 +242,11 @@ class CatiaAdapter:
 
     def supports(self, document: CadDocument, destination: Destination) -> bool:
         if isinstance(destination, (str, Path)):
-            return Path(destination).suffix.lower() in {
-                _PART_SUFFIX,
-                _PRODUCT_SUFFIX,
-            }
-        return hasattr(destination, "write")
+            expected = (
+                _PRODUCT_SUFFIX if document.assembly is not None else _PART_SUFFIX
+            )
+            return Path(destination).suffix.lower() == expected
+        return is_binary_destination(destination)
 
     def write(
         self,
@@ -267,13 +268,24 @@ class CatiaAdapter:
             )
         ):
             path = _write_bytes(destination, native, settings.overwrite)
+            compatibility = document.metadata.get(
+                "catia.container_compatibility", "native-exact"
+            )
+            native_exact = compatibility == "native-exact"
             return WriteResult(
                 path,
                 _FORMAT_ID,
                 len(native),
+                diagnostics=document.diagnostics,
                 metadata=MappingProxyType(
                     {
                         "mode": "exact_native_roundtrip",
+                        "compatibility": compatibility,
+                        "vendor_loadable": native_exact,
+                        "native_geometry": native_exact,
+                        "native_history": native_exact,
+                        "native_assembly": native_exact
+                        and document.assembly is not None,
                         "container": "V5_CFV2",
                         "document_type": document_type,
                     }
@@ -301,11 +313,15 @@ class CatiaAdapter:
             path,
             _FORMAT_ID,
             len(data),
-            diagnostics=(diagnostic,),
+            diagnostics=(*document.diagnostics, diagnostic),
             metadata=MappingProxyType(
                 {
                     "mode": "generated_cfv2",
                     "compatibility": "kit-neutral-only",
+                    "vendor_loadable": False,
+                    "native_geometry": False,
+                    "native_history": False,
+                    "native_assembly": False,
                     "native_feature_graph": False,
                     "container": "V5_CFV2",
                     "document_type": document_type,
@@ -524,6 +540,7 @@ def _embedded_document(
             "catia.embedded_source_container_version": original.container_version,
             "catia.embedded_source_application_version": original.application_version,
             "catia.embedded_source_attributes": dict(original.attributes),
+            "catia.container_compatibility": "kit-neutral-only",
         }
     )
     if settings.include_brep:
@@ -643,6 +660,10 @@ def _destination_type(document: CadDocument, destination: Destination) -> str:
     )
     if suffix not in {_PART_SUFFIX, _PRODUCT_SUFFIX}:
         raise ValueError("CATIA destination must end in .CATPart or .CATProduct")
+    if document.assembly is None and suffix != _PART_SUFFIX:
+        raise ValueError("part documents require a .CATPart destination")
+    if document.assembly is not None and suffix != _PRODUCT_SUFFIX:
+        raise ValueError("assembly documents require a .CATProduct destination")
     return "CATProduct" if suffix == _PRODUCT_SUFFIX else "CATPart"
 
 
