@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 import hashlib
+import os
 from pathlib import Path
 import re
+import stat
 from typing import Callable
 
 from convert.adapters.base import ReadOptions
@@ -30,6 +32,9 @@ _PRODUCT_MARKER = b"ASMPRODUCT"
 _INSTANCE = re.compile(r"(?:I_)?(.+)\.(\d+)")
 _TRAILING_VARIANT = re.compile(r"(?:_| )\d+$")
 _SPACE_NUMBER = re.compile(r"(.+ )([0-9]+)$")
+_DEFAULT_MAX_FILES = 4096
+_DEFAULT_MAX_TOTAL_BYTES = 4 * 1024 * 1024 * 1024
+_DEFAULT_MAX_DEPTH = 8
 _NON_COMPONENT_VALUES = frozenset(
     {
         "3DIC",
@@ -165,7 +170,7 @@ def native_product_assembly(
     reader: ComponentReader,
 ) -> tuple[AssemblyData, tuple[Diagnostic, ...]]:
     table = decode_product_table(archive)
-    references = _component_reference_index(label, settings)
+    references, search_diagnostics = _component_reference_index(label, settings)
     selected, reference_diagnostics = _selected_references(table, references)
     documents, document_ids, document_diagnostics = _component_documents(
         label,
@@ -306,10 +311,12 @@ def native_product_assembly(
         )
         for order, occurrence in enumerate(table.occurrences)
     )
-    missing = tuple(
-        name for name in definition_ids if name not in selected
-    )
-    diagnostics: list[Diagnostic] = [*reference_diagnostics, *document_diagnostics]
+    missing = tuple(name for name in definition_ids if name not in selected)
+    diagnostics: list[Diagnostic] = [
+        *search_diagnostics,
+        *reference_diagnostics,
+        *document_diagnostics,
+    ]
     if missing:
         diagnostics.append(
             Diagnostic(
@@ -392,9 +399,7 @@ def _product_tokens(data: bytes) -> tuple[NativeProductToken, ...]:
         raw = data[cursor + 1 : end]
         if any(value < 0x20 or value > 0x7E for value in raw):
             break
-        result.append(
-            NativeProductToken(raw.decode("ascii"), cursor + 1, length)
-        )
+        result.append(NativeProductToken(raw.decode("ascii"), cursor + 1, length))
         cursor = end
     return tuple(result)
 
@@ -459,9 +464,7 @@ def _product_occurrences(
     return tuple(result)
 
 
-def _instance_definition(
-    pending: NativeProductToken | None, derived: str
-) -> str:
+def _instance_definition(pending: NativeProductToken | None, derived: str) -> str:
     if pending is None:
         return derived
     if pending.value == derived:
@@ -487,53 +490,221 @@ def _custom_numbered_pair(
     return pending.value
 
 
-def _component_reference_index(
-    label: str, settings: ReadOptions
-) -> dict[str, tuple[NativeProductReference, ...]]:
+def _component_reference_index(label: str, settings: ReadOptions) -> tuple[
+    dict[str, tuple[NativeProductReference, ...]],
+    tuple[Diagnostic, ...],
+]:
     if settings.values.get("resolve_components", True) is False:
-        return {}
-    requested_root = settings.values.get("component_search_root")
-    if requested_root:
-        root = Path(str(requested_root)).expanduser().resolve()
+        return {}, ()
+    max_files = _search_limit(
+        settings,
+        "component_search_max_files",
+        _DEFAULT_MAX_FILES,
+    )
+    max_total_bytes = _search_limit(
+        settings,
+        "component_search_max_total_bytes",
+        _DEFAULT_MAX_TOTAL_BYTES,
+    )
+    max_depth = _search_limit(
+        settings,
+        "component_search_max_depth",
+        _DEFAULT_MAX_DEPTH,
+        allow_zero=True,
+    )
+    roots, root_diagnostics = _component_search_roots(label, settings)
+    references: defaultdict[str, list[NativeProductReference]] = defaultdict(list)
+    diagnostics = list(root_diagnostics)
+    file_count = 0
+    total_bytes = 0
+    limit: str | None = None
+    for root in roots:
+        pending: list[tuple[Path, int]] = [(root, 0)]
+        while pending and limit is None:
+            directory, depth = pending.pop(0)
+            try:
+                entries = tuple(
+                    sorted(directory.iterdir(), key=lambda item: item.name.casefold())
+                )
+            except OSError as exc:
+                diagnostics.append(
+                    _search_diagnostic(directory, "unreadable_directory", str(exc))
+                )
+                continue
+            for path in entries:
+                if _is_reparse_point(path):
+                    diagnostics.append(_search_diagnostic(path, "reparse_point"))
+                    continue
+                try:
+                    if path.is_dir():
+                        if depth >= max_depth:
+                            limit = "depth"
+                            break
+                        resolved_directory = path.resolve(strict=True)
+                        if not _under_root(resolved_directory, root):
+                            diagnostics.append(_search_diagnostic(path, "root_escape"))
+                            continue
+                        pending.append((resolved_directory, depth + 1))
+                        continue
+                    if not path.is_file() or path.suffix.casefold() not in {
+                        ".catpart",
+                        ".catproduct",
+                    }:
+                        continue
+                    resolved = path.resolve(strict=True)
+                    if not _under_root(resolved, root):
+                        diagnostics.append(_search_diagnostic(path, "root_escape"))
+                        continue
+                    size = resolved.stat().st_size
+                except OSError as exc:
+                    diagnostics.append(
+                        _search_diagnostic(path, "unreadable_candidate", str(exc))
+                    )
+                    continue
+                if file_count >= max_files:
+                    limit = "files"
+                    break
+                if size > max_total_bytes - total_bytes:
+                    limit = "total_bytes"
+                    break
+                file_count += 1
+                total_bytes += size
+                try:
+                    data = resolved.read_bytes()
+                    archive = Cfv2Archive.from_bytes(data)
+                    table = decode_product_table(archive)
+                except (Cfv2FormatError, OSError, UnicodeDecodeError, ValueError):
+                    continue
+                references[table.root_name].append(
+                    NativeProductReference(
+                        table.root_name,
+                        resolved,
+                        (
+                            "CATProduct"
+                            if resolved.suffix.casefold() == ".catproduct"
+                            else "CATPart"
+                        ),
+                        hashlib.sha256(data).hexdigest(),
+                    )
+                )
+        if limit is not None:
+            break
+    if limit is not None:
+        diagnostics.append(
+            Diagnostic(
+                "catia.product.component_search_limit",
+                f"CATIA component discovery stopped at the configured {limit} limit.",
+                Severity.WARNING,
+                attributes=frozen_mapping(
+                    {
+                        "limit": limit,
+                        "files": file_count,
+                        "total_bytes": total_bytes,
+                        "max_files": max_files,
+                        "max_total_bytes": max_total_bytes,
+                        "max_depth": max_depth,
+                    }
+                ),
+            )
+        )
+    return (
+        {
+            name: tuple(sorted(values, key=lambda item: str(item.path).casefold()))
+            for name, values in references.items()
+        },
+        tuple(diagnostics),
+    )
+
+
+def _component_search_roots(
+    label: str, settings: ReadOptions
+) -> tuple[tuple[Path, ...], tuple[Diagnostic, ...]]:
+    requested = settings.values.get("component_search_root")
+    if requested:
+        candidates = (Path(str(requested)).expanduser(),)
     else:
         source = _source_path(label)
         if source is None:
-            return {}
-        root = (
-            source.parent.parent
-            if source.parent.name.casefold() in {".catproduct", "catproduct"}
-            else source.parent
-        )
-    if not root.is_dir():
-        return {}
-    references: defaultdict[str, list[NativeProductReference]] = defaultdict(list)
-    for path in root.rglob("*"):
-        if not path.is_file() or path.suffix.casefold() not in {
-            ".catpart",
-            ".catproduct",
-        }:
+            return (), ()
+        candidates = (source.parent,)
+        if source.parent.name.casefold() in {".catproduct", "catproduct"}:
+            candidates = (*candidates, source.parent.parent / ".CATPart")
+    roots: list[Path] = []
+    diagnostics: list[Diagnostic] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if _is_reparse_point(candidate):
+            diagnostics.append(_search_diagnostic(candidate, "reparse_root"))
             continue
-        resolved = path.resolve()
         try:
-            data = resolved.read_bytes()
-            archive = Cfv2Archive.from_bytes(data)
-            table = decode_product_table(archive)
-        except (Cfv2FormatError, OSError, UnicodeDecodeError, ValueError):
-            continue
-        references[table.root_name].append(
-            NativeProductReference(
-                table.root_name,
-                resolved,
-                "CATProduct"
-                if resolved.suffix.casefold() == ".catproduct"
-                else "CATPart",
-                hashlib.sha256(data).hexdigest(),
+            resolved = candidate.resolve(strict=True)
+        except OSError as exc:
+            diagnostics.append(
+                _search_diagnostic(candidate, "unavailable_root", str(exc))
             )
-        )
-    return {
-        name: tuple(sorted(values, key=lambda item: str(item.path).casefold()))
-        for name, values in references.items()
-    }
+            continue
+        if not resolved.is_dir():
+            diagnostics.append(_search_diagnostic(resolved, "root_is_not_directory"))
+            continue
+        key = os.path.normcase(str(resolved))
+        if key in seen:
+            continue
+        seen.add(key)
+        roots.append(resolved)
+    return tuple(roots), tuple(diagnostics)
+
+
+def _search_limit(
+    settings: ReadOptions,
+    name: str,
+    default: int,
+    *,
+    allow_zero: bool = False,
+) -> int:
+    value = settings.values.get(name, default)
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    minimum = 0 if allow_zero else 1
+    if parsed < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return parsed
+
+
+def _is_reparse_point(path: Path) -> bool:
+    try:
+        value = path.lstat()
+    except OSError:
+        return False
+    attributes = getattr(value, "st_file_attributes", 0)
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return path.is_symlink() or bool(attributes & reparse_flag)
+
+
+def _under_root(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _search_diagnostic(path: Path, reason: str, detail: str = "") -> Diagnostic:
+    return Diagnostic(
+        "catia.product.component_search_rejected",
+        f"CATIA component discovery rejected {path}: {reason}.",
+        Severity.INFO,
+        attributes=frozen_mapping(
+            {
+                "path": str(path),
+                "reason": reason,
+                "detail": detail,
+            }
+        ),
+    )
 
 
 def _selected_references(
@@ -634,6 +805,22 @@ def _component_documents(
                     f"CATIA component could not be decoded: {reference.path}: {exc}",
                     Severity.WARNING,
                     attributes=frozen_mapping({"definition_name": name}),
+                )
+            )
+            continue
+        if document.source.sha256.casefold() != reference.sha256.casefold():
+            diagnostics.append(
+                Diagnostic(
+                    "catia.product.component_source_changed",
+                    f"CATIA component changed after discovery and was not linked: {reference.path}",
+                    Severity.WARNING,
+                    attributes=frozen_mapping(
+                        {
+                            "definition_name": name,
+                            "indexed_sha256": reference.sha256,
+                            "decoded_sha256": document.source.sha256,
+                        }
+                    ),
                 )
             )
             continue
