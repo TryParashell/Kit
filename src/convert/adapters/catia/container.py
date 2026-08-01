@@ -10,6 +10,8 @@ MAGIC = b"V5_CFV2\x00"
 DIRECTORY_MAGIC = b"CATIA_V5 CB0001\x00"
 DIRECTORY_END = b"CB__END"
 OSMX_MAGIC = b"OSMX"
+_MAX_OSMX_SYMBOLS = 65_536
+_MAX_OSMX_SYMBOL_BYTES = 16 * 1024 * 1024
 
 
 class Cfv2FormatError(ValueError):
@@ -89,10 +91,13 @@ class OsmxArchive:
         section_length = struct.unpack_from("<I", data, symbol_table_offset + 2)[0]
         if section_length != len(data) - symbol_table_offset:
             raise OsmxFormatError("OSMX symbol table length is inconsistent")
-        candidates = _osmx_symbol_candidates(data, symbol_table_offset)
+        candidates, limit_exceeded = _osmx_symbol_candidates(data, symbol_table_offset)
+        if limit_exceeded and not candidates:
+            raise OsmxFormatError("OSMX symbol table exceeds the safety limit")
         if len(candidates) != 1:
             raise OsmxFormatError("OSMX symbol data boundary is ambiguous")
-        symbol_data_offset, symbols = candidates[0]
+        symbol_data_offset, symbol_count = candidates[0]
+        symbols = _decode_osmx_symbols(data, symbol_data_offset, symbol_count)
         match = re.search(rb"V5R\d+(?:SP\d+)?(?:HF\d+)?", data[:symbol_table_offset])
         version = match.group().decode("ascii") if match else ""
         return cls(
@@ -129,27 +134,8 @@ class Cfv2Archive:
         if outer_offset + outer_length != len(data):
             raise Cfv2FormatError("outer CFV2 directory does not end at EOF")
         outer = _parse_directory(data, 0, outer_offset, outer_length)
-        nested: list[Cfv2Directory] = []
-        cursor = len(MAGIC)
-        while True:
-            position = data.find(MAGIC, cursor)
-            if position < 0:
-                break
-            cursor = position + 1
-            if position + 16 > len(data):
-                continue
-            offset, length = struct.unpack_from(">II", data, position + 8)
-            absolute = position + offset
-            if absolute + length > len(data):
-                continue
-            try:
-                directory = _parse_directory(data, position, absolute, length)
-            except Cfv2FormatError:
-                continue
-            if not _owns_nested_stream(outer, position, absolute + length):
-                raise Cfv2FormatError("nested CFV2 container has no owning stream")
-            nested.append(directory)
-        return cls(data, outer, tuple(nested))
+        nested = _nested_directories(data, outer)
+        return cls(data, outer, nested)
 
     def stream_bytes(
         self, stream: Cfv2Stream, directory: Cfv2Directory | None = None
@@ -429,30 +415,50 @@ def _validate_extent_layout(directory: Cfv2Directory) -> None:
             raise Cfv2FormatError("CFV2 stream extents overlap")
 
 
-def _owns_nested_stream(
-    directory: Cfv2Directory, nested_start: int, nested_end: int
-) -> bool:
+def _nested_directories(
+    data: bytes, directory: Cfv2Directory
+) -> tuple[Cfv2Directory, ...]:
+    nested: list[Cfv2Directory] = []
+    seen: set[int] = set()
     for stream in directory.streams:
-        extents = sorted(stream.extents, key=lambda extent: extent.logical_offset)
-        if not extents:
+        physical_range = _contiguous_stream_range(directory, stream)
+        if physical_range is None:
             continue
-        ranges = tuple(
-            (
-                directory.physical_base + extent.physical_offset,
-                directory.physical_base
-                + extent.physical_offset
-                + extent.physical_length,
+        start, end = physical_range
+        if start in seen or data[start : start + len(MAGIC)] != MAGIC:
+            continue
+        seen.add(start)
+        if start + 16 > end:
+            raise Cfv2FormatError("nested CFV2 header exceeds its owning stream")
+        offset, length = struct.unpack_from(">II", data, start + 8)
+        absolute = start + offset
+        if absolute + length != end:
+            raise Cfv2FormatError(
+                "nested CFV2 container does not fill its owning stream"
             )
-            for extent in extents
+        nested.append(_parse_directory(data, start, absolute, length))
+    nested.sort(key=lambda value: value.physical_base)
+    return tuple(nested)
+
+
+def _contiguous_stream_range(
+    directory: Cfv2Directory, stream: Cfv2Stream
+) -> tuple[int, int] | None:
+    extents = sorted(stream.extents, key=lambda extent: extent.logical_offset)
+    if not extents:
+        return None
+    ranges = tuple(
+        (
+            directory.physical_base + extent.physical_offset,
+            directory.physical_base + extent.physical_offset + extent.physical_length,
         )
-        if ranges[0][0] != nested_start or ranges[-1][1] != nested_end:
-            continue
-        if any(current[0] != prior[1] for prior, current in zip(ranges, ranges[1:])):
-            continue
-        if sum(end - start for start, end in ranges) != stream.logical_length:
-            continue
-        return True
-    return False
+        for extent in extents
+    )
+    if any(current[0] != prior[1] for prior, current in zip(ranges, ranges[1:])):
+        return None
+    if sum(end - start for start, end in ranges) != stream.logical_length:
+        return None
+    return ranges[0][0], ranges[-1][1]
 
 
 def _descriptor_name(data: bytes, offset: int) -> str:
@@ -543,40 +549,66 @@ def _validate_class_name(name: str) -> None:
 
 def _osmx_symbol_candidates(
     data: bytes, symbol_table_offset: int
-) -> tuple[tuple[int, tuple[OsmxSymbol, ...]], ...]:
-    results: list[tuple[int, tuple[OsmxSymbol, ...]]] = []
+) -> tuple[tuple[tuple[int, int], ...], bool]:
+    results: list[tuple[int, int]] = []
+    limit_exceeded = False
     start = symbol_table_offset + 6
     stop = min(symbol_table_offset + 16, len(data))
     for symbol_data_offset in range(start, stop):
         cursor = symbol_data_offset
-        symbols: list[OsmxSymbol] = []
+        symbol_count = 0
+        symbol_bytes = 0
         valid = True
         while cursor < len(data):
             stored_length = data[cursor]
             value_offset = cursor + 1
             value_length = stored_length - 1
             value_end = value_offset + value_length
+            symbol_count += 1
+            symbol_bytes += value_length
+            if (
+                symbol_count > _MAX_OSMX_SYMBOLS
+                or symbol_bytes > _MAX_OSMX_SYMBOL_BYTES
+            ):
+                limit_exceeded = True
+                valid = False
+                break
             if (
                 stored_length == 0
                 or value_end > len(data)
                 or any(
-                    value < 0x20 or value > 0x7E
-                    for value in data[value_offset:value_end]
+                    data[index] < 0x20 or data[index] > 0x7E
+                    for index in range(value_offset, value_end)
                 )
             ):
                 valid = False
                 break
-            symbols.append(
-                OsmxSymbol(
-                    len(symbols),
-                    value_offset,
-                    data[value_offset:value_end].decode("ascii"),
-                )
-            )
             cursor = value_end
-        if valid and cursor == len(data) and symbols:
-            results.append((symbol_data_offset, tuple(symbols)))
-    return tuple(results)
+        if valid and cursor == len(data) and symbol_count:
+            results.append((symbol_data_offset, symbol_count))
+    return tuple(results), limit_exceeded
+
+
+def _decode_osmx_symbols(
+    data: bytes, symbol_data_offset: int, symbol_count: int
+) -> tuple[OsmxSymbol, ...]:
+    cursor = symbol_data_offset
+    symbols: list[OsmxSymbol] = []
+    for index in range(symbol_count):
+        stored_length = data[cursor]
+        value_offset = cursor + 1
+        value_end = value_offset + stored_length - 1
+        symbols.append(
+            OsmxSymbol(
+                index,
+                value_offset,
+                data[value_offset:value_end].decode("ascii"),
+            )
+        )
+        cursor = value_end
+    if cursor != len(data):
+        raise OsmxFormatError("OSMX symbol table decode is incomplete")
+    return tuple(symbols)
 
 
 def _u32be(data: bytes, offset: int) -> int:
