@@ -1154,8 +1154,74 @@ def _unchanged_native_payload(
     data = matches[0].data
     if data is None or hashlib.sha256(data).hexdigest() != matches[0].sha256:
         return None
-    Cfv2Archive.from_bytes(data)
+    if not _native_payload_matches_document(document, data, document_type):
+        return None
     return data
+
+
+def _native_payload_matches_document(
+    document: CadDocument, data: bytes, document_type: str
+) -> bool:
+    try:
+        archive = Cfv2Archive.from_bytes(data)
+        if _document_type(archive, f"candidate.{document_type}") != document_type:
+            return False
+        manifest = _manifest_bytes(archive)
+        if manifest is not None:
+            embedded = CadDocument.from_json(_unpack_manifest(manifest))
+            return _semantic_digest(embedded) == _semantic_digest(document)
+        include_tessellation = any(
+            payload.id == "catia:native-tessellation"
+            for payload in document.brep_payloads
+        )
+        candidate = _native_payloads(
+            archive,
+            data,
+            document_type,
+            ReadOptions(
+                include_brep=True,
+                include_tessellation=include_tessellation,
+            ),
+        )
+    except (CatiaAdapterError, Cfv2FormatError, TypeError, ValueError, zlib.error):
+        return False
+    native_ids = {
+        "catia:native-cgm",
+        "catia:native-feature-graph",
+        "catia:native-product-graph",
+        "catia:native-brep-topology",
+        "catia:native-tessellation",
+    }
+    expected = {
+        payload.id: (
+            payload.format_id,
+            payload.kind,
+            payload.schema,
+            hashlib.sha256(payload.data).hexdigest()
+            if payload.data is not None
+            else payload.sha256,
+        )
+        for payload in document.brep_payloads
+        if payload.id in native_ids
+    }
+    actual = {
+        payload.id: (
+            payload.format_id,
+            payload.kind,
+            payload.schema,
+            hashlib.sha256(payload.data).hexdigest()
+            if payload.data is not None
+            else payload.sha256,
+        )
+        for payload in candidate
+        if payload.id in native_ids
+    }
+    return expected == actual and {
+        "catia:native-cgm",
+        "catia:native-feature-graph",
+        "catia:native-product-graph",
+        "catia:native-brep-topology",
+    }.issubset(actual)
 
 
 def _semantic_digest(document: CadDocument) -> str:
