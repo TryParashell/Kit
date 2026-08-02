@@ -42,7 +42,9 @@ from convert.adapters.freecad.protocol import (
     ASSEMBLY_LINK_TYPE_ID,
     ASSEMBLY_OBJECT_TYPE_PREFIX,
     ASSEMBLY_ROOT_TYPE_ID,
+    APP_PART_TYPE_ID,
     APP_LINK_TYPE_ID,
+    BODY_CONTAINER_TYPE_IDS,
     BODY_TYPE_ID,
     BOOLEAN_OPERATION_TYPE_BY_KIND,
     BOOLEAN_OPERATION_TYPES,
@@ -123,15 +125,21 @@ from interchange import (
     Configuration,
     ConstraintKind,
     ConstraintReference,
+    Expression,
     ExtrusionEndCondition,
     FeatureKind,
+    FeatureStep,
     GeometryKind,
     MateKind,
     Mesh,
     NativeFeatureDefinition,
     NativeGeometry,
+    Parameter,
+    ParameterValue,
     PayloadRole,
     PointGeometry,
+    Selection,
+    SelectionPathElement,
     SketchConstraint,
     SketchEntity,
     ValueKind,
@@ -880,10 +888,12 @@ def test_freecad_protocol_registries_are_exact_and_exhaustive() -> None:
     assert ASSEMBLY_JOINT_GROUP_TYPE_ID == "Assembly::JointGroup"
     assert ASSEMBLY_LINK_TYPE_ID == "Assembly::AssemblyLink"
     assert APP_LINK_TYPE_ID == "App::Link"
+    assert APP_PART_TYPE_ID == "App::Part"
     assert BODY_TYPE_ID == "PartDesign::Body"
     assert SKETCH_TYPE_ID == "Sketcher::SketchObject"
     assert PART_CONTAINER_TYPE_IDS == frozenset({"Part::BodyBase", BODY_TYPE_ID})
-    assert NON_FEATURE_OBJECT_TYPE_IDS == PART_CONTAINER_TYPE_IDS | {SKETCH_TYPE_ID}
+    assert BODY_CONTAINER_TYPE_IDS == PART_CONTAINER_TYPE_IDS | {APP_PART_TYPE_ID}
+    assert NON_FEATURE_OBJECT_TYPE_IDS == BODY_CONTAINER_TYPE_IDS | {SKETCH_TYPE_ID}
     assert STRING_HASHER_TAGS == frozenset({"StringHasher", "StringHasher2"})
     assert JOINT_GROUND_PROPERTY == "ObjectToGround"
     assert JOINT_REFERENCE_PROPERTIES == ("Reference1", "Reference2")
@@ -972,15 +982,15 @@ def test_freecad_protocol_registries_are_exact_and_exhaustive() -> None:
             *FEATURE_KIND_BY_TYPE_ID,
             *PRIMITIVE_FEATURE_TYPE_IDS,
             *SUPPORT_PLANE_TYPE_IDS,
-            *PART_CONTAINER_TYPE_IDS,
+            *BODY_CONTAINER_TYPE_IDS,
         )
     )
-    assert len(PART_OBJECT_TYPE_IDS) == 137
+    assert len(PART_OBJECT_TYPE_IDS) == 138
     assert (
         hashlib.sha256(
             json.dumps(sorted(PART_OBJECT_TYPE_IDS), separators=(",", ":")).encode()
         ).hexdigest()
-        == "fb2d67e2b56a9f2e7d659818dbc5965601124e993ba7687febc1092e66660e1e"
+        == "589bb6d7434a0fd03697172fe47b83a3385d0a9069aecf014e9de3715f1b1c8e"
     )
     assert ADDITIONAL_PART_OBJECT_TYPE_IDS == frozenset(
         {"App::Plane", "Part::FeatureGeometrySet"}
@@ -988,14 +998,14 @@ def test_freecad_protocol_registries_are_exact_and_exhaustive() -> None:
     assert REGISTERED_PART_OBJECT_TYPE_IDS == (
         PART_OBJECT_TYPE_IDS - ADDITIONAL_PART_OBJECT_TYPE_IDS
     )
-    assert len(REGISTERED_PART_OBJECT_TYPE_IDS) == 135
+    assert len(REGISTERED_PART_OBJECT_TYPE_IDS) == 136
     assert (
         hashlib.sha256(
             json.dumps(
                 sorted(REGISTERED_PART_OBJECT_TYPE_IDS), separators=(",", ":")
             ).encode()
         ).hexdigest()
-        == "09f8c9a8aeeea2aa2a3486b023710416bd2166c796127a955a8031df9591cea5"
+        == "5d46a78532f802c86552b56704f5238758e098dd1afb4ce9802b4ffc78649993"
     )
     assert CONSTRAINT_POINT_BY_INDEX == {
         value.index: value.name for value in CONSTRAINT_POINTS
@@ -1281,6 +1291,108 @@ def test_native_capabilities_follow_restored_sections() -> None:
             Capability.ROUNDTRIP_METADATA,
         }
     )
+
+
+def test_neutral_sections_are_exposed_by_native_freecad_graph() -> None:
+    source = neutral_document()
+    first_parameter = Parameter("p:a", "A", ParameterValue(2.0))
+    second_parameter = Parameter(
+        "p:b",
+        "B",
+        ParameterValue(4.0),
+        expression=Expression("p:a * 2", ("p:a",), "kit"),
+    )
+    selection = Selection(
+        "selection:face",
+        "Face selection",
+        (SelectionPathElement("face", source.feature_timeline[0].id, "Face1"),),
+    )
+    fallback = FeatureStep(
+        "feature:fallback",
+        "Revolve fallback",
+        FeatureKind.REVOLUTION,
+        1,
+        input_feature_ids=(source.feature_timeline[0].id,),
+        selection_ids=(selection.id,),
+    )
+    document = replace(
+        source,
+        parameters=(first_parameter, second_parameter),
+        selections=(selection,),
+        feature_timeline=(*source.feature_timeline, fallback),
+        bodies=(
+            replace(
+                source.bodies[0],
+                final_feature_id=fallback.id,
+                material_id="material:steel",
+            ),
+        ),
+        brep=triangle_brep(),
+    )
+    output = io.BytesIO()
+    result = FreeCADAdapter().write(document, output)
+    transfers = {item.capability: item.mode for item in result.transfers}
+    assert transfers[Capability.SUPPORT_PLANES] is TransferMode.NATIVE
+    assert transfers[Capability.BODY_STRUCTURE] is TransferMode.NATIVE
+    assert transfers[Capability.SELECTIONS] is TransferMode.NATIVE
+    assert transfers[Capability.EXPRESSIONS] is TransferMode.NATIVE
+    assert transfers[Capability.MATERIALS] is TransferMode.NATIVE
+    assert transfers[Capability.CONFIGURATIONS] is TransferMode.NATIVE
+    assert transfers[Capability.BREP] is TransferMode.NATIVE
+    assert transfers[Capability.PARAMETRIC_HISTORY] is TransferMode.MIXED
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+        declarations = {
+            item.get("name", ""): item.get("type", "")
+            for item in root.findall("./Objects/Object")
+        }
+        assert declarations["XY"] == "App::Plane"
+        assert declarations["Body"] == "App::Part"
+        assert declarations["Revolve_fallback"] == "Part::Feature"
+        formula = root.find(
+            "./ObjectData/Object[@name='Parameters']/Properties/"
+            "Property[@name='cells']/Cells/Cell[@address='B2']"
+        )
+        assert formula is not None
+        assert formula.get("content") == "=p_a * 2"
+        material = root.find(
+            "./ObjectData/Object[@name='Body']/Properties/"
+            "Property[@name='MaterialId']/String"
+        )
+        assert material is not None
+        assert material.get("value") == "material:steel"
+        link = root.find(
+            "./ObjectData/Object[@name='Face_selection']/Properties/"
+            "Property[@name='Selection']/LinkSubList/Link"
+        )
+        assert link is not None
+        assert (link.get("obj"), link.get("sub")) == ("Boss1", "Face1")
+        kind = root.find(
+            "./ObjectData/Object[@name='Revolve_fallback']/Properties/"
+            "Property[@name='FeatureKind']/String"
+        )
+        assert kind is not None
+        assert kind.get("value") == FeatureKind.REVOLUTION.value
+        configuration = root.find(
+            "./ObjectData/Object[@name='Default']/Properties/"
+            "Property[@name='KitConfigurationId']/String"
+        )
+        assert configuration is not None
+        assert configuration.get("value") == "config:default"
+        shape = root.find(
+            "./ObjectData/Object[@name='BRep']/Properties/"
+            "Property[@name='Shape']/Part"
+        )
+        assert shape is not None
+        shape_file = shape.get("file", "")
+        assert shape_file
+        assert is_structurally_valid_ascii_brep(archive.read(shape_file))
+    assert FreeCADAdapter().read(output.getvalue()) == document
+    native = freecad_native_module.read_native_fcstd(output.getvalue())
+    assert len(native.support_planes) == 1
+    assert native.bodies[0].material_id == "material:steel"
+    assert native.configurations[0].id == "config:default"
+    assert any(item.id == selection.id for item in native.selections)
 
 
 def test_native_quantities_preserve_value_kind_and_internal_units() -> None:
@@ -2223,7 +2335,7 @@ def test_fcstd_contains_editable_native_history(tmp_path) -> None:
         assert types.count("Sketcher::SketchObject") == 5
         assert types.count("Part::Extrusion") == 5
         assert types.count("Part::Cut") == 2
-        assert types.count("Part::MultiFuse") == 2
+        assert types.count("Part::MultiFuse") == 3
         assert types.count("Part::Fillet") == 1
         assert {
             "Parameters",
