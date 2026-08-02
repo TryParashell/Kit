@@ -558,6 +558,53 @@ def _encode_brep_body(
             for shell_use_id in region.shell_use_ids:
                 shell_id = topology.shell_uses[shell_use_id].shell_id
                 exterior_shells[shell_id] = allocate_index()
+    solidworks_face_attributes: dict[str, tuple[int, int, int]] = {}
+    solidworks_face_values: dict[str, tuple[int, int, int]] = {}
+    solidworks_face_definitions: dict[str, int] = {}
+    solidworks_face_definition_next: dict[str, int] = {}
+    solidworks_face_identifiers: dict[str, int] = {}
+    solidworks_body_attributes: dict[str, int] = {}
+    solidworks_body_values: dict[str, int] = {}
+    solidworks_body_definitions: dict[str, int] = {}
+    solidworks_body_definition_next: dict[str, int] = {}
+    solidworks_body_identifiers: dict[str, int] = {}
+    if solidworks_solid:
+        for name in ("unchanged", "downstream", "colour"):
+            solidworks_face_definitions[name] = allocate_index()
+            solidworks_face_definition_next[name] = (
+                0 if name == "colour" else allocate_index()
+            )
+            solidworks_face_identifiers[name] = allocate_index()
+        for face in model.faces:
+            solidworks_face_attributes[face.id] = tuple(
+                allocate_index() for _ in range(3)
+            )
+            solidworks_face_values[face.id] = tuple(
+                allocate_index() for _ in range(3)
+            )
+        solidworks_body_attributes = {
+            "timestamp": allocate_index(),
+            "feature": allocate_index(),
+            "implicit": allocate_index(),
+            "match": allocate_index(),
+            "density": allocate_index(),
+            "lightweight": allocate_index(),
+            "recipe": 13,
+        }
+        for name in (
+            "timestamp",
+            "feature",
+            "implicit",
+            "match",
+            "density",
+            "lightweight",
+            "recipe",
+        ):
+            solidworks_body_definitions[name] = allocate_index()
+            solidworks_body_definition_next[name] = allocate_index()
+            solidworks_body_identifiers[name] = allocate_index()
+        for name in ("timestamp", "feature", "match", "density", "lightweight"):
+            solidworks_body_values[name] = allocate_index()
     if max((*reserved_indices, *used_indices), default=0) >= 32767:
         raise ParasolidWriteError("Parasolid V12 writer node space is exhausted")
 
