@@ -739,7 +739,7 @@ def _embedded_document(
             "catia.embedded_source_container_version": original.container_version,
             "catia.embedded_source_application_version": original.application_version,
             "catia.embedded_source_attributes": dict(original.attributes),
-            "catia.container_compatibility": "kit-neutral-only",
+            "catia.container_compatibility": _replay_compatibility(data),
         }
     )
     filtered = filter_document(
@@ -1037,8 +1037,96 @@ def _replay_compatibility(data: bytes) -> str:
     manifest = _manifest_bytes(archive)
     if manifest is None:
         return "native-exact"
-    _manifest_document(manifest)
+    document = _manifest_document(manifest)
+    if _native_base_overlay_matches(archive, document):
+        return "native-base-neutral-overlay"
     return "kit-neutral-only"
+
+
+def _native_base_overlay_matches(
+    archive: Cfv2Archive, document: CadDocument
+) -> bool:
+    manifest_matches = tuple(
+        (directory, stream)
+        for directory in (archive.outer, *archive.nested)
+        for stream in directory.streams
+        if stream.name == _MANIFEST_NAME
+    )
+    if len(manifest_matches) != 1 or manifest_matches[0][0] is not archive.outer:
+        return False
+    matches = 0
+    for payload in document.brep_payloads:
+        if not _is_preserved_document_payload(payload) or payload.data is None:
+            continue
+        if hashlib.sha256(payload.data).hexdigest() != payload.sha256:
+            continue
+        binding = _matching_document_binding(document, payload)
+        if binding is None:
+            continue
+        try:
+            base = Cfv2Archive.from_bytes(payload.data)
+            if _manifest_bytes(base) is not None:
+                continue
+            if (
+                _document_type(base, f"candidate.{payload.schema}")
+                != payload.schema
+            ):
+                continue
+            if _overlay_preserves_native_base(
+                archive,
+                base,
+                manifest_matches[0][1],
+            ):
+                matches += 1
+        except (CatiaAdapterError, Cfv2FormatError, TypeError, ValueError):
+            continue
+    return matches == 1
+
+
+def _overlay_preserves_native_base(
+    overlay: Cfv2Archive,
+    base: Cfv2Archive,
+    manifest_stream: Cfv2Stream,
+) -> bool:
+    manifest = overlay.stream_bytes(manifest_stream, overlay.outer)
+    if overlay.outer.offset != base.outer.offset + len(manifest):
+        return False
+    if overlay.data[16 : base.outer.offset] != base.data[16 : base.outer.offset]:
+        return False
+    if overlay.data[base.outer.offset : overlay.outer.offset] != manifest:
+        return False
+    base_directory = base.data[
+        base.outer.offset : base.outer.offset + base.outer.length
+    ]
+    overlay_directory = overlay.data[
+        overlay.outer.offset : overlay.outer.offset + overlay.outer.length
+    ]
+    descriptor_length = overlay.outer.length - base.outer.length
+    descriptor_offset = manifest_stream.descriptor_offset - overlay.outer.offset
+    if (
+        descriptor_length <= 0
+        or descriptor_offset < 0
+        or descriptor_offset + descriptor_length > len(overlay_directory)
+    ):
+        return False
+    retained_directory = b"".join(
+        (
+            overlay_directory[:descriptor_offset],
+            overlay_directory[descriptor_offset + descriptor_length :],
+        )
+    )
+    if retained_directory != base_directory:
+        return False
+    base_streams = tuple(
+        (stream.name, base.stream_bytes(stream, base.outer))
+        for stream in base.outer.streams
+    )
+    overlay_streams = tuple(
+        (stream.name, overlay.stream_bytes(stream, overlay.outer))
+        for stream in overlay.outer.streams
+        if stream.name != _MANIFEST_NAME
+    )
+    return overlay_streams == base_streams
 
 
 def _native_part_data(archive: Cfv2Archive, document_type: str) -> tuple[
