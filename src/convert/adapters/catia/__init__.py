@@ -9,6 +9,7 @@ from .container import (
     OsmxArchive,
     OsmxFormatError,
     OsmxSymbol,
+    append_cfv2_stream,
     build_cfv2,
     build_declaration,
 )
