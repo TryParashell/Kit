@@ -151,6 +151,14 @@ _SOURCE_BYTES_KEY = "solidworks_source_bytes"
 _SOURCE_SHA256_KEY = "solidworks_source_sha256"
 _SOURCE_SEMANTIC_SHA256_KEY = "solidworks_source_semantic_sha256"
 _SOURCE_FORMAT_KEY = "solidworks_source_format_id"
+_ATTESTED_COMPATIBILITIES = frozenset(
+    {
+        "kit-neutral-only",
+        "native-brep-with-kit-neutral",
+        "native-source-with-kit-neutral",
+        "native-template",
+    }
+)
 _SOURCE_KEYS = frozenset(
     {
         _SOURCE_BYTES_KEY,
@@ -1053,6 +1061,10 @@ def _preserved_source(document: CadDocument, destination: Path | None) -> bytes 
     semantic = document.metadata.get(_SOURCE_SEMANTIC_SHA256_KEY)
     if semantic != _semantic_sha256(document):
         return None
+    if _replay_compatibility(
+        data
+    ) == "native-exact" and not _native_source_matches_document(document, data):
+        return None
     return data
 
 
@@ -1073,6 +1085,30 @@ def _source_template(document: CadDocument, destination: Path | None) -> bytes |
     except SldprtFormatError:
         return None
     return data
+
+
+def _native_source_matches_document(document: CadDocument, data: bytes) -> bool:
+    active = tuple(
+        configuration.name
+        for configuration in document.configurations
+        if configuration.active
+    )
+    if len(active) > 1:
+        return False
+    source = BytesIO(data)
+    source.name = document.source.path
+    try:
+        candidate = SldprtAdapter().read(
+            source,
+            ReadOptions(
+                configuration=active[0] if active else None,
+                include_brep=Capability.BREP in document.capabilities,
+                include_tessellation=Capability.TESSELLATION in document.capabilities,
+            ),
+        )
+    except (OSError, SldprtFormatError, TypeError, ValueError):
+        return False
+    return _semantic_sha256(candidate) == _semantic_sha256(document)
 
 
 def _required_capabilities(document: CadDocument) -> frozenset[Capability]:
@@ -1243,14 +1279,16 @@ def _native_attestation_bytes(
     native_brep: str,
 ) -> bytes:
     embedded = streams[KIT_DOCUMENT_STREAM]
+    document = CadDocument.from_json(embedded.decode("utf-8"))
     value = {
-        "version": 1,
+        "version": 2,
         "compatibility": compatibility,
         "application_usable": application_usable,
         "vendor_loadable": vendor_loadable,
         "native_brep": native_brep,
         "native_stream_sha256": _native_stream_sha256(streams),
         "embedded_sha256": hashlib.sha256(embedded).hexdigest(),
+        "semantic_sha256": _semantic_sha256(document),
         "transfers": [
             {
                 "capability": transfer.capability.value,
@@ -1273,11 +1311,14 @@ def _native_attestation(data: bytes) -> dict[str, Any] | None:
         raw = archive.require(KIT_NATIVE_STREAM)
         embedded = archive.require(KIT_DOCUMENT_STREAM)
         value = json.loads(raw.decode("utf-8"))
+        document = CadDocument.from_json(embedded.decode("utf-8"))
     except (KeyError, SldprtFormatError, TypeError, ValueError, UnicodeDecodeError):
         return None
-    if not isinstance(value, dict) or value.get("version") != 1:
+    if not isinstance(value, dict) or value.get("version") != 2:
         return None
     if value.get("embedded_sha256") != hashlib.sha256(embedded).hexdigest():
+        return None
+    if value.get("semantic_sha256") != _semantic_sha256(document):
         return None
     if value.get("native_stream_sha256") != _native_stream_sha256(archive.streams):
         return None
@@ -1288,7 +1329,10 @@ def _native_attestation(data: bytes) -> dict[str, Any] | None:
     if value["application_usable"] and not value["vendor_loadable"]:
         return None
     compatibility = value.get("compatibility")
-    if not isinstance(compatibility, str):
+    if (
+        not isinstance(compatibility, str)
+        or compatibility not in _ATTESTED_COMPATIBILITIES
+    ):
         return None
     records = value.get("transfers")
     if not isinstance(records, list):
@@ -1313,19 +1357,39 @@ def _native_attestation(data: bytes) -> dict[str, Any] | None:
         parsed
     ):
         return None
-    if value["application_usable"]:
-        try:
-            if COMPONENT_TREE_STREAM in archive.streams:
-                decode_native_assembly(archive)
-            else:
-                decode_native_model(
-                    archive.require(KEYWORDS_STREAM),
-                    archive.require(RESOLVED_FEATURES_STREAM),
-                )
-        except (SldprtFormatError, ValueError):
-            return None
+    proof = _attested_native_proof(document, archive)
+    if proof is None:
+        return None
+    expected_transfers = _solidworks_transfers(
+        _required_capabilities(document), proof.native_capabilities
+    )
+    if (
+        compatibility != proof.compatibility
+        or value["application_usable"] is not proof.application_usable
+        or value["vendor_loadable"] is not proof.vendor_loadable
+        or value.get("native_brep") != proof.native_brep
+        or parsed != expected_transfers
+    ):
+        return None
     value["parsed_transfers"] = parsed
     return value
+
+
+def _attested_native_proof(
+    document: CadDocument, archive: SldprtArchive
+) -> _GeneratedStreams | None:
+    streams = archive.streams
+    before = _native_stream_sha256(streams)
+    try:
+        if KEYWORDS_STREAM in streams and RESOLVED_FEATURES_STREAM in streams:
+            proof = _patch_native_template(document, streams, {})
+        else:
+            proof = _generated_streams(document)
+    except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
+        return None
+    if _native_stream_sha256(proof.streams) != before:
+        return None
+    return proof
 
 
 def _attested_transfers(
