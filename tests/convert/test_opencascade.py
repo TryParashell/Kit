@@ -156,19 +156,23 @@ def test_structural_validator_accepts_complete_opaque_native_brep() -> None:
 
 def test_structural_validator_requires_exact_physical_version_line() -> None:
     data = _located_triangle_brep()
+    version = b"CASCADE Topology V1, (c) Matra-Datavision"
     split = data.replace(
-        b"CASCADE Topology V1, (c) Matra-Datavision",
+        version,
         b"CASCADE\nTopology V1, (c) Matra-Datavision",
         1,
     )
     unsupported_first = data.replace(
-        b"CASCADE Topology V1, (c) Matra-Datavision",
+        version,
         b"CASCADE Topology V2, (c) Matra-Datavision\n"
-        b"CASCADE Topology V1, (c) Matra-Datavision",
+        + version,
         1,
     )
+    payload = data[data.index(version) :]
+    bare_carriage_return = b"junk\r" + payload
     assert not is_structurally_valid_ascii_brep(split)
     assert not is_structurally_valid_ascii_brep(unsupported_first)
+    assert not is_structurally_valid_ascii_brep(bare_carriage_return)
 
 
 def test_structural_validator_matches_location_table_normalization() -> None:
@@ -196,11 +200,17 @@ def test_structural_validator_requires_face_triangulation_line_position() -> Non
     immediate = _face_triangulation_fixture(1, b"\n2 1\n\n")
     same_line = _face_triangulation_fixture(1, b" 2 1\n\n")
     blank_line = _face_triangulation_fixture(1, b"\n\n2 1\n\n")
+    indented = _face_triangulation_fixture(1, b"\n 2 1\n\n")
+    split_index = _face_triangulation_fixture(1, b"\n2\n1\n\n")
+    trailing = _face_triangulation_fixture(1, b"\n2 1 0101000\n\n")
     surface_zero_valid = _face_triangulation_fixture(0, b"\n2 1\n\n")
     surface_zero_missing = _face_triangulation_fixture(0, b"\n\n")
     assert is_structurally_valid_ascii_brep(immediate)
     assert not is_structurally_valid_ascii_brep(same_line)
     assert not is_structurally_valid_ascii_brep(blank_line)
+    assert not is_structurally_valid_ascii_brep(indented)
+    assert not is_structurally_valid_ascii_brep(split_index)
+    assert not is_structurally_valid_ascii_brep(trailing)
     assert is_structurally_valid_ascii_brep(surface_zero_valid)
     assert not is_structurally_valid_ascii_brep(surface_zero_missing)
 
@@ -224,6 +234,18 @@ def test_structural_validator_rejects_incomplete_or_ambiguous_brep() -> None:
     data = _located_triangle_brep()
     tshapes = next(line for line in data.splitlines() if line.startswith(b"TShapes "))
     shape_count = int(tshapes.split()[1])
+    surface_line = next(
+        line
+        for index, line in enumerate(data.splitlines())
+        if index > 0 and data.splitlines()[index - 1].startswith(b"Surfaces ")
+    )
+    long_number = data.replace(
+        surface_line,
+        surface_line.rsplit(b" ", 1)[0] + b" " + b"0" * 40,
+        1,
+    )
+    root_head, root_separator, root_tail = data.rpartition(b"+1 1")
+    assert root_separator
     malformed = (
         b"CASCADE Topology V1, (c) Matra-Datavision\n",
         data[: len(data) // 2],
@@ -233,6 +255,8 @@ def test_structural_validator_rejects_incomplete_or_ambiguous_brep() -> None:
         data.replace(tshapes, f"TShapes {shape_count + 1}".encode("ascii"), 1),
         data.replace(b"+1 1", b"+999999 1", 1),
         data.replace(b"Locations 1\n1\n1 ", b"Locations 1\n1\nnan ", 1),
+        long_number,
+        root_head + b"+2 1" + root_tail,
     )
     assert all(not is_structurally_valid_ascii_brep(value) for value in malformed)
 
