@@ -1121,18 +1121,20 @@ def _assembly_bundle(
                 values=frozen_mapping(values),
             ),
         )
-        names[definition.document_id] = candidate
         payload = buffer.getvalue()
         if target.exists() and not settings.overwrite:
             if target.read_bytes() != payload:
                 raise FileExistsError(target)
         else:
             payloads[target] = payload
-        if (
-            not result.application_usable
-            or not result.vendor_loadable
-            or result.requirements
-        ):
+        native_result = (
+            result.application_usable
+            and result.vendor_loadable
+            and not result.requirements
+        )
+        if native_result:
+            names[definition.document_id] = candidate
+        else:
             complete = False
     if any(
         definition.document_id and definition.document_id not in names
