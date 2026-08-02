@@ -221,16 +221,12 @@ def append_cfv2_stream(
     if marker < 0 or any(directory[marker + len(DIRECTORY_END) :]):
         raise Cfv2FormatError("CFV2 directory end marker is missing")
     descriptor = _descriptor(name, directory_start, len(payload))
-    extended_directory = b"".join(
-        (directory[:marker], descriptor, directory[marker:])
-    )
+    extended_directory = b"".join((directory[:marker], descriptor, directory[marker:]))
     new_directory_start = directory_start + len(payload)
     result = bytearray(data[:directory_start])
     result.extend(payload)
     result.extend(extended_directory)
-    result[8:16] = struct.pack(
-        ">II", new_directory_start, len(extended_directory)
-    )
+    result[8:16] = struct.pack(">II", new_directory_start, len(extended_directory))
     generated = Cfv2Archive.from_bytes(result)
     original_streams = tuple(
         (stream.name, archive.stream_bytes(stream, archive.outer))
