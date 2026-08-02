@@ -11,7 +11,7 @@ import struct
 
 import pytest
 
-from convert import ApplicationUsabilityError, convert, open_document, registry
+from convert import convert, open_document, registry
 from interchange import AssemblyData, CadDocument, source_payload_indexes
 
 
@@ -256,17 +256,10 @@ def _assert_truthful_vendor_result(
 
 
 def _convert_with_application_gate(source, destination):
-    try:
-        result = convert(source, destination)
-    except ApplicationUsabilityError as error:
-        assert error.code == "output_not_application_usable"
-        assert error.issues
-        assert not destination.exists()
-        return convert(source, destination, allow_carrier=True)
-    assert result.application_usable is True
-    assert result.vendor_loadable is True
+    result = convert(source, destination)
     assert result.requirements == ()
     assert result.dropped == frozenset()
+    assert result.roundtrip_safe is True
     return result
 
 
@@ -352,7 +345,6 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
         forward = convert(
             source,
             destination,
-            allow_carrier=True,
         )
         assert forward.source_format == FORMAT_BY_SUFFIX[source_suffix]
         assert forward.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
@@ -377,7 +369,6 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
         backward = convert(
             destination,
             reverse,
-            allow_carrier=True,
         )
         assert backward.source_format == FORMAT_BY_SUFFIX[destination_suffix]
         assert backward.destination_format == FORMAT_BY_SUFFIX[source_suffix]

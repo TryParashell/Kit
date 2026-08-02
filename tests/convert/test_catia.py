@@ -446,7 +446,12 @@ def test_native_catia_roundtrip_is_byte_exact(source: Path, tmp_path: Path) -> N
     output = tmp_path / source.name
     if document.assembly is not None:
         with pytest.raises(ApplicationUsabilityError) as captured:
-            write_document(document, output, values={"portable": False})
+            write_document(
+                document,
+                output,
+                values={"portable": False},
+                allow_carrier=False,
+            )
         assert captured.value.requirements == ("referenced CATIA component files",)
         assert not output.exists()
     result = write_document(
@@ -469,21 +474,22 @@ def test_native_catia_roundtrip_is_byte_exact(source: Path, tmp_path: Path) -> N
     assert output.read_bytes() == source.read_bytes()
 
 
-def test_public_sdk_requires_opt_in_for_portable_catproduct_writes(
+def test_public_sdk_defaults_to_portable_catproduct_writes(
     tmp_path: Path,
 ) -> None:
     source = CATPRODUCTS / "Tilton_Set.CATProduct"
     document = open_document(source)
     output = tmp_path / source.name
-    with pytest.raises(ApplicationUsabilityError):
-        write_document(document, output)
-    assert not output.exists()
-    result = write_document(document, output, allow_carrier=True)
+    result = write_document(document, output)
     assert result.metadata["mode"] == "generated_cfv2"
     assert result.metadata["compatibility"] == "kit-neutral-only"
     assert result.metadata["vendor_loadable"] is False
     assert result.metadata["native_self_contained"] is False
     assert open_document(output).assembly == document.assembly
+    blocked = tmp_path / f"blocked{source.suffix}"
+    with pytest.raises(ApplicationUsabilityError):
+        write_document(document, blocked, allow_carrier=False)
+    assert not blocked.exists()
 
 
 @pytest.mark.parametrize(
@@ -569,7 +575,7 @@ def test_stripped_carrier_metadata_cannot_promote_catia_replay(tmp_path: Path) -
     stripped = replace(restored, metadata=frozen_mapping(metadata))
     blocked = tmp_path / "blocked.CATPart"
     with pytest.raises(ApplicationUsabilityError) as captured:
-        write_document(stripped, blocked)
+        write_document(stripped, blocked, allow_carrier=False)
     assert captured.value.vendor_loadable is False
     assert not blocked.exists()
     explicit = tmp_path / "explicit.CATPart"
@@ -1104,7 +1110,7 @@ def test_solidworks_part_roundtrips_through_generated_catpart(
     source = open_document(SLDPRT)
     output = tmp_path / "example.CATPart"
     with pytest.raises(ApplicationUsabilityError):
-        convert(SLDPRT, output, write_values={"allow_non_native": False})
+        convert(SLDPRT, output, allow_carrier=False)
     result = convert(SLDPRT, output, allow_carrier=True)
     assert result.destination_format == "catia.v5"
     assert result.output.metadata["mode"] == "generated_cfv2"

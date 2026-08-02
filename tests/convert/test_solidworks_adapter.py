@@ -35,6 +35,7 @@ from interchange import (
     BooleanOperation,
     BrepPayload,
     Capability,
+    CircleGeometry,
     ExtrusionFeature,
     FeatureKind,
     FeatureStep,
@@ -820,8 +821,8 @@ def test_adapter_recovers_construction_geometry_without_guessing() -> None:
         "Sketch1": 2,
         "Sketch2": 2,
         "Sketch3": 6,
-        "Sketch4": 0,
-        "Sketch6": 0,
+        "Sketch4": 1,
+        "Sketch6": 2,
     }
     for sketch in document.sketches:
         lines = [
@@ -848,6 +849,22 @@ def test_adapter_recovers_construction_geometry_without_guessing() -> None:
         (124.3, 89.75, -124.3, -89.75),
         (124.3, -89.75, -124.3, 89.75),
     }
+    sketch4 = document.sketch("sldprt:sketch:88")
+    construction = [
+        entity.geometry
+        for entity in sketch4.entities
+        if entity.construction and isinstance(entity.geometry, LineGeometry)
+    ]
+    assert (
+        construction[0].start.x,
+        construction[0].start.y,
+        construction[0].end.x,
+        construction[0].end.y,
+    ) == pytest.approx((10.0, 89.75, 10.0, -89.75))
+    assert all(
+        not str(constraint.kind).startswith("native_")
+        for constraint in sketch4.constraints
+    )
     assert any(
         isinstance(entity.geometry, NativeGeometry) for entity in sketch1.entities
     )
@@ -857,6 +874,52 @@ def test_adapter_recovers_construction_geometry_without_guessing() -> None:
         and entity.geometry.data.get("record_data")
         for entity in sketch6.entities
     )
+
+
+def test_adapter_accumulates_proven_circle_profiles() -> None:
+    document = read_sldprt(CORPUS / "Cover.SLDPRT", include_brep=False)
+    sketch = document.sketch("sldprt:sketch:26")
+    entities = {entity.id: entity.geometry for entity in sketch.entities}
+    profiles = [entities[profile[0]] for profile in sketch.closed_profile_entity_ids]
+    assert all(isinstance(profile, CircleGeometry) for profile in profiles)
+    assert [profile.radius for profile in profiles] == pytest.approx((16.0, 184.0))
+    assert (profiles[0].center.x, profiles[0].center.y) == pytest.approx(
+        (15.300876095409, 4.677947275564)
+    )
+    assert (profiles[1].center.x, profiles[1].center.y) == pytest.approx(
+        (-130.107647738324, 130.107647738325)
+    )
+
+
+def test_adapter_binds_dimension_operands_by_marker_position() -> None:
+    document = read_sldprt(CORPUS / "Cover.SLDPRT", include_brep=False)
+    sketch = document.sketch("sldprt:sketch:77")
+    constraints = {
+        constraint.parameter_id: constraint
+        for constraint in sketch.constraints
+        if constraint.parameter_id
+    }
+    assert tuple(
+        reference.entity_id
+        for reference in constraints["sldprt:parameter:77:D2"].references
+    ) == (
+        "sldprt:sketch:77:native:90347",
+        "sldprt:sketch:77:native:87930",
+    )
+    assert tuple(
+        reference.entity_id
+        for reference in constraints["sldprt:parameter:77:D6"].references
+    ) == (
+        "sldprt:sketch:77:native:87322",
+        "sldprt:sketch:77:native:87484",
+    )
+    radial = document.sketch("sldprt:sketch:27")
+    radial_constraints = {
+        constraint.parameter_id: constraint
+        for constraint in radial.constraints
+        if constraint.parameter_id
+    }
+    assert radial_constraints["sldprt:parameter:27:D2"].references == ()
 
 
 def test_adapter_resolves_line_endpoints_by_native_marker_index() -> None:

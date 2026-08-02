@@ -168,7 +168,7 @@ assert adapters == {
     "solidworks.sldprt",
 }
 cases = (
-    (root / "examples" / ".SLDPRT" / "example.SLDPRT", ".FCStd", True),
+    (root / "examples" / ".SLDPRT" / "example.SLDPRT", ".FCStd"),
     (
         root
         / "examples"
@@ -176,13 +176,11 @@ cases = (
         / "V8_engine"
         / "hex bolt gradeb_iso.FCStd",
         ".CATPart",
-        True,
     ),
-    (root / "examples" / ".CATPart" / "Banjo.CATPart", ".SLDPRT", True),
+    (root / "examples" / ".CATPart" / "Banjo.CATPart", ".SLDPRT"),
     (
         root / "examples" / "Random" / "Pistons" / "Piston.SLDASM",
         ".CATProduct",
-        True,
     ),
     (
         root
@@ -190,14 +188,15 @@ cases = (
         / ".CATProduct"
         / "Brake_Pedal_Assembly - Backup 2.CATProduct",
         ".SLDASM",
-        True,
     ),
 )
-for index, (source, suffix, allow_carrier) in enumerate(cases):
+for index, (source, suffix) in enumerate(cases):
     destination = output / f"conversion_{index}{suffix}"
-    result = convert(source, destination, allow_carrier=allow_carrier)
+    result = convert(source, destination)
     assert result.output.path == destination.resolve()
     assert result.output.bytes_written == destination.stat().st_size
+    assert result.requirements == ()
+    assert result.dropped == frozenset()
     assert open_document(destination).validate() == ()
 
 source_document = open_document(cases[0][0])

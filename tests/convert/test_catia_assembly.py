@@ -573,8 +573,8 @@ def test_catproduct_to_fcstd_structural_roundtrip(tmp_path: Path) -> None:
     source = CATPRODUCTS / "Brake_Pedal_Assembly - Backup 1.CATProduct"
     output = tmp_path / "Brake.FCStd"
     with pytest.raises(ApplicationUsabilityError) as captured:
-        convert(source, output)
-    assert "unimplemented_translation" in captured.value.issues
+        convert(source, output, allow_carrier=False)
+    assert "opaque_source_data" in captured.value.issues
     assert not output.exists()
     assert tuple(tmp_path.iterdir()) == ()
     result = convert(source, output, allow_carrier=True)
@@ -663,9 +663,11 @@ def test_catproduct_to_embedded_fcstd_structural_roundtrip() -> None:
     assert len(internal_links) == 48
     assert len({link.get("name", "") for link in internal_links}) == 24
     assert all(link.get("name", "") in object_names for link in internal_links)
-    brake_target = "Definition_catia_definition_2_Bodies"
+    brake_target = "Definition_catia_definition_2_CATIA_native_feature_graph"
     assert any(link.get("name", "") == brake_target for link in internal_links)
-    brake_group = root.find(f"./ObjectData/Object[@name='{brake_target}']")
+    brake_group = root.find(
+        "./ObjectData/Object[@name='Definition_catia_definition_2_Bodies']"
+    )
     assert brake_group is not None
     assert {
         link.get("value", "")

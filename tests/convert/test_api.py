@@ -82,36 +82,44 @@ def test_default_exact_replay_is_application_usable(
     assert result.output.path == destination.resolve()
 
 
-def test_default_proprietary_conversion_rejects_carrier_output(tmp_path: Path) -> None:
-    destination = tmp_path / "blocked.CATPart"
-    with pytest.raises(ApplicationUsabilityError) as captured:
-        convert(SAMPLE, destination)
-    assert captured.value.code == "output_not_application_usable"
-    assert captured.value.format_id == "catia.v5"
-    assert "carrier_only" in captured.value.issues
-    assert not destination.exists()
-    assert tuple(tmp_path.iterdir()) == ()
-    result = convert(SAMPLE, destination, allow_carrier=True)
+def test_default_proprietary_conversion_writes_reversible_carrier(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "portable.CATPart"
+    result = convert(SAMPLE, destination)
     assert result.application_usable is False
     assert result.vendor_loadable is False
     assert result.near_lossless is False
+    assert result.roundtrip_safe is True
     assert result.requirements == ()
     assert result.dropped == frozenset()
     assert result.output.carrier_capabilities
     assert destination.is_file()
 
 
-def test_write_document_uses_the_same_application_gate(tmp_path: Path) -> None:
-    document = open_document(SAMPLE)
+def test_strict_proprietary_conversion_rejects_carrier_output(tmp_path: Path) -> None:
     destination = tmp_path / "blocked.CATPart"
-    with pytest.raises(ApplicationUsabilityError):
-        write_document(document, destination)
+    with pytest.raises(ApplicationUsabilityError) as captured:
+        convert(SAMPLE, destination, allow_carrier=False)
+    assert captured.value.code == "output_not_application_usable"
+    assert captured.value.format_id == "catia.v5"
+    assert "carrier_only" in captured.value.issues
     assert not destination.exists()
-    result = write_document(document, destination, allow_carrier=True)
+    assert tuple(tmp_path.iterdir()) == ()
+
+
+def test_write_document_uses_the_same_default_and_strict_gate(tmp_path: Path) -> None:
+    document = open_document(SAMPLE)
+    destination = tmp_path / "portable.CATPart"
+    result = write_document(document, destination)
     assert result.application_usable is False
     assert result.vendor_loadable is False
     assert result.requirements == ()
     assert result.dropped == frozenset()
+    strict_destination = tmp_path / "blocked.CATPart"
+    with pytest.raises(ApplicationUsabilityError):
+        write_document(document, strict_destination, allow_carrier=False)
+    assert not strict_destination.exists()
 
 
 def test_public_api_reports_vendor_carriers_as_carrier_only(tmp_path) -> None:
@@ -418,12 +426,11 @@ def test_package_metadata_is_internal_and_matches_supported_sdk() -> None:
     assert "Internal use only" in readme
 
 
-def test_readme_does_not_advertise_carriers_as_default_swaps() -> None:
+def test_readme_describes_default_reversible_swaps_and_strict_mode() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "allow_carrier=True" in readme
-    assert "portable assembly output by default" not in readme
-    assert "Part swaps use `.SLDPRT` ↔ `.FCStd` ↔ `.CATPart`" not in readme
-    assert "Assembly swaps use `.SLDASM` ↔ `.FCStd` ↔ `.CATProduct`" not in readme
+    assert "convert(source, destination)" in readme
+    assert "allow_carrier=False" in readme
+    assert "without requiring CAD software" in readme
 
 
 def test_brep_extraction_is_exact_and_safe(tmp_path) -> None:

@@ -303,7 +303,7 @@ def test_public_sdk_does_not_promote_generated_parasolid_partition(tmp_path) -> 
     )
     blocked = tmp_path / "blocked.SLDPRT"
     with pytest.raises(ApplicationUsabilityError) as captured:
-        write_document(source, blocked)
+        write_document(source, blocked, allow_carrier=False)
     assert Capability.BREP in captured.value.unimplemented_capabilities
     assert not blocked.exists()
     explicit = tmp_path / "explicit.SLDPRT"
@@ -703,7 +703,7 @@ def test_public_sdk_requires_explicit_carrier_opt_in(tmp_path) -> None:
     direct = tmp_path / "direct.SLDPRT"
     blocked = tmp_path / "blocked.SLDPRT"
     with pytest.raises(ApplicationUsabilityError):
-        write_document(source, blocked, values={"allow_non_native": False})
+        write_document(source, blocked, allow_carrier=False)
     assert not blocked.exists()
     written = write_document(source, direct, allow_carrier=True)
     assert written.metadata["compatibility"] == "kit-neutral-only"
@@ -712,7 +712,7 @@ def test_public_sdk_requires_explicit_carrier_opt_in(tmp_path) -> None:
     write_freecad(source, fcstd)
     blocked_conversion = tmp_path / "blocked_conversion.SLDPRT"
     with pytest.raises(ApplicationUsabilityError):
-        convert(fcstd, blocked_conversion)
+        convert(fcstd, blocked_conversion, allow_carrier=False)
     assert not blocked_conversion.exists()
     result = convert(
         fcstd,
@@ -759,16 +759,7 @@ def test_public_sdk_defaults_to_portable_assembly_writes(tmp_path) -> None:
     assert portable_result.near_lossless is True
     assert read_sldprt(portable).assembly == source.assembly
     exact = tmp_path / "exact.SLDASM"
-    with pytest.raises(ApplicationUsabilityError) as captured:
-        write_document(source, exact, values={"portable": False})
-    assert captured.value.requirements == ("referenced SOLIDWORKS component files",)
-    assert not exact.exists()
-    exact_result = write_document(
-        source,
-        exact,
-        values={"portable": False},
-        allow_carrier=True,
-    )
+    exact_result = write_document(source, exact, values={"portable": False})
     assert exact_result.metadata["compatibility"] == "native-exact"
     assert exact_result.metadata["native_self_contained"] is False
     assert exact_result.requirements == ("referenced SOLIDWORKS component files",)

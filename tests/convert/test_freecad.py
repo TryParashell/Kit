@@ -2344,12 +2344,12 @@ def test_explicit_kit_mate_carrier_restores_without_native_joint_type() -> None:
     assert not mate.driving
 
 
-def test_default_sldprt_to_fcstd_rejects_opaque_native_portions(
+def test_strict_sldprt_to_fcstd_rejects_opaque_native_portions(
     tmp_path,
 ) -> None:
     output = tmp_path / "blocked.FCStd"
     with pytest.raises(ApplicationUsabilityError) as captured:
-        convert(SAMPLE, output)
+        convert(SAMPLE, output, allow_carrier=False)
     assert "opaque_source_data" in captured.value.issues
     assert not output.exists()
 
@@ -3529,7 +3529,12 @@ def test_nonportable_freecad_replay_requires_explicit_opt_in(tmp_path) -> None:
     document = open_document(source)
     blocked = tmp_path / "blocked.FCStd"
     with pytest.raises(ApplicationUsabilityError) as captured:
-        write_document(document, blocked, values={"portable": False})
+        write_document(
+            document,
+            blocked,
+            values={"portable": False},
+            allow_carrier=False,
+        )
     assert captured.value.requirements == ("referenced FreeCAD component files",)
     assert not blocked.exists()
     explicit = tmp_path / "explicit.FCStd"

@@ -19,7 +19,7 @@ from convert.adapters.freecad.brep import (
     brep_model_brep,
     triangle_mesh_brep,
 )
-from convert.opencascade import decode_ascii_brep
+from convert.opencascade import decode_ascii_brep, is_structurally_valid_ascii_brep
 from interchange import (
     BrepModel,
     BrepPayload,
@@ -50,6 +50,7 @@ from tests.interchange.test_brep import triangle_brep
 
 
 ORACLE = Path(os.environ.get("KIT_FREECAD_ORACLE", ""))
+ROOT = Path(__file__).parents[2]
 
 
 def _raw_brep_document(data: bytes) -> CadDocument:
@@ -121,12 +122,29 @@ def test_neutral_brep_is_deterministic_open_cascade_serialization() -> None:
     second = brep_model_brep(model)
     assert first == second
     assert first.startswith(b"DBRep_DrawableShape\n\nCASCADE Topology V1")
-    assert b"Curve2ds 0\n" in first
+    assert b"Curve2ds 3\n" in first
     assert b"Curves 3\n" in first
     assert b"Surfaces 1\n" in first
     assert b"TShapes 9\n" in first
     assert b"\nFa\n0  9.9999999999999995e-08 1 0\n" in first
     assert first.endswith(b"\n+1 0 \n")
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        ROOT / "examples" / ".SLDPRT" / "example.SLDPRT",
+        ROOT / "examples" / "Random" / "Cover.SLDPRT",
+    ),
+)
+def test_supplied_solidworks_analytic_brep_serializes_to_native_open_cascade(
+    source: Path,
+) -> None:
+    document = open_document(source)
+    assert document.brep is not None
+    encoded = brep_model_brep(document.brep)
+    assert is_structurally_valid_ascii_brep(encoded)
+    assert f"Curve2ds {len(document.brep.coedges)}\n".encode("ascii") in encoded
 
 
 @pytest.mark.parametrize(
@@ -253,7 +271,7 @@ def test_neutral_brep_is_deterministic_open_cascade_serialization() -> None:
         "offset-surface",
     ),
 )
-def test_unproven_geometry_families_are_writer_unimplemented(
+def test_open_cascade_geometry_families_are_structurally_serialized(
     collection: str, entity: object
 ) -> None:
     model = triangle_brep()
@@ -261,12 +279,8 @@ def test_unproven_geometry_families_are_writer_unimplemented(
         model,
         **{collection: (*getattr(model, collection), entity)},
     )
-    with pytest.raises(
-        FreeCADBrepWriteError,
-        match=f"writer_unimplemented.*{type(entity).__name__}",
-    ) as error:
-        brep_model_brep(narrowed)
-    assert error.value.reason == "writer_unimplemented"
+    encoded = brep_model_brep(narrowed)
+    assert is_structurally_valid_ascii_brep(encoded)
 
 
 def _decoded_tetrahedron(prefix: str, x_offset: float = 0.0) -> BrepModel:
@@ -323,7 +337,7 @@ def test_multiple_body_roots_roundtrip_as_distinct_solid_regions() -> None:
     assert decoded.validate() == ()
 
 
-def test_free_wire_body_is_writer_unimplemented() -> None:
+def test_free_wire_body_is_serialized_as_native_wire() -> None:
     model = triangle_brep()
     wire = BrepWire(
         "wire:free",
@@ -349,8 +363,9 @@ def test_free_wire_body_is_writer_unimplemented() -> None:
         ),
     )
     assert narrowed.validate() == ()
-    with pytest.raises(FreeCADBrepWriteError, match="writer_unimplemented.*free wire"):
-        brep_model_brep(narrowed)
+    encoded = brep_model_brep(narrowed)
+    assert is_structurally_valid_ascii_brep(encoded)
+    assert b"\nWi\n" in encoded
 
 
 def test_neutral_brep_marks_unsupported_geometry_as_writer_unimplemented() -> None:
@@ -457,10 +472,9 @@ def test_public_sdk_rejects_header_only_brep_and_preserves_explicit_carrier(
     document = _raw_brep_document(data)
     blocked = tmp_path / "blocked.FCStd"
     with pytest.raises(ApplicationUsabilityError) as captured:
-        write_document(document, blocked)
+        write_document(document, blocked, allow_carrier=False)
     assert (
-        captured.value.carrier_reasons[Capability.BREP]
-        is CarrierReason.WRITER_UNIMPLEMENTED
+        captured.value.carrier_reasons[Capability.BREP] is CarrierReason.SOURCE_OPAQUE
     )
     assert (
         captured.value.carrier_reasons[Capability.NATIVE_PAYLOADS]
