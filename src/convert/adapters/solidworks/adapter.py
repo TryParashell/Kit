@@ -2192,6 +2192,12 @@ def _patch_native_assembly(
             native = decode_native_assembly(archive, include_tessellation=True)
         except SldprtFormatError:
             return frozenset()
+    if _patch_assembly_mates(document.assembly, native, streams, document.source.path):
+        try:
+            archive = SldprtArchive.from_bytes(build_sldprt(streams))
+            native = decode_native_assembly(archive, include_tessellation=True)
+        except SldprtFormatError:
+            return frozenset()
     result: set[Capability] = set()
     if _assembly_structure_values(
         document.assembly
@@ -2345,6 +2351,134 @@ def _yes_text(value: bool) -> str:
     return "YES" if value else "NO"
 
 
+def _patch_assembly_mates(
+    assembly: AssemblyData,
+    native: NativeAssembly,
+    streams: dict[str, bytes],
+    source_path: str,
+) -> bool:
+    definition_map = {
+        definition.object_id: definition.object_id for definition in native.definitions
+    }
+    occurrence_map = {
+        occurrence.object_id: occurrence.object_id for occurrence in native.occurrences
+    }
+    _, _, original_mates, _ = _assembly_mates(
+        native,
+        ((native, SldprtArchive.from_bytes(build_sldprt(streams)), definition_map, occurrence_map, source_path),),
+    )
+    original = {mate.id: mate for mate in original_mates}
+    desired = {mate.id: mate for mate in assembly.mates}
+    if set(original) != set(desired):
+        return False
+    buffers: dict[str, bytearray] = {}
+    changed = False
+    for mate_id, target in desired.items():
+        source = original[mate_id]
+        if (
+            target.name != source.name
+            or target.kind != source.kind
+            or target.owner_definition_id != source.owner_definition_id
+            or target.entity_ids != source.entity_ids
+            or target.order != source.order
+            or target.parameter_ids != source.parameter_ids
+            or target.suppressed != source.suppressed
+            or target.driving != source.driving
+        ):
+            continue
+        parts = mate_id.split(":")
+        if len(parts) != 5:
+            continue
+        try:
+            list_index = int(parts[3])
+            mate_order = int(parts[4])
+        except ValueError:
+            continue
+        if not 0 <= list_index < len(native.mate_lists):
+            continue
+        mate_list = native.mate_lists[list_index]
+        native_mate = next(
+            (mate for mate in mate_list.mates if mate.order == mate_order), None
+        )
+        if native_mate is None:
+            continue
+        buffer = buffers.setdefault(
+            mate_list.stream, bytearray(streams[mate_list.stream])
+        )
+        if target.value != source.value:
+            values = _native_mate_values(target.value, native_mate)
+            if values is not None:
+                for index, native_value in enumerate(values):
+                    struct.pack_into(
+                        "<d",
+                        buffer,
+                        native_mate.dimensions[index].value_offset,
+                        native_value,
+                    )
+                changed = True
+        if target.alignment != source.alignment:
+            alignment_code = next(
+                (
+                    code
+                    for code, alignment in NATIVE_MATE_ALIGNMENT_BY_CODE.items()
+                    if alignment.kind == str(target.alignment)
+                    or alignment.kind == getattr(target.alignment, "value", None)
+                ),
+                None,
+            )
+            offset = _native_mate_alignment_offset(buffer, native_mate)
+            if alignment_code is not None and offset is not None:
+                struct.pack_into("<H", buffer, offset, alignment_code)
+                changed = True
+    for stream, buffer in buffers.items():
+        streams[stream] = bytes(buffer)
+    return changed
+
+
+def _native_mate_values(
+    value: ParameterValue | None, mate: NativeMate
+) -> tuple[float, ...] | None:
+    if value is None or not mate.dimensions:
+        return None
+    if isinstance(value.value, bool) or not isinstance(value.value, (int, float)):
+        return None
+    number = float(value.value)
+    if not math.isfinite(number):
+        return None
+    semantic = MATE_VALUE_SEMANTICS.get(mate.kind)
+    if semantic == "length" and value.kind is ValueKind.LENGTH:
+        factor = {
+            "": 1.0,
+            "mm": 1.0,
+            "cm": 10.0,
+            "m": 1000.0,
+            "in": 25.4,
+        }.get(value.unit.casefold())
+        return (number * factor / 1000.0,) if factor is not None else None
+    if semantic == "angle" and value.kind is ValueKind.ANGLE:
+        factor = {"": 1.0, "rad": 1.0, "deg": math.pi / 180.0}.get(
+            value.unit.casefold()
+        )
+        return (number * factor,) if factor is not None else None
+    if semantic == "ratio" and value.kind is ValueKind.NUMBER and len(mate.dimensions) >= 2:
+        denominator = mate.dimensions[1].value
+        return number * denominator, denominator
+    return None
+
+
+def _native_mate_alignment_offset(
+    data: bytes | bytearray, mate: NativeMate
+) -> int | None:
+    start = mate.record_offset
+    end = start + mate.record_length
+    encoded = mate.name.encode("utf-16le")
+    text_start = bytes(data).find(encoded, start, end)
+    if text_start < 0:
+        return None
+    offset = text_start + len(encoded) + 159
+    return offset if offset + 2 <= end else None
+
+
 def _assembly_structure_values(assembly: AssemblyData) -> tuple[Any, ...]:
     return (
         assembly.root_definition_id,
@@ -2411,7 +2545,7 @@ def _mate_values(
                 mate.owner_definition_id,
                 mate.entity_ids,
                 mate.order,
-                mate.value,
+                _mate_parameter_value(mate.value),
                 mate.parameter_ids,
                 mate.alignment,
                 mate.suppressed,
@@ -2431,6 +2565,29 @@ def _mate_values(
             for group in groups
         ),
     )
+
+
+def _mate_parameter_value(value: ParameterValue | None) -> Any:
+    if value is None or isinstance(value.value, bool) or not isinstance(
+        value.value, (int, float)
+    ):
+        return value
+    number = float(value.value)
+    if value.kind is ValueKind.LENGTH:
+        factor = {"": 1.0, "mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4}.get(
+            value.unit.casefold()
+        )
+        if factor is not None:
+            return ValueKind.LENGTH, _round_number(number * factor)
+    if value.kind is ValueKind.ANGLE:
+        factor = {"": 1.0, "rad": 1.0, "deg": math.pi / 180.0}.get(
+            value.unit.casefold()
+        )
+        if factor is not None:
+            return ValueKind.ANGLE, _round_number(number * factor)
+    if value.kind is ValueKind.NUMBER:
+        return ValueKind.NUMBER, _round_number(number)
+    return value
 
 
 def _mesh_values(meshes: Sequence[Mesh]) -> tuple[Any, ...]:
