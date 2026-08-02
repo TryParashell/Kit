@@ -641,6 +641,7 @@ class SldprtAdapter:
         required = _required_capabilities(document)
         referenced_files_written = 0
         bundle = _AssemblyBundle({}, {}, False)
+        portable_carrier = False
         if preserved is None:
             template = _source_template(document, path)
             if settings.values.get("allow_non_native", True) is not True:
@@ -655,7 +656,26 @@ class SldprtAdapter:
                 and settings.values.get("portable") is True
             ):
                 bundle = _assembly_bundle(document, path, settings)
+            portable_carrier = (
+                document.assembly is not None
+                and settings.values.get("portable") is True
+                and settings.values.get("allow_carrier") is True
+                and not bundle.complete
+            )
+            if portable_carrier:
+                bundle = _AssemblyBundle({}, {}, False)
             generated = _generated_streams(document, template, bundle.names)
+            if portable_carrier:
+                generated = replace(
+                    generated,
+                    compatibility=(
+                        "native-source-with-kit-neutral"
+                        if generated.compatibility == "native-template"
+                        else generated.compatibility
+                    ),
+                    application_usable=False,
+                    vendor_loadable=False,
+                )
             transfers = _solidworks_transfers(
                 required,
                 generated.native_capabilities,
@@ -754,7 +774,9 @@ class SldprtAdapter:
         archive = SldprtArchive.from_bytes(data, output or "<memory>")
         requirements = (
             ("referenced SOLIDWORKS component files",)
-            if document.assembly is not None and not bundle.complete
+            if document.assembly is not None
+            and not bundle.complete
+            and not portable_carrier
             else ()
         )
         return WriteResult(
