@@ -326,12 +326,25 @@ def _allow_carrier(options: WriteOptions) -> bool:
     return value
 
 
-def _writer_options(options: WriteOptions) -> tuple[WriteOptions, bool]:
+def _require_self_contained(options: WriteOptions) -> bool:
+    value = options.values.get("require_self_contained", True)
+    if not isinstance(value, bool):
+        raise TypeError("require_self_contained must be a boolean")
+    return value
+
+
+def _writer_options(options: WriteOptions) -> tuple[WriteOptions, bool, bool]:
     allow_carrier = _allow_carrier(options)
+    require_self_contained = _require_self_contained(options)
     values = dict(options.values)
     values["allow_carrier"] = allow_carrier
+    values["require_self_contained"] = require_self_contained
     values["allow_non_native"] = True
-    return replace(options, values=frozen_mapping(values)), allow_carrier
+    return (
+        replace(options, values=frozen_mapping(values)),
+        allow_carrier,
+        require_self_contained,
+    )
 
 
 def _checked_write(
@@ -340,6 +353,7 @@ def _checked_write(
     destination: Destination,
     options: WriteOptions,
     allow_carrier: bool,
+    require_self_contained: bool,
 ) -> WriteResult:
     result = adapter.write(document, destination, options)
     if not isinstance(result, WriteResult):
@@ -372,6 +386,8 @@ def _checked_write(
             application_usable=False,
             vendor_loadable=False,
         )
+    if require_self_contained and checked.requirements:
+        raise ApplicationUsabilityError(adapter.info.format_id, checked)
     if not allow_carrier and (
         not checked.application_usable
         or not checked.vendor_loadable
@@ -474,6 +490,7 @@ def _write_path_staged(
     destination: str | Path,
     options: WriteOptions,
     allow_carrier: bool,
+    require_self_contained: bool,
 ) -> WriteResult:
     final = Path(destination).expanduser().resolve()
     if _path_exists(final) and not options.overwrite:
@@ -499,6 +516,7 @@ def _write_path_staged(
                 staged_destination,
                 replace(options, overwrite=False),
                 allow_carrier,
+                require_self_contained,
             )
             if (
                 result.path is None
@@ -520,6 +538,7 @@ def _write_stream_staged(
     destination: Destination,
     options: WriteOptions,
     allow_carrier: bool,
+    require_self_contained: bool,
 ) -> WriteResult:
     staged = BytesIO() if is_binary_destination(destination) else StringIO()
     result = _checked_write(
@@ -528,6 +547,7 @@ def _write_stream_staged(
         staged,
         options,
         allow_carrier,
+        require_self_contained,
     )
     if result.path is not None:
         raise AdapterRegistryError("stream writer returned a filesystem path")
@@ -917,7 +937,7 @@ class AdapterRegistry:
         selected = options or WriteOptions()
         if format_id is not None:
             selected = replace(selected, destination_format=format_id)
-        selected, allow_carrier = _writer_options(selected)
+        selected, allow_carrier, require_self_contained = _writer_options(selected)
         if not adapter.supports(document, destination):
             raise AdapterNotFoundError(
                 f"{adapter.info.format_id} does not support the destination"
@@ -935,6 +955,7 @@ class AdapterRegistry:
                 destination,
                 selected,
                 allow_carrier,
+                require_self_contained,
             )
         return _write_stream_staged(
             document,
@@ -942,6 +963,7 @@ class AdapterRegistry:
             destination,
             selected,
             allow_carrier,
+            require_self_contained,
         )
 
     def format_ids(self) -> tuple[str, ...]:
