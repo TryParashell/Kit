@@ -52,9 +52,7 @@ _PARASOLID_V12_SCHEMA = "SCH_1200000_12006"
 _PARASOLID_V12_PARTITION_DESCRIPTION = (
     b": TRANSMIT FILE (partition) created by modeller version 1200000"
 )
-_PARASOLID_V12_PART_DESCRIPTION = (
-    b": TRANSMIT FILE created by modeller version 1200000"
-)
+_PARASOLID_V12_PART_DESCRIPTION = b": TRANSMIT FILE created by modeller version 1200000"
 _SOLIDWORKS_2025_SCHEMA = "SCH_3601228_36001_13006"
 _BLANK_PARTITION_BODY = bytes.fromhex(
     "00e7000000000065134343434343434349046d65736803ee00014908706f6c79"
@@ -127,8 +125,13 @@ def encode_brep_model(
             raise ParasolidWriteError(
                 "SOLIDWORKS feature ids must cover every Parasolid body"
             )
-        if any(type(value) is not int or not 0 < value < 1 << 31 for value in feature_ids.values()):
-            raise ParasolidWriteError("SOLIDWORKS feature ids must be positive i32 values")
+        if any(
+            type(value) is not int or not 0 < value < 1 << 31
+            for value in feature_ids.values()
+        ):
+            raise ParasolidWriteError(
+                "SOLIDWORKS feature ids must be positive i32 values"
+            )
     _validate_brep_write_support(model)
     topology = _BrepTopology(model)
     body, _ = _encode_brep_body(
@@ -556,15 +559,11 @@ def _encode_brep_body(
     for edge in model.edges:
         uses = topology.edge_coedges[edge.id]
         body_ids = {
-            face_body[
-                topology.loop_face[topology.coedge_loop[coedge_id]]
-            ]
+            face_body[topology.loop_face[topology.coedge_loop[coedge_id]]]
             for coedge_id in uses
         }
         if len(body_ids) != 1:
-            raise ParasolidWriteError(
-                f"Parasolid edge {edge.id} spans multiple bodies"
-            )
+            raise ParasolidWriteError(f"Parasolid edge {edge.id} spans multiple bodies")
         body_id = next(iter(body_ids))
         edge_body[edge.id] = body_id
         for vertex_id in (edge.start_vertex_id, edge.end_vertex_id):
@@ -653,12 +652,8 @@ def _encode_brep_body(
             fin_other[real_index] = dummy_index
             fin_other[dummy_index] = real_index
             real = topology.coedges[uses[0]]
-            real_vertex = (
-                edge.end_vertex_id if real.reversed else edge.start_vertex_id
-            )
-            dummy_vertex = (
-                edge.start_vertex_id if real.reversed else edge.end_vertex_id
-            )
+            real_vertex = edge.end_vertex_id if real.reversed else edge.start_vertex_id
+            dummy_vertex = edge.start_vertex_id if real.reversed else edge.end_vertex_id
             fin_vertex[real_index] = real_vertex
             fin_vertex[dummy_index] = dummy_vertex
             vertex_fins[real_vertex].append(real_index)
@@ -726,11 +721,15 @@ def _encode_brep_body(
         _bef64(output, 1e-8)
         for value in (
             0,
-            bodies[model.bodies[position + 1].id]
-            if position + 1 < len(model.bodies)
-            else attribute_base + 4
-            if solidworks_triangle and attribute_base is not None
-            else 0,
+            (
+                bodies[model.bodies[position + 1].id]
+                if position + 1 < len(model.bodies)
+                else (
+                    attribute_base + 4
+                    if solidworks_triangle and attribute_base is not None
+                    else 0
+                )
+            ),
             bodies[model.bodies[position - 1].id] if position else 0,
         ):
             _v12_pointer(output, value)
@@ -798,17 +797,19 @@ def _encode_brep_body(
             _v12_pointer(output, bodies[body.id])
             _v12_pointer(
                 output,
-                regions[region_values[position + 1]]
-                if position + 1 < len(region_values)
-                else 0,
+                (
+                    regions[region_values[position + 1]]
+                    if position + 1 < len(region_values)
+                    else 0
+                ),
             )
             _v12_pointer(
                 output,
-                exterior_regions[body.id]
-                if solid and position == 0
-                else regions[region_values[position - 1]]
-                if position
-                else 0,
+                (
+                    exterior_regions[body.id]
+                    if solid and position == 0
+                    else regions[region_values[position - 1]] if position else 0
+                ),
             )
             _v12_pointer(output, shells[shell_ids[0]] if shell_ids else 0)
             output.extend(b"S" if region.solid else b"V")
@@ -854,9 +855,11 @@ def _encode_brep_body(
             _v12_pointer(output, bodies[body_id])
             _v12_pointer(
                 output,
-                exterior_shells[exterior_ids[exterior_position + 1]]
-                if exterior_position + 1 < len(exterior_ids)
-                else 0,
+                (
+                    exterior_shells[exterior_ids[exterior_position + 1]]
+                    if exterior_position + 1 < len(exterior_ids)
+                    else 0
+                ),
             )
             _v12_pointer(output, 0)
             _v12_pointer(output, 0)
@@ -955,9 +958,11 @@ def _encode_brep_body(
         _v12_pointer(output, curves[edge.curve_id])
         _v12_pointer(
             output,
-            edges[curve_chain[curve_position + 1]]
-            if curve_position + 1 < len(curve_chain)
-            else 0,
+            (
+                edges[curve_chain[curve_position + 1]]
+                if curve_position + 1 < len(curve_chain)
+                else 0
+            ),
         )
         _v12_pointer(
             output,
@@ -1032,9 +1037,11 @@ def _encode_brep_body(
         first_face_id = first_face_by_body.get(face_body[face.id])
         _v12_pointer(
             output,
-            attribute_base + 32
-            if attribute_base is not None and face.id == first_face_id
-            else 0,
+            (
+                attribute_base + 32
+                if attribute_base is not None and face.id == first_face_id
+                else 0
+            ),
         )
         _bef64(output, _MISSING_PARAMETER)
         for value in (
@@ -1048,9 +1055,11 @@ def _encode_brep_body(
         output.extend(b"+" if face.same_sense else b"-")
         _v12_pointer(
             output,
-            faces[surface_chain[surface_position + 1]]
-            if surface_position + 1 < len(surface_chain)
-            else 0,
+            (
+                faces[surface_chain[surface_position + 1]]
+                if surface_position + 1 < len(surface_chain)
+                else 0
+            ),
         )
         _v12_pointer(
             output,
@@ -1060,9 +1069,7 @@ def _encode_brep_body(
         _v12_pointer(output, 0)
         _v12_pointer(
             output,
-            exterior_shells[shell.id]
-            if region.solid
-            else shells[shell.id],
+            exterior_shells[shell.id] if region.solid else shells[shell.id],
         )
     for body in model.bodies:
         attribute_base = attribute_bases.get(body.id)
