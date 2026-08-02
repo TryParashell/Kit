@@ -1321,17 +1321,20 @@ def _seam_band(
     face: BrepFace,
     graph: _ModelGraph,
     tolerance: float,
-) -> tuple[
-    BrepCoedge,
-    BrepCoedge,
-    _GeneratedPcurve,
-    _GeneratedPcurve,
-    bool,
-    bool,
-    Point,
-    Point,
-    float,
-] | None:
+) -> (
+    tuple[
+        BrepCoedge,
+        BrepCoedge,
+        _GeneratedPcurve,
+        _GeneratedPcurve,
+        bool,
+        bool,
+        Point,
+        Point,
+        float,
+    ]
+    | None
+):
     surface = graph.surfaces[face.surface_id]
     if not isinstance(surface, (CylinderSurface, ConeSurface)):
         return None
@@ -1347,12 +1350,15 @@ def _seam_band(
     curves = tuple(graph.curves[edge.curve_id] for edge in edges)
     if any(not isinstance(curve, CircleCurve) for curve in curves):
         return None
-    allowed = max(
-        tolerance,
-        *(edge.tolerance for edge in edges),
-        *(graph.vertices[edge.start_vertex_id].tolerance for edge in edges),
-        1e-7,
-    ) * 10.0
+    allowed = (
+        max(
+            tolerance,
+            *(edge.tolerance for edge in edges),
+            *(graph.vertices[edge.start_vertex_id].tolerance for edge in edges),
+            1e-7,
+        )
+        * 10.0
+    )
     if any(
         edge.start_vertex_id != edge.end_vertex_id
         or abs(abs(edge.end_parameter - edge.start_parameter) - math.tau) > allowed
@@ -1396,20 +1402,27 @@ def _seam_band(
     high_start = high_generated.end if high_reversed else high_generated.start
     high_end = high_generated.start if high_reversed else high_generated.end
     if (
-        math.hypot(low_end[0] - high_start[0], low_end[1] - high_start[1])
-        > allowed
-        or math.hypot(high_end[0] - low_start[0], high_end[1] - low_start[1])
-        > allowed
+        math.hypot(low_end[0] - high_start[0], low_end[1] - high_start[1]) > allowed
+        or math.hypot(high_end[0] - low_start[0], high_end[1] - low_start[1]) > allowed
     ):
         return None
     low_point = _vector3(graph.vertices[low_edge.start_vertex_id].point)
     high_point = _vector3(graph.vertices[high_edge.start_vertex_id].point)
     vector = _subtract(high_point, low_point)
     length = _length(vector)
-    if length <= allowed or abs(length - (means[high_index] - means[low_index])) > allowed:
+    if (
+        length <= allowed
+        or abs(length - (means[high_index] - means[low_index])) > allowed
+    ):
         return None
     if any(
-        (_surface_residual(surface, tuple(low_point[axis] + vector[axis] * ratio for axis in range(3))) or 0.0)
+        (
+            _surface_residual(
+                surface,
+                tuple(low_point[axis] + vector[axis] * ratio for axis in range(3)),
+            )
+            or 0.0
+        )
         > allowed
         for ratio in (0.25, 0.5, 0.75)
     ):
@@ -1711,11 +1724,16 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
     if any(body.transform != Transform() for body in model.bodies):
         _unsupported("native FreeCAD B-rep writing requires identity body transforms")
     graph = _ModelGraph(model)
-    curve_records = tuple(_curve_record(value) for value in model.curves)
+    base_curve_records = tuple(_curve_record(value) for value in model.curves)
     surface_records = tuple(
         _surface_record(value, graph.surfaces) for value in model.surfaces
     )
-    pcurve_records, edge_pcurves = _edge_pcurve_records(model, graph, tolerance)
+    pcurve_records, edge_pcurves, seam_bands = _edge_pcurve_records(
+        model, graph, tolerance
+    )
+    curve_records = base_curve_records + tuple(
+        (band.curve_record, 1.0) for band in seam_bands.values()
+    )
     curve_indexes = {value.id: index for index, value in enumerate(model.curves, 1)}
     curve_scales = {
         value.id: curve_records[index][1] for index, value in enumerate(model.curves)
@@ -1782,7 +1800,27 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                 ),
             )
         )
+    for offset, band in enumerate(seam_bands.values(), len(base_curve_records) + 1):
+        shapes.append(
+            _ShapeRecord(
+                f"edge:seam:{band.face_id}",
+                "Ed",
+                (
+                    f" {_number(tolerance)} 1 1 0",
+                    f"1  {offset} 0 0 {_number(band.length)}",
+                    f"3  {band.first_pcurve_index} {band.second_pcurve_index} CN {surface_indexes[graph.faces[band.face_id].surface_id]} 0 0 {_number(band.length)}",
+                    "0",
+                ),
+                "0101000",
+                (
+                    (f"vertex:{band.low_vertex_id}", False),
+                    (f"vertex:{band.high_vertex_id}", True),
+                ),
+            )
+        )
     for loop in model.loops:
+        if any(loop.id in band.loop_ids for band in seam_bands.values()):
+            continue
         shapes.append(
             _ShapeRecord(
                 f"loop:{loop.id}",
@@ -1801,6 +1839,23 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                         ),
                     )
                     for coedge_id in loop.coedge_ids
+                ),
+            )
+        )
+    for band in seam_bands.values():
+        low_edge = graph.edges[graph.coedges[band.low_coedge_id].edge_id]
+        high_edge = graph.edges[graph.coedges[band.high_coedge_id].edge_id]
+        shapes.append(
+            _ShapeRecord(
+                f"loop:seam:{band.face_id}",
+                "Wi",
+                (),
+                "0101100",
+                (
+                    (f"edge:{low_edge.id}", band.low_reversed),
+                    (f"edge:seam:{band.face_id}", False),
+                    (f"edge:{high_edge.id}", band.high_reversed),
+                    (f"edge:seam:{band.face_id}", True),
                 ),
             )
         )
@@ -1827,6 +1882,20 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
             )
         )
     for face in model.faces:
+        seam_band = seam_bands.get(face.id)
+        if seam_band is not None:
+            shapes.append(
+                _ShapeRecord(
+                    f"face:{face.id}",
+                    "Fa",
+                    (
+                        f"0  {_number(max(tolerance, face.tolerance))} {surface_indexes[face.surface_id]} 0",
+                    ),
+                    "0101000",
+                    ((f"loop:seam:{face.id}", False),),
+                )
+            )
+            continue
         area_tolerance = max(tolerance * tolerance, 1e-10)
         loop_points = {
             loop_id: _loop_uv_points(graph, face, graph.loops[loop_id])
