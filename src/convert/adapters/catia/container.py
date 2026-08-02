@@ -199,6 +199,58 @@ def build_cfv2(streams: Sequence[tuple[str, bytes]]) -> bytes:
     return bytes(result)
 
 
+def append_cfv2_stream(
+    source: bytes | bytearray, name: str, value: bytes | bytearray
+) -> bytes:
+    data = bytes(source)
+    payload = bytes(value)
+    _validate_stream_name(name)
+    if not payload:
+        raise ValueError(f"CFV2 stream {name!r} is empty")
+    archive = Cfv2Archive.from_bytes(data)
+    if any(
+        stream.name == name
+        for directory in (archive.outer, *archive.nested)
+        for stream in directory.streams
+    ):
+        raise ValueError(f"CFV2 stream {name!r} already exists")
+    directory_start = archive.outer.offset
+    directory_end = directory_start + archive.outer.length
+    directory = data[directory_start:directory_end]
+    marker = directory.rfind(DIRECTORY_END)
+    if marker < 0 or any(directory[marker + len(DIRECTORY_END) :]):
+        raise Cfv2FormatError("CFV2 directory end marker is missing")
+    descriptor = _descriptor(name, directory_start, len(payload))
+    extended_directory = b"".join(
+        (directory[:marker], descriptor, directory[marker:])
+    )
+    new_directory_start = directory_start + len(payload)
+    result = bytearray(data[:directory_start])
+    result.extend(payload)
+    result.extend(extended_directory)
+    result[8:16] = struct.pack(
+        ">II", new_directory_start, len(extended_directory)
+    )
+    generated = Cfv2Archive.from_bytes(result)
+    original_streams = tuple(
+        (stream.name, archive.stream_bytes(stream, archive.outer))
+        for stream in archive.outer.streams
+    )
+    retained_streams = tuple(
+        (stream.name, generated.stream_bytes(stream, generated.outer))
+        for stream in generated.outer.streams
+        if stream.name != name
+    )
+    added_streams = tuple(
+        generated.stream_bytes(stream, generated.outer)
+        for stream in generated.outer.streams
+        if stream.name == name
+    )
+    if retained_streams != original_streams or added_streams != (payload,):
+        raise Cfv2FormatError("extended CFV2 directory failed validation")
+    return bytes(result)
+
+
 def build_declaration(
     class_name: str, base_class: str, stream_name: str, ordinal: int = 2
 ) -> bytes:
