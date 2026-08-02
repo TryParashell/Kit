@@ -1402,8 +1402,8 @@ def _seam_band(
     high_start = high_generated.end if high_reversed else high_generated.start
     high_end = high_generated.start if high_reversed else high_generated.end
     if (
-        math.hypot(low_end[0] - high_start[0], low_end[1] - high_start[1]) > allowed
-        or math.hypot(high_end[0] - low_start[0], high_end[1] - low_start[1]) > allowed
+        abs(low_end[0] - high_start[0]) > allowed
+        or abs(high_end[0] - low_start[0]) > allowed
     ):
         return None
     low_point = _vector3(graph.vertices[low_edge.start_vertex_id].point)
