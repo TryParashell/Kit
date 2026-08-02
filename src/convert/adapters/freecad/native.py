@@ -2330,12 +2330,12 @@ def read_native_fcstd(
     body_ids = {
         obj.name: f"freecad:body:{obj.name}"
         for obj in native.objects
-        if obj.type_id == BODY_TYPE_ID
+        if obj.type_id in BODY_CONTAINER_TYPE_IDS
     }
     brep_payloads, owner_payloads = _build_brep_payloads(native, feature_ids, body_ids)
     meshes = _parse_meshes(native)
     features: list[FeatureStep] = []
-    selections: list[Selection] = []
+    selections: list[Selection] = list(_explicit_selections(native.objects))
     for order, obj in enumerate(feature_objects):
         feature_id = feature_ids[obj.name]
         kind = _feature_kind(obj)
@@ -2400,7 +2400,7 @@ def read_native_fcstd(
         )
     bodies: list[Body] = []
     for obj in native.objects:
-        if obj.type_id != BODY_TYPE_ID:
+        if obj.type_id not in BODY_CONTAINER_TYPE_IDS:
             continue
         final_name = _link(obj, "Tip")
         if final_name not in feature_ids:
@@ -2420,6 +2420,7 @@ def read_native_fcstd(
                 _string(obj, "Label", obj.name),
                 feature_ids[final_name],
                 TopologySummary(),
+                material_id=_string(obj, "MaterialId") or None,
                 provenance=Provenance(FORMAT_ID, obj.name),
                 attributes={
                     "freecad": _native_object_data(obj),
@@ -2533,9 +2534,10 @@ def read_native_fcstd(
             }
             for filename, (identity, linked_document) in resolved_external.items()
         ]
+    configurations = _native_configurations(native.objects, feature_ids)
     document = CadDocument(
         source,
-        (Configuration("freecad:configuration:default", "Default", active=True),),
+        configurations,
         tuple(parameters),
         support_planes,
         sketches,
