@@ -1679,6 +1679,38 @@ def _application_version(data: bytes) -> str:
     return match.group().decode("ascii") if match else "CATIA V5"
 
 
+def _native_base_payload(document: CadDocument, document_type: str) -> bytes | None:
+    candidates = sorted(
+        (
+            payload
+            for payload in document.brep_payloads
+            if (
+                _is_native_document_payload(payload)
+                or _is_preserved_document_payload(payload)
+            )
+            and payload.schema == document_type
+            and payload.data is not None
+        ),
+        key=_is_preserved_document_payload,
+    )
+    for payload in candidates:
+        data = payload.data
+        if data is None or hashlib.sha256(data).hexdigest() != payload.sha256:
+            continue
+        if _matching_document_binding(document, payload) is None:
+            continue
+        try:
+            archive = Cfv2Archive.from_bytes(data)
+            if _manifest_bytes(archive) is not None:
+                continue
+            if _document_type(archive, f"candidate.{document_type}") != document_type:
+                continue
+        except (CatiaAdapterError, Cfv2FormatError, TypeError, ValueError):
+            continue
+        return data
+    return None
+
+
 def _unchanged_native_payload(
     document: CadDocument, document_type: str
 ) -> tuple[bytes, bool] | None:
