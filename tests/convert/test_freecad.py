@@ -1243,8 +1243,9 @@ def test_non_open_cascade_brep_bytes_are_never_bound_as_freecad_shapes() -> None
     document = replace(source, brep_payloads=(payload,))
     output = io.BytesIO()
     result = FreeCADAdapter().write(document, output)
-    transfers = {transfer.capability: transfer.mode for transfer in result.transfers}
-    assert transfers[Capability.BREP] == TransferMode.CARRIER
+    transfers = {transfer.capability: transfer for transfer in result.transfers}
+    assert transfers[Capability.BREP].mode == TransferMode.CARRIER
+    assert transfers[Capability.BREP].carrier_reason is CarrierReason.SOURCE_OPAQUE
     with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
         root = ET.fromstring(archive.read("Document.xml"))
         shape_files = {
@@ -1257,6 +1258,60 @@ def test_non_open_cascade_brep_bytes_are_never_bound_as_freecad_shapes() -> None
         assert shape_files == set()
         assert archive.read("interchange/native/foreign_brep.x_b") == payload.data
     assert FreeCADAdapter().read(output.getvalue()) == document
+
+
+def test_decoded_brep_and_retained_source_payload_are_accounted_once() -> None:
+    source = neutral_document()
+    data = b"PS\x00\x00retained-source"
+    payload = BrepPayload(
+        "source:brep",
+        "parasolid.x_b",
+        "partition",
+        "SCH_3500040",
+        hashlib.sha256(data).hexdigest(),
+        data=data,
+        role=PayloadRole.BREP,
+        file_extension=".x_b",
+    )
+    document = replace(source, brep=triangle_brep(), brep_payloads=(payload,))
+    output = io.BytesIO()
+    result = FreeCADAdapter().write(document, output)
+    transfers = {transfer.capability: transfer for transfer in result.transfers}
+    assert transfers[Capability.BREP].mode is TransferMode.NATIVE
+    assert transfers[Capability.BREP].carrier_reason is None
+    assert transfers[Capability.NATIVE_PAYLOADS].mode is TransferMode.CARRIER
+    assert (
+        transfers[Capability.NATIVE_PAYLOADS].carrier_reason
+        is CarrierReason.TARGET_UNSUPPORTED
+    )
+    assert FreeCADAdapter().read(output.getvalue()) == document
+
+
+def test_duplicate_reference_and_housekeeping_nodes_do_not_degrade_history() -> None:
+    source = neutral_document()
+    reference = FeatureStep(
+        "feature:reference-plane",
+        "Reference plane",
+        FeatureKind.REFERENCE,
+        1,
+        attributes={"native_type": "Plane"},
+    )
+    housekeeping = FeatureStep(
+        "feature:comments",
+        "Comments",
+        FeatureKind.NATIVE,
+        2,
+        attributes={"native_type": "Comments"},
+    )
+    document = replace(
+        source,
+        feature_timeline=(*source.feature_timeline, reference, housekeeping),
+    )
+    document.assert_valid()
+    result = FreeCADAdapter().write(document, io.BytesIO())
+    transfers = {transfer.capability: transfer for transfer in result.transfers}
+    assert transfers[Capability.PARAMETRIC_HISTORY].mode is TransferMode.NATIVE
+    assert transfers[Capability.PARAMETRIC_HISTORY].carrier_reason is None
 
 
 def test_native_capabilities_follow_restored_sections() -> None:
@@ -1704,8 +1759,12 @@ def test_unavailable_sketch_geometry_uses_explicit_carrier_fallback() -> None:
     output = io.BytesIO()
     adapter = FreeCADAdapter()
     result = adapter.write(document, output)
-    transfers = {transfer.capability: transfer.mode for transfer in result.transfers}
-    assert transfers[Capability.EDITABLE_SKETCHES] == TransferMode.MIXED
+    transfers = {transfer.capability: transfer for transfer in result.transfers}
+    assert transfers[Capability.EDITABLE_SKETCHES].mode == TransferMode.MIXED
+    assert (
+        transfers[Capability.EDITABLE_SKETCHES].carrier_reason
+        is CarrierReason.SOURCE_OPAQUE
+    )
     with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
         root = ET.fromstring(archive.read("Document.xml"))
     sketch_object = next(
