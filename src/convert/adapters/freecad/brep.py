@@ -81,6 +81,7 @@ class _ModelGraph:
         "bodies",
         "coedge_owner",
         "coedges",
+        "curves",
         "edge_uses",
         "edges",
         "face_uses",
@@ -101,6 +102,7 @@ class _ModelGraph:
 
     def __init__(self, model: BrepModel) -> None:
         self.vertices = {value.id: value for value in model.vertices}
+        self.curves = {value.id: value for value in model.curves}
         self.edges = {value.id: value for value in model.edges}
         self.coedges = {value.id: value for value in model.coedges}
         self.loops = {value.id: value for value in model.loops}
@@ -1277,6 +1279,42 @@ def _edge_pcurve_records(
     return tuple(records), result
 
 
+def _loop_uv_area(
+    graph: _ModelGraph,
+    face: BrepFace,
+    loop: BrepLoop,
+) -> float | None:
+    surface = graph.surfaces[face.surface_id]
+    values: list[tuple[float, float]] = []
+    for coedge_id in loop.coedge_ids:
+        coedge = graph.coedges[coedge_id]
+        edge = graph.edges[coedge.edge_id]
+        geometry = graph.curves.get(edge.curve_id)
+        if geometry is None:
+            return None
+        first, last = edge.start_parameter, edge.end_parameter
+        if coedge.reversed:
+            first, last = last, first
+        for index in range(16):
+            point = _curve_point(
+                geometry,
+                first + (last - first) * index / 16.0,
+            )
+            if point is None:
+                return None
+            uv = _surface_uv(surface, point)
+            if uv is None:
+                return None
+            values.append(uv)
+    unwrapped = _unwrap_periodic(values, _surface_periods(surface))
+    if len(unwrapped) < 3:
+        return None
+    return sum(
+        left[0] * right[1] - right[0] * left[1]
+        for left, right in zip(unwrapped, (*unwrapped[1:], unwrapped[0]))
+    ) / 2.0
+
+
 def _check_edge_geometry(
     edge: BrepEdge,
     curve: object,
@@ -1532,6 +1570,34 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
             )
         )
     for face in model.faces:
+        loop_areas = {
+            loop_id: _loop_uv_area(graph, face, graph.loops[loop_id])
+            for loop_id in face.loop_ids
+        }
+        measurable = {
+            loop_id: area
+            for loop_id, area in loop_areas.items()
+            if area is not None and abs(area) > tolerance * tolerance
+        }
+        outer_loop_id = (
+            max(measurable, key=lambda loop_id: abs(measurable[loop_id]))
+            if measurable
+            else next(
+                (
+                    loop_id
+                    for loop_id in face.loop_ids
+                    if graph.loops[loop_id].outer
+                ),
+                face.loop_ids[0],
+            )
+        )
+
+        def loop_reversed(loop_id: str) -> bool:
+            area = loop_areas[loop_id]
+            if area is None or abs(area) <= tolerance * tolerance:
+                return False
+            return (area > 0.0) != (loop_id == outer_loop_id)
+
         shapes.append(
             _ShapeRecord(
                 f"face:{face.id}",
@@ -1540,7 +1606,10 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                     f"0  {_number(max(tolerance, face.tolerance))} {surface_indexes[face.surface_id]} 0",
                 ),
                 "0101000",
-                tuple((f"loop:{loop_id}", False) for loop_id in face.loop_ids),
+                tuple(
+                    (f"loop:{loop_id}", loop_reversed(loop_id))
+                    for loop_id in face.loop_ids
+                ),
             )
         )
     for shell in model.shells:
