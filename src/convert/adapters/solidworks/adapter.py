@@ -2186,6 +2186,12 @@ def _patch_native_assembly(
         native = decode_native_assembly(archive, include_tessellation=True)
     except SldprtFormatError:
         return frozenset()
+    if _patch_assembly_instances(document.assembly, native, streams):
+        try:
+            archive = SldprtArchive.from_bytes(build_sldprt(streams))
+            native = decode_native_assembly(archive, include_tessellation=True)
+        except SldprtFormatError:
+            return frozenset()
     result: set[Capability] = set()
     if _assembly_structure_values(
         document.assembly
@@ -2237,6 +2243,106 @@ def _patch_native_assembly(
     if _mesh_values(document.meshes) == _mesh_values(native_meshes):
         result.add(Capability.TESSELLATION)
     return frozenset(result)
+
+
+def _patch_assembly_instances(
+    assembly: AssemblyData,
+    native: NativeAssembly,
+    streams: dict[str, bytes],
+) -> bool:
+    original = {instance.id: instance for instance in _assembly_instances(native)}
+    desired = {instance.id: instance for instance in assembly.instances}
+    if set(original) != set(desired):
+        return False
+    prefix, root, trailing = _keywords_root(streams[COMPONENT_TREE_STREAM])
+    elements: dict[int, ET.Element] = {}
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] != "swReference":
+            continue
+        try:
+            elements[int(element.attrib.get("id", ""))] = element
+        except ValueError:
+            continue
+    changed = False
+    for instance_id, target in desired.items():
+        source = original[instance_id]
+        native_id = _native_id(instance_id, "sldasm:instance:")
+        element = elements.get(native_id or -1)
+        if element is None:
+            continue
+        if (
+            target.owner_definition_id != source.owner_definition_id
+            or target.order != source.order
+            or target.fixed != source.fixed
+        ):
+            continue
+        values = {
+            "swModelRef": str(
+                _native_id(target.definition_id, "sldasm:definition:")
+                or element.attrib.get("swModelRef", "")
+            ),
+            "swReferenceNumber": target.reference_number,
+            "swConfigurationName": target.configuration_name,
+            "swConfigurationId": target.configuration_id,
+            "swTransform": " ".join(
+                format(value, ".17g") for value in _native_assembly_matrix(target.transform)
+            ),
+            "swSuppressed": _yes_text(target.suppressed),
+            "swHidden": _yes_text(target.hidden),
+            "swFlexible": _yes_text(target.flexible),
+            "swExcludeFromBOM": _yes_text(target.exclude_from_bom),
+        }
+        reference_number = target.reference_number or source.reference_number
+        suffix = f"-{reference_number}"
+        target_name = (
+            target.name[: -len(suffix)]
+            if target.name.endswith(suffix)
+            else source.name[: -len(f"-{source.reference_number}")]
+        )
+        values["swName"] = target_name
+        for key, value in values.items():
+            if element.attrib.get(key) != value:
+                element.attrib[key] = value
+                changed = True
+    if changed:
+        streams[COMPONENT_TREE_STREAM] = _keywords_bytes(prefix, root, trailing)
+    return changed
+
+
+def _native_assembly_matrix(matrix: Matrix4) -> tuple[float, ...]:
+    values = matrix.values
+    result = [0.0] * 16
+    result[0], result[4], result[8], result[12] = (
+        values[0],
+        values[1],
+        values[2],
+        values[3] / 1000.0,
+    )
+    result[1], result[5], result[9], result[13] = (
+        values[4],
+        values[5],
+        values[6],
+        values[7] / 1000.0,
+    )
+    result[2], result[6], result[10], result[14] = (
+        values[8],
+        values[9],
+        values[10],
+        values[11] / 1000.0,
+    )
+    result[3], result[7], result[11], result[15] = (
+        values[12],
+        values[13],
+        values[14],
+        values[15],
+    )
+    if not all(math.isfinite(value) for value in result):
+        raise SldprtFormatError("component transform contains a non-finite value")
+    return tuple(result)
+
+
+def _yes_text(value: bool) -> str:
+    return "YES" if value else "NO"
 
 
 def _assembly_structure_values(assembly: AssemblyData) -> tuple[Any, ...]:
