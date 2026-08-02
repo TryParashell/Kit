@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import chain
 from math import isclose, isfinite, sqrt
 import re
 from sys import float_info
@@ -95,11 +96,19 @@ class _Tokens:
                 return None
         return self._lookahead.group(0)
 
-    def peek_starts_next_line(self) -> bool:
-        if self.peek() is None or self._lookahead is None:
+    def face_triangulation_starts_next_line(self) -> bool:
+        current_end = self._data.find(b"\n", self._last_end)
+        if current_end < 0:
             return False
-        separation = self._data[self._last_end : self._lookahead.start()]
-        return re.fullmatch(rb"[ \t]*\r?\n[ \t]*", separation) is not None
+        current_tail = self._data[self._last_end : current_end]
+        if re.fullmatch(rb"[ \t]*\r?", current_tail) is None:
+            return False
+        next_start = current_end + 1
+        next_end = self._data.find(b"\n", next_start)
+        if next_end < 0:
+            next_end = len(self._data)
+        line = self._data[next_start:next_end]
+        return re.fullmatch(rb"2[ \t]+[1-9]\d*[ \t]*\r?", line) is not None
 
     def expect(self, expected: bytes) -> None:
         if self.take() != expected:
@@ -362,7 +371,7 @@ def _location_multiply(
     left: tuple[tuple[int, int], ...], right: tuple[tuple[int, int], ...]
 ) -> tuple[tuple[int, int], ...]:
     result: list[tuple[int, int]] = []
-    for datum, power in (*right, *left):
+    for datum, power in chain(right, left):
         if result and result[-1][0] == datum:
             combined = result[-1][1] + power
             if combined < _MIN_INT32 or combined > _MAX_INT32:
@@ -453,6 +462,7 @@ def _location_transform(tokens: _Tokens) -> None:
 def _locations(tokens: _Tokens) -> int:
     count = _count(tokens, b"Locations", _MAX_GEOMETRY)
     locations: list[tuple[tuple[int, int], ...]] = []
+    unique_locations: set[tuple[tuple[int, int], ...]] = set()
     for index in range(1, count + 1):
         kind = tokens.integer(1, 2)
         if kind == 1:
@@ -467,9 +477,10 @@ def _locations(tokens: _Tokens) -> int:
                     _location_power(locations[reference - 1], power), location
                 )
                 reference = tokens.integer(0, len(locations))
-        if not location or location in locations:
+        if not location or location in unique_locations:
             raise _DecodeFailure("invalid BRep location record")
         locations.append(location)
+        unique_locations.add(location)
     return count
 
 
@@ -659,8 +670,8 @@ def _face_structure(
         surface = tokens.integer(0, surfaces)
         _location_index(tokens, locations)
         has_triangulation = False
-        if tokens.peek() == b"2" and tokens.peek_starts_next_line():
-            tokens.take()
+        if tokens.face_triangulation_starts_next_line():
+            tokens.expect(b"2")
             _positive_index(tokens, len(triangulations))
             has_triangulation = True
         if surface == 0 and not has_triangulation:
@@ -701,6 +712,7 @@ def _shape_structure(
     if count == 0:
         raise _DecodeFailure("empty BRep topology")
     kinds: dict[int, bytes] = {}
+    children: dict[int, tuple[int, ...]] = {}
     for ordinal in range(1, count + 1):
         kind = tokens.take()
         if kind not in _SHAPE_TYPES:
@@ -724,6 +736,7 @@ def _shape_structure(
         flags = tokens.take()
         if _FLAGS_PATTERN.fullmatch(flags) is None:
             raise _DecodeFailure("invalid BRep shape flags")
+        child_records = []
         while True:
             child = _structural_reference(tokens, count, locations)
             if child is None:
@@ -734,10 +747,27 @@ def _shape_structure(
             child_kind = kinds.get(reference.record)
             if child_kind not in _SHAPE_CHILD_TYPES[kind]:
                 raise _DecodeFailure("invalid BRep child shape type")
+            child_records.append(reference.record)
         kinds[record] = kind
+        children[record] = tuple(child_records)
     root = _structural_reference(tokens, count, locations)
-    if root is None or root[0].record not in kinds or tokens.peek() is not None:
+    if (
+        root is None
+        or root[0].record != 1
+        or root[0].record not in kinds
+        or tokens.peek() is not None
+    ):
         raise _DecodeFailure("invalid BRep root shape")
+    reachable = set()
+    pending = [root[0].record]
+    while pending:
+        record = pending.pop()
+        if record in reachable:
+            continue
+        reachable.add(record)
+        pending.extend(children[record])
+    if reachable != set(kinds):
+        raise _DecodeFailure("unreachable BRep topology")
 
 
 def _vertex_geometry(tokens: _Tokens) -> _VertexData:
@@ -1179,17 +1209,23 @@ def is_structurally_valid_ascii_brep(data: bytes) -> bool:
     try:
         offset = 0
         payload = None
-        for line in data.splitlines(keepends=True):
-            body = line[:-1] if line.endswith(b"\n") else line
-            body = body[:-1] if body.endswith(b"\r") else body
+        while offset < len(data):
+            line_end = data.find(b"\n", offset)
+            if line_end < 0:
+                line_end = len(data)
+            body = data[offset:line_end]
             if len(body) > 99:
                 break
+            while body.endswith(b"\r"):
+                body = body[:-1]
             if body in _VERSION_LINES:
                 if body != _VERSION_LINE:
                     raise _DecodeFailure("unsupported BRep version line")
                 payload = data[offset:]
                 break
-            offset += len(line)
+            if line_end == len(data):
+                break
+            offset = line_end + 1
         if payload is None:
             raise _DecodeFailure("invalid BRep version line")
         tokens = _Tokens(payload)
