@@ -1051,6 +1051,7 @@ class _TopologyRecord:
     reversed: bool = False
     owner: int = 0
     point: Vector3 | None = None
+    isolated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1352,22 +1353,45 @@ def _parse_coedge(data: bytes, offset: int) -> _TopologyRecord | None:
     attribute = _u16(data, start)
     references = _refs(data, start + 2, 9)
     marker_offset = start + 20
-    if (
-        references is None
-        or marker_offset >= len(data)
-        or data[marker_offset] not in {0x2B, 0x2D}
-    ):
+    marker = data[marker_offset] if marker_offset < len(data) else -1
+    isolated = (
+        attribute is not None
+        and references is not None
+        and marker == 0x3F
+        and _isolated_fin(attribute, references)
+    )
+    if references is None or (marker not in {0x2B, 0x2D} and not isolated):
         references = _tripled_refs(data, start + 2, 9)
         marker_offset = start + 29
+        marker = data[marker_offset] if marker_offset < len(data) else -1
+        isolated = (
+            attribute is not None
+            and references is not None
+            and marker == 0x3F
+            and _isolated_fin(attribute, references)
+        )
     if attribute is None or attribute <= 1 or references is None:
         return None
-    if marker_offset >= len(data) or data[marker_offset] not in {0x2B, 0x2D}:
+    if marker not in {0x2B, 0x2D} and not isolated:
         return None
     return _TopologyRecord(
         attribute,
         references,
         offset,
-        data[marker_offset] == 0x2D,
+        marker == 0x2D,
+        isolated=isolated,
+    )
+
+
+def _isolated_fin(attribute: int, references: tuple[int, ...]) -> bool:
+    return (
+        len(references) == 9
+        and references[0] <= 1
+        and references[1] > 1
+        and references[2] == attribute
+        and references[3] == attribute
+        and references[4] > 1
+        and all(references[index] <= 1 for index in (5, 6, 7, 8))
     )
 
 
@@ -1641,6 +1665,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
     face_loops: dict[int, tuple[tuple[int, tuple[int, ...]], ...]] = {}
     edge_endpoints: dict[int, tuple[int, int]] = {}
     edge_curves: dict[int, int] = {}
+    coedge_edges: dict[int, int] = {}
     used_coedges: set[int] = set()
     used_edges: set[int] = set()
     used_vertices: set[int] = set()
@@ -1648,6 +1673,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
     used_curves: set[int] = set()
     used_surfaces: set[int] = set()
     synthetic_vertices: dict[int, Vector3] = {}
+    synthetic_curves: dict[int, NativeCurve] = {}
     owner_faces: dict[int, int] = {}
     for bridge_attribute, bridge in sorted(tables.bridges.items()):
         if bridge.owner in owner_faces:
@@ -1677,6 +1703,30 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
             for index, coedge_attribute in enumerate(ring):
                 coedge = tables.coedges[coedge_attribute]
                 next_coedge = tables.coedges[ring[(index + 1) % len(ring)]]
+                if coedge.isolated:
+                    if len(ring) != 1 or not _isolated_fin(
+                        coedge.attribute, coedge.references
+                    ):
+                        raise ValueError("invalid isolated vertex loop")
+                    edge_attribute = 0x10000 + coedge_attribute
+                    curve_attribute = edge_attribute
+                    vertex_attribute = coedge.references[4]
+                    edge_endpoints[edge_attribute] = (
+                        vertex_attribute,
+                        vertex_attribute,
+                    )
+                    edge_curves[edge_attribute] = curve_attribute
+                    coedge_edges[coedge_attribute] = edge_attribute
+                    synthetic_curves[curve_attribute] = NativeCurve(
+                        _native_id("curve", curve_attribute),
+                        "parasolid.xt",
+                        "isolated-vertex-loop",
+                    )
+                    used_coedges.add(coedge_attribute)
+                    used_edges.add(edge_attribute)
+                    used_vertices.add(vertex_attribute)
+                    used_curves.add(curve_attribute)
+                    continue
                 edge_attribute = coedge.references[6]
                 start_vertex = coedge.references[4]
                 end_vertex = next_coedge.references[4]
@@ -1711,6 +1761,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
                 previous_curve = edge_curves.setdefault(edge_attribute, curve_attribute)
                 if previous_curve != curve_attribute:
                     raise ValueError("inconsistent edge curve")
+                coedge_edges[coedge_attribute] = edge_attribute
                 used_coedges.add(coedge_attribute)
                 used_edges.add(edge_attribute)
                 used_vertices.update(canonical)
@@ -1737,17 +1788,28 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         vertices.append(
             BrepVertex(_native_id("vertex", vertex_attribute), point_record.point)
         )
-    curves = tuple(tables.curves[attribute] for attribute in sorted(used_curves))
+    curves = tuple(
+        (
+            tables.curves[attribute]
+            if attribute in tables.curves
+            else synthetic_curves[attribute]
+        )
+        for attribute in sorted(used_curves)
+    )
     edges: list[BrepEdge] = []
     for edge_attribute in sorted(used_edges):
         start_vertex, end_vertex = edge_endpoints[edge_attribute]
         curve_attribute = edge_curves[edge_attribute]
-        curve = tables.curves[curve_attribute]
-        start_parameter, end_parameter = _provable_curve_range(
-            curve,
-            points_by_vertex[start_vertex],
-            points_by_vertex[end_vertex],
-        )
+        degenerate = curve_attribute in synthetic_curves
+        if degenerate:
+            start_parameter, end_parameter = 0.0, 0.0
+        else:
+            curve = tables.curves[curve_attribute]
+            start_parameter, end_parameter = _provable_curve_range(
+                curve,
+                points_by_vertex[start_vertex],
+                points_by_vertex[end_vertex],
+            )
         edges.append(
             BrepEdge(
                 _native_id("edge", edge_attribute),
@@ -1756,24 +1818,38 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
                 _native_id("curve", curve_attribute),
                 start_parameter,
                 end_parameter,
+                degenerate=degenerate,
             )
         )
     coedges = tuple(
         BrepCoedge(
             _native_id("coedge", attribute),
-            _native_id("edge", tables.coedges[attribute].references[6]),
+            _native_id("edge", coedge_edges[attribute]),
             reversed=tables.coedges[attribute].reversed,
         )
         for attribute in sorted(used_coedges)
     )
+    outer_loops: set[int] = set()
+    for values in face_loops.values():
+        outer_loop = next(
+            (
+                loop_attribute
+                for loop_attribute, ring in values
+                if not any(tables.coedges[value].isolated for value in ring)
+            ),
+            0,
+        )
+        if outer_loop <= 1:
+            raise ValueError("face has no dimensional boundary loop")
+        outer_loops.add(outer_loop)
     loops = tuple(
         BrepLoop(
             _native_id("loop", loop_attribute),
             tuple(_native_id("coedge", value) for value in ring),
-            index == 0,
+            loop_attribute in outer_loops,
         )
         for values in face_loops.values()
-        for index, (loop_attribute, ring) in enumerate(values)
+        for loop_attribute, ring in values
     )
     surfaces = tuple(tables.surfaces[attribute] for attribute in sorted(used_surfaces))
     faces = tuple(
@@ -1932,7 +2008,10 @@ def _derive_body_hierarchy(
         face_edges = []
         for _, ring in loops:
             for coedge_attribute in ring:
-                edge_attribute = tables.coedges[coedge_attribute].references[6]
+                coedge = tables.coedges[coedge_attribute]
+                if coedge.isolated:
+                    continue
+                edge_attribute = coedge.references[6]
                 face_edges.append(edge_attribute)
                 faces_by_edge.setdefault(edge_attribute, set()).add(face_attribute)
         edges_by_face[face_attribute] = face_edges
