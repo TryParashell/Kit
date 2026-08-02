@@ -247,9 +247,7 @@ def test_neutral_binary_writer_uses_v12_body_and_fin_topology() -> None:
     payload = encode_brep_model(triangle_brep(), partition=False)
     header = _parasolid_header(payload)
     assert header is not None
-    assert header.description == (
-        ": TRANSMIT FILE created by modeller version 1200000"
-    )
+    assert header.description == (": TRANSMIT FILE created by modeller version 1200000")
     assert header.schema == "SCH_1200000_12006"
     body = payload[header.body_offset :]
     assert body[:8] == bytes.fromhex("00000000000c0002")
@@ -298,6 +296,9 @@ def test_v12_solidworks_body_attributes_bind_the_modifying_feature() -> None:
     assert header is not None
     body = payload[header.body_offset :]
     assert len(payload) == 1797
+    assert sha256(body).hexdigest() == (
+        "5f4e997ad967fc770c11d999f6c7267a8f7fed05738c6701d022936d0ff21de6"
+    )
     assert body[12:16] == bytes.fromhex("00030004")
     assert b"BODY_RECIPE_2001" in body
     assert b"SWIMPLICITBODYNAME_ID_U" in body
