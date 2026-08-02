@@ -595,6 +595,23 @@ def _link_list_property(
     return result
 
 
+def _link_sub_list_property(
+    name: str,
+    targets: list[tuple[str, str]],
+    *,
+    dynamic: bool = False,
+) -> ET.Element:
+    result = _property(name, "App::PropertyLinkSubList", dynamic=dynamic)
+    child = ET.SubElement(result, "LinkSubList", {"count": str(len(targets))})
+    for target, subelement in targets:
+        ET.SubElement(
+            child,
+            "Link",
+            {"obj": target, "sub": subelement},
+        )
+    return result
+
+
 def _xlink_property(
     name: str,
     target: str,
@@ -784,6 +801,78 @@ class _Parameters:
             "number",
         )
 
+    def native_expression(self, item: Mapping[str, Any]) -> str | None:
+        expression = item.get("expression", {})
+        if not isinstance(expression, Mapping):
+            return None
+        source = _text(expression.get("source")).strip()
+        if not source or "\n" in source or "\r" in source or ";" in source:
+            return None
+        language = _text(expression.get("language"), "kit").casefold()
+        if language == "freecad":
+            return source
+        if language != "kit":
+            return None
+        references = [_text(value) for value in _sequence(expression.get("parameter_ids", []))]
+        translated = source
+        allowed_identifiers = {
+            "abs",
+            "acos",
+            "asin",
+            "atan",
+            "atan2",
+            "ceil",
+            "cos",
+            "e",
+            "exp",
+            "false",
+            "floor",
+            "log",
+            "log10",
+            "max",
+            "min",
+            "pi",
+            "pow",
+            "round",
+            "sin",
+            "sqrt",
+            "tan",
+            "true",
+        }
+        for parameter_id in references:
+            alias = self.aliases.get(parameter_id)
+            if not alias:
+                return None
+            parameter = self.by_id.get(parameter_id, {})
+            name = _text(parameter.get("name")) if isinstance(parameter, Mapping) else ""
+            replaced = False
+            for token in (parameter_id, name):
+                if token and token in translated:
+                    translated = translated.replace(token, alias)
+                    replaced = True
+            if not replaced and alias not in translated:
+                return None
+            allowed_identifiers.add(alias)
+        translated = translated.replace("^", "**")
+        identifiers = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", translated))
+        if identifiers - allowed_identifiers:
+            return None
+        if re.search(r"[^A-Za-z0-9_.,+\-*/%<>=!&|() \t]", translated):
+            return None
+        return translated
+
+    def expression_parts(self) -> tuple[int, int]:
+        native = 0
+        carrier = 0
+        for item in self.parameters:
+            if not isinstance(item.get("expression"), Mapping):
+                continue
+            if self.native_expression(item) is None:
+                carrier += 1
+            else:
+                native += 1
+        return native, carrier
+
     def sheet_properties(self) -> list[ET.Element]:
         result = [
             _string_property("Label", "Parameters"),
@@ -820,6 +909,9 @@ class _Parameters:
                     content += f" {unit}"
             else:
                 content = "'" + _text(raw)
+            native_expression = self.native_expression(item)
+            if native_expression is not None:
+                content = "=" + native_expression
             ET.SubElement(cells, "Cell", {"address": f"A{row}", "content": "'" + name})
             ET.SubElement(
                 cells,
@@ -842,6 +934,10 @@ class _Parameters:
         ET.SubElement(heights, "RowInfo", {"Count": "0"})
         result.append(heights)
         return result
+
+
+def native_expression_parts(manifest: Mapping[str, Any]) -> tuple[int, int]:
+    return _Parameters(_items(manifest.get("parameters", []))).expression_parts()
 
 
 def _element_from_data(value: Any) -> ET.Element | None:
@@ -1844,9 +1940,73 @@ def _feature_metadata(feature: Mapping[str, Any], role: str) -> list[ET.Element]
     return [
         _string_property("KitId", feature.get("id"), dynamic=True),
         _string_property("KitRole", role, dynamic=True),
+        _string_property(
+            "FeatureKind", _enum(feature.get("kind")), dynamic=True
+        ),
+        _string_property(
+            "Operation", _enum(feature.get("operation")), dynamic=True
+        ),
         _integer_property("TimelineOrder", feature.get("order", 0), dynamic=True),
+        _bool_property("Suppressed", bool(feature.get("suppressed")), dynamic=True),
         _json_property("SourceFeatureJSON", feature),
     ]
+
+
+def _definition_property(name: str, value: Any) -> ET.Element | None:
+    property_name = "Definition" + _safe(name, "Value")
+    if isinstance(value, bool):
+        return _bool_property(property_name, value, dynamic=True)
+    if isinstance(value, int):
+        return _integer_property(property_name, value, dynamic=True)
+    if isinstance(value, float):
+        return _float_property(property_name, value, dynamic=True)
+    if isinstance(value, str):
+        return _string_property(property_name, value, dynamic=True)
+    if isinstance(value, Mapping):
+        value_type = _text(value.get("$type"))
+        if value_type == "ParameterValue":
+            raw = value.get("value")
+            kind = _text(_enum(value.get("kind"))).casefold()
+            if isinstance(raw, bool):
+                return _bool_property(property_name, raw, dynamic=True)
+            if isinstance(raw, int) and kind == "integer":
+                return _integer_property(property_name, raw, dynamic=True)
+            if isinstance(raw, (int, float)):
+                property_type = {
+                    "angle": "App::PropertyAngle",
+                    "length": "App::PropertyLength",
+                }.get(kind, "App::PropertyFloat")
+                return _float_property(
+                    property_name,
+                    raw,
+                    property_type,
+                    dynamic=True,
+                )
+            if isinstance(raw, str):
+                return _string_property(property_name, raw, dynamic=True)
+        keys = set(value)
+        if {"x", "y", "z"} <= keys:
+            return _vector_property(
+                property_name,
+                _vector(value, (0.0, 0.0, 0.0)),
+                dynamic=True,
+            )
+    if isinstance(value, (list, tuple)) and all(
+        isinstance(item, str) for item in value
+    ):
+        return _string_list_property(property_name, list(value), dynamic=True)
+    return None
+
+
+def _definition_properties(definition: Mapping[str, Any]) -> list[ET.Element]:
+    result: list[ET.Element] = []
+    for name, value in definition.items():
+        if name in {"$type", "object_data"}:
+            continue
+        property_element = _definition_property(name, value)
+        if property_element is not None:
+            result.append(property_element)
+    return result
 
 
 def _shape_property(filename: str = "", name: str = "Shape") -> ET.Element:
@@ -4070,6 +4230,10 @@ def _document_xml(
     )
     planes_group = graph.add("App::DocumentObjectGroup", "SupportPlanes", "Group")
     sketches_group = graph.add("App::DocumentObjectGroup", "Sketches", "Group")
+    selections_group = graph.add("App::DocumentObjectGroup", "Selections", "Group")
+    configurations_group = graph.add(
+        "App::DocumentObjectGroup", "Configurations", "Group"
+    )
     timeline_group = graph.add("App::DocumentObjectGroup", "FeatureTimeline", "Group")
     bodies_group = graph.add("App::DocumentObjectGroup", "Bodies", "Group")
     plane_items = _items(manifest.get("support_planes", manifest.get("planes", [])))
@@ -4088,7 +4252,7 @@ def _document_xml(
         obj = native_graph.get(native_plane_name) if native_replay else None
         if obj is None:
             obj = graph.add(
-                _text(native_plane.get("type_id"), "App::FeaturePython"),
+                _text(native_plane.get("type_id"), "App::Plane"),
                 native_plane.get("name", plane.get("name", plane_id)),
                 "Plane",
             )
@@ -4144,7 +4308,7 @@ def _document_xml(
             obj.properties.extend(
                 [
                     _string_property("Label", plane.get("name", plane_id)),
-                    _placement_property("Placement", transform, dynamic=True),
+                    _placement_property("Placement", transform),
                     _expression_property(expressions),
                     _string_property("KitId", plane_id, dynamic=True),
                     _json_property("SourcePlaneJSON", plane),
@@ -4240,8 +4404,6 @@ def _document_xml(
                 )
             payload_entries[entry] = data
     for feature in feature_items:
-        if bool(feature.get("suppressed")) and not native_replay:
-            continue
         feature_id = _text(feature.get("id"))
         feature_name = _text(feature.get("name"), feature_id)
         kind = _text(_enum(feature.get("kind"))).lower()
@@ -4583,7 +4745,7 @@ def _document_xml(
         else:
             imported = kind == "imported"
             final = graph.add(
-                "Part::Feature" if imported else "App::FeaturePython",
+                "Part::Feature",
                 feature_name,
                 "Feature",
                 touched=True,
@@ -4598,8 +4760,10 @@ def _document_xml(
                     _string_property(
                         "NativeTypeId", definition.get("type_id", ""), dynamic=True
                     ),
+                    *_definition_properties(definition),
                     _json_property("NativeDefinitionJSON", definition),
                     _bool_property("Visibility", imported),
+                    _shape_property(),
                 ]
             )
             if base_name:
@@ -4607,6 +4771,25 @@ def _document_xml(
                     _link_property("InputFeature", base_name, dynamic=True)
                 )
                 final.dependencies.append(base_name)
+            if parameters_data:
+                final.properties.extend(
+                    [
+                        _link_property(
+                            "Parameters", parameter_sheet.name, dynamic=True
+                        ),
+                        _string_list_property(
+                            "ParameterIds",
+                            [
+                                _text(value)
+                                for value in _sequence(
+                                    feature.get("parameter_ids", [])
+                                )
+                            ],
+                            dynamic=True,
+                        ),
+                    ]
+                )
+                final.dependencies.append(parameter_sheet.name)
             feature_names[feature_id] = final.name
             feature_objects.append(final.name)
             if imported:
@@ -4617,11 +4800,43 @@ def _document_xml(
                 native_object_targets[native_feature_name] = final.name
     body_objects: list[str] = []
     body_names: dict[str, str] = {}
+    body_shape_targets: dict[str, str] = {}
+    feature_by_id = {
+        _text(item.get("id")): item for item in feature_items if _text(item.get("id"))
+    }
+
+    def body_members(final_feature_id: str) -> list[str]:
+        pending = [final_feature_id]
+        member_ids: set[str] = set()
+        while pending:
+            feature_id = pending.pop()
+            if feature_id in member_ids or feature_id not in feature_by_id:
+                continue
+            member_ids.add(feature_id)
+            pending.extend(
+                _text(value)
+                for value in _sequence(
+                    feature_by_id[feature_id].get("input_feature_ids", [])
+                )
+            )
+        members: list[str] = []
+        for item in feature_items:
+            feature_id = _text(item.get("id"))
+            if feature_id not in member_ids:
+                continue
+            sketch_name = sketch_names.get(_text(item.get("sketch_id")), "")
+            if sketch_name and sketch_name not in members:
+                members.append(sketch_name)
+            feature_name = feature_names.get(feature_id, "")
+            if feature_name and feature_name not in members:
+                members.append(feature_name)
+        return members
+
     for body in _items(manifest.get("bodies", [])):
         body_id = _text(body.get("id"))
-        final_feature = feature_names.get(
-            _text(body.get("final_feature_id")), current_name
-        )
+        final_feature_id = _text(body.get("final_feature_id"))
+        final_feature = feature_names.get(final_feature_id, current_name)
+        members = body_members(final_feature_id)
         body_attributes = body.get("attributes", {})
         native_body = (
             body_attributes.get("freecad", {})
@@ -4643,15 +4858,17 @@ def _document_xml(
             native_object_targets[native_body_name] = obj.name
         else:
             obj = graph.add(
-                _text(native_body.get("type_id"), "App::DocumentObjectGroup"),
+                _text(native_body.get("type_id"), "App::Part"),
                 native_body.get("name", body.get("name", body_id)),
                 "Body",
             )
             obj.properties.extend(
                 [
                     _string_property("Label", body.get("name", body_id)),
-                    _link_list_property(
-                        "Group", [final_feature] if final_feature else []
+                    _link_list_property("Group", members),
+                    _link_property("Tip", final_feature, dynamic=True),
+                    _placement_property(
+                        "Placement", _matrix_transform(_IDENTITY_MATRIX)
                     ),
                     _string_property("KitId", body_id, dynamic=True),
                     _json_property("TopologyJSON", body.get("topology", {})),
@@ -4659,9 +4876,14 @@ def _document_xml(
                     _bool_property("Visibility", True),
                 ]
             )
-            if final_feature:
-                obj.dependencies.append(final_feature)
+            material_id = _text(body.get("material_id"))
+            if material_id:
+                obj.properties.append(
+                    _string_property("MaterialId", material_id, dynamic=True)
+                )
+            obj.dependencies.extend(members)
         body_names[body_id] = obj.name
+        body_shape_targets[body_id] = final_feature or obj.name
         body_objects.append(obj.name)
     payloads = _items(
         manifest.get("brep_payloads", manifest.get("native_payloads", []))
@@ -4692,7 +4914,7 @@ def _document_xml(
         if not target_name and target_feature_id:
             target_name = feature_names.get(target_feature_id, "")
         if not target_name and target_body_id:
-            target_name = body_names.get(target_body_id, "")
+            target_name = body_shape_targets.get(target_body_id, "")
         if not target_name and not source_object:
             target_name = current_name
         native_brep = _payload_role(payload) == "brep" and _freecad_brep_payload(
