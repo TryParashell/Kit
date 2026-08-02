@@ -349,6 +349,9 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
         assert forward.source_format == FORMAT_BY_SUFFIX[source_suffix]
         assert forward.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
         assert forward.output.bytes_written == destination.stat().st_size
+        assert forward.requirements == ()
+        assert forward.dropped == frozenset()
+        assert forward.roundtrip_safe is True
         _assert_truthful_vendor_result(forward, destination_suffix, is_assembly)
         del forward
         gc.collect()
@@ -373,6 +376,9 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
         assert backward.source_format == FORMAT_BY_SUFFIX[destination_suffix]
         assert backward.destination_format == FORMAT_BY_SUFFIX[source_suffix]
         assert backward.output.bytes_written == reverse.stat().st_size
+        assert backward.requirements == ()
+        assert backward.dropped == frozenset()
+        assert backward.roundtrip_safe is True
         _assert_truthful_vendor_result(backward, source_suffix, is_assembly)
         del backward
         gc.collect()

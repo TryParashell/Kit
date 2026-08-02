@@ -54,10 +54,7 @@ ASSEMBLY = (
     Path(__file__).parents[2] / "examples" / "Random" / "Pistons" / "Piston.SLDASM"
 )
 CATPRODUCT = (
-    Path(__file__).parents[2]
-    / "examples"
-    / ".CATProduct"
-    / "Tilton_Set.CATProduct"
+    Path(__file__).parents[2] / "examples" / ".CATProduct" / "Tilton_Set.CATProduct"
 )
 
 
@@ -801,9 +798,7 @@ def test_incomplete_portable_assembly_downgrades_to_root_carrier(tmp_path) -> No
     blocked = tmp_path / "blocked" / ASSEMBLY.name
     with pytest.raises(ApplicationUsabilityError) as captured:
         write_document(source, blocked, allow_carrier=False)
-    assert captured.value.requirements == (
-        "referenced SOLIDWORKS component files",
-    )
+    assert captured.value.requirements == ("referenced SOLIDWORKS component files",)
     assert not blocked.exists()
 
 
