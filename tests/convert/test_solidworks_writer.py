@@ -30,6 +30,7 @@ from convert.adapters.solidworks import (
 )
 from convert.adapters.solidworks.format import (
     KIT_DOCUMENT_STREAM,
+    KIT_NATIVE_STREAM,
     PARTITION_STREAM,
 )
 from interchange import (
@@ -541,6 +542,73 @@ def test_semantic_edit_uses_native_template_without_claiming_native_edit(
     assert result.diagnostics[-1].code == "sldprt.neutral_write"
 
 
+def test_native_template_patches_driving_dimension_without_carrier_opt_in(
+    tmp_path,
+) -> None:
+    source = read_sldprt(SAMPLE)
+    parameter = source.parameters[0]
+    target_value = float(parameter.value.value) + 1.25
+    edited = replace(
+        source,
+        parameters=(
+            replace(parameter, value=replace(parameter.value, value=target_value)),
+            *source.parameters[1:],
+        ),
+    )
+    output = tmp_path / "dimension.SLDPRT"
+    result = write_document(edited, output)
+    assert result.application_usable is True
+    assert result.vendor_loadable is True
+    assert result.near_lossless is True
+    assert result.metadata["compatibility"] == "native-template"
+    assert {
+        Capability.PARAMETERS,
+        Capability.PARAMETRIC_HISTORY,
+        Capability.EDITABLE_SKETCHES,
+    } <= result.native_capabilities
+    archive = SldprtArchive.open(output)
+    streams = archive.streams
+    streams.pop(KIT_DOCUMENT_STREAM)
+    streams.pop(KIT_NATIVE_STREAM)
+    native = read_sldprt(
+        build_sldprt(
+            streams,
+            file_id=archive.file_id,
+            format_version=archive.format_version,
+        )
+    )
+    native_parameter = next(item for item in native.parameters if item.id == parameter.id)
+    assert native_parameter.value.value == pytest.approx(target_value)
+
+
+def test_native_template_patches_same_width_feature_name(tmp_path) -> None:
+    source = read_sldprt(SAMPLE)
+    feature = source.feature_timeline[0]
+    target_name = "X" * len(feature.name)
+    edited = replace(
+        source,
+        feature_timeline=(
+            replace(feature, name=target_name),
+            *source.feature_timeline[1:],
+        ),
+    )
+    output = tmp_path / "feature-name.SLDPRT"
+    result = write_document(edited, output)
+    assert result.near_lossless is True
+    archive = SldprtArchive.open(output)
+    streams = archive.streams
+    streams.pop(KIT_DOCUMENT_STREAM)
+    streams.pop(KIT_NATIVE_STREAM)
+    native = read_sldprt(
+        build_sldprt(
+            streams,
+            file_id=archive.file_id,
+            format_version=archive.format_version,
+        )
+    )
+    assert native.feature_timeline[0].name == target_name
+
+
 def test_solidworks_aliases_enforce_document_kind(tmp_path) -> None:
     adapter = registry.writer("solidworks.sldprt")
     assert registry.reader("solidworks.sldasm") is registry.reader("solidworks.sldprt")
@@ -651,46 +719,40 @@ def test_public_sdk_requires_explicit_carrier_opt_in(tmp_path) -> None:
     assert result.output.metadata["compatibility"] == "kit-neutral-only"
 
 
-def test_stripped_carrier_metadata_cannot_promote_solidworks_replay(tmp_path) -> None:
+def test_attested_native_template_survives_wrapper_metadata_removal(tmp_path) -> None:
     original = open_document(SAMPLE)
     changed = replace(
         original,
         metadata=frozen_mapping({**original.metadata, "audit_change": True}),
     )
     carrier = tmp_path / "carrier.SLDPRT"
-    first = write_document(changed, carrier, allow_carrier=True)
-    assert first.vendor_loadable is False
+    first = write_document(changed, carrier)
+    assert first.vendor_loadable is True
+    assert first.near_lossless is True
     assert first.metadata["mode"] == "template"
     restored = open_document(carrier)
     metadata = dict(restored.metadata)
-    assert metadata.pop("solidworks.container_compatibility") == "kit-neutral-only"
+    assert metadata.pop("solidworks.container_compatibility") == "native-template"
     stripped = replace(restored, metadata=frozen_mapping(metadata))
-    blocked = tmp_path / "blocked.SLDPRT"
-    with pytest.raises(ApplicationUsabilityError) as captured:
-        write_document(stripped, blocked)
-    assert captured.value.vendor_loadable is False
-    assert not blocked.exists()
-    explicit = tmp_path / "explicit.SLDPRT"
-    result = write_document(stripped, explicit, allow_carrier=True)
-    assert result.vendor_loadable is False
-    assert result.near_lossless is False
-    assert explicit.read_bytes() == carrier.read_bytes()
-    assert open_document(explicit).feature_timeline == restored.feature_timeline
+    replay = tmp_path / "replay.SLDPRT"
+    result = write_document(stripped, replay)
+    assert result.vendor_loadable is True
+    assert result.near_lossless is True
+    assert replay.read_bytes() == carrier.read_bytes()
+    assert open_document(replay).feature_timeline == restored.feature_timeline
 
 
 def test_public_sdk_defaults_to_portable_assembly_writes(tmp_path) -> None:
     source = read_sldprt(ASSEMBLY)
     portable = tmp_path / "portable.SLDASM"
-    with pytest.raises(ApplicationUsabilityError):
-        write_document(source, portable)
-    assert not portable.exists()
-    portable_result = write_document(
-        source,
-        portable,
-        allow_carrier=True,
+    portable_result = write_document(source, portable)
+    assert portable_result.metadata["compatibility"] == "native-template"
+    assert portable_result.metadata["native_self_contained"] is True
+    assert portable_result.metadata["referenced_files_written"] == len(
+        source.assembly.documents
     )
-    assert portable_result.metadata["compatibility"] != "native-exact"
-    assert portable_result.metadata["native_self_contained"] is False
+    assert portable_result.requirements == ()
+    assert portable_result.near_lossless is True
     assert read_sldprt(portable).assembly == source.assembly
     exact = tmp_path / "exact.SLDASM"
     with pytest.raises(ApplicationUsabilityError) as captured:
