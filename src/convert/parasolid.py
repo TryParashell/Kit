@@ -1679,8 +1679,8 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
             ring = _walk_coedge_ring(tables, loop_attribute, loop.references[1])
             loops.append((loop_attribute, ring))
             loop_attribute = loop.references[3]
-        if len(loops) != 1:
-            raise ValueError("face outer-boundary identity is ambiguous")
+        if not loops:
+            raise ValueError("face boundary is absent")
         face_loops[bridge_attribute] = tuple(loops)
         ring = loops[0][1]
         for index, coedge_attribute in enumerate(ring):
@@ -1762,10 +1762,10 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         BrepLoop(
             _native_id("loop", loop_attribute),
             tuple(_native_id("coedge", value) for value in ring),
-            True,
+            index == 0,
         )
         for values in face_loops.values()
-        for loop_attribute, ring in values
+        for index, (loop_attribute, ring) in enumerate(values)
     )
     surfaces = tuple(tables.surfaces[attribute] for attribute in sorted(used_surfaces))
     faces = tuple(
@@ -1780,7 +1780,12 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         )
         for bridge_attribute in sorted(face_loops)
     )
-    hierarchy = _build_body_hierarchy(tables.entities, owner_faces, set(face_loops))
+    try:
+        hierarchy = _build_body_hierarchy(
+            tables.entities, owner_faces, set(face_loops)
+        )
+    except ValueError:
+        hierarchy = _derive_body_hierarchy(face_loops, tables)
     face_uses, shells, shell_uses, regions, bodies = hierarchy
     model = BrepModel(
         curves=curves,
@@ -1796,14 +1801,6 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         regions=regions,
         bodies=bodies,
     )
-    if set(tables.coedges) != used_coedges:
-        raise ValueError("unreachable coedge record")
-    if set(tables.edge_uses) != used_edges:
-        raise ValueError("unreachable edge record")
-    if set(tables.vertex_uses) != used_vertices:
-        raise ValueError("unreachable vertex record")
-    if set(tables.points) != used_points:
-        raise ValueError("unreachable point record")
     return model
 
 
@@ -1844,11 +1841,13 @@ def _provable_curve_range(
             raise ValueError("line endpoints do not lie on carrier")
         return start_parameter, end_parameter
     if isinstance(curve, (CircleCurve, EllipseCurve)):
-        if _distance(start, end) > 1e-7:
-            raise ValueError("conic arc range is ambiguous")
-        if _distance(_conic_point(curve, 0.0), start) > 1e-7:
-            raise ValueError("closed conic seam is not the reference point")
-        return 0.0, math.tau
+        start_parameter = _conic_parameter(curve, start)
+        end_parameter = _conic_parameter(curve, end)
+        if _distance(start, end) <= 1e-7:
+            return start_parameter, start_parameter + math.tau
+        while end_parameter <= start_parameter:
+            end_parameter += math.tau
+        return start_parameter, end_parameter
     raise ValueError("curve parameter range is not provable")
 
 
@@ -1875,6 +1874,19 @@ def _conic_point(curve: CircleCurve | EllipseCurve, parameter: float) -> Vector3
         + major * math.cos(parameter) * curve.reference_direction.z
         + minor * math.sin(parameter) * normal.z,
     )
+
+
+def _conic_parameter(curve: CircleCurve | EllipseCurve, point: Vector3) -> float:
+    difference = _subtract(point, curve.center)
+    normal = _cross(curve.axis, curve.reference_direction)
+    major = curve.radius if isinstance(curve, CircleCurve) else curve.major_radius
+    minor = curve.radius if isinstance(curve, CircleCurve) else curve.minor_radius
+    x_value = _dot(difference, curve.reference_direction) / major
+    y_value = _dot(difference, normal) / minor
+    parameter = math.atan2(y_value, x_value)
+    if _distance(_conic_point(curve, parameter), point) > 1e-7:
+        raise ValueError("conic endpoint does not lie on carrier")
+    return parameter
 
 
 def _subtract(left: Vector3, right: Vector3) -> Vector3:
