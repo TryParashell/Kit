@@ -1046,9 +1046,11 @@ def _feature_kind(obj: _NativeObject) -> FeatureKind:
     declared = _string(obj, "FeatureKind").casefold()
     if declared:
         try:
-            return FeatureKind(declared)
+            declared_kind = FeatureKind(declared)
         except ValueError:
-            pass
+            declared_kind = None
+        if declared_kind is not None:
+            return declared_kind
     if obj.type_id == "Part::Feature":
         return FeatureKind.IMPORTED
     if obj.type_id in PRIMITIVE_FEATURE_TYPE_IDS:
