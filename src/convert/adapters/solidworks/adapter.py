@@ -630,6 +630,8 @@ class SldprtAdapter:
             else _preserved_source(document, path)
         )
         diagnostics = document.diagnostics
+        required = _required_capabilities(document)
+        referenced_files_written = 0
         if preserved is None:
             template = _source_template(document, path)
             if settings.values.get("allow_non_native", True) is not True:
@@ -638,7 +640,20 @@ class SldprtAdapter:
                     f"{kind} SOLIDWORKS writing requires "
                     "WriteOptions(values={'allow_non_native': True})"
                 )
-            streams, native_brep = _generated_streams(document, template)
+            generated = _generated_streams(document, template)
+            transfers = _solidworks_transfers(
+                required,
+                generated.native_capabilities,
+            )
+            streams = generated.streams
+            streams[KIT_NATIVE_STREAM] = _native_attestation_bytes(
+                streams,
+                generated.compatibility,
+                generated.application_usable,
+                generated.vendor_loadable,
+                transfers,
+                generated.native_brep,
+            )
             file_id = (
                 SldprtArchive.from_bytes(template).file_id
                 if template is not None
@@ -650,58 +665,78 @@ class SldprtAdapter:
             data = build_sldprt(streams, file_id=file_id or 1)
             mode = "template" if template is not None else "generated"
             native_content = (
-                "source-preserved"
+                "source-patched"
                 if template is not None
                 else (
                     "neutral-brep"
-                    if native_brep == "generated"
-                    else "parasolid-import" if native_brep == "preserved" else "none"
+                    if generated.native_brep == "generated"
+                    else (
+                        "parasolid-import"
+                        if generated.native_brep == "preserved"
+                        else "none"
+                    )
                 )
             )
-            diagnostics = (
-                *diagnostics,
-                Diagnostic(
-                    code="sldprt.neutral_write",
-                    message=(
-                        "neutral edits are stored in the Kit stream and are not "
-                        "represented as native SOLIDWORKS feature edits"
+            if not generated.application_usable:
+                diagnostics = (
+                    *diagnostics,
+                    Diagnostic(
+                        code="sldprt.neutral_write",
+                        message=(
+                            "one or more neutral edits are retained in the Kit "
+                            "stream because their native SOLIDWORKS records could "
+                            "not be reproduced"
+                        ),
+                        severity=Severity.WARNING,
                     ),
-                    severity=Severity.WARNING,
-                ),
-            )
-            if native_brep.startswith("unsupported:"):
+                )
+            if generated.native_brep.startswith("unsupported:"):
                 diagnostics = (
                     *diagnostics,
                     Diagnostic(
                         code="sldprt.native_brep_unsupported",
-                        message=native_brep.removeprefix("unsupported:"),
+                        message=generated.native_brep.removeprefix("unsupported:"),
                         severity=Severity.WARNING,
                     ),
                 )
+            native_brep = generated.native_brep
+            compatibility = generated.compatibility
+            application_usable = generated.application_usable
+            vendor_loadable = generated.vendor_loadable
         else:
             data = preserved
             mode = "exact"
             native_content = "exact"
             native_brep = "exact"
-        compatibility = (
-            _replay_compatibility(data)
-            if mode == "exact"
-            else (
-                "native-source-with-kit-neutral"
-                if mode == "template"
-                else (
-                    "native-brep-with-kit-neutral"
-                    if native_content in {"neutral-brep", "parasolid-import"}
-                    else "kit-neutral-only"
+            compatibility = _replay_compatibility(data)
+            attestation = _native_attestation(data)
+            if compatibility == "native-exact":
+                transfers = tuple(
+                    CapabilityTransfer(capability, TransferMode.NATIVE)
+                    for capability in sorted(required, key=lambda value: value.value)
                 )
-            )
+                application_usable = True
+                vendor_loadable = True
+            elif attestation is not None:
+                transfers = _attested_transfers(attestation, required)
+                application_usable = attestation["application_usable"]
+                vendor_loadable = attestation["vendor_loadable"]
+                native_brep = str(attestation.get("native_brep", "template"))
+                native_content = "source-patched"
+            else:
+                transfers = _solidworks_transfers(required, frozenset())
+                application_usable = False
+                vendor_loadable = False
+        neutral_edits_are_native = all(
+            transfer.mode is TransferMode.NATIVE
+            or transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
+            for transfer in transfers
         )
-        native_exact = mode == "exact" and compatibility == "native-exact"
         output = _write_destination(destination, data, settings.overwrite)
         archive = SldprtArchive.from_bytes(data, output or "<memory>")
         requirements = (
             ("referenced SOLIDWORKS component files",)
-            if mode == "exact" and document.assembly is not None
+            if document.assembly is not None
             else ()
         )
         return WriteResult(
@@ -715,24 +750,43 @@ class SldprtAdapter:
                     "format_id": format_id,
                     "compatibility": compatibility,
                     "native_content": native_content,
-                    "neutral_edits_are_native": native_exact,
-                    "vendor_loadable": native_exact,
+                    "neutral_edits_are_native": neutral_edits_are_native,
+                    "vendor_loadable": vendor_loadable,
+                    "application_usable": application_usable,
                     "native_geometry": native_brep
-                    in {"exact", "generated", "preserved"},
+                    in {"exact", "generated", "preserved", "patched", "template"},
                     "native_brep": native_brep,
-                    "native_history": native_exact,
-                    "native_assembly": native_exact and document.assembly is not None,
-                    "native_self_contained": native_exact and document.assembly is None,
-                    "referenced_files_written": 0,
+                    "native_history": (
+                        Capability.PARAMETRIC_HISTORY
+                        not in required
+                        or Capability.PARAMETRIC_HISTORY
+                        in {
+                            transfer.capability
+                            for transfer in transfers
+                            if transfer.mode is TransferMode.NATIVE
+                        }
+                    ),
+                    "native_assembly": (
+                        document.assembly is not None
+                        and Capability.ASSEMBLIES
+                        in {
+                            transfer.capability
+                            for transfer in transfers
+                            if transfer.mode is TransferMode.NATIVE
+                        }
+                    ),
+                    "native_self_contained": document.assembly is None,
+                    "referenced_files_written": referenced_files_written,
                     "container_version": archive.format_version,
                     "file_id": archive.file_id,
                     "stream_count": len(archive.records),
                     "runtime": "python-stdlib",
                 }
             ),
+            transfers=transfers,
             requirements=requirements,
-            application_usable=native_exact,
-            vendor_loadable=native_exact,
+            application_usable=application_usable,
+            vendor_loadable=vendor_loadable,
         )
 
 
