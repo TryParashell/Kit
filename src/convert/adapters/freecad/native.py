@@ -76,6 +76,7 @@ from convert.opencascade import decode_ascii_brep
 
 from .archive import (
     DOCUMENT_ENTRY,
+    NATIVE_DOCUMENT_SHA256_ATTRIBUTE,
     _MAX_ENTRY_SIZE,
     _MAX_EXTERNAL_FILES,
     _MAX_TOTAL_SIZE,
@@ -2344,6 +2345,17 @@ def read_native_fcstd(
         if obj.type_id in BODY_CONTAINER_TYPE_IDS
     }
     brep_payloads, owner_payloads = _build_brep_payloads(native, feature_ids, body_ids)
+    native_document_sha256 = hashlib.sha256(data).hexdigest()
+    brep_payloads = tuple(
+        replace(
+            payload,
+            attributes={
+                **payload.attributes,
+                NATIVE_DOCUMENT_SHA256_ATTRIBUTE: native_document_sha256,
+            },
+        )
+        for payload in brep_payloads
+    )
     meshes = _parse_meshes(native)
     features: list[FeatureStep] = []
     selections: list[Selection] = list(_explicit_selections(native.objects))
