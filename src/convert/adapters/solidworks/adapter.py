@@ -4,6 +4,7 @@ from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, replace
 import hashlib
+from io import BytesIO
 import json
 import math
 import os
@@ -169,6 +170,13 @@ class _GeneratedStreams:
     compatibility: str
     application_usable: bool
     vendor_loadable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _AssemblyBundle:
+    names: Mapping[str, str]
+    payloads: Mapping[Path, bytes]
+    complete: bool
 
 
 _WRAPPER_METADATA_KEYS = _SOURCE_KEYS | frozenset(
@@ -632,6 +640,7 @@ class SldprtAdapter:
         diagnostics = document.diagnostics
         required = _required_capabilities(document)
         referenced_files_written = 0
+        bundle = _AssemblyBundle({}, {}, False)
         if preserved is None:
             template = _source_template(document, path)
             if settings.values.get("allow_non_native", True) is not True:
@@ -640,7 +649,13 @@ class SldprtAdapter:
                     f"{kind} SOLIDWORKS writing requires "
                     "WriteOptions(values={'allow_non_native': True})"
                 )
-            generated = _generated_streams(document, template)
+            if (
+                document.assembly is not None
+                and path is not None
+                and settings.values.get("portable") is True
+            ):
+                bundle = _assembly_bundle(document, path, settings)
+            generated = _generated_streams(document, template, bundle.names)
             transfers = _solidworks_transfers(
                 required,
                 generated.native_capabilities,
@@ -665,7 +680,7 @@ class SldprtAdapter:
             data = build_sldprt(streams, file_id=file_id or 1)
             mode = "template" if template is not None else "generated"
             native_content = (
-                "source-patched"
+                "source-preserved"
                 if template is not None
                 else (
                     "neutral-brep"
@@ -722,7 +737,7 @@ class SldprtAdapter:
                 application_usable = attestation["application_usable"]
                 vendor_loadable = attestation["vendor_loadable"]
                 native_brep = str(attestation.get("native_brep", "template"))
-                native_content = "source-patched"
+                native_content = "source-preserved"
             else:
                 transfers = _solidworks_transfers(required, frozenset())
                 application_usable = False
@@ -733,10 +748,13 @@ class SldprtAdapter:
             for transfer in transfers
         )
         output = _write_destination(destination, data, settings.overwrite)
+        for target, payload in bundle.payloads.items():
+            _write_destination(target, payload, settings.overwrite)
+        referenced_files_written = len(bundle.payloads)
         archive = SldprtArchive.from_bytes(data, output or "<memory>")
         requirements = (
             ("referenced SOLIDWORKS component files",)
-            if document.assembly is not None
+            if document.assembly is not None and not bundle.complete
             else ()
         )
         return WriteResult(
@@ -775,7 +793,10 @@ class SldprtAdapter:
                             if transfer.mode is TransferMode.NATIVE
                         }
                     ),
-                    "native_self_contained": document.assembly is None,
+                    "native_self_contained": (
+                        application_usable
+                        and (document.assembly is None or bundle.complete)
+                    ),
                     "referenced_files_written": referenced_files_written,
                     "container_version": archive.format_version,
                     "file_id": archive.file_id,
@@ -1040,6 +1061,91 @@ def _required_capabilities(document: CadDocument) -> frozenset[Capability]:
     )
 
 
+def _assembly_bundle(
+    document: CadDocument, destination: Path, settings: WriteOptions
+) -> _AssemblyBundle:
+    assembly = document.assembly
+    if assembly is None:
+        return _AssemblyBundle({}, {}, False)
+    documents = {
+        component.id: component.document for component in assembly.documents
+    }
+    definitions = tuple(
+        definition
+        for definition in assembly.definitions
+        if definition.id != assembly.root_definition_id
+    )
+    names: dict[str, str] = {}
+    payloads: dict[Path, bytes] = {}
+    used = {destination.name.casefold()}
+    complete = True
+    for definition in definitions:
+        if not definition.document_id:
+            complete = False
+            continue
+        if definition.document_id in names:
+            continue
+        component = documents.get(definition.document_id)
+        if not isinstance(component, CadDocument):
+            complete = False
+            continue
+        suffix = SUFFIX_BY_FORMAT_ID[
+            _ASSEMBLY_FORMAT_ID if component.assembly is not None else _FORMAT_ID
+        ]
+        source_name = PureWindowsPath(
+            str(
+                definition.attributes.get("native_source_path")
+                or definition.source_path
+                or component.source.path
+            )
+        ).name
+        candidate = Path(source_name).name if source_name else ""
+        if Path(candidate).suffix.casefold() != suffix:
+            candidate = f"{definition.name or definition.document_id}{suffix}"
+        stem = Path(candidate).stem or "component"
+        index = 1
+        while candidate.casefold() in used:
+            index += 1
+            candidate = f"{stem}-{index}{suffix}"
+        used.add(candidate.casefold())
+        target = destination.parent / candidate
+        buffer = BytesIO()
+        values = dict(settings.values)
+        values["portable"] = False
+        result = SldprtAdapter().write(
+            component,
+            buffer,
+            WriteOptions(
+                overwrite=True,
+                validate=settings.validate,
+                values=frozen_mapping(values),
+            ),
+        )
+        names[definition.document_id] = candidate
+        payload = buffer.getvalue()
+        if target.exists() and not settings.overwrite:
+            if target.read_bytes() != payload:
+                raise FileExistsError(target)
+        else:
+            payloads[target] = payload
+        if (
+            not result.application_usable
+            or not result.vendor_loadable
+            or result.requirements
+        ):
+            complete = False
+    if any(
+        definition.document_id and definition.document_id not in names
+        for definition in definitions
+    ):
+        complete = False
+    return _AssemblyBundle(
+        frozen_mapping(names),
+        frozen_mapping(payloads),
+        complete,
+    )
+
+
 def _solidworks_transfers(
     required: frozenset[Capability], native: frozenset[Capability]
 ) -> tuple[CapabilityTransfer, ...]:
@@ -1206,7 +1312,9 @@ def _replay_compatibility(data: bytes) -> str:
 
 
 def _generated_streams(
-    document: CadDocument, template: bytes | None = None
+    document: CadDocument,
+    template: bytes | None = None,
+    bundle_names: Mapping[str, str] | None = None,
 ) -> _GeneratedStreams:
     portable = _document_without_source(document)
     if isinstance(document.source.attributes.get("embedded_source_format_id"), str):
@@ -1223,7 +1331,7 @@ def _generated_streams(
     if template is not None:
         streams = SldprtArchive.from_bytes(template).streams
         streams[KIT_DOCUMENT_STREAM] = embedded
-        return _patch_native_template(document, streams)
+        return _patch_native_template(document, streams, bundle_names or {})
     configuration = next(
         (item.name for item in portable.configurations if item.active),
         portable.configurations[0].name if portable.configurations else "Default",
@@ -1258,6 +1366,977 @@ def _generated_streams(
         ),
         False,
         False,
+    )
+
+
+def _patch_native_template(
+    document: CadDocument,
+    streams: dict[str, bytes],
+    bundle_names: Mapping[str, str],
+) -> _GeneratedStreams:
+    native = set[Capability]()
+    original_streams = dict(streams)
+    if KEYWORDS_STREAM not in streams or RESOLVED_FEATURES_STREAM not in streams:
+        return _GeneratedStreams(
+            streams,
+            "template",
+            frozenset(),
+            "native-source-with-kit-neutral",
+            False,
+            False,
+        )
+    original_model = decode_native_model(
+        streams[KEYWORDS_STREAM], streams[RESOLVED_FEATURES_STREAM]
+    )
+    keywords = _keywords_root(streams[KEYWORDS_STREAM])
+    resolved = bytearray(streams[RESOLVED_FEATURES_STREAM])
+    keywords_changed = _patch_feature_names(
+        document, original_model, keywords[1], resolved
+    )
+    keywords_changed = (
+        _patch_parameters(document, original_model, keywords[1], resolved)
+        or keywords_changed
+    )
+    _patch_support_planes(document, original_model, resolved)
+    _patch_sketch_geometry(document, original_model, resolved)
+    if keywords_changed:
+        streams[KEYWORDS_STREAM] = _keywords_bytes(*keywords)
+    streams[RESOLVED_FEATURES_STREAM] = bytes(resolved)
+    patched_model = decode_native_model(
+        streams[KEYWORDS_STREAM], streams[RESOLVED_FEATURES_STREAM]
+    )
+    patched_parameters = _parameters(patched_model)
+    patched_planes = _planes(
+        patched_model, {parameter.id for parameter in patched_parameters}
+    )
+    patched_sketches = _sketches(
+        patched_model, {parameter.id for parameter in patched_parameters}
+    )
+    patched_selections = _selections(patched_model)
+    patched_timeline = _timeline(patched_model, patched_selections)
+    original_parameters = _parameters(original_model)
+    original_planes = _planes(
+        original_model, {parameter.id for parameter in original_parameters}
+    )
+    original_sketches = _sketches(
+        original_model, {parameter.id for parameter in original_parameters}
+    )
+    original_selections = _selections(original_model)
+    original_timeline = _timeline(original_model, original_selections)
+    if _parameter_values(document.parameters) == _parameter_values(
+        patched_parameters
+    ):
+        native.add(Capability.PARAMETERS)
+        if not any(parameter.expression is not None for parameter in document.parameters):
+            native.add(Capability.EXPRESSIONS)
+    if _plane_values(document.support_planes) == _plane_values(patched_planes):
+        native.add(Capability.SUPPORT_PLANES)
+    desired_sketch_values = _sketch_values(document.sketches)
+    if desired_sketch_values == _sketch_values(
+        patched_sketches
+    ) or desired_sketch_values == _sketch_values(original_sketches):
+        native.add(Capability.EDITABLE_SKETCHES)
+    if _feature_values(document.feature_timeline) == _feature_values(
+        patched_timeline
+    ) and _native_feature_definitions_unchanged(
+        document.feature_timeline, original_timeline
+    ):
+        native.add(Capability.PARAMETRIC_HISTORY)
+    if _selection_values(document.selections) == _selection_values(
+        original_selections
+    ):
+        native.add(Capability.SELECTIONS)
+    original_configurations = _configurations(original_model, None)
+    if _configuration_values(document.configurations) == _configuration_values(
+        original_configurations
+    ):
+        native.add(Capability.CONFIGURATIONS)
+    if document.assembly is None and _body_values(
+        document.bodies
+    ) == _native_body_values(original_model, original_timeline):
+        native.add(Capability.BODY_STRUCTURE)
+    native_brep, brep_native, payloads_native = _patch_template_brep(
+        document, streams, original_streams
+    )
+    if brep_native:
+        native.add(Capability.BREP)
+    if payloads_native:
+        native.add(Capability.NATIVE_PAYLOADS)
+    if document.assembly is None and document.meshes == ():
+        native.add(Capability.TESSELLATION)
+    if document.assembly is not None:
+        assembly_native = _patch_native_assembly(document, streams, bundle_names)
+        native.update(assembly_native)
+    required = _required_capabilities(document)
+    blockers = required - native - {
+        Capability.PROVENANCE,
+        Capability.ROUNDTRIP_METADATA,
+    }
+    usable = not blockers
+    return _GeneratedStreams(
+        streams,
+        native_brep,
+        frozenset(native),
+        "native-template" if usable else "native-source-with-kit-neutral",
+        usable,
+        usable,
+    )
+
+
+def _keywords_root(data: bytes) -> tuple[bytes, ET.Element, bytes]:
+    start = data.find(b"<?xml")
+    if start < 0:
+        start = data.find(b"<")
+    if start < 0:
+        raise SldprtFormatError("keyword stream contains no XML document")
+    prefix = data[:start]
+    raw = data[start:]
+    trailing = b"\r\n" if raw.endswith(b"\r\n") else b"\n" if raw.endswith(b"\n") else b""
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise SldprtFormatError(f"invalid keyword XML: {exc}") from exc
+    return prefix, root, trailing
+
+
+def _keywords_bytes(prefix: bytes, root: ET.Element, trailing: bytes) -> bytes:
+    return prefix + ET.tostring(root, encoding="utf-8", xml_declaration=True) + trailing
+
+
+def _xml_elements_by_id(root: ET.Element) -> dict[int, ET.Element]:
+    result: dict[int, ET.Element] = {}
+    for element in root.iter():
+        raw = element.attrib.get("id")
+        if raw is None:
+            continue
+        try:
+            result[int(raw)] = element
+        except ValueError:
+            continue
+    return result
+
+
+def _native_id(value: str, prefix: str) -> int | None:
+    if not value.startswith(prefix):
+        return None
+    try:
+        return int(value.removeprefix(prefix).split(":", 1)[0])
+    except ValueError:
+        return None
+
+
+def _patch_feature_names(
+    document: CadDocument,
+    model: NativeModel,
+    root: ET.Element,
+    resolved: bytearray,
+) -> bool:
+    desired: dict[int, str] = {}
+    for feature in document.feature_timeline:
+        native_id = _native_id(feature.id, "sldprt:feature:")
+        if native_id is not None:
+            desired[native_id] = feature.name
+    for plane in document.support_planes:
+        native_id = _native_id(plane.id, "sldprt:plane:")
+        if native_id is not None and native_id not in desired:
+            desired[native_id] = plane.name
+    for sketch in document.sketches:
+        native_id = _native_id(sketch.id, "sldprt:sketch:")
+        if native_id is not None and native_id not in desired:
+            desired[native_id] = sketch.name
+    elements = _xml_elements_by_id(root)
+    features = {feature.object_id: feature for feature in model.features}
+    changed = False
+    for object_id, name in desired.items():
+        feature = features.get(object_id)
+        if feature is None or name == feature.name:
+            continue
+        record = next(
+            (
+                candidate
+                for candidate in model.names
+                if candidate.object_id == object_id
+                and candidate.offset == feature.native_offset
+            ),
+            None,
+        )
+        encoded = name.encode("utf-16le")
+        if record is None or len(encoded) != len(feature.name.encode("utf-16le")):
+            continue
+        start = record.text_end - len(feature.name.encode("utf-16le"))
+        if bytes(resolved[start : record.text_end]).decode("utf-16le") != feature.name:
+            continue
+        resolved[start : record.text_end] = encoded
+        element = elements.get(object_id)
+        if element is not None:
+            element.attrib["Name"] = name
+        changed = True
+    return changed
+
+
+def _parameter_millimeters(parameter: Parameter) -> float | None:
+    value = parameter.value.value
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    if not math.isfinite(number) or parameter.value.kind is not ValueKind.LENGTH:
+        return None
+    factor = {
+        "": 1.0,
+        "mm": 1.0,
+        "millimeter": 1.0,
+        "millimeters": 1.0,
+        "cm": 10.0,
+        "m": 1000.0,
+        "in": 25.4,
+        "inch": 25.4,
+        "inches": 25.4,
+    }.get(parameter.value.unit.casefold())
+    return number * factor if factor is not None else None
+
+
+def _dimension_text(source: str, millimeters: float) -> str:
+    value = format(millimeters, ".15g")
+    return _NUMBER_TEXT.sub(value, source, count=1)
+
+
+def _patch_parameters(
+    document: CadDocument,
+    model: NativeModel,
+    root: ET.Element,
+    resolved: bytearray,
+) -> bool:
+    original = {parameter.id: parameter for parameter in _parameters(model)}
+    desired = {parameter.id: parameter for parameter in document.parameters}
+    if set(original) != set(desired):
+        return False
+    elements = _xml_elements_by_id(root)
+    dimensions: dict[str, tuple[int, NativeDimension]] = {}
+    for feature in model.features:
+        for dimension, parameter_id in _parameter_entries(
+            feature.object_id, feature.dimensions
+        ):
+            dimensions[parameter_id] = feature.object_id, dimension
+    changed = False
+    for parameter_id, target in desired.items():
+        source = original[parameter_id]
+        target_mm = _parameter_millimeters(target)
+        source_mm = _parameter_millimeters(source)
+        if target_mm is None or source_mm is None or math.isclose(
+            target_mm, source_mm, rel_tol=1e-12, abs_tol=1e-12
+        ):
+            continue
+        if (
+            target.name != source.name
+            or target.role != source.role
+            or target.owner_id != source.owner_id
+            or target.expression != source.expression
+        ):
+            continue
+        record = dimensions.get(parameter_id)
+        if record is None or record[1].native_offset is None:
+            continue
+        object_id, dimension = record
+        struct.pack_into("<d", resolved, dimension.native_offset, target_mm / 1000.0)
+        element = elements.get(object_id)
+        if element is None:
+            continue
+        occurrence = int(parameter_id.rsplit(":", 1)[-1]) - 1 if parameter_id.rsplit(":", 1)[-1].isdigit() and parameter_id.count(":") > 3 else 0
+        matches = tuple(
+            child
+            for child in element
+            if child.tag.rsplit("}", 1)[-1] == "Dimension"
+            and child.attrib.get("Name", "") == dimension.name
+        )
+        if occurrence < len(matches):
+            matches[occurrence].text = _dimension_text(
+                matches[occurrence].text or dimension.source_text,
+                target_mm,
+            )
+            changed = True
+    return changed
+
+
+def _vector_values(vector: Vector3) -> tuple[float, float, float]:
+    return vector.x, vector.y, vector.z
+
+
+def _unit_vector(values: tuple[float, float, float]) -> bool:
+    return all(math.isfinite(value) for value in values) and math.isclose(
+        sum(value * value for value in values), 1.0, rel_tol=1e-9, abs_tol=1e-9
+    )
+
+
+def _orthonormal_transform(transform: Transform) -> bool:
+    axes = (
+        _vector_values(transform.x_axis),
+        _vector_values(transform.y_axis),
+        _vector_values(transform.z_axis),
+    )
+    return all(_unit_vector(axis) for axis in axes) and all(
+        math.isclose(
+            sum(left[index] * right[index] for index in range(3)),
+            0.0,
+            abs_tol=1e-9,
+        )
+        for left, right in ((axes[0], axes[1]), (axes[0], axes[2]), (axes[1], axes[2]))
+    )
+
+
+def _patch_support_planes(
+    document: CadDocument, model: NativeModel, resolved: bytearray
+) -> None:
+    parameters = _parameters(model)
+    original = {
+        plane.id: plane
+        for plane in _planes(model, {parameter.id for parameter in parameters})
+    }
+    desired = {plane.id: plane for plane in document.support_planes}
+    if set(original) != set(desired):
+        return
+    for plane_id, target in desired.items():
+        source = original[plane_id]
+        if target.transform == source.transform:
+            continue
+        if (
+            target.name != source.name
+            or target.support_selection_id != source.support_selection_id
+            or target.offset_parameter_id != source.offset_parameter_id
+            or not _orthonormal_transform(target.transform)
+        ):
+            continue
+        offset = source.attributes.get("native_frame_offset")
+        length = source.attributes.get("native_frame_length")
+        if not isinstance(offset, int) or length not in {81, 121}:
+            continue
+        origin = tuple(value / 1000.0 for value in _vector_values(target.transform.origin))
+        x_axis = _vector_values(target.transform.x_axis)
+        y_axis = _vector_values(target.transform.y_axis)
+        z_axis = _vector_values(target.transform.z_axis)
+        if not all(math.isfinite(value) for value in origin):
+            continue
+        if length == 81:
+            if (
+                x_axis != (1.0, 0.0, 0.0)
+                or y_axis != (0.0, 1.0, 0.0)
+                or z_axis != (0.0, 0.0, 1.0)
+            ):
+                continue
+            struct.pack_into("<3d", resolved, offset, *origin)
+            struct.pack_into("<3d", resolved, offset + 57, 0.0, -origin[2], 1.0)
+            continue
+        struct.pack_into("<3d", resolved, offset, *origin)
+        struct.pack_into("<3d", resolved, offset + 24, *z_axis)
+        rows = tuple(zip(x_axis, y_axis, z_axis, strict=True))
+        for index, row in enumerate(rows):
+            struct.pack_into("<3d", resolved, offset + 49 + index * 24, *row)
+
+
+def _coordinate_offset(data: bytes | bytearray, marker_offset: int) -> int | None:
+    for relative in (56, 64):
+        offset = marker_offset + relative
+        if data[offset : offset + 2] == b"\x1e\x00" and offset + 18 <= len(data):
+            return offset + 2
+    return None
+
+
+def _patch_coordinate(
+    resolved: bytearray, marker_offset: int, point: tuple[float, float]
+) -> bool:
+    if not all(math.isfinite(value) for value in point):
+        return False
+    offset = _coordinate_offset(resolved, marker_offset)
+    if offset is None:
+        return False
+    struct.pack_into("<2d", resolved, offset, point[0] / 1000.0, point[1] / 1000.0)
+    return True
+
+
+def _point_values(value: Vector2) -> tuple[float, float]:
+    return value.x, value.y
+
+
+def _patch_sketch_geometry(
+    document: CadDocument, model: NativeModel, resolved: bytearray
+) -> None:
+    parameters = _parameters(model)
+    original_sketches = _sketches(
+        model, {parameter.id for parameter in parameters}
+    )
+    original = {sketch.id: sketch for sketch in original_sketches}
+    native = {_sketch_id(sketch.object_id): sketch for sketch in model.sketches}
+    desired = {sketch.id: sketch for sketch in document.sketches}
+    if set(original) != set(desired):
+        return
+    for sketch_id, target in desired.items():
+        source = original[sketch_id]
+        native_sketch = native[sketch_id]
+        if (
+            target.support_plane_id != source.support_plane_id
+            or target.constraints != source.constraints
+            or target.parameter_ids != source.parameter_ids
+            or target.closed_profile_entity_ids != source.closed_profile_entity_ids
+            or target.suppressed != source.suppressed
+        ):
+            continue
+        source_entities = {entity.id: entity for entity in source.entities}
+        target_entities = {entity.id: entity for entity in target.entities}
+        if set(source_entities) != set(target_entities):
+            continue
+        for entity_id, target_entity in target_entities.items():
+            source_entity = source_entities[entity_id]
+            if target_entity.geometry == source_entity.geometry:
+                continue
+            if (
+                target_entity.kind != source_entity.kind
+                or target_entity.construction != source_entity.construction
+                or target_entity.fixed != source_entity.fixed
+            ):
+                continue
+            if isinstance(source_entity.geometry, PointGeometry) and isinstance(
+                target_entity.geometry, PointGeometry
+            ):
+                marker_offset = _native_id(
+                    entity_id, f"sldprt:sketch:{native_sketch.object_id}:native:"
+                )
+                if marker_offset is not None:
+                    _patch_coordinate(
+                        resolved,
+                        marker_offset,
+                        _point_values(target_entity.geometry.point),
+                    )
+        for profile_index, profile in enumerate(native_sketch.profiles):
+            if profile.kind == "circle":
+                entity_id = _profile_id(native_sketch.object_id, profile_index)
+                source_entity = source_entities.get(entity_id)
+                target_entity = target_entities.get(entity_id)
+                if (
+                    source_entity is None
+                    or target_entity is None
+                    or target_entity.geometry == source_entity.geometry
+                    or not isinstance(target_entity.geometry, CircleGeometry)
+                    or len(profile.marker_offsets) < 2
+                ):
+                    continue
+                center = _point_values(target_entity.geometry.center)
+                source_center = profile.coordinates[:2]
+                source_edge = next(
+                    (
+                        marker.coordinates_mm
+                        for marker in native_sketch.markers
+                        if marker.offset == profile.marker_offsets[1]
+                        and marker.coordinates_mm is not None
+                    ),
+                    None,
+                )
+                if source_edge is None or target_entity.geometry.radius <= 0.0:
+                    continue
+                dx = source_edge[0] - source_center[0]
+                dy = source_edge[1] - source_center[1]
+                length = math.hypot(dx, dy)
+                if length <= 1e-12:
+                    dx, dy, length = 1.0, 0.0, 1.0
+                edge = (
+                    center[0] + dx / length * target_entity.geometry.radius,
+                    center[1] + dy / length * target_entity.geometry.radius,
+                )
+                _patch_coordinate(resolved, profile.marker_offsets[0], center)
+                _patch_coordinate(resolved, profile.marker_offsets[1], edge)
+            elif profile.kind == "rectangle":
+                _patch_rectangle_profile(
+                    resolved,
+                    native_sketch,
+                    profile_index,
+                    profile,
+                    target_entities,
+                )
+
+
+def _patch_rectangle_profile(
+    resolved: bytearray,
+    sketch: NativeSketch,
+    profile_index: int,
+    profile: NativeProfile,
+    entities: Mapping[str, SketchEntity],
+) -> None:
+    lines: list[LineGeometry] = []
+    for edge_index in range(4):
+        entity = entities.get(_profile_edge_id(sketch.object_id, profile_index, edge_index))
+        if entity is None or not isinstance(entity.geometry, LineGeometry):
+            return
+        lines.append(entity.geometry)
+    points = tuple(
+        (_point_values(lines[0].start), _point_values(lines[0].end), _point_values(lines[1].end), _point_values(lines[2].end))
+    )[0]
+    if (
+        _point_values(lines[1].start) != points[1]
+        or _point_values(lines[2].start) != points[2]
+        or _point_values(lines[3].start) != points[3]
+        or _point_values(lines[3].end) != points[0]
+    ):
+        return
+    xs = sorted({point[0] for point in points})
+    ys = sorted({point[1] for point in points})
+    if len(xs) != 2 or len(ys) != 2:
+        return
+    x0, y0, x1, y1 = profile.coordinates
+    source_corners = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+    for marker in sketch.markers:
+        if marker.coordinates_mm is None:
+            continue
+        for source, target in zip(source_corners, points, strict=True):
+            if all(
+                math.isclose(left, right, abs_tol=1e-9)
+                for left, right in zip(marker.coordinates_mm, source, strict=True)
+            ):
+                _patch_coordinate(resolved, marker.offset, target)
+                break
+
+
+def _round_number(value: float) -> float:
+    return round(value, 10)
+
+
+def _parameter_values(parameters: Sequence[Parameter]) -> tuple[Any, ...]:
+    return tuple(
+        (
+            parameter.id,
+            parameter.name,
+            (
+                _round_number(value)
+                if (value := _parameter_millimeters(parameter)) is not None
+                else parameter.value
+            ),
+            parameter.role,
+            parameter.expression,
+            parameter.owner_id,
+        )
+        for parameter in parameters
+    )
+
+
+def _transform_values(transform: Transform) -> tuple[float, ...]:
+    return tuple(
+        _round_number(value)
+        for vector in (
+            transform.origin,
+            transform.x_axis,
+            transform.y_axis,
+            transform.z_axis,
+        )
+        for value in _vector_values(vector)
+    )
+
+
+def _plane_values(planes: Sequence[SupportPlane]) -> tuple[Any, ...]:
+    return tuple(
+        (
+            plane.id,
+            plane.name,
+            _transform_values(plane.transform),
+            plane.support_selection_id,
+            plane.offset_parameter_id,
+        )
+        for plane in planes
+    )
+
+
+def _geometry_values(geometry: Any) -> Any:
+    if isinstance(geometry, PointGeometry):
+        return "point", tuple(_round_number(value) for value in _point_values(geometry.point))
+    if isinstance(geometry, LineGeometry):
+        return (
+            "line",
+            tuple(_round_number(value) for value in _point_values(geometry.start)),
+            tuple(_round_number(value) for value in _point_values(geometry.end)),
+        )
+    if isinstance(geometry, CircleGeometry):
+        return (
+            "circle",
+            tuple(_round_number(value) for value in _point_values(geometry.center)),
+            _round_number(geometry.radius),
+        )
+    return geometry
+
+
+def _sketch_values(sketches: Sequence[Sketch]) -> tuple[Any, ...]:
+    return tuple(
+        (
+            sketch.id,
+            sketch.name,
+            sketch.support_plane_id,
+            tuple(
+                (
+                    entity.id,
+                    entity.kind,
+                    _geometry_values(entity.geometry),
+                    entity.construction,
+                    entity.fixed,
+                )
+                for entity in sketch.entities
+            ),
+            tuple(
+                (
+                    constraint.id,
+                    constraint.kind,
+                    constraint.references,
+                    constraint.parameter_id,
+                    constraint.driving,
+                    constraint.suppressed,
+                )
+                for constraint in sketch.constraints
+            ),
+            sketch.parameter_ids,
+            sketch.closed_profile_entity_ids,
+            sketch.suppressed,
+        )
+        for sketch in sketches
+    )
+
+
+def _definition_value(definition: Any) -> Any:
+    if isinstance(definition, ExtrusionFeature):
+        return (
+            "extrusion",
+            _round_number(float(definition.length.value)),
+            definition.length.kind,
+            definition.length.unit,
+            definition.end_condition,
+            definition.reversed,
+        )
+    if isinstance(definition, FilletFeature):
+        return (
+            "fillet",
+            _round_number(float(definition.radius.value)),
+            definition.radius.kind,
+            definition.radius.unit,
+        )
+    if isinstance(definition, NativeFeatureDefinition):
+        return "native", definition.format_id, definition.type_id
+    return definition
+
+
+def _feature_values(features: Sequence[FeatureStep]) -> tuple[Any, ...]:
+    return tuple(
+        (
+            feature.id,
+            feature.name,
+            feature.kind,
+            feature.order,
+            feature.input_feature_ids,
+            feature.sketch_id,
+            feature.parameter_ids,
+            feature.operation,
+            _definition_value(feature.definition),
+            feature.selection_ids,
+            feature.suppressed,
+            feature.configuration_states,
+        )
+        for feature in features
+    )
+
+
+def _native_feature_definitions_unchanged(
+    desired: Sequence[FeatureStep], original: Sequence[FeatureStep]
+) -> bool:
+    originals = {feature.id: feature for feature in original}
+    for feature in desired:
+        source = originals.get(feature.id)
+        if source is None:
+            return False
+        if isinstance(source.definition, NativeFeatureDefinition) and feature.definition != source.definition:
+            return False
+    return True
+
+
+def _selection_values(selections: Sequence[Selection]) -> tuple[Any, ...]:
+    return tuple(
+        (selection.id, selection.name, selection.path, dict(selection.query))
+        for selection in selections
+    )
+
+
+def _configuration_values(configurations: Sequence[Configuration]) -> tuple[Any, ...]:
+    return tuple(
+        (
+            configuration.id,
+            configuration.name,
+            configuration.active,
+            configuration.parent_id,
+            configuration.overrides,
+            configuration.suppressed_feature_ids,
+        )
+        for configuration in configurations
+    )
+
+
+def _body_values(bodies: Sequence[Body]) -> tuple[Any, ...]:
+    return tuple(
+        (
+            body.id,
+            body.name,
+            body.final_feature_id,
+            body.topology,
+            body.material_id,
+        )
+        for body in bodies
+    )
+
+
+def _native_body_values(
+    model: NativeModel, timeline: tuple[FeatureStep, ...]
+) -> tuple[Any, ...]:
+    body_feature = _solid_body_feature(model.features)
+    body = Body(
+        id="sldprt:body:1",
+        name=body_feature.name if body_feature is not None else "Body 1",
+        final_feature_id=_final_body_feature_id(
+            timeline,
+            frozenset(_feature_id(operation.object_id) for operation in model.operations),
+        ),
+        topology=TopologySummary(
+            solid_count=1 if model.operations else 0,
+            bounding_box=_bounding_box(model),
+        ),
+    )
+    return _body_values((body,))
+
+
+def _payload_values(payloads: Sequence[BrepPayload]) -> tuple[Any, ...]:
+    return tuple(
+        (
+            payload.id,
+            payload.format_id,
+            payload.kind,
+            payload.schema,
+            payload.sha256,
+            payload.data,
+            payload.source_stream,
+            payload.role,
+            payload.file_extension,
+        )
+        for payload in payloads
+    )
+
+
+def _patch_template_brep(
+    document: CadDocument,
+    streams: dict[str, bytes],
+    original_streams: Mapping[str, bytes],
+) -> tuple[str, bool, bool]:
+    archive = SldprtArchive.from_bytes(build_sldprt(original_streams))
+    original_payloads, _ = _brep_payloads(archive, ReadOptions(strict=False))
+    desired_indexes = source_payload_indexes(document)
+    desired_payloads = tuple(
+        payload
+        for index, payload in enumerate(document.brep_payloads)
+        if index not in desired_indexes and payload.role is PayloadRole.BREP
+    )
+    payloads_native = _payload_values(desired_payloads) == _payload_values(
+        original_payloads
+    )
+    original_brep = _typed_brep(original_payloads)
+    if document.brep == original_brep and payloads_native:
+        return "template", True, True
+    payload, state = _parasolid_payload(document)
+    if payload is None:
+        status = (
+            state
+            if state.startswith("unsupported:")
+            else "unsupported:geometry has no writable Parasolid representation"
+        )
+        return status, False, payloads_native
+    streams[PARTITION_STREAM] = payload
+    return "patched", True, payloads_native
+
+
+def _patch_native_assembly(
+    document: CadDocument,
+    streams: dict[str, bytes],
+    bundle_names: Mapping[str, str],
+) -> frozenset[Capability]:
+    if document.assembly is None or COMPONENT_TREE_STREAM not in streams:
+        return frozenset()
+    if bundle_names:
+        prefix, root, trailing = _keywords_root(streams[COMPONENT_TREE_STREAM])
+        path_by_file_id = {
+            int(definition.attributes["native_file_id"]): bundle_names[
+                definition.document_id
+            ]
+            for definition in document.assembly.definitions
+            if definition.document_id in bundle_names
+            and isinstance(definition.attributes.get("native_file_id"), int)
+        }
+        changed = False
+        for element in root.iter():
+            if element.tag.rsplit("}", 1)[-1] != "swFile":
+                continue
+            try:
+                file_id = int(element.attrib.get("id", ""))
+            except ValueError:
+                continue
+            target = path_by_file_id.get(file_id)
+            if target is not None and element.attrib.get("swPath") != target:
+                element.attrib["swPath"] = target
+                changed = True
+        if changed:
+            streams[COMPONENT_TREE_STREAM] = _keywords_bytes(prefix, root, trailing)
+    try:
+        archive = SldprtArchive.from_bytes(build_sldprt(streams))
+        native = decode_native_assembly(archive, include_tessellation=True)
+    except SldprtFormatError:
+        return frozenset()
+    result: set[Capability] = set()
+    if _assembly_structure_values(
+        document.assembly
+    ) == _native_assembly_structure_values(native):
+        result.add(Capability.ASSEMBLIES)
+    definitions = {
+        definition.id: definition for definition in document.assembly.definitions
+    }
+    if all(
+        isinstance(component.document, CadDocument)
+        and _preserved_source(component.document, None) is not None
+        for component in document.assembly.documents
+    ):
+        result.add(Capability.COMPONENT_DOCUMENTS)
+        if all(
+            not component.document.bodies
+            or Capability.BODY_STRUCTURE in component.document.capabilities
+            for component in document.assembly.documents
+            if isinstance(component.document, CadDocument)
+        ):
+            result.add(Capability.BODY_STRUCTURE)
+    if any(definition.source_path for definition in definitions.values()):
+        result.add(Capability.EXTERNAL_REFERENCES)
+    identity_definitions = {
+        definition.object_id: definition.object_id for definition in native.definitions
+    }
+    identity_occurrences = {
+        occurrence.object_id: occurrence.object_id for occurrence in native.occurrences
+    }
+    _, entities, mates, groups = _assembly_mates(
+        native,
+        (
+            (
+                native,
+                archive,
+                identity_definitions,
+                identity_occurrences,
+                document.source.path,
+            ),
+        ),
+    )
+    if _mate_values(
+        document.assembly.mate_entities,
+        document.assembly.mates,
+        document.assembly.mate_groups,
+    ) == _mate_values(entities, mates, groups):
+        result.add(Capability.ASSEMBLY_MATES)
+    native_meshes, _ = _assembly_meshes(native)
+    if _mesh_values(document.meshes) == _mesh_values(native_meshes):
+        result.add(Capability.TESSELLATION)
+    return frozenset(result)
+
+
+def _assembly_structure_values(assembly: AssemblyData) -> tuple[Any, ...]:
+    return (
+        assembly.root_definition_id,
+        tuple(
+            (definition.id, definition.name, definition.kind, definition.configuration_name)
+            for definition in assembly.definitions
+        ),
+        tuple(
+            (
+                instance.id,
+                instance.name,
+                instance.definition_id,
+                instance.owner_definition_id,
+                tuple(_round_number(value) for value in instance.transform.values),
+                instance.order,
+                instance.reference_number,
+                instance.configuration_name,
+                instance.configuration_id,
+                instance.suppressed,
+                instance.hidden,
+                instance.fixed,
+                instance.flexible,
+                instance.exclude_from_bom,
+            )
+            for instance in assembly.instances
+        ),
+    )
+
+
+def _native_assembly_structure_values(native: NativeAssembly) -> tuple[Any, ...]:
+    return _assembly_structure_values(
+        AssemblyData(
+            _assembly_definition_id(native.root_definition_id),
+            _assembly_definitions(native, {}, {}, {}, {}, "<memory>"),
+            _assembly_instances(native),
+        )
+    )
+
+
+def _mate_values(
+    entities: Sequence[MateEntity],
+    mates: Sequence[MateConstraint],
+    groups: Sequence[MateGroup],
+) -> tuple[Any, ...]:
+    return (
+        tuple(
+            (
+                entity.id,
+                entity.owner_definition_id,
+                entity.instance_path,
+                entity.kind,
+                entity.source_entity_id,
+                entity.selection_id,
+                entity.frame,
+                entity.radius,
+            )
+            for entity in entities
+        ),
+        tuple(
+            (
+                mate.id,
+                mate.name,
+                mate.kind,
+                mate.owner_definition_id,
+                mate.entity_ids,
+                mate.order,
+                mate.value,
+                mate.parameter_ids,
+                mate.alignment,
+                mate.suppressed,
+                mate.driving,
+            )
+            for mate in mates
+        ),
+        tuple(
+            (
+                group.id,
+                group.name,
+                group.owner_definition_id,
+                group.mate_ids,
+                group.parent_group_id,
+                group.order,
+            )
+            for group in groups
+        ),
+    )
+
+
+def _mesh_values(meshes: Sequence[Mesh]) -> tuple[Any, ...]:
+    return tuple(
+        (
+            mesh.id,
+            mesh.name,
+            mesh.vertices,
+            mesh.triangles,
+            mesh.normals,
+        )
+        for mesh in meshes
     )
 
 
@@ -3398,8 +4477,6 @@ def _typed_brep(payloads: Sequence[BrepPayload]) -> BrepModel | None:
         )
     models: list[BrepModel] = []
     for group in groups.values():
-        if any("delta" in payload.kind.casefold() for payload in group):
-            continue
         decoded = tuple(
             model
             for payload in group
