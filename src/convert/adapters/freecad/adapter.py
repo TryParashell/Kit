@@ -47,10 +47,8 @@ from interchange import (
     FilletFeature,
     MateKind,
     Mesh,
-    NativeGeometry,
     PayloadRole,
     Severity,
-    Sketch,
     filter_document,
     frozen_mapping,
     infer_capabilities,
@@ -68,6 +66,7 @@ from .archive import (
     build_fcstd_archive,
     extract_manifest_from_fcstd,
     native_expression_parts,
+    native_sketch_carrier_reasons,
     native_sketch_parts,
 )
 from .brep import FreeCADBrepWriteError, brep_model_brep
@@ -621,17 +620,6 @@ def _feature_parts(
     return native, carrier, frozenset(reasons)
 
 
-def _sketch_carrier_reason(sketch: Sketch) -> CarrierReason:
-    if any(isinstance(entity.geometry, NativeGeometry) for entity in sketch.entities):
-        return CarrierReason.SOURCE_OPAQUE
-    if any(
-        _enum_text(constraint.kind).startswith("native")
-        for constraint in sketch.constraints
-    ):
-        return CarrierReason.SOURCE_OPAQUE
-    return CarrierReason.WRITER_UNIMPLEMENTED
-
-
 def _selection_parts(document: CadDocument) -> tuple[int, int]:
     targets = {
         *(plane.id for plane in document.support_planes),
@@ -767,18 +755,30 @@ def _capability_transfers(
         source_native = _has_native_freecad_graph(item)
         manifest = document_to_manifest(item)
         sketch_parts = native_sketch_parts(manifest)
+        sketch_reason_parts = native_sketch_carrier_reasons(manifest)
         sketch_native: dict[str, bool] = {}
         sketch_carrier_reasons: dict[str, CarrierReason] = {}
-        for sketch, (native_count, carrier_count) in zip(
-            item.sketches, sketch_parts, strict=True
+        for sketch, (native_count, carrier_count), reason_values in zip(
+            item.sketches, sketch_parts, sketch_reason_parts, strict=True
         ):
             parts[Capability.EDITABLE_SKETCHES].extend(
                 [True] * native_count + [False] * carrier_count
             )
             if carrier_count:
-                sketch_reason = _sketch_carrier_reason(sketch)
+                sketch_reasons = {CarrierReason(value) for value in reason_values} or {
+                    CarrierReason.WRITER_UNIMPLEMENTED
+                }
+                sketch_reason = next(
+                    reason
+                    for reason in (
+                        CarrierReason.SOURCE_OPAQUE,
+                        CarrierReason.WRITER_UNIMPLEMENTED,
+                        CarrierReason.TARGET_UNSUPPORTED,
+                    )
+                    if reason in sketch_reasons
+                )
                 sketch_carrier_reasons[sketch.id] = sketch_reason
-                carrier_reasons[Capability.EDITABLE_SKETCHES].add(sketch_reason)
+                carrier_reasons[Capability.EDITABLE_SKETCHES].update(sketch_reasons)
             sketch_native[sketch.id] = carrier_count == 0
         parts[Capability.PARAMETERS].extend(True for _ in item.parameters)
         feature_native, feature_carrier, feature_reasons = _feature_parts(
