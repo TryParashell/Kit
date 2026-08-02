@@ -1482,14 +1482,10 @@ def _parse_intersection_fields(
     )
 
 
-def _parse_intersection_record(
-    data: bytes, offset: int
-) -> _IntersectionRecord | None:
+def _parse_intersection_record(data: bytes, offset: int) -> _IntersectionRecord | None:
     start = _record_start(data, offset, 0x26)
     return (
-        _parse_intersection_fields(data, offset, start)
-        if start is not None
-        else None
+        _parse_intersection_fields(data, offset, start) if start is not None else None
     )
 
 
@@ -1587,15 +1583,16 @@ def _parse_chart_record(data: bytes, offset: int) -> _ChartRecord | None:
     )
 
 
-def _parse_extended_chart_points(
-    data: bytes, offset: int, count: int
-) -> tuple[
-    tuple[Vector3, ...],
-    tuple[float, ...],
-    tuple[Vector3, ...],
-    tuple[tuple[tuple[float, float], ...], ...],
-    int,
-] | None:
+def _parse_extended_chart_points(data: bytes, offset: int, count: int) -> (
+    tuple[
+        tuple[Vector3, ...],
+        tuple[float, ...],
+        tuple[Vector3, ...],
+        tuple[tuple[tuple[float, float], ...], ...],
+        int,
+    ]
+    | None
+):
     end = offset + count * 88
     if end > len(data):
         return None
@@ -1658,9 +1655,7 @@ def _parse_compact_chart_points(
     return typed_points, tuple(parameters), end
 
 
-def _ordered_chart(
-    points: Sequence[Vector3], parameters: Sequence[float]
-) -> bool:
+def _ordered_chart(points: Sequence[Vector3], parameters: Sequence[float]) -> bool:
     return (
         len(points) >= 2
         and len(points) == len(parameters)
@@ -1728,13 +1723,9 @@ def _parse_support_uv_payload(
     return _SupportUvRecord(attribute, marker, values, offset, data[offset:end])
 
 
-def _parse_support_uv_record(
-    data: bytes, offset: int
-) -> _SupportUvRecord | None:
+def _parse_support_uv_record(data: bytes, offset: int) -> _SupportUvRecord | None:
     start = _record_start(data, offset, 0xCC)
-    return (
-        _parse_support_uv_payload(data, start, offset) if start is not None else None
-    )
+    return _parse_support_uv_payload(data, start, offset) if start is not None else None
 
 
 def _parse_compact_support_uv_record(
@@ -1781,13 +1772,11 @@ def _support_uv_lanes(
     if len(values) < width * 2 or len(values) % width:
         return None
     first = tuple(
-        (values[index], values[index + 1])
-        for index in range(0, len(values), width)
+        (values[index], values[index + 1]) for index in range(0, len(values), width)
     )
     second = (
         tuple(
-            (values[index + 2], values[index + 3])
-            for index in range(0, len(values), 4)
+            (values[index + 2], values[index + 3]) for index in range(0, len(values), 4)
         )
         if marker == 4
         else ()
@@ -1796,9 +1785,7 @@ def _support_uv_lanes(
 
 
 def _resolved_support_uv(
-    data: bytes,
     attribute: int,
-    point_count: int,
     records: Mapping[int, _SupportUvRecord],
     compact_records: Mapping[int, _CompactSupportUvRecord],
 ) -> tuple[tuple[tuple[tuple[float, float], ...], ...], int, bytes] | None:
@@ -1832,13 +1819,16 @@ def _resolve_intersection_curve(
     compact_support_uv: Mapping[int, _CompactSupportUvRecord],
     surfaces: Mapping[int, object],
 ) -> IntersectionCurve | None:
-    first_surface, second_surface, chart_id, start_id, end_id, uv_id = (
-        record.references
-    )
+    first_surface, second_surface, chart_id, start_id, end_id, uv_id = record.references
     chart = charts.get(chart_id)
     first = surfaces.get(first_surface)
     second = surfaces.get(second_surface)
-    if chart is None or first is None or second is None or first_surface == second_surface:
+    if (
+        chart is None
+        or first is None
+        or second is None
+        or first_surface == second_surface
+    ):
         return None
     limits: tuple[_TermRecord, ...]
     if start_id == 1 and end_id == 1:
@@ -1859,13 +1849,13 @@ def _resolve_intersection_curve(
         return None
     tolerance = max(chart.chordal_error, 1e-7)
     for surface in (first, second):
-        residuals = tuple(_analytic_surface_residual(surface, point) for point in chart.points)
+        residuals = tuple(
+            _analytic_surface_residual(surface, point) for point in chart.points
+        )
         if any(residual is None or residual > tolerance for residual in residuals):
             return None
     resolved_uv = _resolved_support_uv(
-        data,
         uv_id,
-        len(chart.points),
         support_uv,
         compact_support_uv,
     )
@@ -1926,9 +1916,7 @@ def _analytic_surface_residual(surface: object, point: Vector3) -> float | None:
         return abs(radial - surface.radius)
     if isinstance(surface, ConeSurface):
         return abs(radial - (surface.radius - axial * math.tan(surface.half_angle)))
-    return abs(
-        math.hypot(radial - surface.major_radius, axial) - surface.minor_radius
-    )
+    return abs(math.hypot(radial - surface.major_radius, axial) - surface.minor_radius)
 
 
 def _refs(data: bytes, offset: int, count: int) -> tuple[int, ...] | None:
@@ -2645,7 +2633,10 @@ def _provable_curve_range(
             not isinstance(parameters, tuple)
             or len(parameters) != len(curve.samples)
             or len(parameters) < 2
-            or not all(isinstance(value, float) and math.isfinite(value) for value in parameters)
+            or not all(
+                isinstance(value, float) and math.isfinite(value)
+                for value in parameters
+            )
             or not all(left < right for left, right in zip(parameters, parameters[1:]))
         ):
             raise ValueError("intersection chart parameters are not provable")
