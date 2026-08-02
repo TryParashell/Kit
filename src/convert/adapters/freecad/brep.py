@@ -1096,9 +1096,7 @@ def _surface_residual(value: object, point: Point) -> float | None:
         delta = _subtract(point, _vector3(value.center))
         radial = math.hypot(_dot(delta, reference), _dot(delta, y_direction))
         axial = _dot(delta, axis)
-        return abs(
-            math.hypot(radial - value.major_radius, axial) - value.minor_radius
-        )
+        return abs(math.hypot(radial - value.major_radius, axial) - value.minor_radius)
     return None
 
 
@@ -1244,9 +1242,7 @@ def _edge_pcurve_records(
 ) -> tuple[tuple[str, ...], Mapping[str, _EdgePcurve]]:
     records = [value[0] for value in (_pcurve_record(item) for item in model.pcurves)]
     explicit_indexes = {item.id: index for index, item in enumerate(model.pcurves, 1)}
-    explicit_scales = {
-        item.id: _pcurve_record(item)[1] for item in model.pcurves
-    }
+    explicit_scales = {item.id: _pcurve_record(item)[1] for item in model.pcurves}
     result: dict[str, _EdgePcurve] = {}
     branches: dict[tuple[str, str], int] = {}
     for coedge in model.coedges:
@@ -1308,8 +1304,7 @@ def _edge_geometry(
     graph: _ModelGraph,
     curve_indexes: Mapping[str, int],
     curve_scales: Mapping[str, float],
-    pcurve_indexes: Mapping[str, int],
-    pcurve_scales: Mapping[str, float],
+    edge_pcurves: Mapping[str, _EdgePcurve],
     surface_indexes: Mapping[str, int],
     tolerance: float,
 ) -> tuple[str, ...]:
@@ -1321,10 +1316,6 @@ def _edge_geometry(
     first, last = sorted(
         (edge.start_parameter * curve_scale, edge.end_parameter * curve_scale)
     )
-    lines = [
-        f" {_number(max(tolerance, edge.tolerance))} 1 1 0",
-        f"1  {curve_indexes[edge.curve_id]} 0 {_number(first)} {_number(last)}",
-    ]
     grouped: dict[str, list[BrepCoedge]] = {}
     for coedge_id in graph.edge_uses[edge.id]:
         coedge = graph.coedges[coedge_id]
@@ -1334,28 +1325,47 @@ def _edge_geometry(
                 _unsupported(f"wire coedge {coedge.id} cannot carry a surface pcurve")
             continue
         surface = graph.surfaces[face.surface_id]
-        if not coedge.pcurve_id:
-            continue
-        if abs(pcurve_scales[coedge.pcurve_id] - curve_scale) > 1e-9:
-            _unsupported(
-                f"coedge {coedge.id} pcurve parameterization does not match edge {edge.id}"
-            )
         grouped.setdefault(face.surface_id, []).append(coedge)
+    representations: list[str] = []
     for surface_id, uses in grouped.items():
         surface_index = surface_indexes[surface_id]
         if len(uses) == 1:
-            lines.append(
-                f"2  {pcurve_indexes[uses[0].pcurve_id]} {surface_index} 0 {_number(first)} {_number(last)}"
+            pcurve = edge_pcurves[uses[0].id]
+            representations.append(
+                f"2  {pcurve.index} {surface_index} 0 {_number(pcurve.first)} {_number(pcurve.last)}"
             )
             continue
-        if len(uses) == 2 and uses[0].pcurve_id != uses[1].pcurve_id:
-            lines.append(
-                f"3  {pcurve_indexes[uses[0].pcurve_id]} {pcurve_indexes[uses[1].pcurve_id]}C0 {surface_index} 0 {_number(first)} {_number(last)}"
+        if len(uses) == 2:
+            first_pcurve = edge_pcurves[uses[0].id]
+            second_pcurve = edge_pcurves[uses[1].id]
+            if (
+                abs(first_pcurve.first - second_pcurve.first) > 1e-9
+                or abs(first_pcurve.last - second_pcurve.last) > 1e-9
+            ):
+                _unsupported(
+                    f"edge {edge.id} has inconsistent closed-surface pcurve ranges"
+                )
+            representations.append(
+                f"3  {first_pcurve.index} {second_pcurve.index} C0 {surface_index} 0 {_number(first_pcurve.first)} {_number(first_pcurve.last)}"
             )
             continue
         _unsupported(
             f"edge {edge.id} has an unsupported closed-surface pcurve arrangement"
         )
+    same_range = all(
+        abs(value - expected) <= 1e-9
+        for coedge_id in graph.edge_uses[edge.id]
+        if coedge_id in edge_pcurves
+        for value, expected in (
+            (edge_pcurves[coedge_id].first, first),
+            (edge_pcurves[coedge_id].last, last),
+        )
+    )
+    lines = [
+        f" {_number(max(tolerance, edge.tolerance))} {int(same_range)} {int(same_range)} 0",
+        f"1  {curve_indexes[edge.curve_id]} 0 {_number(first)} {_number(last)}",
+        *representations,
+    ]
     lines.append("0")
     return tuple(lines)
 
@@ -1407,17 +1417,13 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
         _unsupported("native FreeCAD B-rep writing requires identity body transforms")
     graph = _ModelGraph(model)
     curve_records = tuple(_curve_record(value) for value in model.curves)
-    pcurve_records = tuple(_pcurve_record(value) for value in model.pcurves)
     surface_records = tuple(
         _surface_record(value, graph.surfaces) for value in model.surfaces
     )
+    pcurve_records, edge_pcurves = _edge_pcurve_records(model, graph, tolerance)
     curve_indexes = {value.id: index for index, value in enumerate(model.curves, 1)}
     curve_scales = {
         value.id: curve_records[index][1] for index, value in enumerate(model.curves)
-    }
-    pcurve_indexes = {value.id: index for index, value in enumerate(model.pcurves, 1)}
-    pcurve_scales = {
-        value.id: pcurve_records[index][1] for index, value in enumerate(model.pcurves)
     }
     surface_indexes = {value.id: index for index, value in enumerate(model.surfaces, 1)}
     lines = [
@@ -1426,7 +1432,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
         "CASCADE Topology V1, (c) Matra-Datavision",
         "Locations 0",
         f"Curve2ds {len(pcurve_records)}",
-        *(value[0] for value in pcurve_records),
+        *pcurve_records,
         f"Curves {len(curve_records)}",
         *(value[0] for value in curve_records),
         "Polygon3D 0",
@@ -1470,8 +1476,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                     graph,
                     curve_indexes,
                     curve_scales,
-                    pcurve_indexes,
-                    pcurve_scales,
+                    edge_pcurves,
                     surface_indexes,
                     tolerance,
                 ),
