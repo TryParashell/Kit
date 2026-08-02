@@ -1195,6 +1195,17 @@ def _decode_partition_model(
 def _scan_partition_records(body: bytes) -> _RecordTables | None:
     tables = _RecordTables({}, {}, {}, {}, {}, {}, {}, {}, {})
     loop_candidates: list[_TopologyRecord] = []
+    intersections: dict[int, _IntersectionRecord] = {}
+    charts: dict[int, _ChartRecord] = {}
+    terms: dict[int, _TermRecord] = {}
+    support_uv: dict[int, _SupportUvRecord] = {}
+    compact_support_uv: dict[int, _CompactSupportUvRecord] = {}
+    ambiguous_intersections: set[int] = set()
+    ambiguous_charts: set[int] = set()
+    ambiguous_terms: set[int] = set()
+    ambiguous_support_uv: set[int] = set()
+    ambiguous_compact_support_uv: set[int] = set()
+    chart_point_count = 0
     for offset in range(max(0, len(body) - 1)):
         if body[offset] != 0:
             continue
@@ -1222,6 +1233,45 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
             target, record = topology
             if record is not None:
                 target[record.attribute] = record
+        if kind == 0x08:
+            record = _parse_compact_support_uv_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    compact_support_uv,
+                    ambiguous_compact_support_uv,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x26:
+            record = _parse_intersection_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    intersections,
+                    ambiguous_intersections,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x28:
+            record = _parse_chart_record(body, offset)
+            if record is not None:
+                chart_point_count += len(record.points)
+                if chart_point_count > 4_000_000:
+                    return None
+                _store_unique_record(
+                    charts,
+                    ambiguous_charts,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x29:
+            record = _parse_term_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    terms,
+                    ambiguous_terms,
+                    record.attribute,
+                    record,
+                )
         if kind in {0x1E, 0x1F, 0x20, 0x32, 0x33, 0x34, 0x35, 0x36}:
             carrier = _parse_analytic_carrier(body, offset)
             if carrier is not None:
@@ -1231,6 +1281,15 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
             entity = _parse_entity(body, offset)
             if entity is not None:
                 tables.entities[entity.attribute] = entity
+        if kind == 0xCC:
+            record = _parse_support_uv_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    support_uv,
+                    ambiguous_support_uv,
+                    record.attribute,
+                    record,
+                )
         if (
             sum(
                 len(values)
@@ -1244,11 +1303,67 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
                     tables.curves,
                     tables.surfaces,
                     tables.entities,
+                    intersections,
+                    charts,
+                    terms,
+                    support_uv,
+                    compact_support_uv,
                 )
             )
             > 1_000_000
         ):
             return None
+    cursor = 0
+    term_descriptor = b"term_use" + _INLINE_TERM_TAIL
+    while (position := body.find(term_descriptor, cursor)) >= 0:
+        base = position + len(term_descriptor)
+        record = _parse_term_payload(body, base, base)
+        if record is not None:
+            _store_unique_record(
+                terms,
+                ambiguous_terms,
+                record.attribute,
+                record,
+            )
+        cursor = position + 1
+    cursor = 0
+    uv_descriptor = b"values" + _INLINE_UV_TAIL
+    while (position := body.find(uv_descriptor, cursor)) >= 0:
+        base = position + len(uv_descriptor)
+        record = _parse_support_uv_payload(body, base, base)
+        if record is not None:
+            _store_unique_record(
+                support_uv,
+                ambiguous_support_uv,
+                record.attribute,
+                record,
+            )
+        cursor = position + 1
+    cursor = 0
+    while (position := body.find(b"\x5a", cursor)) >= 0:
+        record = _parse_intersection_data_record(body, position)
+        if record is not None:
+            _store_unique_record(
+                intersections,
+                ambiguous_intersections,
+                record.attribute,
+                record,
+            )
+        cursor = position + 1
+    for attribute, record in intersections.items():
+        if attribute in tables.curves:
+            continue
+        curve = _resolve_intersection_curve(
+            body,
+            record,
+            charts,
+            terms,
+            support_uv,
+            compact_support_uv,
+            tables.surfaces,
+        )
+        if curve is not None:
+            tables.curves[attribute] = curve
     tables.loops = {
         record.attribute: record
         for record in loop_candidates
@@ -1257,6 +1372,21 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
         and first.references[1] == record.attribute
     }
     return tables
+
+
+def _store_unique_record(
+    target: dict[int, object],
+    ambiguous: set[int],
+    attribute: int,
+    record: object,
+) -> None:
+    if attribute in ambiguous:
+        return
+    if attribute in target:
+        del target[attribute]
+        ambiguous.add(attribute)
+        return
+    target[attribute] = record
 
 
 def _record_start(data: bytes, offset: int, kind: int) -> int | None:
