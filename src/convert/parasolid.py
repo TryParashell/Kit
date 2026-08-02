@@ -1194,9 +1194,7 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
         record.attribute: record
         for record in loop_candidates
         if record.references[2] in tables.bridges
-        and (
-            first := tables.coedges.get(record.references[1])
-        ) is not None
+        and (first := tables.coedges.get(record.references[1])) is not None
         and first.references[1] == record.attribute
     }
     return tables
@@ -1255,9 +1253,10 @@ def _parse_bridge(data: bytes, offset: int) -> _TopologyRecord | None:
         return None
     attribute = _u16(data, start)
     owner = _u16(data, start + 6)
-    if data[start + 8 : start + 9] == b"\x01" and data[
-        start + 9 : start + 17
-    ] == _ENTITY_MAGIC:
+    if (
+        data[start + 8 : start + 9] == b"\x01"
+        and data[start + 9 : start + 17] == _ENTITY_MAGIC
+    ):
         references = _tripled_refs(data, start + 17, 5)
         marker_offset = start + 32
     elif data[start + 8 : start + 16] == _ENTITY_MAGIC:
@@ -1331,9 +1330,7 @@ def _parse_edge_use(data: bytes, offset: int) -> _TopologyRecord | None:
                 cursor += 3
         else:
             while (
-                cursor + 3 <= len(data)
-                and data[cursor + 2] == 1
-                and len(decoded) < 8
+                cursor + 3 <= len(data) and data[cursor + 2] == 1 and len(decoded) < 8
             ):
                 value = _u16(data, cursor)
                 if value is None:
@@ -1414,11 +1411,7 @@ def _parse_point(
     if prefixed:
         values = []
         cursor = start + 6
-        while (
-            cursor + 3 <= len(data)
-            and data[cursor + 2] == 1
-            and len(values) < 16
-        ):
+        while cursor + 3 <= len(data) and data[cursor + 2] == 1 and len(values) < 16:
             value = _u16(data, cursor)
             if value is None:
                 return None
@@ -1465,10 +1458,7 @@ def _parse_analytic_carrier(data: bytes, offset: int) -> tuple[int, object] | No
         return None
     attribute = _u16(data, start)
     marker_offset = start + 16
-    if (
-        marker_offset >= len(data)
-        or data[marker_offset] not in {0x2B, 0x2D}
-    ):
+    if marker_offset >= len(data) or data[marker_offset] not in {0x2B, 0x2D}:
         marker_offset = next(
             (
                 position
@@ -1781,9 +1771,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         for bridge_attribute in sorted(face_loops)
     )
     try:
-        hierarchy = _build_body_hierarchy(
-            tables.entities, owner_faces, set(face_loops)
-        )
+        hierarchy = _build_body_hierarchy(tables.entities, owner_faces, set(face_loops))
     except ValueError:
         hierarchy = _derive_body_hierarchy(face_loops, tables)
     face_uses, shells, shell_uses, regions, bodies = hierarchy
@@ -1908,6 +1896,77 @@ def _cross(left: Vector3, right: Vector3) -> Vector3:
 def _distance(left: Vector3, right: Vector3) -> float:
     difference = _subtract(left, right)
     return math.sqrt(_dot(difference, difference))
+
+
+def _derive_body_hierarchy(
+    face_loops: Mapping[int, tuple[tuple[int, tuple[int, ...]], ...]],
+    tables: _RecordTables,
+) -> tuple[
+    tuple[BrepFaceUse, ...],
+    tuple[BrepShell, ...],
+    tuple[BrepShellUse, ...],
+    tuple[BrepRegion, ...],
+    tuple[BrepBody, ...],
+]:
+    faces_by_edge: dict[int, set[int]] = {}
+    edges_by_face: dict[int, list[int]] = {}
+    for face_attribute, loops in face_loops.items():
+        face_edges = []
+        for _, ring in loops:
+            for coedge_attribute in ring:
+                edge_attribute = tables.coedges[coedge_attribute].references[6]
+                face_edges.append(edge_attribute)
+                faces_by_edge.setdefault(edge_attribute, set()).add(face_attribute)
+        edges_by_face[face_attribute] = face_edges
+    neighbors = {face_attribute: set() for face_attribute in face_loops}
+    for face_attributes in faces_by_edge.values():
+        for face_attribute in face_attributes:
+            neighbors[face_attribute].update(face_attributes - {face_attribute})
+    components = []
+    remaining = set(face_loops)
+    while remaining:
+        seed = min(remaining)
+        pending = [seed]
+        component = set()
+        while pending:
+            face_attribute = pending.pop()
+            if face_attribute in component:
+                continue
+            component.add(face_attribute)
+            pending.extend(neighbors[face_attribute] - component)
+        remaining -= component
+        components.append(tuple(sorted(component)))
+    face_uses = []
+    shells = []
+    shell_uses = []
+    regions = []
+    region_ids = []
+    for index, component in enumerate(components, start=1):
+        use_ids = []
+        edge_counts: dict[int, int] = {}
+        for face_attribute in component:
+            use_id = f"sldprt:brep:face-use:derived:{face_attribute}"
+            face_uses.append(BrepFaceUse(use_id, _native_id("face", face_attribute)))
+            use_ids.append(use_id)
+            for edge_attribute in edges_by_face[face_attribute]:
+                edge_counts[edge_attribute] = edge_counts.get(edge_attribute, 0) + 1
+        solid = bool(edge_counts) and all(value == 2 for value in edge_counts.values())
+        shell_id = f"sldprt:brep:shell:derived:{index}"
+        shell_use_id = f"sldprt:brep:shell-use:derived:{index}"
+        region_id = f"sldprt:brep:region:derived:{index}"
+        shells.append(BrepShell(shell_id, tuple(use_ids), solid))
+        shell_uses.append(BrepShellUse(shell_use_id, shell_id))
+        regions.append(BrepRegion(region_id, (shell_use_id,), solid))
+        region_ids.append(region_id)
+    if not region_ids:
+        raise ValueError("body hierarchy is absent")
+    return (
+        tuple(face_uses),
+        tuple(shells),
+        tuple(shell_uses),
+        tuple(regions),
+        (BrepBody("sldprt:brep:body:derived:1", tuple(region_ids)),),
+    )
 
 
 def _build_body_hierarchy(
