@@ -24,6 +24,7 @@ from interchange import (
     ConeSurface,
     CylinderSurface,
     EllipseCurve,
+    IntersectionCurve,
     LineCurve,
     NativeCurve,
     NativeSurface,
@@ -35,11 +36,14 @@ from interchange import (
     TorusSurface,
     Transform,
     Vector3,
+    frozen_mapping,
 )
 
 
 _WRAPPER_MAGIC = bytes.fromhex("231dd571da8148a2a85898b21b89ef99")
 _ENTITY_MAGIC = bytes.fromhex("c2bc928f996e0000")
+_INLINE_TERM_TAIL = bytes.fromhex("000000010163435a")
+_INLINE_UV_TAIL = bytes.fromhex("00000002016601")
 _LENGTH_SCALE = 0.001
 _SOLID_SCHEMA = "SCH_SW_33103_11000"
 _SHEET_SCHEMA = "SCH_SW_32001_11000"
