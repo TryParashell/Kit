@@ -19,6 +19,7 @@ import zipfile
 
 from convert.adapters.base import (
     AdapterInfo,
+    CarrierReason,
     CapabilityTransfer,
     Destination,
     ProbeResult,
@@ -46,8 +47,10 @@ from interchange import (
     FilletFeature,
     MateKind,
     Mesh,
+    NativeGeometry,
     PayloadRole,
     Severity,
+    Sketch,
     filter_document,
     frozen_mapping,
     infer_capabilities,
@@ -542,16 +545,37 @@ def _extrusion_is_native(feature: Any) -> bool:
 
 def _feature_parts(
     document: CadDocument, sketch_native: Mapping[str, bool]
-) -> tuple[int, int]:
+) -> tuple[int, int, frozenset[CarrierReason]]:
+    dependent_feature_ids = {
+        feature_id
+        for feature in document.feature_timeline
+        for feature_id in feature.input_feature_ids
+    }
+    final_feature_ids = {body.final_feature_id for body in document.bodies}
     features = tuple(
         feature
         for feature in document.feature_timeline
         if _enum_text(feature.kind) != FeatureKind.IMPORTED.value
+        and not (
+            _enum_text(feature.kind) == FeatureKind.REFERENCE.value
+            and str(feature.attributes.get("native_type", "")).casefold()
+            in {"plane", "sketch"}
+        )
+        and not (
+            _enum_text(feature.kind) == FeatureKind.NATIVE.value
+            and feature.id not in dependent_feature_ids
+            and feature.id not in final_feature_ids
+            and not feature.input_feature_ids
+            and feature.sketch_id is None
+            and not feature.parameter_ids
+            and not feature.selection_ids
+        )
     )
     if _has_native_freecad_graph(document) and document.assembly is None:
-        return len(features), 0
+        return len(features), 0, frozenset()
     native = 0
     carrier = 0
+    reasons: set[CarrierReason] = set()
     for feature in features:
         kind = _enum_text(feature.kind)
         writable = not feature.suppressed and kind in _FEATURE_WRITE_VALUES
@@ -575,7 +599,26 @@ def _feature_parts(
         native += 1
         if not writable:
             carrier += 1
-    return native, carrier
+            if feature.suppressed:
+                reasons.add(CarrierReason.TARGET_UNSUPPORTED)
+            elif kind == FeatureKind.REFERENCE.value:
+                reasons.add(CarrierReason.TARGET_UNSUPPORTED)
+            elif kind == FeatureKind.NATIVE.value:
+                reasons.add(CarrierReason.SOURCE_OPAQUE)
+            else:
+                reasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
+    return native, carrier, frozenset(reasons)
+
+
+def _sketch_carrier_reason(sketch: Sketch) -> CarrierReason:
+    if any(isinstance(entity.geometry, NativeGeometry) for entity in sketch.entities):
+        return CarrierReason.SOURCE_OPAQUE
+    if any(
+        _enum_text(constraint.kind).startswith("native")
+        for constraint in sketch.constraints
+    ):
+        return CarrierReason.SOURCE_OPAQUE
+    return CarrierReason.WRITER_UNIMPLEMENTED
 
 
 def _selection_parts(document: CadDocument) -> tuple[int, int]:
@@ -677,6 +720,21 @@ def _transfer_mode(parts: Sequence[bool]) -> TransferMode:
     return TransferMode.CARRIER
 
 
+def _carrier_reason(
+    capability: Capability,
+    reasons: Mapping[Capability, set[CarrierReason]],
+) -> CarrierReason:
+    values = reasons[capability]
+    for reason in (
+        CarrierReason.SOURCE_OPAQUE,
+        CarrierReason.WRITER_UNIMPLEMENTED,
+        CarrierReason.TARGET_UNSUPPORTED,
+    ):
+        if reason in values:
+            return reason
+    return CAPABILITY_CARRIER_REASONS[capability]
+
+
 def _capability_transfers(
     document: CadDocument,
     destination_path: Path | None,
@@ -693,6 +751,7 @@ def _capability_transfers(
             for capability in sorted(required, key=lambda value: value.value)
         )
     parts = {capability: [] for capability in Capability}
+    carrier_reasons = {capability: set() for capability in Capability}
     for item in _document_tree(document):
         source_native = _has_native_freecad_graph(item)
         manifest = document_to_manifest(item)
@@ -704,12 +763,19 @@ def _capability_transfers(
             parts[Capability.EDITABLE_SKETCHES].extend(
                 [True] * native_count + [False] * carrier_count
             )
+            if carrier_count:
+                carrier_reasons[Capability.EDITABLE_SKETCHES].add(
+                    _sketch_carrier_reason(sketch)
+                )
             sketch_native[sketch.id] = carrier_count == 0
         parts[Capability.PARAMETERS].extend(True for _ in item.parameters)
-        feature_native, feature_carrier = _feature_parts(item, sketch_native)
+        feature_native, feature_carrier, feature_reasons = _feature_parts(
+            item, sketch_native
+        )
         parts[Capability.PARAMETRIC_HISTORY].extend(
             [True] * feature_native + [False] * feature_carrier
         )
+        carrier_reasons[Capability.PARAMETRIC_HISTORY].update(feature_reasons)
         parts[Capability.SUPPORT_PLANES].extend(True for _ in item.support_planes)
         if source_native:
             parts[Capability.SELECTIONS].extend(True for _ in item.selections)
@@ -735,14 +801,22 @@ def _capability_transfers(
         parts[Capability.EXPRESSIONS].extend(
             [True] * native_expressions + [False] * carrier_expressions
         )
-        native_breps = [
+        raw_breps = [
             _payload_is_reattachable_brep(payload)
             for payload in item.brep_payloads
             if payload.role == PayloadRole.BREP and payload.data is not None
         ]
         if item.brep is not None:
-            parts[Capability.BREP].append(_neutral_brep_is_native(item))
-        parts[Capability.BREP].extend(native_breps)
+            native_brep = _neutral_brep_is_native(item) or any(raw_breps)
+            parts[Capability.BREP].append(native_brep)
+            if not native_brep:
+                carrier_reasons[Capability.BREP].add(
+                    CarrierReason.WRITER_UNIMPLEMENTED
+                )
+        else:
+            parts[Capability.BREP].extend(raw_breps)
+            if any(not value for value in raw_breps):
+                carrier_reasons[Capability.BREP].add(CarrierReason.SOURCE_OPAQUE)
         parts[Capability.TESSELLATION].extend(True for _ in item.meshes)
         parts[Capability.TESSELLATION].extend(
             False
@@ -773,11 +847,20 @@ def _capability_transfers(
             True for body in item.bodies if body.material_id
         )
         envelope_indexes = source_payload_indexes(item)
-        parts[Capability.NATIVE_PAYLOADS].extend(
-            _payload_is_reattachable_brep(payload)
-            for index, payload in enumerate(item.brep_payloads)
-            if index not in envelope_indexes
-        )
+        for index, payload in enumerate(item.brep_payloads):
+            if index in envelope_indexes:
+                continue
+            native_payload = _payload_is_reattachable_brep(payload)
+            parts[Capability.NATIVE_PAYLOADS].append(native_payload)
+            if native_payload:
+                continue
+            carrier_reasons[Capability.NATIVE_PAYLOADS].add(
+                (
+                    CarrierReason.TARGET_UNSUPPORTED
+                    if payload.role == PayloadRole.BREP and item.brep is not None
+                    else CarrierReason.SOURCE_OPAQUE
+                )
+            )
         provenance_values = (
             *item.parameters,
             *item.support_planes,
@@ -799,7 +882,7 @@ def _capability_transfers(
             (
                 None
                 if mode is TransferMode.NATIVE
-                else CAPABILITY_CARRIER_REASONS[capability]
+                else _carrier_reason(capability, carrier_reasons)
             ),
         )
         for capability in sorted(required, key=lambda value: value.value)
