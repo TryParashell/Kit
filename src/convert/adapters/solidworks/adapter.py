@@ -2,20 +2,27 @@ from __future__ import annotations
 
 from collections import defaultdict
 from contextlib import suppress
-from dataclasses import replace
+from dataclasses import dataclass, replace
 import hashlib
+import json
+import math
 import os
 from pathlib import Path, PureWindowsPath
+import re
 import struct
 import tempfile
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
+import xml.etree.ElementTree as ET
 
 from convert.adapters.base import (
     AdapterInfo,
+    CapabilityTransfer,
+    CarrierReason,
     Destination,
     ProbeResult,
     ReadOptions,
     Source,
+    TransferMode,
     WriteOptions,
     WriteResult,
     is_binary_destination,
@@ -29,6 +36,7 @@ from interchange import (
     BrepPayload,
     CadDocument,
     CadSource,
+    Capability,
     CircleGeometry,
     ComponentDefinition,
     ComponentDocument,
@@ -106,6 +114,7 @@ from .format import (
     INFO,
     KEYWORDS_STREAM,
     KIT_DOCUMENT_STREAM,
+    KIT_NATIVE_STREAM,
     PARTITION_STREAM,
     PLANE_FEATURE_TYPES,
     RELATIONSHIPS_STREAM,
@@ -149,6 +158,19 @@ _SOURCE_KEYS = frozenset(
         _SOURCE_FORMAT_KEY,
     }
 )
+_NUMBER_TEXT = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
+
+
+@dataclass(frozen=True, slots=True)
+class _GeneratedStreams:
+    streams: dict[str, bytes]
+    native_brep: str
+    native_capabilities: frozenset[Capability]
+    compatibility: str
+    application_usable: bool
+    vendor_loadable: bool
+
+
 _WRAPPER_METADATA_KEYS = _SOURCE_KEYS | frozenset(
     {
         "adapter",
