@@ -650,6 +650,42 @@ def test_neutral_brep_writes_native_parasolid_partition() -> None:
     assert result.metadata["vendor_loadable"] is False
 
 
+def test_source_less_brep_only_writes_native_imported_feature_metadata() -> None:
+    base = document()
+    feature = replace(
+        base.feature_timeline[0],
+        name="Imported1",
+        kind="imported",
+        sketch_id=None,
+        attributes=frozen_mapping({"native_object_id": 26, "native_type": "Imported"}),
+    )
+    body = replace(base.bodies[0], final_feature_id=feature.id)
+    source = replace(
+        base,
+        support_planes=(),
+        sketches=(),
+        feature_timeline=(feature,),
+        bodies=(body,),
+        brep=triangle_brep(),
+        capabilities=frozenset({Capability.BREP}),
+    )
+    output = BytesIO()
+    write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    resolved = archive.require(RESOLVED_FEATURES_STREAM)
+    native = decode_native_model(archive.require(KEYWORDS_STREAM), resolved)
+    imported = next(item for item in native.features if item.object_id == 26)
+    classes = {item.offset: item.name for item in native.classes}
+    assert imported.name == "Imported1"
+    assert imported.kind == "Imported"
+    assert classes[imported.native_offset - 18] == "moBaseBody_c"
+    assert len(resolved) == 5913
+    assert resolved[0] == 0x6B
+    assert resolved[4] == 0x12
+    assert resolved[1495] == 0x80
+    assert resolved[5302] == 0x52
+
+
 def test_public_sdk_does_not_promote_generated_parasolid_partition(tmp_path) -> None:
     base = document()
     source = replace(

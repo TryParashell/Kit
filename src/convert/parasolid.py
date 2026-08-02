@@ -509,7 +509,7 @@ def _encode_brep_body(
     dummy_edges = tuple(
         edge for edge in model.edges if len(topology.edge_coedges[edge.id]) == 1
     )
-    dummy_fins = allocate(dummy_edges, (25, 26, 28) if solidworks_triangle else ())
+    dummy_fins = allocate(dummy_edges, (25, 28, 26) if solidworks_triangle else ())
     loops = allocate(model.loops, (22,) if solidworks_triangle else ())
     faces = allocate(model.faces, (16,) if solidworks_triangle else ())
     exterior_regions: dict[str, int] = {}
@@ -1310,6 +1310,106 @@ def _write_solidworks_body_attribute_suffix(
     )
     _v12_int_values(output, base + 14, (101,))
     _v12_attribute_identifier(output, base + 59, "ATOM_ID_2001")
+
+
+def _order_solidworks_triangle_records(data: bytes) -> bytes:
+    fixed_sizes = {
+        1: 4,
+        12: 61,
+        13: 24,
+        14: 39,
+        15: 16,
+        16: 32,
+        17: 23,
+        18: 28,
+        19: 19,
+        29: 40,
+        70: 39,
+    }
+    geometry_values = {
+        30: 6,
+        31: 10,
+        32: 11,
+        50: 9,
+        51: 10,
+        52: 12,
+        53: 10,
+        54: 11,
+    }
+    variable_sizes = {
+        74: lambda count: 14 + 2 * count,
+        79: lambda count: 8 + count,
+        80: lambda count: 38 + count,
+        81: lambda count: 24 + 2 * count,
+        82: lambda count: 8 + 4 * count,
+        83: lambda count: 8 + 8 * count,
+    }
+    records: list[tuple[tuple[int, int], bytes]] = []
+    offset = 0
+    while offset < len(data):
+        if offset + 4 > len(data) or data[offset] != 0:
+            raise ParasolidWriteError("SOLIDWORKS Parasolid record framing is invalid")
+        kind = data[offset + 1]
+        if kind in fixed_sizes:
+            size = fixed_sizes[kind]
+            index_offset = offset + 2
+        elif kind in geometry_values:
+            size = 19 + 8 * geometry_values[kind]
+            index_offset = offset + 2
+        elif kind in variable_sizes:
+            if offset + 8 > len(data):
+                raise ParasolidWriteError("SOLIDWORKS Parasolid record is truncated")
+            count = struct.unpack_from(">I", data, offset + 2)[0]
+            size = variable_sizes[kind](count)
+            index_offset = offset + 6
+        else:
+            raise ParasolidWriteError(
+                f"SOLIDWORKS Parasolid record kind {kind} is unsupported"
+            )
+        end = offset + size
+        if end > len(data):
+            raise ParasolidWriteError("SOLIDWORKS Parasolid record is truncated")
+        encoded_index = struct.unpack_from(">h", data, index_offset)[0]
+        if encoded_index <= 0:
+            raise ParasolidWriteError("SOLIDWORKS Parasolid record index is invalid")
+        records.append(((kind, encoded_index - 1), data[offset:end]))
+        offset = end
+    order = (
+        (12, 1),
+        (81, 2),
+        (70, 3),
+        (13, 5),
+        (50, 6),
+        (30, 7),
+        (29, 8),
+        (19, 9),
+        (16, 10),
+        (18, 11),
+        (17, 19),
+        (18, 21),
+        (17, 25),
+        (18, 27),
+        (29, 18),
+        (29, 29),
+        (17, 28),
+        (17, 23),
+        (16, 20),
+        (17, 24),
+        (15, 22),
+        (17, 26),
+        (16, 30),
+        (30, 31),
+        (30, 17),
+        (14, 16),
+    )
+    ranks = {key: position for position, key in enumerate(order)}
+    if not set(order).issubset(key for key, _ in records):
+        raise ParasolidWriteError("SOLIDWORKS Parasolid triangle layout is incomplete")
+    ordered = sorted(
+        enumerate(records),
+        key=lambda item: ranks.get(item[1][0], len(ranks) + item[0]),
+    )
+    return b"".join(record for _, (_, record) in ordered)
 
 
 def _v12_variable_node(
