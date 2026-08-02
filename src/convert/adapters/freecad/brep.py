@@ -69,6 +69,13 @@ class _ShapeRecord:
     children: tuple[tuple[str, bool], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _EdgePcurve:
+    index: int
+    first: float
+    last: float
+
+
 class _ModelGraph:
     __slots__ = (
         "bodies",
@@ -972,6 +979,306 @@ def _curve_point(value: object, parameter: float) -> Point | None:
             for index in range(3)
         )
     return None
+
+
+def _surface_periods(value: object) -> tuple[float | None, float | None]:
+    if isinstance(value, (CylinderSurface, ConeSurface, SphereSurface)):
+        return math.tau, None
+    if isinstance(value, TorusSurface):
+        return math.tau, math.tau
+    return None, None
+
+
+def _unwrap_periodic(
+    values: Sequence[tuple[float, float]],
+    periods: tuple[float | None, float | None],
+) -> tuple[tuple[float, float], ...]:
+    if not values:
+        return ()
+    result = [values[0]]
+    for value in values[1:]:
+        adjusted = list(value)
+        previous = result[-1]
+        for axis, period in enumerate(periods):
+            if period is None:
+                continue
+            adjusted[axis] += round((previous[axis] - adjusted[axis]) / period) * period
+        result.append((adjusted[0], adjusted[1]))
+    return tuple(result)
+
+
+def _surface_uv(value: object, point: Point) -> tuple[float, float] | None:
+    if isinstance(value, PlaneSurface):
+        axis, reference, y_direction = _frame(
+            value.normal,
+            value.reference_direction,
+            f"plane surface {value.id}",
+        )
+        delta = _subtract(point, _vector3(value.origin))
+        return _dot(delta, reference), _dot(delta, y_direction)
+    if isinstance(value, (CylinderSurface, ConeSurface)):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"surface {value.id}",
+        )
+        delta = _subtract(point, _vector3(value.origin))
+        u = math.atan2(_dot(delta, y_direction), _dot(delta, reference))
+        if isinstance(value, CylinderSurface):
+            return u, _dot(delta, axis)
+        cosine = math.cos(value.half_angle)
+        if abs(cosine) <= 1e-15:
+            return None
+        return u, _dot(delta, axis) / cosine
+    if isinstance(value, SphereSurface):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"sphere surface {value.id}",
+        )
+        delta = _subtract(point, _vector3(value.center))
+        return (
+            math.atan2(_dot(delta, y_direction), _dot(delta, reference)),
+            math.atan2(
+                _dot(delta, axis),
+                math.hypot(_dot(delta, reference), _dot(delta, y_direction)),
+            ),
+        )
+    if isinstance(value, TorusSurface):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"torus surface {value.id}",
+        )
+        delta = _subtract(point, _vector3(value.center))
+        x_value = _dot(delta, reference)
+        y_value = _dot(delta, y_direction)
+        z_value = _dot(delta, axis)
+        return (
+            math.atan2(y_value, x_value),
+            math.atan2(z_value, math.hypot(x_value, y_value) - value.major_radius),
+        )
+    return None
+
+
+def _surface_residual(value: object, point: Point) -> float | None:
+    if isinstance(value, PlaneSurface):
+        axis, _, _ = _frame(
+            value.normal,
+            value.reference_direction,
+            f"plane surface {value.id}",
+        )
+        return abs(_dot(_subtract(point, _vector3(value.origin)), axis))
+    if isinstance(value, (CylinderSurface, ConeSurface)):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"surface {value.id}",
+        )
+        delta = _subtract(point, _vector3(value.origin))
+        radial = math.hypot(_dot(delta, reference), _dot(delta, y_direction))
+        axial = _dot(delta, axis)
+        if isinstance(value, CylinderSurface):
+            return abs(radial - value.radius)
+        cosine = math.cos(value.half_angle)
+        if abs(cosine) <= 1e-15:
+            return None
+        expected = value.radius + axial / cosine * math.sin(value.half_angle)
+        return abs(radial - abs(expected))
+    if isinstance(value, SphereSurface):
+        return abs(_length(_subtract(point, _vector3(value.center))) - value.radius)
+    if isinstance(value, TorusSurface):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"torus surface {value.id}",
+        )
+        delta = _subtract(point, _vector3(value.center))
+        radial = math.hypot(_dot(delta, reference), _dot(delta, y_direction))
+        axial = _dot(delta, axis)
+        return abs(
+            math.hypot(radial - value.major_radius, axial) - value.minor_radius
+        )
+    return None
+
+
+def _plane_conic_pcurve(
+    curve: object,
+    surface: PlaneSurface,
+    edge: BrepEdge,
+    tolerance: float,
+) -> tuple[str, float, float] | None:
+    if not isinstance(curve, (CircleCurve, EllipseCurve)):
+        return None
+    normal, surface_x, surface_y = _frame(
+        surface.normal,
+        surface.reference_direction,
+        f"plane surface {surface.id}",
+    )
+    curve_axis, curve_x, curve_y = _frame(
+        curve.axis,
+        curve.reference_direction,
+        f"curve {curve.id}",
+    )
+    allowed = max(tolerance, edge.tolerance, 1e-7) * 10.0
+    if abs(abs(_dot(normal, curve_axis)) - 1.0) > allowed:
+        return None
+    center = _surface_uv(surface, _vector3(curve.center))
+    if center is None:
+        return None
+    x_direction = (_dot(curve_x, surface_x), _dot(curve_x, surface_y))
+    y_direction = (_dot(curve_y, surface_x), _dot(curve_y, surface_y))
+    if (
+        abs(math.hypot(*x_direction) - 1.0) > allowed
+        or abs(math.hypot(*y_direction) - 1.0) > allowed
+        or abs(x_direction[0] * y_direction[0] + x_direction[1] * y_direction[1])
+        > allowed
+    ):
+        return None
+    first, last = sorted((edge.start_parameter, edge.end_parameter))
+    kind = "2" if isinstance(curve, CircleCurve) else "3"
+    radii = (
+        (curve.radius,)
+        if isinstance(curve, CircleCurve)
+        else (curve.major_radius, curve.minor_radius)
+    )
+    return (
+        f"{kind} {_values(center + x_direction + y_direction + radii)} ",
+        first,
+        last,
+    )
+
+
+def _linear_surface_pcurve(
+    curve: object,
+    surface: object,
+    edge: BrepEdge,
+    tolerance: float,
+    branch: int,
+) -> tuple[str, float, float] | None:
+    low, high = sorted((edge.start_parameter, edge.end_parameter))
+    if high == low:
+        return None
+    parameters = tuple(low + (high - low) * index / 8.0 for index in range(9))
+    points = tuple(_curve_point(curve, parameter) for parameter in parameters)
+    if any(point is None for point in points):
+        return None
+    concrete_points = tuple(point for point in points if point is not None)
+    allowed = max(tolerance, edge.tolerance, 1e-7) * 10.0
+    residuals = tuple(_surface_residual(surface, point) for point in concrete_points)
+    if any(value is None or value > allowed for value in residuals):
+        return None
+    raw_uv = tuple(_surface_uv(surface, point) for point in concrete_points)
+    if any(value is None for value in raw_uv):
+        return None
+    uv = _unwrap_periodic(
+        tuple(value for value in raw_uv if value is not None),
+        _surface_periods(surface),
+    )
+    delta_parameter = high - low
+    direction = (
+        (uv[-1][0] - uv[0][0]) / delta_parameter,
+        (uv[-1][1] - uv[0][1]) / delta_parameter,
+    )
+    magnitude = math.hypot(*direction)
+    if magnitude <= 1e-15:
+        return None
+    origin = (
+        uv[0][0] - low * direction[0],
+        uv[0][1] - low * direction[1],
+    )
+    for parameter, value in zip(parameters, uv, strict=True):
+        expected = (
+            origin[0] + parameter * direction[0],
+            origin[1] + parameter * direction[1],
+        )
+        if math.hypot(value[0] - expected[0], value[1] - expected[1]) > allowed:
+            return None
+    periods = _surface_periods(surface)
+    if branch:
+        for axis, period in enumerate(periods):
+            if period is not None and abs(direction[axis]) <= allowed:
+                shifted = list(origin)
+                shifted[axis] += branch * period
+                origin = shifted[0], shifted[1]
+                break
+    unit = direction[0] / magnitude, direction[1] / magnitude
+    return (
+        f"1 {_values(origin + unit)} ",
+        low * magnitude,
+        high * magnitude,
+    )
+
+
+def _generated_pcurve(
+    curve: object,
+    surface: object,
+    edge: BrepEdge,
+    tolerance: float,
+    branch: int,
+) -> tuple[str, float, float]:
+    result = (
+        _plane_conic_pcurve(curve, surface, edge, tolerance)
+        if isinstance(surface, PlaneSurface)
+        else None
+    )
+    if result is None:
+        result = _linear_surface_pcurve(
+            curve,
+            surface,
+            edge,
+            tolerance,
+            branch,
+        )
+    if result is None:
+        _unsupported(
+            f"edge {edge.id} has no exact pcurve on surface {getattr(surface, 'id', '')}"
+        )
+    return result
+
+
+def _edge_pcurve_records(
+    model: BrepModel,
+    graph: _ModelGraph,
+    tolerance: float,
+) -> tuple[tuple[str, ...], Mapping[str, _EdgePcurve]]:
+    records = [value[0] for value in (_pcurve_record(item) for item in model.pcurves)]
+    explicit_indexes = {item.id: index for index, item in enumerate(model.pcurves, 1)}
+    explicit_scales = {
+        item.id: _pcurve_record(item)[1] for item in model.pcurves
+    }
+    result: dict[str, _EdgePcurve] = {}
+    branches: dict[tuple[str, str], int] = {}
+    for coedge in model.coedges:
+        face = graph.face_for_coedge(coedge.id)
+        if face is None:
+            continue
+        edge = graph.edges[coedge.edge_id]
+        if coedge.pcurve_id:
+            scale = explicit_scales[coedge.pcurve_id]
+            first, last = sorted(
+                (edge.start_parameter * scale, edge.end_parameter * scale)
+            )
+            result[coedge.id] = _EdgePcurve(
+                explicit_indexes[coedge.pcurve_id],
+                first,
+                last,
+            )
+            continue
+        surface = graph.surfaces[face.surface_id]
+        key = edge.id, surface.id
+        branch = branches.get(key, 0)
+        branches[key] = branch + 1
+        record, first, last = _generated_pcurve(
+            next(value for value in model.curves if value.id == edge.curve_id),
+            surface,
+            edge,
+            tolerance,
+            branch,
+        )
+        records.append(record)
+        result[coedge.id] = _EdgePcurve(len(records), first, last)
+    return tuple(records), result
 
 
 def _check_edge_geometry(
