@@ -64,6 +64,7 @@ from .archive import (
     _validated_archive_members,
     build_fcstd_archive,
     extract_manifest_from_fcstd,
+    native_expression_parts,
     native_sketch_parts,
 )
 from .brep import FreeCADBrepWriteError, brep_model_brep
@@ -571,7 +572,46 @@ def _feature_parts(
             )
         else:
             writable = False
-        if writable:
+        native += 1
+        if not writable:
+            carrier += 1
+    return native, carrier
+
+
+def _selection_parts(document: CadDocument) -> tuple[int, int]:
+    targets = {
+        *(plane.id for plane in document.support_planes),
+        *(sketch.id for sketch in document.sketches),
+        *(feature.id for feature in document.feature_timeline),
+        *(body.id for body in document.bodies),
+    }
+    native = 0
+    carrier = 0
+    for selection in document.selections:
+        native_path = bool(selection.path) and all(
+            item.entity_id in targets for item in selection.path
+        )
+        native_point = selection.point is not None
+        if native_path or native_point:
+            native += 1
+        else:
+            carrier += 1
+        if selection.query:
+            carrier += 1
+    return native, carrier
+
+
+def _configuration_parts(document: CadDocument) -> tuple[int, int]:
+    native = 0
+    carrier = 0
+    for configuration in document.configurations:
+        if (
+            len(document.configurations) == 1
+            and configuration.active
+            and configuration.parent_id is None
+            and not configuration.overrides
+            and not configuration.suppressed_feature_ids
+        ):
             native += 1
         else:
             carrier += 1
@@ -670,16 +710,30 @@ def _capability_transfers(
         parts[Capability.PARAMETRIC_HISTORY].extend(
             [True] * feature_native + [False] * feature_carrier
         )
-        parts[Capability.SUPPORT_PLANES].extend(
-            source_native for _ in item.support_planes
+        parts[Capability.SUPPORT_PLANES].extend(True for _ in item.support_planes)
+        if source_native:
+            parts[Capability.SELECTIONS].extend(True for _ in item.selections)
+        else:
+            native_selections, carrier_selections = _selection_parts(item)
+            parts[Capability.SELECTIONS].extend(
+                [True] * native_selections + [False] * carrier_selections
+            )
+        parts[Capability.BODY_STRUCTURE].extend(True for _ in item.bodies)
+        native_configurations, carrier_configurations = _configuration_parts(item)
+        parts[Capability.CONFIGURATIONS].extend(
+            [True] * native_configurations + [False] * carrier_configurations
         )
-        parts[Capability.SELECTIONS].extend(source_native for _ in item.selections)
-        parts[Capability.BODY_STRUCTURE].extend(source_native for _ in item.bodies)
-        parts[Capability.CONFIGURATIONS].extend(False for _ in item.configurations)
+        if source_native:
+            expression_count = sum(
+                parameter.expression is not None for parameter in item.parameters
+            )
+            native_expressions, carrier_expressions = expression_count, 0
+        else:
+            native_expressions, carrier_expressions = native_expression_parts(
+                manifest
+            )
         parts[Capability.EXPRESSIONS].extend(
-            source_native
-            for parameter in item.parameters
-            if parameter.expression is not None
+            [True] * native_expressions + [False] * carrier_expressions
         )
         native_breps = [
             _payload_is_reattachable_brep(payload)
@@ -689,10 +743,6 @@ def _capability_transfers(
         if item.brep is not None:
             parts[Capability.BREP].append(_neutral_brep_is_native(item))
         parts[Capability.BREP].extend(native_breps)
-        if (item.brep is not None or any(not value for value in native_breps)) and (
-            item.meshes
-        ):
-            parts[Capability.BREP].append(True)
         parts[Capability.TESSELLATION].extend(True for _ in item.meshes)
         parts[Capability.TESSELLATION].extend(
             False
@@ -720,7 +770,7 @@ def _capability_transfers(
             for _ in _native_external_documents(item)
         )
         parts[Capability.MATERIALS].extend(
-            False for body in item.bodies if body.material_id
+            True for body in item.bodies if body.material_id
         )
         envelope_indexes = source_payload_indexes(item)
         parts[Capability.NATIVE_PAYLOADS].extend(
