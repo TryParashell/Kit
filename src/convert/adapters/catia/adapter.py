@@ -1867,6 +1867,16 @@ def _native_payload_matches_document(
             payload.role == PayloadRole.TESSELLATION and payload.data is not None
             for payload in document.brep_payloads
         )
+        if document_type == PART_DOCUMENT_TYPE:
+            parsed = CatiaAdapter().read(
+                data,
+                ReadOptions(
+                    include_brep=True,
+                    include_tessellation=include_tessellation,
+                ),
+            )
+            if _semantic_digest(parsed) != _semantic_digest(document):
+                return False
         candidate = _native_payloads(
             archive,
             data,
