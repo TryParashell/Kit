@@ -544,7 +544,9 @@ def _extrusion_is_native(feature: Any) -> bool:
 
 
 def _feature_parts(
-    document: CadDocument, sketch_native: Mapping[str, bool]
+    document: CadDocument,
+    sketch_native: Mapping[str, bool],
+    sketch_carrier_reasons: Mapping[str, CarrierReason],
 ) -> tuple[int, int, frozenset[CarrierReason]]:
     dependent_feature_ids = {
         feature_id
@@ -599,14 +601,23 @@ def _feature_parts(
         native += 1
         if not writable:
             carrier += 1
+            feature_reasons: set[CarrierReason] = set()
             if feature.suppressed:
-                reasons.add(CarrierReason.TARGET_UNSUPPORTED)
+                feature_reasons.add(CarrierReason.TARGET_UNSUPPORTED)
             elif kind == FeatureKind.REFERENCE.value:
-                reasons.add(CarrierReason.TARGET_UNSUPPORTED)
+                feature_reasons.add(CarrierReason.TARGET_UNSUPPORTED)
             elif kind == FeatureKind.NATIVE.value:
-                reasons.add(CarrierReason.SOURCE_OPAQUE)
+                feature_reasons.add(CarrierReason.SOURCE_OPAQUE)
             else:
-                reasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
+                if kind == FeatureKind.EXTRUSION.value:
+                    sketch_reason = sketch_carrier_reasons.get(feature.sketch_id or "")
+                    if sketch_reason is not None:
+                        feature_reasons.add(sketch_reason)
+                    if not feature.sketch_id or not _extrusion_is_native(feature):
+                        feature_reasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
+                if not feature_reasons:
+                    feature_reasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
+            reasons.update(feature_reasons)
     return native, carrier, frozenset(reasons)
 
 
@@ -757,6 +768,7 @@ def _capability_transfers(
         manifest = document_to_manifest(item)
         sketch_parts = native_sketch_parts(manifest)
         sketch_native: dict[str, bool] = {}
+        sketch_carrier_reasons: dict[str, CarrierReason] = {}
         for sketch, (native_count, carrier_count) in zip(
             item.sketches, sketch_parts, strict=True
         ):
@@ -764,13 +776,13 @@ def _capability_transfers(
                 [True] * native_count + [False] * carrier_count
             )
             if carrier_count:
-                carrier_reasons[Capability.EDITABLE_SKETCHES].add(
-                    _sketch_carrier_reason(sketch)
-                )
+                sketch_reason = _sketch_carrier_reason(sketch)
+                sketch_carrier_reasons[sketch.id] = sketch_reason
+                carrier_reasons[Capability.EDITABLE_SKETCHES].add(sketch_reason)
             sketch_native[sketch.id] = carrier_count == 0
         parts[Capability.PARAMETERS].extend(True for _ in item.parameters)
         feature_native, feature_carrier, feature_reasons = _feature_parts(
-            item, sketch_native
+            item, sketch_native, sketch_carrier_reasons
         )
         parts[Capability.PARAMETRIC_HISTORY].extend(
             [True] * feature_native + [False] * feature_carrier
@@ -795,9 +807,7 @@ def _capability_transfers(
             )
             native_expressions, carrier_expressions = expression_count, 0
         else:
-            native_expressions, carrier_expressions = native_expression_parts(
-                manifest
-            )
+            native_expressions, carrier_expressions = native_expression_parts(manifest)
         parts[Capability.EXPRESSIONS].extend(
             [True] * native_expressions + [False] * carrier_expressions
         )
@@ -810,9 +820,7 @@ def _capability_transfers(
             native_brep = _neutral_brep_is_native(item) or any(raw_breps)
             parts[Capability.BREP].append(native_brep)
             if not native_brep:
-                carrier_reasons[Capability.BREP].add(
-                    CarrierReason.WRITER_UNIMPLEMENTED
-                )
+                carrier_reasons[Capability.BREP].add(CarrierReason.WRITER_UNIMPLEMENTED)
         else:
             parts[Capability.BREP].extend(raw_breps)
             if any(not value for value in raw_breps):
