@@ -1426,7 +1426,7 @@ def _parse_point(
         values_offset = start + 14
     if attribute is None or attribute <= 1 or references is None:
         return None
-    if any(reference > 1 for reference in references):
+    if not references or references[0] > 1:
         return None
     if values_offset + 24 > len(data):
         return None
