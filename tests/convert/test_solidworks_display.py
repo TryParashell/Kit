@@ -8,11 +8,39 @@ from convert.adapters.solidworks.container import SldprtArchive
 from convert.adapters.solidworks.display import (
     decode_display_lists,
     decode_tessellation_faces,
+    is_component_path,
     neutral_meshes,
 )
 
 
 ASSEMBLY = Path(__file__).parents[2] / "examples" / "Random" / "V8_engine.SLDASM"
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "Rotor@Assembly",
+        "Custom instance name@Root/Nested occurrence@Subassembly",
+        "Part-1@Assembly",
+    ),
+)
+def test_component_paths_do_not_require_generated_numeric_suffixes(value: str) -> None:
+    assert is_component_path(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "Top Plane@Rotor@Assembly",
+        "Belt1-1^Assembly-1@Assembly",
+        "C:/Parts/Rotor.SLDPRT",
+        "@Assembly",
+    ),
+)
+def test_component_path_detection_rejects_entity_references_and_files(
+    value: str,
+) -> None:
+    assert not is_component_path(value)
 
 
 def test_display_lists_recovers_every_face_and_geometry_group() -> None:

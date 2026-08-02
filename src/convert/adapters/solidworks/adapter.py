@@ -8,7 +8,7 @@ import os
 from pathlib import Path, PureWindowsPath
 import struct
 import tempfile
-from typing import Any
+from typing import Any, Sequence
 
 from convert.adapters.base import (
     AdapterInfo,
@@ -25,10 +25,10 @@ from interchange import (
     Body,
     BooleanOperation,
     BoundingBox,
+    BrepModel,
     BrepPayload,
     CadDocument,
     CadSource,
-    Capability,
     CircleGeometry,
     ComponentDefinition,
     ComponentDocument,
@@ -52,11 +52,13 @@ from interchange import (
     MateKind,
     Matrix4,
     Mesh,
+    NativeFeatureDefinition,
     NativeGeometry,
     Parameter,
     ParameterRole,
     ParameterValue,
     PointGeometry,
+    PayloadRole,
     Provenance,
     ProvenanceSpan,
     Selection,
@@ -73,9 +75,19 @@ from interchange import (
     Vector2,
     Vector3,
     frozen_mapping,
+    filter_document,
+    infer_capabilities,
+    retained_capabilities,
+    semantic_metadata,
+    source_payload_indexes,
+    with_wrapper_metadata,
 )
 
 from .assembly import (
+    MATE_VALUE_SEMANTICS,
+    NATIVE_MATE_ALIGNMENT_BY_CODE,
+    NATIVE_MATE_ENTITY_MARKERS,
+    NATIVE_MATE_NEUTRAL_KIND_ALIASES,
     NativeAssembly,
     NativeAssemblyDefinition,
     NativeAssemblyOccurrence,
@@ -85,8 +97,24 @@ from .assembly import (
     decode_native_assembly,
 )
 from .container import SldprtArchive, SldprtFormatError, build_sldprt
+from .format import (
+    COMPONENT_TREE_STREAM,
+    CONTAINER_VERSIONS,
+    CONTENT_TYPES_STREAM,
+    DISPLAY_LISTS_STREAM,
+    FORMAT_ID_BY_SUFFIX,
+    INFO,
+    KEYWORDS_STREAM,
+    KIT_DOCUMENT_STREAM,
+    PARTITION_STREAM,
+    PLANE_FEATURE_TYPES,
+    RELATIONSHIPS_STREAM,
+    RESOLVED_FEATURES_STREAM,
+    SOLIDWORKS_STREAM,
+    SOLID_BODY_FEATURE_TYPES,
+    SUFFIX_BY_FORMAT_ID,
+)
 from .native import (
-    NativeConstraint,
     NativeDimension,
     NativeFeature,
     NativeMarker,
@@ -96,15 +124,19 @@ from .native import (
     NativeSketch,
     decode_native_model,
 )
-from .parasolid import ParasolidPayload, decode_partition_stream
+from .parasolid import (
+    ParasolidPayload,
+    ParasolidWriteError,
+    contains_parasolid_payload,
+    decode_brep_model,
+    decode_partition_stream,
+    encode_brep_model,
+    is_native_parasolid_payload,
+)
 
 
-_FORMAT_ID = "solidworks.sldprt"
-_ASSEMBLY_FORMAT_ID = "solidworks.sldasm"
-_ASSEMBLY_COMPONENT_STREAM = "swXmlContents/COMPINSTANCETREE"
-_RESOLVED_STREAM = "Contents/Config-0-ResolvedFeatures"
-_KEYWORDS_STREAM = "swXmlContents/KeyWords"
-_KIT_DOCUMENT_STREAM = "Kit/Interchange"
+_FORMAT_ID = INFO.format_id
+_ASSEMBLY_FORMAT_ID = INFO.aliases[0]
 _SOURCE_BYTES_KEY = "solidworks_source_bytes"
 _SOURCE_SHA256_KEY = "solidworks_source_sha256"
 _SOURCE_SEMANTIC_SHA256_KEY = "solidworks_source_semantic_sha256"
@@ -117,34 +149,286 @@ _SOURCE_KEYS = frozenset(
         _SOURCE_FORMAT_KEY,
     }
 )
+_WRAPPER_METADATA_KEYS = _SOURCE_KEYS | frozenset(
+    {
+        "adapter",
+        "embedded_source_format_id",
+        "embedded_source_path",
+        "embedded_source_sha256",
+        "file_id",
+        "solidworks.container_compatibility",
+        "stream_names",
+    }
+)
+_FEATURE_KIND_BY_NATIVE = {
+    "3dprofilefeature": FeatureKind.REFERENCE,
+    "3dsplinecurve": FeatureKind.REFERENCE,
+    "advholewzd": FeatureKind.HOLE,
+    "advstructmember": FeatureKind.SWEEP,
+    "aem3dcontact": FeatureKind.NATIVE,
+    "aemgravity": FeatureKind.NATIVE,
+    "aemlineardamper": FeatureKind.NATIVE,
+    "aemlinearmotor": FeatureKind.NATIVE,
+    "aemlinearspring": FeatureKind.NATIVE,
+    "aemrotationalmotor": FeatureKind.NATIVE,
+    "aemtorque": FeatureKind.NATIVE,
+    "aemtorsionaldamper": FeatureKind.NATIVE,
+    "aemtorsionalspring": FeatureKind.NATIVE,
+    "ambientlight": FeatureKind.REFERENCE,
+    "apattern": FeatureKind.PATTERN,
+    "asmexploder": FeatureKind.NATIVE,
+    "attribute": FeatureKind.REFERENCE,
+    "axis": FeatureKind.REFERENCE,
+    "basebody": FeatureKind.EXTRUSION,
+    "bending": FeatureKind.REFINE,
+    "bendtableachor": FeatureKind.REFERENCE,
+    "blend": FeatureKind.LOFT,
+    "blendcut": FeatureKind.LOFT,
+    "blendregion": FeatureKind.LOFT,
+    "blendrefsurface": FeatureKind.SURFACE,
+    "blockdef": FeatureKind.REFERENCE,
+    "blockfolder": FeatureKind.REFERENCE,
+    "body-delete/keep": FeatureKind.BOOLEAN,
+    "bodyexplodestep": FeatureKind.NATIVE,
+    "bomfeat": FeatureKind.NATIVE,
+    "bomtemplate": FeatureKind.REFERENCE,
+    "boss": FeatureKind.EXTRUSION,
+    "bossthin": FeatureKind.EXTRUSION,
+    "boundingbox": FeatureKind.REFERENCE,
+    "breakcorner": FeatureKind.CHAMFER,
+    "camerafeature": FeatureKind.REFERENCE,
+    "cavity": FeatureKind.BOOLEAN,
+    "centerofmass": FeatureKind.REFERENCE,
+    "chamfer": FeatureKind.CHAMFER,
+    "cirpattern": FeatureKind.PATTERN,
+    "combine": FeatureKind.BOOLEAN,
+    "combinebodies": FeatureKind.BOOLEAN,
+    "commentsfolder": FeatureKind.REFERENCE,
+    "compexplodestep": FeatureKind.NATIVE,
+    "compositecurve": FeatureKind.REFERENCE,
+    "coordsys": FeatureKind.REFERENCE,
+    "cornertrim": FeatureKind.NATIVE,
+    "cosmeticthread": FeatureKind.NATIVE,
+    "cosmeticweldbead": FeatureKind.NATIVE,
+    "cosmeticweldsubfolder": FeatureKind.REFERENCE,
+    "createassemfeat": FeatureKind.NATIVE,
+    "crossbreak": FeatureKind.NATIVE,
+    "curveinfile": FeatureKind.REFERENCE,
+    "curvepattern": FeatureKind.PATTERN,
+    "cut": FeatureKind.EXTRUSION,
+    "cut-revolve": FeatureKind.REVOLUTION,
+    "cut-sweep": FeatureKind.SWEEP,
+    "cutlistfolder": FeatureKind.REFERENCE,
+    "cutthin": FeatureKind.EXTRUSION,
+    "deform": FeatureKind.REFINE,
+    "deletebody": FeatureKind.BOOLEAN,
+    "delface": FeatureKind.SURFACE,
+    "derivedcirpattern": FeatureKind.PATTERN,
+    "derivedholepattern": FeatureKind.PATTERN,
+    "derivedlpattern": FeatureKind.PATTERN,
+    "detailcircle": FeatureKind.REFERENCE,
+    "dimpattern": FeatureKind.PATTERN,
+    "directionlight": FeatureKind.REFERENCE,
+    "dome": FeatureKind.REFINE,
+    "draft": FeatureKind.DRAFT,
+    "drbreakoutsectionline": FeatureKind.REFERENCE,
+    "drsectionline": FeatureKind.REFERENCE,
+    "edgeflange": FeatureKind.EXTRUSION,
+    "edgemerge": FeatureKind.REFINE,
+    "emboss": FeatureKind.REFINE,
+    "endcap": FeatureKind.EXTRUSION,
+    "explodelineprofilefeature": FeatureKind.REFERENCE,
+    "extendrefsurface": FeatureKind.SURFACE,
+    "extrusion": FeatureKind.EXTRUSION,
+    "extrurefsurface": FeatureKind.SURFACE,
+    "familytablefeat": FeatureKind.REFERENCE,
+    "featsurfacebodyfolder": FeatureKind.REFERENCE,
+    "fillrefsurface": FeatureKind.SURFACE,
+    "fillet": FeatureKind.FILLET,
+    "flatpattern": FeatureKind.NATIVE,
+    "flattenbends": FeatureKind.NATIVE,
+    "flattensurface": FeatureKind.SURFACE,
+    "fold": FeatureKind.NATIVE,
+    "formtoolinstance": FeatureKind.NATIVE,
+    "ftrfolder": FeatureKind.REFERENCE,
+    "generaltableanchor": FeatureKind.REFERENCE,
+    "gridfeature": FeatureKind.REFERENCE,
+    "groundplane": FeatureKind.REFERENCE,
+    "gusset": FeatureKind.EXTRUSION,
+    "hem": FeatureKind.NATIVE,
+    "helix": FeatureKind.HELIX,
+    "helix/spiral": FeatureKind.HELIX,
+    "holeseries": FeatureKind.HOLE,
+    "holetableanchor": FeatureKind.REFERENCE,
+    "holewizard": FeatureKind.HOLE,
+    "holewzd": FeatureKind.HOLE,
+    "imported": FeatureKind.IMPORTED,
+    "importedcurve": FeatureKind.REFERENCE,
+    "incontextfeatholder": FeatureKind.REFERENCE,
+    "insertedfeaturefolder": FeatureKind.REFERENCE,
+    "jog": FeatureKind.NATIVE,
+    "libraryfeature": FeatureKind.NATIVE,
+    "livesection": FeatureKind.REFERENCE,
+    "localchainpattern": FeatureKind.PATTERN,
+    "localcirpattern": FeatureKind.PATTERN,
+    "localcurvepattern": FeatureKind.PATTERN,
+    "locallpattern": FeatureKind.PATTERN,
+    "localsketchpattern": FeatureKind.PATTERN,
+    "loft": FeatureKind.LOFT,
+    "loft-thin": FeatureKind.LOFT,
+    "loftedbend": FeatureKind.LOFT,
+    "lpattern": FeatureKind.PATTERN,
+    "macrofeature": FeatureKind.NATIVE,
+    "magneticgroundplane": FeatureKind.REFERENCE,
+    "matecamtangent": FeatureKind.NATIVE,
+    "matecoincident": FeatureKind.NATIVE,
+    "mateconcentric": FeatureKind.NATIVE,
+    "matedistancedim": FeatureKind.NATIVE,
+    "mategeardim": FeatureKind.NATIVE,
+    "matehinge": FeatureKind.NATIVE,
+    "mateinplace": FeatureKind.NATIVE,
+    "matelimitdistancedim": FeatureKind.NATIVE,
+    "matelinearcoupler": FeatureKind.NATIVE,
+    "matelock": FeatureKind.NATIVE,
+    "mateparallel": FeatureKind.NATIVE,
+    "mateperpendicular": FeatureKind.NATIVE,
+    "mateplanarangledim": FeatureKind.NATIVE,
+    "mateprofilecenter": FeatureKind.NATIVE,
+    "materackpiniondim": FeatureKind.NATIVE,
+    "matereferencegroupfolder": FeatureKind.REFERENCE,
+    "matescrew": FeatureKind.NATIVE,
+    "mateslot": FeatureKind.NATIVE,
+    "matesymmetric": FeatureKind.NATIVE,
+    "matetangent": FeatureKind.NATIVE,
+    "mateuniversaljoint": FeatureKind.NATIVE,
+    "matewidth": FeatureKind.NATIVE,
+    "mbimport": FeatureKind.IMPORTED,
+    "midrefsurface": FeatureKind.SURFACE,
+    "mirror": FeatureKind.MIRROR,
+    "mirrorcompfeat": FeatureKind.MIRROR,
+    "mirrorpattern": FeatureKind.MIRROR,
+    "mirrorsolid": FeatureKind.MIRROR,
+    "mirrorstock": FeatureKind.MIRROR,
+    "moldcorecavitysolids": FeatureKind.BOOLEAN,
+    "moldpartinggeom": FeatureKind.SURFACE,
+    "moldpartline": FeatureKind.REFERENCE,
+    "moldshutoffsrf": FeatureKind.SURFACE,
+    "movecopybody": FeatureKind.NATIVE,
+    "netblend": FeatureKind.LOFT,
+    "normalcut": FeatureKind.EXTRUSION,
+    "offsetrefsurface": FeatureKind.OFFSET,
+    "offsetrefsuface": FeatureKind.OFFSET,
+    "onebend": FeatureKind.NATIVE,
+    "planarsurface": FeatureKind.SURFACE,
+    "pline": FeatureKind.REFERENCE,
+    "pointlight": FeatureKind.REFERENCE,
+    "posgroupfolder": FeatureKind.REFERENCE,
+    "processbends": FeatureKind.NATIVE,
+    "profilefeature": FeatureKind.REFERENCE,
+    "profileftrfolder": FeatureKind.REFERENCE,
+    "prtexploder": FeatureKind.NATIVE,
+    "punch": FeatureKind.NATIVE,
+    "punchtableanchor": FeatureKind.REFERENCE,
+    "radiaterefsurface": FeatureKind.SURFACE,
+    "refaxis": FeatureKind.REFERENCE,
+    "refaxisftrfolder": FeatureKind.REFERENCE,
+    "refcurve": FeatureKind.REFERENCE,
+    "refplaneftrfolder": FeatureKind.REFERENCE,
+    "refpoint": FeatureKind.REFERENCE,
+    "reference": FeatureKind.REFERENCE,
+    "referencepattern": FeatureKind.PATTERN,
+    "refsurface": FeatureKind.SURFACE,
+    "replaceface": FeatureKind.SURFACE,
+    "revisiontableanchor": FeatureKind.REFERENCE,
+    "rib": FeatureKind.EXTRUSION,
+    "rip": FeatureKind.NATIVE,
+    "revolve": FeatureKind.REVOLUTION,
+    "revolution": FeatureKind.REVOLUTION,
+    "revolutionthin": FeatureKind.REVOLUTION,
+    "revcut": FeatureKind.REVOLUTION,
+    "revolvrefsurf": FeatureKind.SURFACE,
+    "ruledsrffromedge": FeatureKind.SURFACE,
+    "round fillet corner": FeatureKind.FILLET,
+    "scale": FeatureKind.SCALE,
+    "sculpt": FeatureKind.BOOLEAN,
+    "sensor": FeatureKind.REFERENCE,
+    "sewrefsurface": FeatureKind.SURFACE,
+    "shape": FeatureKind.NATIVE,
+    "sheetmetal": FeatureKind.NATIVE,
+    "shell": FeatureKind.SHELL,
+    "sidecore": FeatureKind.BOOLEAN,
+    "simplotfeature": FeatureKind.NATIVE,
+    "simplotxaxisfeature": FeatureKind.NATIVE,
+    "simplotyaxisfeature": FeatureKind.NATIVE,
+    "simresultfolder": FeatureKind.NATIVE,
+    "sketch": FeatureKind.REFERENCE,
+    "sketchbend": FeatureKind.NATIVE,
+    "sketchbitmap": FeatureKind.REFERENCE,
+    "sketchblockdef": FeatureKind.REFERENCE,
+    "sketchblockinst": FeatureKind.REFERENCE,
+    "sketchhole": FeatureKind.HOLE,
+    "sketchpattern": FeatureKind.PATTERN,
+    "sketchslicefolder": FeatureKind.REFERENCE,
+    "sm3dbend": FeatureKind.NATIVE,
+    "smbaseflange": FeatureKind.EXTRUSION,
+    "smgusset": FeatureKind.NATIVE,
+    "smmiteredflange": FeatureKind.EXTRUSION,
+    "smartcomponentfeature": FeatureKind.NATIVE,
+    "solidtosheetmetal": FeatureKind.NATIVE,
+    "split": FeatureKind.BOOLEAN,
+    "splitbody": FeatureKind.BOOLEAN,
+    "spotlight": FeatureKind.REFERENCE,
+    "stock": FeatureKind.IMPORTED,
+    "strctsysbtwptsmbrfeat": FeatureKind.NATIVE,
+    "strctsyscnrfeat": FeatureKind.NATIVE,
+    "strctsyscnrgrpfeat": FeatureKind.REFERENCE,
+    "strctsyscnrmgmtfeat": FeatureKind.REFERENCE,
+    "strctsysfeat": FeatureKind.REFERENCE,
+    "strctsysgrpfeat": FeatureKind.REFERENCE,
+    "strctsyspathsegmbrfeat": FeatureKind.NATIVE,
+    "strctsyspttomem": FeatureKind.NATIVE,
+    "strctsysrefplnmbrfeat": FeatureKind.NATIVE,
+    "strctsysskptlenmbrfeat": FeatureKind.NATIVE,
+    "strctsyssupplnmbrfeat": FeatureKind.NATIVE,
+    "strctsyssurfplnmbrfeat": FeatureKind.NATIVE,
+    "subatomfolder": FeatureKind.REFERENCE,
+    "subweldfolder": FeatureKind.REFERENCE,
+    "surfacebodyfolder": FeatureKind.REFERENCE,
+    "surfcut": FeatureKind.SURFACE,
+    "sweep": FeatureKind.SWEEP,
+    "sweepcut": FeatureKind.SWEEP,
+    "sweeprefsurface": FeatureKind.SURFACE,
+    "sweepthread": FeatureKind.SWEEP,
+    "tablepattern": FeatureKind.PATTERN,
+    "templateflatpattern": FeatureKind.REFERENCE,
+    "templatesheetmetal": FeatureKind.REFERENCE,
+    "thicken": FeatureKind.SURFACE,
+    "thickencut": FeatureKind.SURFACE,
+    "toroidalbend": FeatureKind.NATIVE,
+    "trimrefsurface": FeatureKind.SURFACE,
+    "unfold": FeatureKind.NATIVE,
+    "untrimrefsurf": FeatureKind.SURFACE,
+    "varfillet": FeatureKind.FILLET,
+    "viewbodyfeature": FeatureKind.REFERENCE,
+    "weldbeadfeat": FeatureKind.NATIVE,
+    "weldcornerfeat": FeatureKind.NATIVE,
+    "weldmemberfeat": FeatureKind.SWEEP,
+    "weldmentfeature": FeatureKind.NATIVE,
+    "weldmenttableanchor": FeatureKind.REFERENCE,
+    "weldmenttablefeat": FeatureKind.REFERENCE,
+    "weldtableanchor": FeatureKind.REFERENCE,
+    "xformstock": FeatureKind.IMPORTED,
+    **{
+        native_type: FeatureKind.REFERENCE
+        for native_type in (*PLANE_FEATURE_TYPES, *SOLID_BODY_FEATURE_TYPES)
+    },
+}
 
 
 class SldprtAdapter:
     @property
     def info(self) -> AdapterInfo:
-        return AdapterInfo(
-            format_id=_FORMAT_ID,
-            name="SOLIDWORKS",
-            version="1.0",
-            extensions=(".sldprt", ".sldasm"),
-            aliases=(_ASSEMBLY_FORMAT_ID,),
-            capabilities=frozenset(
-                {
-                    Capability.PARAMETRIC_HISTORY,
-                    Capability.EDITABLE_SKETCHES,
-                    Capability.CONFIGURATIONS,
-                    Capability.BREP,
-                    Capability.TESSELLATION,
-                    Capability.ASSEMBLIES,
-                    Capability.NATIVE_PAYLOADS,
-                    Capability.ROUNDTRIP_METADATA,
-                }
-            ),
-            media_types=(
-                "application/x-solidworks-part",
-                "application/x-solidworks-assembly",
-            ),
-        )
+        return INFO
 
     def probe(self, source: Source) -> ProbeResult:
         try:
@@ -154,7 +438,7 @@ class SldprtAdapter:
                     _FORMAT_ID, 0.0, "file is shorter than the container header"
                 )
             version = struct.unpack_from(">I", data, 4)[0]
-            if version not in {3, 4}:
+            if version not in CONTAINER_VERSIONS:
                 return ProbeResult(
                     _FORMAT_ID, 0.0, f"unsupported container version {version}"
                 )
@@ -162,7 +446,7 @@ class SldprtAdapter:
         except (OSError, SldprtFormatError, TypeError, ValueError) as exc:
             return ProbeResult(_FORMAT_ID, 0.0, str(exc))
         names = archive.streams
-        if _RESOLVED_STREAM in names and _KEYWORDS_STREAM in names:
+        if RESOLVED_FEATURES_STREAM in names and KEYWORDS_STREAM in names:
             return ProbeResult(
                 _FORMAT_ID, 1.0, "native history and resolved-feature streams found"
             )
@@ -174,15 +458,22 @@ class SldprtAdapter:
         settings = options or ReadOptions()
         data, label = _source_bytes(source)
         archive = SldprtArchive.from_bytes(data, label)
-        embedded = archive.get(_KIT_DOCUMENT_STREAM)
+        embedded = archive.get(KIT_DOCUMENT_STREAM)
         if embedded is not None:
-            return _embedded_document(self, archive, data, label, embedded, settings)
-        if archive.get(_ASSEMBLY_COMPONENT_STREAM) is not None:
-            return _retain_source(
-                _assembly_document(self, archive, data, label, settings), data
+            document = _embedded_document(
+                self, archive, data, label, embedded, settings
             )
+            _validate_source_suffix(label, document.assembly is not None)
+            return document
+        if archive.get(COMPONENT_TREE_STREAM) is not None:
+            document = _retain_source(
+                _assembly_document(self, archive, data, label, settings),
+                data,
+            )
+            _validate_source_suffix(label, True)
+            return document
         model = decode_native_model(
-            archive.require(_KEYWORDS_STREAM), archive.require(_RESOLVED_STREAM)
+            archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
         )
         configurations = _configurations(model, settings.configuration)
         parameters = _parameters(model)
@@ -192,23 +483,18 @@ class SldprtAdapter:
         selections = _selections(model)
         timeline = _timeline(model, selections)
         payloads, payload_diagnostics = _brep_payloads(archive, settings)
-        final_feature = next(
-            (
-                feature.id
-                for feature in reversed(timeline)
-                if feature.kind
-                in {FeatureKind.EXTRUSION, FeatureKind.FILLET, FeatureKind.CHAMFER}
+        brep = _typed_brep(payloads)
+        final_feature = _final_body_feature_id(
+            timeline,
+            frozenset(
+                _feature_id(operation.object_id) for operation in model.operations
             ),
-            timeline[-1].id if timeline else "",
         )
-        body_feature = next(
-            (feature for feature in model.features if feature.name == "Solid Bodies"),
-            None,
-        )
+        body_feature = _solid_body_feature(model.features)
         bodies = (
             Body(
                 id="sldprt:body:1",
-                name="Solid Bodies",
+                name=body_feature.name if body_feature is not None else "Body 1",
                 final_feature_id=final_feature,
                 topology=TopologySummary(
                     solid_count=1 if model.operations else 0,
@@ -262,6 +548,7 @@ class SldprtAdapter:
             selections=selections,
             feature_timeline=timeline,
             bodies=bodies,
+            brep=brep,
             brep_payloads=payloads,
             diagnostics=diagnostics,
             capabilities=self.info.capabilities,
@@ -281,13 +568,14 @@ class SldprtAdapter:
             units=UnitSystem.MILLIMETER,
         )
         document.assert_valid()
+        _validate_source_suffix(label, False)
         return _retain_source(document, data)
 
     def supports(self, document: CadDocument, destination: Destination) -> bool:
         path = _destination_path(destination)
         if path is None:
             return is_binary_destination(destination)
-        expected = ".sldasm" if document.assembly is not None else ".sldprt"
+        expected = SUFFIX_BY_FORMAT_ID[_destination_format_id(document)]
         return path.suffix.casefold() == expected
 
     def write(
@@ -310,7 +598,7 @@ class SldprtAdapter:
                 f"{settings.destination_format} does not support this document kind"
             )
         if not self.supports(document, destination):
-            expected = ".SLDASM" if document.assembly is not None else ".SLDPRT"
+            expected = SUFFIX_BY_FORMAT_ID[expected_format].upper()
             raise ValueError(f"SOLIDWORKS destination must end in {expected}")
         path = _destination_path(destination)
         format_id = _destination_format_id(document)
@@ -328,12 +616,12 @@ class SldprtAdapter:
                     f"{kind} SOLIDWORKS writing requires "
                     "WriteOptions(values={'allow_non_native': True})"
                 )
-            streams = _generated_streams(document, template)
+            streams, native_brep = _generated_streams(document, template)
             file_id = (
                 SldprtArchive.from_bytes(template).file_id
                 if template is not None
                 else int.from_bytes(
-                    hashlib.sha256(streams[_KIT_DOCUMENT_STREAM]).digest()[:4],
+                    hashlib.sha256(streams[KIT_DOCUMENT_STREAM]).digest()[:4],
                     "big",
                 )
             )
@@ -343,9 +631,9 @@ class SldprtAdapter:
                 "source-preserved"
                 if template is not None
                 else (
-                    "parasolid-import"
-                    if "Contents/Config-0-Partition" in streams
-                    else "none"
+                    "neutral-brep"
+                    if native_brep == "generated"
+                    else "parasolid-import" if native_brep == "preserved" else "none"
                 )
             )
             diagnostics = (
@@ -359,33 +647,41 @@ class SldprtAdapter:
                     severity=Severity.WARNING,
                 ),
             )
+            if native_brep.startswith("unsupported:"):
+                diagnostics = (
+                    *diagnostics,
+                    Diagnostic(
+                        code="sldprt.native_brep_unsupported",
+                        message=native_brep.removeprefix("unsupported:"),
+                        severity=Severity.WARNING,
+                    ),
+                )
         else:
             data = preserved
             mode = "exact"
             native_content = "exact"
-        retained_compatibility = document.metadata.get(
-            "solidworks.container_compatibility"
-        )
-        native_exact = mode == "exact" and retained_compatibility is None
+            native_brep = "exact"
         compatibility = (
-            str(retained_compatibility)
-            if retained_compatibility is not None
+            _replay_compatibility(data)
+            if mode == "exact"
             else (
-                "native-exact"
-                if mode == "exact"
+                "native-source-with-kit-neutral"
+                if mode == "template"
                 else (
-                    "native-source-with-kit-neutral"
-                    if mode == "template"
-                    else (
-                        "parasolid-with-kit-neutral"
-                        if native_content == "parasolid-import"
-                        else "kit-neutral-only"
-                    )
+                    "native-brep-with-kit-neutral"
+                    if native_content in {"neutral-brep", "parasolid-import"}
+                    else "kit-neutral-only"
                 )
             )
         )
+        native_exact = mode == "exact" and compatibility == "native-exact"
         output = _write_destination(destination, data, settings.overwrite)
         archive = SldprtArchive.from_bytes(data, output or "<memory>")
+        requirements = (
+            ("referenced SOLIDWORKS component files",)
+            if mode == "exact" and document.assembly is not None
+            else ()
+        )
         return WriteResult(
             path=output,
             adapter=format_id,
@@ -399,7 +695,9 @@ class SldprtAdapter:
                     "native_content": native_content,
                     "neutral_edits_are_native": native_exact,
                     "vendor_loadable": native_exact,
-                    "native_geometry": native_exact,
+                    "native_geometry": native_brep
+                    in {"exact", "generated", "preserved"},
+                    "native_brep": native_brep,
                     "native_history": native_exact,
                     "native_assembly": native_exact and document.assembly is not None,
                     "native_self_contained": native_exact and document.assembly is None,
@@ -410,6 +708,9 @@ class SldprtAdapter:
                     "runtime": "python-stdlib",
                 }
             ),
+            requirements=requirements,
+            application_usable=native_exact,
+            vendor_loadable=native_exact,
         )
 
 
@@ -418,6 +719,7 @@ def read_sldprt(
     *,
     configuration: str | None = None,
     include_brep: bool = True,
+    include_tessellation: bool = True,
     strict: bool = True,
 ) -> CadDocument:
     return SldprtAdapter().read(
@@ -425,6 +727,7 @@ def read_sldprt(
         ReadOptions(
             configuration=configuration,
             include_brep=include_brep,
+            include_tessellation=include_tessellation,
             strict=strict,
         ),
     )
@@ -476,11 +779,7 @@ def _embedded_document(
             replace(item, active=item.id in matches) for item in configurations
         )
     original = document.source
-    format_id = (
-        _ASSEMBLY_FORMAT_ID
-        if Path(label).suffix.casefold() == ".sldasm" or document.assembly is not None
-        else _FORMAT_ID
-    )
+    format_id = _ASSEMBLY_FORMAT_ID if document.assembly is not None else _FORMAT_ID
     metadata = dict(document.metadata)
     metadata.update(
         {
@@ -509,12 +808,22 @@ def _embedded_document(
             ),
         ),
         configurations=configurations,
-        brep_payloads=(document.brep_payloads if settings.include_brep else ()),
         metadata=frozen_mapping(metadata),
+    )
+    document = filter_document(
+        document,
+        include_brep=settings.include_brep,
+        include_tessellation=settings.include_tessellation,
+        keep_payload_records=False,
     )
     if settings.strict:
         document.assert_valid()
-    return _retain_source(document, data)
+    return _retain_source(
+        document,
+        data,
+        retain_capabilities=True,
+        read_options=settings,
+    )
 
 
 def _document_without_source(document: CadDocument) -> CadDocument:
@@ -536,6 +845,7 @@ def _semantic_sha256(document: CadDocument) -> str:
 
 
 def _semantic_document(document: CadDocument) -> CadDocument:
+    envelope_indexes = source_payload_indexes(document)
     payloads = tuple(
         replace(
             payload,
@@ -546,11 +856,8 @@ def _semantic_document(document: CadDocument) -> CadDocument:
                 else payload.sha256
             ),
         )
-        for payload in document.brep_payloads
-        if not (
-            payload.kind in {"native_document", "native_document_binding"}
-            and payload.format_id.casefold() != _FORMAT_ID
-        )
+        for index, payload in enumerate(document.brep_payloads)
+        if index not in envelope_indexes
     )
     assembly = document.assembly
     if assembly is not None:
@@ -572,15 +879,36 @@ def _semantic_document(document: CadDocument) -> CadDocument:
         document,
         source=CadSource("", "", ""),
         brep_payloads=payloads,
-        diagnostics=(),
-        capabilities=frozenset(),
-        metadata=frozen_mapping(),
+        metadata=semantic_metadata(document.metadata),
         assembly=assembly,
     )
 
 
-def _retain_source(document: CadDocument, data: bytes) -> CadDocument:
+def _retain_source(
+    document: CadDocument,
+    data: bytes,
+    *,
+    retain_capabilities: bool = False,
+    read_options: ReadOptions | None = None,
+) -> CadDocument:
+    capabilities = document.capabilities
+    selected_options = read_options or ReadOptions()
     portable = _document_without_source(document)
+    portable = replace(
+        portable,
+        metadata=with_wrapper_metadata(portable.metadata, _WRAPPER_METADATA_KEYS),
+    )
+    selected_capabilities = (
+        retained_capabilities(
+            portable,
+            capabilities,
+            include_brep=selected_options.include_brep,
+            include_tessellation=selected_options.include_tessellation,
+        )
+        if retain_capabilities
+        else infer_capabilities(portable, roundtrip_metadata=True)
+    )
+    portable = replace(portable, capabilities=selected_capabilities)
     metadata = dict(portable.metadata)
     metadata.update(
         {
@@ -590,7 +918,14 @@ def _retain_source(document: CadDocument, data: bytes) -> CadDocument:
             _SOURCE_FORMAT_KEY: document.source.format_id,
         }
     )
-    return replace(portable, metadata=frozen_mapping(metadata))
+    return replace(
+        portable,
+        metadata=with_wrapper_metadata(metadata, _WRAPPER_METADATA_KEYS),
+    )
+
+
+def _is_geometry_brep_payload(payload: BrepPayload) -> bool:
+    return payload.role == PayloadRole.BREP and payload.data is not None
 
 
 def _preserved_source(document: CadDocument, destination: Path | None) -> bytes | None:
@@ -612,10 +947,8 @@ def _source_template(document: CadDocument, destination: Path | None) -> bytes |
         return None
     source_format = document.metadata.get(_SOURCE_FORMAT_KEY)
     if destination is not None:
-        expected_suffix = (
-            ".sldasm" if source_format == _ASSEMBLY_FORMAT_ID else ".sldprt"
-        )
-        if destination.suffix.casefold() != expected_suffix:
+        expected_suffix = SUFFIX_BY_FORMAT_ID.get(source_format)
+        if expected_suffix is None or destination.suffix.casefold() != expected_suffix:
             return None
     try:
         SldprtArchive.from_bytes(data)
@@ -624,57 +957,101 @@ def _source_template(document: CadDocument, destination: Path | None) -> bytes |
     return data
 
 
+def _replay_compatibility(data: bytes) -> str:
+    archive = SldprtArchive.from_bytes(data)
+    return (
+        "kit-neutral-only" if KIT_DOCUMENT_STREAM in archive.streams else "native-exact"
+    )
+
+
 def _generated_streams(
     document: CadDocument, template: bytes | None = None
-) -> dict[str, bytes]:
+) -> tuple[dict[str, bytes], str]:
     portable = _document_without_source(document)
+    if isinstance(document.source.attributes.get("embedded_source_format_id"), str):
+        envelope_indexes = source_payload_indexes(document)
+        portable = replace(
+            portable,
+            brep_payloads=tuple(
+                payload
+                for index, payload in enumerate(portable.brep_payloads)
+                if index not in envelope_indexes
+            ),
+        )
     embedded = portable.to_json(indent=None).encode("utf-8")
     if template is not None:
         streams = SldprtArchive.from_bytes(template).streams
-        streams[_KIT_DOCUMENT_STREAM] = embedded
-        return streams
-    keywords = (
-        b'<?xml version="1.0" encoding="UTF-8"?>'
-        b'<swDocument><Configuration id="0" Name="Default"/>'
-        b'<Feature id="1" Name="Origin" Type="Origin"/></swDocument>'
+        streams[KIT_DOCUMENT_STREAM] = embedded
+        return streams, "template"
+    configuration = next(
+        (item.name for item in portable.configurations if item.active),
+        portable.configurations[0].name if portable.configurations else "Default",
     )
+    model_name = PureWindowsPath(portable.source.path).stem
     streams = {
-        "[Content_Types].xml": (
+        CONTENT_TYPES_STREAM: (
             b'<?xml version="1.0" encoding="UTF-8"?>'
             b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
             b'<Default Extension="xml" ContentType="application/xml"/>'
             b'<Default Extension="bin" ContentType="application/octet-stream"/>'
             b"</Types>"
         ),
-        "_rels/.rels": (
+        RELATIONSHIPS_STREAM: (
             b'<?xml version="1.0" encoding="UTF-8"?>'
             b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
         ),
-        _KEYWORDS_STREAM: keywords,
-        "swXmlContents/Features": keywords,
-        _RESOLVED_STREAM: b"",
-        "Contents/SolidWorks": (
-            b'<?xml version="1.0"?><swSolidWorks>'
-            b'<swModel swName="" swConfigurationName="Default"/>'
-            b"</swSolidWorks>"
-        ),
-        _KIT_DOCUMENT_STREAM: embedded,
+        SOLIDWORKS_STREAM: _solidworks_xml(model_name, configuration),
+        KIT_DOCUMENT_STREAM: embedded,
     }
-    payload = _parasolid_payload(portable)
+    payload, native_brep = _parasolid_payload(portable)
     if payload is not None:
-        streams["Contents/Config-0-Partition"] = payload
-    return streams
+        streams[PARTITION_STREAM] = payload
+    return streams, native_brep
 
 
-def _parasolid_payload(document: CadDocument) -> bytes | None:
-    candidates = [
-        payload.data
-        for payload in document.brep_payloads
-        if payload.format_id.casefold() == "parasolid"
-        and payload.data is not None
-        and payload.data.startswith(b"PS\0\0")
-    ]
-    return max(candidates, key=len) if candidates else None
+def _parasolid_payload(document: CadDocument) -> tuple[bytes | None, str]:
+    candidates: list[bytes] = []
+    for payload in document.brep_payloads:
+        if (
+            payload.role != PayloadRole.BREP
+            or payload.format_id.casefold() != "parasolid"
+            or payload.data is None
+        ):
+            continue
+        try:
+            decoded = decode_partition_stream(payload.data, payload.source_stream)
+        except SldprtFormatError:
+            continue
+        candidates.extend(
+            item.data for item in decoded if is_native_parasolid_payload(item.data)
+        )
+    if candidates:
+        return max(candidates, key=len), "preserved"
+    if document.brep is None or document.assembly is not None:
+        return None, "none"
+    try:
+        return encode_brep_model(document.brep), "generated"
+    except ParasolidWriteError as exc:
+        return None, f"unsupported:{exc}"
+
+
+def _solidworks_xml(model: str, configuration: str) -> bytes:
+    model_value = _xml_attribute(model)
+    configuration_value = _xml_attribute(configuration)
+    return (
+        '<?xml version="1.0"?><swSolidWorks><swModel swName="'
+        f'{model_value}" swConfigurationName="{configuration_value}"/>'
+        "</swSolidWorks>"
+    ).encode("utf-8")
+
+
+def _xml_attribute(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
 
 
 def _destination_format_id(document: CadDocument) -> str:
@@ -727,7 +1104,7 @@ def _assembly_document(
 ) -> CadDocument:
     native = decode_native_assembly(archive, include_tessellation=True)
     model = decode_native_model(
-        archive.require(_KEYWORDS_STREAM), archive.require(_RESOLVED_STREAM)
+        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
     )
     configurations = _configurations(model, settings.configuration)
     parameters = _parameters(model)
@@ -929,7 +1306,7 @@ def _component_file_index(
         return {}
     result: defaultdict[str, list[Path]] = defaultdict(list)
     for path in root.rglob("*"):
-        if path.is_file() and path.suffix.casefold() in {".sldprt", ".sldasm"}:
+        if path.is_file() and path.suffix.casefold() in FORMAT_ID_BY_SUFFIX:
             result[path.name.casefold()].append(path.resolve())
     return {
         name: tuple(sorted(paths, key=lambda path: str(path).casefold()))
@@ -1045,16 +1422,27 @@ def _assembly_meshes(
     native: NativeAssembly,
 ) -> tuple[tuple[Mesh, ...], dict[int, str]]:
     definition_by_path = {
-        occurrence.path: occurrence.definition_id
+        occurrence.path.casefold(): occurrence.definition_id
         for occurrence in native.occurrence_paths
     }
+    occurrence_by_id = {
+        occurrence.object_id: occurrence for occurrence in native.occurrences
+    }
+    identity = {object_id: object_id for object_id in occurrence_by_id}
     definition_by_id = {
         definition.object_id: definition for definition in native.definitions
     }
     result: list[Mesh] = []
     mesh_ids: dict[int, str] = {}
     for component in native.display_components:
-        definition_id = definition_by_path.get(component.occurrence_path)
+        definition_id = definition_by_path.get(component.occurrence_path.casefold())
+        if definition_id is None:
+            try:
+                path = _mate_instance_path(native, identity, component.occurrence_path)
+            except SldprtFormatError:
+                path = ()
+            if path:
+                definition_id = occurrence_by_id[path[-1]].definition_id
         if definition_id is None or definition_id in mesh_ids:
             continue
         vertices: list[Vector3] = []
@@ -1096,7 +1484,7 @@ def _assembly_meshes(
                     native_id=str(definition_id),
                     spans=(
                         ProvenanceSpan(
-                            "Contents/DisplayLists",
+                            DISPLAY_LISTS_STREAM,
                             component.record_offset,
                             component.record_length,
                             "component-tessellation",
@@ -1175,7 +1563,7 @@ def _assembly_definitions(
                     native_id=str(definition.object_id),
                     spans=(
                         ProvenanceSpan(
-                            _ASSEMBLY_COMPONENT_STREAM,
+                            COMPONENT_TREE_STREAM,
                             0,
                             0,
                             "component-definition",
@@ -1223,7 +1611,7 @@ def _assembly_instances(
                 native_id=str(occurrence.object_id),
                 spans=(
                     ProvenanceSpan(
-                        _ASSEMBLY_COMPONENT_STREAM,
+                        COMPONENT_TREE_STREAM,
                         0,
                         0,
                         "component-instance",
@@ -1477,21 +1865,24 @@ def _assembly_mates(
                             {
                                 "native_kind": mate.kind,
                                 "native_class_name": mate.class_name,
+                                "native_class_token": mate.class_token,
                                 "native_owner_definition_id": mate.owner_definition_id,
                                 "native_record_offset": mate.record_offset,
                                 "native_record_length": mate.record_length,
                                 "native_payload_id": payload_id,
                                 "serialized_strings": mate.serialized_strings,
                                 "source_document": source_label,
-                                **(
+                                "native_alignment_code": mate.alignment_code,
+                                "native_dimensions": tuple(
                                     {
-                                        "native_alignment_code": mate.alignment_code,
-                                        "native_value_m": mate.value_m,
-                                        "native_value_offset": mate.value_offset,
+                                        "name": dimension.name,
+                                        "value": dimension.value,
+                                        "value_offset": dimension.value_offset,
                                     }
-                                    if mate.kind == "distance"
-                                    else {}
+                                    for dimension in mate.dimensions
                                 ),
+                                "native_value_m": mate.value_m,
+                                "native_value_offset": mate.value_offset,
                             }
                         ),
                     )
@@ -1541,6 +1932,7 @@ def _mate_payload(
                         "name": mate.name,
                         "kind": mate.kind,
                         "class_name": mate.class_name,
+                        "class_token": mate.class_token,
                         "offset": mate.record_offset,
                         "length": mate.record_length,
                     }
@@ -1548,6 +1940,8 @@ def _mate_payload(
                 ),
             }
         ),
+        role=PayloadRole.ASSEMBLY_STRUCTURE,
+        file_extension=".bin",
     )
 
 
@@ -1597,11 +1991,15 @@ def _mate_instance_path(
     owner_id = source.root_definition_id
     result: list[int] = []
     for raw_segment in component_path.split("/"):
-        segment = raw_segment.split("@", 1)[0].casefold()
+        segment = raw_segment.split("@", 1)[0].strip().casefold()
         candidates = tuple(
             occurrence
             for occurrence in children.get(owner_id, [])
-            if f"{occurrence.name}-{occurrence.reference_number}".casefold() == segment
+            if segment
+            in {
+                occurrence.name.strip().casefold(),
+                f"{occurrence.name}-{occurrence.reference_number}".strip().casefold(),
+            }
         )
         if len(candidates) != 1:
             raise SldprtFormatError(
@@ -1619,47 +2017,45 @@ def _mate_instance_path(
 
 
 def _neutral_mate_kind(value: str) -> MateKind:
-    values = {
-        "coincident": MateKind.COINCIDENT,
-        "concentric": MateKind.CONCENTRIC,
-        "cam_tangent": MateKind.CAM,
-        "belt": MateKind.BELT,
-        "lock_to_sketch": MateKind.LOCK,
-        "gear": MateKind.GEAR,
-        "distance": MateKind.DISTANCE,
-    }
-    return values.get(value, MateKind.NATIVE)
+    alias = NATIVE_MATE_NEUTRAL_KIND_ALIASES.get(value)
+    if alias is not None:
+        return MateKind(alias)
+    try:
+        return MateKind(value)
+    except ValueError:
+        return MateKind.NATIVE
 
 
 def _neutral_mate_alignment(mate: NativeMate) -> MateAlignment:
-    if mate.kind != "distance":
+    alignment = NATIVE_MATE_ALIGNMENT_BY_CODE.get(mate.alignment_code)
+    if alignment is None:
         return MateAlignment.UNKNOWN
-    return {
-        1: MateAlignment.ALIGNED,
-        2: MateAlignment.ANTI_ALIGNED,
-    }.get(mate.alignment_code, MateAlignment.UNKNOWN)
+    return MateAlignment(alignment.kind)
 
 
 def _neutral_mate_value(mate: NativeMate) -> ParameterValue | None:
-    if mate.kind != "distance" or mate.value_m is None:
+    dimensions = mate.dimensions
+    if not dimensions:
         return None
-    return ParameterValue(mate.value_m * 1000.0, ValueKind.LENGTH, "mm")
+    semantic = MATE_VALUE_SEMANTICS.get(mate.kind)
+    if semantic == "angle":
+        return ParameterValue(dimensions[0].value, ValueKind.ANGLE, "rad")
+    if semantic == "length":
+        return ParameterValue(dimensions[0].value * 1000.0, ValueKind.LENGTH, "mm")
+    if semantic == "ratio" and len(dimensions) >= 2:
+        denominator = dimensions[1].value
+        if denominator != 0.0:
+            return ParameterValue(
+                dimensions[0].value / denominator, ValueKind.NUMBER, ""
+            )
+    return None
 
 
 def _neutral_mate_entity_kind(value: str) -> MateEntityKind:
     lowered = value.casefold()
-    if "^" in value:
-        return MateEntityKind.SKETCH_ENTITY
-    if "cylinder" in lowered or "wzdhole" in lowered or "sweepside" in lowered:
-        return MateEntityKind.CYLINDER
-    if "plane" in lowered:
-        return MateEntityKind.PLANE
-    if "line" in lowered:
-        return MateEntityKind.LINE
-    if "edge" in lowered:
-        return MateEntityKind.EDGE
-    if "face" in lowered or "surfidrep" in lowered:
-        return MateEntityKind.FACE
+    for marker, kind in NATIVE_MATE_ENTITY_MARKERS:
+        if marker in lowered:
+            return MateEntityKind(kind)
     return MateEntityKind.NATIVE
 
 
@@ -1687,16 +2083,22 @@ def _mate_groups(
 ) -> tuple[MateGroup, ...]:
     result: list[MateGroup] = []
     records = mate_list.mates
-    for marker in records:
-        if marker.kind != "group" or marker.name.endswith("___EndTag___"):
-            continue
-        end_name = f"{marker.name}___EndTag___"
-        end = next((item for item in records if item.name == end_name), None)
-        if end is None:
-            raise SldprtFormatError(f"mate group {marker.name!r} has no end marker")
+    markers = tuple(record for record in records if record.kind == "group")
+    for pair_index in range(0, len(markers) - 1, 2):
+        marker = markers[pair_index]
+        end = markers[pair_index + 1]
+        next_start = (
+            markers[pair_index + 2].order
+            if pair_index + 2 < len(markers)
+            else len(records)
+        )
         members: list[str] = []
         for candidate in records:
-            if candidate.order <= end.order or candidate.kind == "group":
+            if (
+                candidate.order <= end.order
+                or candidate.order >= next_start
+                or candidate.kind == "group"
+            ):
                 continue
             mate_id = mate_ids_by_order.get(candidate.order)
             if mate_id is not None:
@@ -1848,6 +2250,8 @@ def _companion_payloads(label: str) -> tuple[BrepPayload, ...]:
                     ),
                 ),
                 attributes=frozen_mapping(attributes),
+                role=PayloadRole.BREP,
+                file_extension=suffix,
             )
         )
     return tuple(result)
@@ -1893,6 +2297,17 @@ def _assembly_definition_id(native_id: int) -> str:
 
 def _assembly_instance_id(native_id: int) -> str:
     return f"sldasm:instance:{native_id}"
+
+
+def _validate_source_suffix(label: str, is_assembly: bool) -> None:
+    suffix = Path(label).suffix.casefold()
+    expected_format = _ASSEMBLY_FORMAT_ID if is_assembly else _FORMAT_ID
+    expected = SUFFIX_BY_FORMAT_ID[expected_format]
+    if suffix in FORMAT_ID_BY_SUFFIX and suffix != expected:
+        kind = "assembly" if is_assembly else "part"
+        raise SldprtFormatError(
+            f"SOLIDWORKS {kind} content requires a {expected.upper()} source"
+        )
 
 
 def _source_bytes(source: Source) -> tuple[bytes, str]:
@@ -2054,6 +2469,7 @@ def _planes(model: NativeModel, parameter_ids: set[str]) -> tuple[SupportPlane, 
                         "native_object_id": plane.object_id,
                         "native_frame_offset": plane.native_offset,
                         "native_frame_length": plane.native_length,
+                        "principal": plane.principal,
                     }
                 ),
             )
@@ -2131,7 +2547,7 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
                         native_id=f"{sketch.object_id}:profile:{profile_index}",
                         spans=tuple(
                             ProvenanceSpan(
-                                _RESOLVED_STREAM,
+                                RESOLVED_FEATURES_STREAM,
                                 offset,
                                 142,
                                 "sketch-circle-marker",
@@ -2144,18 +2560,25 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
             )
             reference_map[f"{sketch.object_id}:profile:{profile_index}"] = entity_id
     index_map: dict[int, str] = {}
-    coordinates_by_marker = tuple(marker.coordinates_mm for marker in sketch.markers)
+    coordinates_by_prefix = {
+        prefix: tuple(
+            marker.coordinates_mm
+            for marker in sketch.markers
+            if marker.prefix == prefix
+        )
+        for prefix in {marker.prefix for marker in sketch.markers}
+    }
     for marker in sketch.markers:
         if marker.offset in profile_offsets:
             continue
-        entity = _marker_entity(sketch, marker, coordinates_by_marker)
+        entity = _marker_entity(sketch, marker, coordinates_by_prefix)
         entities.append(entity)
         if marker.object_index is not None:
             index_map[marker.object_index] = entity.id
     reference_map.update(
         {f"native-index:{index}": entity_id for index, entity_id in index_map.items()}
     )
-    constraints = _sketch_constraints(sketch, reference_map, entities, parameter_ids)
+    constraints = _sketch_constraints(sketch, reference_map, parameter_ids)
     closed_profiles: list[tuple[str, ...]] = []
     for profile_index, profile in enumerate(sketch.profiles):
         if profile.kind == "rectangle":
@@ -2197,26 +2620,22 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
 def _marker_entity(
     sketch: NativeSketch,
     marker: NativeMarker,
-    coordinates_by_marker: tuple[tuple[float, float] | None, ...],
+    coordinates_by_prefix: dict[str, tuple[tuple[float, float] | None, ...]],
 ) -> SketchEntity:
     entity_id = _marker_id(sketch.object_id, marker.offset)
     if marker.semantic == "point" and marker.coordinates_mm is not None:
         kind = GeometryKind.POINT
         geometry: Any = PointGeometry(Vector2(*marker.coordinates_mm))
-    elif marker.endpoint_indices is not None and (
-        marker.locus == "04000200" or marker.profile_role == 2
-    ):
-        start = _coordinate_reference(coordinates_by_marker, marker.endpoint_indices[0])
-        end = _coordinate_reference(coordinates_by_marker, marker.endpoint_indices[1])
+    elif marker.semantic == "line" and marker.endpoint_indices is not None:
+        coordinates = coordinates_by_prefix[marker.prefix]
+        start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
+        end = _coordinate_reference(coordinates, marker.endpoint_indices[1])
         if start is not None and end is not None and start != end:
             kind = GeometryKind.LINE
             geometry = LineGeometry(Vector2(*start), Vector2(*end))
         else:
             kind = GeometryKind.NATIVE
             geometry = _native_marker_geometry(marker)
-    elif marker.coordinates_mm is not None:
-        kind = GeometryKind.POINT
-        geometry = PointGeometry(Vector2(*marker.coordinates_mm))
     else:
         kind = GeometryKind.NATIVE
         geometry = _native_marker_geometry(marker)
@@ -2263,6 +2682,7 @@ def _native_marker_geometry(marker: NativeMarker) -> NativeGeometry:
                 "locus": marker.locus,
                 "coordinates_mm": marker.coordinates_mm,
                 "endpoint_indices": marker.endpoint_indices,
+                "record_data": marker.data,
             }
         ),
     )
@@ -2271,7 +2691,6 @@ def _native_marker_geometry(marker: NativeMarker) -> NativeGeometry:
 def _sketch_constraints(
     sketch: NativeSketch,
     reference_map: dict[str, str],
-    entities: list[SketchEntity],
     parameter_ids: set[str],
 ) -> tuple[SketchConstraint, ...]:
     result: list[SketchConstraint] = []
@@ -2388,12 +2807,7 @@ def _sketch_constraints(
                     attributes=frozen_mapping({"inferred": True}),
                 )
             )
-    entity_ids = {entity.id for entity in entities}
-    return tuple(
-        constraint
-        for constraint in result
-        if all(reference.entity_id in entity_ids for reference in constraint.references)
-    )
+    return tuple(result)
 
 
 def _selections(model: NativeModel) -> tuple[Selection, ...]:
@@ -2432,7 +2846,7 @@ def _selections(model: NativeModel) -> tuple[Selection, ...]:
                         native_id=f"{operation.object_id}:edge:{local_id}",
                         spans=tuple(
                             ProvenanceSpan(
-                                _RESOLVED_STREAM,
+                                RESOLVED_FEATURES_STREAM,
                                 offset,
                                 38,
                                 "edge-selection",
@@ -2455,6 +2869,7 @@ def _timeline(
         feature.object_id: order for order, feature in enumerate(model.features)
     }
     selection_ids = {selection.id for selection in selections}
+    principal_plane_ids = {plane.object_id for plane in model.planes if plane.principal}
     previous_operation: int | None = None
     result: list[FeatureStep] = []
     for order, feature in enumerate(model.features):
@@ -2466,8 +2881,8 @@ def _timeline(
         elif sketch is not None:
             inputs.append(sketch.support_plane_id)
         elif (
-            (feature.kind == "Plane" or feature.name.startswith("Plane"))
-            and feature.name not in {"Front Plane", "Top Plane", "Right Plane"}
+            feature.kind.casefold() in PLANE_FEATURE_TYPES
+            and feature.object_id not in principal_plane_ids
             and previous_operation is not None
         ):
             inputs.append(previous_operation)
@@ -2521,15 +2936,48 @@ def _timeline(
                 ),
                 parameter_ids=parameter_ids,
                 operation=operation_value,
-                definition=(
-                    _feature_definition(operation) if operation is not None else None
-                ),
+                definition=_feature_definition(feature, operation),
                 selection_ids=selected,
                 provenance=_feature_provenance(feature),
                 attributes=frozen_mapping(attributes),
             )
         )
     return tuple(result)
+
+
+def _solid_body_feature(
+    features: tuple[NativeFeature, ...],
+) -> NativeFeature | None:
+    return next(
+        (
+            feature
+            for feature in features
+            if feature.kind.casefold().strip() in SOLID_BODY_FEATURE_TYPES
+        ),
+        None,
+    )
+
+
+def _final_body_feature_id(
+    timeline: tuple[FeatureStep, ...], operation_feature_ids: frozenset[str]
+) -> str:
+    candidate = next(
+        (
+            feature
+            for feature in reversed(timeline)
+            if feature.id in operation_feature_ids
+            or (
+                isinstance(feature.kind, FeatureKind)
+                and feature.kind != FeatureKind.REFERENCE
+                and feature.kind != FeatureKind.SURFACE
+                and feature.kind != FeatureKind.NATIVE
+            )
+        ),
+        None,
+    )
+    if candidate is not None:
+        return candidate.id
+    return timeline[-1].id if timeline else ""
 
 
 def _operation_attributes(operation: NativeOperation) -> dict[str, Any]:
@@ -2562,9 +3010,9 @@ def _operation_attributes(operation: NativeOperation) -> dict[str, Any]:
 
 
 def _feature_definition(
-    operation: NativeOperation,
-) -> ExtrusionFeature | FilletFeature | None:
-    if operation.length_mm is not None:
+    feature: NativeFeature, operation: NativeOperation | None
+) -> ExtrusionFeature | FilletFeature | NativeFeatureDefinition:
+    if operation is not None and operation.length_mm is not None:
         return ExtrusionFeature(
             length=ParameterValue(operation.length_mm, ValueKind.LENGTH, "mm"),
             end_condition=(
@@ -2574,21 +3022,51 @@ def _feature_definition(
             ),
             reversed=operation.kind == "cut",
         )
-    if operation.radius_mm is not None:
+    if operation is not None and operation.radius_mm is not None:
         return FilletFeature(
             radius=ParameterValue(operation.radius_mm, ValueKind.LENGTH, "mm")
         )
-    return None
+    return NativeFeatureDefinition(
+        format_id=_FORMAT_ID,
+        type_id=feature.kind or feature.xml_tag,
+        object_data=frozen_mapping(
+            {
+                "native_object_id": feature.object_id,
+                "xml_tag": feature.xml_tag,
+                "properties": feature.properties,
+                "dimensions": tuple(
+                    {
+                        "name": dimension.name,
+                        "value_mm": dimension.value_mm,
+                        "kind": dimension.kind,
+                        "source_text": dimension.source_text,
+                        "native_value": dimension.native_value,
+                        "native_offset": dimension.native_offset,
+                        "native_role": dimension.native_role,
+                        "operands": tuple(
+                            {
+                                "offset": operand.offset,
+                                "kind_code": operand.kind_code,
+                                "entity_index": operand.entity_index,
+                            }
+                            for operand in dimension.operands
+                        ),
+                    }
+                    for dimension in feature.dimensions
+                ),
+                "record_data": feature.data,
+                "operation": (
+                    _operation_attributes(operation) if operation is not None else None
+                ),
+            }
+        ),
+    )
 
 
 def _feature_kind(feature: NativeFeature) -> FeatureKind:
-    if feature.kind == "Extrusion":
-        return FeatureKind.EXTRUSION
-    if feature.kind == "Fillet":
-        return FeatureKind.FILLET
-    if feature.kind in {"Sketch", "Plane"}:
-        return FeatureKind.REFERENCE
-    return FeatureKind.NATIVE
+    return _FEATURE_KIND_BY_NATIVE.get(
+        feature.kind.casefold().strip(), FeatureKind.NATIVE
+    )
 
 
 def _brep_payloads(
@@ -2599,7 +3077,7 @@ def _brep_payloads(
     payloads: list[BrepPayload] = []
     diagnostics: list[Diagnostic] = []
     for record in archive.records:
-        if not record.name.endswith("Partition"):
+        if not contains_parasolid_payload(record.data):
             continue
         try:
             decoded = decode_partition_stream(record.data, record.name)
@@ -2655,7 +3133,30 @@ def _brep_payload(index: int, native: ParasolidPayload) -> BrepPayload:
                 "uncompressed_size": native.uncompressed_size,
             }
         ),
+        role=PayloadRole.BREP,
+        file_extension=".x_b",
     )
+
+
+def _typed_brep(payloads: Sequence[BrepPayload]) -> BrepModel | None:
+    groups: dict[str, list[BrepPayload]] = {}
+    for index, payload in enumerate(payloads):
+        groups.setdefault(payload.source_stream or f"payload:{index}", []).append(
+            payload
+        )
+    models: list[BrepModel] = []
+    for group in groups.values():
+        if any("delta" in payload.kind.casefold() for payload in group):
+            continue
+        decoded = tuple(
+            model
+            for payload in group
+            if payload.data is not None
+            and (model := decode_brep_model(payload.data)) is not None
+        )
+        if len(decoded) == 1:
+            models.append(decoded[0])
+    return models[0] if len(models) == 1 else None
 
 
 def _bounding_box(model: NativeModel) -> BoundingBox | None:
@@ -2739,7 +3240,7 @@ def _provenance(
     confidence: float = 1.0,
 ) -> Provenance:
     spans = (
-        (ProvenanceSpan(_RESOLVED_STREAM, offset, length or 0, kind),)
+        (ProvenanceSpan(RESOLVED_FEATURES_STREAM, offset, length or 0, kind),)
         if offset is not None
         else ()
     )

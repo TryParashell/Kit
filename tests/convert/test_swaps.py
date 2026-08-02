@@ -11,8 +11,8 @@ import struct
 
 import pytest
 
-from convert import convert, open_document, registry
-from interchange import AssemblyData, CadDocument
+from convert import ApplicationUsabilityError, convert, open_document, registry
+from interchange import AssemblyData, CadDocument, source_payload_indexes
 
 
 ROOT = Path(__file__).parents[2]
@@ -114,6 +114,11 @@ def _assembly_signature(assembly: AssemblyData | None):
 
 
 def _document_signature(document: CadDocument):
+    envelope_indexes = (
+        source_payload_indexes(document)
+        if isinstance(document.source.attributes.get("embedded_source_format_id"), str)
+        else frozenset()
+    )
     return (
         document.configurations,
         document.parameters,
@@ -125,9 +130,10 @@ def _document_signature(document: CadDocument):
         tuple(_mesh_signature(mesh) for mesh in document.meshes),
         tuple(
             _brep_signature(payload)
-            for payload in document.brep_payloads
-            if payload.kind not in {"native_document", "native_document_binding"}
+            for index, payload in enumerate(document.brep_payloads)
+            if index not in envelope_indexes
         ),
+        document.capabilities,
         document.units,
         document.schema_version,
         _assembly_signature(document.assembly),
@@ -155,8 +161,22 @@ def _mesh_signature(mesh):
 
 
 def _brep_signature(payload):
+    payload_id = payload.id
+    attributes = payload.attributes
+    if payload.format_id == "catia.v5.cfv2" and payload.kind == "native_document":
+        payload_id = "catia:native-document"
+        attributes = {
+            key: value
+            for key, value in attributes.items()
+            if key != "catia.replay_semantic_sha256"
+        }
+    elif (
+        payload.format_id == "catia.v5.sha256"
+        and payload.kind == "native_document_binding"
+    ):
+        payload_id = "catia:native-document-binding"
     return (
-        payload.id,
+        payload_id,
         payload.format_id,
         payload.kind,
         payload.schema,
@@ -169,7 +189,9 @@ def _brep_signature(payload):
         ),
         payload.source_stream,
         payload.provenance,
-        payload.attributes,
+        attributes,
+        payload.role,
+        payload.file_extension,
     )
 
 
@@ -233,6 +255,21 @@ def _assert_truthful_vendor_result(
         assert metadata["native_self_contained"] is False
 
 
+def _convert_with_application_gate(source, destination):
+    try:
+        result = convert(source, destination)
+    except ApplicationUsabilityError as error:
+        assert error.code == "output_not_application_usable"
+        assert error.issues
+        assert not destination.exists()
+        return convert(source, destination, allow_carrier=True)
+    assert result.application_usable is True
+    assert result.vendor_loadable is True
+    assert result.requirements == ()
+    assert result.dropped == frozenset()
+    return result
+
+
 @lru_cache(maxsize=len(MATRIX_SOURCES))
 def _matrix_document(source: Path) -> CadDocument:
     return open_document(source)
@@ -269,7 +306,7 @@ def test_every_valid_format_swap_runs_both_directions(
     assert (original.assembly is not None) == is_assembly
     original_signature = _document_signature(original)
     destination = tmp_path / f"{name}_swapped{destination_suffix}"
-    result = convert(source, destination)
+    result = _convert_with_application_gate(source, destination)
     restored = open_document(destination)
     assert result.source_format == FORMAT_BY_SUFFIX[source_suffix]
     assert result.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
@@ -280,7 +317,7 @@ def test_every_valid_format_swap_runs_both_directions(
     _assert_target(restored, destination_suffix, destination, is_assembly)
     _assert_truthful_vendor_result(result, destination_suffix, is_assembly)
     reverse = tmp_path / f"{name}_reversed{source_suffix}"
-    reverse_result = convert(destination, reverse)
+    reverse_result = _convert_with_application_gate(destination, reverse)
     reversed_document = open_document(reverse)
     assert reverse_result.source_format == FORMAT_BY_SUFFIX[destination_suffix]
     assert reverse_result.destination_format == FORMAT_BY_SUFFIX[source_suffix]
@@ -315,6 +352,7 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
         forward = convert(
             source,
             destination,
+            allow_carrier=True,
         )
         assert forward.source_format == FORMAT_BY_SUFFIX[source_suffix]
         assert forward.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
@@ -339,6 +377,7 @@ def test_every_supported_example_swaps_to_every_valid_format_and_back(
         backward = convert(
             destination,
             reverse,
+            allow_carrier=True,
         )
         assert backward.source_format == FORMAT_BY_SUFFIX[destination_suffix]
         assert backward.destination_format == FORMAT_BY_SUFFIX[source_suffix]

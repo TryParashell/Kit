@@ -11,7 +11,7 @@ import zipfile
 import pytest
 
 from convert import open_document, write_document
-from interchange import CadDocument, ComponentKind, Matrix4
+from interchange import CadDocument, ComponentKind, Matrix4, PayloadRole
 
 
 RANDOM = Path(__file__).parents[2] / "examples" / "Random" / "V8_engine.SLDASM"
@@ -116,8 +116,22 @@ def test_random_assembly_public_sdk_recovers_complete_neutral_graph(
     assert assembly is not None
     assert document.source.format_id == "solidworks.sldasm"
     assert document.validate() == ()
-    assert (len(document.sketches), len(document.feature_timeline)) == (3, 48)
-    assert (len(document.parameters), len(document.brep_payloads)) == (3, 7)
+    assert (len(document.sketches), len(document.feature_timeline)) == (3, 327)
+    assert len(
+        {
+            feature.attributes["native_object_id"]
+            for feature in document.feature_timeline
+        }
+    ) == len(document.feature_timeline)
+    assert all(
+        feature.attributes["native_type"] and feature.attributes["xml_tag"]
+        for feature in document.feature_timeline
+    )
+    assert (len(document.parameters), len(document.brep_payloads)) == (3, 15)
+    assert Counter(payload.role for payload in document.brep_payloads) == {
+        PayloadRole.BREP: 12,
+        PayloadRole.ASSEMBLY_STRUCTURE: 3,
+    }
     assert (
         len(assembly.definitions),
         len(assembly.instances),
@@ -142,12 +156,25 @@ def test_random_assembly_public_sdk_recovers_complete_neutral_graph(
         "solidworks.sldprt": 51,
         "solidworks.sldasm": 2,
     }
-    assert (
+    linked_counts = (
         sum(len(item.document.sketches) for item in assembly.documents),
         sum(len(item.document.feature_timeline) for item in assembly.documents),
         sum(len(item.document.parameters) for item in assembly.documents),
         sum(len(item.document.brep_payloads) for item in assembly.documents),
-    ) == (391, 2064, 1692, 155)
+    )
+    assert linked_counts == (391, 2147, 1692, 303)
+    assert Counter(
+        payload.role
+        for item in assembly.documents
+        for payload in item.document.brep_payloads
+    ) == {
+        PayloadRole.BREP: 301,
+        PayloadRole.ASSEMBLY_STRUCTURE: 2,
+    }
+    assert linked_counts[:2] == (
+        assembly.attributes["linked_sketch_count"],
+        assembly.attributes["linked_feature_count"],
+    )
     nested = {
         PureWindowsPath(item.document.source.path).name: item.document.assembly
         for item in assembly.documents
@@ -156,7 +183,7 @@ def test_random_assembly_public_sdk_recovers_complete_neutral_graph(
     assert set(nested) == {"Conrod.SLDASM", "Piston.SLDASM"}
     assert len(nested["Conrod.SLDASM"].mates) == 13
     assert len(nested["Piston.SLDASM"].mates) == 6
-    assert _document_counts(document) == (394, 2112)
+    assert _document_counts(document) == (394, 2474)
 
 
 def test_random_assembly_preserves_meshes_mates_and_millimeter_transforms(
@@ -228,11 +255,23 @@ def test_random_assembly_writes_external_component_files(
     random_document: CadDocument, tmp_path: Path
 ) -> None:
     output = tmp_path / "V8_engine.FCStd"
-    result = write_document(random_document, output)
+    result = write_document(random_document, output, allow_carrier=True)
+    assert result.application_usable is True
+    assert result.vendor_loadable is True
+    assert result.near_lossless is False
     component_directory = tmp_path / "V8_engine"
     components = tuple(component_directory.glob("*.FCStd"))
     assert len(components) == 67
     assert result.metadata["component_file_count"] == 67
+    timeline_count = 0
+    for document_path in (output, *components):
+        with zipfile.ZipFile(document_path) as archive:
+            document_root = ET.fromstring(archive.read("Document.xml"))
+        for item in document_root.findall("./ObjectData/Object"):
+            role = item.find("./Properties/Property[@name='KitRole']/String")
+            if role is not None and role.get("value") != "profile-extrusion":
+                timeline_count += 1
+    assert timeline_count == 2474
     with zipfile.ZipFile(output) as archive:
         root = ET.fromstring(archive.read("Document.xml"))
     objects = {
@@ -424,7 +463,7 @@ print('KIT_RANDOM',len(documents),len(links),len(leaf),len(sources),len(breps),s
         391218,
         65,
         394,
-        2112,
+        2474,
         613,
         632,
         3,

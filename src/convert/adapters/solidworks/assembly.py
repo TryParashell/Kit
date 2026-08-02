@@ -1,32 +1,456 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import IntEnum
 from pathlib import PureWindowsPath
 import math
 import re
 import struct
-from typing import Iterable
+from types import MappingProxyType
+from typing import Iterable, Mapping
 import xml.etree.ElementTree as ET
 
 from .container import SldprtArchive, SldprtFormatError
 from .display import (
     NativeDisplayComponent,
-    NativeTessellationFace,
+    NativeTessellationFace as NativeTessellationFace,
     decode_display_lists,
-    decode_tessellation_faces,
+    decode_tessellation_faces as decode_tessellation_faces,
+)
+from .format import (
+    CLASS_MARKER,
+    COMPONENT_TREE_STREAM,
+    DISPLAY_LISTS_STREAM,
+    MATES_STREAM_NAME,
+    MATES_STREAM_SUFFIX,
+    SERIALIZED_STRING_MARKER,
+    dimension_scalar_value_offset,
+    is_cad_path,
+    is_component_path,
 )
 
 
-_COMPONENT_STREAM = "swXmlContents/COMPINSTANCETREE"
-_DISPLAY_STREAM = "Contents/DisplayLists"
-_MATES_SUFFIX = "-MatesList"
-_STRING_MARKER = bytes.fromhex("fffeff")
-_DIMENSION_NAME = re.compile(r"D\d+")
 _WIDE_TEXT = re.compile(rb"(?:[ -~]\x00){4,}")
-_DISTANCE_DIMENSION_MARKER = _STRING_MARKER + b"\x02D\x001\x00"
 _MATE_ALIGNMENT_OFFSET = 159
 _MATE_ENTITY_COUNT_OFFSET = 164
-_DIMENSION_SCALAR_OFFSET = 30
+
+
+@dataclass(frozen=True, slots=True)
+class NativeMateType:
+    code: int | None
+    api_name: str
+    kind: str
+    class_names: tuple[str, ...] = ()
+    name_prefixes: tuple[str, ...] = ()
+    value_semantic: str = ""
+    neutral_kind: str = ""
+
+
+class NativeMateAlignmentCode(IntEnum):
+    ANY = 0
+    ALIGNED = 1
+    ANTI_ALIGNED = 2
+    CLOSEST = 3
+
+
+@dataclass(frozen=True, slots=True)
+class NativeMateAlignment:
+    code: NativeMateAlignmentCode
+    api_name: str
+    kind: str
+
+
+@dataclass(frozen=True, slots=True)
+class NativeMateEntityType:
+    code: int | None
+    api_name: str
+    kind: str
+    markers: tuple[str, ...] = ()
+
+
+NATIVE_MATE_TYPES = (
+    NativeMateType(
+        0,
+        "swMateCOINCIDENT",
+        "coincident",
+        ("MateCoincident", "moMateCoincident"),
+        ("coincident",),
+    ),
+    NativeMateType(
+        1,
+        "swMateCONCENTRIC",
+        "concentric",
+        ("MateConcentric", "moMateConcentric"),
+        ("concentric",),
+    ),
+    NativeMateType(
+        2,
+        "swMatePERPENDICULAR",
+        "perpendicular",
+        ("MatePerpendicular", "moMatePerpendicular"),
+        ("perpendicular",),
+    ),
+    NativeMateType(
+        3,
+        "swMatePARALLEL",
+        "parallel",
+        ("MateParallel", "moMateParallel"),
+        ("parallel",),
+    ),
+    NativeMateType(
+        4,
+        "swMateTANGENT",
+        "tangent",
+        ("MateTangent", "moMateTangent"),
+        ("tangent",),
+    ),
+    NativeMateType(
+        5,
+        "swMateDISTANCE",
+        "distance",
+        (
+            "MateDistanceDim",
+            "MateLimitDistanceDim",
+            "moMateDistanceDim",
+            "moMateDistanceDim_c",
+            "moMateLimitDistanceDim",
+            "moMateLimitDistanceDim_c",
+        ),
+        ("distance", "limitdistance"),
+        "length",
+    ),
+    NativeMateType(
+        6,
+        "swMateANGLE",
+        "angle",
+        (
+            "MateLimitAngleDim",
+            "MatePlanarAngleDim",
+            "moMateAngleDim_c",
+            "moMateLimitAngleDim",
+            "moMateLimitAngleDim_c",
+            "moMatePlanarAngleDim",
+            "moMatePlanarAngleDim_c",
+        ),
+        ("angle", "limitangle"),
+        "angle",
+    ),
+    NativeMateType(7, "swMateUNKNOWN", "native"),
+    NativeMateType(
+        8,
+        "swMateSYMMETRIC",
+        "symmetric",
+        ("MateSymmetric", "moMateSymmetric"),
+        ("symmetric",),
+    ),
+    NativeMateType(
+        9,
+        "swMateCAMFOLLOWER",
+        "cam_tangent",
+        ("MateCamTangent", "moMateCamTangent"),
+        ("cam", "cammatetangent", "camfollower"),
+        neutral_kind="cam",
+    ),
+    NativeMateType(
+        10,
+        "swMateGEAR",
+        "gear",
+        ("MateGearDim", "moMateGearDim", "moMateGearDim_c"),
+        ("gear", "gearmate"),
+        "ratio",
+    ),
+    NativeMateType(
+        11,
+        "swMateWIDTH",
+        "width",
+        ("MateWidth", "moMateWidth"),
+        ("width", "widthmate"),
+    ),
+    NativeMateType(
+        12,
+        "swMateLOCKTOSKETCH",
+        "lock_to_sketch",
+        ("moLockToSketchMate",),
+        ("locktosketch", "locktosketchmate"),
+        neutral_kind="lock",
+    ),
+    NativeMateType(
+        13,
+        "swMateRACKPINION",
+        "rack_pinion",
+        ("MateRackPinionDim", "moMateRackPinionDim", "moMateRackPinionDim_c"),
+        ("rackpinion",),
+        "length",
+    ),
+    NativeMateType(14, "swMateMAXMATES", "native"),
+    NativeMateType(
+        15,
+        "swMatePATH",
+        "path",
+        ("MatePath", "moMatePath"),
+        ("path", "pathmate"),
+    ),
+    NativeMateType(
+        16,
+        "swMateLOCK",
+        "lock",
+        ("MateInPlace", "MateLock", "moMateInPlace", "moMateLock"),
+        ("inplace", "lock", "lockmate"),
+    ),
+    NativeMateType(
+        17,
+        "swMateSCREW",
+        "screw",
+        ("MateScrew", "moMateScrew", "moMateScrewDim_c"),
+        ("screw", "screwmate"),
+        "length",
+    ),
+    NativeMateType(
+        18,
+        "swMateLINEARCOUPLER",
+        "linear_coupler",
+        ("MateLinearCoupler", "moMateLinearCoupler"),
+        ("linearcoupler",),
+        "ratio",
+    ),
+    NativeMateType(
+        19,
+        "swMateUNIVERSALJOINT",
+        "universal_joint",
+        ("MateUniversalJoint", "moMateUniversalJoint"),
+        ("universaljoint", "universalmate"),
+    ),
+    NativeMateType(
+        20,
+        "swMateCOORDINATE",
+        "coordinate",
+        ("MateCoordinate", "moMateCoordinate"),
+        ("coordinate",),
+    ),
+    NativeMateType(
+        21,
+        "swMateSLOT",
+        "slot",
+        ("MateSlot", "moMateSlot"),
+        ("slot", "slotmate"),
+    ),
+    NativeMateType(
+        22,
+        "swMateHINGE",
+        "hinge",
+        ("MateHinge", "moMateHinge"),
+        ("hinge",),
+    ),
+    NativeMateType(
+        23,
+        "swMateSLIDER",
+        "slider",
+        ("MateSlider", "moMateSlider"),
+        ("slider",),
+    ),
+    NativeMateType(
+        24,
+        "swMatePROFILECENTER",
+        "profile_center",
+        ("MateProfileCenter", "moMateProfileCenter"),
+        ("profilecenter",),
+    ),
+    NativeMateType(
+        25,
+        "swMateMAGNETIC",
+        "magnetic",
+        ("MateMagnetic", "moMateMagnetic"),
+        ("magnetic", "magneticmate"),
+    ),
+)
+NATIVE_MATE_TYPE_EXTENSIONS = (
+    NativeMateType(
+        None,
+        "BELT",
+        "belt",
+        ("moMateBeltDim_c",),
+        ("beltmate",),
+        "ratio",
+    ),
+    NativeMateType(
+        None,
+        "BELT_GROUP",
+        "group",
+        ("moBeltMateFolder_c",),
+        ("beltmates",),
+    ),
+    NativeMateType(
+        None,
+        "MATE_REFERENCE_GROUP_FOLDER",
+        "group",
+        ("MateReferenceGroupFolder",),
+    ),
+)
+NATIVE_MATE_TYPE_RECORDS = (*NATIVE_MATE_TYPES, *NATIVE_MATE_TYPE_EXTENSIONS)
+
+
+def _classifier_map(
+    records: Iterable[NativeMateType | NativeMateEntityType], attribute: str
+) -> Mapping[str, str]:
+    result: dict[str, str] = {}
+    for record in records:
+        for value in getattr(record, attribute):
+            key = value.casefold()
+            previous = result.get(key)
+            if previous is not None and previous != record.kind:
+                raise RuntimeError(f"conflicting classifier {value!r}")
+            result[key] = record.kind
+    return MappingProxyType(result)
+
+
+_MATE_KIND_BY_CLASS = _classifier_map(NATIVE_MATE_TYPE_RECORDS, "class_names")
+_MATE_KIND_BY_NAME = _classifier_map(NATIVE_MATE_TYPE_RECORDS, "name_prefixes")
+MATE_VALUE_SEMANTICS = MappingProxyType(
+    {
+        record.kind: record.value_semantic
+        for record in NATIVE_MATE_TYPE_RECORDS
+        if record.value_semantic
+    }
+)
+NATIVE_MATE_NEUTRAL_KIND_ALIASES = MappingProxyType(
+    {
+        record.kind: record.neutral_kind
+        for record in NATIVE_MATE_TYPE_RECORDS
+        if record.neutral_kind
+    }
+)
+
+NATIVE_MATE_ALIGNMENTS = (
+    NativeMateAlignment(
+        NativeMateAlignmentCode.ANY,
+        "swMateReferenceAlignment_Any",
+        "unknown",
+    ),
+    NativeMateAlignment(
+        NativeMateAlignmentCode.ALIGNED,
+        "swMateReferenceAlignment_Aligned",
+        "aligned",
+    ),
+    NativeMateAlignment(
+        NativeMateAlignmentCode.ANTI_ALIGNED,
+        "swMateReferenceAlignment_AntiAligned",
+        "anti_aligned",
+    ),
+    NativeMateAlignment(
+        NativeMateAlignmentCode.CLOSEST,
+        "swMateReferenceAlignment_Closest",
+        "closest",
+    ),
+)
+NATIVE_MATE_ALIGNMENT_BY_CODE = {
+    int(record.code): record for record in NATIVE_MATE_ALIGNMENTS
+}
+
+NATIVE_MATE_ENTITY_GEOMETRY_TYPES = (
+    NativeMateEntityType(0, "swMateUnsupported", "native"),
+    NativeMateEntityType(1, "swMatePoint", "point"),
+    NativeMateEntityType(2, "swMateLine", "line"),
+    NativeMateEntityType(3, "swMatePlane", "plane"),
+    NativeMateEntityType(4, "swMateCylinder", "cylinder"),
+    NativeMateEntityType(5, "swMateCone", "cone"),
+    NativeMateEntityType(6, "swMateSphere", "sphere"),
+    NativeMateEntityType(7, "swMateCircle", "circle"),
+)
+
+NATIVE_MATE_ENTITY_REFERENCE_TYPES = (
+    NativeMateEntityType(
+        0,
+        "swMateEntity2ReferenceType_Point",
+        "point",
+        ("refpoint", "point"),
+    ),
+    NativeMateEntityType(1, "swMateEntity2ReferenceType_Line", "line", ("line",)),
+    NativeMateEntityType(
+        2,
+        "swMateEntity2ReferenceType_Circle",
+        "circle",
+        ("circle",),
+    ),
+    NativeMateEntityType(
+        3,
+        "swMateEntity2ReferenceType_Plane",
+        "plane",
+        ("plane",),
+    ),
+    NativeMateEntityType(
+        4,
+        "swMateEntity2ReferenceType_Cylinder",
+        "cylinder",
+        ("cylinder", "wzdhole", "sweepside"),
+    ),
+    NativeMateEntityType(
+        5,
+        "swMateEntity2ReferenceType_Sphere",
+        "sphere",
+        ("sphere",),
+    ),
+    NativeMateEntityType(6, "swMateEntity2ReferenceType_Set", "native"),
+    NativeMateEntityType(
+        7,
+        "swMateEntity2ReferenceType_Cone",
+        "cone",
+        ("cone",),
+    ),
+    NativeMateEntityType(
+        8,
+        "swMateEntity2ReferenceType_SweptSurface",
+        "surface",
+        ("sweptsurface",),
+    ),
+    NativeMateEntityType(
+        9,
+        "swMateEntity2ReferenceType_MultipleSurface",
+        "surface",
+        ("multiplesurface",),
+    ),
+    NativeMateEntityType(
+        10,
+        "swMateEntity2ReferenceType_GenSurface",
+        "surface",
+        ("gensurface", "generalsurface", "surface"),
+    ),
+    NativeMateEntityType(
+        11,
+        "swMateEntity2ReferenceType_Ellipse",
+        "curve",
+        ("ellipse",),
+    ),
+    NativeMateEntityType(
+        12,
+        "swMateEntity2ReferenceType_GeneralCurve",
+        "curve",
+        ("generalcurve", "curve"),
+    ),
+    NativeMateEntityType(13, "swMateEntity2ReferenceType_UNKNOWN", "native"),
+)
+NATIVE_MATE_ENTITY_TYPE_EXTENSIONS = (
+    NativeMateEntityType(None, "SketchEntity", "sketch_entity", ("^",)),
+    NativeMateEntityType(
+        None, "CoordinateSystem", "coordinate_system", ("coordinatesystem", "coordsys")
+    ),
+    NativeMateEntityType(None, "Vertex", "vertex", ("vertex",)),
+    NativeMateEntityType(None, "Axis", "axis", ("axis",)),
+    NativeMateEntityType(None, "Edge", "edge", ("edge",)),
+    NativeMateEntityType(None, "Face", "face", ("face", "surfidrep")),
+)
+NATIVE_MATE_ENTITY_TYPE_RECORDS = (
+    NATIVE_MATE_ENTITY_TYPE_EXTENSIONS[0],
+    *NATIVE_MATE_ENTITY_REFERENCE_TYPES,
+    *NATIVE_MATE_ENTITY_TYPE_EXTENSIONS[1:],
+)
+NATIVE_MATE_ENTITY_KIND_BY_MARKER = _classifier_map(
+    NATIVE_MATE_ENTITY_TYPE_RECORDS, "markers"
+)
+NATIVE_MATE_ENTITY_MARKERS = tuple(
+    (marker.casefold(), record.kind)
+    for record in NATIVE_MATE_ENTITY_TYPE_RECORDS
+    for marker in record.markers
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +533,13 @@ class NativeMateEntity:
 
 
 @dataclass(frozen=True, slots=True)
+class NativeMateDimension:
+    name: str
+    value: float
+    value_offset: int
+
+
+@dataclass(frozen=True, slots=True)
 class NativeMate:
     name: str
     kind: str
@@ -118,10 +549,26 @@ class NativeMate:
     record_offset: int
     record_length: int
     class_name: str
+    class_token: int | None
     serialized_strings: tuple[str, ...]
     alignment_code: int | None
-    value_m: float | None
-    value_offset: int | None
+    dimensions: tuple[NativeMateDimension, ...]
+
+    @property
+    def value_m(self) -> float | None:
+        return (
+            self.dimensions[0].value
+            if self.kind == "distance" and self.dimensions
+            else None
+        )
+
+    @property
+    def value_offset(self) -> int | None:
+        return (
+            self.dimensions[0].value_offset
+            if self.kind == "distance" and self.dimensions
+            else None
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +578,19 @@ class NativeMateList:
     owner_definition_id: int
     mates: tuple[NativeMate, ...]
     stream: str
+
+
+@dataclass(frozen=True, slots=True)
+class _MateRecord:
+    name: str
+    name_end: int
+    start: int
+    end: int
+    class_name: str
+    class_token: int | None
+    strings: tuple[str, ...]
+    alignment_code: int | None
+    dimensions: tuple[NativeMateDimension, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,7 +619,7 @@ class NativeAssembly:
 def decode_native_assembly(
     archive: SldprtArchive, *, include_tessellation: bool = False
 ) -> NativeAssembly:
-    root = _xml_root(archive.require(_COMPONENT_STREAM))
+    root = _xml_root(archive.require(COMPONENT_TREE_STREAM))
     files = _files(root)
     file_by_id = {item.object_id: item for item in files}
     definitions, occurrences = _models(root, file_by_id)
@@ -173,14 +633,9 @@ def decode_native_assembly(
     occurrence_paths = expand_occurrence_paths(
         root_definition_id, definitions, occurrences
     )
-    mate_lists = tuple(
-        decode_mate_list(record.data, record.name, root_definition_id)
-        for record in archive.records
-        if record.name.startswith("Contents/Config-")
-        and record.name.endswith(_MATES_SUFFIX)
-    )
+    mate_lists = _mate_lists(archive, root_definition_id)
     display_components: tuple[NativeDisplayComponent, ...] = ()
-    display = archive.get(_DISPLAY_STREAM)
+    display = archive.get(DISPLAY_LISTS_STREAM)
     if include_tessellation and display:
         display_components = decode_display_lists(display)
     return NativeAssembly(
@@ -204,7 +659,7 @@ def decode_mate_list(
     if len(data) < 6:
         raise SldprtFormatError(f"mate stream is truncated: {stream}")
     native_id, declared_count = struct.unpack_from("<IH", data, 0)
-    class_offset = data.find(bytes.fromhex("ffff0100"), 6)
+    class_offset = data.find(CLASS_MARKER, 6)
     if class_offset < 0 or class_offset + 6 > len(data):
         raise SldprtFormatError(f"mate stream has no class table: {stream}")
     class_size = struct.unpack_from("<H", data, class_offset + 4)[0]
@@ -212,41 +667,79 @@ def decode_mate_list(
     if class_end + 5 > len(data):
         raise SldprtFormatError(f"mate class record is truncated: {stream}")
     object_prefix = data[class_end : class_end + 2]
-    name_prefix = object_prefix + _STRING_MARKER
+    name_prefix = object_prefix + SERIALIZED_STRING_MARKER
+    serialized = _prefixed_strings(data, name_prefix)
+    scalar_tokens = {
+        token
+        for offset, _, name_end in serialized
+        if dimension_scalar_value_offset(data, name_end, len(data)) is not None
+        for token in (_class_reference_token(data, offset - 2),)
+        if token is not None
+    }
     candidates = [
         item
-        for item in _prefixed_strings(data, name_prefix)
-        if not _DIMENSION_NAME.fullmatch(item[1])
+        for item in serialized
+        if dimension_scalar_value_offset(data, item[2], len(data)) is None
+        and _class_reference_token(data, item[0] - 2) not in scalar_tokens
     ]
     if len(candidates) != declared_count:
         raise SldprtFormatError(
             f"mate count mismatch in {stream}: expected {declared_count}, decoded {len(candidates)}"
         )
     starts = [_mate_record_start(data, offset) for offset, _, _ in candidates]
-    mates: list[NativeMate] = []
+    records: list[_MateRecord] = []
     for order, ((_, name, name_end), start) in enumerate(zip(candidates, starts)):
         end = starts[order + 1] if order + 1 < len(starts) else len(data)
         strings = _record_strings(data, start, end)
-        kind = _mate_kind(name)
-        alignment_code, value_m, value_offset = (
-            _distance_mate_data(data, start, end, name_end)
-            if kind == "distance"
-            else (None, None, None)
+        class_name = _inline_class_name(data, start)
+        records.append(
+            _MateRecord(
+                name=name,
+                name_end=name_end,
+                start=start,
+                end=end,
+                class_name=class_name,
+                class_token=(
+                    None if class_name else _class_reference_token(data, start)
+                ),
+                strings=strings,
+                alignment_code=_mate_alignment(data, end, name_end),
+                dimensions=_mate_dimensions(data, start, end),
+            )
         )
+    token_kinds = _mate_token_kinds(records)
+    classes_by_kind: dict[str, set[str]] = {}
+    for record in records:
+        if not record.class_name:
+            continue
+        kind = _mate_kind(record.name, record.class_name)
+        if kind != "native":
+            classes_by_kind.setdefault(kind, set()).add(record.class_name)
+    mates: list[NativeMate] = []
+    for order, record in enumerate(records):
+        if record.class_name:
+            kind = _mate_kind(record.name, record.class_name)
+            class_name = record.class_name
+        else:
+            kind = token_kinds.get(record.class_token, _mate_kind(record.name))
+            inferred_classes = classes_by_kind.get(kind, set())
+            class_name = (
+                next(iter(inferred_classes)) if len(inferred_classes) == 1 else ""
+            )
         mates.append(
             NativeMate(
-                name=name,
+                name=record.name,
                 kind=kind,
                 owner_definition_id=owner_definition_id,
                 order=order,
-                entities=_mate_entities(strings),
-                record_offset=start,
-                record_length=end - start,
-                class_name=_inline_class_name(data, start),
-                serialized_strings=strings,
-                alignment_code=alignment_code,
-                value_m=value_m,
-                value_offset=value_offset,
+                entities=_mate_entities(record.strings),
+                record_offset=record.start,
+                record_length=record.end - record.start,
+                class_name=class_name,
+                class_token=record.class_token,
+                serialized_strings=record.strings,
+                alignment_code=record.alignment_code,
+                dimensions=record.dimensions,
             )
         )
     return NativeMateList(
@@ -255,6 +748,45 @@ def decode_mate_list(
         owner_definition_id=owner_definition_id,
         mates=tuple(mates),
         stream=stream,
+    )
+
+
+def _mate_lists(
+    archive: SldprtArchive, owner_definition_id: int
+) -> tuple[NativeMateList, ...]:
+    result: list[NativeMateList] = []
+    for record in archive.records:
+        named = _mate_stream_name(record.name)
+        if not named and not _mate_stream_structure(record.data):
+            continue
+        try:
+            decoded = decode_mate_list(record.data, record.name, owner_definition_id)
+        except SldprtFormatError:
+            if named:
+                raise
+            continue
+        result.append(decoded)
+    return tuple(result)
+
+
+def _mate_stream_name(name: str) -> bool:
+    leaf = name.replace("\\", "/").rsplit("/", 1)[-1].casefold()
+    return leaf == MATES_STREAM_NAME.casefold() or leaf.endswith(
+        MATES_STREAM_SUFFIX.casefold()
+    )
+
+
+def _mate_stream_structure(data: bytes) -> bool:
+    if len(data) < 12 or data[6:10] != CLASS_MARKER:
+        return False
+    class_size = struct.unpack_from("<H", data, 10)[0]
+    class_end = 12 + class_size
+    if not 1 <= class_size <= 128 or class_end + 5 > len(data):
+        return False
+    object_prefix = struct.unpack_from("<H", data, class_end)[0]
+    return (
+        object_prefix & 0x8000 != 0
+        and data[class_end + 2 : class_end + 5] == SERIALIZED_STRING_MARKER
     )
 
 
@@ -458,11 +990,11 @@ def _serialized_strings(
     result: list[tuple[int, str, int]] = []
     cursor = max(start, 0)
     while True:
-        offset = data.find(_STRING_MARKER, cursor, limit)
+        offset = data.find(SERIALIZED_STRING_MARKER, cursor, limit)
         if offset < 0:
             break
         cursor = offset + 1
-        decoded = _utf16_string(data, offset + len(_STRING_MARKER), limit)
+        decoded = _utf16_string(data, offset + len(SERIALIZED_STRING_MARKER), limit)
         if decoded is not None:
             value, string_end = decoded
             result.append((offset, value, string_end))
@@ -492,7 +1024,7 @@ def _utf16_string(
 
 
 def _mate_record_start(data: bytes, name_prefix_offset: int) -> int:
-    inline = data.rfind(bytes.fromhex("ffff0100"), 0, name_prefix_offset)
+    inline = data.rfind(CLASS_MARKER, 0, name_prefix_offset)
     if inline >= 0 and inline + 6 <= name_prefix_offset:
         size = struct.unpack_from("<H", data, inline + 4)[0]
         if inline + 6 + size == name_prefix_offset:
@@ -501,7 +1033,7 @@ def _mate_record_start(data: bytes, name_prefix_offset: int) -> int:
 
 
 def _inline_class_name(data: bytes, start: int) -> str:
-    if data[start : start + 4] != bytes.fromhex("ffff0100"):
+    if data[start : start + 4] != CLASS_MARKER:
         return ""
     if start + 6 > len(data):
         return ""
@@ -512,30 +1044,56 @@ def _inline_class_name(data: bytes, start: int) -> str:
         return ""
 
 
+def _class_reference_token(data: bytes, offset: int) -> int | None:
+    if offset < 0 or offset + 2 > len(data):
+        return None
+    token = struct.unpack_from("<H", data, offset)[0]
+    return token if token & 0x8000 and token != 0xFFFF else None
+
+
+def _mate_token_kinds(records: list[_MateRecord]) -> dict[int | None, str]:
+    candidates: dict[int, set[str]] = {}
+    for record in records:
+        if record.class_name or record.class_token is None:
+            continue
+        kind = _mate_kind(record.name)
+        if kind != "native":
+            candidates.setdefault(record.class_token, set()).add(kind)
+    return {
+        token: next(iter(kinds))
+        for token, kinds in candidates.items()
+        if len(kinds) == 1
+    }
+
+
 def _mate_entities(strings: tuple[str, ...]) -> tuple[NativeMateEntity, ...]:
-    paths = tuple(value for value in strings if _component_path(value))
-    source_paths = tuple(value for value in strings if _cad_path(value))
+    source_paths = tuple(value for value in strings if is_cad_path(value))
     entity_values: list[tuple[str, list[str]]] = []
     persistent: list[str] = []
     for value in strings:
-        if value.startswith("mo"):
+        if "^" in value and "@" in value:
+            continue
+        if value.casefold().startswith("mo"):
             persistent.append(value)
             continue
-        if _component_path(value):
+        if is_component_path(value):
             entity_values.append((value, persistent))
             persistent = []
             continue
         if "@" in value and entity_values:
             entity_values[-1][1].append(value)
+            continue
+        if "@" in value:
+            persistent.append(value)
     entities: list[NativeMateEntity] = []
     for component_path, references in entity_values:
         leaf = component_path.rsplit("/", 1)[-1].split("@", 1)[0]
-        source_name = re.sub(r"-\d+$", "", leaf).lower()
+        source_name = re.sub(r"-\d+$", "", leaf).casefold()
         source_path = next(
             (
                 value
                 for value in source_paths
-                if PureWindowsPath(value).stem.lower() == source_name
+                if PureWindowsPath(value).stem.casefold() == source_name
             ),
             "",
         )
@@ -557,64 +1115,47 @@ def _mate_entities(strings: tuple[str, ...]) -> tuple[NativeMateEntity, ...]:
         )
         for value in synthetic
     )
-    if len(entities) != len(paths) + len(synthetic):
-        raise SldprtFormatError("mate entity path decoding is inconsistent")
+    if persistent:
+        entities.append(NativeMateEntity("", tuple(persistent), "", ""))
     return tuple(entities)
 
 
-def _mate_kind(name: str) -> str:
-    kinds = (
-        ("Concentric", "concentric"),
-        ("Coincident", "coincident"),
-        ("CamMateTangent", "cam_tangent"),
-        ("GearMate", "gear"),
-        ("BeltMates", "group"),
-        ("BeltMate", "belt"),
-        ("Distance", "distance"),
-        ("LockToSketchMate", "lock_to_sketch"),
-    )
-    return next((kind for prefix, kind in kinds if name.startswith(prefix)), "native")
+def _mate_kind(name: str, class_name: str = "") -> str:
+    normalized_class = class_name.casefold().strip()
+    if normalized_class:
+        return _MATE_KIND_BY_CLASS.get(normalized_class, "native")
+    lowered = name.casefold().strip()
+    match = re.fullmatch(r"([a-z]+)(\d+)(?:___endtag___)?", lowered)
+    return _MATE_KIND_BY_NAME.get(match.group(1), "native") if match else "native"
 
 
-def _distance_mate_data(
-    data: bytes, start: int, end: int, name_end: int
-) -> tuple[int | None, float | None, int | None]:
+def _mate_alignment(data: bytes, end: int, name_end: int) -> int | None:
     alignment_offset = name_end + _MATE_ALIGNMENT_OFFSET
     entity_count_offset = name_end + _MATE_ENTITY_COUNT_OFFSET
     if entity_count_offset + 4 > end:
-        return None, None, None
-    alignment_code = struct.unpack_from("<H", data, alignment_offset)[0]
-    if alignment_code not in {1, 2}:
-        alignment_code = None
+        return None
     entity_count = struct.unpack_from("<I", data, entity_count_offset)[0]
     if entity_count != 2:
-        return alignment_code, None, None
-    marker_offset = data.find(_DISTANCE_DIMENSION_MARKER, start, end)
-    if marker_offset < 0:
-        return alignment_code, None, None
-    if data.find(_DISTANCE_DIMENSION_MARKER, marker_offset + 1, end) >= 0:
-        return alignment_code, None, None
-    value_offset = marker_offset + _DIMENSION_SCALAR_OFFSET
-    if value_offset + 8 > end:
-        return alignment_code, None, None
-    value_m = struct.unpack_from("<d", data, value_offset)[0]
-    if not math.isfinite(value_m):
-        return alignment_code, None, None
-    return alignment_code, value_m, value_offset
+        return None
+    try:
+        alignment_code = struct.unpack_from("<H", data, alignment_offset)[0]
+    except struct.error:
+        return None
+    return alignment_code if alignment_code in NATIVE_MATE_ALIGNMENT_BY_CODE else None
 
 
-def _cad_path(value: str) -> bool:
-    lowered = value.lower()
-    return lowered.endswith(".sldprt") or lowered.endswith(".sldasm")
-
-
-def _component_path(value: str) -> bool:
-    if "@" not in value or "^" in value:
-        return False
-    return all(
-        "@" in segment and re.search(r"-\d+$", segment.split("@", 1)[0]) is not None
-        for segment in value.split("/")
-    )
+def _mate_dimensions(
+    data: bytes, start: int, end: int
+) -> tuple[NativeMateDimension, ...]:
+    result: list[NativeMateDimension] = []
+    for _, name, string_end in _serialized_strings(data, start, end):
+        value_offset = dimension_scalar_value_offset(data, string_end, end)
+        if value_offset is None:
+            continue
+        value = struct.unpack_from("<d", data, value_offset)[0]
+        if math.isfinite(value):
+            result.append(NativeMateDimension(name, value, value_offset))
+    return tuple(result)
 
 
 def _record_strings(data: bytes, start: int, end: int) -> tuple[str, ...]:

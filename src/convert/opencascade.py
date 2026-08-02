@@ -28,6 +28,8 @@ _MAX_BYTES = 128 * 1024 * 1024
 _MAX_GEOMETRY = 300_000
 _MAX_SHAPES = 500_000
 _MAX_TOKENS = 12_000_000
+_MIN_INT32 = -(2**31)
+_MAX_INT32 = 2**31 - 1
 _TOKEN_PATTERN = re.compile(rb"\S+")
 _INTEGER_PATTERN = re.compile(rb"[+-]?\d+")
 _FLAGS_PATTERN = re.compile(rb"[01]{7}")
@@ -125,6 +127,8 @@ class _Tokens:
 
     def number(self) -> float:
         token = self.take()
+        if len(token) > 30:
+            raise _DecodeFailure("BRep number is out of bounds")
         try:
             value = float(token)
         except ValueError as exc:
@@ -361,6 +365,8 @@ def _location_multiply(
     for datum, power in (*right, *left):
         if result and result[-1][0] == datum:
             combined = result[-1][1] + power
+            if combined < _MIN_INT32 or combined > _MAX_INT32:
+                raise _DecodeFailure("BRep location power is out of bounds")
             result.pop()
             if combined:
                 result.append((datum, combined))
@@ -390,6 +396,37 @@ def _location_power(
     return result
 
 
+def _normalized_vector(value: tuple[float, float, float]) -> tuple[float, float, float]:
+    magnitude = sqrt(sum(component * component for component in value))
+    if not isfinite(magnitude) or magnitude <= float_info.min:
+        raise _DecodeFailure("invalid BRep location transform")
+    result = tuple(component / magnitude for component in value)
+    if not all(isfinite(component) for component in result):
+        raise _DecodeFailure("invalid BRep location transform")
+    return result
+
+
+def _orthogonalized_vectors(
+    values: tuple[tuple[float, float, float], ...],
+) -> tuple[tuple[float, float, float], ...]:
+    first = _normalized_vector(values[0])
+    projection = sum(values[1][index] * first[index] for index in range(3))
+    second = _normalized_vector(
+        tuple(values[1][index] - projection * first[index] for index in range(3))
+    )
+    first_projection = sum(values[2][index] * first[index] for index in range(3))
+    second_projection = sum(values[2][index] * second[index] for index in range(3))
+    third = _normalized_vector(
+        tuple(
+            values[2][index]
+            - first_projection * first[index]
+            - second_projection * second[index]
+            for index in range(3)
+        )
+    )
+    return first, second, third
+
+
 def _location_transform(tokens: _Tokens) -> None:
     values = tuple(tokens.number() for _ in range(12))
     determinant = (
@@ -399,6 +436,18 @@ def _location_transform(tokens: _Tokens) -> None:
     )
     if not isfinite(determinant) or abs(determinant) < float_info.min:
         raise _DecodeFailure("singular BRep location transform")
+    scale = abs(determinant) ** (1.0 / 3.0)
+    if determinant < 0.0:
+        scale = -scale
+    rows = (
+        tuple(values[index] / scale for index in (0, 1, 2)),
+        tuple(values[index] / scale for index in (4, 5, 6)),
+        tuple(values[index] / scale for index in (8, 9, 10)),
+    )
+    columns = tuple(tuple(rows[row][column] for row in range(3)) for column in range(3))
+    columns = _orthogonalized_vectors(columns)
+    rows = tuple(tuple(columns[column][row] for column in range(3)) for row in range(3))
+    _orthogonalized_vectors(rows)
 
 
 def _locations(tokens: _Tokens) -> int:
@@ -449,10 +498,10 @@ def _polygons_on_triangulations(tokens: _Tokens) -> tuple[int, ...]:
     maximum_nodes = []
     for _ in range(count):
         nodes = tokens.integer(1, _MAX_GEOMETRY)
-        node_values = tuple(
-            tokens.integer(1, _MAX_GEOMETRY) for _ in range(nodes)
-        )
-        maximum_nodes.append(max(node_values))
+        maximum_node = 0
+        for _ in range(nodes):
+            maximum_node = max(maximum_node, tokens.integer(1, _MAX_GEOMETRY))
+        maximum_nodes.append(maximum_node)
         tokens.expect(b"p")
         if tokens.number() < 0.0:
             raise _DecodeFailure("negative BRep polygon deflection")

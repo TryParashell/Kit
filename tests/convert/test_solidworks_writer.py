@@ -2,24 +2,151 @@ from __future__ import annotations
 
 from dataclasses import replace
 from io import BytesIO, StringIO
+import hashlib
+import json
 from pathlib import Path
+import struct
 
 import pytest
 
-from convert import convert, registry, write_document
+from convert import (
+    ApplicationUsabilityError,
+    convert,
+    open_document,
+    registry,
+    write_document,
+)
 from convert.adapters.catia import read_catia, write_catia
 from convert.adapters.freecad import read_freecad, write_freecad
 from convert.adapters.solidworks import (
     SldprtArchive,
     SldprtFormatError,
+    build_sldprt,
+    decode_brep_model,
+    decode_partition_stream,
+    encode_brep_model,
     read_sldprt,
     write_sldprt,
 )
+from convert.adapters.solidworks.format import (
+    KIT_DOCUMENT_STREAM,
+    PARTITION_STREAM,
+)
+from interchange import (
+    BrepPayload,
+    Capability,
+    Diagnostic,
+    NativeSurface,
+    PayloadRole,
+    Severity,
+    frozen_mapping,
+)
 from tests.interchange.test_assembly import assembly_document
+from tests.interchange.test_brep import triangle_brep
 from tests.interchange.test_document import document
 
 
 SAMPLE = Path(__file__).parents[2] / "examples" / ".SLDPRT" / "example.SLDPRT"
+ASSEMBLY = (
+    Path(__file__).parents[2] / "examples" / "Random" / "Pistons" / "Piston.SLDASM"
+)
+
+
+def test_pre_payload_field_solidworks_carrier_restores_payload_semantics() -> None:
+    native_document = b"legacy CATProduct"
+    native_digest = hashlib.sha256(native_document).digest()
+    source = replace(
+        document(),
+        brep_payloads=(
+            BrepPayload(
+                "legacy-brep",
+                "parasolid",
+                "binary",
+                "SCH_3500040",
+                hashlib.sha256(b"PS\0\0legacy").hexdigest(),
+                data=b"PS\0\0legacy",
+                source_stream="Contents/Bodies/Partition",
+                role=PayloadRole.BREP,
+                file_extension=".x_b",
+            ),
+            BrepPayload(
+                "legacy-mates",
+                "solidworks.mates",
+                "mate-list",
+                "solidworks.serialized-object-stream",
+                hashlib.sha256(b"legacy mates").hexdigest(),
+                data=b"legacy mates",
+                source_stream="Contents/Mates",
+                role=PayloadRole.ASSEMBLY_STRUCTURE,
+                file_extension=".bin",
+            ),
+            BrepPayload(
+                "legacy-document",
+                "catia.v5.cfv2",
+                "native_document",
+                "CATProduct",
+                hashlib.sha256(native_document).hexdigest(),
+                data=native_document,
+                source_stream="V5_CFV2",
+                role=PayloadRole.DOCUMENT,
+                file_extension=".catproduct",
+            ),
+            BrepPayload(
+                "legacy-binding",
+                "catia.v5.sha256",
+                "native_document_binding",
+                "sha256",
+                hashlib.sha256(native_digest).hexdigest(),
+                data=native_digest,
+                source_stream="V5_CFV2",
+                role=PayloadRole.VERIFICATION,
+                file_extension=".sha256",
+            ),
+        ),
+    )
+    generated = BytesIO()
+    write_sldprt(source, generated)
+    archive = SldprtArchive.from_bytes(generated.getvalue())
+    manifest = json.loads(archive.require(KIT_DOCUMENT_STREAM))
+    for payload in manifest["brep_payloads"]["$tuple"]:
+        payload.pop("role")
+        payload.pop("file_extension")
+    streams = archive.streams
+    streams[KIT_DOCUMENT_STREAM] = json.dumps(manifest).encode("utf-8")
+    legacy = build_sldprt(
+        streams,
+        file_id=archive.file_id,
+        format_version=archive.format_version,
+    )
+    restored = read_sldprt(legacy)
+    fields = {
+        payload.id: (payload.role, payload.file_extension, payload.data)
+        for payload in restored.brep_payloads
+    }
+    assert fields == {
+        "legacy-brep": (PayloadRole.BREP, ".x_b", b"PS\0\0legacy"),
+        "legacy-mates": (
+            PayloadRole.ASSEMBLY_STRUCTURE,
+            ".bin",
+            b"legacy mates",
+        ),
+        "legacy-document": (
+            PayloadRole.DOCUMENT,
+            ".catproduct",
+            native_document,
+        ),
+        "legacy-binding": (
+            PayloadRole.VERIFICATION,
+            ".sha256",
+            native_digest,
+        ),
+    }
+    filtered = read_sldprt(legacy, include_brep=False)
+    assert {payload.id for payload in filtered.brep_payloads} == {
+        "legacy-mates",
+        "legacy-document",
+        "legacy-binding",
+    }
 
 
 def test_solidworks_source_replays_exactly_after_freecad_roundtrip(tmp_path) -> None:
@@ -50,6 +177,54 @@ def test_solidworks_source_replays_exactly_after_catia_carrier(tmp_path) -> None
     assert result.metadata["compatibility"] == "native-exact"
 
 
+def test_portable_solidworks_assembly_discards_active_catia_carrier_envelope(
+    tmp_path,
+) -> None:
+    source = read_sldprt(ASSEMBLY)
+    catproduct = tmp_path / "source.CATProduct"
+    output = tmp_path / "source.SLDASM"
+    write_catia(source, catproduct, allow_non_native=True)
+    restored = open_document(catproduct)
+    write_document(restored, output, allow_carrier=True)
+    reversed_document = read_sldprt(output)
+    assert reversed_document.brep_payloads == source.brep_payloads
+    assert reversed_document.assembly == source.assembly
+
+
+@pytest.mark.parametrize("change", ("capabilities", "metadata", "diagnostics"))
+def test_semantic_edits_disable_exact_source_replay(change: str) -> None:
+    document = read_sldprt(SAMPLE)
+    if change == "capabilities":
+        changed = replace(
+            document,
+            capabilities=document.capabilities | {Capability.MATERIALS},
+        )
+    elif change == "metadata":
+        changed = replace(
+            document,
+            metadata=frozen_mapping({**document.metadata, "user.tag": "changed"}),
+        )
+    else:
+        changed = replace(
+            document,
+            diagnostics=(
+                *document.diagnostics,
+                Diagnostic("user.changed", "changed", Severity.INFO),
+            ),
+        )
+    output = BytesIO()
+    result = write_sldprt(changed, output)
+    assert result.metadata["mode"] != "exact"
+    assert output.getvalue() != SAMPLE.read_bytes()
+    restored = read_sldprt(output.getvalue())
+    if change == "capabilities":
+        assert Capability.MATERIALS in restored.capabilities
+    elif change == "metadata":
+        assert restored.metadata["user.tag"] == "changed"
+    else:
+        assert restored.diagnostics[-1].code == "user.changed"
+
+
 def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> None:
     source = document()
     fcstd = tmp_path / "neutral.FCStd"
@@ -62,8 +237,8 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     archive = SldprtArchive.open(output)
     assert archive.format_version == 4
     assert archive.require("Kit/Interchange")
-    assert archive.require("swXmlContents/KeyWords").startswith(b"<?xml")
-    assert archive.get("Contents/Config-0-ResolvedFeatures") == b""
+    assert archive.get("swXmlContents/KeyWords") is None
+    assert archive.get("Contents/Config-0-ResolvedFeatures") is None
     assert output.read_bytes()[:1] not in {b"{", b"["}
     assert output.read_bytes()[:4] != b"PK\x03\x04"
     reread = read_sldprt(output)
@@ -88,6 +263,256 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     assert replay.getvalue() == output.read_bytes()
     assert replay_result.metadata["compatibility"] == "kit-neutral-only"
     assert replay_result.metadata["vendor_loadable"] is False
+
+
+def test_neutral_brep_writes_native_parasolid_partition() -> None:
+    base = document()
+    source = replace(
+        base,
+        brep=triangle_brep(),
+        capabilities=base.capabilities | {Capability.BREP},
+    )
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    partition = archive.require(PARTITION_STREAM)
+    native = decode_partition_stream(partition)[0]
+    restored = read_sldprt(output.getvalue())
+    assert native.schema == "SCH_SW_32001_11000"
+    assert native.data == partition
+    assert restored.brep == source.brep
+    assert result.metadata["mode"] == "generated"
+    assert result.metadata["native_content"] == "neutral-brep"
+    assert result.metadata["compatibility"] == "native-brep-with-kit-neutral"
+    assert result.metadata["native_brep"] == "generated"
+    assert result.metadata["native_geometry"] is True
+    assert result.metadata["native_history"] is False
+    assert result.metadata["native_assembly"] is False
+    assert result.metadata["vendor_loadable"] is False
+
+
+def test_public_sdk_does_not_promote_generated_parasolid_partition(tmp_path) -> None:
+    base = document()
+    source = replace(
+        base,
+        brep=triangle_brep(),
+        capabilities=base.capabilities | {Capability.BREP},
+    )
+    blocked = tmp_path / "blocked.SLDPRT"
+    with pytest.raises(ApplicationUsabilityError) as captured:
+        write_document(source, blocked)
+    assert Capability.BREP in captured.value.unimplemented_capabilities
+    assert not blocked.exists()
+    explicit = tmp_path / "explicit.SLDPRT"
+    result = write_document(source, explicit, allow_carrier=True)
+    assert result.metadata["native_brep"] == "generated"
+    assert result.vendor_loadable is False
+    assert result.near_lossless is False
+    assert open_document(explicit).brep == source.brep
+
+
+def test_parasolid_partition_decodes_to_kernel_neutral_brep() -> None:
+    encoded = encode_brep_model(triangle_brep())
+    decoded = decode_brep_model(encoded)
+    assert decoded is not None
+    assert decoded.validate() == ()
+    assert len(decoded.bodies) == 1
+    assert len(decoded.faces) == 1
+    assert len(decoded.edges) == 3
+    assert len(decoded.vertices) == 3
+    assert {vertex.point for vertex in decoded.vertices} == {
+        vertex.point for vertex in triangle_brep().vertices
+    }
+
+
+def test_native_sldprt_read_preserves_partition_and_adds_typed_brep() -> None:
+    encoded = encode_brep_model(triangle_brep())
+    source = SldprtArchive.open(SAMPLE)
+    streams = source.streams
+    streams[PARTITION_STREAM] = encoded
+    streams.pop("Contents/Config-0-GhostPartition", None)
+    native = build_sldprt(
+        streams,
+        file_id=source.file_id,
+        format_version=source.format_version,
+    )
+    decoded = read_sldprt(native)
+    assert decoded.brep is not None
+    assert decoded.brep.validate() == ()
+    assert len(decoded.brep_payloads) == 1
+    assert decoded.brep_payloads[0].data == encoded
+
+
+def test_parasolid_decoder_rejects_open_topology_and_deltas() -> None:
+    encoded = encode_brep_model(triangle_brep())
+    broken = bytearray(encoded)
+    coedge = broken.find(bytes((0, 0x11)))
+    assert coedge >= 0
+    struct.pack_into(">H", broken, coedge + 10, 0)
+    assert decode_brep_model(broken) is None
+    deltas = encoded.replace(b"partition", b"deltasxxx", 1)
+    assert decode_brep_model(deltas) is None
+
+
+def test_native_sldprt_include_brep_false_omits_typed_and_raw_geometry() -> None:
+    encoded = encode_brep_model(triangle_brep())
+    source = SldprtArchive.open(SAMPLE)
+    streams = source.streams
+    streams[PARTITION_STREAM] = encoded
+    streams.pop("Contents/Config-0-GhostPartition", None)
+    native = build_sldprt(
+        streams,
+        file_id=source.file_id,
+        format_version=source.format_version,
+    )
+    decoded = read_sldprt(native, include_brep=False)
+    assert decoded.brep is None
+    assert decoded.brep_payloads == ()
+
+
+def test_unsupported_neutral_brep_remains_an_honest_carrier() -> None:
+    base = document()
+    brep = triangle_brep()
+    unsupported = replace(
+        brep,
+        surfaces=(NativeSurface("surface:0", "future.cad", "future-surface"),),
+    )
+    source = replace(
+        base,
+        brep=unsupported,
+        capabilities=base.capabilities | {Capability.BREP},
+    )
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    restored = read_sldprt(output.getvalue())
+    assert archive.get(PARTITION_STREAM) is None
+    assert restored.brep == source.brep
+    assert result.metadata["native_content"] == "none"
+    assert result.metadata["native_brep"].startswith("unsupported:")
+    assert result.metadata["native_geometry"] is False
+    assert result.metadata["vendor_loadable"] is False
+    assert result.diagnostics[-1].code == "sldprt.native_brep_unsupported"
+
+
+def test_generated_carrier_include_brep_filter_retains_non_geometry_payloads(
+    tmp_path,
+) -> None:
+    base = document()
+    source = replace(
+        base,
+        brep_payloads=(
+            BrepPayload(
+                "geometry",
+                "future.kernel",
+                "body",
+                "1",
+                "",
+                data=b"geometry",
+                role=PayloadRole.BREP,
+                file_extension=".geo",
+            ),
+            BrepPayload(
+                "history",
+                "future.cad",
+                "feature-records",
+                "1",
+                "",
+                data=b"history",
+                role=PayloadRole.FEATURE_HISTORY,
+            ),
+        ),
+        capabilities=base.capabilities
+        | frozenset({Capability.BREP, Capability.NATIVE_PAYLOADS}),
+    )
+    target = tmp_path / "payloads.SLDPRT"
+    write_sldprt(source, target)
+    without_brep = read_sldprt(target, include_brep=False)
+    assert [payload.id for payload in without_brep.brep_payloads] == ["history"]
+    assert without_brep.brep_payloads[0].data == b"history"
+    assert without_brep.capabilities == source.capabilities - {Capability.BREP}
+    with_brep = read_sldprt(target, include_brep=True)
+    assert [payload.id for payload in with_brep.brep_payloads] == [
+        "geometry",
+        "history",
+    ]
+    assert with_brep.capabilities == source.capabilities
+
+
+@pytest.mark.parametrize("source", (document(), assembly_document()))
+def test_generated_carrier_preserves_declared_sparse_capabilities(source) -> None:
+    output = BytesIO()
+    write_sldprt(source, output)
+    restored = read_sldprt(output.getvalue())
+    assert restored.capabilities == source.capabilities
+    if source.assembly is not None:
+        assert restored.assembly is not None
+        assert tuple(
+            item.document.capabilities
+            for item in restored.assembly.documents
+            if item.document is not None
+        ) == tuple(
+            item.document.capabilities
+            for item in source.assembly.documents
+            if item.document is not None
+        )
+
+
+@pytest.mark.parametrize(
+    ("payload_index", "changes"),
+    (
+        (0, {"data": b"changed document"}),
+        (1, {"data": b"changed binding"}),
+        (0, {"id": "changed-document"}),
+        (1, {"id": "changed-binding"}),
+    ),
+)
+def test_foreign_document_payload_mutation_invalidates_outer_replay(
+    payload_index: int, changes: dict[str, bytes | str]
+) -> None:
+    source = replace(
+        document(),
+        brep_payloads=(
+            BrepPayload(
+                "foreign-document",
+                "future.cad.document",
+                "native_document",
+                "v1",
+                "",
+                data=b"original document",
+                role=PayloadRole.DOCUMENT,
+                file_extension=".cad",
+            ),
+            BrepPayload(
+                "foreign-binding",
+                "future.cad.sha256",
+                "native_document_binding",
+                "sha256",
+                "",
+                data=b"original binding",
+                role=PayloadRole.VERIFICATION,
+                file_extension=".sha256",
+            ),
+        ),
+    )
+    carrier = BytesIO()
+    write_sldprt(source, carrier)
+    original = carrier.getvalue()
+    restored = read_sldprt(original)
+    payloads = list(restored.brep_payloads)
+    payloads[payload_index] = replace(payloads[payload_index], **changes)
+    mutated = replace(
+        restored,
+        brep_payloads=tuple(payloads),
+    )
+    output = BytesIO()
+    result = write_sldprt(mutated, output)
+    assert result.metadata["mode"] == "template"
+    assert output.getvalue() != original
+    reread = read_sldprt(output.getvalue())
+    changed = reread.brep_payloads[payload_index]
+    for key, value in changes.items():
+        assert getattr(changed, key) == value
 
 
 def test_semantic_edit_uses_native_template_without_claiming_native_edit(
@@ -164,9 +589,31 @@ def test_solidworks_aliases_enforce_document_kind(tmp_path) -> None:
         assembly_json,
         tmp_path / "converted.SLDASM",
         destination_format="solidworks.sldasm",
-        write_values={"allow_non_native": True},
+        allow_carrier=True,
     )
     assert conversion.destination_format == "solidworks.sldasm"
+
+
+@pytest.mark.parametrize(
+    ("source", "wrong_suffix"),
+    ((SAMPLE, ".SLDASM"), (ASSEMBLY, ".SLDPRT")),
+)
+def test_solidworks_reader_rejects_native_suffix_kind_mismatch(
+    source, wrong_suffix, tmp_path
+) -> None:
+    renamed = tmp_path / f"renamed{wrong_suffix}"
+    renamed.write_bytes(source.read_bytes())
+    with pytest.raises(SldprtFormatError, match="content requires"):
+        read_sldprt(renamed)
+
+
+def test_solidworks_reader_rejects_carrier_suffix_kind_mismatch(tmp_path) -> None:
+    valid = tmp_path / "valid.SLDPRT"
+    write_sldprt(document(), valid)
+    renamed = tmp_path / "renamed.SLDASM"
+    renamed.write_bytes(valid.read_bytes())
+    with pytest.raises(SldprtFormatError, match="content requires"):
+        read_sldprt(renamed)
 
 
 def test_generated_sldasm_stream_retains_assembly_identity() -> None:
@@ -179,27 +626,85 @@ def test_generated_sldasm_stream_retains_assembly_identity() -> None:
     assert restored.assembly == source.assembly
 
 
-def test_public_sdk_generates_non_native_swaps_by_default(tmp_path) -> None:
+def test_public_sdk_requires_explicit_carrier_opt_in(tmp_path) -> None:
     source = document()
     direct = tmp_path / "direct.SLDPRT"
     blocked = tmp_path / "blocked.SLDPRT"
-    with pytest.raises(SldprtFormatError, match="allow_non_native"):
+    with pytest.raises(ApplicationUsabilityError):
         write_document(source, blocked, values={"allow_non_native": False})
-    written = write_document(source, direct)
+    assert not blocked.exists()
+    written = write_document(source, direct, allow_carrier=True)
     assert written.metadata["compatibility"] == "kit-neutral-only"
     fcstd = tmp_path / "source.FCStd"
     converted = tmp_path / "converted.SLDPRT"
     write_freecad(source, fcstd)
     blocked_conversion = tmp_path / "blocked_conversion.SLDPRT"
-    with pytest.raises(SldprtFormatError, match="allow_non_native"):
-        convert(
-            fcstd,
-            blocked_conversion,
-            write_values={"allow_non_native": False},
-        )
+    with pytest.raises(ApplicationUsabilityError):
+        convert(fcstd, blocked_conversion)
+    assert not blocked_conversion.exists()
     result = convert(
         fcstd,
         converted,
+        allow_carrier=True,
     )
     assert result.destination_format == "solidworks.sldprt"
     assert result.output.metadata["compatibility"] == "kit-neutral-only"
+
+
+def test_stripped_carrier_metadata_cannot_promote_solidworks_replay(tmp_path) -> None:
+    original = open_document(SAMPLE)
+    changed = replace(
+        original,
+        metadata=frozen_mapping({**original.metadata, "audit_change": True}),
+    )
+    carrier = tmp_path / "carrier.SLDPRT"
+    first = write_document(changed, carrier, allow_carrier=True)
+    assert first.vendor_loadable is False
+    assert first.metadata["mode"] == "template"
+    restored = open_document(carrier)
+    metadata = dict(restored.metadata)
+    assert metadata.pop("solidworks.container_compatibility") == "kit-neutral-only"
+    stripped = replace(restored, metadata=frozen_mapping(metadata))
+    blocked = tmp_path / "blocked.SLDPRT"
+    with pytest.raises(ApplicationUsabilityError) as captured:
+        write_document(stripped, blocked)
+    assert captured.value.vendor_loadable is False
+    assert not blocked.exists()
+    explicit = tmp_path / "explicit.SLDPRT"
+    result = write_document(stripped, explicit, allow_carrier=True)
+    assert result.vendor_loadable is False
+    assert result.near_lossless is False
+    assert explicit.read_bytes() == carrier.read_bytes()
+    assert open_document(explicit).feature_timeline == restored.feature_timeline
+
+
+def test_public_sdk_defaults_to_portable_assembly_writes(tmp_path) -> None:
+    source = read_sldprt(ASSEMBLY)
+    portable = tmp_path / "portable.SLDASM"
+    with pytest.raises(ApplicationUsabilityError):
+        write_document(source, portable)
+    assert not portable.exists()
+    portable_result = write_document(
+        source,
+        portable,
+        allow_carrier=True,
+    )
+    assert portable_result.metadata["compatibility"] != "native-exact"
+    assert portable_result.metadata["native_self_contained"] is False
+    assert read_sldprt(portable).assembly == source.assembly
+    exact = tmp_path / "exact.SLDASM"
+    with pytest.raises(ApplicationUsabilityError) as captured:
+        write_document(source, exact, values={"portable": False})
+    assert captured.value.requirements == ("referenced SOLIDWORKS component files",)
+    assert not exact.exists()
+    exact_result = write_document(
+        source,
+        exact,
+        values={"portable": False},
+        allow_carrier=True,
+    )
+    assert exact_result.metadata["compatibility"] == "native-exact"
+    assert exact_result.metadata["native_self_contained"] is False
+    assert exact_result.requirements == ("referenced SOLIDWORKS component files",)
+    assert exact_result.near_lossless is False
+    assert exact.read_bytes() == ASSEMBLY.read_bytes()

@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import hashlib
 import os
 from pathlib import Path
-import re
 import stat
 from typing import Callable
 
@@ -25,27 +24,22 @@ from interchange import (
 )
 
 from .container import Cfv2Archive, Cfv2FormatError, Cfv2Stream
+from .format import (
+    DOCUMENT_TYPE_BY_SUFFIX,
+    INFO,
+    PART_DOCUMENT_TYPE,
+    PRODUCT_DOCUMENT_TYPE,
+    SUFFIX_BY_DOCUMENT_TYPE,
+)
 
 
-_FORMAT_ID = "catia.v5"
+_FORMAT_ID = INFO.format_id
+_PART_SUFFIX = SUFFIX_BY_DOCUMENT_TYPE[PART_DOCUMENT_TYPE]
+_PRODUCT_SUFFIX = SUFFIX_BY_DOCUMENT_TYPE[PRODUCT_DOCUMENT_TYPE]
 _PRODUCT_MARKER = b"ASMPRODUCT"
-_INSTANCE = re.compile(r"(?:I_)?(.+)\.(\d+)")
-_TRAILING_VARIANT = re.compile(r"(?:_| )\d+$")
-_SPACE_NUMBER = re.compile(r"(.+ )([0-9]+)$")
 _DEFAULT_MAX_FILES = 4096
 _DEFAULT_MAX_TOTAL_BYTES = 4 * 1024 * 1024 * 1024
 _DEFAULT_MAX_DEPTH = 8
-_NON_COMPONENT_VALUES = frozenset(
-    {
-        "3DIC",
-        "FromCATPart",
-        "IsRoot",
-        "PRDBAGREP",
-        "PRDREP",
-        "Shape 1",
-        "VPGlobal",
-    }
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +47,7 @@ class NativeProductToken:
     value: str
     offset: int
     length: int
+    encoding: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +56,8 @@ class NativeProductOccurrence:
     instance_name: str
     definition_offset: int
     instance_offset: int
+    definition_length: int
+    instance_length: int
     reference_number: str
 
 
@@ -72,6 +69,17 @@ class NativeProductTable:
     table_offset: int
     tokens: tuple[NativeProductToken, ...]
     occurrences: tuple[NativeProductOccurrence, ...]
+    ambiguous_tokens: tuple[NativeProductToken, ...]
+    alternatives: tuple[NativeProductTableCandidate, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class NativeProductTableCandidate:
+    root_name: str
+    stream_name: str
+    stream_descriptor_offset: int
+    table_offset: int
+    tokens: tuple[NativeProductToken, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +112,18 @@ def decode_product_table(archive: Cfv2Archive) -> NativeProductTable:
     stream, tokens = candidates[0]
     if len(tokens) < 2:
         raise Cfv2FormatError("CATIA ASMPRODUCT table has no product name")
-    occurrences = _product_occurrences(tokens)
+    occurrences, ambiguous_tokens = _product_occurrences(tokens)
+    alternatives = tuple(
+        NativeProductTableCandidate(
+            root_name=value[1][1].value,
+            stream_name=value[0].name,
+            stream_descriptor_offset=value[0].descriptor_offset,
+            table_offset=value[1][0].offset,
+            tokens=value[1],
+        )
+        for value in candidates[1:]
+        if len(value[1]) >= 2
+    )
     return NativeProductTable(
         root_name=tokens[1].value,
         stream_name=stream.name,
@@ -112,6 +131,8 @@ def decode_product_table(archive: Cfv2Archive) -> NativeProductTable:
         table_offset=tokens[0].offset,
         tokens=tokens,
         occurrences=occurrences,
+        ambiguous_tokens=ambiguous_tokens,
+        alternatives=alternatives,
     )
 
 
@@ -171,7 +192,9 @@ def native_product_assembly(
 ) -> tuple[AssemblyData, tuple[Diagnostic, ...]]:
     table = decode_product_table(archive)
     references, search_diagnostics = _component_reference_index(label, settings)
-    selected, reference_diagnostics = _selected_references(table, references)
+    selected, reference_candidates, reference_diagnostics = _selected_references(
+        table, references
+    )
     documents, document_ids, document_diagnostics = _component_documents(
         label,
         table,
@@ -219,11 +242,9 @@ def native_product_assembly(
         )
     ]
     definition_ids: dict[str, str] = {}
-    first_offsets: dict[str, int] = {}
+    first_occurrences: dict[str, NativeProductOccurrence] = {}
     for occurrence in table.occurrences:
-        first_offsets.setdefault(
-            occurrence.definition_name, occurrence.definition_offset
-        )
+        first_occurrences.setdefault(occurrence.definition_name, occurrence)
     for definition_name in dict.fromkeys(
         occurrence.definition_name for occurrence in table.occurrences
     ):
@@ -234,10 +255,12 @@ def native_product_assembly(
         document = documents_by_id.get(document_id)
         kind = (
             ComponentKind.ASSEMBLY
-            if reference is not None and reference.document_type == "CATProduct"
+            if reference is not None
+            and reference.document_type == PRODUCT_DOCUMENT_TYPE
             else (
                 ComponentKind.PART
-                if reference is not None and reference.document_type == "CATPart"
+                if reference is not None
+                and reference.document_type == PART_DOCUMENT_TYPE
                 else ComponentKind.REFERENCE
             )
         )
@@ -261,8 +284,8 @@ def native_product_assembly(
                     spans=_physical_spans(
                         archive,
                         table,
-                        first_offsets[definition_name],
-                        len(definition_name),
+                        first_occurrences[definition_name].definition_offset,
+                        first_occurrences[definition_name].definition_length,
                         "component-definition",
                     ),
                 ),
@@ -270,6 +293,20 @@ def native_product_assembly(
                     {
                         "native_reference_name": definition_name,
                         "source_resolved": reference is not None,
+                        "source_ambiguous": len(
+                            reference_candidates.get(definition_name, ())
+                        )
+                        > 1,
+                        "native_reference_candidates": tuple(
+                            {
+                                "path": str(candidate.path),
+                                "document_type": candidate.document_type,
+                                "sha256": candidate.sha256,
+                            }
+                            for candidate in reference_candidates.get(
+                                definition_name, ()
+                            )
+                        ),
                     }
                 ),
             )
@@ -289,7 +326,7 @@ def native_product_assembly(
                     archive,
                     table,
                     occurrence.instance_offset,
-                    len(occurrence.instance_name),
+                    occurrence.instance_length,
                     "component-instance",
                 ),
             ),
@@ -301,7 +338,7 @@ def native_product_assembly(
                         archive,
                         table,
                         occurrence.instance_offset,
-                        len(occurrence.instance_name),
+                        occurrence.instance_length,
                         "component-instance",
                     )[0].offset,
                     "transform_resolved": False,
@@ -317,6 +354,38 @@ def native_product_assembly(
         *reference_diagnostics,
         *document_diagnostics,
     ]
+    if table.alternatives:
+        diagnostics.append(
+            Diagnostic(
+                "catia.product.root_ambiguous",
+                "Multiple CATIA product tables were retained; the deterministic Data-first table supplies normalized assembly semantics.",
+                Severity.WARNING,
+                attributes=frozen_mapping(
+                    {
+                        "selected": _table_candidate_record(table),
+                        "alternatives": tuple(
+                            _table_candidate_record(candidate)
+                            for candidate in table.alternatives
+                        ),
+                    }
+                ),
+            )
+        )
+    if table.ambiguous_tokens:
+        diagnostics.append(
+            Diagnostic(
+                "catia.product.native_tokens_retained",
+                "CATIA product tokens without verified occurrence roles remain available as ordered native records.",
+                Severity.INFO,
+                attributes=frozen_mapping(
+                    {
+                        "tokens": tuple(
+                            _token_record(token) for token in table.ambiguous_tokens
+                        )
+                    }
+                ),
+            )
+        )
     if missing:
         diagnostics.append(
             Diagnostic(
@@ -378,10 +447,56 @@ def native_product_assembly(
                 ),
                 "transform_status": "native-only",
                 "constraint_status": "native-only",
+                "native_table_candidates": (
+                    _table_candidate_record(table),
+                    *(
+                        _table_candidate_record(candidate)
+                        for candidate in table.alternatives
+                    ),
+                ),
+                "native_unresolved_tokens": tuple(
+                    _token_record(token) for token in table.ambiguous_tokens
+                ),
+                "native_reference_candidates": tuple(
+                    {
+                        "definition_name": name,
+                        "candidates": tuple(
+                            {
+                                "path": str(candidate.path),
+                                "document_type": candidate.document_type,
+                                "sha256": candidate.sha256,
+                            }
+                            for candidate in candidates
+                        ),
+                    }
+                    for name, candidates in reference_candidates.items()
+                    if candidates
+                ),
             }
         ),
     )
     return assembly, tuple(diagnostics)
+
+
+def _token_record(token: NativeProductToken) -> dict[str, object]:
+    return {
+        "value": token.value,
+        "offset": token.offset,
+        "length": token.length,
+        "encoding": token.encoding,
+    }
+
+
+def _table_candidate_record(
+    table: NativeProductTable | NativeProductTableCandidate,
+) -> dict[str, object]:
+    return {
+        "root_name": table.root_name,
+        "stream_name": table.stream_name,
+        "stream_descriptor_offset": table.stream_descriptor_offset,
+        "table_offset": table.table_offset,
+        "tokens": tuple(_token_record(token) for token in table.tokens),
+    }
 
 
 def _product_tokens(data: bytes) -> tuple[NativeProductToken, ...]:
@@ -397,97 +512,168 @@ def _product_tokens(data: bytes) -> tuple[NativeProductToken, ...]:
         if length < 1 or end > len(data):
             break
         raw = data[cursor + 1 : end]
-        if any(value < 0x20 or value > 0x7E for value in raw):
-            break
-        result.append(NativeProductToken(raw.decode("ascii"), cursor + 1, length))
+        value, encoding = _decode_product_token(raw)
+        result.append(NativeProductToken(value, cursor + 1, length, encoding))
         cursor = end
     return tuple(result)
 
 
+def _decode_product_token(raw: bytes) -> tuple[str, str]:
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        decoded = _decoded_text(raw, "utf-16")
+        if decoded is not None:
+            return decoded, "utf-16"
+    if len(raw) >= 2 and len(raw) % 2 == 0:
+        pairs = len(raw) // 2
+        little_zeroes = sum(raw[index] == 0 for index in range(1, len(raw), 2))
+        big_zeroes = sum(raw[index] == 0 for index in range(0, len(raw), 2))
+        if little_zeroes * 2 >= pairs:
+            decoded = _decoded_text(raw, "utf-16le")
+            if decoded is not None:
+                return decoded, "utf-16le"
+        if big_zeroes * 2 >= pairs:
+            decoded = _decoded_text(raw, "utf-16be")
+            if decoded is not None:
+                return decoded, "utf-16be"
+    decoded = _decoded_text(raw, "utf-8")
+    return (
+        (decoded, "utf-8")
+        if decoded is not None
+        else (raw.decode("latin-1"), "latin-1")
+    )
+
+
+def _decoded_text(raw: bytes, encoding: str) -> str | None:
+    try:
+        return raw.decode(encoding)
+    except UnicodeDecodeError:
+        return None
+
+
 def _product_occurrences(
     tokens: tuple[NativeProductToken, ...],
-) -> tuple[NativeProductOccurrence, ...]:
+) -> tuple[tuple[NativeProductOccurrence, ...], tuple[NativeProductToken, ...]]:
     values = tuple(token.value for token in tokens)
     try:
         start = values.index("_Reps") + 1
     except ValueError as exc:
         raise Cfv2FormatError("CATIA ASMPRODUCT table has no _Reps boundary") from exc
-    usable = tuple(
-        token
-        for token in tokens[start:]
-        if not token.value.startswith("_")
-        and token.value not in _NON_COMPONENT_VALUES
-        and not token.value.isdecimal()
-    )
     result: list[NativeProductOccurrence] = []
-    definition_offsets: dict[str, int] = {}
-    pending: NativeProductToken | None = None
-    for token in usable:
-        match = _INSTANCE.fullmatch(token.value)
-        if match is not None:
-            derived = match.group(1)
-            definition = _instance_definition(pending, derived)
-            offset = (
-                pending.offset
-                if pending is not None and definition == pending.value
-                else definition_offsets.get(definition, token.offset)
+    used: set[int] = set()
+    terminal = next(
+        (
+            index
+            for index in range(start, len(tokens))
+            if tokens[index].value == "IsRoot"
+        ),
+        len(tokens),
+    )
+
+    def append(definition_index: int, instance_index: int, reference: str) -> None:
+        definition = tokens[definition_index]
+        instance = tokens[instance_index]
+        result.append(
+            NativeProductOccurrence(
+                definition.value,
+                instance.value,
+                definition.offset,
+                instance.offset,
+                definition.length,
+                instance.length,
+                reference,
             )
-            definition_offsets.setdefault(definition, offset)
-            result.append(
-                NativeProductOccurrence(
-                    definition,
-                    token.value,
-                    definition_offsets[definition],
-                    token.offset,
-                    match.group(2),
-                )
-            )
-            pending = None
+        )
+        used.update((definition_index, instance_index))
+
+    marker = next(
+        (
+            index
+            for index in range(start + 1, terminal)
+            if tokens[index].value == "_InstanceName"
+        ),
+        None,
+    )
+    current_definition: int | None = None
+    definitions_by_instance_key: dict[str, int] = {}
+    pool_start = start
+    if marker is not None and marker + 1 < terminal:
+        identity = _numbered_instance_identity(tokens[marker + 1].value)
+        append(start, marker + 1, identity[1] if identity is not None else "")
+        if identity is not None:
+            definitions_by_instance_key[identity[0]] = start
+        current_definition = start
+        shape = next(
+            (
+                index
+                for index in range(marker + 2, terminal)
+                if tokens[index].value == "Shape 1"
+            ),
+            marker + 1,
+        )
+        pool_start = shape + 1
+    pending: int | None = None
+    for index in range(pool_start, terminal):
+        if index in used:
             continue
-        custom = _custom_numbered_pair(pending, token)
-        if custom is not None:
-            definition_offsets.setdefault(custom, pending.offset)
-            reference = _SPACE_NUMBER.fullmatch(token.value)
-            result.append(
-                NativeProductOccurrence(
-                    custom,
-                    token.value,
-                    definition_offsets[custom],
-                    token.offset,
-                    reference.group(2) if reference is not None else "",
-                )
-            )
-            pending = None
+        identity = _numbered_instance_identity(tokens[index].value)
+        if identity is not None:
+            instance_key, reference = identity
+            established = definitions_by_instance_key.get(instance_key)
+            if pending is not None:
+                current_definition = pending
+                definitions_by_instance_key[instance_key] = pending
+                pending = None
+            elif established is not None:
+                current_definition = established
+            if current_definition is not None:
+                append(current_definition, index, reference)
             continue
-        pending = token
-        definition_offsets.setdefault(token.value, token.offset)
-    return tuple(result)
+        if tokens[index].value == "_InstanceName" and pending is not None:
+            instance_index = index + 1
+            if instance_index < terminal:
+                append(
+                    pending,
+                    instance_index,
+                    (
+                        identity[1]
+                        if (
+                            identity := _numbered_instance_identity(
+                                tokens[instance_index].value
+                            )
+                        )
+                        is not None
+                        else ""
+                    ),
+                )
+                if identity is not None:
+                    definitions_by_instance_key[identity[0]] = pending
+                current_definition = pending
+                pending = None
+            continue
+        pending = index
+    if terminal >= start + 3:
+        ordinal, definition, instance = range(terminal - 3, terminal)
+        if (
+            tokens[ordinal].value.isdecimal()
+            and definition not in used
+            and instance not in used
+        ):
+            append(definition, instance, tokens[ordinal].value)
+    ambiguous = tuple(
+        token
+        for index, token in enumerate(tokens)
+        if index >= start and index not in used
+    )
+    return tuple(result), ambiguous
 
 
-def _instance_definition(pending: NativeProductToken | None, derived: str) -> str:
-    if pending is None:
-        return derived
-    if pending.value == derived:
-        return derived
-    if _TRAILING_VARIANT.sub("", pending.value) == derived:
-        return pending.value
-    if pending.value.startswith(derived + "_"):
-        return pending.value
-    return derived
-
-
-def _custom_numbered_pair(
-    pending: NativeProductToken | None, current: NativeProductToken
-) -> str | None:
-    if pending is None:
+def _numbered_instance_identity(value: str) -> tuple[str, str] | None:
+    identity, separator, reference = value.rpartition(".")
+    if not identity or not separator or not reference.isdecimal():
         return None
-    left = _SPACE_NUMBER.fullmatch(pending.value)
-    right = _SPACE_NUMBER.fullmatch(current.value)
-    if left is None or right is None or left.group(1) != right.group(1):
-        return None
-    if int(right.group(2)) != int(left.group(2)) + 1:
-        return None
-    return pending.value
+    if identity.startswith("I_"):
+        identity = identity[2:]
+    return identity, reference
 
 
 def _component_reference_index(label: str, settings: ReadOptions) -> tuple[
@@ -524,7 +710,10 @@ def _component_reference_index(label: str, settings: ReadOptions) -> tuple[
             directory, depth = pending.pop(0)
             try:
                 entries = tuple(
-                    sorted(directory.iterdir(), key=lambda item: item.name.casefold())
+                    sorted(
+                        directory.iterdir(),
+                        key=lambda item: (item.name.casefold(), item.name),
+                    )
                 )
             except OSError as exc:
                 diagnostics.append(
@@ -546,10 +735,10 @@ def _component_reference_index(label: str, settings: ReadOptions) -> tuple[
                             continue
                         pending.append((resolved_directory, depth + 1))
                         continue
-                    if not path.is_file() or path.suffix.casefold() not in {
-                        ".catpart",
-                        ".catproduct",
-                    }:
+                    if (
+                        not path.is_file()
+                        or path.suffix.casefold() not in DOCUMENT_TYPE_BY_SUFFIX
+                    ):
                         continue
                     resolved = path.resolve(strict=True)
                     if not _under_root(resolved, root):
@@ -579,11 +768,7 @@ def _component_reference_index(label: str, settings: ReadOptions) -> tuple[
                     NativeProductReference(
                         table.root_name,
                         resolved,
-                        (
-                            "CATProduct"
-                            if resolved.suffix.casefold() == ".catproduct"
-                            else "CATPart"
-                        ),
+                        DOCUMENT_TYPE_BY_SUFFIX[resolved.suffix.casefold()],
                         hashlib.sha256(data).hexdigest(),
                     )
                 )
@@ -609,7 +794,12 @@ def _component_reference_index(label: str, settings: ReadOptions) -> tuple[
         )
     return (
         {
-            name: tuple(sorted(values, key=lambda item: str(item.path).casefold()))
+            name: tuple(
+                sorted(
+                    values,
+                    key=lambda item: (str(item.path).casefold(), str(item.path)),
+                )
+            )
             for name, values in references.items()
         },
         tuple(diagnostics),
@@ -627,8 +817,14 @@ def _component_search_roots(
         if source is None:
             return (), ()
         candidates = (source.parent,)
-        if source.parent.name.casefold() in {".catproduct", "catproduct"}:
-            candidates = (*candidates, source.parent.parent / ".CATPart")
+        if source.parent.name.casefold() in {
+            _PRODUCT_SUFFIX,
+            _PRODUCT_SUFFIX.removeprefix("."),
+        }:
+            candidates = (
+                *candidates,
+                source.parent.parent / f".{PART_DOCUMENT_TYPE}",
+            )
     roots: list[Path] = []
     diagnostics: list[Diagnostic] = []
     seen: set[str] = set()
@@ -710,8 +906,13 @@ def _search_diagnostic(path: Path, reason: str, detail: str = "") -> Diagnostic:
 def _selected_references(
     table: NativeProductTable,
     references: dict[str, tuple[NativeProductReference, ...]],
-) -> tuple[dict[str, NativeProductReference], tuple[Diagnostic, ...]]:
+) -> tuple[
+    dict[str, NativeProductReference],
+    dict[str, tuple[NativeProductReference, ...]],
+    tuple[Diagnostic, ...],
+]:
     selected: dict[str, NativeProductReference] = {}
+    retained: dict[str, tuple[NativeProductReference, ...]] = {}
     diagnostics: list[Diagnostic] = []
     for name in dict.fromkeys(
         occurrence.definition_name for occurrence in table.occurrences
@@ -722,26 +923,29 @@ def _selected_references(
         ordered = sorted(
             candidates,
             key=lambda item: (
-                item.path.stem.casefold() != name.casefold(),
                 str(item.path).casefold(),
+                str(item.path),
             ),
         )
-        selected[name] = ordered[0]
-        if len(ordered) > 1:
+        retained[name] = tuple(ordered)
+        if len(ordered) == 1:
+            selected[name] = ordered[0]
+        else:
             diagnostics.append(
                 Diagnostic(
                     "catia.product.component_source_ambiguous",
-                    f"Multiple CATIA documents declare product name {name!r}; the deterministic best match was selected.",
+                    f"Multiple CATIA documents declare product name {name!r}; no source was selected without unique structural identity.",
                     Severity.WARNING,
                     attributes=frozen_mapping(
                         {
-                            "selected": str(ordered[0].path),
+                            "definition_name": name,
+                            "selected": "",
                             "candidates": tuple(str(item.path) for item in ordered),
                         }
                     ),
                 )
             )
-    return selected, tuple(diagnostics)
+    return selected, retained, tuple(diagnostics)
 
 
 def _component_documents(

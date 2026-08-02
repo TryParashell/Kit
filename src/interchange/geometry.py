@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, is_dataclass
+from functools import reduce
+from operator import or_
 from typing import Any, Mapping
 
 from .types import GeometryKind, Provenance, Transform, Vector2, Vector3, frozen_mapping
@@ -44,6 +46,7 @@ class SplineGeometry:
     control_points: tuple[Vector2, ...]
     degree: int
     knots: tuple[float, ...] = ()
+    multiplicities: tuple[int, ...] = ()
     weights: tuple[float, ...] = ()
     periodic: bool = False
 
@@ -55,15 +58,12 @@ class NativeGeometry:
     data: Mapping[str, Any] = field(default_factory=frozen_mapping)
 
 
-Geometry = (
-    PointGeometry
-    | LineGeometry
-    | CircleGeometry
-    | ArcGeometry
-    | EllipseGeometry
-    | SplineGeometry
-    | NativeGeometry
+_GEOMETRY_TYPES = tuple(
+    value
+    for name, value in tuple(globals().items())
+    if name.endswith("Geometry") and isinstance(value, type) and is_dataclass(value)
 )
+Geometry = reduce(or_, _GEOMETRY_TYPES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,3 +135,4 @@ class Selection:
     query: Mapping[str, Any] = field(default_factory=frozen_mapping)
     point: Vector3 | None = None
     provenance: Provenance | None = None
+    attributes: Mapping[str, Any] = field(default_factory=frozen_mapping)

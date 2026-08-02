@@ -6,6 +6,8 @@ import struct
 from typing import Iterable, Mapping
 import zlib
 
+from .format import CONTAINER_VERSIONS
+
 
 _LOCAL_SIGNATURE_PREFIX = bytes.fromhex("140006000800")
 _LOCAL_SIGNATURE_SIZE = 10
@@ -55,7 +57,7 @@ class SldprtArchive:
         if len(data) < 8:
             raise SldprtFormatError("file is too short to contain an SLDPRT header")
         file_id, format_version = struct.unpack_from(">II", data, 0)
-        if format_version not in {3, 4}:
+        if format_version not in CONTAINER_VERSIONS:
             raise SldprtFormatError(
                 f"unsupported SLDPRT container version {format_version}"
             )
@@ -87,7 +89,7 @@ def build_sldprt(
 ) -> bytes:
     if not 0 <= file_id <= 0xFFFFFFFF:
         raise ValueError("SLDPRT file id must fit in 32 bits")
-    if format_version not in {3, 4}:
+    if format_version not in CONTAINER_VERSIONS:
         raise ValueError("SLDPRT container version must be 3 or 4")
     items = list(streams.items() if isinstance(streams, Mapping) else streams)
     names = [name for name, _ in items]

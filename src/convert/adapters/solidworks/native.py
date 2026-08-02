@@ -1,16 +1,22 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import itertools
 import math
 import re
 import struct
+from types import MappingProxyType
 import xml.etree.ElementTree as ET
 
 from .container import SldprtFormatError
+from .format import (
+    CANONICAL_PLANE_FEATURE_TYPE,
+    CLASS_MARKER,
+    PLANE_FEATURE_TYPES,
+    dimension_scalar_value_offset,
+)
 
 
-_CLASS_MARKER = bytes.fromhex("ffff0100")
 _CURRENT_MARKER = bytes.fromhex("ffff1f0003")
 _LEGACY_MARKER = bytes.fromhex("ffff070001")
 _EXTENDED_MARKER = bytes.fromhex("ffff1f0001")
@@ -18,12 +24,21 @@ _MARKERS = (_CURRENT_MARKER, _LEGACY_MARKER, _EXTENDED_MARKER)
 _COORDINATE_TAG = bytes.fromhex("1e00")
 _POINT_LOCUS = bytes.fromhex("04000200")
 _CIRCLE_LOCUS = bytes.fromhex("05000100")
-_SCALAR_HEADERS = (
-    bytes.fromhex("0000000000000040ffffffff00000000fffeff000000"),
-    bytes.fromhex("0000000000000040ffffffff000000000000"),
-)
 _NUMBER = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 _EDGE_SELECTION_IDENTITY = bytes.fromhex("7dc39425ad49b2547dc39425ad49b254")
+MARKER_LOCAL_ID_OFFSET_BY_LENGTH = MappingProxyType(
+    {
+        142: 138,
+        146: 138,
+        152: 148,
+        154: 150,
+        156: 148,
+        158: 144,
+        162: 158,
+        166: 158,
+        167: 158,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +101,7 @@ class NativeMarker:
     endpoint_indices: tuple[int, int] | None
     construction: bool
     semantic: str
+    data: bytes = b""
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +120,8 @@ class NativeProfile:
     kind: str
     coordinates: tuple[float, ...]
     marker_offsets: tuple[int, ...]
+    parameter_name: str | None = None
+    dimension_kind: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +134,7 @@ class NativePlane:
     v_axis: tuple[float, float, float]
     native_offset: int | None
     native_length: int | None
+    principal: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +188,7 @@ class NativeFeature:
     native_end: int | None
     properties: dict[str, str]
     dimensions: tuple[NativeDimension, ...]
+    data: bytes = b""
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,77 +227,76 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
     names = _parse_names(resolved)
     classes = _parse_classes(resolved)
     scalars = _parse_scalars(resolved, names)
-    name_by_key = {
-        (name.object_id, name.name): name
-        for name in names
-        if name.object_id is not None
-    }
+    record_by_id = _feature_records(xml_features, names)
     ordered_records = sorted(
-        (
-            name_by_key[(feature.object_id, feature.name)]
-            for feature in xml_features
-            if (feature.object_id, feature.name) in name_by_key
-        ),
+        {record.offset: record for record in record_by_id.values()}.values(),
         key=lambda record: record.offset,
     )
     ends = {
-        (record.object_id, record.name): (
+        record.offset: (
             ordered_records[index + 1].offset
             if index + 1 < len(ordered_records)
             else len(resolved)
         )
         for index, record in enumerate(ordered_records)
     }
-    feature_by_id = {feature.object_id: feature for feature in xml_features}
     scalar_owner = _scalar_owners(scalars, ordered_records, ends)
     native_features: list[NativeFeature] = []
     for feature in xml_features:
-        record = name_by_key.get((feature.object_id, feature.name))
+        record = record_by_id.get(feature.object_id)
+        name = feature.name or (record.name if record is not None else "")
+        if not name:
+            name = f"{feature.kind or feature.xml_tag} {feature.object_id}"
         owned = scalar_owner.get(feature.object_id, ())
-        dimensions = tuple(
-            _bind_dimension(dimension, owned) for dimension in feature.dimensions
+        dimensions = _semantic_dimensions(
+            feature.kind,
+            tuple(_bind_dimension(item, owned) for item in feature.dimensions),
         )
+        native_end = ends.get(record.offset) if record is not None else None
         native_features.append(
             NativeFeature(
                 object_id=feature.object_id,
-                name=feature.name,
+                name=name,
                 kind=feature.kind,
                 xml_tag=feature.xml_tag,
                 native_offset=record.offset if record else None,
-                native_end=(
-                    ends[(feature.object_id, feature.name)] if record else None
-                ),
+                native_end=native_end,
                 properties=dict(feature.properties),
                 dimensions=dimensions,
+                data=(
+                    resolved[record.offset : native_end]
+                    if record is not None and native_end is not None
+                    else b""
+                ),
             )
         )
     planes = _decode_planes(resolved, native_features)
     plane_by_id = {plane.object_id: plane for plane in planes}
+    principal_plane_frames = _principal_plane_frames(native_features)
+    principal_plane_ids = frozenset(principal_plane_frames)
     author = sorted(
         (
             feature
             for feature in native_features
             if feature.native_offset is not None
-            and (
-                feature.kind in {"Sketch", "Extrusion", "Fillet"}
-                or _is_plane_feature(feature)
-                or feature.name.startswith("Sketch")
-            )
-            and feature.name
-            not in {"Origin", "Front Plane", "Top Plane", "Right Plane"}
+            and not _is_origin_feature(feature)
+            and feature.object_id not in principal_plane_ids
         ),
         key=lambda feature: feature.native_offset or 0,
     )
     sketches: list[NativeSketch] = []
     operations: list[NativeOperation] = []
+    native_index_by_id = {
+        feature.object_id: index for index, feature in enumerate(native_features)
+    }
     latest_sketch: NativeSketch | None = None
     latest_operation: NativeOperation | None = None
-    latest_plane_id = 2
+    latest_plane_id = next(iter(principal_plane_frames), next(iter(plane_by_id), 0))
     for feature in author:
         if _is_plane_feature(feature):
             latest_plane_id = feature.object_id
             continue
-        if feature.kind == "Sketch":
+        if feature.kind.casefold() == "sketch":
             support = _support_plane_id(
                 resolved,
                 feature.native_offset or 0,
@@ -286,10 +305,14 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
                 plane_by_id,
             )
             latest_sketch = _decode_sketch(resolved, feature, support)
+            native_index = native_index_by_id[feature.object_id]
+            native_features[native_index] = replace(
+                native_features[native_index], dimensions=latest_sketch.dimensions
+            )
             sketches.append(latest_sketch)
             continue
-        if feature.kind == "Extrusion":
-            record = name_by_key.get((feature.object_id, feature.name))
+        if feature.kind.casefold() == "extrusion":
+            record = record_by_id.get(feature.object_id)
             if record is None:
                 continue
             child = _integer_property(feature.properties.get("DissectableChildren"))
@@ -320,7 +343,7 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
                 dependencies=dependencies,
                 native_offset=feature.native_offset or 0,
                 native_end=feature.native_end or len(resolved),
-                length_mm=_dimension(feature.dimensions, "D1"),
+                length_mm=_operation_dimension(feature.dimensions, "length"),
                 radius_mm=None,
                 family_code=family,
                 operation_code=operation_code,
@@ -333,7 +356,7 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
             operations.append(operation)
             latest_operation = operation
             continue
-        if feature.kind == "Fillet":
+        if feature.kind.casefold() == "fillet":
             selections = _edge_selections(
                 resolved,
                 feature.native_offset or 0,
@@ -359,7 +382,7 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
                 native_offset=feature.native_offset or 0,
                 native_end=feature.native_end or len(resolved),
                 length_mm=None,
-                radius_mm=_dimension(feature.dimensions, "D1"),
+                radius_mm=_operation_dimension(feature.dimensions, "radius"),
                 family_code=None,
                 operation_code=None,
                 schema_code=None,
@@ -426,15 +449,19 @@ def _parse_keywords(
                 )
             )
             continue
-        if tag not in {"Feature", "Extrusion", "Sketch"}:
+        if element is root or tag == "Dimension":
             continue
-        name = element.attrib.get("Name", "")
         raw_id = element.attrib.get("id")
-        if not raw_id or not name:
+        if not raw_id:
+            continue
+        try:
+            object_id = int(raw_id)
+        except ValueError:
             continue
         kind = tag if tag != "Feature" else element.attrib.get("Type", "Feature")
-        if kind == "RefPlane":
-            kind = "Plane"
+        if kind.casefold() in PLANE_FEATURE_TYPES:
+            kind = CANONICAL_PLANE_FEATURE_TYPE.title()
+        name = element.attrib.get("Name", "")
         dimensions = [
             _parse_dimension(child.attrib.get("Name", ""), child.text or "")
             for child in element
@@ -442,7 +469,7 @@ def _parse_keywords(
         ]
         features.append(
             _XmlFeature(
-                object_id=int(raw_id),
+                object_id=object_id,
                 name=name,
                 kind=kind,
                 xml_tag=tag,
@@ -482,7 +509,7 @@ def _parse_dimension(name: str, text: str) -> NativeDimension:
 
 
 def _name_marker(data: bytes) -> bytes:
-    for offset in _find_all(data, _CLASS_MARKER):
+    for offset in _find_all(data, CLASS_MARKER):
         if offset + 6 > len(data):
             continue
         length = struct.unpack_from("<H", data, offset + 4)[0]
@@ -534,7 +561,7 @@ def _parse_names(data: bytes) -> tuple[NativeName, ...]:
 
 def _parse_classes(data: bytes) -> tuple[NativeClass, ...]:
     classes: list[NativeClass] = []
-    for offset in _find_all(data, _CLASS_MARKER):
+    for offset in _find_all(data, CLASS_MARKER):
         if offset + 6 > len(data):
             continue
         length = struct.unpack_from("<H", data, offset + 4)[0]
@@ -553,12 +580,13 @@ def _parse_scalars(
 ) -> tuple[NativeScalar, ...]:
     scalars: list[NativeScalar] = []
     for name in names:
-        value_offset = None
-        for header in _SCALAR_HEADERS:
-            if data[name.text_end : name.text_end + len(header)] == header:
-                value_offset = name.text_end + len(header)
-                break
-        if value_offset is None or value_offset + 15 > len(data):
+        value_offset = dimension_scalar_value_offset(
+            data,
+            name.text_end,
+            len(data),
+            trailing_bytes=7,
+        )
+        if value_offset is None:
             continue
         value = struct.unpack_from("<d", data, value_offset)[0]
         if not math.isfinite(value):
@@ -626,13 +654,13 @@ def _scalar_trailer(data: bytes, trailer: int) -> tuple[str, tuple[NativeOperand
 def _scalar_owners(
     scalars: tuple[NativeScalar, ...],
     records: list[NativeName],
-    ends: dict[tuple[int | None, str], int],
+    ends: dict[int, int],
 ) -> dict[int, tuple[NativeScalar, ...]]:
     result: dict[int, list[NativeScalar]] = {}
     for record in records:
         if record.object_id is None:
             continue
-        end = ends[(record.object_id, record.name)]
+        end = ends[record.offset]
         result[record.object_id] = [
             scalar for scalar in scalars if record.offset < scalar.value_offset < end
         ]
@@ -643,12 +671,17 @@ def _bind_dimension(
     dimension: NativeDimension, scalars: tuple[NativeScalar, ...]
 ) -> NativeDimension:
     target = dimension.value_mm / 1000.0
-    matches = [
+    value_matches = [
         scalar
         for scalar in scalars
-        if scalar.name == dimension.name
-        and math.isclose(scalar.value, target, rel_tol=1e-9, abs_tol=1e-12)
+        if math.isclose(scalar.value, target, rel_tol=1e-9, abs_tol=1e-12)
     ]
+    named_matches = [
+        scalar for scalar in value_matches if scalar.name == dimension.name
+    ]
+    matches = named_matches
+    if not matches and len(value_matches) == 1:
+        matches = value_matches
     if not matches:
         return dimension
     scalar = next(
@@ -666,16 +699,62 @@ def _bind_dimension(
     )
 
 
+def _feature_records(
+    features: list[_XmlFeature], names: tuple[NativeName, ...]
+) -> dict[int, NativeName]:
+    records: dict[int, list[NativeName]] = {}
+    for record in names:
+        if record.object_id is not None:
+            records.setdefault(record.object_id, []).append(record)
+    result: dict[int, NativeName] = {}
+    for feature in features:
+        candidates = records.get(feature.object_id, ())
+        if not candidates:
+            continue
+        exact = tuple(record for record in candidates if record.name == feature.name)
+        selected = min(exact or tuple(candidates), key=lambda record: record.offset)
+        result[feature.object_id] = selected
+    return result
+
+
+def _semantic_dimensions(
+    feature_kind: str, dimensions: tuple[NativeDimension, ...]
+) -> tuple[NativeDimension, ...]:
+    semantic = {
+        "extrusion": "length",
+        "fillet": "radius",
+    }.get(feature_kind.casefold())
+    if semantic is None or not dimensions:
+        return dimensions
+    selected = _primary_dimension(dimensions)
+    return tuple(
+        replace(dimension, kind=semantic) if index == selected else dimension
+        for index, dimension in enumerate(dimensions)
+    )
+
+
+def _primary_dimension(dimensions: tuple[NativeDimension, ...]) -> int:
+    return min(
+        range(len(dimensions)),
+        key=lambda index: (
+            dimensions[index].native_role == "display",
+            dimensions[index].native_offset is None,
+            (
+                dimensions[index].native_offset
+                if dimensions[index].native_offset is not None
+                else index
+            ),
+            index,
+        ),
+    )
+
+
 def _decode_planes(data: bytes, features: list[NativeFeature]) -> list[NativePlane]:
-    principal = {
-        "Front Plane": ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0)),
-        "Top Plane": ((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)),
-        "Right Plane": ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
-    }
+    principal = _principal_plane_frames(features)
     planes: list[NativePlane] = []
     for feature in features:
-        if feature.name in principal:
-            origin, normal, u_axis = principal[feature.name]
+        if feature.object_id in principal:
+            origin, normal, u_axis = principal[feature.object_id]
             planes.append(
                 NativePlane(
                     feature.object_id,
@@ -686,6 +765,7 @@ def _decode_planes(data: bytes, features: list[NativeFeature]) -> list[NativePla
                     _cross(normal, u_axis),
                     feature.native_offset,
                     None,
+                    True,
                 )
             )
             continue
@@ -712,10 +792,54 @@ def _decode_planes(data: bytes, features: list[NativeFeature]) -> list[NativePla
     return planes
 
 
-def _is_plane_feature(feature: NativeFeature) -> bool:
-    return feature.kind.casefold() == "plane" or feature.name.casefold().startswith(
-        "plane"
+def _principal_plane_frames(
+    features: list[NativeFeature],
+) -> dict[
+    int,
+    tuple[
+        tuple[float, float, float],
+        tuple[float, float, float],
+        tuple[float, float, float],
+    ],
+]:
+    ordered = tuple(
+        feature
+        for _, feature in sorted(
+            enumerate(features),
+            key=lambda item: (
+                item[1].native_offset is None,
+                (
+                    item[1].native_offset
+                    if item[1].native_offset is not None
+                    else item[0]
+                ),
+                item[0],
+            ),
+        )
     )
+    origin_index = next(
+        (index for index, feature in enumerate(ordered) if _is_origin_feature(feature)),
+        None,
+    )
+    if origin_index is None:
+        return {}
+    planes = tuple(
+        feature for feature in ordered[:origin_index] if _is_plane_feature(feature)
+    )
+    frames = (
+        ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0)),
+        ((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)),
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+    )
+    return {feature.object_id: frame for feature, frame in zip(planes[:3], frames)}
+
+
+def _is_origin_feature(feature: NativeFeature) -> bool:
+    return feature.properties.get("Type", "").casefold() == "origin"
+
+
+def _is_plane_feature(feature: NativeFeature) -> bool:
+    return feature.kind.casefold() in PLANE_FEATURE_TYPES
 
 
 def _matrix_frame(data: bytes, start: int, end: int) -> (
@@ -729,7 +853,7 @@ def _matrix_frame(data: bytes, start: int, end: int) -> (
     ]
     | None
 ):
-    for offset in range(start, max(start, end - 121 + 1) + 1):
+    for offset in range(start, max(start, end - 121 + 1)):
         if data[offset + 48] != 1:
             continue
         origin = struct.unpack_from("<3d", data, offset)
@@ -783,7 +907,7 @@ def _minimal_frame(data: bytes, start: int, end: int) -> (
     ]
     | None
 ):
-    for offset in range(start, max(start, end - 81 + 1) + 1):
+    for offset in range(start, max(start, end - 81 + 1)):
         origin = struct.unpack_from("<3d", data, offset)
         normal = struct.unpack_from("<3d", data, offset + 24)
         if normal != (0.0, 0.0, 1.0):
@@ -869,7 +993,7 @@ def _decode_sketch(
     start = feature.native_offset or 0
     end = feature.native_end or len(data)
     markers = list(_parse_markers(data, start, end))
-    profiles, profile_markers = _profiles(markers, feature.dimensions)
+    profiles, profile_markers, dimensions = _profiles(markers, feature.dimensions)
     normalized_markers = tuple(
         NativeMarker(
             offset=marker.offset,
@@ -886,10 +1010,10 @@ def _decode_sketch(
             construction=(
                 marker.construction
                 or marker.offset not in profile_markers
-                and marker.semantic
-                in {"point", "line", "circle", "reference", "relation"}
+                and marker.semantic != "native"
             ),
             semantic=marker.semantic,
+            data=marker.data,
         )
         for marker in markers
     )
@@ -902,7 +1026,7 @@ def _decode_sketch(
         native_end=end,
         markers=normalized_markers,
         profiles=profiles,
-        dimensions=feature.dimensions,
+        dimensions=dimensions,
         constraints=constraints,
     )
 
@@ -921,22 +1045,17 @@ def _parse_markers(data: bytes, start: int, end: int) -> tuple[NativeMarker, ...
         prefix_bytes = next(
             prefix for prefix in _MARKERS if data.startswith(prefix, offset)
         )
-        current = prefix_bytes == _CURRENT_MARKER
-        native_offset = 17 if current or prefix_bytes == _EXTENDED_MARKER else 13
-        locus_offset = 23 if current or prefix_bytes == _EXTENDED_MARKER else 19
-        role_offset = 27 if current or prefix_bytes == _EXTENDED_MARKER else 23
+        native_offset = 17
+        locus_offset = 23
+        role_offset = 27
         if offset + native_offset + 4 > end:
             continue
         native_kind = struct.unpack_from("<I", data, offset + native_offset)[0]
         locus = data[offset + locus_offset : offset + locus_offset + 4]
-        if locus not in {_POINT_LOCUS, _CIRCLE_LOCUS}:
-            continue
         profile_role = struct.unpack_from("<H", data, offset + role_offset)[0]
         next_offset = offsets[index + 1] if index + 1 < len(offsets) else end
         length = next_offset - offset
-        state_offset = offset + (
-            48 if current or prefix_bytes == _EXTENDED_MARKER else 40
-        )
+        state_offset = offset + 48
         state = (
             struct.unpack_from("<d", data, state_offset)[0]
             if state_offset + 8 <= end
@@ -944,14 +1063,10 @@ def _parse_markers(data: bytes, start: int, end: int) -> tuple[NativeMarker, ...
         )
         if state is not None and not math.isfinite(state):
             state = None
-        coordinates = _marker_coordinates(
-            data, offset, end, current or prefix_bytes == _EXTENDED_MARKER
-        )
+        coordinates = _marker_coordinates(data, offset, end)
         endpoints = None
         if coordinates is None:
-            pair_offset = offset + (
-                64 if current or prefix_bytes == _EXTENDED_MARKER else 42
-            )
+            pair_offset = offset + 64
             if pair_offset + 4 <= end:
                 pair = struct.unpack_from("<HH", data, pair_offset)
                 if pair != (0, 0):
@@ -980,16 +1095,16 @@ def _parse_markers(data: bytes, start: int, end: int) -> tuple[NativeMarker, ...
                 endpoint_indices=endpoints,
                 construction=profile_role == 2,
                 semantic=semantic,
+                data=bytes(data[offset:next_offset]),
             )
         )
     return tuple(markers)
 
 
 def _marker_coordinates(
-    data: bytes, offset: int, end: int, current: bool
+    data: bytes, offset: int, end: int
 ) -> tuple[float, float] | None:
-    relatives = (56, 64) if current else (42, 48, 56, 64)
-    for relative in relatives:
+    for relative in (56, 64):
         coordinate_offset = offset + relative
         if data[coordinate_offset : coordinate_offset + 2] != _COORDINATE_TAG:
             continue
@@ -1007,17 +1122,7 @@ def _marker_coordinates(
 
 
 def _marker_local_id(data: bytes, offset: int, length: int) -> int | None:
-    relative = {
-        142: 138,
-        146: 138,
-        152: 148,
-        154: 150,
-        156: 148,
-        158: 144,
-        162: 158,
-        166: 158,
-        167: 158,
-    }.get(length)
+    relative = MARKER_LOCAL_ID_OFFSET_BY_LENGTH.get(length)
     if relative is None or offset + relative + 4 > len(data):
         return None
     value = struct.unpack_from("<I", data, offset + relative)[0]
@@ -1035,68 +1140,26 @@ def _marker_semantic(
         return "relation"
     if locus == _CIRCLE_LOCUS and coordinates is not None:
         return "circle"
-    if coordinates is not None:
-        return "point"
-    if endpoints is not None and endpoints[0] != endpoints[1]:
-        return "line"
-    if native_kind in {3, 4}:
-        return "relation"
-    return "reference"
+    if locus == _POINT_LOCUS:
+        if coordinates is not None:
+            return "point"
+        if endpoints is not None and endpoints[0] != endpoints[1]:
+            return "line"
+        return "reference"
+    return "native"
 
 
 def _profiles(
     markers: list[NativeMarker], dimensions: tuple[NativeDimension, ...]
-) -> tuple[tuple[NativeProfile, ...], set[int]]:
-    diameter = next(
-        (
-            dimension.value_mm
-            for dimension in dimensions
-            if dimension.kind == "diameter"
-        ),
-        None,
-    )
-    if diameter is not None:
-        centers = [
-            marker
-            for marker in markers
-            if marker.semantic == "circle" and marker.coordinates_mm is not None
-        ]
-        if not centers:
-            return (), set()
-        center = next(
-            (
-                marker
-                for marker in reversed(centers)
-                if marker.native_kind != 0
-                and any(
-                    candidate.offset > marker.offset
-                    and candidate.native_kind == 0
-                    and candidate.semantic == "circle"
-                    for candidate in centers
-                )
-            ),
-            centers[-1],
+) -> tuple[tuple[NativeProfile, ...], set[int], tuple[NativeDimension, ...]]:
+    circle = _circle_profile(markers, dimensions)
+    if circle is not None:
+        profile, selected_index, semantic = circle
+        normalized = tuple(
+            replace(dimension, kind=semantic) if index == selected_index else dimension
+            for index, dimension in enumerate(dimensions)
         )
-        radius = diameter / 2.0
-        following = next(
-            (
-                marker
-                for marker in markers
-                if marker.offset > center.offset and marker.coordinates_mm is not None
-            ),
-            None,
-        )
-        radial_offset = following.offset if following else center.offset
-        return (
-            (
-                NativeProfile(
-                    "circle",
-                    (center.coordinates_mm[0], center.coordinates_mm[1], radius),
-                    (center.offset, radial_offset),
-                ),
-            ),
-            {center.offset, radial_offset},
-        )
+        return (profile,), set(profile.marker_offsets), normalized
     points = [
         marker
         for marker in markers
@@ -1205,7 +1268,137 @@ def _profiles(
             if marker.semantic == "point" and marker.coordinates_mm in corners
         )
         profiles.append(NativeProfile("rectangle", rectangle, span))
-    return tuple(profiles), used
+    return tuple(profiles), used, dimensions
+
+
+def _circle_profile(
+    markers: list[NativeMarker], dimensions: tuple[NativeDimension, ...]
+) -> tuple[NativeProfile, int, str] | None:
+    centers = [
+        marker
+        for marker in markers
+        if marker.semantic == "circle" and marker.coordinates_mm is not None
+    ]
+    if not centers:
+        return None
+    preferred = next(
+        (
+            marker
+            for marker in reversed(centers)
+            if marker.native_kind != 0
+            and any(
+                candidate.offset > marker.offset
+                and candidate.native_kind == 0
+                and candidate.semantic == "circle"
+                for candidate in centers
+            )
+        ),
+        centers[-1],
+    )
+    ordered_centers = (
+        preferred,
+        *tuple(marker for marker in centers if marker != preferred),
+    )
+    candidates: list[
+        tuple[tuple[bool, bool, bool, bool, int, int], NativeProfile, int, str]
+    ] = []
+    for center_order, center in enumerate(ordered_centers):
+        following = next(
+            (
+                marker
+                for marker in markers
+                if marker.offset > center.offset
+                and marker.coordinates_mm is not None
+                and not _same_point(marker.coordinates_mm, center.coordinates_mm)
+            ),
+            None,
+        )
+        if following is None:
+            continue
+        radius = math.dist(center.coordinates_mm, following.coordinates_mm)
+        if not math.isfinite(radius) or radius <= 1e-12:
+            continue
+        for index, dimension in enumerate(dimensions):
+            semantic = None
+            normalized_radius = radius
+            if math.isclose(dimension.value_mm, radius, rel_tol=1e-7, abs_tol=1e-7):
+                semantic = "radius"
+                normalized_radius = dimension.value_mm
+            elif math.isclose(
+                dimension.value_mm, radius * 2.0, rel_tol=1e-7, abs_tol=1e-7
+            ):
+                semantic = "diameter"
+                normalized_radius = dimension.value_mm / 2.0
+            if semantic is None:
+                continue
+            profile = NativeProfile(
+                "circle",
+                (
+                    center.coordinates_mm[0],
+                    center.coordinates_mm[1],
+                    normalized_radius,
+                ),
+                (center.offset, following.offset),
+                dimension.name,
+                semantic,
+            )
+            rank = (
+                center_order != 0,
+                len(dimension.operands) != 1,
+                dimension.kind not in {"radius", "diameter"},
+                dimension.native_role == "display",
+                (
+                    dimension.native_offset
+                    if dimension.native_offset is not None
+                    else index
+                ),
+                index,
+            )
+            candidates.append((rank, profile, index, semantic))
+    if candidates:
+        _, profile, index, semantic = min(candidates, key=lambda item: item[0])
+        return profile, index, semantic
+    diameter = next(
+        (
+            (index, dimension)
+            for index, dimension in enumerate(dimensions)
+            if dimension.kind == "diameter"
+        ),
+        None,
+    )
+    if diameter is None:
+        return None
+    index, dimension = diameter
+    center = preferred
+    following = next(
+        (
+            marker
+            for marker in markers
+            if marker.offset > center.offset and marker.coordinates_mm is not None
+        ),
+        center,
+    )
+    return (
+        NativeProfile(
+            "circle",
+            (
+                center.coordinates_mm[0],
+                center.coordinates_mm[1],
+                dimension.value_mm / 2.0,
+            ),
+            (center.offset, following.offset),
+            dimension.name,
+            "diameter",
+        ),
+        index,
+        "diameter",
+    )
+
+
+def _same_point(left: tuple[float, float], right: tuple[float, float]) -> bool:
+    return math.isclose(left[0], right[0], abs_tol=1e-12) and math.isclose(
+        left[1], right[1], abs_tol=1e-12
+    )
 
 
 def _constraints(
@@ -1214,6 +1407,7 @@ def _constraints(
     profiles: tuple[NativeProfile, ...],
 ) -> tuple[NativeConstraint, ...]:
     constraints: list[NativeConstraint] = []
+    radial_parameters: set[str] = set()
     for profile_index, profile in enumerate(profiles):
         if profile.kind == "rectangle":
             for edge_index in range(4):
@@ -1235,13 +1429,25 @@ def _constraints(
                     )
                 )
         elif profile.kind == "circle":
+            semantic = profile.dimension_kind or "radius"
+            parameter_name = profile.parameter_name
+            if parameter_name is not None:
+                radial_parameters.add(parameter_name)
             constraints.append(
                 NativeConstraint(
-                    id=f"{feature.object_id}:profile:{profile_index}:diameter",
-                    kind="diameter",
+                    id=f"{feature.object_id}:profile:{profile_index}:{semantic}",
+                    kind=semantic,
                     references=(f"{feature.object_id}:profile:{profile_index}",),
-                    parameter=f"{feature.object_id}:D1",
-                    value=profile.coordinates[2] * 2.0,
+                    parameter=(
+                        f"{feature.object_id}:{parameter_name}"
+                        if parameter_name is not None
+                        else None
+                    ),
+                    value=(
+                        profile.coordinates[2] * 2.0
+                        if semantic == "diameter"
+                        else profile.coordinates[2]
+                    ),
                     native_offset=(
                         profile.marker_offsets[0] if profile.marker_offsets else None
                     ),
@@ -1249,7 +1455,7 @@ def _constraints(
                 )
             )
     for dimension in feature.dimensions:
-        if dimension.kind == "diameter":
+        if dimension.name in radial_parameters:
             continue
         constraints.append(
             NativeConstraint(
@@ -1338,9 +1544,12 @@ def _edge_selections(
     return tuple(selections)
 
 
-def _dimension(dimensions: tuple[NativeDimension, ...], name: str) -> float | None:
+def _operation_dimension(
+    dimensions: tuple[NativeDimension, ...], semantic: str
+) -> float | None:
     return next(
-        (dimension.value_mm for dimension in dimensions if dimension.name == name), None
+        (dimension.value_mm for dimension in dimensions if dimension.kind == semantic),
+        None,
     )
 
 

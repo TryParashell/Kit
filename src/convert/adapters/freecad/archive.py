@@ -16,14 +16,322 @@ import zipfile
 import zlib
 from typing import Any, Mapping
 
-from .brep import triangle_mesh_brep
+from convert.opencascade import is_structurally_valid_ascii_brep
+from interchange import CadDocument
+
+from .brep import FreeCADBrepWriteError, brep_model_brep, triangle_mesh_brep
+from .format import FORMAT_ID
+from .protocol import (
+    ASSEMBLY_CONNECTOR_PROPERTY_PREFIXES,
+    ASSEMBLY_JOINT_GROUP_TYPE_ID,
+    ASSEMBLY_LINK_TYPE_ID,
+    ASSEMBLY_ROOT_TYPE_ID,
+    APP_LINK_TYPE_ID,
+    BOOLEAN_OPERATION_TYPE_BY_KIND,
+    CIRCULAR_GEOMETRY_KINDS,
+    CONSTRAINT_CODE_BY_KIND,
+    CONSTRAINT_POINT_INDEX_BY_NAME,
+    CREATE_OPERATION_NAMES,
+    DIMENSIONAL_CONSTRAINT_CODES,
+    FIXED_CONSTRAINT_KINDS,
+    FREECAD_BREP_FORMAT_IDS,
+    GEOMETRY_TYPE_IDS_BY_KIND,
+    JOINT_GROUND_PROPERTY,
+    JOINT_REFERENCE_INDEX_BY_PROPERTY,
+    JOINT_RESERVED_LINK_PROPERTIES,
+    JOINT_TYPE_BY_MATE_KIND,
+    JOINT_TYPES,
+    JOINT_TYPES_USING_DISTANCE,
+    JOINT_TYPES_USING_SECOND_DISTANCE,
+    MIDPOINT_REFERENCE_POINT_NAMES,
+    NEUTRAL_GEOMETRY_TYPE_BY_KIND,
+    NEUTRAL_GEOMETRY_TYPE_ID_BY_KIND,
+    SKETCH_TYPE_ID,
+    SPLINE_GEOMETRY_KINDS,
+    SPLINE_CONTROL_TAGS,
+    STRING_HASHER_TAGS,
+)
 
 
 MANIFEST_ENTRY = "interchange/document.json"
+DOCUMENT_ENTRY = "Document.xml"
 MANIFEST_DATA_PROPERTY = "KitManifestData"
 MANIFEST_ENCODING_PROPERTY = "KitManifestEncoding"
 MANIFEST_SHA256_PROPERTY = "KitManifestSHA256"
 MANIFEST_ENCODING = "zlib+base64+utf-8"
+_MAX_ENTRIES = 16384
+_MAX_ENTRY_SIZE = 512 * 1024 * 1024
+_MAX_TOTAL_SIZE = 1024 * 1024 * 1024
+_MAX_DOCUMENT_SIZE = 512 * 1024 * 1024
+_MAX_COMPRESSION_RATIO = 500
+_MAX_EXTERNAL_FILES = 256
+_MAX_MANIFEST_JSON_DEPTH = 256
+_MAX_XML_DEPTH = 256
+_MAX_XML_NODES = 2_000_000
+_MIN_OBJECT_GRAPH_SCHEMA_VERSION = 2
+_TARGET_SCHEMA_VERSION = "4"
+_TARGET_PROGRAM_VERSION = "1.0.2"
+_TARGET_FILE_VERSION = "1"
+
+
+def _validated_entry_name(name: str) -> str:
+    if not name or "\\" in name or "\x00" in name:
+        raise ValueError("FCStd archive contains an unsafe entry name")
+    if any(part in {"", ".", ".."} for part in name.split("/")):
+        raise ValueError("FCStd archive contains an unsafe entry name")
+    path = PurePosixPath(name)
+    if path.is_absolute():
+        raise ValueError("FCStd archive contains an unsafe entry name")
+    if path.parts and ":" in path.parts[0]:
+        raise ValueError("FCStd archive contains an unsafe entry name")
+    return path.as_posix()
+
+
+def _validated_object_name(name: str) -> str:
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
+        raise ValueError("FreeCAD object name is unsafe or invalid")
+    return name
+
+
+def _validated_archive_members(
+    data: bytes,
+) -> tuple[zipfile.ZipFile, dict[str, zipfile.ZipInfo]]:
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(data))
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise ValueError("source is not an FCStd ZIP archive") from exc
+    infos = archive.infolist()
+    if not infos or len(infos) > _MAX_ENTRIES:
+        archive.close()
+        raise ValueError("FCStd archive entry count is outside safe limits")
+    members: dict[str, zipfile.ZipInfo] = {}
+    total = 0
+    try:
+        for info in infos:
+            name = _validated_entry_name(
+                info.filename.rstrip("/") if info.is_dir() else info.filename
+            )
+            if name in members:
+                raise ValueError("FCStd archive contains duplicate entries")
+            members[name] = info
+            if info.flag_bits & 0x1:
+                raise ValueError("FCStd archive contains an encrypted entry")
+            mode = (info.external_attr >> 16) & 0o170000
+            if mode == 0o120000:
+                raise ValueError("FCStd archive contains a symbolic link")
+            if info.is_dir():
+                continue
+            if info.file_size < 0 or info.file_size > _MAX_ENTRY_SIZE:
+                raise ValueError("FCStd archive entry exceeds safe limits")
+            total += info.file_size
+            if total > _MAX_TOTAL_SIZE:
+                raise ValueError("FCStd archive exceeds safe limits")
+            if info.file_size and info.compress_size <= 0:
+                raise ValueError("FCStd archive has an invalid compressed entry")
+            if (
+                info.compress_size
+                and info.file_size / info.compress_size > _MAX_COMPRESSION_RATIO
+            ):
+                raise ValueError("FCStd archive compression ratio is unsafe")
+        document = members.get(DOCUMENT_ENTRY)
+        if document is not None and document.file_size > _MAX_DOCUMENT_SIZE:
+            raise ValueError("FCStd archive has no safe Document.xml")
+    except BaseException:
+        archive.close()
+        raise
+    return archive, members
+
+
+def _validated_document_xml(
+    archive: zipfile.ZipFile, members: Mapping[str, zipfile.ZipInfo]
+) -> tuple[ET.Element, bytes]:
+    document_info = members.get(DOCUMENT_ENTRY)
+    if document_info is None or document_info.file_size > _MAX_DOCUMENT_SIZE:
+        raise ValueError("FCStd archive has no safe Document.xml")
+    try:
+        document_xml = archive.read(document_info)
+        root = ET.fromstring(document_xml)
+    except (
+        OSError,
+        RuntimeError,
+        NotImplementedError,
+        ET.ParseError,
+        zipfile.BadZipFile,
+    ) as exc:
+        raise ValueError("FCStd archive has no readable Document.xml") from exc
+    if root.tag != "Document":
+        raise ValueError("FreeCAD Document.xml has an invalid root")
+    count = 0
+    stack = [(root, 1)]
+    while stack:
+        node, depth = stack.pop()
+        count += 1
+        if count > _MAX_XML_NODES:
+            raise ValueError("FreeCAD Document.xml node count exceeds safe limits")
+        if depth > _MAX_XML_DEPTH:
+            raise ValueError("FreeCAD Document.xml nesting exceeds safe limits")
+        stack.extend((child, depth + 1) for child in node)
+    try:
+        schema_version = int(root.get("SchemaVersion", ""))
+    except ValueError as exc:
+        raise ValueError("FreeCAD Document.xml schema version is invalid") from exc
+    if schema_version < _MIN_OBJECT_GRAPH_SCHEMA_VERSION:
+        raise ValueError("FreeCAD Document.xml schema version is not supported")
+
+    def stored_count(
+        node: ET.Element, names: tuple[str, ...], actual: int, label: str
+    ) -> None:
+        value = next(
+            (node.get(name) for name in names if node.get(name) is not None), None
+        )
+        if value is None:
+            return
+        try:
+            expected = int(value)
+        except ValueError as exc:
+            raise ValueError(f"FreeCAD {label} count is invalid") from exc
+        if expected != actual:
+            raise ValueError(f"FreeCAD {label} count does not match its data")
+
+    if schema_version == 2:
+        features_node = root.find("./Features")
+        feature_data_node = root.find("./FeatureData")
+        if features_node is None or feature_data_node is None:
+            raise ValueError("FreeCAD Document.xml has no object graph")
+        features = features_node.findall("./Feature")
+        feature_data = feature_data_node.findall("./Feature")
+        stored_count(features_node, ("Count", "count"), len(features), "feature")
+        stored_count(
+            feature_data_node,
+            ("Count", "count"),
+            len(feature_data),
+            "feature data",
+        )
+        objects_node = ET.Element(
+            "Objects", {"Count": str(len(features)), "Dependencies": "0"}
+        )
+        data_node = ET.Element("ObjectData", {"Count": str(len(feature_data))})
+        for index, feature in enumerate(features, start=1):
+            ET.SubElement(
+                objects_node,
+                "Object",
+                {
+                    "type": feature.get("type", ""),
+                    "name": feature.get("name", ""),
+                    "id": str(index),
+                },
+            )
+        for feature in feature_data:
+            item = ET.SubElement(data_node, "Object", {"name": feature.get("name", "")})
+            item.extend(copy.deepcopy(list(feature)))
+        root.append(objects_node)
+        root.append(data_node)
+    else:
+        objects_node = root.find("./Objects")
+        data_node = root.find("./ObjectData")
+    if objects_node is None or data_node is None:
+        raise ValueError("FreeCAD Document.xml has no object graph")
+    declarations = objects_node.findall("./Object")
+    object_data = data_node.findall("./Object")
+
+    stored_count(objects_node, ("Count", "count"), len(declarations), "object")
+    stored_count(data_node, ("Count", "count"), len(object_data), "object data")
+    declared_names: set[str] = set()
+    object_ids: set[str] = set()
+    for declaration in declarations:
+        name = declaration.get("name", "")
+        type_id = declaration.get("type", "")
+        object_id = declaration.get("id", "")
+        if not name or not type_id or name in declared_names:
+            raise ValueError("FreeCAD object declarations are malformed")
+        _validated_object_name(name)
+        if object_id and object_id in object_ids:
+            raise ValueError("FreeCAD object declarations contain duplicate ids")
+        declared_names.add(name)
+        if object_id:
+            object_ids.add(object_id)
+    data_names: set[str] = set()
+    for object_element in object_data:
+        name = object_element.get("name", "")
+        if not name or name in data_names:
+            raise ValueError("FreeCAD object data contains duplicate names")
+        data_names.add(name)
+        properties = object_element.find("./Properties")
+        if properties is None:
+            raise ValueError(f"FreeCAD object {name!r} has no properties")
+        stored_count(
+            properties,
+            ("Count", "count"),
+            len(properties.findall("./Property")),
+            "property",
+        )
+        stored_count(
+            properties,
+            ("TransientCount",),
+            len(properties.findall("./_Property")),
+            "transient property",
+        )
+    if declared_names != data_names:
+        raise ValueError("FreeCAD object declarations and data do not match")
+    dependency_names: set[str] = set()
+    for dependency in objects_node.findall("./ObjectDeps"):
+        name = dependency.get("Name", "")
+        values = [item.get("Name", "") for item in dependency.findall("./Dep")]
+        if not name or name in dependency_names or name not in declared_names:
+            raise ValueError("FreeCAD dependency graph is malformed")
+        if any(not value or value not in declared_names for value in values):
+            raise ValueError("FreeCAD dependency graph has missing objects")
+        stored_count(dependency, ("Count", "count"), len(values), "dependency")
+        dependency_names.add(name)
+    referenced: set[str] = set()
+    for node in root.findall(".//*[@file]"):
+        if node.tag == "XLink":
+            continue
+        filename = node.get("file", "")
+        if filename:
+            referenced.add(_validated_entry_name(filename))
+    missing = sorted(referenced.difference(members))
+    if missing:
+        raise ValueError(
+            "FCStd archive is missing referenced data: " + ", ".join(missing)
+        )
+    return root, document_xml
+
+
+def _manifest_mapping(raw: bytes) -> dict[str, Any]:
+    try:
+        value = json.loads(raw)
+    except RecursionError as exc:
+        raise ValueError(
+            "embedded Kit interchange document JSON nesting exceeds safe limits"
+        ) from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("embedded Kit interchange document is corrupt") from exc
+    if not isinstance(value, dict):
+        raise ValueError("embedded Kit document is not a mapping")
+    stack = [(iter((value,)), 0)]
+    while stack:
+        values, parent_depth = stack[-1]
+        try:
+            item = next(values)
+        except StopIteration:
+            stack.pop()
+            continue
+        if isinstance(item, dict):
+            depth = parent_depth + 1
+            if depth > _MAX_MANIFEST_JSON_DEPTH:
+                raise ValueError(
+                    "embedded Kit interchange document JSON nesting exceeds safe limits"
+                )
+            stack.append((iter(item.values()), depth))
+        elif isinstance(item, list):
+            depth = parent_depth + 1
+            if depth > _MAX_MANIFEST_JSON_DEPTH:
+                raise ValueError(
+                    "embedded Kit interchange document JSON nesting exceeds safe limits"
+                )
+            stack.append((iter(item), depth))
+    return value
 
 
 def _enum(value: Any) -> Any:
@@ -371,7 +679,9 @@ def _json_property(name: str, value: Any) -> ET.Element:
 class _Object:
     type_id: str
     name: str
+    object_id: str = ""
     properties: list[ET.Element] = field(default_factory=list)
+    transient_properties: list[ET.Element] = field(default_factory=list)
     dependencies: list[str] = field(default_factory=list)
     touched: bool = False
     extensions: tuple[str, ...] = ()
@@ -439,6 +749,24 @@ class _Parameters:
             result += f" / {_number(divisor):.16g}"
         return result
 
+    def has_source_expression(self, parameter_id: str) -> bool:
+        parameter = self.by_id.get(parameter_id, {})
+        expression = (
+            parameter.get("expression", {}) if isinstance(parameter, Mapping) else {}
+        )
+        return isinstance(expression, Mapping) and bool(_text(expression.get("source")))
+
+    def source_path(self, parameter_id: str) -> str:
+        parameter = self.by_id.get(parameter_id, {})
+        attributes = (
+            parameter.get("attributes", {}) if isinstance(parameter, Mapping) else {}
+        )
+        return (
+            _text(attributes.get("freecad_path"))
+            if isinstance(attributes, Mapping)
+            else ""
+        )
+
     def value(self, parameter_id: str, default: float = 0.0) -> float:
         parameter = self.by_id.get(parameter_id)
         if not parameter:
@@ -485,10 +813,10 @@ class _Parameters:
                 else "number"
             )
             if isinstance(raw, bool):
-                content = "=TRUE" if raw else "=FALSE"
+                content = "=true" if raw else "=false"
             elif isinstance(raw, (int, float)):
                 content = "=" + (f"{raw:.17g}" if isinstance(raw, float) else str(raw))
-                if unit and kind in {"length", "angle"}:
+                if unit:
                     content += f" {unit}"
             else:
                 content = "'" + _text(raw)
@@ -516,24 +844,304 @@ class _Parameters:
         return result
 
 
-def _geometry_property(sketch: Mapping[str, Any]) -> tuple[ET.Element, dict[str, int]]:
+def _element_from_data(value: Any) -> ET.Element | None:
+    if not isinstance(value, Mapping):
+        return None
+    tag = value.get("tag")
+    attributes = value.get("attributes", {})
+    if not isinstance(tag, str) or not tag or not isinstance(attributes, Mapping):
+        return None
+    element = ET.Element(tag, {str(key): str(item) for key, item in attributes.items()})
+    text = value.get("text")
+    if isinstance(text, str):
+        element.text = text
+    children = value.get("children", [])
+    if not isinstance(children, (list, tuple)):
+        return None
+    for child_data in children:
+        child = _element_from_data(child_data)
+        if child is None:
+            return None
+        element.append(child)
+    return element
+
+
+def _native_properties(value: Mapping[str, Any]) -> list[ET.Element]:
+    properties = value.get("properties", {})
+    if not isinstance(properties, Mapping):
+        return []
+    order = [
+        _text(name)
+        for name in _sequence(value.get("property_order", []))
+        if _text(name) in properties
+    ]
+    order.extend(str(name) for name in properties if str(name) not in order)
+    return [
+        element
+        for name in order
+        if (element := _element_from_data(properties.get(name))) is not None
+        and element.tag == "Property"
+    ]
+
+
+def _native_extensions(value: Mapping[str, Any]) -> tuple[str, ...]:
+    return tuple(
+        extension_type
+        for item in _sequence(value.get("extensions", []))
+        if (element := _element_from_data(item)) is not None
+        and element.tag == "Extension"
+        and (extension_type := _text(element.get("type")))
+    )
+
+
+def _native_link_property_name(value: Mapping[str, Any]) -> str:
+    properties = value.get("properties", {})
+    if not isinstance(properties, Mapping):
+        return ""
+    if "LinkedObject" in properties:
+        return "LinkedObject"
+    elements = {
+        _text(name): element
+        for name, item in properties.items()
+        if (element := _element_from_data(item)) is not None
+        and element.tag == "Property"
+    }
+    proxy = elements.get("Proxy")
+    proxy_value = proxy.find("./Python") if proxy is not None else None
+    marker = " ".join(
+        (
+            _text(value.get("type_id")),
+            "" if proxy_value is None else proxy_value.get("class", ""),
+            *_native_extensions(value),
+        )
+    ).casefold()
+    if "link" not in marker:
+        return ""
+    candidates = [
+        name
+        for name, element in elements.items()
+        if element.find("./XLink") is not None
+        and name not in JOINT_RESERVED_LINK_PROPERTIES
+    ]
+    named = next(
+        (name for name in candidates if "link" in name.casefold()),
+        "",
+    )
+    return named or (candidates[0] if len(candidates) == 1 else "")
+
+
+def _native_object(value: Mapping[str, Any]) -> _Object:
+    name = _text(value.get("name"))
+    type_id = _text(value.get("type_id"))
+    if not name or not type_id:
+        raise ValueError("native FreeCAD object metadata requires name and type_id")
+    _validated_object_name(name)
+    transient_properties = [
+        element
+        for item in _sequence(value.get("transient_properties", []))
+        if (element := _element_from_data(item)) is not None
+        and element.tag == "_Property"
+    ]
+    extensions = _native_extensions(value)
+    return _Object(
+        type_id,
+        name,
+        object_id=_text(value.get("object_id")),
+        properties=_native_properties(value),
+        transient_properties=transient_properties,
+        dependencies=[
+            _text(item)
+            for item in _sequence(value.get("dependencies", []))
+            if _text(item)
+        ],
+        touched=bool(value.get("touched")),
+        extensions=extensions,
+    )
+
+
+def _merge_named_property(
+    properties: list[ET.Element], replacement: ET.Element
+) -> None:
+    name = replacement.get("name")
+    for current in properties:
+        if current.get("name") == name:
+            current[:] = [copy.deepcopy(child) for child in replacement]
+            return
+    properties.append(replacement)
+
+
+def _native_geometry_element(entity: Mapping[str, Any]) -> ET.Element | None:
+    kind = _text(_enum(entity.get("kind"))).lower()
+    attributes = entity.get("attributes", {})
+    geometry = entity.get("geometry", {})
+    if not isinstance(geometry, Mapping):
+        geometry = {}
+    element = (
+        _element_from_data(attributes.get("freecad"))
+        if isinstance(attributes, Mapping)
+        else None
+    )
+    native_geometry = _text(geometry.get("$type")) == "NativeGeometry" or all(
+        key in geometry for key in ("format_id", "entity_type", "data")
+    )
+    if element is None and native_geometry:
+        format_id = _text(geometry.get("format_id")).casefold()
+        entity_type = _text(geometry.get("entity_type"))
+        candidate = _element_from_data(geometry.get("data"))
+        if (
+            format_id == FORMAT_ID
+            and candidate is not None
+            and candidate.tag == "Geometry"
+            and candidate.get("type", "") == entity_type
+        ):
+            element = candidate
+    if element is None or element.tag != "Geometry":
+        return None
+    expected_type_ids = GEOMETRY_TYPE_IDS_BY_KIND.get(kind)
+    if (
+        expected_type_ids is not None
+        and element.get("type", "") not in expected_type_ids
+    ):
+        return None
+    if kind != "native" and expected_type_ids is None:
+        return None
+    if not native_geometry and kind == "line":
+        value = element.find("./LineSegment")
+        if value is not None:
+            start = _point2(geometry.get("start"))
+            end = _point2(geometry.get("end"))
+            value.set("StartX", _fmt(start[0]))
+            value.set("StartY", _fmt(start[1]))
+            value.set("EndX", _fmt(end[0]))
+            value.set("EndY", _fmt(end[1]))
+    elif not native_geometry and kind in CIRCULAR_GEOMETRY_KINDS:
+        value = element.find("./Circle" if kind == "circle" else "./ArcOfCircle")
+        if value is not None:
+            center = _point2(geometry.get("center"))
+            value.set("CenterX", _fmt(center[0]))
+            value.set("CenterY", _fmt(center[1]))
+            value.set("Radius", _fmt(geometry.get("radius")))
+            if kind == "arc":
+                value.set("StartAngle", _fmt(geometry.get("start_angle")))
+                value.set("EndAngle", _fmt(geometry.get("end_angle")))
+    elif not native_geometry and kind == "point":
+        value = element.find("./GeomPoint")
+        if value is None:
+            value = element.find("./Point")
+        if value is not None:
+            point = _point2(geometry.get("point"))
+            value.set("X", _fmt(point[0]))
+            value.set("Y", _fmt(point[1]))
+    elif not native_geometry and kind == "ellipse":
+        value = element.find("./Ellipse")
+        if value is not None:
+            center = _point2(geometry.get("center"))
+            major_axis = _point2(geometry.get("major_axis"))
+            value.set("CenterX", _fmt(center[0]))
+            value.set("CenterY", _fmt(center[1]))
+            if value.get("AngleXU") is not None:
+                value.set("AngleXU", _fmt(math.atan2(major_axis[1], major_axis[0])))
+            else:
+                value.set("MajorAxisX", _fmt(major_axis[0]))
+                value.set("MajorAxisY", _fmt(major_axis[1]))
+            value.set("MajorRadius", _fmt(geometry.get("major_radius")))
+            value.set("MinorRadius", _fmt(geometry.get("minor_radius")))
+    elif not native_geometry and kind in SPLINE_GEOMETRY_KINDS:
+        value = element.find("./BezierCurve" if kind == "bezier" else "./BSplineCurve")
+        if value is not None:
+            points = _items(geometry.get("control_points", []))
+            weights = [
+                _number(item, 1.0) for item in _sequence(geometry.get("weights", []))
+            ]
+            if len(weights) != len(points):
+                weights = [1.0] * len(points)
+            value[:] = [
+                child for child in value if child.tag not in SPLINE_CONTROL_TAGS
+            ]
+            value.set("PolesCount", str(len(points)))
+            for point, weight in zip(points, weights, strict=True):
+                x, y = _point2(point)
+                ET.SubElement(
+                    value,
+                    "Pole",
+                    {
+                        "X": _fmt(x),
+                        "Y": _fmt(y),
+                        "Z": _fmt(0),
+                        "Weight": _fmt(weight),
+                    },
+                )
+            if kind == "spline":
+                degree = max(
+                    1,
+                    min(
+                        int(_number(geometry.get("degree"), 3)),
+                        max(1, len(points) - 1),
+                    ),
+                )
+                knots = [_number(item) for item in _sequence(geometry.get("knots", []))]
+                multiplicities = [
+                    int(_number(item, 1))
+                    for item in _sequence(geometry.get("multiplicities", []))
+                ]
+                if not knots or len(multiplicities) != len(knots):
+                    interior_count = max(0, len(points) - degree - 1)
+                    knots = [float(item) for item in range(interior_count + 2)]
+                    multiplicities = [degree + 1] + [1] * interior_count + [degree + 1]
+                value.set("KnotsCount", str(len(knots)))
+                value.set("Degree", str(degree))
+                value.set("IsPeriodic", "1" if bool(geometry.get("periodic")) else "0")
+                for knot, multiplicity in zip(knots, multiplicities, strict=True):
+                    ET.SubElement(
+                        value,
+                        "Knot",
+                        {"Value": _fmt(knot), "Mult": str(multiplicity)},
+                    )
+    construction = element.find("./Construction")
+    if construction is not None:
+        construction.set("value", "1" if bool(entity.get("construction")) else "0")
+    return element
+
+
+def _geometry_property(
+    sketch: Mapping[str, Any],
+) -> tuple[ET.Element, dict[str, int], list[dict[str, Any]]]:
     entities = _items(sketch.get("entities", []))
     result = _property("Geometry", "Part::PropertyGeometryList", status="8192")
-    geometry_list = ET.SubElement(result, "GeometryList", {"count": str(len(entities))})
+    geometry_list = ET.SubElement(result, "GeometryList", {"count": "0"})
     indices: dict[str, int] = {}
-    for index, entity in enumerate(entities):
-        entity_id = _text(entity.get("id"), str(index))
-        indices[entity_id] = index
+    diagnostics: list[dict[str, Any]] = []
+    for source_index, entity in enumerate(entities):
+        entity_id = _text(entity.get("id"), str(source_index))
         kind = _text(_enum(entity.get("kind"))).lower()
+        native_item = _native_geometry_element(entity)
+        if native_item is not None:
+            indices[entity_id] = len(geometry_list)
+            geometry_list.append(native_item)
+            continue
         geometry = entity.get("geometry", {})
         if not isinstance(geometry, Mapping):
             geometry = {}
-        type_id = {
-            "line": "Part::GeomLineSegment",
-            "circle": "Part::GeomCircle",
-            "arc": "Part::GeomArcOfCircle",
-            "point": "Part::GeomPoint",
-        }.get(kind, "Part::GeomPoint")
+        geometry_type = _text(geometry.get("$type"))
+        expected_geometry_type = NEUTRAL_GEOMETRY_TYPE_BY_KIND.get(kind)
+        type_id = NEUTRAL_GEOMETRY_TYPE_ID_BY_KIND.get(kind)
+        if type_id is None or (
+            geometry_type == "NativeGeometry"
+            or (geometry_type and geometry_type != expected_geometry_type)
+        ):
+            diagnostics.append(
+                {
+                    "code": "freecad.sketch_geometry_carrier_only",
+                    "entity_id": entity_id,
+                    "kind": kind,
+                    "mode": "carrier_only",
+                    "reason": "native FreeCAD geometry data is unavailable",
+                    "severity": "warning",
+                }
+            )
+            continue
+        index = len(geometry_list)
+        indices[entity_id] = index
         item = ET.SubElement(
             geometry_list,
             "Geometry",
@@ -572,7 +1180,7 @@ def _geometry_property(sketch: Mapping[str, Any]) -> tuple[ET.Element, dict[str,
                     "EndZ": _fmt(0),
                 },
             )
-        elif kind in {"circle", "arc"}:
+        elif kind in CIRCULAR_GEOMETRY_KINDS:
             center = _point2(geometry.get("center"))
             attributes = {
                 "CenterX": _fmt(center[0]),
@@ -590,7 +1198,84 @@ def _geometry_property(sketch: Mapping[str, Any]) -> tuple[ET.Element, dict[str,
                 ET.SubElement(item, "ArcOfCircle", attributes)
             else:
                 ET.SubElement(item, "Circle", attributes)
-        else:
+        elif kind == "ellipse":
+            center = _point2(geometry.get("center"))
+            major_axis = _point2(geometry.get("major_axis"))
+            ET.SubElement(
+                item,
+                "Ellipse",
+                {
+                    "CenterX": _fmt(center[0]),
+                    "CenterY": _fmt(center[1]),
+                    "CenterZ": _fmt(0),
+                    "NormalX": _fmt(0),
+                    "NormalY": _fmt(0),
+                    "NormalZ": _fmt(1),
+                    "MajorRadius": _fmt(geometry.get("major_radius")),
+                    "MinorRadius": _fmt(geometry.get("minor_radius")),
+                    "AngleXU": _fmt(math.atan2(major_axis[1], major_axis[0])),
+                },
+            )
+        elif kind in SPLINE_GEOMETRY_KINDS:
+            points = _items(geometry.get("control_points", []))
+            weights = [
+                _number(value, 1.0) for value in _sequence(geometry.get("weights", []))
+            ]
+            if len(weights) != len(points):
+                weights = [1.0] * len(points)
+            if kind == "bezier":
+                curve = ET.SubElement(
+                    item, "BezierCurve", {"PolesCount": str(len(points))}
+                )
+            else:
+                degree = max(
+                    1,
+                    min(
+                        int(_number(geometry.get("degree"), 3)),
+                        max(1, len(points) - 1),
+                    ),
+                )
+                knots = [
+                    _number(value) for value in _sequence(geometry.get("knots", []))
+                ]
+                multiplicities = [
+                    int(_number(value, 1))
+                    for value in _sequence(geometry.get("multiplicities", []))
+                ]
+                if not knots or len(multiplicities) != len(knots):
+                    interior_count = max(0, len(points) - degree - 1)
+                    knots = [float(value) for value in range(interior_count + 2)]
+                    multiplicities = [degree + 1] + [1] * interior_count + [degree + 1]
+                curve = ET.SubElement(
+                    item,
+                    "BSplineCurve",
+                    {
+                        "PolesCount": str(len(points)),
+                        "KnotsCount": str(len(knots)),
+                        "Degree": str(degree),
+                        "IsPeriodic": ("1" if bool(geometry.get("periodic")) else "0"),
+                    },
+                )
+            for point, weight in zip(points, weights, strict=True):
+                x, y = _point2(point)
+                ET.SubElement(
+                    curve,
+                    "Pole",
+                    {
+                        "X": _fmt(x),
+                        "Y": _fmt(y),
+                        "Z": _fmt(0),
+                        "Weight": _fmt(weight),
+                    },
+                )
+            if kind == "spline":
+                for knot, multiplicity in zip(knots, multiplicities, strict=True):
+                    ET.SubElement(
+                        curve,
+                        "Knot",
+                        {"Value": _fmt(knot), "Mult": str(multiplicity)},
+                    )
+        elif kind == "point":
             point = _point2(geometry.get("point", geometry.get("center")))
             ET.SubElement(
                 item,
@@ -598,78 +1283,304 @@ def _geometry_property(sketch: Mapping[str, Any]) -> tuple[ET.Element, dict[str,
                 {"X": _fmt(point[0]), "Y": _fmt(point[1]), "Z": _fmt(0)},
             )
         ET.SubElement(item, "Construction", {"value": "1" if construction else "0"})
-    return result, indices
+    geometry_list.set("count", str(len(geometry_list)))
+    return result, indices, diagnostics
 
 
 def _reference_point(value: Any) -> int:
     point = _text(value).lower()
-    return {
-        "start": 1,
-        "startpoint": 1,
-        "end": 2,
-        "endpoint": 2,
-        "center": 3,
-        "centre": 3,
-        "midpoint": 3,
-    }.get(point, 0)
+    return CONSTRAINT_POINT_INDEX_BY_NAME.get(point, 0)
+
+
+def _raw_constraint_slots(attributes: Mapping[str, Any]) -> list[tuple[int, int]]:
+    element_ids = _text(attributes.get("ElementIds"))
+    element_positions = _text(attributes.get("ElementPositions"))
+    slots: list[tuple[int, int]] = []
+    if element_ids and element_positions:
+        ids = element_ids.split()
+        positions = element_positions.split()
+        if len(ids) == len(positions):
+            slots = [
+                (int(_number(entity_id, -2000)), int(_number(position)))
+                for entity_id, position in zip(ids, positions, strict=True)
+            ]
+    for index, prefix in enumerate(("First", "Second", "Third")):
+        if prefix not in attributes:
+            continue
+        while len(slots) <= index:
+            slots.append((-2000, 0))
+        slots[index] = (
+            int(_number(attributes.get(prefix), -2000)),
+            int(_number(attributes.get(prefix + "Pos"))),
+        )
+    return slots
+
+
+def _midpoint_slots(
+    constraint: Mapping[str, Any],
+    indices: Mapping[str, int],
+    entities: Mapping[str, Mapping[str, Any]],
+) -> list[tuple[int, int]] | None:
+    references = _items(constraint.get("references", []))
+    if len(references) == 2:
+        for line_reference, point_reference in (
+            (references[0], references[1]),
+            (references[1], references[0]),
+        ):
+            line_id = _text(line_reference.get("entity_id"))
+            point_id = _text(point_reference.get("entity_id"))
+            line = entities.get(line_id, {})
+            point = entities.get(point_id, {})
+            line_reference_point = _text(line_reference.get("point")).casefold()
+            if (
+                _text(_enum(line.get("kind"))).casefold() != "line"
+                or line_reference_point not in MIDPOINT_REFERENCE_POINT_NAMES
+                or line_id == point_id
+                or line_id not in indices
+                or point_id not in indices
+            ):
+                continue
+            point_position = _reference_point(point_reference.get("point"))
+            if (
+                point_position == 0
+                and _text(_enum(point.get("kind"))).casefold() == "point"
+            ):
+                point_position = 1
+            if point_position:
+                return [
+                    (indices[line_id], 1),
+                    (indices[line_id], 2),
+                    (indices[point_id], point_position),
+                ]
+    if len(references) == 3:
+        resolved = [
+            (
+                _text(reference.get("entity_id")),
+                _reference_point(reference.get("point")),
+            )
+            for reference in references
+        ]
+        for line_id, line in entities.items():
+            if (
+                _text(_enum(line.get("kind"))).casefold() != "line"
+                or line_id not in indices
+            ):
+                continue
+            line_points = [
+                point for entity_id, point in resolved if entity_id == line_id
+            ]
+            others = [
+                (entity_id, point)
+                for entity_id, point in resolved
+                if entity_id != line_id
+            ]
+            if sorted(line_points) != [1, 2] or len(others) != 1:
+                continue
+            point_id, point_position = others[0]
+            point = entities.get(point_id, {})
+            if (
+                point_position == 0
+                and _text(_enum(point.get("kind"))).casefold() == "point"
+            ):
+                point_position = 1
+            if point_id in indices and point_position:
+                return [
+                    (indices[line_id], 1),
+                    (indices[line_id], 2),
+                    (indices[point_id], point_position),
+                ]
+    return None
+
+
+def _constraint_diagnostic(
+    constraint: Mapping[str, Any],
+    kind: str,
+    code: str,
+    mode: str,
+    reason: str,
+    severity: str,
+    native_kind: str = "",
+) -> dict[str, Any]:
+    result = {
+        "code": code,
+        "constraint_id": _text(constraint.get("id")),
+        "kind": kind,
+        "mode": mode,
+        "reason": reason,
+        "severity": severity,
+    }
+    if native_kind:
+        result["native_kind"] = native_kind
+    return result
 
 
 def _constraints_property(
     sketch: Mapping[str, Any], indices: Mapping[str, int], parameters: _Parameters
-) -> tuple[ET.Element, list[tuple[str, str]], list[str]]:
+) -> tuple[
+    ET.Element,
+    list[tuple[str, str]],
+    list[str],
+    list[dict[str, Any]],
+]:
     source_constraints = _items(sketch.get("constraints", []))
+    entity_items = _items(sketch.get("entities", []))
+    entities = {_text(entity.get("id")): entity for entity in entity_items}
     encoded: list[dict[str, Any]] = []
     expressions: list[tuple[str, str]] = []
     dependencies: list[str] = []
+    diagnostics: list[dict[str, Any]] = []
     constraint_names: set[str] = set()
-    type_codes = {
-        "coincident": 1,
-        "horizontal": 2,
-        "vertical": 3,
-        "parallel": 4,
-        "tangent": 5,
-        "distance": 6,
-        "distance_x": 7,
-        "distance_y": 8,
-        "angle": 9,
-        "perpendicular": 10,
-        "radius": 11,
-        "equal": 12,
-        "concentric": 1,
-        "midpoint": 13,
-        "symmetric": 14,
-        "fixed": 17,
-        "block": 17,
-        "diameter": 18,
-    }
+    fixed_entities: set[str] = set()
     for constraint in source_constraints:
-        if bool(constraint.get("suppressed")):
-            continue
         kind = _text(_enum(constraint.get("kind"))).lower()
-        code = type_codes.get(kind)
-        references = _items(constraint.get("references", []))
-        resolved = [
-            (
-                indices.get(_text(ref.get("entity_id"))),
-                _reference_point(ref.get("point")),
+        source_attributes = constraint.get("attributes", {})
+        if not isinstance(source_attributes, Mapping):
+            source_attributes = {}
+        raw_attributes = source_attributes.get("freecad", {})
+        if not isinstance(raw_attributes, Mapping):
+            raw_attributes = {}
+        source_code = source_attributes.get(
+            "freecad_type_code", raw_attributes.get("Type")
+        )
+        native_constraint = source_code is not None or bool(raw_attributes)
+        composition: tuple[str, str] | None = None
+        if kind == "midpoint" and source_code is None:
+            code = 14
+            resolved = _midpoint_slots(constraint, indices, entities)
+            if resolved is not None:
+                composition = (
+                    "Symmetric",
+                    "encoded as symmetry between a line's endpoints and the referenced point",
+                )
+            else:
+                diagnostics.append(
+                    _constraint_diagnostic(
+                        constraint,
+                        kind,
+                        "freecad.sketch_constraint_carrier_only",
+                        "carrier_only",
+                        "the midpoint relationship cannot be expressed as a sound FreeCAD symmetry constraint",
+                        "warning",
+                    )
+                )
+                continue
+        else:
+            code = (
+                int(_number(source_code, -1))
+                if source_code is not None
+                else CONSTRAINT_CODE_BY_KIND.get(kind)
             )
-            for ref in references
-        ]
-        resolved = [(index, point) for index, point in resolved if index is not None]
-        if code is None or not resolved:
+            resolved = None
+        if code is None or code < 0:
+            diagnostics.append(
+                _constraint_diagnostic(
+                    constraint,
+                    kind,
+                    "freecad.sketch_constraint_carrier_only",
+                    "carrier_only",
+                    "no equivalent FreeCAD constraint type is available",
+                    "warning",
+                )
+            )
             continue
-        if kind == "concentric" and len(resolved) >= 2:
-            resolved = [(resolved[0][0], 3), (resolved[1][0], 3)]
+        if resolved is None:
+            source_slots = _items(source_attributes.get("freecad_reference_slots", []))
+            slot_values: list[tuple[int, int, str]] = []
+            if source_slots:
+                slot_values = [
+                    (
+                        int(_number(slot.get("freecad_geometry_index"), -2000)),
+                        int(_number(slot.get("freecad_point_index"))),
+                        _text(slot.get("entity_id")),
+                    )
+                    for slot in source_slots
+                ]
+            elif raw_attributes:
+                slot_values = [
+                    (entity_index, point_index, "")
+                    for entity_index, point_index in _raw_constraint_slots(
+                        raw_attributes
+                    )
+                ]
+            unresolved = False
+            if slot_values:
+                resolved = []
+                for entity_index, point_index, entity_id in slot_values:
+                    if entity_index < 0:
+                        resolved.append((entity_index, point_index))
+                        continue
+                    target_id = entity_id
+                    if not target_id and entity_index < len(entity_items):
+                        target_id = _text(entity_items[entity_index].get("id"))
+                    target_index = indices.get(target_id)
+                    if target_index is None:
+                        unresolved = True
+                        break
+                    resolved.append((target_index, point_index))
+                if unresolved:
+                    resolved = []
+            else:
+                references = _items(constraint.get("references", []))
+                resolved = []
+                for reference in references:
+                    entity_id = _text(reference.get("entity_id"))
+                    entity_index = indices.get(entity_id)
+                    if entity_index is None:
+                        unresolved = True
+                        break
+                    resolved.append(
+                        (entity_index, _reference_point(reference.get("point")))
+                    )
+                if unresolved:
+                    resolved = []
+            if kind == "concentric" and not native_constraint:
+                if len(resolved) == 2:
+                    resolved = [(resolved[0][0], 3), (resolved[1][0], 3)]
+                    composition = (
+                        "Coincident",
+                        "encoded as coincidence between the referenced curve centers",
+                    )
+                else:
+                    resolved = []
+            elif kind == "fixed" and not native_constraint:
+                if len(resolved) == 1 and resolved[0][1] == 0:
+                    composition = (
+                        "Block",
+                        "encoded using FreeCAD's block constraint",
+                    )
+                else:
+                    resolved = []
+        if not resolved:
+            diagnostics.append(
+                _constraint_diagnostic(
+                    constraint,
+                    kind,
+                    "freecad.sketch_constraint_carrier_only",
+                    "carrier_only",
+                    "the constraint has no sound native reference encoding",
+                    "warning",
+                )
+            )
+            continue
         parameter_id = _text(constraint.get("parameter_id"))
-        value = parameters.value(parameter_id, _number(constraint.get("value")))
-        values = resolved[:3] + [(-2000, 0)] * (3 - len(resolved[:3]))
-        name_base = _safe(constraint.get("id"), "Constraint")
-        name = name_base
-        suffix = 2
-        while name in constraint_names:
-            name = f"{name_base}_{suffix}"
-            suffix += 1
-        constraint_names.add(name)
+        value = parameters.value(
+            parameter_id,
+            _number(constraint.get("value"), _number(raw_attributes.get("Value"))),
+        )
+        elements = resolved + [(-2000, 0)] * max(0, 3 - len(resolved))
+        values = elements[:3]
+        if native_constraint and "Name" in raw_attributes:
+            name = _text(raw_attributes.get("Name"))
+        else:
+            name_base = _safe(constraint.get("id"), "Constraint")
+            name = name_base
+            suffix = 2
+            while name in constraint_names:
+                name = f"{name_base}_{suffix}"
+                suffix += 1
+            constraint_names.add(name)
+        if name:
+            constraint_names.add(name)
         encoded.append(
             {
                 "name": name,
@@ -680,23 +1591,46 @@ def _constraints_property(
                 "first": values[0],
                 "second": values[1],
                 "third": values[2],
+                "elements": elements,
+                "attributes": raw_attributes,
             }
         )
-        expression = parameters.expression(parameter_id)
+        if kind in FIXED_CONSTRAINT_KINDS:
+            fixed_entities.update(
+                _text(reference.get("entity_id"))
+                for reference in _items(constraint.get("references", []))
+            )
+        if composition is not None:
+            diagnostics.append(
+                _constraint_diagnostic(
+                    constraint,
+                    kind,
+                    "freecad.sketch_constraint_composed",
+                    "native_composition",
+                    composition[1],
+                    "info",
+                    composition[0],
+                )
+            )
+        expression = (
+            parameters.expression(parameter_id)
+            if not native_constraint or parameters.has_source_expression(parameter_id)
+            else None
+        )
         if (
             expression
             and bool(constraint.get("driving", True))
-            and code in {6, 7, 8, 9, 11, 18}
+            and code in DIMENSIONAL_CONSTRAINT_CODES
         ):
-            expressions.append((f".Constraints.{name}", expression))
+            source_path = parameters.source_path(parameter_id)
+            path = (
+                f".{source_path}"
+                if native_constraint and source_path
+                else f".Constraints.{name}"
+            )
+            expressions.append((path, expression))
             dependencies.append("Parameters")
-    fixed_entities = {
-        _text(ref.get("entity_id"))
-        for item in source_constraints
-        if _text(_enum(item.get("kind"))).lower() in {"fixed", "block"}
-        for ref in _items(item.get("references", []))
-    }
-    for entity in _items(sketch.get("entities", [])):
+    for entity in entity_items:
         entity_id = _text(entity.get("id"))
         if (
             bool(entity.get("fixed"))
@@ -713,6 +1647,8 @@ def _constraints_property(
                     "first": (indices[entity_id], 0),
                     "second": (-2000, 0),
                     "third": (-2000, 0),
+                    "elements": [(indices[entity_id], 0), (-2000, 0), (-2000, 0)],
+                    "attributes": {},
                 }
             )
     result = _property("Constraints", "Sketcher::PropertyConstraintList")
@@ -721,20 +1657,25 @@ def _constraints_property(
     )
     for item in encoded:
         first, second, third = item["first"], item["second"], item["third"]
-        ET.SubElement(
-            constraint_list,
-            "Constrain",
+        elements = item["elements"]
+        attributes = {str(key): str(value) for key, value in item["attributes"].items()}
+        if not attributes:
+            attributes.update(
+                {
+                    "MetaData": "",
+                    "Orientation": "0",
+                    "LabelDistance": _fmt(10),
+                    "LabelPosition": _fmt(0),
+                    "IsInVirtualSpace": "0",
+                    "IsVisible": "1",
+                }
+            )
+        attributes.update(
             {
                 "Name": item["name"],
-                "MetaData": "",
                 "Type": str(item["type"]),
-                "Orientation": "0",
                 "Value": _fmt(item["value"]),
-                "LabelDistance": _fmt(10),
-                "LabelPosition": _fmt(0),
                 "IsDriving": "1" if item["driving"] else "0",
-                "IsInVirtualSpace": "0",
-                "IsVisible": "1",
                 "IsActive": "1" if item["active"] else "0",
                 "First": str(first[0]),
                 "FirstPos": str(first[1]),
@@ -742,11 +1683,12 @@ def _constraints_property(
                 "SecondPos": str(second[1]),
                 "Third": str(third[0]),
                 "ThirdPos": str(third[1]),
-                "ElementIds": f"{first[0]} {second[0]} {third[0]}",
-                "ElementPositions": f"{first[1]} {second[1]} {third[1]}",
-            },
+                "ElementIds": " ".join(str(value[0]) for value in elements),
+                "ElementPositions": " ".join(str(value[1]) for value in elements),
+            }
         )
-    return result, expressions, dependencies
+        ET.SubElement(constraint_list, "Constrain", attributes)
+    return result, expressions, dependencies, diagnostics
 
 
 def _sketch_properties(
@@ -754,16 +1696,81 @@ def _sketch_properties(
     plane: Mapping[str, Any],
     plane_name: str,
     parameters: _Parameters,
+    preserve_native: bool = False,
 ) -> tuple[list[ET.Element], list[str]]:
     transform = (
         plane.get("transform", {})
         if isinstance(plane.get("transform"), Mapping)
         else {}
     )
-    geometry, indices = _geometry_property(sketch)
-    constraints, expressions, dependencies = _constraints_property(
-        sketch, indices, parameters
+    geometry, indices, geometry_diagnostics = _geometry_property(sketch)
+    constraints, expressions, dependencies, constraint_diagnostics = (
+        _constraints_property(sketch, indices, parameters)
     )
+    sketch_diagnostics = [*geometry_diagnostics, *constraint_diagnostics]
+    diagnostics_property = (
+        _json_property("KitSketchDiagnosticsJSON", sketch_diagnostics)
+        if sketch_diagnostics
+        else None
+    )
+    sketch_attributes = sketch.get("attributes", {})
+    native_object = (
+        sketch_attributes.get("freecad", {})
+        if isinstance(sketch_attributes, Mapping)
+        else {}
+    )
+    native_properties = (
+        native_object.get("properties", {})
+        if isinstance(native_object, Mapping)
+        else {}
+    )
+    if isinstance(native_properties, Mapping) and native_properties:
+        properties = _native_properties(native_object)
+        replacements = [
+            _string_property("Label", sketch.get("name", sketch.get("id", "Sketch"))),
+            geometry,
+            constraints,
+            _shape_property("", "InternalShape"),
+            _shape_property(),
+            _bool_property("Visibility", not bool(sketch.get("suppressed"))),
+        ]
+        if diagnostics_property is not None:
+            replacements.append(diagnostics_property)
+        if not preserve_native:
+            replacements.insert(1, _placement_property("Placement", transform))
+        for replacement in replacements:
+            _merge_named_property(properties, replacement)
+        attachment = next(
+            (item for item in properties if item.get("name") == "AttachmentSupport"),
+            None,
+        )
+        if attachment is not None and plane_name:
+            for link in attachment.findall(".//Link"):
+                link.set("obj", plane_name)
+        dependencies = [plane_name]
+        external = next(
+            (item for item in properties if item.get("name") == "ExternalGeometry"),
+            None,
+        )
+        if external is not None:
+            dependencies.extend(
+                target
+                for link in external.findall(".//Link")
+                if (target := _text(link.get("obj")))
+            )
+        if not preserve_native:
+            properties.extend(
+                [
+                    _link_property("SupportPlane", plane_name, dynamic=True),
+                    _string_property("KitId", sketch.get("id"), dynamic=True),
+                    _json_property(
+                        "ClosedProfilesJSON",
+                        sketch.get("closed_profile_entity_ids", []),
+                    ),
+                    _json_property("SourceSketchJSON", sketch),
+                ]
+            )
+        return properties, dependencies
     expressions.append(("Placement", f"{plane_name}.Placement"))
     dependencies.append(plane_name)
     properties = [
@@ -782,7 +1789,29 @@ def _sketch_properties(
         _json_property("SourceSketchJSON", sketch),
         _bool_property("Visibility", False),
     ]
+    if diagnostics_property is not None:
+        properties.append(diagnostics_property)
     return properties, dependencies
+
+
+def native_sketch_parts(manifest: Mapping[str, Any]) -> tuple[tuple[int, int], ...]:
+    parameters = _Parameters(_items(manifest.get("parameters", [])))
+    result: list[tuple[int, int]] = []
+    for sketch in _items(manifest.get("sketches", [])):
+        geometry, indices, geometry_diagnostics = _geometry_property(sketch)
+        constraints, _, _, constraint_diagnostics = _constraints_property(
+            sketch, indices, parameters
+        )
+        diagnostics = (*geometry_diagnostics, *constraint_diagnostics)
+        result.append(
+            (
+                1
+                + len(geometry.findall("./GeometryList/Geometry"))
+                + len(constraints.findall("./ConstraintList/Constrain")),
+                sum(item.get("mode") == "carrier_only" for item in diagnostics),
+            )
+        )
+    return tuple(result)
 
 
 def _feature_parameter(
@@ -873,22 +1902,23 @@ def _payload_bytes(payload: Mapping[str, Any]) -> bytes | None:
 
 
 def _payload_extension(payload: Mapping[str, Any]) -> str:
-    format_id = _text(payload.get("format_id")).lower()
-    if "parasolid" in format_id:
-        return ".x_b"
-    if "step" in format_id:
-        return ".step"
-    if format_id == "catia.cgm":
-        return ".cgm"
-    if _is_open_cascade_payload(format_id):
-        return ".brp"
+    declared = _text(payload.get("file_extension"))
+    if re.fullmatch(r"\.[A-Za-z0-9_]{1,16}", declared):
+        return declared
+    suffix = PurePosixPath(_text(payload.get("source_stream"))).suffix
+    if re.fullmatch(r"\.[A-Za-z0-9_]{1,16}", suffix):
+        return suffix
     return ".bin"
 
 
-def _is_open_cascade_payload(format_id: str) -> bool:
-    return format_id in {"brep", "freecad.brep", "occ"} or format_id.startswith(
-        "opencascade"
-    )
+def _payload_role(payload: Mapping[str, Any]) -> str:
+    return _text(_enum(payload.get("role"))).lower()
+
+
+def _freecad_brep_payload(payload: Mapping[str, Any], data: bytes) -> bool:
+    return _text(
+        payload.get("format_id")
+    ).casefold() in FREECAD_BREP_FORMAT_IDS and is_structurally_valid_ascii_brep(data)
 
 
 _IDENTITY_MATRIX = (
@@ -909,43 +1939,6 @@ _IDENTITY_MATRIX = (
     0.0,
     1.0,
 )
-_JOINT_TYPES = [
-    "Fixed",
-    "Revolute",
-    "Cylindrical",
-    "Slider",
-    "Ball",
-    "Distance",
-    "Parallel",
-    "Perpendicular",
-    "Angle",
-    "RackPinion",
-    "Screw",
-    "Gears",
-    "Belt",
-]
-_JOINT_TYPE_BY_MATE = {
-    "lock": "Fixed",
-    "fixed": "Fixed",
-    "coincident": "Fixed",
-    "hinge": "Revolute",
-    "revolute": "Revolute",
-    "concentric": "Cylindrical",
-    "cylindrical": "Cylindrical",
-    "slot": "Slider",
-    "slider": "Slider",
-    "ball": "Ball",
-    "distance": "Distance",
-    "parallel": "Parallel",
-    "perpendicular": "Perpendicular",
-    "angle": "Angle",
-    "rack_pinion": "RackPinion",
-    "rackpinion": "RackPinion",
-    "screw": "Screw",
-    "gear": "Gears",
-    "gears": "Gears",
-    "belt": "Belt",
-}
 
 
 def _assembly_data(manifest: Mapping[str, Any]) -> Mapping[str, Any] | None:
@@ -1204,13 +2197,28 @@ def _mesh_kernel_data(
     for vertex in vertices:
         result.extend(struct.pack("<fff", *vertex))
     for triangle, adjacent in zip(triangles, neighbors):
-        result.extend(struct.pack("<iiiiii", *triangle, *adjacent))
+        result.extend(
+            struct.pack(
+                "<IIIIII",
+                *(value & 0xFFFFFFFF for value in (*triangle, *adjacent)),
+            )
+        )
     if vertices:
         minimum = tuple(min(vertex[index] for vertex in vertices) for index in range(3))
         maximum = tuple(max(vertex[index] for vertex in vertices) for index in range(3))
     else:
         minimum = maximum = (0.0, 0.0, 0.0)
-    result.extend(struct.pack("<ffffff", *minimum, *maximum))
+    result.extend(
+        struct.pack(
+            "<ffffff",
+            minimum[0],
+            maximum[0],
+            minimum[1],
+            maximum[1],
+            minimum[2],
+            maximum[2],
+        )
+    )
     return bytes(result)
 
 
@@ -1320,14 +2328,14 @@ def _import_component_document(
         imported_object = _Object(
             node.get("type", "App::FeaturePython"),
             names[old_name],
-            properties,
-            [
+            properties=properties,
+            dependencies=[
                 names[value]
                 for value in dependencies.get(old_name, [])
                 if value in names
             ],
-            node.get("Touched") == "1",
-            extensions,
+            touched=node.get("Touched") == "1",
+            extensions=extensions,
         )
         graph.objects.append(imported_object)
         imported.append(imported_object.name)
@@ -1345,8 +2353,8 @@ def _import_component_document(
     return target, imported
 
 
-def _mate_joint_type(kind: Any) -> str:
-    return _JOINT_TYPE_BY_MATE.get(_text(_enum(kind)).lower(), "Fixed")
+def _mate_joint_type(kind: Any) -> str | None:
+    return JOINT_TYPE_BY_MATE_KIND.get(_text(_enum(kind)).lower())
 
 
 def _mate_value(value: Any) -> float:
@@ -1528,18 +2536,92 @@ def _add_assembly_origin(graph: _Graph, assembly: _Object) -> str:
     return origin.name
 
 
-def _grounded_joint(graph: _Graph, component: str, label: str) -> _Object:
-    joint = graph.add("App::FeaturePython", f"Grounded_{label}", "GroundedJoint")
-    target = _property("ObjectToGround", "App::PropertyLinkGlobal", dynamic=True)
-    ET.SubElement(target, "Link", {"value": component})
-    joint.properties.extend(
-        [
-            _string_property("Label", f"Grounded {label}"),
-            target,
-            _python_proxy_property("JointObject", "GroundedJoint"),
-            _bool_property("Visibility", False),
-        ]
+def _grounded_joint(
+    graph: _Graph,
+    component: str,
+    label: str,
+    placement: tuple[float, ...],
+    source: Mapping[str, Any] | None = None,
+) -> _Object:
+    source = source if isinstance(source, Mapping) else {}
+    joint = graph.add(
+        _text(source.get("type_id"), "App::FeaturePython"),
+        source.get("name", f"Grounded_{label}"),
+        "GroundedJoint",
+        touched=bool(source.get("touched")),
+        extensions=_native_extensions(source),
     )
+    joint.properties.extend(_native_properties(source))
+    object_to_ground = next(
+        (
+            item
+            for item in joint.properties
+            if item.get("name") == JOINT_GROUND_PROPERTY
+        ),
+        None,
+    )
+    if object_to_ground is None:
+        object_to_ground = _property(JOINT_GROUND_PROPERTY, "App::PropertyLink")
+        object_to_ground.attrib.update(
+            {
+                "group": "Ground",
+                "doc": "The object to ground",
+                "attr": "0",
+                "ro": "0",
+                "hide": "0",
+                "status": "2097152",
+            }
+        )
+        joint.properties.append(object_to_ground)
+    link = object_to_ground.find("./Link")
+    if link is None:
+        link = ET.SubElement(object_to_ground, "Link")
+    link.set("value", component)
+    placement_property = next(
+        (item for item in joint.properties if item.get("name") == "Placement"), None
+    )
+    if placement_property is None:
+        placement_property = _property("Placement", "App::PropertyPlacement")
+        placement_property.attrib.update(
+            {
+                "group": "Ground",
+                "doc": "This is where the part is grounded.",
+                "attr": "0",
+                "ro": "0",
+                "hide": "0",
+                "status": "2097152",
+            }
+        )
+        joint.properties.append(placement_property)
+    placement_value = _placement_property(
+        "Placement", _matrix_transform(placement)
+    ).find("./PropertyPlacement")
+    current_placement = placement_property.find("./PropertyPlacement")
+    if current_placement is None:
+        current_placement = ET.SubElement(placement_property, "PropertyPlacement")
+    if placement_value is not None:
+        current_placement.attrib.clear()
+        current_placement.attrib.update(placement_value.attrib)
+    if not joint.properties:
+        raise ValueError("grounded joint properties could not be generated")
+    if not any(item.get("name") == "ExpressionEngine" for item in joint.properties):
+        joint.properties.insert(0, _expression_property([]))
+    if not any(item.get("name") == "Label" for item in joint.properties):
+        joint.properties.insert(
+            1,
+            _property("Label", "App::PropertyString", status="134217728"),
+        )
+        ET.SubElement(joint.properties[1], "String", {"value": "GroundedJoint"})
+    if not any(item.get("name") == "Label2" for item in joint.properties):
+        label2 = _property("Label2", "App::PropertyString", status="67108992")
+        ET.SubElement(label2, "String", {"value": ""})
+        joint.properties.append(label2)
+    if not any(item.get("name") == "Proxy" for item in joint.properties):
+        joint.properties.append(_python_proxy_property("JointObject", "GroundedJoint"))
+    if not any(item.get("name") == "Visibility" for item in joint.properties):
+        visibility = _property("Visibility", "App::PropertyBool", status="648")
+        ET.SubElement(visibility, "Bool", {"value": "true"})
+        joint.properties.append(visibility)
     joint.dependencies.append(component)
     return joint
 
@@ -1563,6 +2645,7 @@ def _add_assembly(
     assembly = _assembly_data(manifest)
     if assembly is None:
         return "", 0, 0
+    parameters = _Parameters(_items(manifest.get("parameters", [])))
     definitions = _items(assembly.get("definitions", []))
     documents = {
         _text(item.get("id")): item.get("document")
@@ -1577,12 +2660,45 @@ def _add_assembly(
     }
     root_definition = definitions_by_id.get(root_definition_id, {})
     root_label = _text(root_definition.get("name"), "Assembly")
-    root = graph.add(
-        "Assembly::AssemblyObject",
-        root_label,
-        "Assembly",
-        extensions=("App::OriginGroupExtension",),
+    assembly_attributes = assembly.get("attributes", {})
+    native_root_source = (
+        assembly_attributes.get("freecad", {})
+        if isinstance(assembly_attributes, Mapping)
+        else {}
     )
+    if not isinstance(native_root_source, Mapping):
+        native_root_source = {}
+    group_items = sorted(
+        (
+            group
+            for group in _items(assembly.get("mate_groups", assembly.get("groups", [])))
+            if _text(group.get("owner_definition_id")) == root_definition_id
+        ),
+        key=lambda item: (int(_number(item.get("order"))), _text(item.get("id"))),
+    )
+    native_joint_group = next(
+        (
+            group
+            for group in group_items
+            if isinstance(group.get("attributes"), Mapping)
+            and isinstance(group["attributes"].get("freecad"), Mapping)
+        ),
+        None,
+    )
+    native_joint_source = (
+        native_joint_group["attributes"]["freecad"]
+        if native_joint_group is not None
+        else {}
+    )
+    root_extensions = _native_extensions(native_root_source)
+    root = graph.add(
+        _text(native_root_source.get("type_id"), ASSEMBLY_ROOT_TYPE_ID),
+        native_root_source.get("name", root_label),
+        "Assembly",
+        touched=bool(native_root_source.get("touched")),
+        extensions=root_extensions or ("App::OriginGroupExtension",),
+    )
+    root.properties.extend(_native_properties(native_root_source))
     root_origin = _add_assembly_origin(graph, root)
     definitions_group = graph.add(
         "App::DocumentObjectGroup", f"{root_label}_Definitions", "Definitions"
@@ -1593,11 +2709,13 @@ def _add_assembly(
     entities_group = graph.add(
         "App::DocumentObjectGroup", f"{root_label}_MateEntities", "MateEntities"
     )
+    joint_extensions = _native_extensions(native_joint_source)
     mates_group = graph.add(
-        "Assembly::JointGroup",
-        f"{root_label}_Joints",
+        _text(native_joint_source.get("type_id"), ASSEMBLY_JOINT_GROUP_TYPE_ID),
+        native_joint_source.get("name", f"{root_label}_Joints"),
         "Joints",
-        extensions=("App::GroupExtension",),
+        touched=bool(native_joint_source.get("touched")),
+        extensions=joint_extensions or ("App::GroupExtension",),
     )
     definition_objects: list[str] = []
     definition_targets: dict[str, str] = {}
@@ -1727,6 +2845,7 @@ def _add_assembly(
     )
     occurrence_objects: list[str] = []
     occurrence_by_path: dict[tuple[str, ...], str] = {}
+    occurrence_by_native_name: dict[str, str] = {}
     proxy_chain_by_path: dict[tuple[str, ...], tuple[str, ...]] = {}
     assembly_link_records: list[tuple[tuple[str, ...], _Object, Mapping[str, Any]]] = []
     rigid_subassembly_ids: set[str] = set()
@@ -1740,43 +2859,74 @@ def _add_assembly(
         if not target and external is None:
             continue
         label = _text(instance.get("name"), instance_id)
+        instance_attributes = instance.get("attributes", {})
+        native_instance = (
+            instance_attributes.get("freecad", {})
+            if isinstance(instance_attributes, Mapping)
+            else {}
+        )
+        native_instance_properties = native_instance.get("properties", {})
+        native_link_fields = (
+            {_text(name) for name in native_instance_properties if _text(name)}
+            if isinstance(native_instance_properties, Mapping)
+            else set()
+        )
+        native_link_property = _native_link_property_name(native_instance)
+        has_native_link = bool(native_link_property)
         component_kind = _text(
             _enum(definitions_by_id.get(definition_id, {}).get("kind"))
         ).lower()
-        is_assembly_link = external is not None and component_kind == "assembly"
+        is_assembly_link = external is not None and (
+            {"Group", "Rigid"}.issubset(native_link_fields)
+            or (not has_native_link and component_kind == "assembly")
+        )
+        component_type_id = (
+            _text(native_instance.get("type_id"))
+            if has_native_link and _text(native_instance.get("type_id"))
+            else ASSEMBLY_LINK_TYPE_ID if is_assembly_link else APP_LINK_TYPE_ID
+        )
         placement_matrix = _matrix_values(instance.get("transform", {}))
         component = graph.add(
-            "Assembly::AssemblyLink" if is_assembly_link else "App::Link",
+            component_type_id,
             f"{label}_{'_'.join(path)}",
             "Component",
             touched=is_assembly_link,
             extensions=(
-                ("App::OriginGroupExtension",)
-                if is_assembly_link
-                else ("App::LinkExtension",)
+                _native_extensions(native_instance)
+                or (
+                    ("App::OriginGroupExtension",)
+                    if is_assembly_link
+                    else ("App::LinkExtension",)
+                )
             ),
         )
+        component.properties.extend(_native_properties(native_instance))
         if is_assembly_link:
             _add_assembly_origin(graph, component)
         if component_kind == "assembly" and not bool(instance.get("flexible")):
             rigid_subassembly_ids.add(instance_id)
         suppressed = bool(instance.get("suppressed"))
         hidden = bool(instance.get("hidden")) or suppressed
+        fixed = bool(instance.get("fixed")) and not suppressed
         linked_object = (
             _xlink_property(
-                "LinkedObject",
+                native_link_property or "LinkedObject",
                 _text(external.get("target")),
                 file=_text(external.get("file")),
                 stamp=_text(external.get("stamp")),
                 status=None if is_assembly_link else "256",
             )
             if external is not None
-            else _xlink_property("LinkedObject", target)
+            else _xlink_property(native_link_property or "LinkedObject", target)
         )
         placement = _placement_property(
             "Placement",
             _matrix_transform(placement_matrix),
-            status="8388608" if is_assembly_link else "264",
+            status=(
+                "8388612"
+                if is_assembly_link and fixed
+                else "8388608" if is_assembly_link else "268" if fixed else "264"
+            ),
         )
         native_link_properties = (
             [
@@ -1787,64 +2937,80 @@ def _add_assembly(
             if is_assembly_link
             else [
                 _placement_property(
-                    "LinkPlacement", _matrix_transform(placement_matrix), status="256"
+                    "LinkPlacement",
+                    _matrix_transform(placement_matrix),
+                    status="260" if fixed else "256",
                 ),
                 _bool_property("LinkTransform", True),
                 _vector_property("ScaleVector", _matrix_scale(placement_matrix)),
             ]
         )
-        component.properties.extend(
-            [
-                _string_property("Label", label),
-                linked_object,
-                placement,
-                *native_link_properties,
-                _string_property("InstanceId", instance_id, dynamic=True),
-                _string_property("DefinitionId", definition_id, dynamic=True),
-                _string_property(
-                    "OwnerDefinitionId",
-                    instance.get("owner_definition_id", ""),
-                    dynamic=True,
-                ),
-                _string_list_property("InstancePath", list(path), dynamic=True),
-                _string_property(
-                    "ReferenceNumber",
-                    instance.get("reference_number", ""),
-                    dynamic=True,
-                ),
-                _string_property(
-                    "ConfigurationName",
-                    instance.get("configuration_name", ""),
-                    dynamic=True,
-                ),
-                _string_property(
-                    "ConfigurationId",
-                    instance.get("configuration_id", ""),
-                    dynamic=True,
-                ),
-                _bool_property("Suppressed", suppressed, dynamic=True),
-                _bool_property("Hidden", bool(instance.get("hidden")), dynamic=True),
-                _bool_property("Fixed", bool(instance.get("fixed")), dynamic=True),
-                _bool_property(
-                    "Flexible", bool(instance.get("flexible")), dynamic=True
-                ),
-                _bool_property(
-                    "ExcludeFromBOM",
-                    bool(instance.get("exclude_from_bom")),
-                    dynamic=True,
-                ),
-                _json_property("InstanceDataJSON", instance),
-                _bool_property("Visibility", not hidden),
-            ]
-        )
+        for property_element in (
+            _string_property("Label", label),
+            linked_object,
+            placement,
+            *native_link_properties,
+            _string_property("InstanceId", instance_id, dynamic=True),
+            _string_property("DefinitionId", definition_id, dynamic=True),
+            _string_property(
+                "OwnerDefinitionId",
+                instance.get("owner_definition_id", ""),
+                dynamic=True,
+            ),
+            _string_list_property("InstancePath", list(path), dynamic=True),
+            _string_property(
+                "ReferenceNumber",
+                instance.get("reference_number", ""),
+                dynamic=True,
+            ),
+            _string_property(
+                "ConfigurationName",
+                instance.get("configuration_name", ""),
+                dynamic=True,
+            ),
+            _string_property(
+                "ConfigurationId",
+                instance.get("configuration_id", ""),
+                dynamic=True,
+            ),
+            _bool_property("Suppressed", suppressed, dynamic=True),
+            _bool_property("Hidden", bool(instance.get("hidden")), dynamic=True),
+            _bool_property("Flexible", bool(instance.get("flexible")), dynamic=True),
+            _bool_property(
+                "ExcludeFromBOM",
+                bool(instance.get("exclude_from_bom")),
+                dynamic=True,
+            ),
+            _json_property("InstanceDataJSON", instance),
+            _bool_property("Visibility", not hidden),
+        ):
+            _replace_named_property(
+                component.properties,
+                property_element.get("name", ""),
+                property_element,
+            )
         if external is None and target:
             component.dependencies.append(target)
         occurrence_objects.append(component.name)
         occurrence_by_path[path] = component.name
+        native_instance_name = _text(native_instance.get("name"))
+        if native_instance_name:
+            occurrence_by_native_name[native_instance_name] = component.name
         if is_assembly_link and external is not None:
             assembly_link_records.append((path, component, external))
-        if bool(instance.get("fixed")) and not suppressed:
-            grounded = _grounded_joint(graph, component.name, label)
+        if fixed:
+            grounded_source = (
+                instance_attributes.get("grounded_joint", {})
+                if isinstance(instance_attributes, Mapping)
+                else {}
+            )
+            grounded = _grounded_joint(
+                graph,
+                component.name,
+                label,
+                placement_matrix,
+                grounded_source,
+            )
             grounded_objects.append(grounded.name)
 
     def add_external_occurrences(
@@ -1860,11 +3026,7 @@ def _add_assembly(
             target = _text(record.get("target"))
             type_id = _text(record.get("type_id"))
             instance_id = _text(record.get("instance_id"))
-            if (
-                not target
-                or not instance_id
-                or type_id not in {"App::Link", "Assembly::AssemblyLink"}
-            ):
+            if not target or not instance_id or not type_id:
                 continue
             source_path = tuple(
                 _text(value)
@@ -1887,7 +3049,12 @@ def _add_assembly(
 
             label = _text(value("label", value("name", instance_id)), instance_id)
             placement_matrix = _matrix_values(value("transform", {}))
-            is_assembly_link = type_id == "Assembly::AssemblyLink"
+            link_fields = {
+                _text(field)
+                for field in _sequence(record.get("link_fields", []))
+                if _text(field)
+            }
+            is_assembly_link = {"Group", "Rigid"}.issubset(link_fields)
             proxy = graph.add(
                 type_id,
                 f"{parent.name}_{target}",
@@ -2138,6 +3305,13 @@ def _add_assembly(
         mate_name = _text(mate.get("name"), mate_id)
         owner_id = _text(mate.get("owner_definition_id"))
         entity_ids = [_text(value) for value in _sequence(mate.get("entity_ids", []))]
+        mate_attributes = mate.get("attributes", {})
+        if not isinstance(mate_attributes, Mapping):
+            mate_attributes = {}
+        native_mate = mate_attributes.get("freecad", {})
+        if not isinstance(native_mate, Mapping):
+            native_mate = {}
+        native_references = _items(mate_attributes.get("references", []))
         linked_entities = [
             entity_names[value] for value in entity_ids if value in entity_names
         ]
@@ -2148,23 +3322,80 @@ def _add_assembly(
                 if value in entity_components
             )
         )
-        connector_targets = [connector_target(value) for value in entity_ids[:2]]
+        reference_entity_ids: list[list[str]] = [[], []]
+        for entity_id in entity_ids:
+            entity = entity_by_id.get(entity_id, {})
+            attributes = entity.get("attributes", {})
+            property_name = (
+                _text(attributes.get("reference_property"))
+                if isinstance(attributes, Mapping)
+                else ""
+            )
+            reference_index = JOINT_REFERENCE_INDEX_BY_PROPERTY.get(property_name)
+            if reference_index is not None:
+                reference_entity_ids[reference_index].append(entity_id)
+        if not any(reference_entity_ids):
+            for index, entity_id in enumerate(entity_ids[:2]):
+                reference_entity_ids[index].append(entity_id)
+        connector_targets: list[str] = []
+        connector_subelements: list[list[str]] = []
+        native_root_name = _text(native_root_source.get("name"))
+        for index, grouped_ids in enumerate(reference_entity_ids):
+            native_reference = (
+                native_references[index] if index < len(native_references) else {}
+            )
+            if native_reference:
+                source_target = _text(native_reference.get("name"))
+                target = (
+                    root.name
+                    if source_target == native_root_name
+                    else occurrence_by_native_name.get(source_target, source_target)
+                )
+                subelements = []
+                for value in _sequence(native_reference.get("subelements", [])):
+                    source_value = _text(value)
+                    prefix, separator, suffix = source_value.partition(".")
+                    mapped = occurrence_by_native_name.get(prefix, prefix)
+                    subelements.append(f"{mapped}.{suffix}" if separator else mapped)
+            else:
+                target = connector_target(grouped_ids[0]) if grouped_ids else ""
+                subelements = []
+                for entity_id in grouped_ids:
+                    entity = entity_by_id.get(entity_id, {})
+                    values = _mate_subelements(entity)
+                    if len(grouped_ids) == 1:
+                        subelements.extend(values)
+                    elif values:
+                        subelements.append(values[0])
+            connector_targets.append(target)
+            connector_subelements.append(subelements)
         has_connector_pair = len(connector_targets) == 2 and all(connector_targets)
-        joint_type = _mate_joint_type(mate.get("kind"))
+        resolved_joint_type = _mate_joint_type(mate.get("kind"))
+        native_joint_supported = resolved_joint_type is not None
+        native_mate_extensions = _native_extensions(native_mate)
         obj = graph.add(
-            "App::FeaturePython",
-            mate_name,
+            _text(native_mate.get("type_id"), "App::FeaturePython"),
+            native_mate.get("name", mate_name),
             "Mate",
-            extensions=("App::SuppressibleExtensionPython",),
+            touched=bool(native_mate.get("touched")),
+            extensions=(
+                native_mate_extensions
+                or (
+                    ("App::SuppressibleExtensionPython",)
+                    if native_joint_supported
+                    else ()
+                )
+            ),
         )
         connector_properties: list[ET.Element] = []
         for index in range(1, 3):
-            entity_id = entity_ids[index - 1] if index <= len(entity_ids) else ""
+            grouped_ids = reference_entity_ids[index - 1]
+            entity_id = grouped_ids[0] if grouped_ids else ""
             component_name = (
                 connector_targets[index - 1] if index <= len(connector_targets) else ""
             )
             entity = entity_by_id.get(entity_id, {})
-            subelements = _mate_subelements(entity)
+            subelements = connector_subelements[index - 1]
             has_real_subelements = bool(subelements)
             component_prefix = entity_prefixes.get(entity_id, "")
             if component_prefix:
@@ -2204,14 +3435,10 @@ def _add_assembly(
                     ),
                 ]
             )
-        properties = [
-            _string_property("Label", mate_name),
+        metadata_properties = [
             _string_property("MateId", mate_id, dynamic=True),
             _string_list_property("OwnerOccurrencePath", [], dynamic=True),
             _string_property("MateType", _text(_enum(mate.get("kind"))), dynamic=True),
-            _enumeration_choices_property(
-                "JointType", _JOINT_TYPES, _JOINT_TYPES.index(joint_type), dynamic=True
-            ),
             _string_property(
                 "OwnerDefinitionId",
                 owner_id,
@@ -2231,55 +3458,183 @@ def _add_assembly(
             _bool_property(
                 "SourceSuppressed", bool(mate.get("suppressed")), dynamic=True
             ),
-            _bool_property(
-                "Suppressed",
-                bool(mate.get("suppressed")) or not has_connector_pair,
-            ),
             _bool_property("Driving", bool(mate.get("driving", True)), dynamic=True),
             _json_property("MateValueJSON", mate.get("value")),
             _json_property("MateDataJSON", mate),
         ]
+        if not native_joint_supported:
+            obj.properties.extend(_native_properties(native_mate))
+            for property_element in (
+                _string_property("Label", mate_name),
+                _bool_property("KitMateCarrier", True, dynamic=True),
+                *metadata_properties,
+                *connector_properties,
+                _bool_property("Visibility", False),
+            ):
+                _replace_named_property(
+                    obj.properties,
+                    property_element.get("name", ""),
+                    property_element,
+                )
+            obj.dependencies.extend(connector_targets)
+            mate_objects.append(obj.name)
+            mate_names[mate_id] = obj.name
+            continue
+        joint_type = resolved_joint_type
         numeric_value = _mate_value(mate.get("value"))
-        properties.extend(
-            [
+        parameter_values = {
+            path: parameters.value(parameter_id)
+            for parameter_id in (
+                _text(value) for value in _sequence(mate.get("parameter_ids", []))
+            )
+            if (path := parameters.source_path(parameter_id))
+        }
+        angle_value = parameter_values.get(
+            "Angle", numeric_value if joint_type == "Angle" else 0.0
+        )
+        distance_value = parameter_values.get(
+            "Distance",
+            numeric_value if joint_type in JOINT_TYPES_USING_DISTANCE else 0.0,
+        )
+        native_mate_properties = native_mate.get("properties", {})
+        if isinstance(native_mate_properties, Mapping) and native_mate_properties:
+            properties = [
+                element
+                for value in native_mate_properties.values()
+                if (element := _element_from_data(value)) is not None
+                and element.tag == "Property"
+            ]
+            replacements = [
+                _string_property("Label", mate_name),
+                _enumeration_choices_property(
+                    "JointType", JOINT_TYPES, JOINT_TYPES.index(joint_type)
+                ),
+                _bool_property(
+                    "Suppressed",
+                    bool(mate.get("suppressed"))
+                    or not has_connector_pair
+                    or not native_joint_supported,
+                ),
                 _float_property(
                     "Angle",
-                    numeric_value if joint_type == "Angle" else 0.0,
+                    angle_value,
+                    "App::PropertyAngle",
+                ),
+                _float_property(
+                    "Distance",
+                    distance_value,
+                    "App::PropertyLength",
+                ),
+                *[
+                    item
+                    for item in connector_properties
+                    if item.get("name", "").startswith(
+                        ASSEMBLY_CONNECTOR_PROPERTY_PREFIXES
+                    )
+                ],
+            ]
+            for property_name, property_type in (
+                ("Distance2", "App::PropertyLength"),
+                ("LengthMin", "App::PropertyLength"),
+                ("LengthMax", "App::PropertyLength"),
+                ("AngleMin", "App::PropertyAngle"),
+                ("AngleMax", "App::PropertyAngle"),
+            ):
+                if property_name in parameter_values:
+                    replacements.append(
+                        _float_property(
+                            property_name,
+                            parameter_values[property_name],
+                            property_type,
+                        )
+                    )
+            for replacement in replacements:
+                _merge_named_property(properties, replacement)
+            properties.extend(metadata_properties)
+        else:
+            properties = [
+                _string_property("Label", mate_name),
+                *metadata_properties,
+                _enumeration_choices_property(
+                    "JointType",
+                    JOINT_TYPES,
+                    JOINT_TYPES.index(joint_type),
+                    dynamic=True,
+                ),
+                _bool_property(
+                    "Suppressed",
+                    bool(mate.get("suppressed"))
+                    or not has_connector_pair
+                    or not native_joint_supported,
+                ),
+                _float_property(
+                    "Angle",
+                    angle_value,
                     "App::PropertyAngle",
                     dynamic=True,
                 ),
                 _float_property(
                     "Distance",
-                    numeric_value if joint_type == "Distance" else 0.0,
+                    distance_value,
                     "App::PropertyLength",
                     dynamic=True,
                 ),
-                _float_property("Distance2", 0.0, "App::PropertyLength", dynamic=True),
-                _float_property("LengthMin", 0.0, "App::PropertyLength", dynamic=True),
-                _float_property("LengthMax", 0.0, "App::PropertyLength", dynamic=True),
-                _float_property("AngleMin", 0.0, "App::PropertyAngle", dynamic=True),
-                _float_property("AngleMax", 0.0, "App::PropertyAngle", dynamic=True),
-                _bool_property("EnableLengthMin", False, dynamic=True),
-                _bool_property("EnableLengthMax", False, dynamic=True),
-                _bool_property("EnableAngleMin", False, dynamic=True),
-                _bool_property("EnableAngleMax", False, dynamic=True),
+                _float_property(
+                    "Distance2",
+                    (
+                        parameter_values.get("Distance2", 0.0)
+                        if joint_type in JOINT_TYPES_USING_SECOND_DISTANCE
+                        else 0.0
+                    ),
+                    "App::PropertyLength",
+                    dynamic=True,
+                ),
+                _float_property(
+                    "LengthMin",
+                    parameter_values.get("LengthMin", 0.0),
+                    "App::PropertyLength",
+                    dynamic=True,
+                ),
+                _float_property(
+                    "LengthMax",
+                    parameter_values.get("LengthMax", 0.0),
+                    "App::PropertyLength",
+                    dynamic=True,
+                ),
+                _float_property(
+                    "AngleMin",
+                    parameter_values.get("AngleMin", 0.0),
+                    "App::PropertyAngle",
+                    dynamic=True,
+                ),
+                _float_property(
+                    "AngleMax",
+                    parameter_values.get("AngleMax", 0.0),
+                    "App::PropertyAngle",
+                    dynamic=True,
+                ),
+                _bool_property(
+                    "EnableLengthMin", "LengthMin" in parameter_values, dynamic=True
+                ),
+                _bool_property(
+                    "EnableLengthMax", "LengthMax" in parameter_values, dynamic=True
+                ),
+                _bool_property(
+                    "EnableAngleMin", "AngleMin" in parameter_values, dynamic=True
+                ),
+                _bool_property(
+                    "EnableAngleMax", "AngleMax" in parameter_values, dynamic=True
+                ),
                 *connector_properties,
                 _python_proxy_property("JointObject", "Joint"),
                 _bool_property("Visibility", False),
             ]
-        )
+
         obj.properties.extend(properties)
         obj.dependencies.extend(connector_targets)
         mate_objects.append(obj.name)
         mate_names[mate_id] = obj.name
-    group_items = sorted(
-        (
-            group
-            for group in _items(assembly.get("mate_groups", assembly.get("groups", [])))
-            if _text(group.get("owner_definition_id")) == root_definition_id
-        ),
-        key=lambda item: (int(_number(item.get("order"))), _text(item.get("id"))),
-    )
+    group_items = [group for group in group_items if group is not native_joint_group]
     group_names: dict[str, str] = {}
     group_objects: list[_Object] = []
     for group in group_items:
@@ -2291,15 +3646,12 @@ def _add_assembly(
         )
         group_names[group_id] = obj.name
         group_objects.append(obj)
-    grouped_mates: set[str] = set()
-    child_groups: set[str] = set()
     for group, obj in zip(group_items, group_objects):
         members = [
             mate_names[value]
             for value in (_text(item) for item in _sequence(group.get("mate_ids", [])))
             if value in mate_names
         ]
-        grouped_mates.update(members)
         nested = [
             name
             for group_id, name in group_names.items()
@@ -2315,18 +3667,17 @@ def _add_assembly(
             )
             == _text(group.get("id"))
         ]
-        child_groups.update(nested)
-        children = [*nested, *members]
+        children = nested
         obj.properties.extend(
             [
                 _string_property("Label", group.get("name", group.get("id", ""))),
                 _link_list_property("Group", children),
+                _string_list_property("MateObjects", members, dynamic=True),
                 _string_property("MateGroupId", group.get("id", ""), dynamic=True),
                 _bool_property("Visibility", False),
             ]
         )
         obj.dependencies.extend(children)
-    top_groups = [obj.name for obj in group_objects if obj.name not in child_groups]
     definitions_group.properties.extend(
         [
             _string_property("Label", "Component Definitions"),
@@ -2351,35 +3702,69 @@ def _add_assembly(
         ]
     )
     entities_group.dependencies.extend(entity_objects)
-    mate_children = [*top_groups, *grounded_objects, *mate_objects]
-    mates_group.properties.extend(
-        [
-            _string_property("Label", "Joints"),
-            _link_list_property("Group", mate_children),
-            _bool_property("Visibility", False),
-        ]
+    mate_children = [*grounded_objects, *mate_objects]
+    mates_group.properties.extend(_native_properties(native_joint_source))
+    group_property = next(
+        (item for item in mates_group.properties if item.get("name") == "Group"), None
+    )
+    if group_property is None:
+        group_property = _link_list_property("Group", mate_children)
+        mates_group.properties.append(group_property)
+    else:
+        link_list = group_property.find("./LinkList")
+        if link_list is None:
+            link_list = ET.SubElement(group_property, "LinkList")
+        link_list.clear()
+        link_list.set("count", str(len(mate_children)))
+        for target in mate_children:
+            ET.SubElement(link_list, "Link", {"value": target})
+    if not any(
+        item.get("name") == "ExpressionEngine" for item in mates_group.properties
+    ):
+        mates_group.properties.insert(0, _expression_property([]))
+    if not any(item.get("name") == "Label" for item in mates_group.properties):
+        label_property = _property("Label", "App::PropertyString", status="134217728")
+        ET.SubElement(label_property, "String", {"value": "Joints"})
+        mates_group.properties.append(label_property)
+    if not any(item.get("name") == "Label2" for item in mates_group.properties):
+        label2_property = _property("Label2", "App::PropertyString", status="67108992")
+        ET.SubElement(label2_property, "String", {"value": ""})
+        mates_group.properties.append(label2_property)
+    if not any(item.get("name") == "Visibility" for item in mates_group.properties):
+        visibility_property = _property("Visibility", "App::PropertyBool", status="648")
+        ET.SubElement(visibility_property, "Bool", {"value": "true"})
+        mates_group.properties.append(visibility_property)
+    mates_group.transient_properties.append(
+        ET.Element(
+            "_Property",
+            {
+                "name": "_GroupTouched",
+                "type": "App::PropertyBool",
+                "status": "100663424",
+            },
+        )
     )
     mates_group.dependencies.extend(mate_children)
     root_children = [
         mates_group.name,
         *occurrence_objects,
-        *top_groups,
         *grounded_objects,
         *mate_objects,
     ]
-    root.properties.extend(
-        [
-            _string_property("Label", root_label),
-            _string_property("Type", "Assembly"),
-            _link_list_property("Group", root_children),
-            _placement_property("Placement", _matrix_transform(_IDENTITY_MATRIX)),
-            _string_property("RootDefinitionId", root_definition_id, dynamic=True),
-            _integer_property("DefinitionCount", len(definitions), dynamic=True),
-            _integer_property("OccurrenceCount", len(direct_instances), dynamic=True),
-            _integer_property("MateCount", len(mate_objects), dynamic=True),
-            _bool_property("Visibility", True),
-        ]
-    )
+    for property_element in (
+        _string_property("Label", root_label),
+        _string_property("Type", "Assembly"),
+        _link_list_property("Group", root_children),
+        _placement_property("Placement", _matrix_transform(_IDENTITY_MATRIX)),
+        _string_property("RootDefinitionId", root_definition_id, dynamic=True),
+        _integer_property("DefinitionCount", len(definitions), dynamic=True),
+        _integer_property("OccurrenceCount", len(direct_instances), dynamic=True),
+        _integer_property("MateCount", len(mate_objects), dynamic=True),
+        _bool_property("Visibility", True),
+    ):
+        _replace_named_property(
+            root.properties, property_element.get("name", ""), property_element
+        )
     root.dependencies.extend(root_children)
     return root.name, len(direct_instances), len(mate_objects)
 
@@ -2452,6 +3837,47 @@ def _add_document_meshes(
     return result
 
 
+def _add_document_brep(
+    graph: _Graph,
+    manifest: Mapping[str, Any],
+    payload_entries: dict[str, bytes],
+    parametric_target: str,
+) -> tuple[list[str], str]:
+    if manifest.get("brep") is None:
+        return [], ""
+    try:
+        document = CadDocument.from_dict(manifest)
+    except (KeyError, TypeError, ValueError, RecursionError) as exc:
+        raise ValueError("neutral B-rep manifest data is invalid") from exc
+    if document.brep is None:
+        return [], ""
+    try:
+        data = brep_model_brep(document.brep)
+    except FreeCADBrepWriteError:
+        return [], ""
+    obj = graph.add("Part::Feature", "BRep", "NeutralBRep")
+    filename = _unique_payload_name(payload_entries, f"{obj.name}.Shape.brp")
+    payload_entries[filename] = data
+    obj.properties.extend(
+        [
+            _string_property("Label", "Neutral BRep"),
+            _shape_property(filename),
+            _placement_property("Placement", _matrix_transform(_IDENTITY_MATRIX)),
+            _string_property("Representation", "neutral-brep", dynamic=True),
+            _string_property(
+                "BRepSchemaVersion", document.brep.schema_version, dynamic=True
+            ),
+            _bool_property("Visibility", True),
+        ]
+    )
+    if parametric_target:
+        obj.properties.append(
+            _link_property("ParametricSource", parametric_target, dynamic=True)
+        )
+        obj.dependencies.append(parametric_target)
+    return [obj.name], filename
+
+
 def _document_properties(
     label: str, document_id: str, document_timestamp: str
 ) -> ET.Element:
@@ -2495,9 +3921,68 @@ def _serialize_object_data(parent: ET.Element, obj: _Object) -> None:
     properties = ET.SubElement(
         element,
         "Properties",
-        {"Count": str(len(obj.properties)), "TransientCount": "0"},
+        {
+            "Count": str(len(obj.properties)),
+            "TransientCount": str(len(obj.transient_properties)),
+        },
     )
+    properties.extend(obj.transient_properties)
     properties.extend(obj.properties)
+
+
+def _sanitize_payload_references(
+    objects: list[_Object], payload_entries: Mapping[str, bytes]
+) -> None:
+    for obj in objects:
+        for property_element in obj.properties:
+            part = property_element.find("./Part")
+            if part is not None:
+                filename = part.get("file", "")
+                if filename and filename not in payload_entries:
+                    property_element[:] = [ET.Element("Part")]
+                    continue
+            stack = [property_element]
+            while stack:
+                parent = stack.pop()
+                filename = parent.get("file", "")
+                if parent.tag != "XLink" and filename not in payload_entries:
+                    parent.attrib.pop("file", None)
+                for child in list(parent):
+                    filename = child.get("file", "")
+                    if (
+                        child.tag != "XLink"
+                        and filename
+                        and filename not in payload_entries
+                    ):
+                        parent.remove(child)
+                    else:
+                        stack.append(child)
+
+
+def _represented_native_object_names(
+    manifest: Mapping[str, Any], assembly: Mapping[str, Any]
+) -> set[str]:
+    result: set[str] = set()
+
+    def visit(value: Any) -> None:
+        if isinstance(value, Mapping):
+            attributes = value.get("attributes", {})
+            if isinstance(attributes, Mapping):
+                for key in ("freecad", "grounded_joint"):
+                    native = attributes.get(key, {})
+                    if isinstance(native, Mapping):
+                        name = _text(native.get("name"))
+                        if name:
+                            result.add(name)
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                visit(child)
+
+    visit(manifest)
+    visit(assembly)
+    return result
 
 
 def _document_xml(
@@ -2505,10 +3990,64 @@ def _document_xml(
     manifest_data: str,
     manifest_sha256: str,
     external_links: Mapping[str, Mapping[str, Any]] | None = None,
+    native_external_links: Mapping[str, str] | None = None,
     document_timestamp: str = "1980-01-01T00:00:00Z",
 ) -> tuple[bytes, dict[str, bytes]]:
     external_links = external_links or {}
+    native_external_links = native_external_links or {}
+    manifest_metadata = manifest.get("metadata", {})
+    freecad_metadata = (
+        manifest_metadata.get("freecad", {})
+        if isinstance(manifest_metadata, Mapping)
+        else {}
+    )
+    native_values = (
+        _items(freecad_metadata.get("objects", []))
+        if isinstance(freecad_metadata, Mapping)
+        else []
+    )
+    assembly = _assembly_data(manifest)
+    native_replay = bool(native_values) and assembly is None
+    represented_native_names = (
+        _represented_native_object_names(manifest, assembly)
+        if assembly is not None
+        else set()
+    )
+    replay_values = native_values
+    if not native_replay:
+        replay_values = [
+            value
+            for value in native_values
+            if _text(value.get("name")) not in represented_native_names
+        ]
+        while True:
+            replay_names = {_text(value.get("name")) for value in replay_values}
+            closed_values = [
+                value
+                for value in replay_values
+                if all(
+                    _text(dependency) in replay_names
+                    for dependency in _sequence(value.get("dependencies", []))
+                )
+            ]
+            if len(closed_values) == len(replay_values):
+                break
+            replay_values = closed_values
     graph = _Graph()
+    native_graph: dict[str, _Object] = {}
+    if replay_values:
+        for value in sorted(
+            replay_values, key=lambda item: int(_number(item.get("order")))
+        ):
+            obj = _native_object(value)
+            if obj.name in native_graph:
+                raise ValueError(
+                    f"duplicate native FreeCAD object metadata: {obj.name}"
+                )
+            native_graph[obj.name] = obj
+            graph.names.add(obj.name)
+            graph.objects.append(obj)
+    native_object_targets = {name: obj.name for name, obj in native_graph.items()}
     parameters_data = _items(manifest.get("parameters", []))
     parameters = _Parameters(parameters_data)
     parameter_sheet = graph.add("Spreadsheet::Sheet", "Parameters", "Parameters")
@@ -2539,7 +4078,22 @@ def _document_xml(
     plane_objects: list[str] = []
     for plane in plane_items:
         plane_id = _text(plane.get("id"))
-        obj = graph.add("App::FeaturePython", plane.get("name", plane_id), "Plane")
+        plane_attributes = plane.get("attributes", {})
+        native_plane = (
+            plane_attributes.get("freecad", {})
+            if isinstance(plane_attributes, Mapping)
+            else {}
+        )
+        native_plane_name = _text(native_plane.get("name"))
+        obj = native_graph.get(native_plane_name) if native_replay else None
+        if obj is None:
+            obj = graph.add(
+                _text(native_plane.get("type_id"), "App::FeaturePython"),
+                native_plane.get("name", plane.get("name", plane_id)),
+                "Plane",
+            )
+        if native_plane_name:
+            native_object_targets[native_plane_name] = obj.name
         plane_names[plane_id] = obj.name
         plane_objects.append(obj.name)
         transform = (
@@ -2564,17 +4118,40 @@ def _document_xml(
                     expressions.append(
                         (f"Placement.Base.{coordinate}", sign + _text(expression))
                     )
-        obj.properties.extend(
-            [
+        native_plane_properties = (
+            native_plane.get("properties", {})
+            if isinstance(native_plane, Mapping)
+            else {}
+        )
+        if isinstance(native_plane_properties, Mapping) and native_plane_properties:
+            properties = _native_properties(native_plane)
+            replacements = [
                 _string_property("Label", plane.get("name", plane_id)),
-                _placement_property("Placement", transform, dynamic=True),
-                _expression_property(expressions),
-                _string_property("KitId", plane_id, dynamic=True),
-                _json_property("SourcePlaneJSON", plane),
+                _placement_property("Placement", transform),
                 _bool_property("Visibility", False),
             ]
-        )
-        if expressions:
+            for replacement in replacements:
+                _merge_named_property(properties, replacement)
+            if not native_replay:
+                properties.extend(
+                    [
+                        _string_property("KitId", plane_id, dynamic=True),
+                        _json_property("SourcePlaneJSON", plane),
+                    ]
+                )
+            obj.properties = properties
+        else:
+            obj.properties.extend(
+                [
+                    _string_property("Label", plane.get("name", plane_id)),
+                    _placement_property("Placement", transform, dynamic=True),
+                    _expression_property(expressions),
+                    _string_property("KitId", plane_id, dynamic=True),
+                    _json_property("SourcePlaneJSON", plane),
+                    _bool_property("Visibility", False),
+                ]
+            )
+        if expressions and not native_replay:
             obj.dependencies.append(parameter_sheet.name)
     sketch_items = _items(manifest.get("sketches", []))
     sketch_names: dict[str, str] = {}
@@ -2584,19 +4161,44 @@ def _document_xml(
         plane_id = _text(sketch.get("support_plane_id"))
         plane = plane_by_id.get(plane_id, {"transform": {}})
         plane_name = plane_names.get(plane_id, "")
-        obj = graph.add(
-            "Sketcher::SketchObject",
-            sketch.get("name", sketch_id),
-            "Sketch",
-            touched=True,
-            extensions=("Part::AttachExtension",),
+        sketch_attributes = sketch.get("attributes", {})
+        native_sketch = (
+            sketch_attributes.get("freecad", {})
+            if isinstance(sketch_attributes, Mapping)
+            else {}
         )
+        native_sketch_name = _text(native_sketch.get("name"))
+        obj = native_graph.get(native_sketch_name) if native_replay else None
+        if obj is None:
+            obj = graph.add(
+                _text(native_sketch.get("type_id"), SKETCH_TYPE_ID),
+                native_sketch.get("name", sketch.get("name", sketch_id)),
+                "Sketch",
+                touched=True,
+                extensions=("Part::AttachExtension",),
+            )
         sketch_names[sketch_id] = obj.name
+        if native_sketch_name:
+            native_object_targets[native_sketch_name] = obj.name
         sketch_objects.append(obj.name)
         properties, dependencies = _sketch_properties(
-            sketch, plane, plane_name, parameters
+            sketch, plane, plane_name, parameters, native_replay
         )
-        obj.properties.extend(properties)
+        if native_replay and native_sketch:
+            obj.properties = properties
+        else:
+            obj.properties.extend(properties)
+        if native_sketch and not native_replay:
+            obj.transient_properties.append(
+                ET.Element(
+                    "_Property",
+                    {
+                        "name": "_ElementMapVersion",
+                        "type": "App::PropertyString",
+                        "status": "234881024",
+                    },
+                )
+            )
         obj.dependencies.extend(dependency for dependency in dependencies if dependency)
     selection_items = {
         _text(item.get("id")): item for item in _items(manifest.get("selections", []))
@@ -2611,8 +4213,34 @@ def _document_xml(
     current_name = ""
     final_shape_filename = ""
     payload_entries: dict[str, bytes] = {}
+    replay_entry_names: set[str] | None = None
+    if not native_replay:
+        replay_entry_names = {
+            filename
+            for value in replay_values
+            for property_element in _native_properties(value)
+            for node in property_element.iter()
+            if node.tag != "XLink" and (filename := node.get("file", ""))
+        }
+    if native_values and isinstance(freecad_metadata, Mapping):
+        for item in _items(freecad_metadata.get("entries", [])):
+            source_stream = _text(item.get("source_stream"))
+            data = _payload_bytes(item)
+            if not source_stream or data is None:
+                raise ValueError("native FreeCAD entry metadata is incomplete")
+            if (
+                replay_entry_names is not None
+                and source_stream not in replay_entry_names
+            ):
+                continue
+            entry = _validated_entry_name(source_stream)
+            if entry in {DOCUMENT_ENTRY, MANIFEST_ENTRY} or entry in payload_entries:
+                raise ValueError(
+                    "native FreeCAD entry metadata conflicts with the archive"
+                )
+            payload_entries[entry] = data
     for feature in feature_items:
-        if bool(feature.get("suppressed")):
+        if bool(feature.get("suppressed")) and not native_replay:
             continue
         feature_id = _text(feature.get("id"))
         feature_name = _text(feature.get("name"), feature_id)
@@ -2628,6 +4256,13 @@ def _document_xml(
             if isinstance(feature.get("definition"), Mapping)
             else {}
         )
+        native_definition_data = (
+            definition.get("object_data", {})
+            if _text(definition.get("$type")) == "NativeFeatureDefinition"
+            and _text(definition.get("format_id")) == FORMAT_ID
+            and isinstance(definition.get("object_data"), Mapping)
+            else {}
+        )
         inputs = [
             _text(value) for value in _sequence(feature.get("input_feature_ids", []))
         ]
@@ -2639,6 +4274,84 @@ def _document_xml(
             ),
             current_name,
         )
+        native_feature = attributes.get("freecad", {})
+        native_feature_name = (
+            _text(native_feature.get("name"))
+            if isinstance(native_feature, Mapping)
+            else ""
+        )
+        if native_replay and native_feature_name in native_graph:
+            final = native_graph[native_feature_name]
+            native_property_source = (
+                native_definition_data or native_feature
+                if isinstance(native_feature, Mapping)
+                else native_definition_data
+            )
+            properties = _native_properties(native_property_source)
+            native_definition_type = _text(definition.get("type_id"))
+            if native_definition_data and native_definition_type:
+                final.type_id = native_definition_type
+            property_names = {item.get("name", "") for item in properties}
+            if "Label" in property_names:
+                _merge_named_property(
+                    properties, _string_property("Label", feature_name)
+                )
+            if kind == "extrusion":
+                length = abs(
+                    _number(
+                        definition.get("length"),
+                        _number(attributes.get("length_mm")),
+                    )
+                )
+                replacements = [
+                    _float_property("Length", length, "App::PropertyLength"),
+                    _float_property(
+                        "Length2",
+                        abs(_number(definition.get("second_length"))),
+                        "App::PropertyLength",
+                    ),
+                    _bool_property("Midplane", bool(definition.get("symmetric"))),
+                    _bool_property("Reversed", bool(definition.get("reversed"))),
+                ]
+                direction = definition.get("direction")
+                if direction is not None:
+                    replacements.append(
+                        _vector_property(
+                            "Direction", _vector(direction, (0.0, 0.0, 1.0))
+                        )
+                    )
+                for replacement in replacements:
+                    if replacement.get("name", "") in property_names:
+                        _merge_named_property(properties, replacement)
+            elif kind == "fillet":
+                radius = abs(
+                    _number(
+                        definition.get("radius"),
+                        _number(attributes.get("radius_mm")),
+                    )
+                )
+                for name in ("Radius", "DrivingRadius"):
+                    if name in property_names:
+                        _merge_named_property(
+                            properties,
+                            _float_property(name, radius, "App::PropertyLength"),
+                        )
+            if "Suppressed" in property_names or bool(feature.get("suppressed")):
+                _merge_named_property(
+                    properties,
+                    _bool_property(
+                        "Suppressed",
+                        bool(feature.get("suppressed")),
+                        dynamic="Suppressed" not in property_names,
+                    ),
+                )
+            final.properties = properties
+            feature_names[feature_id] = final.name
+            solid_feature_names[feature_id] = final.name
+            feature_objects.append(final.name)
+            current_name = final.name
+            native_object_targets[native_feature_name] = final.name
+            continue
         if kind == "extrusion":
             sketch_id = _text(feature.get("sketch_id"))
             sketch_name = sketch_names.get(sketch_id, "")
@@ -2688,13 +4401,21 @@ def _document_xml(
             symmetric = bool(definition.get("symmetric"))
             parameter_id = _feature_parameter(feature, parameters, length)
             expression = parameters.expression(parameter_id)
+            operation_kind = (
+                "join"
+                if base_name and operation in CREATE_OPERATION_NAMES
+                else operation or "create"
+            )
+            operation_type = BOOLEAN_OPERATION_TYPE_BY_KIND.get(operation_kind)
+            tool_type = BOOLEAN_OPERATION_TYPE_BY_KIND["create"]
             tool_requested = (
-                feature_name
-                if not base_name and operation in {"", "create", "join"}
-                else f"{feature_name}_Profile"
+                feature_name if not base_name else f"{feature_name}_Profile"
             )
             tool = graph.add(
-                "Part::Extrusion", tool_requested, "Extrusion", touched=True
+                tool_type.type_id,
+                tool_requested,
+                tool_type.label,
+                touched=True,
             )
             tool.properties.extend(
                 [
@@ -2736,8 +4457,15 @@ def _document_xml(
                 tool.dependencies.append(parameter_sheet.name)
             if not base_name:
                 final = tool
-            elif operation == "cut":
-                final = graph.add("Part::Cut", feature_name, "Cut", touched=True)
+            elif (
+                operation_type is not None and operation_type.input_mode == "base_tool"
+            ):
+                final = graph.add(
+                    operation_type.type_id,
+                    feature_name,
+                    operation_type.label,
+                    touched=True,
+                )
                 final.properties.extend(
                     [
                         _string_property("Label", feature_name),
@@ -2752,8 +4480,13 @@ def _document_xml(
                 )
                 final.dependencies.extend([base_name, tool.name])
                 tool.properties[-1] = _bool_property("Visibility", False)
-            elif operation in {"join", "create", ""}:
-                final = graph.add("Part::MultiFuse", feature_name, "Fuse", touched=True)
+            elif operation_type is not None and operation_type.input_mode == "shapes":
+                final = graph.add(
+                    operation_type.type_id,
+                    feature_name,
+                    operation_type.label,
+                    touched=True,
+                )
                 final.properties.extend(
                     [
                         _string_property("Label", feature_name),
@@ -2848,15 +4581,25 @@ def _document_xml(
             feature_objects.append(final.name)
             current_name = final.name
         else:
+            imported = kind == "imported"
             final = graph.add(
-                "App::FeaturePython", feature_name, "Feature", touched=True
+                "Part::Feature" if imported else "App::FeaturePython",
+                feature_name,
+                "Feature",
+                touched=True,
             )
             final.properties.extend(
                 [
                     _string_property("Label", feature_name),
                     _expression_property([]),
-                    *_feature_metadata(feature, "unsupported-native"),
-                    _bool_property("Visibility", False),
+                    *_feature_metadata(
+                        feature, "imported" if imported else "feature-data"
+                    ),
+                    _string_property(
+                        "NativeTypeId", definition.get("type_id", ""), dynamic=True
+                    ),
+                    _json_property("NativeDefinitionJSON", definition),
+                    _bool_property("Visibility", imported),
                 ]
             )
             if base_name:
@@ -2866,25 +4609,59 @@ def _document_xml(
                 final.dependencies.append(base_name)
             feature_names[feature_id] = final.name
             feature_objects.append(final.name)
+            if imported:
+                solid_feature_names[feature_id] = final.name
+                current_name = final.name
+        if isinstance(native_feature, Mapping):
+            if native_feature_name:
+                native_object_targets[native_feature_name] = final.name
     body_objects: list[str] = []
+    body_names: dict[str, str] = {}
     for body in _items(manifest.get("bodies", [])):
         body_id = _text(body.get("id"))
         final_feature = feature_names.get(
             _text(body.get("final_feature_id")), current_name
         )
-        obj = graph.add("App::DocumentObjectGroup", body.get("name", body_id), "Body")
-        obj.properties.extend(
-            [
-                _string_property("Label", body.get("name", body_id)),
-                _link_list_property("Group", [final_feature] if final_feature else []),
-                _string_property("KitId", body_id, dynamic=True),
-                _json_property("TopologyJSON", body.get("topology", {})),
-                _json_property("SourceBodyJSON", body),
-                _bool_property("Visibility", True),
-            ]
+        body_attributes = body.get("attributes", {})
+        native_body = (
+            body_attributes.get("freecad", {})
+            if isinstance(body_attributes, Mapping)
+            else {}
         )
-        if final_feature:
-            obj.dependencies.append(final_feature)
+        native_body_name = (
+            _text(native_body.get("name")) if isinstance(native_body, Mapping) else ""
+        )
+        obj = native_graph.get(native_body_name) if native_replay else None
+        if obj is not None:
+            properties = _native_properties(native_body)
+            _merge_named_property(
+                properties, _string_property("Label", body.get("name", body_id))
+            )
+            if final_feature:
+                _merge_named_property(properties, _link_property("Tip", final_feature))
+            obj.properties = properties
+            native_object_targets[native_body_name] = obj.name
+        else:
+            obj = graph.add(
+                _text(native_body.get("type_id"), "App::DocumentObjectGroup"),
+                native_body.get("name", body.get("name", body_id)),
+                "Body",
+            )
+            obj.properties.extend(
+                [
+                    _string_property("Label", body.get("name", body_id)),
+                    _link_list_property(
+                        "Group", [final_feature] if final_feature else []
+                    ),
+                    _string_property("KitId", body_id, dynamic=True),
+                    _json_property("TopologyJSON", body.get("topology", {})),
+                    _json_property("SourceBodyJSON", body),
+                    _bool_property("Visibility", True),
+                ]
+            )
+            if final_feature:
+                obj.dependencies.append(final_feature)
+        body_names[body_id] = obj.name
         body_objects.append(obj.name)
     payloads = _items(
         manifest.get("brep_payloads", manifest.get("native_payloads", []))
@@ -2900,7 +4677,6 @@ def _document_xml(
             )
         )
         payload_entries[entry] = data
-        format_id = _text(payload.get("format_id")).lower()
         attributes = (
             payload.get("attributes", {})
             if isinstance(payload.get("attributes"), Mapping)
@@ -2909,16 +4685,87 @@ def _document_xml(
         target_feature_id = _text(
             attributes.get("feature_id", attributes.get("final_feature_id"))
         )
-        target_name = feature_names.get(target_feature_id, current_name)
-        if target_name and _is_open_cascade_payload(format_id):
+        target_body_id = _text(attributes.get("body_id"))
+        source_object = _text(attributes.get("freecad_object"))
+        property_name = _text(attributes.get("freecad_property"), "Shape")
+        target_name = native_object_targets.get(source_object, "")
+        if not target_name and target_feature_id:
+            target_name = feature_names.get(target_feature_id, "")
+        if not target_name and target_body_id:
+            target_name = body_names.get(target_body_id, "")
+        if not target_name and not source_object:
+            target_name = current_name
+        native_brep = _payload_role(payload) == "brep" and _freecad_brep_payload(
+            payload, data
+        )
+        if native_brep:
             target = next(
                 (item for item in graph.objects if item.name == target_name), None
             )
+            if target is None:
+                target = graph.add(
+                    "Part::Feature",
+                    f"NativeBRep_{index}",
+                    _text(payload.get("id"), f"Native BRep {index}"),
+                )
+                target.properties.extend(
+                    [
+                        _string_property(
+                            "Label", _text(payload.get("id"), f"Native BRep {index}")
+                        ),
+                        _string_property(
+                            "KitPayloadId", payload.get("id"), dynamic=True
+                        ),
+                        _bool_property("Visibility", True),
+                    ]
+                )
+                body_objects.append(target.name)
+                target_name = target.name
             if target is not None:
-                shape_entry = f"{target.name}.Shape.brp"
+                shape_entry = f"{target.name}.{_safe(property_name, 'Shape')}.brp"
                 payload_entries[shape_entry] = data
-                target.properties.append(_shape_property(shape_entry))
-                final_shape_filename = shape_entry
+                sidecar_entries: dict[str, str] = {}
+                for sidecar in _items(attributes.get("freecad_sidecars", [])):
+                    source_stream = _text(sidecar.get("source_stream"))
+                    sidecar_data = _payload_bytes(sidecar)
+                    if not source_stream or sidecar_data is None:
+                        continue
+                    suffix = PurePosixPath(source_stream).name
+                    source_prefix = PurePosixPath(
+                        _text(payload.get("source_stream"))
+                    ).stem
+                    if suffix.startswith(source_prefix):
+                        suffix = suffix[len(source_prefix) :]
+                    sidecar_entry = (
+                        f"{target.name}.{_safe(property_name, 'Shape')}{suffix}"
+                    )
+                    sidecar_entries[source_stream] = sidecar_entry
+                    payload_entries[sidecar_entry] = sidecar_data
+                property_element = _element_from_data(
+                    attributes.get("freecad_property_data")
+                )
+                if property_element is None or property_element.tag != "Property":
+                    property_element = _shape_property(
+                        shape_entry, _safe(property_name, "Shape")
+                    )
+                for child in property_element.findall(".//*[@file]"):
+                    source_stream = child.get("file", "")
+                    child.set(
+                        "file",
+                        (
+                            shape_entry
+                            if child.tag == "Part"
+                            else sidecar_entries.get(source_stream, source_stream)
+                        ),
+                    )
+                _merge_named_property(target.properties, property_element)
+                if property_name == "Shape" and target.name == current_name:
+                    final_shape_filename = shape_entry
+    document_breps, neutral_shape_filename = _add_document_brep(
+        graph, manifest, payload_entries, current_name
+    )
+    if neutral_shape_filename:
+        final_shape_filename = neutral_shape_filename
     document_meshes = _add_document_meshes(
         graph, manifest, payload_entries, current_name
     )
@@ -2952,24 +4799,28 @@ def _document_xml(
     bodies_group.properties.extend(
         [
             _string_property("Label", "Bodies"),
-            _link_list_property("Group", body_objects),
+            _link_list_property("Group", [*body_objects, *document_breps]),
             _bool_property("Visibility", True),
         ]
     )
-    bodies_group.dependencies.extend(body_objects)
+    bodies_group.dependencies.extend([*body_objects, *document_breps])
     external_target = (
-        document_meshes[0]
-        if document_meshes
-        else assembly_root
-        or current_name
-        or (bodies_group.name if body_objects else "")
-        or (feature_objects[-1] if feature_objects else "")
-        or bodies_group.name
+        document_breps[0]
+        if document_breps
+        else (
+            document_meshes[0]
+            if document_meshes
+            else assembly_root
+            or current_name
+            or (bodies_group.name if body_objects else "")
+            or (feature_objects[-1] if feature_objects else "")
+            or bodies_group.name
+        )
     )
     target_object = next(
         (item for item in graph.objects if item.name == external_target), None
     )
-    if target_object is not None:
+    if target_object is not None and not native_replay:
         target_object.properties.append(
             _link_property("Sketches", sketches_group.name, dynamic=True)
         )
@@ -3005,11 +4856,73 @@ def _document_xml(
     )
     label = PurePosixPath(_text(source.get("path"), "Kit")).stem or "Kit"
     document_id = _text(source.get("sha256"), manifest_sha256)
+    if native_replay and native_external_links:
+        for obj in native_graph.values():
+            for property_element in obj.properties:
+                for xlink in property_element.findall(".//XLink[@file]"):
+                    source_file = xlink.get("file", "")
+                    if source_file in native_external_links:
+                        xlink.set("file", native_external_links[source_file])
+    string_hasher = (
+        freecad_metadata.get("string_hasher", {})
+        if isinstance(freecad_metadata, Mapping)
+        else {}
+    )
+    root_attributes = {
+        "SchemaVersion": _TARGET_SCHEMA_VERSION,
+        "ProgramVersion": (
+            _text(
+                freecad_metadata.get("program_version"),
+                _TARGET_PROGRAM_VERSION,
+            )
+            if native_replay and isinstance(freecad_metadata, Mapping)
+            else _TARGET_PROGRAM_VERSION
+        ),
+        "FileVersion": (
+            _text(
+                freecad_metadata.get("file_version"),
+                _TARGET_FILE_VERSION,
+            )
+            if native_replay and isinstance(freecad_metadata, Mapping)
+            else _TARGET_FILE_VERSION
+        ),
+    }
+    if isinstance(string_hasher, Mapping):
+        attribute = _text(string_hasher.get("attribute"))
+        if attribute:
+            root_attributes["StringHasher"] = attribute
     root = ET.Element(
         "Document",
-        {"SchemaVersion": "4", "ProgramVersion": "1.0.2", "FileVersion": "1"},
+        root_attributes,
     )
-    root.append(_document_properties(label, document_id, document_timestamp))
+    if isinstance(string_hasher, Mapping):
+        for value in _items(string_hasher.get("nodes", [])):
+            node = _element_from_data(value)
+            if node is not None and node.tag in STRING_HASHER_TAGS:
+                root.append(node)
+        for entry in _items(string_hasher.get("entries", [])):
+            source_stream = _text(entry.get("source_stream"))
+            data = _payload_bytes(entry)
+            path = PurePosixPath(source_stream)
+            if (
+                source_stream
+                and data is not None
+                and not path.is_absolute()
+                and ".." not in path.parts
+            ):
+                payload_entries[source_stream] = data
+    _sanitize_payload_references(graph.objects, payload_entries)
+    native_document_properties = (
+        _element_from_data(freecad_metadata.get("document_properties"))
+        if native_replay and isinstance(freecad_metadata, Mapping)
+        else None
+    )
+    root.append(
+        native_document_properties
+        if native_document_properties is not None
+        and native_document_properties.tag == "Properties"
+        else _document_properties(label, document_id, document_timestamp)
+    )
     objects = ET.SubElement(
         root, "Objects", {"Count": str(len(graph.objects)), "Dependencies": "1"}
     )
@@ -3020,8 +4933,18 @@ def _document_xml(
         )
         for target in dependencies:
             ET.SubElement(dependency, "Dep", {"Name": target})
-    for index, obj in enumerate(graph.objects, start=1):
-        attributes = {"type": obj.type_id, "name": obj.name, "id": str(index)}
+    object_ids = {obj.object_id for obj in graph.objects if obj.object_id}
+    numeric_ids = [int(value) for value in object_ids if value.isdigit()]
+    next_object_id = max(numeric_ids, default=0) + 1
+    for obj in graph.objects:
+        object_id = obj.object_id
+        if not object_id:
+            while str(next_object_id) in object_ids:
+                next_object_id += 1
+            object_id = str(next_object_id)
+            object_ids.add(object_id)
+            next_object_id += 1
+        attributes = {"type": obj.type_id, "name": obj.name, "id": object_id}
         if obj.touched:
             attributes["Touched"] = "1"
         ET.SubElement(objects, "Object", attributes)
@@ -3044,11 +4967,10 @@ def _zip_entry(name: str, data: bytes) -> tuple[zipfile.ZipInfo, bytes]:
 def build_fcstd_archive(
     manifest: Mapping[str, Any],
     external_links: Mapping[str, Mapping[str, Any]] | None = None,
+    native_external_links: Mapping[str, str] | None = None,
     document_timestamp: str | None = None,
 ) -> bytes:
-    canonical = json.dumps(
-        manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    canonical = _canonical_manifest(manifest)
     digest = hashlib.sha256(canonical).hexdigest()
     embedded = base64.b64encode(zlib.compress(canonical, 9)).decode("ascii")
     document_xml, payload_entries = _document_xml(
@@ -3056,57 +4978,108 @@ def build_fcstd_archive(
         embedded,
         digest,
         external_links,
+        native_external_links,
         document_timestamp or "1980-01-01T00:00:00Z",
     )
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", allowZip64=True) as archive:
-        for name, data in [
-            _zip_entry("Document.xml", document_xml),
-            _zip_entry(MANIFEST_ENTRY, canonical + b"\n"),
-        ]:
-            archive.writestr(name, data)
+        archive.writestr(*_zip_entry(DOCUMENT_ENTRY, document_xml))
+        metadata = manifest.get("metadata", {})
+        freecad_metadata = (
+            metadata.get("freecad", {}) if isinstance(metadata, Mapping) else {}
+        )
+        entry_order = (
+            _sequence(freecad_metadata.get("entry_order", []))
+            if isinstance(freecad_metadata, Mapping)
+            else []
+        )
+        written: set[str] = set()
+        for value in entry_order:
+            entry = _text(value)
+            if entry in payload_entries and entry not in written:
+                archive.writestr(*_zip_entry(entry, payload_entries[entry]))
+                written.add(entry)
+        archive.writestr(*_zip_entry(MANIFEST_ENTRY, canonical + b"\n"))
         for entry, data in sorted(payload_entries.items()):
+            if entry in written:
+                continue
             archive.writestr(*_zip_entry(entry, data))
     return output.getvalue()
 
 
-def extract_manifest_from_fcstd(data: bytes) -> dict[str, Any]:
+def _document_xml_manifest(root: ET.Element) -> bytes | None:
+    names = {
+        MANIFEST_DATA_PROPERTY,
+        MANIFEST_ENCODING_PROPERTY,
+        MANIFEST_SHA256_PROPERTY,
+    }
+    values: dict[str, list[str]] = {name: [] for name in names}
+    for property_element in root.findall(".//Property"):
+        name = property_element.get("name", "")
+        if name not in values:
+            continue
+        string = property_element.find("String")
+        values[name].append(string.get("value", "") if string is not None else "")
+    if not any(values.values()):
+        return None
+    if any(len(items) > 1 for items in values.values()):
+        raise ValueError("embedded Kit interchange document is corrupt")
+    encoded = next(iter(values[MANIFEST_DATA_PROPERTY]), "")
+    encoding = next(iter(values[MANIFEST_ENCODING_PROPERTY]), "")
+    digest = next(iter(values[MANIFEST_SHA256_PROPERTY]), "")
+    if not encoded or encoding != MANIFEST_ENCODING:
+        raise ValueError("embedded Kit interchange document is corrupt")
     try:
-        archive = zipfile.ZipFile(io.BytesIO(data))
-    except (zipfile.BadZipFile, OSError) as exc:
-        raise ValueError("source is not an FCStd ZIP archive") from exc
+        compressed = base64.b64decode(encoded, validate=True)
+        decompressor = zlib.decompressobj()
+        canonical = decompressor.decompress(compressed, _MAX_ENTRY_SIZE + 1)
+        if (
+            len(canonical) > _MAX_ENTRY_SIZE
+            or decompressor.unconsumed_tail
+            or not decompressor.eof
+        ):
+            raise ValueError
+        canonical += decompressor.flush()
+        if len(canonical) > _MAX_ENTRY_SIZE or decompressor.unused_data:
+            raise ValueError
+    except (ValueError, zlib.error) as exc:
+        raise ValueError("embedded Kit interchange document is corrupt") from exc
+    if digest and hashlib.sha256(canonical).hexdigest() != digest:
+        raise ValueError("embedded Kit interchange document hash mismatch")
+    return canonical
+
+
+def _canonical_manifest(value: Mapping[str, Any]) -> bytes:
+    return json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+
+
+def extract_manifest_from_fcstd(data: bytes) -> dict[str, Any]:
+    archive, members = _validated_archive_members(data)
     with archive:
-        if MANIFEST_ENTRY in archive.namelist():
-            value = json.loads(archive.read(MANIFEST_ENTRY).decode("utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError("embedded Kit document is not a mapping")
-            return value
+        root, _ = _validated_document_xml(archive, members)
+        xml_manifest = _document_xml_manifest(root)
+        if MANIFEST_ENTRY not in members:
+            if xml_manifest is None:
+                raise ValueError(
+                    "FCStd archive has no embedded Kit interchange document"
+                )
+            return _manifest_mapping(xml_manifest)
         try:
-            root = ET.fromstring(archive.read("Document.xml"))
-        except (KeyError, ET.ParseError) as exc:
-            raise ValueError("FCStd archive has no readable Document.xml") from exc
-        encoded = ""
-        digest = ""
-        encoding = ""
-        for property_element in root.findall(".//Property"):
-            name = property_element.get("name")
-            string = property_element.find("String")
-            value = string.get("value", "") if string is not None else ""
-            if name == MANIFEST_DATA_PROPERTY:
-                encoded = value
-            elif name == MANIFEST_SHA256_PROPERTY:
-                digest = value
-            elif name == MANIFEST_ENCODING_PROPERTY:
-                encoding = value
-        if not encoded or encoding != MANIFEST_ENCODING:
-            raise ValueError("FCStd archive has no embedded Kit interchange document")
-        try:
-            canonical = zlib.decompress(base64.b64decode(encoded, validate=True))
-        except (ValueError, zlib.error) as exc:
+            raw_manifest = archive.read(members[MANIFEST_ENTRY])
+        except (
+            OSError,
+            RuntimeError,
+            NotImplementedError,
+            zipfile.BadZipFile,
+        ) as exc:
             raise ValueError("embedded Kit interchange document is corrupt") from exc
-        if digest and hashlib.sha256(canonical).hexdigest() != digest:
-            raise ValueError("embedded Kit interchange document hash mismatch")
-        value = json.loads(canonical.decode("utf-8"))
-        if not isinstance(value, dict):
-            raise ValueError("embedded Kit document is not a mapping")
-        return value
+        manifest = _manifest_mapping(raw_manifest)
+        if xml_manifest is not None:
+            secondary = _manifest_mapping(xml_manifest)
+            if _canonical_manifest(manifest) != _canonical_manifest(secondary):
+                raise ValueError(
+                    "embedded Kit interchange document copies do not match"
+                )
+        return manifest

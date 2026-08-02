@@ -32,9 +32,12 @@ class MateKind(StrEnum):
     GEAR = "gear"
     RACK_PINION = "rack_pinion"
     SCREW = "screw"
+    COORDINATE = "coordinate"
+    SLIDER = "slider"
     UNIVERSAL_JOINT = "universal_joint"
     CAM = "cam"
     SLOT = "slot"
+    BALL = "ball"
     WIDTH = "width"
     SYMMETRIC = "symmetric"
     LINEAR_COUPLER = "linear_coupler"
@@ -223,7 +226,12 @@ class AssemblyData:
 
     def children(self, definition_id: str) -> tuple[ComponentInstance, ...]:
         return tuple(
-            instance
-            for instance in self.instances
-            if instance.owner_definition_id == definition_id
+            sorted(
+                (
+                    instance
+                    for instance in self.instances
+                    if instance.owner_definition_id == definition_id
+                ),
+                key=lambda instance: (instance.order, instance.id),
+            )
         )

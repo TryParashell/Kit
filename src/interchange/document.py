@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass, replace
+from functools import cache
+import hashlib
 from math import isfinite
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping, get_args, get_origin, get_type_hints
 
 from .assembly import AssemblyData, ComponentKind
+from .brep import BrepModel
 from .geometry import Selection, Sketch, SupportPlane
-from .history import Body, BrepPayload, FeatureStep
+from .history import Body, BrepPayload, FeatureStep, PayloadRole
 from .mesh import Mesh
 from .serialization import dumps, from_data, loads, to_data
 from .types import (
@@ -16,6 +19,8 @@ from .types import (
     Configuration,
     Diagnostic,
     Parameter,
+    FeatureKind,
+    Provenance,
     UnitSystem,
     frozen_mapping,
 )
@@ -23,6 +28,301 @@ from .types import (
 
 class CadDocumentValidationError(ValueError):
     __slots__ = ()
+
+
+_WRAPPER_METADATA_KEY = "kit.wrapper_metadata_keys"
+
+
+def _type_label(value: type[Any]) -> str:
+    return "".join(
+        (
+            f" {character.casefold()}"
+            if index and character.isupper()
+            else character.casefold()
+        )
+        for index, character in enumerate(value.__name__)
+    )
+
+
+def _identified_collections(
+    value: Any,
+) -> tuple[tuple[str, str, tuple[Any, ...]], ...]:
+    return tuple(
+        (name, label, getattr(value, name))
+        for name, label in _identified_collection_fields(type(value))
+    )
+
+
+@cache
+def _identified_collection_fields(
+    value_type: type[Any],
+) -> tuple[tuple[str, str], ...]:
+    hints = get_type_hints(value_type)
+    result: list[tuple[str, str]] = []
+    for item in fields(value_type):
+        hint = hints[item.name]
+        arguments = get_args(hint)
+        if (
+            get_origin(hint) is not tuple
+            or len(arguments) != 2
+            or arguments[1] is not Ellipsis
+        ):
+            continue
+        member_type = arguments[0]
+        if (
+            not isinstance(member_type, type)
+            or not is_dataclass(member_type)
+            or not any(member.name == "id" for member in fields(member_type))
+        ):
+            continue
+        result.append((item.name, _type_label(member_type)))
+    return tuple(result)
+
+
+def _contains_provenance(value: Any) -> bool:
+    pending = [value]
+    seen: set[int] = set()
+    while pending:
+        item = pending.pop()
+        if isinstance(item, Provenance):
+            return True
+        if item is None or isinstance(item, (str, bytes, int, float, bool)):
+            continue
+        identity = id(item)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        if is_dataclass(item):
+            pending.extend(getattr(item, member.name) for member in fields(item))
+        elif isinstance(item, Mapping):
+            pending.extend(item.values())
+        elif isinstance(item, (tuple, list, set, frozenset)):
+            pending.extend(item)
+    return False
+
+
+def with_wrapper_metadata(
+    metadata: Mapping[str, Any], keys: Iterable[str]
+) -> Mapping[str, Any]:
+    existing = metadata.get(_WRAPPER_METADATA_KEY, ())
+    names = (
+        {value for value in existing if isinstance(value, str)}
+        if isinstance(existing, (tuple, list, set, frozenset))
+        else set()
+    )
+    names.update(value for value in keys if isinstance(value, str))
+    result = dict(metadata)
+    result[_WRAPPER_METADATA_KEY] = tuple(sorted(names))
+    return frozen_mapping(result)
+
+
+def semantic_metadata(metadata: Mapping[str, Any]) -> Mapping[str, Any]:
+    values = metadata.get(_WRAPPER_METADATA_KEY, ())
+    names = (
+        frozenset(value for value in values if isinstance(value, str))
+        if isinstance(values, (tuple, list, set, frozenset))
+        else frozenset()
+    )
+    return frozen_mapping(
+        {
+            key: value
+            for key, value in metadata.items()
+            if key != _WRAPPER_METADATA_KEY and key not in names
+        }
+    )
+
+
+def infer_capabilities(
+    document: CadDocument, *, roundtrip_metadata: bool = False
+) -> frozenset[Capability]:
+    documents = tuple(_document_tree(document))
+    assemblies = tuple(item.assembly for item in documents if item.assembly is not None)
+    conditions = {
+        Capability.PARAMETERS: any(item.parameters for item in documents),
+        Capability.PARAMETRIC_HISTORY: any(
+            feature.kind != FeatureKind.IMPORTED
+            for item in documents
+            for feature in item.feature_timeline
+        ),
+        Capability.SUPPORT_PLANES: any(item.support_planes for item in documents),
+        Capability.EDITABLE_SKETCHES: any(item.sketches for item in documents),
+        Capability.SELECTIONS: any(item.selections for item in documents),
+        Capability.BODY_STRUCTURE: any(item.bodies for item in documents),
+        Capability.CONFIGURATIONS: any(item.configurations for item in documents),
+        Capability.EXPRESSIONS: any(
+            parameter.expression is not None
+            for item in documents
+            for parameter in item.parameters
+        ),
+        Capability.BREP: any(
+            item.brep is not None
+            or any(
+                payload.role == PayloadRole.BREP and payload.data is not None
+                for payload in item.brep_payloads
+            )
+            for item in documents
+        ),
+        Capability.TESSELLATION: any(item.meshes for item in documents)
+        or any(
+            payload.role == PayloadRole.TESSELLATION and payload.data is not None
+            for item in documents
+            for payload in item.brep_payloads
+        ),
+        Capability.ASSEMBLIES: bool(assemblies),
+        Capability.ASSEMBLY_MATES: any(assembly.mates for assembly in assemblies),
+        Capability.COMPONENT_DOCUMENTS: any(
+            assembly.documents for assembly in assemblies
+        ),
+        Capability.EXTERNAL_REFERENCES: any(
+            definition.source_path
+            for assembly in assemblies
+            for definition in assembly.definitions
+        ),
+        Capability.MATERIALS: any(
+            body.material_id for item in documents for body in item.bodies
+        ),
+        Capability.NATIVE_PAYLOADS: any(item.brep_payloads for item in documents),
+        Capability.PROVENANCE: _contains_provenance(document),
+        Capability.ROUNDTRIP_METADATA: roundtrip_metadata,
+    }
+    if conditions.keys() != set(Capability):
+        raise RuntimeError("capability inference is not exhaustive")
+    return frozenset(
+        capability for capability, present in conditions.items() if present
+    )
+
+
+def retained_capabilities(
+    document: CadDocument,
+    capabilities: frozenset[Capability],
+    *,
+    include_brep: bool,
+    include_tessellation: bool,
+) -> frozenset[Capability]:
+    retained = set(capabilities)
+    if not include_brep:
+        retained.discard(Capability.BREP)
+    documents = tuple(_document_tree(document))
+    if not include_tessellation and not any(
+        item.meshes
+        or any(
+            payload.role == PayloadRole.TESSELLATION and payload.data is not None
+            for payload in item.brep_payloads
+        )
+        for item in documents
+    ):
+        retained.discard(Capability.TESSELLATION)
+    if not any(item.brep_payloads for item in documents):
+        retained.discard(Capability.NATIVE_PAYLOADS)
+    return frozenset(retained)
+
+
+def filter_document(
+    document: CadDocument,
+    *,
+    include_brep: bool,
+    include_tessellation: bool,
+    keep_payload_records: bool,
+) -> CadDocument:
+    assembly = document.assembly
+    if assembly is not None:
+        assembly = replace(
+            assembly,
+            documents=tuple(
+                replace(
+                    component,
+                    document=(
+                        filter_document(
+                            component.document,
+                            include_brep=include_brep,
+                            include_tessellation=include_tessellation,
+                            keep_payload_records=keep_payload_records,
+                        )
+                        if isinstance(component.document, CadDocument)
+                        else component.document
+                    ),
+                )
+                for component in assembly.documents
+            ),
+        )
+    payloads: list[BrepPayload] = []
+    for payload in document.brep_payloads:
+        excluded = (payload.role == PayloadRole.BREP and not include_brep) or (
+            payload.role == PayloadRole.TESSELLATION and not include_tessellation
+        )
+        if not excluded:
+            payloads.append(payload)
+        elif keep_payload_records:
+            payloads.append(replace(payload, data=None))
+    filtered = replace(
+        document,
+        meshes=document.meshes if include_tessellation else (),
+        brep_payloads=tuple(payloads),
+        assembly=assembly,
+        brep=document.brep if include_brep else None,
+    )
+    return replace(
+        filtered,
+        capabilities=retained_capabilities(
+            filtered,
+            document.capabilities,
+            include_brep=include_brep,
+            include_tessellation=include_tessellation,
+        ),
+    )
+
+
+def _document_tree(document: CadDocument):
+    pending = [document]
+    seen: set[int] = set()
+    while pending:
+        item = pending.pop()
+        identity = id(item)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        yield item
+        if item.assembly is None:
+            continue
+        pending.extend(
+            component.document
+            for component in reversed(item.assembly.documents)
+            if isinstance(component.document, CadDocument)
+        )
+
+
+def source_payload_indexes(document: CadDocument) -> frozenset[int]:
+    try:
+        source_digest = bytes.fromhex(document.source.sha256)
+    except ValueError:
+        return frozenset()
+    if len(source_digest) != hashlib.sha256().digest_size:
+        return frozenset()
+    source_sha256 = document.source.sha256.casefold()
+    documents = tuple(
+        index
+        for index, payload in enumerate(document.brep_payloads)
+        if payload.role == PayloadRole.DOCUMENT
+        and (
+            hashlib.sha256(payload.data).hexdigest()
+            if payload.data is not None
+            else payload.sha256.casefold()
+        )
+        == source_sha256
+    )
+    bindings = tuple(
+        index
+        for index, payload in enumerate(document.brep_payloads)
+        if (
+            payload.role == PayloadRole.VERIFICATION
+            or payload.role == PayloadRole.DOCUMENT
+        )
+        and payload.data == source_digest
+        and payload.sha256.casefold() == hashlib.sha256(source_digest).hexdigest()
+    )
+    if len(documents) != 1 or len(bindings) != 1:
+        return frozenset()
+    return frozenset((*documents, *bindings))
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +343,7 @@ class CadDocument:
     units: UnitSystem = UnitSystem.MILLIMETER
     schema_version: str = "1.0"
     assembly: AssemblyData | None = None
+    brep: BrepModel | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return to_data(self)
@@ -78,54 +379,48 @@ class CadDocument:
 
     def validate(self) -> tuple[str, ...]:
         errors: list[str] = []
-        groups = {
-            "configuration": self.configurations,
-            "parameter": self.parameters,
-            "plane": self.support_planes,
-            "sketch": self.sketches,
-            "selection": self.selections,
-            "feature": self.feature_timeline,
-            "body": self.bodies,
-            "brep": self.brep_payloads,
-            "mesh": self.meshes,
-        }
+        if not isinstance(self.capabilities, frozenset) or any(
+            not isinstance(capability, Capability) for capability in self.capabilities
+        ):
+            errors.append("document capabilities must be Capability values")
+        groups = _identified_collections(self)
         ids: dict[str, set[str]] = {}
-        for label, items in groups.items():
+        for name, label, items in groups:
             values = [item.id for item in items]
             if len(values) != len(set(values)):
                 errors.append(f"duplicate {label} id")
-            ids[label] = set(values)
+            ids[name] = set(values)
         for configuration in self.configurations:
             if (
                 configuration.parent_id
-                and configuration.parent_id not in ids["configuration"]
+                and configuration.parent_id not in ids["configurations"]
             ):
                 errors.append(f"configuration {configuration.id} has missing parent")
             for override in configuration.overrides:
-                if override.parameter_id not in ids["parameter"]:
+                if override.parameter_id not in ids["parameters"]:
                     errors.append(
                         f"configuration {configuration.id} references missing parameter {override.parameter_id}"
                     )
         for parameter in self.parameters:
             if parameter.expression:
                 for reference in parameter.expression.parameter_ids:
-                    if reference not in ids["parameter"]:
+                    if reference not in ids["parameters"]:
                         errors.append(
                             f"parameter {parameter.id} references missing parameter {reference}"
                         )
         for plane in self.support_planes:
             if (
                 plane.support_selection_id
-                and plane.support_selection_id not in ids["selection"]
+                and plane.support_selection_id not in ids["selections"]
             ):
                 errors.append(f"plane {plane.id} references missing selection")
             if (
                 plane.offset_parameter_id
-                and plane.offset_parameter_id not in ids["parameter"]
+                and plane.offset_parameter_id not in ids["parameters"]
             ):
                 errors.append(f"plane {plane.id} references missing offset parameter")
         for sketch in self.sketches:
-            if sketch.support_plane_id not in ids["plane"]:
+            if sketch.support_plane_id not in ids["support_planes"]:
                 errors.append(f"sketch {sketch.id} references missing plane")
             entity_ids = {entity.id for entity in sketch.entities}
             for constraint in sketch.constraints:
@@ -136,7 +431,7 @@ class CadDocument:
                         )
                 if (
                     constraint.parameter_id
-                    and constraint.parameter_id not in ids["parameter"]
+                    and constraint.parameter_id not in ids["parameters"]
                 ):
                     errors.append(
                         f"constraint {constraint.id} references missing parameter"
@@ -151,7 +446,7 @@ class CadDocument:
         ):
             errors.append("feature order values are not unique")
         for feature in self.feature_timeline:
-            if feature.sketch_id and feature.sketch_id not in ids["sketch"]:
+            if feature.sketch_id and feature.sketch_id not in ids["sketches"]:
                 errors.append(f"feature {feature.id} references missing sketch")
             for input_id in feature.input_feature_ids:
                 if input_id not in order_by_feature:
@@ -161,20 +456,28 @@ class CadDocument:
                 elif order_by_feature[input_id] >= feature.order:
                     errors.append(f"feature {feature.id} has a forward dependency")
             for parameter_id in feature.parameter_ids:
-                if parameter_id not in ids["parameter"]:
+                if parameter_id not in ids["parameters"]:
                     errors.append(f"feature {feature.id} references missing parameter")
             for selection_id in feature.selection_ids:
-                if selection_id not in ids["selection"]:
+                if selection_id not in ids["selections"]:
                     errors.append(f"feature {feature.id} references missing selection")
         for body in self.bodies:
-            if body.final_feature_id not in ids["feature"]:
+            if body.final_feature_id not in ids["feature_timeline"]:
                 errors.append(f"body {body.id} references missing final feature")
+        if self.brep is not None:
+            if not isinstance(self.brep, BrepModel):
+                errors.append("document B-rep must be a BrepModel")
+            else:
+                errors.extend(
+                    self.brep.validate(frozenset(body.id for body in self.bodies))
+                )
         if self.assembly is not None:
             errors.extend(self._validate_assembly(ids))
         if not self.configurations:
             errors.append("document has no configuration")
         if (
             not self.feature_timeline
+            and self.brep is None
             and not self.brep_payloads
             and not self.meshes
             and self.assembly is None
@@ -189,15 +492,7 @@ class CadDocument:
         if assembly is None:
             return ()
         errors: list[str] = []
-        groups = {
-            "component definition": assembly.definitions,
-            "component instance": assembly.instances,
-            "component document": assembly.documents,
-            "mate entity": assembly.mate_entities,
-            "mate": assembly.mates,
-            "mate group": assembly.mate_groups,
-        }
-        for label, items in groups.items():
+        for _, label, items in _identified_collections(assembly):
             values = [item.id for item in items]
             if len(values) != len(set(values)):
                 errors.append(f"duplicate {label} id")
@@ -343,7 +638,7 @@ class CadDocument:
                 if target_definition is not None and target_definition.document_id:
                     target_document = documents.get(target_definition.document_id)
                 target_selection_ids = (
-                    ids["selection"]
+                    ids["selections"]
                     if target_document is self
                     else {
                         selection.id
@@ -378,7 +673,7 @@ class CadDocument:
                 target_document = documents.get(owner_definition.document_id)
             if isinstance(target_document, CadDocument):
                 target_parameter_ids = (
-                    ids["parameter"]
+                    ids["parameters"]
                     if target_document is self
                     else {parameter.id for parameter in target_document.parameters}
                 )

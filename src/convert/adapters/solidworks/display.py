@@ -4,16 +4,20 @@ from bisect import bisect_right
 from dataclasses import dataclass
 import math
 from pathlib import PureWindowsPath
-import re
 import struct
 
 from interchange import Mesh, Provenance, ProvenanceSpan, Vector3, frozen_mapping
 
+from .format import (
+    ASSEMBLY_FORMAT_ID,
+    DISPLAY_LISTS_STREAM,
+    SERIALIZED_STRING_MARKER,
+    is_cad_path,
+    is_component_path,
+)
+
 
 _ARRAY_MARKER = struct.pack("<I", 4)
-_STRING_MARKER = bytes.fromhex("fffeff")
-_COMPONENT_SEGMENT = re.compile(r"-\d+$")
-_STREAM = "Contents/DisplayLists"
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,13 +68,13 @@ def decode_display_lists(data: bytes) -> tuple[NativeDisplayComponent, ...]:
     strings = _serialized_strings(data)
     records: list[tuple[int, str, str]] = []
     for index, (offset, value, _) in enumerate(strings):
-        if not _component_path(value):
+        if not is_component_path(value):
             continue
         next_component = next(
             (
                 other_offset
                 for other_offset, other_value, _ in strings[index + 1 :]
-                if _component_path(other_value)
+                if is_component_path(other_value)
             ),
             len(data),
         )
@@ -78,7 +82,7 @@ def decode_display_lists(data: bytes) -> tuple[NativeDisplayComponent, ...]:
             (
                 other_value
                 for other_offset, other_value, _ in strings[index + 1 :]
-                if other_offset < next_component and _cad_path(other_value)
+                if other_offset < next_component and is_cad_path(other_value)
             ),
             "",
         )
@@ -128,11 +132,11 @@ def neutral_meshes(
                     triangles=face.triangle_indices,
                     normals=tuple(Vector3(*normal) for normal in face.normals),
                     provenance=Provenance(
-                        adapter="solidworks.sldasm",
+                        adapter=ASSEMBLY_FORMAT_ID,
                         native_id=str(face.face_id),
                         spans=(
                             ProvenanceSpan(
-                                _STREAM,
+                                DISPLAY_LISTS_STREAM,
                                 face.offset,
                                 face.record_length,
                                 "tessellation-face",
@@ -242,11 +246,11 @@ def _serialized_strings(data: bytes) -> tuple[tuple[int, str, int], ...]:
     result: list[tuple[int, str, int]] = []
     cursor = 0
     while True:
-        offset = data.find(_STRING_MARKER, cursor)
+        offset = data.find(SERIALIZED_STRING_MARKER, cursor)
         if offset < 0:
             break
         cursor = offset + 1
-        length_offset = offset + len(_STRING_MARKER)
+        length_offset = offset + len(SERIALIZED_STRING_MARKER)
         if length_offset >= len(data):
             continue
         length = data[length_offset]
@@ -262,18 +266,3 @@ def _serialized_strings(data: bytes) -> tuple[tuple[int, str, int], ...]:
             continue
         result.append((offset, value, string_end))
     return tuple(result)
-
-
-def _cad_path(value: str) -> bool:
-    lowered = value.lower()
-    return lowered.endswith(".sldprt") or lowered.endswith(".sldasm")
-
-
-def _component_path(value: str) -> bool:
-    if "@" not in value:
-        return False
-    return all(
-        "@" in segment
-        and _COMPONENT_SEGMENT.search(segment.split("@", 1)[0]) is not None
-        for segment in value.split("/")
-    )

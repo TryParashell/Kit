@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from io import TextIOBase
 from pathlib import Path
 
@@ -12,20 +13,27 @@ from convert.adapters.base import (
     WriteOptions,
     WriteResult,
 )
-from interchange import CadDocument, Capability
+from interchange import CadDocument, Capability, filter_document
+
+
+_SUFFIX = ".json"
+_INFO = AdapterInfo(
+    format_id="interchange.json",
+    name="Kit interchange JSON",
+    version="1.0",
+    extensions=(_SUFFIX,),
+    capabilities=frozenset(Capability),
+    native_capabilities=frozenset(Capability),
+    media_types=("application/vnd.parashell.kit+json",),
+    part_extensions=(_SUFFIX,),
+    assembly_extensions=(_SUFFIX,),
+)
 
 
 class JsonAdapter:
     @property
     def info(self) -> AdapterInfo:
-        return AdapterInfo(
-            format_id="interchange.json",
-            name="Kit interchange JSON",
-            version="1.0",
-            extensions=(".json",),
-            capabilities=frozenset(Capability),
-            media_types=("application/vnd.parashell.kit+json",),
-        )
+        return _INFO
 
     def probe(self, source: Source) -> ProbeResult:
         suffix = ""
@@ -34,22 +42,46 @@ class JsonAdapter:
         try:
             prefix = _read_prefix(source, 4096)
         except OSError as exc:
-            return ProbeResult("interchange.json", 0.0, str(exc))
+            return ProbeResult(_INFO.format_id, 0.0, str(exc))
         if b'"$type"' in prefix and b'"CadDocument"' in prefix:
-            return ProbeResult("interchange.json", 1.0, "CadDocument type marker")
-        if suffix == ".json":
-            return ProbeResult("interchange.json", 0.5, "JSON extension")
-        return ProbeResult("interchange.json", 0.0, "no interchange document marker")
+            return ProbeResult(_INFO.format_id, 1.0, "CadDocument type marker")
+        if suffix in _INFO.extensions:
+            return ProbeResult(_INFO.format_id, 0.5, "JSON extension")
+        return ProbeResult(_INFO.format_id, 0.0, "no interchange document marker")
 
     def read(self, source: Source, options: ReadOptions | None = None) -> CadDocument:
+        settings = options or ReadOptions()
         document = CadDocument.from_json(_read_text(source))
-        if options is None or options.strict:
+        if settings.configuration is not None:
+            matches = {
+                configuration.id
+                for configuration in document.configurations
+                if settings.configuration in {configuration.id, configuration.name}
+            }
+            if not matches:
+                raise ValueError(
+                    f"configuration {settings.configuration!r} is unavailable"
+                )
+            document = replace(
+                document,
+                configurations=tuple(
+                    replace(configuration, active=configuration.id in matches)
+                    for configuration in document.configurations
+                ),
+            )
+        document = filter_document(
+            document,
+            include_brep=settings.include_brep,
+            include_tessellation=settings.include_tessellation,
+            keep_payload_records=False,
+        )
+        if settings.strict:
             document.assert_valid()
         return document
 
     def supports(self, document: CadDocument, destination: Destination) -> bool:
         if isinstance(destination, (str, Path)):
-            return Path(destination).suffix.lower() == ".json"
+            return Path(destination).suffix.lower() in _INFO.extensions
         return callable(getattr(destination, "write", None))
 
     def write(
@@ -68,10 +100,22 @@ class JsonAdapter:
                 raise FileExistsError(output)
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(payload)
-            return WriteResult(output, self.info.format_id, len(payload))
+            return WriteResult(
+                output,
+                self.info.format_id,
+                len(payload),
+                application_usable=True,
+                vendor_loadable=True,
+            )
         text = payload.decode("utf-8")
         _write_stream(destination, text, payload)
-        return WriteResult(None, self.info.format_id, len(payload))
+        return WriteResult(
+            None,
+            self.info.format_id,
+            len(payload),
+            application_usable=True,
+            vendor_loadable=True,
+        )
 
 
 def _write_stream(destination: Destination, text: str, payload: bytes) -> None:

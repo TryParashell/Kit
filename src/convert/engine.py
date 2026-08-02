@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from .adapters import (
     AdapterRegistry,
+    CapabilityTransfer,
     Destination,
     ReadOptions,
     Source,
     WriteOptions,
     WriteResult,
 )
-from interchange import CadDocument
+from interchange import CadDocument, Capability
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,6 +20,34 @@ class ConversionResult:
     output: WriteResult
     source_format: str
     destination_format: str
+
+    @property
+    def transfers(self) -> tuple[CapabilityTransfer, ...]:
+        return self.output.transfers
+
+    @property
+    def dropped(self) -> frozenset[Capability]:
+        return self.output.dropped
+
+    @property
+    def requirements(self) -> tuple[str, ...]:
+        return self.output.requirements
+
+    @property
+    def application_usable(self) -> bool:
+        return self.output.application_usable
+
+    @property
+    def vendor_loadable(self) -> bool:
+        return self.output.vendor_loadable
+
+    @property
+    def roundtrip_safe(self) -> bool:
+        return self.output.roundtrip_safe
+
+    @property
+    def near_lossless(self) -> bool:
+        return self.output.near_lossless
 
 
 class ConversionEngine:
@@ -61,32 +90,26 @@ class ConversionEngine:
         read_options: ReadOptions | None = None,
         write_options: WriteOptions | None = None,
     ) -> ConversionResult:
-        reader = (
-            self.registry.reader(source_format)
-            if source_format
-            else self.registry.select_reader(source)
+        document, reader = self.registry.read_with_adapter(
+            source,
+            format_id=source_format,
+            options=read_options or ReadOptions(),
         )
-        document = reader.read(source, read_options or ReadOptions())
-        document.assert_valid()
-        writer = (
-            self.registry.writer(destination_format)
-            if destination_format
-            else self.registry.select_writer(document, destination)
+        output = self.registry.write(
+            document,
+            destination,
+            format_id=destination_format,
+            options=write_options or WriteOptions(),
         )
-        selected_options = write_options or WriteOptions()
-        if destination_format is not None:
-            selected_options = replace(
-                selected_options,
-                destination_format=destination_format,
-            )
-        output = writer.write(document, destination, selected_options)
-        source_ids = {reader.info.format_id, *reader.info.aliases}
+        source_ids = {
+            value.casefold() for value in (reader.info.format_id, *reader.info.aliases)
+        }
         return ConversionResult(
             document=document,
             output=output,
             source_format=(
                 document.source.format_id
-                if document.source.format_id in source_ids
+                if document.source.format_id.casefold() in source_ids
                 else reader.info.format_id
             ),
             destination_format=output.adapter,

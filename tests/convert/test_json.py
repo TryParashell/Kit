@@ -13,6 +13,7 @@ from convert.adapters import (
     AdapterRegistryError,
 )
 from convert.adapters.json import JsonAdapter
+from interchange import Capability
 
 from tests.interchange.test_document import document
 
@@ -85,6 +86,22 @@ class PartialStringIO(StringIO):
         return super().write(value[:-1])
 
 
+class NonSeekableStream:
+    def __init__(self, value):
+        self.value = value
+        self.consumed = False
+
+    def read(self, size=-1):
+        if self.consumed:
+            return self.value[:0]
+        self.consumed = True
+        return self.value
+
+
+def test_json_adapter_declares_every_interchange_capability() -> None:
+    assert JsonAdapter().info.capabilities == frozenset(Capability)
+
+
 def test_registry_roundtrip(tmp_path) -> None:
     adapter = JsonAdapter()
     registry = AdapterRegistry()
@@ -141,6 +158,33 @@ def test_public_sdk_introspects_json_text_source_and_destination() -> None:
     )
     assert result.destination_format == "interchange.json"
     assert JsonAdapter().read(StringIO(destination.getvalue())) == value
+
+
+@pytest.mark.parametrize("binary", (False, True))
+def test_public_sdk_reads_non_seekable_json_stream(binary) -> None:
+    value = document()
+    serialized = value.to_json() + "\n"
+    payload = serialized.encode("utf-8") if binary else serialized
+    source = NonSeekableStream(payload)
+    assert open_document(source) == value
+    destination = StringIO()
+    result = convert(
+        NonSeekableStream(payload),
+        destination,
+        destination_format="interchange.json",
+    )
+    assert result.document == value
+    assert JsonAdapter().read(StringIO(destination.getvalue())) == value
+
+
+def test_explicit_json_writer_rejects_non_json_path(tmp_path) -> None:
+    source = StringIO(document().to_json())
+    with pytest.raises(AdapterNotFoundError, match="does not support"):
+        convert(
+            source,
+            tmp_path / "contradiction.SLDPRT",
+            destination_format="interchange.json",
+        )
 
 
 def test_registry_rejects_canonical_alias_collisions_without_mutation() -> None:

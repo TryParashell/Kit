@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
-from interchange import CadDocument, frozen_mapping
+from interchange import CadDocument, PayloadRole, frozen_mapping
 
 from .adapters import (
     AdapterInfo,
@@ -14,6 +14,7 @@ from .adapters import (
     Source,
     WriteOptions,
     WriteResult,
+    is_windows_device_name,
 )
 from .engine import ConversionEngine, ConversionResult
 
@@ -42,6 +43,7 @@ def open_document(
     source_format: str | None = None,
     configuration: str | None = None,
     include_brep: bool = True,
+    include_tessellation: bool = True,
     strict: bool = True,
 ) -> CadDocument:
     return _engine.read(
@@ -50,6 +52,7 @@ def open_document(
         options=ReadOptions(
             configuration=configuration,
             include_brep=include_brep,
+            include_tessellation=include_tessellation,
             strict=strict,
         ),
     )
@@ -63,8 +66,13 @@ def write_document(
     configuration: str | None = None,
     overwrite: bool = False,
     validate: bool = True,
+    allow_carrier: bool = False,
     values: Mapping[str, Any] | None = None,
 ) -> WriteResult:
+    selected_values = {"portable": True}
+    if values is not None:
+        selected_values.update(values)
+    selected_values["allow_carrier"] = allow_carrier
     return _engine.write(
         document,
         destination,
@@ -73,7 +81,7 @@ def write_document(
             configuration=configuration,
             overwrite=overwrite,
             validate=validate,
-            values=frozen_mapping(values),
+            values=frozen_mapping(selected_values),
         ),
     )
 
@@ -86,13 +94,16 @@ def convert(
     destination_format: str | None = None,
     configuration: str | None = None,
     include_brep: bool = True,
+    include_tessellation: bool = True,
     strict: bool = True,
     overwrite: bool = False,
+    allow_carrier: bool = False,
     write_values: Mapping[str, Any] | None = None,
 ) -> ConversionResult:
     values = {"portable": True}
     if write_values is not None:
         values.update(write_values)
+    values["allow_carrier"] = allow_carrier
     return _engine.convert(
         source,
         destination,
@@ -101,6 +112,7 @@ def convert(
         read_options=ReadOptions(
             configuration=configuration,
             include_brep=include_brep,
+            include_tessellation=include_tessellation,
             strict=strict,
         ),
         write_options=WriteOptions(
@@ -128,17 +140,23 @@ def extract_brep(
     target.mkdir(parents=True, exist_ok=True)
     outputs: list[Path] = []
     used: set[str] = set()
-    for index, payload in enumerate(document.brep_payloads, start=1):
+    payloads = tuple(
+        payload
+        for payload in document.brep_payloads
+        if payload.role == PayloadRole.BREP and payload.data is not None
+    )
+    for index, payload in enumerate(payloads, start=1):
         base = re.sub(r"[^A-Za-z0-9._-]", "_", payload.id).strip("._-")
         base = base or f"payload_{index}"
+        if is_windows_device_name(base):
+            base = f"_{base}"
         name = base
         suffix = 2
         while name.lower() in used:
             name = f"{base}_{suffix}"
             suffix += 1
         used.add(name.lower())
-        extension = ".x_b" if payload.format_id.lower() == "parasolid" else ".brep"
-        output = target / f"{name}{extension}"
+        output = target / f"{name}{payload.file_extension}"
         if output.exists() and not overwrite:
             raise FileExistsError(output)
         output.write_bytes(payload.data)

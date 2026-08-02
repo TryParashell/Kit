@@ -1,21 +1,698 @@
 from __future__ import annotations
 
 from pathlib import Path
+import struct
 
 import pytest
 
-from convert.adapters.solidworks import SldprtAdapter, SldprtArchive, read_sldprt
+from convert.adapters.solidworks import (
+    SldprtAdapter,
+    SldprtArchive,
+    build_sldprt,
+    read_sldprt,
+)
+from convert.adapters.solidworks.adapter import (
+    _FEATURE_KIND_BY_NATIVE,
+    _final_body_feature_id,
+    _feature_kind,
+    _is_geometry_brep_payload,
+    _sketch_constraints,
+    _solid_body_feature,
+    _timeline,
+)
+from convert.adapters.solidworks.native import (
+    NativeConstraint,
+    NativeFeature,
+    NativeModel,
+    NativeOperation,
+    NativePlane,
+    NativeSketch,
+    _decode_planes,
+    _parse_keywords,
+    decode_native_model,
+)
 from interchange import (
     BooleanOperation,
+    BrepPayload,
+    Capability,
     ExtrusionFeature,
+    FeatureKind,
+    FeatureStep,
     FilletFeature,
     LineGeometry,
+    NativeFeatureDefinition,
     NativeGeometry,
+    PayloadRole,
 )
 
 
 SAMPLE = Path(__file__).resolve().parents[2] / "examples" / ".SLDPRT" / "example.SLDPRT"
 CORPUS = Path(__file__).resolve().parents[2] / "examples" / "Random"
+OFFICIAL_FEATURE_TYPES_2026 = frozenset(
+    value.casefold()
+    for value in """
+AsmExploder
+CompExplodeStep
+ExplodeLineProfileFeature
+InContextFeatHolder
+MagneticGroundPlane
+MateCamTangent
+MateCoincident
+MateConcentric
+MateDistanceDim
+MateGearDim
+MateHinge
+MateInPlace
+MateLimitDistanceDim
+MateLinearCoupler
+MateLock
+MateParallel
+MatePerpendicular
+MatePlanarAngleDim
+MateProfileCenter
+MateRackPinionDim
+MateScrew
+MateSlot
+MateSymmetric
+MateTangent
+MateUniversalJoint
+MateWidth
+PosGroupFolder
+Reference
+ReferencePattern
+SmartComponentFeature
+AdvHoleWzd
+APattern
+BaseBody
+Bending
+Blend
+BlendCut
+BodyExplodeStep
+Boss
+BossThin
+Chamfer
+CirPattern
+CombineBodies
+CosmeticThread
+CosmeticWeldBead
+CreateAssemFeat
+CurvePattern
+Cut
+CutThin
+Deform
+DeleteBody
+DelFace
+DerivedCirPattern
+DerivedHolePattern
+DerivedLPattern
+DimPattern
+Dome
+Draft
+EdgeMerge
+Emboss
+Extrusion
+Fillet
+Helix
+HoleSeries
+HoleWzd
+Imported
+LocalChainPattern
+LocalCirPattern
+LocalCurvePattern
+LocalLPattern
+LocalSketchPattern
+LPattern
+MacroFeature
+MirrorCompFeat
+MirrorPattern
+MirrorSolid
+MirrorStock
+MoveCopyBody
+NetBlend
+PrtExploder
+Punch
+ReplaceFace
+RevCut
+Revolution
+RevolutionThin
+Rib
+Rip
+Sculpt
+Shape
+Shell
+SketchHole
+SketchPattern
+Split
+SplitBody
+Stock
+Sweep
+SweepCut
+SweepThread
+TablePattern
+Thicken
+ThickenCut
+VarFillet
+BendTableAchor
+BomFeat
+BomTemplate
+DetailCircle
+DrBreakoutSectionLine
+DrSectionLine
+GeneralTableAnchor
+HoleTableAnchor
+LiveSection
+PunchTableAnchor
+RevisionTableAnchor
+WeldmentTableAnchor
+FamilyTableFeat
+WeldTableAnchor
+BlockFolder
+CommentsFolder
+CosmeticWeldSubFolder
+CutListFolder
+FeatSolidBodyFolder
+FeatSurfaceBodyFolder
+FtrFolder
+InsertedFeatureFolder
+MateReferenceGroupFolder
+ProfileFtrFolder
+RefAxisFtrFolder
+RefPlaneFtrFolder
+SketchSliceFolder
+SolidBodyFolder
+SubAtomFolder
+SubWeldFolder
+SurfaceBodyFolder
+TemplateFlatPattern
+MBimport
+Attribute
+BlockDef
+CurveInFile
+GridFeature
+LibraryFeature
+Scale
+Sensor
+ViewBodyFeature
+Cavity
+MoldCoreCavitySolids
+MoldPartingGeom
+MoldPartLine
+MoldShutOffSrf
+SideCore
+XformStock
+AEM3DContact
+AEMGravity
+AEMLinearDamper
+AEMLinearMotor
+AEMLinearSpring
+AEMRotationalMotor
+AEMTorque
+AEMTorsionalDamper
+AEMTorsionalSpring
+SimPlotFeature
+SimPlotXAxisFeature
+SimPlotYAxisFeature
+SimResultFolder
+BoundingBox
+CenterOfMass
+CoordSys
+GroundPlane
+RefAxis
+RefPlane
+AmbientLight
+CameraFeature
+DirectionLight
+PointLight
+SpotLight
+SMBaseFlange
+BreakCorner
+CornerTrim
+CrossBreak
+EdgeFlange
+FlatPattern
+FlattenBends
+Fold
+FormToolInstance
+Hem
+Jog
+LoftedBend
+NormalCut
+OneBend
+ProcessBends
+SheetMetal
+SketchBend
+SM3dBend
+SMGusset
+SMMiteredFlange
+SolidToSheetMetal
+TemplateSheetMetal
+ToroidalBend
+UnFold
+3DProfileFeature
+3DSplineCurve
+CompositeCurve
+ImportedCurve
+PLine
+ProfileFeature
+RefCurve
+RefPoint
+SketchBlockDef
+SketchBlockInst
+SketchBitmap
+BlendRefSurface
+ExtendRefSurface
+ExtruRefSurface
+FillRefSurface
+FlattenSurface
+MidRefSurface
+OffsetRefSuface
+PlanarSurface
+RadiateRefSurface
+RefSurface
+RevolvRefSurf
+RuledSrfFromEdge
+SewRefSurface
+SurfCut
+SweepRefSurface
+TrimRefSurface
+UnTrimRefSurf
+EndCap
+StrctSysBtwPtsMbrFeat
+StrctSysCnrFeat
+StrctSysCnrGrpFeat
+StrctSysCnrMgmtFeat
+StrctSysFeat
+StrctSysGrpFeat
+StrctSysPathSegMbrFeat
+StrctSysPtToMem
+StrctSysRefPlnMbrFeat
+StrctSysSkPtLenMbrFeat
+StrctSysSupPlnMbrFeat
+StrctSysSurfPlnMbrFeat
+AdvStructMember
+Gusset
+WeldBeadFeat
+WeldCornerFeat
+WeldMemberFeat
+WeldmentFeature
+WeldmentTableFeat
+Round fillet corner
+""".splitlines()
+    if value
+)
+
+
+def _resolved_name_record(
+    name: str,
+    object_id: int,
+    family: int = 0,
+    operation: int = 0,
+    schema: int = 0,
+) -> bytes:
+    encoded = name.encode("utf-16le")
+    return (
+        bytes.fromhex("0480fffeff")
+        + bytes((len(name),))
+        + encoded
+        + struct.pack("<IHBBI", 0, family, operation, schema, object_id)
+    )
+
+
+def test_adapter_advertises_exact_supported_capabilities() -> None:
+    assert SldprtAdapter().info.capabilities == frozenset(Capability)
+
+
+def test_part_capabilities_reflect_the_decoded_document() -> None:
+    without_brep = read_sldprt(SAMPLE, include_brep=False)
+    expected = frozenset(
+        {
+            Capability.BODY_STRUCTURE,
+            Capability.CONFIGURATIONS,
+            Capability.EDITABLE_SKETCHES,
+            Capability.PARAMETERS,
+            Capability.PARAMETRIC_HISTORY,
+            Capability.PROVENANCE,
+            Capability.ROUNDTRIP_METADATA,
+            Capability.SELECTIONS,
+            Capability.SUPPORT_PLANES,
+        }
+    )
+    assert without_brep.capabilities == expected
+    with_brep = read_sldprt(SAMPLE, include_brep=True)
+    assert with_brep.capabilities == expected | {
+        Capability.BREP,
+        Capability.NATIVE_PAYLOADS,
+    }
+
+
+def test_official_feature_type_registry_is_exhaustive() -> None:
+    assert len(OFFICIAL_FEATURE_TYPES_2026) == 246
+    assert OFFICIAL_FEATURE_TYPES_2026 <= _FEATURE_KIND_BY_NATIVE.keys()
+    assert set(FeatureKind) - set(_FEATURE_KIND_BY_NATIVE.values()) == {
+        FeatureKind.PRIMITIVE,
+        FeatureKind.REVERSE,
+    }
+    assert _FEATURE_KIND_BY_NATIVE["macrofeature"] == FeatureKind.NATIVE
+    assert _FEATURE_KIND_BY_NATIVE["round fillet corner"] == FeatureKind.FILLET
+
+
+def test_brep_capability_detection_uses_payload_semantics() -> None:
+    assert _is_geometry_brep_payload(
+        BrepPayload(
+            "1",
+            "future.kernel",
+            "anything",
+            "",
+            "",
+            data=b"geometry",
+            role=PayloadRole.BREP,
+            file_extension=".geo",
+        )
+    )
+    assert not _is_geometry_brep_payload(
+        BrepPayload(
+            "2",
+            "parasolid",
+            "solid",
+            "schema-2040",
+            "",
+            data=b"opaque",
+        )
+    )
+    assert not _is_geometry_brep_payload(
+        BrepPayload(
+            "3",
+            "future.kernel",
+            "anything",
+            "",
+            "",
+            role=PayloadRole.BREP,
+            file_extension=".geo",
+        )
+    )
+
+
+def test_parasolid_stream_discovery_does_not_depend_on_its_name() -> None:
+    archive = SldprtArchive.open(SAMPLE)
+    streams = archive.streams
+    original_name = "Contents/Config-0-Partition"
+    streams["Contents/CustomerGeometryBlob"] = streams.pop(original_name)
+    renamed = build_sldprt(
+        streams,
+        file_id=archive.file_id,
+        format_version=archive.format_version,
+    )
+    document = read_sldprt(renamed)
+    assert len(document.brep_payloads) == 3
+    assert all(payload.role == PayloadRole.BREP for payload in document.brep_payloads)
+    assert (
+        sum(
+            payload.source_stream == "Contents/CustomerGeometryBlob"
+            for payload in document.brep_payloads
+        )
+        == 2
+    )
+
+
+def test_solid_body_folder_detection_is_structural() -> None:
+    body_folder = NativeFeature(
+        object_id=9,
+        name="Corps solides renommés",
+        kind="SolidBodyFolder",
+        xml_tag="Feature",
+        native_offset=None,
+        native_end=None,
+        properties={"Type": "SolidBodyFolder"},
+        dimensions=(),
+    )
+    assert _solid_body_feature((body_folder,)) is body_folder
+
+
+def test_final_body_feature_selection_covers_current_solid_kinds() -> None:
+    reference = FeatureStep("reference", "Plane", FeatureKind.REFERENCE, 0)
+    extrusion = FeatureStep("extrusion", "Boss", FeatureKind.EXTRUSION, 1)
+    revolution = FeatureStep("revolution", "Revolve", FeatureKind.REVOLUTION, 2)
+    trailing_reference = FeatureStep(
+        "trailing-reference", "Folder", FeatureKind.REFERENCE, 3
+    )
+    timeline = (reference, extrusion, revolution, trailing_reference)
+    assert _final_body_feature_id(timeline, frozenset()) == revolution.id
+
+
+def test_final_body_feature_selection_retains_structural_and_unknown_fallbacks() -> (
+    None
+):
+    opaque = FeatureStep("opaque", "Vendor feature", FeatureKind.NATIVE, 0)
+    reference = FeatureStep("reference", "Folder", FeatureKind.REFERENCE, 1)
+    timeline = (opaque, reference)
+    assert _final_body_feature_id(timeline, frozenset({opaque.id})) == opaque.id
+    assert _final_body_feature_id((opaque,), frozenset()) == opaque.id
+
+
+def test_timeline_distinguishes_principal_planes_structurally() -> None:
+    principal = NativeFeature(
+        object_id=1,
+        name="Référence primaire",
+        kind="Plane",
+        xml_tag="Feature",
+        native_offset=None,
+        native_end=None,
+        properties={"Type": "Plane"},
+        dimensions=(),
+    )
+    extrusion = NativeFeature(
+        object_id=2,
+        name="Volume",
+        kind="Extrusion",
+        xml_tag="Feature",
+        native_offset=10,
+        native_end=20,
+        properties={"Type": "Extrusion"},
+        dimensions=(),
+    )
+    offset_plane = NativeFeature(
+        object_id=3,
+        name="Référence décalée",
+        kind="Plane",
+        xml_tag="Feature",
+        native_offset=30,
+        native_end=40,
+        properties={"Type": "Plane"},
+        dimensions=(),
+    )
+    frame = (
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+    )
+    model = NativeModel(
+        configurations=(),
+        features=(principal, extrusion, offset_plane),
+        planes=(
+            NativePlane(1, principal.name, *frame, None, None, True),
+            NativePlane(3, offset_plane.name, *frame, 30, 10, False),
+        ),
+        sketches=(),
+        operations=(
+            NativeOperation(
+                object_id=2,
+                name=extrusion.name,
+                kind="join",
+                profile_id=None,
+                dependencies=(),
+                native_offset=10,
+                native_end=20,
+                length_mm=10.0,
+                radius_mm=None,
+                family_code=0,
+                operation_code=0,
+                schema_code=0,
+                direction_code=0,
+                termination_code=0,
+                selection_offsets=(),
+                selected_local_ids=(),
+            ),
+        ),
+        names=(),
+        classes=(),
+        scalars=(),
+    )
+    timeline = _timeline(model, ())
+    assert timeline[0].input_feature_ids == ()
+    assert timeline[2].input_feature_ids == (timeline[1].id,)
+
+
+def test_principal_planes_use_native_roles_after_rename() -> None:
+    features = [
+        NativeFeature(
+            object_id=index,
+            name=name,
+            kind=kind,
+            xml_tag=tag,
+            native_offset=offset,
+            native_end=offset,
+            properties=properties,
+            dimensions=(),
+        )
+        for index, name, kind, tag, properties, offset in (
+            (99, "Later Datum", "Plane", "Feature", {"Type": "Plane"}, 100),
+            (20, "Primary", "Plane", "Feature", {"Type": "Plane"}, 10),
+            (21, "Horizontal", "Plane", "Feature", {"Type": "Plane"}, 20),
+            (22, "Side", "Plane", "Feature", {"Type": "Plane"}, 30),
+            (23, "Centre", "Sketch", "Sketch", {"Type": "Origin"}, 40),
+        )
+    ]
+    planes = _decode_planes(b"", features)
+    assert [plane.object_id for plane in planes] == [20, 21, 22]
+    assert [plane.name for plane in planes] == ["Primary", "Horizontal", "Side"]
+    assert [plane.normal for plane in planes] == [
+        (0.0, 0.0, 1.0),
+        (0.0, 1.0, 0.0),
+        (1.0, 0.0, 0.0),
+    ]
+
+
+def test_keyword_history_discovers_native_and_future_feature_tags() -> None:
+    configurations, features = _parse_keywords(
+        b"""<?xml version="1.0" encoding="UTF-8"?>
+<Keywords>
+  <Configuration id="0" Name="Default" />
+  <Feature id="1" Name="Datum" Type="Plane" />
+  <HoleWizard id="2" Name="Tapped Hole">
+    <Dimension Name="D1">12.5mm</Dimension>
+  </HoleWizard>
+  <FutureFeature id="3" Name="Vendor Operation" Vendor="Parashell">
+    <FutureChild id="4" Name="Nested Operation" />
+  </FutureFeature>
+  <Dimension id="5" Name="Not a Feature">7mm</Dimension>
+  <Invalid id="not-an-integer" Name="Invalid" />
+</Keywords>"""
+    )
+    assert [configuration.name for configuration in configurations] == ["Default"]
+    assert [
+        (feature.object_id, feature.kind, feature.xml_tag) for feature in features
+    ] == [
+        (1, "Plane", "Feature"),
+        (2, "HoleWizard", "HoleWizard"),
+        (3, "FutureFeature", "FutureFeature"),
+        (4, "FutureChild", "FutureChild"),
+    ]
+    assert features[1].dimensions[0].value_mm == 12.5
+    assert features[2].properties["Vendor"] == "Parashell"
+    assert _feature_kind(features[1]) == FeatureKind.HOLE
+    assert _feature_kind(features[2]) == FeatureKind.NATIVE
+
+
+def test_feature_records_bind_by_object_id_and_missing_names_are_retained() -> None:
+    first = _resolved_name_record("Binary original", 41)
+    second = _resolved_name_record("Binary fallback", 42)
+    model = decode_native_model(
+        b"""<?xml version="1.0" encoding="UTF-8"?>
+<Keywords>
+  <FutureFeature id="41" Name="Renamed display" />
+  <FutureFeature id="42" />
+  <FutureFeature id="43" />
+</Keywords>""",
+        first + second,
+    )
+    by_id = {feature.object_id: feature for feature in model.features}
+    assert by_id[41].name == "Renamed display"
+    assert by_id[41].native_offset == 0
+    assert by_id[41].native_end == len(first)
+    assert by_id[41].data == first
+    assert by_id[42].name == "Binary fallback"
+    assert by_id[42].native_offset == len(first)
+    assert by_id[42].data == second
+    assert by_id[43].name == "FutureFeature 43"
+    assert by_id[43].native_offset is None
+
+
+def test_operation_dimensions_use_record_order_and_feature_semantics() -> None:
+    extrusion = _resolved_name_record("Extrusion native label", 10, 320, 0, 192)
+    fillet = _resolved_name_record("Fillet native label", 20)
+    model = decode_native_model(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<Keywords>
+  <Extrusion id="10" Name="Volume localisé">
+    <Dimension Name="Profondeur">12.5</Dimension>
+  </Extrusion>
+  <Feature id="20" Name="Congé localisé" Type="Fillet">
+    <Dimension Name="Rayon">0.75</Dimension>
+  </Feature>
+</Keywords>""".encode(
+            "utf-8"
+        ),
+        extrusion + fillet,
+    )
+    operations = {operation.object_id: operation for operation in model.operations}
+    assert operations[10].length_mm == 12.5
+    assert operations[20].radius_mm == 0.75
+    features = {feature.object_id: feature for feature in model.features}
+    assert features[10].dimensions[0].kind == "length"
+    assert features[20].dimensions[0].kind == "radius"
+
+
+def test_circle_dimension_semantics_do_not_require_display_tokens_or_names() -> None:
+    archive = SldprtArchive.open(SAMPLE)
+    keywords = archive.require("swXmlContents/KeyWords").replace(
+        b'Name="D1">&lt;MOD-DIAM&gt;5.5',
+        b'Name="Diametre">5.5',
+    )
+    model = decode_native_model(
+        keywords,
+        archive.require("Contents/Config-0-ResolvedFeatures"),
+    )
+    sketch = next(item for item in model.sketches if item.object_id == 88)
+    assert sketch.profiles[0].coordinates[2] == pytest.approx(2.75)
+    assert sketch.profiles[0].parameter_name == "Diametre"
+    assert sketch.profiles[0].dimension_kind == "diameter"
+    assert sketch.dimensions[0].kind == "diameter"
+    assert sketch.dimensions[0].native_offset is not None
+
+
+@pytest.mark.parametrize(
+    ("native_kind", "neutral_kind"),
+    (
+        ("Revolve", FeatureKind.REVOLUTION),
+        ("Cut-Revolve", FeatureKind.REVOLUTION),
+        ("Sweep", FeatureKind.SWEEP),
+        ("Cut-Sweep", FeatureKind.SWEEP),
+        ("Loft-Thin", FeatureKind.LOFT),
+        ("Shell", FeatureKind.SHELL),
+        ("Mirror", FeatureKind.MIRROR),
+        ("LPattern", FeatureKind.PATTERN),
+        ("CirPattern", FeatureKind.PATTERN),
+        ("Helix/Spiral", FeatureKind.HELIX),
+        ("Axis", FeatureKind.REFERENCE),
+    ),
+)
+def test_native_feature_types_map_to_neutral_kinds(
+    native_kind: str, neutral_kind: FeatureKind
+) -> None:
+    feature = NativeFeature(
+        object_id=1,
+        name="Feature",
+        kind=native_kind,
+        xml_tag="Feature",
+        native_offset=None,
+        native_end=None,
+        properties={},
+        dimensions=(),
+    )
+    assert _feature_kind(feature) == neutral_kind
+
+
+def test_corpus_hole_wizard_features_reach_the_timeline() -> None:
+    document = read_sldprt(CORPUS / "Engine_Block.SLDPRT", include_brep=False)
+    holes = [
+        feature
+        for feature in document.feature_timeline
+        if feature.kind == FeatureKind.HOLE
+    ]
+    assert len(holes) == 8
+    assert {feature.attributes["xml_tag"] for feature in holes} == {"HoleWizard"}
+    assert all(feature.attributes["native_type"] == "HoleWizard" for feature in holes)
 
 
 def test_container_recovers_native_streams() -> None:
@@ -48,7 +725,7 @@ def test_adapter_recovers_parametric_history_and_brep() -> None:
     assert len(document.parameters) == 26
     assert len(document.support_planes) == 7
     assert len(document.sketches) == 5
-    assert len(document.feature_timeline) == 38
+    assert len(document.feature_timeline) == 39
     assert len(document.brep_payloads) == 3
     assert [payload.kind for payload in document.brep_payloads] == [
         "partition",
@@ -142,9 +819,9 @@ def test_adapter_recovers_construction_geometry_without_guessing() -> None:
     expected_line_counts = {
         "Sketch1": 2,
         "Sketch2": 2,
-        "Sketch3": 7,
-        "Sketch4": 1,
-        "Sketch6": 2,
+        "Sketch3": 6,
+        "Sketch4": 0,
+        "Sketch6": 0,
     }
     for sketch in document.sketches:
         lines = [
@@ -173,6 +850,12 @@ def test_adapter_recovers_construction_geometry_without_guessing() -> None:
     }
     assert any(
         isinstance(entity.geometry, NativeGeometry) for entity in sketch1.entities
+    )
+    sketch6 = document.sketch("sldprt:sketch:106")
+    assert any(
+        isinstance(entity.geometry, NativeGeometry)
+        and entity.geometry.data.get("record_data")
+        for entity in sketch6.entities
     )
 
 
@@ -205,15 +888,64 @@ def test_adapter_resolves_line_endpoints_by_native_marker_index() -> None:
         assert (geometry.end.x, geometry.end.y) == pytest.approx(end)
 
 
-def test_adapter_does_not_resolve_line_through_noncoordinate_marker() -> None:
+def test_adapter_preserves_unknown_locus_before_resolving_native_indices() -> None:
     document = read_sldprt(CORPUS / "Engine_Block.SLDPRT", include_brep=False)
     sketch = document.sketch("sldprt:sketch:200")
+    unknown = next(
+        entity
+        for entity in sketch.entities
+        if entity.provenance and entity.provenance.spans[0].offset == 196708
+    )
+    assert isinstance(unknown.geometry, NativeGeometry)
+    assert unknown.geometry.data["locus"] == "03000300"
+    assert unknown.geometry.data["record_data"]
     entity = next(
         entity
         for entity in sketch.entities
         if entity.provenance and entity.provenance.spans[0].offset == 198158
     )
-    assert isinstance(entity.geometry, NativeGeometry)
+    assert isinstance(entity.geometry, LineGeometry)
+
+
+def test_every_feature_without_typed_semantics_has_a_native_definition() -> None:
+    document = read_sldprt(SAMPLE, include_brep=False)
+    assert all(feature.definition is not None for feature in document.feature_timeline)
+    native = [
+        feature.definition
+        for feature in document.feature_timeline
+        if isinstance(feature.definition, NativeFeatureDefinition)
+    ]
+    assert native
+    assert all(definition.type_id for definition in native)
+    assert any(definition.object_data["record_data"] for definition in native)
+
+
+def test_unknown_native_constraint_is_retained_without_mapped_references() -> None:
+    sketch = NativeSketch(
+        object_id=7,
+        name="Future sketch",
+        support_plane_id=1,
+        native_offset=10,
+        native_end=20,
+        markers=(),
+        profiles=(),
+        dimensions=(),
+        constraints=(
+            NativeConstraint(
+                id="7:future:1",
+                kind="native_4096",
+                references=("future-reference",),
+                parameter=None,
+                value=None,
+                native_offset=12,
+                native_code=4096,
+            ),
+        ),
+    )
+    constraints = _sketch_constraints(sketch, {}, set())
+    assert len(constraints) == 1
+    assert constraints[0].references == ()
+    assert constraints[0].attributes["native_references"] == ("future-reference",)
 
 
 def test_adapter_accepts_memory_and_roundtrips_neutral_json() -> None:
@@ -237,7 +969,17 @@ def test_entire_local_solidworks_corpus_decodes() -> None:
     documents = [read_sldprt(path) for path in parts]
     assert len(parts) == 54
     assert all(document.validate() == () for document in documents)
-    assert sum(len(document.brep_payloads) for document in documents) == 162
+    assert sum(len(document.brep_payloads) for document in documents) == 313
+    assert all(
+        payload.role == PayloadRole.BREP
+        for document in documents
+        for payload in document.brep_payloads
+    )
+    assert any(
+        not payload.source_stream.endswith("Partition")
+        for document in documents
+        for payload in document.brep_payloads
+    )
 
 
 def test_adapter_handles_positive_zero_plane_frame_variant() -> None:

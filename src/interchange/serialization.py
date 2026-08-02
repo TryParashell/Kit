@@ -6,15 +6,41 @@ from dataclasses import fields, is_dataclass
 from enum import Enum
 import json
 from types import MappingProxyType
-from typing import Any, Mapping, get_origin, get_type_hints
+from typing import Any, Callable, Mapping, get_origin, get_type_hints
 
 
 _TYPE_REGISTRY: dict[str, type] = {}
+_MIGRATION_REGISTRY: dict[type, Callable[[Mapping[str, Any]], Mapping[str, Any]]] = {}
 
 
 def register_types(*types: type) -> None:
     for value in types:
+        existing = _TYPE_REGISTRY.get(value.__name__)
+        if existing is not None and existing is not value:
+            raise ValueError(f"duplicate interchange type name {value.__name__!r}")
         _TYPE_REGISTRY[value.__name__] = value
+
+
+def register_migration(
+    target: type, migration: Callable[[Mapping[str, Any]], Mapping[str, Any]]
+) -> None:
+    existing = _MIGRATION_REGISTRY.get(target)
+    if existing is not None and existing is not migration:
+        raise ValueError(f"duplicate interchange migration for {target.__name__!r}")
+    _MIGRATION_REGISTRY[target] = migration
+
+
+def _ordered_data(values: set[Any] | frozenset[Any]) -> list[Any]:
+    encoded = [to_data(item) for item in values]
+    return sorted(
+        encoded,
+        key=lambda item: json.dumps(
+            item,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+    )
 
 
 def to_data(value: Any) -> Any:
@@ -30,9 +56,9 @@ def to_data(value: Any) -> Any:
     if isinstance(value, tuple):
         return {"$tuple": [to_data(item) for item in value]}
     if isinstance(value, frozenset):
-        return {"$frozenset": [to_data(item) for item in value]}
+        return {"$frozenset": _ordered_data(value)}
     if isinstance(value, set):
-        return {"$set": [to_data(item) for item in value]}
+        return {"$set": _ordered_data(value)}
     if isinstance(value, list):
         return [to_data(item) for item in value]
     if isinstance(value, Mapping):
@@ -68,6 +94,9 @@ def from_data(value: Any) -> Any:
         arguments = {
             key: from_data(item) for key, item in value.items() if key != "$type"
         }
+        migration = _MIGRATION_REGISTRY.get(target)
+        if migration is not None:
+            arguments = dict(migration(MappingProxyType(arguments)))
         hints = get_type_hints(target)
         for item in fields(target):
             hint = hints.get(item.name)

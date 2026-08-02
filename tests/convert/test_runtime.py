@@ -1,25 +1,51 @@
 from __future__ import annotations
 
 import ast
+from email.parser import BytesParser
+from email.policy import default
 import io
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 import tokenize
+import zipfile
 
 
-SOURCE = Path(__file__).parents[2] / "src"
+ROOT = Path(__file__).parents[2]
+SOURCE = ROOT / "src"
 DYNAMIC_IMPORT_PATH = SOURCE / "convert" / "adapters" / "registry.py"
 FORBIDDEN_ROOTS = {
+    "FreeCADGui",
     "FreeCAD",
+    "NXOpen",
+    "OCC",
     "Part",
     "Sketcher",
     "OCP",
+    "adsk",
+    "aiohttp",
     "cadquery",
+    "cffi",
+    "clr",
     "comtypes",
     "ctypes",
+    "ftplib",
+    "httpx",
+    "lxml",
     "multiprocessing",
+    "numpy",
+    "pycatia",
     "pythoncom",
+    "requests",
     "runpy",
+    "scipy",
+    "socket",
+    "ssl",
     "subprocess",
+    "urllib",
+    "urllib3",
+    "websockets",
     "win32com",
 }
 FORBIDDEN_NAMES = {
@@ -53,6 +79,140 @@ FORBIDDEN_ATTRIBUTES = {
     "spawnvpe",
     "system",
 }
+FORBIDDEN_ENVIRONMENT_ATTRIBUTES = {
+    "environ",
+    "getenv",
+    "putenv",
+    "unsetenv",
+}
+NATIVE_LIBRARY_SUFFIXES = (".dll", ".dylib", ".pyd", ".so")
+ALLOWED_RUNTIME_ROOTS = frozenset(sys.stdlib_module_names) | {
+    "convert",
+    "interchange",
+}
+ISOLATED_RUNTIME = r"""
+import io
+from pathlib import Path
+import sys
+
+blocked_imports = frozenset(
+    {
+        "FreeCAD",
+        "FreeCADGui",
+        "NXOpen",
+        "OCC",
+        "OCP",
+        "Part",
+        "Sketcher",
+        "adsk",
+        "aiohttp",
+        "cadquery",
+        "cffi",
+        "clr",
+        "comtypes",
+        "ctypes",
+        "ftplib",
+        "httpx",
+        "lxml",
+        "multiprocessing",
+        "numpy",
+        "pycatia",
+        "pythoncom",
+        "requests",
+        "runpy",
+        "scipy",
+        "socket",
+        "ssl",
+        "subprocess",
+        "urllib",
+        "urllib3",
+        "websockets",
+        "win32com",
+    }
+)
+
+
+class ImportBlocker:
+    def find_spec(self, fullname, path=None, target=None):
+        root = fullname.partition(".")[0]
+        if root in blocked_imports:
+            raise RuntimeError(f"blocked runtime import: {fullname}")
+        return None
+
+
+def audit(event, arguments):
+    blocked = (
+        event == "os.system"
+        or event.startswith("os.spawn")
+        or event.startswith("socket.")
+        or event.startswith("subprocess.")
+        or event.startswith("ctypes.")
+    )
+    if blocked:
+        raise RuntimeError(f"blocked runtime operation: {event}")
+
+
+sys.meta_path.insert(0, ImportBlocker())
+sys.addaudithook(audit)
+sys.path.insert(0, sys.argv[1])
+
+from convert import available_adapters, convert, open_document, write_document
+
+root = Path(sys.argv[2])
+output = Path(sys.argv[3])
+adapters = {adapter.format_id for adapter in available_adapters()}
+assert adapters == {
+    "catia.v5",
+    "freecad.fcstd",
+    "interchange.json",
+    "solidworks.sldprt",
+}
+cases = (
+    (root / "examples" / ".SLDPRT" / "example.SLDPRT", ".FCStd", True),
+    (
+        root
+        / "examples"
+        / "Random"
+        / "V8_engine"
+        / "hex bolt gradeb_iso.FCStd",
+        ".CATPart",
+        True,
+    ),
+    (root / "examples" / ".CATPart" / "Banjo.CATPart", ".SLDPRT", True),
+    (
+        root / "examples" / "Random" / "Pistons" / "Piston.SLDASM",
+        ".CATProduct",
+        True,
+    ),
+    (
+        root
+        / "examples"
+        / ".CATProduct"
+        / "Brake_Pedal_Assembly - Backup 2.CATProduct",
+        ".SLDASM",
+        True,
+    ),
+)
+for index, (source, suffix, allow_carrier) in enumerate(cases):
+    destination = output / f"conversion_{index}{suffix}"
+    result = convert(source, destination, allow_carrier=allow_carrier)
+    assert result.output.path == destination.resolve()
+    assert result.output.bytes_written == destination.stat().st_size
+    assert open_document(destination).validate() == ()
+
+source_document = open_document(cases[0][0])
+buffer = io.BytesIO()
+written = write_document(
+    source_document,
+    buffer,
+    destination_format="interchange.json",
+)
+assert written.path is None
+assert written.bytes_written == len(buffer.getvalue())
+assert open_document(
+    buffer.getvalue(), source_format="interchange.json"
+) == source_document
+"""
 
 
 def test_runtime_has_no_cad_or_process_dependencies() -> None:
@@ -61,9 +221,15 @@ def test_runtime_has_no_cad_or_process_dependencies() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 roots = {alias.name.split(".", 1)[0] for alias in node.names}
+                assert roots <= ALLOWED_RUNTIME_ROOTS, (
+                    path,
+                    roots - ALLOWED_RUNTIME_ROOTS,
+                )
                 assert not roots & FORBIDDEN_ROOTS, (path, roots & FORBIDDEN_ROOTS)
             if isinstance(node, ast.ImportFrom) and node.module:
                 root = node.module.split(".", 1)[0]
+                if node.level == 0:
+                    assert root in ALLOWED_RUNTIME_ROOTS, (path, root)
                 assert root not in FORBIDDEN_ROOTS, (path, root)
                 if node.module == "importlib":
                     for alias in node.names:
@@ -80,6 +246,18 @@ def test_runtime_has_no_cad_or_process_dependencies() -> None:
                         path,
                         node.func.attr,
                     )
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+                if node.value.id == "os":
+                    assert node.attr not in FORBIDDEN_ENVIRONMENT_ATTRIBUTES, (
+                        path,
+                        node.attr,
+                    )
+            if isinstance(node, ast.ImportFrom) and node.module == "os":
+                names = {alias.name for alias in node.names}
+                assert not names & FORBIDDEN_ENVIRONMENT_ATTRIBUTES, (
+                    path,
+                    names & FORBIDDEN_ENVIRONMENT_ATTRIBUTES,
+                )
 
 
 def test_source_contains_no_code_comments_or_stubs() -> None:
@@ -98,3 +276,77 @@ def test_source_layout_uses_only_interchange_and_convert() -> None:
         if path.is_dir() and any(path.rglob("*.py"))
     }
     assert packages == {"convert", "interchange"}
+
+
+def test_built_wheel_is_self_contained_and_runs_with_external_hooks_blocked(
+    tmp_path: Path,
+) -> None:
+    uv = shutil.which("uv")
+    assert uv is not None
+    wheel_directory = tmp_path / "wheel"
+    completed = subprocess.run(
+        (
+            uv,
+            "build",
+            "--wheel",
+            "--offline",
+            "--no-progress",
+            "--out-dir",
+            str(wheel_directory),
+        ),
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    wheels = tuple(wheel_directory.glob("*.whl"))
+    assert completed.returncode == 0
+    assert len(wheels) == 1
+    install_root = tmp_path / "site"
+    with zipfile.ZipFile(wheels[0]) as archive:
+        names = tuple(archive.namelist())
+        assert not any(
+            name.casefold().endswith(NATIVE_LIBRARY_SUFFIXES) for name in names
+        )
+        wheel_name = next(name for name in names if name.endswith("/WHEEL"))
+        metadata_name = next(name for name in names if name.endswith("/METADATA"))
+        entry_points_name = next(
+            name for name in names if name.endswith("/entry_points.txt")
+        )
+        wheel_metadata = archive.read(wheel_name).decode("utf-8")
+        assert "Root-Is-Purelib: true" in wheel_metadata
+        assert "Tag: py3-none-any" in wheel_metadata
+        metadata = BytesParser(policy=default).parsebytes(archive.read(metadata_name))
+        requirements = tuple(metadata.get_all("Requires-Dist", ()))
+        extras = tuple(metadata.get_all("Provides-Extra", ()))
+        extra_markers = {
+            marker
+            for extra in extras
+            for marker in (f"extra == '{extra}'", f'extra == "{extra}"')
+        }
+        assert all(
+            value.partition(";")[2].strip() in extra_markers for value in requirements
+        )
+        assert archive.read(entry_points_name).decode("utf-8") == (
+            "[kit]\nconvert = convert:convert\n"
+        )
+        archive.extractall(install_root)
+    runtime_output = tmp_path / "runtime"
+    runtime_output.mkdir()
+    isolated = subprocess.run(
+        (
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            ISOLATED_RUNTIME,
+            str(install_root),
+            str(ROOT),
+            str(runtime_output),
+        ),
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert isolated.returncode == 0, isolated.stderr

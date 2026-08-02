@@ -8,9 +8,14 @@ import zipfile
 
 import pytest
 
-from convert import convert, open_document
+from convert import ApplicationUsabilityError, convert, open_document
 from convert.adapters import ReadOptions
-from convert.adapters.catia import CatiaAdapter, Cfv2Archive, write_catia
+from convert.adapters.catia import (
+    CatiaAdapter,
+    Cfv2Archive,
+    build_cfv2,
+    write_catia,
+)
 from convert.adapters.catia.assembly import (
     _under_root,
     decode_product_table,
@@ -22,6 +27,20 @@ from interchange import ComponentKind, Matrix4, frozen_mapping
 
 ROOT = Path(__file__).parents[2]
 CATPRODUCTS = ROOT / "examples" / ".CATProduct"
+
+
+def _product_stream(tokens: tuple[tuple[str, str], ...]) -> bytes:
+    values = []
+    for value, encoding in tokens:
+        raw = value.encode(encoding)
+        if len(raw) > 254:
+            raise ValueError("test product token exceeds the one-byte length field")
+        values.append(bytes((len(raw) + 1,)) + raw)
+    return b"".join(values)
+
+
+def _product_archive(tokens: tuple[tuple[str, str], ...]) -> Cfv2Archive:
+    return Cfv2Archive.from_bytes(build_cfv2((("Data", _product_stream(tokens)),)))
 
 
 @pytest.mark.parametrize(
@@ -87,6 +106,197 @@ def test_catproduct_occurrence_pairing_retains_variants_and_custom_names() -> No
             "I_Brake_bias_90_degree_coupler.1",
         ),
     ]
+
+
+def test_catproduct_retains_unicode_numeric_and_underscore_tokens() -> None:
+    table = decode_product_table(
+        _product_archive(
+            (
+                ("ASMPRODUCT", "utf-8"),
+                ("根組立", "utf-16"),
+                ("_Reps", "utf-8"),
+                ("_部品", "utf-16"),
+                ("_InstanceName", "utf-8"),
+                ("007", "latin-1"),
+                ("_Position", "utf-8"),
+                ("PRDREP", "utf-8"),
+                ("Shape 1", "utf-8"),
+                ("_VendorToken", "utf-8"),
+                ("42", "utf-8"),
+                ("IsRoot", "utf-8"),
+            )
+        )
+    )
+    assert table.root_name == "根組立"
+    assert [
+        (item.definition_name, item.instance_name) for item in table.occurrences
+    ] == [("_部品", "007")]
+    assert next(item for item in table.tokens if item.value == "根組立").encoding == (
+        "utf-16"
+    )
+    assert next(item for item in table.tokens if item.value == "_部品").encoding == (
+        "utf-16"
+    )
+    assert {item.value for item in table.ambiguous_tokens} >= {
+        "_VendorToken",
+        "42",
+    }
+
+
+def test_catproduct_retains_latin1_occurrence_names() -> None:
+    table = decode_product_table(
+        _product_archive(
+            (
+                ("ASMPRODUCT", "utf-8"),
+                ("Assemblage", "utf-8"),
+                ("_Reps", "utf-8"),
+                ("Pièce", "latin-1"),
+                ("_InstanceName", "utf-8"),
+                ("Café spécial", "latin-1"),
+                ("IsRoot", "utf-8"),
+            )
+        )
+    )
+    assert [
+        (item.definition_name, item.instance_name) for item in table.occurrences
+    ] == [("Pièce", "Café spécial")]
+    assert next(item for item in table.tokens if item.value == "Pièce").encoding == (
+        "latin-1"
+    )
+    assert (
+        next(item for item in table.tokens if item.value == "Café spécial").encoding
+        == "latin-1"
+    )
+
+
+def test_catproduct_shared_prefix_definitions_bind_by_exact_identity() -> None:
+    table = decode_product_table(
+        _product_archive(
+            (
+                ("ASMPRODUCT", "utf-8"),
+                ("Root", "utf-8"),
+                ("_Reps", "utf-8"),
+                ("Shared", "utf-8"),
+                ("_InstanceName", "utf-8"),
+                ("I_Shared.1", "utf-8"),
+                ("_Position", "utf-8"),
+                ("PRDREP", "utf-8"),
+                ("Shape 1", "utf-8"),
+                ("Shared_1", "utf-8"),
+                ("I_Shared_1.1", "utf-8"),
+                ("I_Shared.2", "utf-8"),
+                ("I_Shared_1.2", "utf-8"),
+                ("IsRoot", "utf-8"),
+            )
+        )
+    )
+    assert [
+        (item.definition_name, item.instance_name) for item in table.occurrences
+    ] == [
+        ("Shared", "I_Shared.1"),
+        ("Shared_1", "I_Shared_1.1"),
+        ("Shared", "I_Shared.2"),
+        ("Shared_1", "I_Shared_1.2"),
+    ]
+
+
+def test_catproduct_retains_alternative_product_tables() -> None:
+    data = build_cfv2(
+        (
+            (
+                "Data",
+                _product_stream(
+                    (
+                        ("ASMPRODUCT", "utf-8"),
+                        ("RootA", "utf-8"),
+                        ("_Reps", "utf-8"),
+                        ("PartA", "utf-8"),
+                        ("_InstanceName", "utf-8"),
+                        ("Instance A", "utf-8"),
+                        ("IsRoot", "utf-8"),
+                    )
+                ),
+            ),
+            (
+                "OtherProductTable",
+                _product_stream(
+                    (
+                        ("ASMPRODUCT", "utf-8"),
+                        ("RootB", "utf-8"),
+                        ("_Reps", "utf-8"),
+                        ("PartB", "utf-8"),
+                        ("_InstanceName", "utf-8"),
+                        ("Instance B", "utf-8"),
+                        ("IsRoot", "utf-8"),
+                    )
+                ),
+            ),
+        )
+    )
+    table = decode_product_table(Cfv2Archive.from_bytes(data))
+    assert table.root_name == "RootA"
+    assert [item.root_name for item in table.alternatives] == ["RootB"]
+    document = CatiaAdapter().read(data, ReadOptions(include_brep=False))
+    assert document.assembly is not None
+    assert [
+        item["root_name"]
+        for item in document.assembly.attributes["native_table_candidates"]
+    ] == ["RootA", "RootB"]
+    assert "catia.product.root_ambiguous" in {
+        item.code for item in document.diagnostics
+    }
+
+
+def test_catproduct_resolves_renamed_component_by_internal_name(
+    tmp_path: Path,
+) -> None:
+    source = ROOT / "examples" / ".CATPart" / "4876.CATPart"
+    renamed = tmp_path / "unrelated-name.CATPart"
+    renamed.write_bytes(source.read_bytes())
+    document = CatiaAdapter().read(
+        CATPRODUCTS / "Tilton_Set.CATProduct",
+        ReadOptions(
+            include_brep=False,
+            values=frozen_mapping({"component_search_root": tmp_path}),
+        ),
+    )
+    assembly = document.assembly
+    assert assembly is not None
+    definition = next(item for item in assembly.definitions if item.name == "4876")
+    assert Path(definition.source_path) == renamed.resolve()
+    assert definition.document_id
+
+
+def test_catproduct_retains_ambiguous_internal_name_references(
+    tmp_path: Path,
+) -> None:
+    source = ROOT / "examples" / ".CATPart" / "4876.CATPart"
+    first = tmp_path / "a.CATPart"
+    second = tmp_path / "b.CATPart"
+    first.write_bytes(source.read_bytes())
+    second.write_bytes(source.read_bytes())
+    document = CatiaAdapter().read(
+        CATPRODUCTS / "Tilton_Set.CATProduct",
+        ReadOptions(
+            include_brep=False,
+            values=frozen_mapping({"component_search_root": tmp_path}),
+        ),
+    )
+    assembly = document.assembly
+    assert assembly is not None
+    definition = next(item for item in assembly.definitions if item.name == "4876")
+    assert definition.source_path == ""
+    assert definition.document_id == ""
+    assert {
+        Path(item["path"]).name
+        for item in definition.attributes["native_reference_candidates"]
+    } == {"a.CATPart", "b.CATPart"}
+    diagnostic = next(
+        item
+        for item in document.diagnostics
+        if item.code == "catia.product.component_source_ambiguous"
+    )
+    assert diagnostic.attributes["definition_name"] == "4876"
 
 
 def test_catproduct_resolves_supplied_documents_by_internal_product_name() -> None:
@@ -321,7 +531,15 @@ def test_catproduct_component_hash_change_prevents_linking() -> None:
 def test_catproduct_to_fcstd_structural_roundtrip(tmp_path: Path) -> None:
     source = CATPRODUCTS / "Brake_Pedal_Assembly - Backup 1.CATProduct"
     output = tmp_path / "Brake.FCStd"
-    result = convert(source, output)
+    with pytest.raises(ApplicationUsabilityError) as captured:
+        convert(source, output)
+    assert "unimplemented_translation" in captured.value.issues
+    assert not output.exists()
+    assert tuple(tmp_path.iterdir()) == ()
+    result = convert(source, output, allow_carrier=True)
+    assert result.application_usable is True
+    assert result.vendor_loadable is True
+    assert result.near_lossless is False
     restored = open_document(output)
     assembly = restored.assembly
     assert assembly is not None

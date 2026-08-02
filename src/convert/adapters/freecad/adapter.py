@@ -1,60 +1,99 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
-from dataclasses import asdict, is_dataclass, replace
+from dataclasses import asdict, fields, is_dataclass, replace
 from datetime import datetime, timezone
 from enum import Enum
+import hashlib
 import io
 import json
 import os
 from pathlib import Path
 import re
 import tempfile
-from typing import Any, BinaryIO
+from typing import Any
 import xml.etree.ElementTree as ET
 import zipfile
 
 from convert.adapters.base import (
     AdapterInfo,
+    CapabilityTransfer,
     Destination,
     ProbeResult,
     ReadOptions,
     Source,
+    TransferMode,
     WriteOptions,
     WriteResult,
     is_binary_destination,
+    is_windows_device_name,
 )
+from convert.opencascade import is_structurally_valid_ascii_brep
 from interchange import (
+    BrepPayload,
     CadDocument,
     CadSource,
     Capability,
     ComponentDefinition,
     ComponentKind,
     Configuration,
+    Diagnostic,
+    ExtrusionEndCondition,
+    ExtrusionFeature,
+    FeatureKind,
+    FilletFeature,
+    MateKind,
     Mesh,
+    PayloadRole,
+    Severity,
+    filter_document,
+    frozen_mapping,
+    infer_capabilities,
+    semantic_metadata,
+    source_payload_indexes,
 )
 
-from .archive import MANIFEST_ENTRY, build_fcstd_archive, extract_manifest_from_fcstd
+from .archive import (
+    DOCUMENT_ENTRY,
+    MANIFEST_ENTRY,
+    _MAX_ENTRY_SIZE,
+    _MAX_EXTERNAL_FILES,
+    _MAX_TOTAL_SIZE,
+    _validated_archive_members,
+    build_fcstd_archive,
+    extract_manifest_from_fcstd,
+    native_sketch_parts,
+)
+from .brep import FreeCADBrepWriteError, brep_model_brep
+from .format import CAPABILITY_CARRIER_REASONS, INFO, SUFFIX
 from .native import NativeFreeCADError, probe_native_fcstd, read_native_fcstd
+from .protocol import (
+    FEATURE_WRITE_KINDS,
+    FREECAD_BREP_FORMAT_IDS,
+    MATE_WRITE_KINDS,
+    XML_TRUE_VALUES,
+)
+
+
+_NATIVE_DOCUMENT_ID = "freecad:native-document"
+_NATIVE_DOCUMENT_BINDING_ID = "freecad:native-document-binding"
+_REPLAY_SEMANTIC_ATTRIBUTE = "freecad.replay_semantic_sha256"
+_NATIVE_EXTRUSION_END_CONDITIONS = frozenset(
+    {
+        ExtrusionEndCondition.BLIND.value,
+        ExtrusionEndCondition.TWO_LENGTHS.value,
+        ExtrusionEndCondition.MID_PLANE.value,
+    }
+)
+_FEATURE_WRITE_VALUES = frozenset(kind.value for kind in FEATURE_WRITE_KINDS)
+_MATE_WRITE_VALUES = frozenset(kind.value for kind in MATE_WRITE_KINDS)
 
 
 class FreeCADAdapterError(RuntimeError):
     def __init__(self, message: str) -> None:
         super().__init__(message)
-
-
-_WINDOWS_RESERVED_NAMES = frozenset(
-    {
-        "CON",
-        "PRN",
-        "AUX",
-        "NUL",
-        *(f"COM{index}" for index in range(1, 10)),
-        *(f"LPT{index}" for index in range(1, 10)),
-    }
-)
 
 
 def _plain(value: Any) -> Any:
@@ -91,21 +130,7 @@ def document_to_manifest(document: Any) -> dict[str, Any]:
     manifest = _plain(document)
     if not isinstance(manifest, dict):
         raise TypeError("CadDocument.to_dict() must produce a mapping")
-    required = {
-        "source",
-        "configurations",
-        "parameters",
-        "support_planes",
-        "sketches",
-        "selections",
-        "feature_timeline",
-        "bodies",
-        "meshes",
-        "brep_payloads",
-        "diagnostics",
-        "capabilities",
-        "metadata",
-    }
+    required = {item.name for item in fields(CadDocument)}
     if manifest.get("$type") == "CadDocument":
         missing = sorted(required.difference(manifest))
         if missing:
@@ -156,6 +181,581 @@ def _source_path(source: Source) -> str:
     return str(name) if isinstance(name, (str, Path)) else ""
 
 
+def _filtered_document(document: CadDocument, settings: ReadOptions) -> CadDocument:
+    filtered = filter_document(
+        document,
+        include_brep=settings.include_brep,
+        include_tessellation=settings.include_tessellation,
+        keep_payload_records=False,
+    )
+    metadata: Mapping[str, Any] = filtered.metadata
+    freecad = metadata.get("freecad", {}) if isinstance(metadata, Mapping) else {}
+    external = (
+        freecad.get("external_documents", []) if isinstance(freecad, Mapping) else []
+    )
+    if isinstance(external, Sequence) and not isinstance(
+        external, (str, bytes, bytearray)
+    ):
+        stripped_external: list[Any] = []
+        changed = False
+        for value in external:
+            if not isinstance(value, Mapping):
+                stripped_external.append(value)
+                continue
+            linked = value.get("document")
+            mapped = isinstance(linked, Mapping)
+            if mapped:
+                try:
+                    linked = CadDocument.from_dict(linked)
+                except (TypeError, ValueError, RecursionError):
+                    stripped_external.append(value)
+                    continue
+            if not isinstance(linked, CadDocument):
+                stripped_external.append(value)
+                continue
+            item = dict(value)
+            stripped = _filtered_document(linked, settings)
+            item["document"] = stripped.to_dict() if mapped else stripped
+            stripped_external.append(item)
+            changed = True
+        if changed:
+            freecad_copy = dict(freecad)
+            freecad_copy["external_documents"] = stripped_external
+            metadata_copy = dict(metadata)
+            metadata_copy["freecad"] = freecad_copy
+            metadata = metadata_copy
+    return replace(
+        filtered,
+        metadata=metadata,
+    )
+
+
+def _is_native_document(payload: BrepPayload) -> bool:
+    return (
+        payload.id == _NATIVE_DOCUMENT_ID
+        and payload.format_id == INFO.format_id
+        and payload.kind == "native_document"
+        and payload.role == PayloadRole.DOCUMENT
+    )
+
+
+def _is_native_document_binding(payload: BrepPayload) -> bool:
+    return (
+        payload.id == _NATIVE_DOCUMENT_BINDING_ID
+        and payload.format_id == f"{INFO.format_id}.sha256"
+        and payload.kind == "native_document_binding"
+        and payload.schema == "sha256"
+        and payload.role == PayloadRole.VERIFICATION
+    )
+
+
+def _is_native_envelope(payload: BrepPayload) -> bool:
+    return _is_native_document(payload) or _is_native_document_binding(payload)
+
+
+def _native_document_pair(
+    document: CadDocument,
+) -> tuple[BrepPayload, BrepPayload] | None:
+    documents = tuple(
+        payload for payload in document.brep_payloads if _is_native_document(payload)
+    )
+    bindings = tuple(
+        payload
+        for payload in document.brep_payloads
+        if _is_native_document_binding(payload)
+    )
+    if len(documents) != 1 or len(bindings) != 1:
+        return None
+    native_document = documents[0]
+    binding = bindings[0]
+    try:
+        native_digest = bytes.fromhex(native_document.sha256)
+    except ValueError:
+        return None
+    if len(native_digest) != hashlib.sha256().digest_size:
+        return None
+    if (
+        native_document.data is None
+        or hashlib.sha256(native_document.data).digest() != native_digest
+        or binding.data != native_digest
+        or binding.sha256 != hashlib.sha256(native_digest).hexdigest()
+    ):
+        return None
+    return native_document, binding
+
+
+def _mapped_external_documents(
+    metadata: Mapping[str, Any],
+    transform: Callable[[CadDocument], CadDocument],
+) -> Mapping[str, Any]:
+    freecad = metadata.get("freecad", {})
+    if not isinstance(freecad, Mapping):
+        return metadata
+    values = freecad.get("external_documents", [])
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes, bytearray)):
+        return metadata
+    changed = False
+    mapped: list[Any] = []
+    for value in values:
+        if not isinstance(value, Mapping):
+            mapped.append(value)
+            continue
+        linked = value.get("document")
+        if not isinstance(linked, CadDocument):
+            mapped.append(value)
+            continue
+        item = dict(value)
+        item["document"] = transform(linked)
+        mapped.append(item)
+        changed = True
+    if not changed:
+        return metadata
+    freecad_copy = dict(freecad)
+    freecad_copy["external_documents"] = mapped
+    result = dict(metadata)
+    result["freecad"] = freecad_copy
+    return frozen_mapping(result)
+
+
+def _semantic_document(document: CadDocument) -> CadDocument:
+    envelope_indexes = source_payload_indexes(document)
+    assembly = document.assembly
+    if assembly is not None:
+        assembly = replace(
+            assembly,
+            documents=tuple(
+                replace(
+                    item,
+                    document=(
+                        _semantic_document(item.document)
+                        if isinstance(item.document, CadDocument)
+                        else item.document
+                    ),
+                )
+                for item in assembly.documents
+            ),
+        )
+    payloads = tuple(
+        replace(
+            payload,
+            data=None,
+            sha256=(
+                hashlib.sha256(payload.data).hexdigest()
+                if payload.data is not None
+                else payload.sha256
+            ),
+            attributes=frozen_mapping(
+                {
+                    key: value
+                    for key, value in payload.attributes.items()
+                    if key != _REPLAY_SEMANTIC_ATTRIBUTE
+                }
+            ),
+        )
+        for index, payload in enumerate(document.brep_payloads)
+        if index not in envelope_indexes and not _is_native_envelope(payload)
+    )
+    metadata = _mapped_external_documents(document.metadata, _semantic_document)
+    return replace(
+        document,
+        source=CadSource("", "", ""),
+        brep_payloads=payloads,
+        metadata=semantic_metadata(metadata),
+        assembly=assembly,
+    )
+
+
+def _semantic_digest(document: CadDocument) -> str:
+    data = _semantic_document(document).to_json(indent=None).encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
+
+
+def _annotate_native_sources(document: CadDocument) -> CadDocument:
+    assembly = document.assembly
+    if assembly is not None:
+        assembly = replace(
+            assembly,
+            documents=tuple(
+                replace(
+                    item,
+                    document=(
+                        _annotate_native_sources(item.document)
+                        if isinstance(item.document, CadDocument)
+                        else item.document
+                    ),
+                )
+                for item in assembly.documents
+            ),
+        )
+    metadata = _mapped_external_documents(document.metadata, _annotate_native_sources)
+    annotated = replace(document, metadata=metadata, assembly=assembly)
+    pair = _native_document_pair(annotated)
+    if pair is None:
+        return annotated
+    native_document, _ = pair
+    digest = _semantic_digest(annotated)
+    payloads = tuple(
+        (
+            replace(
+                payload,
+                attributes=frozen_mapping(
+                    {
+                        **payload.attributes,
+                        _REPLAY_SEMANTIC_ATTRIBUTE: digest,
+                    }
+                ),
+            )
+            if payload.id == native_document.id and _is_native_document(payload)
+            else payload
+        )
+        for payload in annotated.brep_payloads
+    )
+    return replace(annotated, brep_payloads=payloads)
+
+
+def _unchanged_native_source(document: CadDocument) -> bytes | None:
+    pair = _native_document_pair(document)
+    if pair is None:
+        return None
+    native_document, _ = pair
+    expected = native_document.attributes.get(_REPLAY_SEMANTIC_ATTRIBUTE)
+    if not isinstance(expected, str) or expected != _semantic_digest(document):
+        return None
+    data = native_document.data
+    if data is None:
+        return None
+    try:
+        archive, _ = _validated_archive_members(data)
+        archive.close()
+    except (OSError, ValueError, zipfile.BadZipFile):
+        return None
+    return data
+
+
+def _enum_text(value: Any) -> str:
+    return str(getattr(value, "value", value) or "").casefold()
+
+
+def _document_tree(document: CadDocument) -> tuple[CadDocument, ...]:
+    pending = [document]
+    result: list[CadDocument] = []
+    seen: set[int] = set()
+    while pending:
+        item = pending.pop()
+        identity = id(item)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        result.append(item)
+        if item.assembly is not None:
+            pending.extend(
+                component.document
+                for component in reversed(item.assembly.documents)
+                if isinstance(component.document, CadDocument)
+            )
+    return tuple(result)
+
+
+def _has_native_freecad_graph(document: CadDocument) -> bool:
+    freecad = document.metadata.get("freecad", {})
+    if not isinstance(freecad, Mapping):
+        return False
+    objects = freecad.get("objects", ())
+    return (
+        isinstance(objects, Sequence)
+        and not isinstance(objects, (str, bytes, bytearray))
+        and bool(objects)
+    )
+
+
+def _feature_has_native_edges(document: CadDocument, feature: Any) -> bool:
+    attributes = feature.attributes
+    for name in (
+        "selected_native_local_edge_ids",
+        "native_local_edge_ids",
+        "edge_ids",
+        "edges",
+    ):
+        values = attributes.get(name, ())
+        if (
+            isinstance(values, Sequence)
+            and not isinstance(values, (str, bytes, bytearray))
+            and any(isinstance(value, (int, float)) and value > 0 for value in values)
+        ):
+            return True
+    selections = {selection.id: selection for selection in document.selections}
+    for selection_id in feature.selection_ids:
+        selection = selections.get(selection_id)
+        if selection is None:
+            continue
+        if any(
+            re.fullmatch(r"(?:Edge|edge:)(\d+)", item.subelement, re.IGNORECASE)
+            for item in selection.path
+        ):
+            return True
+        if selection.query.get("topology_role") == (
+            "extrusion_terminal_profile_boundary"
+        ):
+            return True
+        if any(
+            isinstance(selection.query.get(name), (int, float))
+            and selection.query[name] > 0
+            for name in ("edge_index", "native_local_id", "index")
+        ):
+            return True
+    return False
+
+
+def _extrusion_is_native(feature: Any) -> bool:
+    definition = feature.definition
+    if not isinstance(definition, ExtrusionFeature):
+        return False
+    if _enum_text(definition.end_condition) not in _NATIVE_EXTRUSION_END_CONDITIONS:
+        return False
+    if (
+        definition.second_end_condition is not None
+        and _enum_text(definition.second_end_condition)
+        not in _NATIVE_EXTRUSION_END_CONDITIONS
+    ):
+        return False
+    if any(
+        value is not None
+        for value in (
+            definition.offset,
+            definition.second_offset,
+            definition.draft_angle,
+            definition.second_draft_angle,
+        )
+    ):
+        return False
+    if definition.up_to_reference or definition.second_up_to_reference:
+        return False
+    return _enum_text(feature.operation) in {
+        "",
+        "create",
+        "join",
+        "cut",
+        "intersect",
+    }
+
+
+def _feature_parts(
+    document: CadDocument, sketch_native: Mapping[str, bool]
+) -> tuple[int, int]:
+    features = tuple(
+        feature
+        for feature in document.feature_timeline
+        if _enum_text(feature.kind) != FeatureKind.IMPORTED.value
+    )
+    if _has_native_freecad_graph(document) and document.assembly is None:
+        return len(features), 0
+    native = 0
+    carrier = 0
+    for feature in features:
+        kind = _enum_text(feature.kind)
+        writable = not feature.suppressed and kind in _FEATURE_WRITE_VALUES
+        if kind == FeatureKind.EXTRUSION.value:
+            writable = (
+                writable
+                and bool(feature.sketch_id)
+                and sketch_native.get(feature.sketch_id or "", False)
+                and _extrusion_is_native(feature)
+            )
+        elif kind == FeatureKind.FILLET.value:
+            writable = (
+                writable
+                and isinstance(feature.definition, FilletFeature)
+                and not feature.definition.variable_radius_parameter_ids
+                and bool(feature.input_feature_ids)
+                and _feature_has_native_edges(document, feature)
+            )
+        else:
+            writable = False
+        if writable:
+            native += 1
+        else:
+            carrier += 1
+    return native, carrier
+
+
+def _mate_parts(document: CadDocument) -> tuple[int, int]:
+    assembly = document.assembly
+    if assembly is None:
+        return 0, 0
+    entities = {entity.id: entity for entity in assembly.mate_entities}
+    instance_ids = {instance.id for instance in assembly.instances}
+    native = 0
+    carrier = 0
+    for mate in assembly.mates:
+        attributes = mate.attributes
+        references = attributes.get("references", ())
+        has_native_references = (
+            isinstance(references, Sequence)
+            and not isinstance(references, (str, bytes, bytearray))
+            and len(references) >= 2
+        )
+        linked = [entities.get(entity_id) for entity_id in mate.entity_ids[:2]]
+        has_occurrence_references = len(linked) == 2 and all(
+            entity is not None
+            and bool(entity.instance_path)
+            and all(instance_id in instance_ids for instance_id in entity.instance_path)
+            for entity in linked
+        )
+        if _enum_text(mate.kind) in _MATE_WRITE_VALUES and (
+            has_native_references or has_occurrence_references
+        ):
+            native += 1
+        else:
+            carrier += 1
+    return native, carrier
+
+
+def _payload_is_reattachable_brep(payload: BrepPayload) -> bool:
+    return (
+        payload.role == PayloadRole.BREP
+        and payload.data is not None
+        and payload.format_id.casefold() in FREECAD_BREP_FORMAT_IDS
+        and is_structurally_valid_ascii_brep(payload.data)
+    )
+
+
+def _neutral_brep_is_native(document: CadDocument) -> bool:
+    if document.brep is None:
+        return False
+    try:
+        brep_model_brep(document.brep)
+    except FreeCADBrepWriteError:
+        return False
+    return True
+
+
+def _transfer_mode(parts: Sequence[bool]) -> TransferMode:
+    if parts and all(parts):
+        return TransferMode.NATIVE
+    if any(parts):
+        return TransferMode.MIXED
+    return TransferMode.CARRIER
+
+
+def _capability_transfers(
+    document: CadDocument,
+    destination_path: Path | None,
+    portable: bool,
+    exact: bool,
+) -> tuple[CapabilityTransfer, ...]:
+    required = document.capabilities | infer_capabilities(
+        document,
+        roundtrip_metadata=(Capability.ROUNDTRIP_METADATA in document.capabilities),
+    )
+    if exact:
+        return tuple(
+            CapabilityTransfer(capability, TransferMode.NATIVE)
+            for capability in sorted(required, key=lambda value: value.value)
+        )
+    parts = {capability: [] for capability in Capability}
+    for item in _document_tree(document):
+        source_native = _has_native_freecad_graph(item)
+        manifest = document_to_manifest(item)
+        sketch_parts = native_sketch_parts(manifest)
+        sketch_native: dict[str, bool] = {}
+        for sketch, (native_count, carrier_count) in zip(
+            item.sketches, sketch_parts, strict=True
+        ):
+            parts[Capability.EDITABLE_SKETCHES].extend(
+                [True] * native_count + [False] * carrier_count
+            )
+            sketch_native[sketch.id] = carrier_count == 0
+        parts[Capability.PARAMETERS].extend(True for _ in item.parameters)
+        feature_native, feature_carrier = _feature_parts(item, sketch_native)
+        parts[Capability.PARAMETRIC_HISTORY].extend(
+            [True] * feature_native + [False] * feature_carrier
+        )
+        parts[Capability.SUPPORT_PLANES].extend(
+            source_native for _ in item.support_planes
+        )
+        parts[Capability.SELECTIONS].extend(source_native for _ in item.selections)
+        parts[Capability.BODY_STRUCTURE].extend(source_native for _ in item.bodies)
+        parts[Capability.CONFIGURATIONS].extend(False for _ in item.configurations)
+        parts[Capability.EXPRESSIONS].extend(
+            source_native
+            for parameter in item.parameters
+            if parameter.expression is not None
+        )
+        native_breps = [
+            _payload_is_reattachable_brep(payload)
+            for payload in item.brep_payloads
+            if payload.role == PayloadRole.BREP and payload.data is not None
+        ]
+        if item.brep is not None:
+            parts[Capability.BREP].append(_neutral_brep_is_native(item))
+        parts[Capability.BREP].extend(native_breps)
+        if (item.brep is not None or any(not value for value in native_breps)) and (
+            item.meshes
+        ):
+            parts[Capability.BREP].append(True)
+        parts[Capability.TESSELLATION].extend(True for _ in item.meshes)
+        parts[Capability.TESSELLATION].extend(
+            False
+            for payload in item.brep_payloads
+            if payload.role == PayloadRole.TESSELLATION and payload.data is not None
+        )
+        if item.assembly is not None:
+            parts[Capability.ASSEMBLIES].append(True)
+            native_mates, carrier_mates = _mate_parts(item)
+            parts[Capability.ASSEMBLY_MATES].extend(
+                [True] * native_mates + [False] * carrier_mates
+            )
+            native_documents = destination_path is not None
+            parts[Capability.COMPONENT_DOCUMENTS].extend(
+                native_documents for _ in item.assembly.documents
+            )
+            native_external = destination_path is not None and portable
+            parts[Capability.EXTERNAL_REFERENCES].extend(
+                native_external
+                for definition in item.assembly.definitions
+                if definition.source_path
+            )
+        parts[Capability.EXTERNAL_REFERENCES].extend(
+            destination_path is not None and portable
+            for _ in _native_external_documents(item)
+        )
+        parts[Capability.MATERIALS].extend(
+            False for body in item.bodies if body.material_id
+        )
+        envelope_indexes = source_payload_indexes(item)
+        parts[Capability.NATIVE_PAYLOADS].extend(
+            _payload_is_reattachable_brep(payload)
+            for index, payload in enumerate(item.brep_payloads)
+            if index not in envelope_indexes
+        )
+        provenance_values = (
+            *item.parameters,
+            *item.support_planes,
+            *item.sketches,
+            *item.selections,
+            *item.feature_timeline,
+            *item.bodies,
+            *item.meshes,
+            *item.brep_payloads,
+        )
+        parts[Capability.PROVENANCE].extend(
+            False for value in provenance_values if value.provenance is not None
+        )
+    parts[Capability.ROUNDTRIP_METADATA].append(False)
+    return tuple(
+        CapabilityTransfer(
+            capability,
+            (mode := _transfer_mode(parts[capability])),
+            (
+                None
+                if mode is TransferMode.NATIVE
+                else CAPABILITY_CARRIER_REASONS[capability]
+            ),
+        )
+        for capability in sorted(required, key=lambda value: value.value)
+    )
+
+
 def _write_bytes(destination: Destination, data: bytes, overwrite: bool) -> Path | None:
     path = _destination_path(destination)
     if path is None:
@@ -171,8 +771,8 @@ def _write_bytes(destination: Destination, data: bytes, overwrite: bool) -> Path
                 f"short FCStd write: expected {len(data)} bytes, wrote {written}"
             )
         return None
-    if path.suffix.lower() != ".fcstd":
-        raise ValueError("FreeCAD destination must end in .FCStd")
+    if path.suffix.casefold() != SUFFIX.casefold():
+        raise ValueError(f"FreeCAD destination must end in {SUFFIX}")
     if path.exists() and not overwrite:
         raise FileExistsError(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -195,8 +795,8 @@ def _write_bytes(destination: Destination, data: bytes, overwrite: bool) -> Path
 def _component_stem(value: str) -> str:
     stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", value).strip(" .")
     stem = stem or "Component"
-    if stem.upper() in _WINDOWS_RESERVED_NAMES:
-        stem += "_"
+    if is_windows_device_name(stem):
+        stem = f"_{stem}"
     return stem[:120].rstrip(" .") or "Component"
 
 
@@ -221,7 +821,7 @@ def _component_paths(document: CadDocument, destination: Path) -> dict[str, Path
             ending = f"_{suffix}"
             candidate = base[: 120 - len(ending)].rstrip(" .") + ending
         used.add(candidate.casefold())
-        result[definition.id] = directory / f"{candidate}.FCStd"
+        result[definition.id] = directory / f"{candidate}{SUFFIX}"
     return result
 
 
@@ -306,7 +906,7 @@ def _xml_bool(node: ET.Element, name: str, default: bool = False) -> bool:
     value = node.find(f"./Properties/Property[@name='{name}']/Bool")
     if value is None:
         return default
-    return value.get("value", "false").casefold() in {"1", "true"}
+    return value.get("value", "false").casefold() in XML_TRUE_VALUES
 
 
 def _xml_string_list(node: ET.Element, name: str) -> list[str]:
@@ -400,7 +1000,7 @@ def _xml_scale(node: ET.Element) -> list[float]:
 
 def _external_link_details(data: bytes) -> tuple[str, list[dict[str, Any]]]:
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        root = ET.fromstring(archive.read("Document.xml"))
+        root = ET.fromstring(archive.read(DOCUMENT_ENTRY))
     value = root.find(
         "./ObjectData/Object[@name='KitMetadata']/Properties/"
         "Property[@name='ExternalLinkTarget']/String"
@@ -422,12 +1022,19 @@ def _external_link_details(data: bytes) -> tuple[str, list[dict[str, Any]]]:
         if (
             node is None
             or name in active
-            or type_id not in {"App::Link", "Assembly::AssemblyLink"}
+            or node.find("./Properties/Property[@name='LinkedObject']/XLink") is None
         ):
             return None
         instance_id = _xml_string(node, "InstanceId")
         if not instance_id:
             return None
+        link_fields = tuple(
+            sorted(
+                property_element.get("name", "")
+                for property_element in node.findall("./Properties/Property")
+                if property_element.get("name", "")
+            )
+        )
         raw_instance_data = _xml_string(node, "InstanceDataJSON")
         instance_data: Any = {}
         if raw_instance_data:
@@ -443,6 +1050,7 @@ def _external_link_details(data: bytes) -> tuple[str, list[dict[str, Any]]]:
         return {
             "target": name,
             "type_id": type_id,
+            "link_fields": link_fields,
             "label": _xml_string(node, "Label", name),
             "instance_id": instance_id,
             "definition_id": _xml_string(node, "DefinitionId"),
@@ -523,7 +1131,7 @@ def _bundle_timestamp(destination: Path) -> tuple[str, float]:
             component_files = tuple(
                 path
                 for path in directory.iterdir()
-                if path.is_file() and path.suffix.lower() == ".fcstd"
+                if path.is_file() and path.suffix.casefold() == SUFFIX.casefold()
             )
         except OSError:
             component_files = ()
@@ -696,46 +1304,173 @@ def _write_components(
     return external_links, bytes_written
 
 
+def _native_external_documents(document: CadDocument) -> list[tuple[str, CadDocument]]:
+    metadata = document.metadata
+    freecad = metadata.get("freecad", {}) if isinstance(metadata, Mapping) else {}
+    values = (
+        freecad.get("external_documents", []) if isinstance(freecad, Mapping) else []
+    )
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes, bytearray)):
+        raise FreeCADAdapterError(
+            "native FreeCAD external document metadata is invalid"
+        )
+    result: list[tuple[str, CadDocument]] = []
+    seen: set[str] = set()
+    total = 0
+    for value in values:
+        if not isinstance(value, Mapping):
+            raise FreeCADAdapterError(
+                "native FreeCAD external document metadata is invalid"
+            )
+        source_file = str(value.get("file", ""))
+        linked = value.get("document")
+        if isinstance(linked, Mapping):
+            try:
+                linked = CadDocument.from_dict(linked)
+            except (TypeError, ValueError, RecursionError) as exc:
+                raise FreeCADAdapterError(
+                    "native FreeCAD external document metadata is invalid"
+                ) from exc
+        if not source_file or not isinstance(linked, CadDocument):
+            raise FreeCADAdapterError(
+                "native FreeCAD external document metadata is invalid"
+            )
+        if source_file in seen:
+            raise FreeCADAdapterError(
+                "native FreeCAD external document metadata contains duplicates"
+            )
+        seen.add(source_file)
+        native_payload_size = sum(
+            len(payload.data)
+            for payload in linked.brep_payloads
+            if payload.role == PayloadRole.DOCUMENT and payload.data is not None
+        )
+        total += native_payload_size
+        if len(result) >= _MAX_EXTERNAL_FILES or total > _MAX_TOTAL_SIZE:
+            raise FreeCADAdapterError(
+                "native FreeCAD external documents exceed safe limits"
+            )
+        result.append((source_file, linked))
+    return result
+
+
+def _write_native_external_documents(
+    document: CadDocument,
+    destination: Path,
+    overwrite: bool,
+    validate: bool,
+) -> tuple[dict[str, str], int]:
+    records = _native_external_documents(document)
+    directory = destination.parent / destination.stem
+    used: set[str] = set()
+    links: dict[str, str] = {}
+    bytes_written = 0
+    for source_file, linked in records:
+        source_name = Path(source_file).name
+        suffix = Path(source_name).suffix or SUFFIX
+        base = _component_stem(Path(source_name).stem)
+        candidate = base
+        index = 1
+        while (candidate + suffix).casefold() in used:
+            index += 1
+            ending = f"_{index}"
+            candidate = base[: 120 - len(ending)].rstrip(" .") + ending
+        filename = candidate + suffix
+        used.add(filename.casefold())
+        output = directory / filename
+        result = FreeCADAdapter().write(
+            linked,
+            output,
+            WriteOptions(
+                overwrite=overwrite,
+                validate=validate,
+                values={"portable": True},
+            ),
+        )
+        if result.bytes_written > _MAX_ENTRY_SIZE:
+            raise FreeCADAdapterError(
+                "native FreeCAD external document exceeds safe limits"
+            )
+        bytes_written += result.bytes_written
+        if bytes_written > _MAX_TOTAL_SIZE:
+            raise FreeCADAdapterError(
+                "native FreeCAD external documents exceed safe limits"
+            )
+        links[source_file] = output.relative_to(destination.parent).as_posix()
+    return links, bytes_written
+
+
+def _manifest_document(value: Mapping[str, Any]) -> CadDocument:
+    try:
+        return CadDocument.from_dict(value)
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise FreeCADAdapterError(
+            "embedded neutral document cannot be restored"
+        ) from exc
+
+
+def _selected_configurations(
+    configurations: tuple[Configuration, ...], selected: str | None
+) -> tuple[Configuration, ...]:
+    if selected is None:
+        return configurations
+    matches = {
+        configuration.id
+        for configuration in configurations
+        if selected in {configuration.id, configuration.name}
+    }
+    if not matches:
+        raise FreeCADAdapterError(f"configuration {selected!r} is unavailable")
+    return tuple(
+        replace(configuration, active=configuration.id in matches)
+        for configuration in configurations
+    )
+
+
 class FreeCADAdapter:
     @property
     def info(self) -> AdapterInfo:
-        return AdapterInfo(
-            format_id="freecad.fcstd",
-            name="FreeCAD FCStd",
-            version="1.0",
-            extensions=(".fcstd",),
-            capabilities=frozenset(
-                {
-                    Capability.PARAMETRIC_HISTORY,
-                    Capability.EDITABLE_SKETCHES,
-                    Capability.EXPRESSIONS,
-                    Capability.BREP,
-                    Capability.ASSEMBLIES,
-                    Capability.NATIVE_PAYLOADS,
-                    Capability.ROUNDTRIP_METADATA,
-                }
-            ),
-            media_types=("application/vnd.freecad", "application/zip"),
-        )
+        return INFO
 
     def probe(self, source: Source) -> ProbeResult:
         try:
             data = _source_bytes(source)
-            with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                names = set(archive.namelist())
-                if MANIFEST_ENTRY in names and "Document.xml" in names:
+            archive, members = _validated_archive_members(data)
+            archive.close()
+            if MANIFEST_ENTRY in members:
+                try:
+                    value = extract_manifest_from_fcstd(data)
+                    _manifest_document(value)
+                except (ValueError, FreeCADAdapterError) as exc:
+                    return ProbeResult(self.info.format_id, 0.0, str(exc))
+                return ProbeResult(self.info.format_id, 1.0, "Kit FCStd archive")
+            if "Document.xml" in members:
+                try:
+                    value = extract_manifest_from_fcstd(data)
+                except ValueError as exc:
+                    if (
+                        str(exc)
+                        != "FCStd archive has no embedded Kit interchange document"
+                    ):
+                        return ProbeResult(self.info.format_id, 0.0, str(exc))
+                else:
+                    try:
+                        _manifest_document(value)
+                    except FreeCADAdapterError as exc:
+                        return ProbeResult(self.info.format_id, 0.0, str(exc))
                     return ProbeResult(self.info.format_id, 1.0, "Kit FCStd archive")
-                if "Document.xml" in names:
-                    confidence, reason = probe_native_fcstd(data)
-                    return ProbeResult(self.info.format_id, confidence, reason)
-        except (OSError, TypeError, zipfile.BadZipFile):
-            return ProbeResult(self.info.format_id, 0.0, "not a readable FCStd archive")
+                confidence, reason = probe_native_fcstd(data)
+                return ProbeResult(self.info.format_id, confidence, reason)
+        except (OSError, TypeError, ValueError, zipfile.BadZipFile) as exc:
+            return ProbeResult(self.info.format_id, 0.0, str(exc))
         return ProbeResult(
             self.info.format_id, 0.0, "ZIP archive has no FreeCAD document"
         )
 
     def read(self, source: Source, options: ReadOptions | None = None) -> CadDocument:
+        settings = options or ReadOptions(include_tessellation=True)
         data = _source_bytes(source)
+        native = False
         try:
             value = extract_manifest_from_fcstd(data)
         except ValueError as exc:
@@ -743,23 +1478,28 @@ class FreeCADAdapter:
                 raise FreeCADAdapterError(str(exc)) from exc
             try:
                 document = read_native_fcstd(data, _source_path(source))
-            except NativeFreeCADError as native_exc:
+            except (NativeFreeCADError, TypeError, ValueError) as native_exc:
                 raise FreeCADAdapterError(str(native_exc)) from native_exc
+            native = True
         else:
-            try:
-                document = CadDocument.from_dict(value)
-            except (TypeError, ValueError) as exc:
-                raise FreeCADAdapterError(
-                    "embedded neutral document cannot be restored"
-                ) from exc
-        if options is None or options.strict:
+            document = _manifest_document(value)
+        if native:
+            document = _annotate_native_sources(document)
+        document = replace(
+            document,
+            configurations=_selected_configurations(
+                document.configurations, settings.configuration
+            ),
+        )
+        document = _filtered_document(document, settings)
+        if settings.strict:
             document.assert_valid()
         return document
 
     def supports(self, document: CadDocument, destination: Destination) -> bool:
         path = _destination_path(destination)
         if path is not None:
-            return path.suffix.lower() == ".fcstd"
+            return path.suffix.casefold() == SUFFIX.casefold()
         if not is_binary_destination(destination):
             return False
         writable = getattr(destination, "writable", None)
@@ -784,7 +1524,7 @@ class FreeCADAdapter:
             document.assert_valid()
         if not self.supports(document, destination):
             raise FreeCADAdapterError(
-                "FreeCAD destination must be a .FCStd path or writable binary stream"
+                f"FreeCAD destination must be a {SUFFIX} path or writable binary stream"
             )
         destination_path = _destination_path(destination)
         if (
@@ -793,10 +1533,60 @@ class FreeCADAdapter:
             and not should_overwrite
         ):
             raise FileExistsError(destination_path)
+        portable = selected.values.get("portable", True) is True
+        native_external_documents = _native_external_documents(document)
+        native_source = (
+            None
+            if selected.values.get("rebuild", False) is True
+            or (
+                portable
+                and (document.assembly is not None or bool(native_external_documents))
+            )
+            else _unchanged_native_source(document)
+        )
+        if native_source is not None:
+            path = _write_bytes(destination, native_source, should_overwrite)
+            external_requirements = document.assembly is not None or bool(
+                native_external_documents
+            )
+            requirements = (
+                ("referenced FreeCAD component files",) if external_requirements else ()
+            )
+            return WriteResult(
+                path=path,
+                adapter=self.info.format_id,
+                bytes_written=len(native_source),
+                diagnostics=document.diagnostics,
+                transfers=_capability_transfers(
+                    document,
+                    destination_path,
+                    portable,
+                    True,
+                ),
+                metadata={
+                    "mode": "exact_native_roundtrip",
+                    "compatibility": "native-exact",
+                    "vendor_loadable": True,
+                    "application_usable": True,
+                    "native_self_contained": not external_requirements,
+                    "referenced_files_written": 0,
+                    "runtime": "python-stdlib",
+                },
+                requirements=requirements,
+                application_usable=True,
+                vendor_loadable=True,
+            )
         external_links: dict[str, dict[str, Any]] = {}
+        native_external_links: dict[str, str] = {}
         component_bytes_written = 0
+        native_external_bytes_written = 0
         document_timestamp: str | None = None
         timestamp_epoch: float | None = None
+        carrier_only_references = (
+            destination_path is None
+            and portable
+            and (bool(native_external_documents) or document.assembly is not None)
+        )
         if destination_path is not None and document.assembly is not None:
             document_timestamp, timestamp_epoch = _bundle_timestamp(destination_path)
             external_links, component_bytes_written = _write_components(
@@ -807,10 +1597,20 @@ class FreeCADAdapter:
                 document_timestamp,
                 timestamp_epoch,
             )
+        if destination_path is not None and native_external_documents and portable:
+            native_external_links, native_external_bytes_written = (
+                _write_native_external_documents(
+                    document,
+                    destination_path,
+                    should_overwrite,
+                    selected.validate,
+                )
+            )
         manifest = document_to_manifest(document)
         data = build_fcstd_archive(
             manifest,
             external_links=external_links,
+            native_external_links=native_external_links,
             document_timestamp=document_timestamp,
         )
         path = _write_bytes(destination, data, should_overwrite)
@@ -829,15 +1629,46 @@ class FreeCADAdapter:
             ),
             "component_file_count": len(external_links),
             "component_bytes_written": component_bytes_written,
+            "external_document_file_count": len(native_external_links),
+            "external_document_bytes_written": native_external_bytes_written,
             "runtime": "python-stdlib",
             "recompute_required": True,
+            "native_referenced_files_emitted": not carrier_only_references,
+            "carrier_embedded_reference_count": (
+                len(native_external_documents)
+                + (
+                    len(document.assembly.documents)
+                    if document.assembly is not None
+                    else 0
+                )
+            ),
+            "application_usable": not carrier_only_references,
+            "vendor_loadable": True,
         }
+        diagnostics = document.diagnostics
+        if carrier_only_references:
+            diagnostics = (
+                *diagnostics,
+                Diagnostic(
+                    "freecad.references_embedded_without_files",
+                    "Referenced documents are retained in the Kit carrier but cannot be exposed as native relative files from a stream destination",
+                    Severity.WARNING,
+                ),
+            )
         return WriteResult(
             path=path,
             adapter=self.info.format_id,
             bytes_written=len(data),
-            diagnostics=document.diagnostics,
+            diagnostics=diagnostics,
             metadata=metadata,
+            transfers=_capability_transfers(
+                document,
+                destination_path,
+                portable,
+                False,
+            ),
+            application_usable=not carrier_only_references,
+            vendor_loadable=True,
         )
 
 

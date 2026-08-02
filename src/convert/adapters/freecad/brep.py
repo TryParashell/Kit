@@ -2,8 +2,45 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Sequence
+from dataclasses import dataclass
 import math
-from typing import Any
+from typing import Any, Mapping
+
+from interchange import (
+    BrepBody,
+    BrepCoedge,
+    BrepEdge,
+    BrepFace,
+    BrepFaceUse,
+    BrepLoop,
+    BrepModel,
+    BrepRegion,
+    BrepShell,
+    BrepShellUse,
+    BrepVertex,
+    BrepWire,
+    CircleCurve,
+    CirclePcurve,
+    ConeSurface,
+    CylinderSurface,
+    EllipseCurve,
+    IntersectionCurve,
+    LineCurve,
+    LinePcurve,
+    NativeCurve,
+    NativePcurve,
+    NativeSurface,
+    NurbsCurve,
+    NurbsPcurve,
+    NurbsSurface,
+    OffsetSurface,
+    PlaneSurface,
+    SphereSurface,
+    TorusSurface,
+    Transform,
+    Vector2,
+    Vector3,
+)
 
 
 Point = tuple[float, float, float]
@@ -15,6 +52,185 @@ Geometry = tuple[
     Point,
     Point,
 ]
+
+
+class FreeCADBrepWriteError(ValueError):
+    __slots__ = ()
+
+    reason = "writer_unimplemented"
+
+
+@dataclass(frozen=True, slots=True)
+class _ShapeRecord:
+    key: str
+    kind: str
+    geometry: tuple[str, ...]
+    flags: str
+    children: tuple[tuple[str, bool], ...]
+
+
+class _ModelGraph:
+    __slots__ = (
+        "bodies",
+        "coedge_owner",
+        "coedges",
+        "edge_uses",
+        "edges",
+        "face_uses",
+        "faces",
+        "loop_face",
+        "loops",
+        "pcurves",
+        "region_body",
+        "regions",
+        "shell_owners",
+        "shell_uses",
+        "shells",
+        "surfaces",
+        "vertices",
+        "wire_body",
+        "wires",
+    )
+
+    def __init__(self, model: BrepModel) -> None:
+        self.vertices = {value.id: value for value in model.vertices}
+        self.edges = {value.id: value for value in model.edges}
+        self.coedges = {value.id: value for value in model.coedges}
+        self.loops = {value.id: value for value in model.loops}
+        self.wires = {value.id: value for value in model.wires}
+        self.faces = {value.id: value for value in model.faces}
+        self.face_uses = {value.id: value for value in model.face_uses}
+        self.shells = {value.id: value for value in model.shells}
+        self.shell_uses = {value.id: value for value in model.shell_uses}
+        self.regions = {value.id: value for value in model.regions}
+        self.bodies = {value.id: value for value in model.bodies}
+        self.pcurves = {value.id: value for value in model.pcurves}
+        self.surfaces = {value.id: value for value in model.surfaces}
+        self.coedge_owner: dict[str, tuple[str, str]] = {}
+        self.loop_face: dict[str, str] = {}
+        self.shell_owners: dict[str, list[tuple[str, str]]] = {
+            value.id: [] for value in model.shells
+        }
+        self.region_body: dict[str, str] = {}
+        self.wire_body: dict[str, str] = {}
+        self.edge_uses: dict[str, list[str]] = {value.id: [] for value in model.edges}
+        for loop in model.loops:
+            for coedge_id in loop.coedge_ids:
+                self._bind_coedge(coedge_id, "loop", loop.id)
+        for wire in model.wires:
+            for coedge_id in wire.coedge_ids:
+                self._bind_coedge(coedge_id, "wire", wire.id)
+        for face in model.faces:
+            for loop_id in face.loop_ids:
+                _bind_once(self.loop_face, loop_id, face.id, "loop", "face")
+        face_use_owner: dict[str, str] = {}
+        for shell in model.shells:
+            for face_use_id in shell.face_use_ids:
+                _bind_once(
+                    face_use_owner,
+                    face_use_id,
+                    shell.id,
+                    "face use",
+                    "shell",
+                )
+                face_use = self.face_uses[face_use_id]
+                self.shell_owners.setdefault(shell.id, []).append(
+                    (face_use.id, face_use.face_id)
+                )
+        shell_use_owner: dict[str, str] = {}
+        for region in model.regions:
+            for shell_use_id in region.shell_use_ids:
+                _bind_once(
+                    shell_use_owner,
+                    shell_use_id,
+                    region.id,
+                    "shell use",
+                    "region",
+                )
+        for body in model.bodies:
+            for region_id in body.region_ids:
+                _bind_once(
+                    self.region_body,
+                    region_id,
+                    body.id,
+                    "region",
+                    "body",
+                )
+            for wire_id in body.wire_ids:
+                _bind_once(
+                    self.wire_body,
+                    wire_id,
+                    body.id,
+                    "wire",
+                    "body",
+                )
+        _require_owned(self.coedge_owner, self.coedges, "coedge", "loop or wire")
+        _require_owned(self.loop_face, self.loops, "loop", "face")
+        _require_owned(face_use_owner, self.face_uses, "face use", "shell")
+        _require_owned(shell_use_owner, self.shell_uses, "shell use", "region")
+        _require_owned(self.region_body, self.regions, "region", "body")
+        _require_owned(self.wire_body, self.wires, "wire", "body")
+        used_faces = {face_use.face_id for face_use in model.face_uses}
+        unused_face = next(
+            (face_id for face_id in self.faces if face_id not in used_faces), None
+        )
+        if unused_face is not None:
+            _unsupported(f"B-rep face {unused_face} has no face use")
+        used_shells = {shell_use.shell_id for shell_use in model.shell_uses}
+        unused_shell = next(
+            (shell_id for shell_id in self.shells if shell_id not in used_shells), None
+        )
+        if unused_shell is not None:
+            _unsupported(f"B-rep shell {unused_shell} has no shell use")
+        for coedge in model.coedges:
+            self.edge_uses[coedge.edge_id].append(coedge.id)
+        for edge_id, uses in self.edge_uses.items():
+            if not uses:
+                _unsupported(f"B-rep edge {edge_id} has no coedge use")
+            if len(uses) > 2:
+                _unsupported(f"B-rep edge {edge_id} is non-manifold")
+
+    def _bind_coedge(self, coedge_id: str, kind: str, owner_id: str) -> None:
+        if coedge_id in self.coedge_owner:
+            _unsupported(
+                f"B-rep coedge {coedge_id} belongs to multiple loop or wire values"
+            )
+        self.coedge_owner[coedge_id] = (kind, owner_id)
+
+    def face_for_coedge(self, coedge_id: str) -> BrepFace | None:
+        kind, owner_id = self.coedge_owner[coedge_id]
+        if kind == "wire":
+            return None
+        return self.faces[self.loop_face[owner_id]]
+
+
+def _unsupported(message: str) -> None:
+    raise FreeCADBrepWriteError(f"writer_unimplemented: {message}")
+
+
+def _bind_once(
+    owners: dict[str, str],
+    value_id: str,
+    owner_id: str,
+    value_name: str,
+    owner_name: str,
+) -> None:
+    if value_id in owners:
+        _unsupported(
+            f"B-rep {value_name} {value_id} belongs to multiple {owner_name} values"
+        )
+    owners[value_id] = owner_id
+
+
+def _require_owned(
+    owners: Mapping[str, object],
+    values: Mapping[str, object],
+    value_name: str,
+    owner_name: str,
+) -> None:
+    missing = next((value_id for value_id in values if value_id not in owners), None)
+    if missing is not None:
+        _unsupported(f"B-rep {value_name} {missing} has no {owner_name}")
 
 
 def _number(value: float) -> str:
@@ -438,6 +654,657 @@ def _independent_brep(
             "+1 0 ",
         ]
     )
+    return ("\n".join(lines) + "\n").encode("ascii")
+
+
+def _vector2(value: Vector2) -> tuple[float, float]:
+    return value.x, value.y
+
+
+def _vector3(value: Vector3) -> Point:
+    return value.x, value.y, value.z
+
+
+def _unit2(value: Vector2, label: str) -> tuple[tuple[float, float], float]:
+    length = math.hypot(value.x, value.y)
+    if not math.isfinite(length) or length <= 0.0:
+        _unsupported(f"{label} has an invalid direction")
+    return (value.x / length, value.y / length), length
+
+
+def _unit3(value: Vector3, label: str) -> tuple[Point, float]:
+    raw = _vector3(value)
+    length = _length(raw)
+    if not math.isfinite(length) or length <= 0.0:
+        _unsupported(f"{label} has an invalid direction")
+    return _scale(raw, 1.0 / length), length
+
+
+def _frame(axis: Vector3, reference: Vector3, label: str) -> tuple[Point, Point, Point]:
+    normalized_axis, _ = _unit3(axis, label)
+    normalized_reference, _ = _unit3(reference, label)
+    if abs(_dot(normalized_axis, normalized_reference)) > 1e-9:
+        _unsupported(f"{label} axis and reference direction are not orthogonal")
+    y_direction = _cross(normalized_axis, normalized_reference)
+    if abs(_length(y_direction) - 1.0) > 1e-9:
+        _unsupported(f"{label} has an invalid coordinate frame")
+    return normalized_axis, normalized_reference, y_direction
+
+
+def _bspline_layout(
+    degree: int,
+    pole_count: int,
+    knots: Sequence[float],
+    multiplicities: Sequence[int],
+    periodic: bool,
+    label: str,
+) -> None:
+    if (
+        type(degree) is not int
+        or not 0 < degree <= 25
+        or pole_count < 2
+        or len(knots) != len(multiplicities)
+        or len(knots) < 2
+        or any(not math.isfinite(value) for value in knots)
+        or any(left >= right for left, right in zip(knots, knots[1:]))
+    ):
+        _unsupported(f"{label} has an invalid B-spline layout")
+    for index, value in enumerate(multiplicities):
+        maximum = degree
+        if not periodic and index in {0, len(multiplicities) - 1}:
+            maximum = degree + 1
+        if type(value) is not int or not 1 <= value <= maximum:
+            _unsupported(f"{label} has an invalid knot multiplicity")
+    if periodic:
+        if multiplicities[0] != multiplicities[-1]:
+            _unsupported(f"{label} has inconsistent periodic multiplicities")
+        expected = sum(multiplicities[:-1])
+    else:
+        expected = sum(multiplicities) - degree - 1
+    if expected != pole_count:
+        _unsupported(f"{label} pole and knot counts are inconsistent")
+
+
+def _curve_record(value: object) -> tuple[str, float]:
+    if isinstance(value, LineCurve):
+        direction, scale = _unit3(value.direction, f"line curve {value.id}")
+        return f"1 {_values(_vector3(value.origin) + direction)} ", scale
+    if isinstance(value, CircleCurve):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"circle curve {value.id}",
+        )
+        return (
+            f"2 {_values(_vector3(value.center) + axis + reference + y_direction + (value.radius,))} ",
+            1.0,
+        )
+    if isinstance(value, EllipseCurve):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"ellipse curve {value.id}",
+        )
+        return (
+            f"3 {_values(_vector3(value.center) + axis + reference + y_direction + (value.major_radius, value.minor_radius))} ",
+            1.0,
+        )
+    if isinstance(value, NurbsCurve):
+        _bspline_layout(
+            value.degree,
+            len(value.control_points),
+            value.knots,
+            value.multiplicities,
+            value.periodic,
+            f"NURBS curve {value.id}",
+        )
+        rational = bool(value.weights)
+        if rational and (
+            len(value.weights) != len(value.control_points)
+            or any(
+                not math.isfinite(weight) or weight <= 0.0 for weight in value.weights
+            )
+        ):
+            _unsupported(f"NURBS curve {value.id} has invalid weights")
+        fields = [
+            "7",
+            "1" if rational else "0",
+            "1" if value.periodic else "0",
+            str(value.degree),
+            str(len(value.control_points)),
+            str(len(value.knots)),
+        ]
+        for index, point in enumerate(value.control_points):
+            fields.extend(_number(component) for component in _vector3(point))
+            if rational:
+                fields.append(_number(value.weights[index]))
+        for knot, multiplicity in zip(value.knots, value.multiplicities):
+            fields.extend((_number(knot), str(multiplicity)))
+        return " ".join(fields) + " ", 1.0
+    if isinstance(value, (IntersectionCurve, NativeCurve)):
+        _unsupported(f"curve {value.id} of type {type(value).__name__} is unsupported")
+    _unsupported(f"curve type {type(value).__name__} is unsupported")
+
+
+def _pcurve_record(value: object) -> tuple[str, float]:
+    if isinstance(value, LinePcurve):
+        direction, scale = _unit2(value.direction, f"line pcurve {value.id}")
+        return f"1 {_values(_vector2(value.origin) + direction)} ", scale
+    if isinstance(value, CirclePcurve):
+        return (
+            f"2 {_values(_vector2(value.center) + (1.0, 0.0, 0.0, 1.0, value.radius))} ",
+            1.0,
+        )
+    if isinstance(value, NurbsPcurve):
+        _bspline_layout(
+            value.degree,
+            len(value.control_points),
+            value.knots,
+            value.multiplicities,
+            value.periodic,
+            f"NURBS pcurve {value.id}",
+        )
+        rational = bool(value.weights)
+        if rational and (
+            len(value.weights) != len(value.control_points)
+            or any(
+                not math.isfinite(weight) or weight <= 0.0 for weight in value.weights
+            )
+        ):
+            _unsupported(f"NURBS pcurve {value.id} has invalid weights")
+        fields = [
+            "7",
+            "1" if rational else "0",
+            "1" if value.periodic else "0",
+            str(value.degree),
+            str(len(value.control_points)),
+            str(len(value.knots)),
+        ]
+        for index, point in enumerate(value.control_points):
+            fields.extend(_number(component) for component in _vector2(point))
+            if rational:
+                fields.append(_number(value.weights[index]))
+        for knot, multiplicity in zip(value.knots, value.multiplicities):
+            fields.extend((_number(knot), str(multiplicity)))
+        return " ".join(fields) + " ", 1.0
+    if isinstance(value, NativePcurve):
+        _unsupported(f"pcurve {value.id} of type NativePcurve is unsupported")
+    _unsupported(f"pcurve type {type(value).__name__} is unsupported")
+
+
+def _surface_record(
+    value: object,
+    surfaces: Mapping[str, object],
+    active: frozenset[str] = frozenset(),
+) -> str:
+    if isinstance(value, PlaneSurface):
+        axis, reference, y_direction = _frame(
+            value.normal,
+            value.reference_direction,
+            f"plane surface {value.id}",
+        )
+        return f"1 {_values(_vector3(value.origin) + axis + reference + y_direction)} "
+    if isinstance(value, CylinderSurface):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"cylinder surface {value.id}",
+        )
+        return f"2 {_values(_vector3(value.origin) + axis + reference + y_direction + (value.radius,))} "
+    if isinstance(value, ConeSurface):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"cone surface {value.id}",
+        )
+        if not 0.0 < abs(value.half_angle) < math.pi / 2.0:
+            _unsupported(f"cone surface {value.id} has an invalid half angle")
+        return f"3 {_values(_vector3(value.origin) + axis + reference + y_direction + (value.radius, value.half_angle))} "
+    if isinstance(value, SphereSurface):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"sphere surface {value.id}",
+        )
+        return f"4 {_values(_vector3(value.center) + axis + reference + y_direction + (value.radius,))} "
+    if isinstance(value, TorusSurface):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"torus surface {value.id}",
+        )
+        if value.major_radius < 0.0:
+            _unsupported(f"torus surface {value.id} has a negative major radius")
+        return f"5 {_values(_vector3(value.center) + axis + reference + y_direction + (value.major_radius, value.minor_radius))} "
+    if isinstance(value, NurbsSurface):
+        u_count = len(value.control_points)
+        v_count = len(value.control_points[0]) if value.control_points else 0
+        if (
+            not u_count
+            or not v_count
+            or any(len(row) != v_count for row in value.control_points)
+        ):
+            _unsupported(f"NURBS surface {value.id} has an invalid pole grid")
+        _bspline_layout(
+            value.degree_u,
+            u_count,
+            value.knots_u,
+            value.multiplicities_u,
+            value.periodic_u,
+            f"NURBS surface {value.id} U direction",
+        )
+        _bspline_layout(
+            value.degree_v,
+            v_count,
+            value.knots_v,
+            value.multiplicities_v,
+            value.periodic_v,
+            f"NURBS surface {value.id} V direction",
+        )
+        rational = bool(value.weights)
+        if rational and (
+            len(value.weights) != u_count
+            or any(len(row) != v_count for row in value.weights)
+            or any(
+                not math.isfinite(weight) or weight <= 0.0
+                for row in value.weights
+                for weight in row
+            )
+        ):
+            _unsupported(f"NURBS surface {value.id} has invalid weights")
+        fields = [
+            "9",
+            "1" if rational else "0",
+            "1" if rational else "0",
+            "1" if value.periodic_u else "0",
+            "1" if value.periodic_v else "0",
+            str(value.degree_u),
+            str(value.degree_v),
+            str(u_count),
+            str(v_count),
+            str(len(value.knots_u)),
+            str(len(value.knots_v)),
+        ]
+        for u_index, row in enumerate(value.control_points):
+            for v_index, point in enumerate(row):
+                fields.extend(_number(component) for component in _vector3(point))
+                if rational:
+                    fields.append(_number(value.weights[u_index][v_index]))
+        for knot, multiplicity in zip(value.knots_u, value.multiplicities_u):
+            fields.extend((_number(knot), str(multiplicity)))
+        for knot, multiplicity in zip(value.knots_v, value.multiplicities_v):
+            fields.extend((_number(knot), str(multiplicity)))
+        return " ".join(fields) + " "
+    if isinstance(value, OffsetSurface):
+        if value.id in active:
+            _unsupported(f"offset surface {value.id} has a cyclic basis")
+        base = surfaces.get(value.base_surface_id)
+        if base is None:
+            _unsupported(f"offset surface {value.id} has no basis surface")
+        nested = _surface_record(base, surfaces, active | {value.id})
+        return f"11 {_number(value.distance)} {nested}"
+    if isinstance(value, NativeSurface):
+        _unsupported(f"surface {value.id} of type NativeSurface is unsupported")
+    _unsupported(f"surface type {type(value).__name__} is unsupported")
+
+
+def _curve_point(value: object, parameter: float) -> Point | None:
+    if isinstance(value, LineCurve):
+        return tuple(
+            origin + parameter * direction
+            for origin, direction in zip(
+                _vector3(value.origin), _vector3(value.direction)
+            )
+        )
+    if isinstance(value, (CircleCurve, EllipseCurve)):
+        axis, reference, y_direction = _frame(
+            value.axis,
+            value.reference_direction,
+            f"curve {value.id}",
+        )
+        major = value.radius if isinstance(value, CircleCurve) else value.major_radius
+        minor = value.radius if isinstance(value, CircleCurve) else value.minor_radius
+        center = _vector3(value.center)
+        return tuple(
+            center[index]
+            + major * math.cos(parameter) * reference[index]
+            + minor * math.sin(parameter) * y_direction[index]
+            for index in range(3)
+        )
+    return None
+
+
+def _check_edge_geometry(
+    edge: BrepEdge,
+    curve: object,
+    vertices: Mapping[str, BrepVertex],
+    tolerance: float,
+) -> None:
+    start = _curve_point(curve, edge.start_parameter)
+    end = _curve_point(curve, edge.end_parameter)
+    if start is None or end is None:
+        return
+    for actual, vertex_id in (
+        (start, edge.start_vertex_id),
+        (end, edge.end_vertex_id),
+    ):
+        vertex = vertices[vertex_id]
+        allowed = max(tolerance, edge.tolerance, vertex.tolerance)
+        if _length(_subtract(actual, _vector3(vertex.point))) > allowed:
+            _unsupported(
+                f"edge {edge.id} curve endpoint does not match vertex {vertex_id}"
+            )
+
+
+def _edge_geometry(
+    edge: BrepEdge,
+    graph: _ModelGraph,
+    curve_indexes: Mapping[str, int],
+    curve_scales: Mapping[str, float],
+    pcurve_indexes: Mapping[str, int],
+    pcurve_scales: Mapping[str, float],
+    surface_indexes: Mapping[str, int],
+    tolerance: float,
+) -> tuple[str, ...]:
+    if edge.degenerate:
+        _unsupported(f"degenerate edge {edge.id} is unsupported")
+    if edge.end_parameter <= edge.start_parameter:
+        _unsupported(f"edge {edge.id} requires an increasing parameter range")
+    curve_scale = curve_scales[edge.curve_id]
+    first = edge.start_parameter * curve_scale
+    last = edge.end_parameter * curve_scale
+    lines = [
+        f" {_number(max(tolerance, edge.tolerance))} 1 1 0",
+        f"1  {curve_indexes[edge.curve_id]} 0 {_number(first)} {_number(last)}",
+    ]
+    grouped: dict[str, list[BrepCoedge]] = {}
+    for coedge_id in graph.edge_uses[edge.id]:
+        coedge = graph.coedges[coedge_id]
+        face = graph.face_for_coedge(coedge_id)
+        if face is None:
+            if coedge.pcurve_id:
+                _unsupported(f"wire coedge {coedge.id} cannot carry a surface pcurve")
+            continue
+        surface = graph.surfaces[face.surface_id]
+        if not coedge.pcurve_id:
+            if not isinstance(surface, PlaneSurface):
+                _unsupported(
+                    f"coedge {coedge.id} on a curved surface requires a pcurve"
+                )
+            continue
+        if abs(pcurve_scales[coedge.pcurve_id] - curve_scale) > 1e-9:
+            _unsupported(
+                f"coedge {coedge.id} pcurve parameterization does not match edge {edge.id}"
+            )
+        grouped.setdefault(face.surface_id, []).append(coedge)
+    for surface_id, uses in grouped.items():
+        surface_index = surface_indexes[surface_id]
+        if len(uses) == 1:
+            lines.append(
+                f"2  {pcurve_indexes[uses[0].pcurve_id]} {surface_index} 0 {_number(first)} {_number(last)}"
+            )
+            continue
+        if len(uses) == 2 and uses[0].pcurve_id != uses[1].pcurve_id:
+            lines.append(
+                f"3  {pcurve_indexes[uses[0].pcurve_id]} {pcurve_indexes[uses[1].pcurve_id]}C0 {surface_index} 0 {_number(first)} {_number(last)}"
+            )
+            continue
+        _unsupported(
+            f"edge {edge.id} has an unsupported closed-surface pcurve arrangement"
+        )
+    lines.append("0")
+    return tuple(lines)
+
+
+def _shape_lines(records: Sequence[_ShapeRecord], root: tuple[str, bool]) -> list[str]:
+    ordinals = {record.key: index for index, record in enumerate(records, 1)}
+    count = len(records)
+
+    def reference(key: str) -> int:
+        try:
+            return count - ordinals[key] + 1
+        except KeyError:
+            _unsupported(f"native topology references unknown shape {key}")
+
+    lines = [f"TShapes {count}"]
+    for record in records:
+        lines.append(record.kind)
+        lines.extend(record.geometry)
+        lines.append("")
+        lines.append(record.flags)
+        lines.append(
+            " ".join(
+                f"{'-' if reversed_value else '+'}{reference(key)} 0"
+                for key, reversed_value in record.children
+            )
+            + (" " if record.children else "")
+            + "*"
+        )
+    lines.extend(
+        [
+            "",
+            f"{'-' if root[1] else '+'}{reference(root[0])} 0 ",
+        ]
+    )
+    return lines
+
+
+def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
+    if not isinstance(model, BrepModel):
+        raise TypeError("model must be a BrepModel")
+    if not math.isfinite(tolerance) or tolerance <= 0.0:
+        raise ValueError("tolerance must be finite and positive")
+    unsupported_curve = next(
+        (value for value in model.curves if not isinstance(value, LineCurve)), None
+    )
+    if unsupported_curve is not None:
+        _unsupported(
+            f"curve {unsupported_curve.id} of type {type(unsupported_curve).__name__} is not proven native"
+        )
+    if model.pcurves:
+        unsupported_pcurve = model.pcurves[0]
+        _unsupported(
+            f"pcurve {unsupported_pcurve.id} of type {type(unsupported_pcurve).__name__} is not proven native"
+        )
+    unsupported_surface = next(
+        (value for value in model.surfaces if not isinstance(value, PlaneSurface)),
+        None,
+    )
+    if unsupported_surface is not None:
+        _unsupported(
+            f"surface {unsupported_surface.id} of type {type(unsupported_surface).__name__} is not proven native"
+        )
+    if model.wires:
+        _unsupported("free wire bodies are not proven native")
+    if any(body.vertex_ids for body in model.bodies):
+        _unsupported("point bodies are not proven native")
+    errors = model.validate(
+        frozenset(body.design_body_id for body in model.bodies if body.design_body_id)
+    )
+    if errors:
+        _unsupported(errors[0])
+    if any(body.transform != Transform() for body in model.bodies):
+        _unsupported("native FreeCAD B-rep writing requires identity body transforms")
+    graph = _ModelGraph(model)
+    curve_records = tuple(_curve_record(value) for value in model.curves)
+    pcurve_records = tuple(_pcurve_record(value) for value in model.pcurves)
+    surface_records = tuple(
+        _surface_record(value, graph.surfaces) for value in model.surfaces
+    )
+    curve_indexes = {value.id: index for index, value in enumerate(model.curves, 1)}
+    curve_scales = {
+        value.id: curve_records[index][1] for index, value in enumerate(model.curves)
+    }
+    pcurve_indexes = {value.id: index for index, value in enumerate(model.pcurves, 1)}
+    pcurve_scales = {
+        value.id: pcurve_records[index][1] for index, value in enumerate(model.pcurves)
+    }
+    surface_indexes = {value.id: index for index, value in enumerate(model.surfaces, 1)}
+    lines = [
+        "DBRep_DrawableShape",
+        "",
+        "CASCADE Topology V1, (c) Matra-Datavision",
+        "Locations 0",
+        f"Curve2ds {len(pcurve_records)}",
+        *(value[0] for value in pcurve_records),
+        f"Curves {len(curve_records)}",
+        *(value[0] for value in curve_records),
+        "Polygon3D 0",
+        "PolygonOnTriangulations 0",
+        f"Surfaces {len(surface_records)}",
+        *surface_records,
+        "Triangulations 0",
+        "",
+    ]
+    shapes: list[_ShapeRecord] = []
+    for vertex in model.vertices:
+        shapes.append(
+            _ShapeRecord(
+                f"vertex:{vertex.id}",
+                "Ve",
+                (
+                    _number(max(tolerance, vertex.tolerance)),
+                    _values(_vector3(vertex.point)),
+                    "0 0",
+                ),
+                "0101101",
+                (),
+            )
+        )
+    for edge in model.edges:
+        _check_edge_geometry(
+            edge,
+            next(value for value in model.curves if value.id == edge.curve_id),
+            graph.vertices,
+            tolerance,
+        )
+        shapes.append(
+            _ShapeRecord(
+                f"edge:{edge.id}",
+                "Ed",
+                _edge_geometry(
+                    edge,
+                    graph,
+                    curve_indexes,
+                    curve_scales,
+                    pcurve_indexes,
+                    pcurve_scales,
+                    surface_indexes,
+                    tolerance,
+                ),
+                "0101000",
+                (
+                    (f"vertex:{edge.start_vertex_id}", False),
+                    (f"vertex:{edge.end_vertex_id}", True),
+                ),
+            )
+        )
+    for loop in model.loops:
+        shapes.append(
+            _ShapeRecord(
+                f"loop:{loop.id}",
+                "Wi",
+                (),
+                "0101100",
+                tuple(
+                    (
+                        f"edge:{graph.coedges[coedge_id].edge_id}",
+                        graph.coedges[coedge_id].reversed,
+                    )
+                    for coedge_id in loop.coedge_ids
+                ),
+            )
+        )
+    for wire in model.wires:
+        shapes.append(
+            _ShapeRecord(
+                f"wire:{wire.id}",
+                "Wi",
+                (),
+                "0101100" if wire.closed else "0101000",
+                tuple(
+                    (
+                        f"edge:{graph.coedges[coedge_id].edge_id}",
+                        graph.coedges[coedge_id].reversed,
+                    )
+                    for coedge_id in wire.coedge_ids
+                ),
+            )
+        )
+    for face in model.faces:
+        shapes.append(
+            _ShapeRecord(
+                f"face:{face.id}",
+                "Fa",
+                (
+                    f"0  {_number(max(tolerance, face.tolerance))} {surface_indexes[face.surface_id]} 0",
+                ),
+                "0101000",
+                tuple((f"loop:{loop_id}", False) for loop_id in face.loop_ids),
+            )
+        )
+    for shell in model.shells:
+        children: list[tuple[str, bool]] = []
+        for face_use_id in shell.face_use_ids:
+            face_use = graph.face_uses[face_use_id]
+            face = graph.faces[face_use.face_id]
+            children.append(
+                (
+                    f"face:{face.id}",
+                    not (face.same_sense != face_use.reversed),
+                )
+            )
+        shapes.append(
+            _ShapeRecord(
+                f"shell:{shell.id}",
+                "Sh",
+                (),
+                "0101100" if shell.closed else "0101000",
+                tuple(children),
+            )
+        )
+    region_roots: dict[str, tuple[str, bool]] = {}
+    for region in model.regions:
+        shell_children = tuple(
+            (
+                f"shell:{graph.shell_uses[shell_use_id].shell_id}",
+                graph.shell_uses[shell_use_id].reversed,
+            )
+            for shell_use_id in region.shell_use_ids
+        )
+        if region.solid:
+            if any(
+                not graph.shells[graph.shell_uses[value].shell_id].closed
+                for value in region.shell_use_ids
+            ):
+                _unsupported(f"solid region {region.id} contains an open shell")
+            key = f"region:{region.id}"
+            shapes.append(_ShapeRecord(key, "So", (), "0100000", shell_children))
+            region_roots[region.id] = (key, False)
+        elif len(shell_children) == 1:
+            region_roots[region.id] = shell_children[0]
+        else:
+            key = f"region:{region.id}"
+            shapes.append(_ShapeRecord(key, "Co", (), "0100000", shell_children))
+            region_roots[region.id] = (key, False)
+    body_roots: list[tuple[str, bool]] = []
+    for body in model.bodies:
+        children = [region_roots[value] for value in body.region_ids]
+        children.extend((f"wire:{value}", False) for value in body.wire_ids)
+        children.extend((f"vertex:{value}", False) for value in body.vertex_ids)
+        if len(children) == 1:
+            body_roots.append(children[0])
+        else:
+            key = f"body:{body.id}"
+            shapes.append(_ShapeRecord(key, "Co", (), "0100000", tuple(children)))
+            body_roots.append((key, False))
+    if len(body_roots) == 1:
+        root = body_roots[0]
+    else:
+        root_key = "model:root"
+        shapes.append(_ShapeRecord(root_key, "Co", (), "1100000", tuple(body_roots)))
+        root = (root_key, False)
+    lines.extend(_shape_lines(shapes, root))
     return ("\n".join(lines) + "\n").encode("ascii")
 
 

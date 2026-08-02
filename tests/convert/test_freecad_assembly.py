@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 import os
 from pathlib import Path
 import struct
@@ -11,12 +12,22 @@ import zipfile
 import pytest
 
 from convert.adapters.freecad import read_freecad, write_freecad
-from interchange import CadSource, ComponentDocument, Matrix4, Mesh, Vector3
-from tests.interchange.test_assembly import assembly_document
+from interchange import CadSource, ComponentDocument, MateKind, Matrix4, Mesh, Vector3
+from tests.interchange.test_assembly import (
+    assembly_document as interchange_assembly_document,
+)
 from tests.interchange.test_document import document
 
 
 ORACLE = Path(os.environ.get("KIT_FREECAD_ORACLE", ""))
+
+
+def assembly_document():
+    source = interchange_assembly_document()
+    assembly = source.assembly
+    assert assembly is not None
+    mates = tuple(replace(mate, kind=MateKind.LOCK) for mate in assembly.mates)
+    return replace(source, assembly=replace(assembly, mates=mates))
 
 
 def _property(node: ET.Element, name: str) -> ET.Element:
@@ -122,6 +133,46 @@ def _nested_assembly_document():
                 ComponentDocument("document:subassembly", nested),
             ),
         ),
+    )
+
+
+def _geometry_free(source):
+    assembly = source.assembly
+    if assembly is not None:
+        assembly = replace(
+            assembly,
+            definitions=tuple(
+                replace(item, body_ids=()) for item in assembly.definitions
+            ),
+            documents=tuple(
+                replace(item, document=_geometry_free(item.document))
+                for item in assembly.documents
+            ),
+        )
+    return replace(
+        source,
+        parameters=(),
+        support_planes=(),
+        sketches=(),
+        selections=(),
+        feature_timeline=(),
+        bodies=(),
+        meshes=(
+            source.meshes
+            or (
+                Mesh(
+                    "mesh:geometry-free",
+                    "Geometry",
+                    (
+                        Vector3(0.0, 0.0, 0.0),
+                        Vector3(1.0, 0.0, 0.0),
+                        Vector3(0.0, 1.0, 0.0),
+                    ),
+                    ((0, 1, 2),),
+                ),
+            )
+        ),
+        assembly=assembly,
     )
 
 
@@ -267,6 +318,61 @@ def test_fcstd_mate_connectors_preserve_reference_and_detached_frame_state(
     assert len(component_links) == 1
 
 
+@pytest.mark.parametrize(
+    "kind",
+    (
+        MateKind.COINCIDENT,
+        MateKind.TANGENT,
+        MateKind.COORDINATE,
+        MateKind.UNIVERSAL_JOINT,
+        MateKind.CAM,
+        MateKind.SLOT,
+        MateKind.WIDTH,
+        MateKind.SYMMETRIC,
+        MateKind.LINEAR_COUPLER,
+        MateKind.PATH,
+        MateKind.MAGNETIC,
+        MateKind.PROFILE_CENTER,
+        MateKind.NATIVE,
+    ),
+)
+def test_fcstd_unsupported_mates_are_explicit_lossless_kit_carriers(
+    tmp_path, kind: MateKind
+) -> None:
+    source = _geometry_free(assembly_document())
+    assembly = source.assembly
+    assert assembly is not None
+    source = replace(
+        source,
+        assembly=replace(
+            assembly,
+            mates=(replace(assembly.mates[0], kind=kind),),
+        ),
+    )
+    output = tmp_path / f"{kind.value}.FCStd"
+    write_freecad(source, output)
+    with zipfile.ZipFile(output) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+    carrier = next(
+        item
+        for item in root.findall("./ObjectData/Object")
+        if item.find("./Properties/Property[@name='MateId']") is not None
+    )
+    marker = _property(carrier, "KitMateCarrier").find("Bool")
+    mate_type = _property(carrier, "MateType").find("String")
+    stored = _property(carrier, "MateDataJSON").find("String")
+    assert marker is not None and marker.get("value") == "true"
+    assert mate_type is not None and mate_type.get("value") == kind.value
+    assert stored is not None
+    assert json.loads(stored.get("value", ""))["kind"]["value"] == kind.value
+    assert carrier.find("./Properties/Property[@name='JointType']") is None
+    assert carrier.find("./Properties/Property[@name='Suppressed']") is None
+    assert carrier.find("./Properties/Property[@name='Proxy']") is None
+    assert _property(carrier, "Reference1").find("XLink") is not None
+    assert _property(carrier, "Reference2").find("XLink") is not None
+    assert read_freecad(output) == source
+
+
 def test_fcstd_assembly_emits_reusable_mesh_definition(tmp_path) -> None:
     source = _mesh_document()
     output = tmp_path / "mesh_assembly.FCStd"
@@ -370,6 +476,65 @@ def test_fcstd_keeps_nested_definition_mates_out_of_parent_assembly(tmp_path) ->
     assert restored.assembly is not None
     assert restored.assembly.mates == (mate,)
     assert restored.assembly.mate_entities == entities
+
+
+def test_fcstd_replays_nested_links_from_structural_link_fields(tmp_path) -> None:
+    source = _geometry_free(_nested_assembly_document())
+    assembly = source.assembly
+    assert assembly is not None
+    documents = list(assembly.documents)
+    nested_index = next(
+        index
+        for index, item in enumerate(documents)
+        if item.document.assembly is not None
+    )
+    nested_document = documents[nested_index].document
+    nested_assembly = nested_document.assembly
+    assert nested_assembly is not None
+    nested_instance = nested_assembly.instances[0]
+    custom_instance = replace(
+        nested_instance,
+        attributes={
+            "freecad": {
+                "name": "CustomPartLink",
+                "type_id": "Vendor::DerivedLink",
+                "properties": {
+                    "LinkedObject": {},
+                    "LinkPlacement": {},
+                    "LinkTransform": {},
+                },
+            }
+        },
+    )
+    nested_document = replace(
+        nested_document,
+        assembly=replace(nested_assembly, instances=(custom_instance,)),
+    )
+    documents[nested_index] = replace(documents[nested_index], document=nested_document)
+    source = replace(
+        source,
+        assembly=replace(assembly, documents=tuple(documents)),
+    )
+    output = tmp_path / "structural_links.FCStd"
+    write_freecad(source, output)
+    with zipfile.ZipFile(output) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+    declaration = next(
+        item
+        for item in root.findall("./Objects/Object")
+        if item.get("type") == "Vendor::DerivedLink"
+    )
+    data = root.find(f"./ObjectData/Object[@name='{declaration.get('name')}']")
+    assert data is not None
+    assert _property(data, "LinkedObject").find("XLink") is not None
+    assembly_link = next(
+        item
+        for item in root.findall("./ObjectData/Object")
+        if item.find("./Properties/Property[@name='Rigid']") is not None
+        and item.find("./Properties/Property[@name='LinkedObject']") is not None
+    )
+    group = _property(assembly_link, "Group").findall("./LinkList/Link")
+    assert declaration.get("name") in {item.get("value") for item in group}
 
 
 def test_fcstd_preserves_nested_assembly_history_in_component_file(tmp_path) -> None:

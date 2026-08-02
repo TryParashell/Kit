@@ -38,7 +38,15 @@ from .native import (
     NativeSketch,
     decode_native_model,
 )
-from .parasolid import ParasolidPayload, decode_partition_stream
+from .parasolid import (
+    ParasolidPayload,
+    ParasolidWriteError,
+    contains_parasolid_payload,
+    decode_brep_model,
+    decode_partition_stream,
+    encode_brep_model,
+    is_native_parasolid_payload,
+)
 
 
 __all__ = [name for name in globals() if not name.startswith("_")]
