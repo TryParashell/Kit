@@ -1647,6 +1647,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
     used_points: set[int] = set()
     used_curves: set[int] = set()
     used_surfaces: set[int] = set()
+    synthetic_vertices: dict[int, Vector3] = {}
     owner_faces: dict[int, int] = {}
     for bridge_attribute, bridge in sorted(tables.bridges.items()):
         if bridge.owner in owner_faces:
@@ -1679,8 +1680,26 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
             edge_attribute = coedge.references[6]
             start_vertex = coedge.references[4]
             end_vertex = next_coedge.references[4]
-            if edge_attribute <= 1 or start_vertex <= 1 or end_vertex <= 1:
+            if edge_attribute <= 1:
                 raise ValueError("incomplete coedge topology")
+            edge_use = tables.edge_uses.get(edge_attribute)
+            if edge_use is None:
+                raise ValueError("missing edge use")
+            curve_attribute = edge_use.references[3]
+            curve = tables.curves.get(curve_attribute)
+            if curve is None:
+                raise ValueError("unresolved edge curve")
+            if start_vertex <= 1 or end_vertex <= 1:
+                if not (
+                    start_vertex <= 1
+                    and end_vertex <= 1
+                    and isinstance(curve, (CircleCurve, EllipseCurve))
+                ):
+                    raise ValueError("incomplete coedge topology")
+                synthetic = 0x10000 + edge_attribute
+                synthetic_vertices[synthetic] = _conic_point(curve, 0.0)
+                start_vertex = synthetic
+                end_vertex = synthetic
             canonical = (
                 (end_vertex, start_vertex)
                 if coedge.reversed
@@ -1689,12 +1708,6 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
             previous = edge_endpoints.setdefault(edge_attribute, canonical)
             if previous != canonical:
                 raise ValueError("inconsistent edge orientation")
-            edge_use = tables.edge_uses.get(edge_attribute)
-            if edge_use is None:
-                raise ValueError("missing edge use")
-            curve_attribute = edge_use.references[3]
-            if curve_attribute not in tables.curves:
-                raise ValueError("unresolved edge curve")
             previous_curve = edge_curves.setdefault(edge_attribute, curve_attribute)
             if previous_curve != curve_attribute:
                 raise ValueError("inconsistent edge curve")
@@ -1707,6 +1720,13 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
     vertices: list[BrepVertex] = []
     points_by_vertex: dict[int, Vector3] = {}
     for vertex_attribute in sorted(used_vertices):
+        if vertex_attribute in synthetic_vertices:
+            point = synthetic_vertices[vertex_attribute]
+            points_by_vertex[vertex_attribute] = point
+            vertices.append(
+                BrepVertex(_native_id("vertex", vertex_attribute), point)
+            )
+            continue
         vertex_use = tables.vertex_uses.get(vertex_attribute)
         if vertex_use is None:
             raise ValueError("missing vertex use")
