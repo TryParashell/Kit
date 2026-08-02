@@ -775,8 +775,7 @@ class SldprtAdapter:
                     in {"exact", "generated", "preserved", "patched", "template"},
                     "native_brep": native_brep,
                     "native_history": (
-                        Capability.PARAMETRIC_HISTORY
-                        not in required
+                        Capability.PARAMETRIC_HISTORY not in required
                         or Capability.PARAMETRIC_HISTORY
                         in {
                             transfer.capability
@@ -1067,9 +1066,7 @@ def _assembly_bundle(
     assembly = document.assembly
     if assembly is None:
         return _AssemblyBundle({}, {}, False)
-    documents = {
-        component.id: component.document for component in assembly.documents
-    }
+    documents = {component.id: component.document for component in assembly.documents}
     definitions = tuple(
         definition
         for definition in assembly.definitions
@@ -1425,11 +1422,11 @@ def _patch_native_template(
     )
     original_selections = _selections(original_model)
     original_timeline = _timeline(original_model, original_selections)
-    if _parameter_values(document.parameters) == _parameter_values(
-        patched_parameters
-    ):
+    if _parameter_values(document.parameters) == _parameter_values(patched_parameters):
         native.add(Capability.PARAMETERS)
-        if not any(parameter.expression is not None for parameter in document.parameters):
+        if not any(
+            parameter.expression is not None for parameter in document.parameters
+        ):
             native.add(Capability.EXPRESSIONS)
     if _plane_values(document.support_planes) == _plane_values(patched_planes):
         native.add(Capability.SUPPORT_PLANES)
@@ -1444,9 +1441,7 @@ def _patch_native_template(
         document.feature_timeline, original_timeline
     ):
         native.add(Capability.PARAMETRIC_HISTORY)
-    if _selection_values(document.selections) == _selection_values(
-        original_selections
-    ):
+    if _selection_values(document.selections) == _selection_values(original_selections):
         native.add(Capability.SELECTIONS)
     original_configurations = _configurations(original_model, None)
     if _configuration_values(document.configurations) == _configuration_values(
@@ -1470,10 +1465,14 @@ def _patch_native_template(
         assembly_native = _patch_native_assembly(document, streams, bundle_names)
         native.update(assembly_native)
     required = _required_capabilities(document)
-    blockers = required - native - {
-        Capability.PROVENANCE,
-        Capability.ROUNDTRIP_METADATA,
-    }
+    blockers = (
+        required
+        - native
+        - {
+            Capability.PROVENANCE,
+            Capability.ROUNDTRIP_METADATA,
+        }
+    )
     usable = not blockers
     return _GeneratedStreams(
         streams,
@@ -1493,7 +1492,9 @@ def _keywords_root(data: bytes) -> tuple[bytes, ET.Element, bytes]:
         raise SldprtFormatError("keyword stream contains no XML document")
     prefix = data[:start]
     raw = data[start:]
-    trailing = b"\r\n" if raw.endswith(b"\r\n") else b"\n" if raw.endswith(b"\n") else b""
+    trailing = (
+        b"\r\n" if raw.endswith(b"\r\n") else b"\n" if raw.endswith(b"\n") else b""
+    )
     try:
         root = ET.fromstring(raw)
     except ET.ParseError as exc:
@@ -1624,8 +1625,10 @@ def _patch_parameters(
         source = original[parameter_id]
         target_mm = _parameter_millimeters(target)
         source_mm = _parameter_millimeters(source)
-        if target_mm is None or source_mm is None or math.isclose(
-            target_mm, source_mm, rel_tol=1e-12, abs_tol=1e-12
+        if (
+            target_mm is None
+            or source_mm is None
+            or math.isclose(target_mm, source_mm, rel_tol=1e-12, abs_tol=1e-12)
         ):
             continue
         if (
@@ -1643,7 +1646,11 @@ def _patch_parameters(
         element = elements.get(object_id)
         if element is None:
             continue
-        occurrence = int(parameter_id.rsplit(":", 1)[-1]) - 1 if parameter_id.rsplit(":", 1)[-1].isdigit() and parameter_id.count(":") > 3 else 0
+        occurrence = (
+            int(parameter_id.rsplit(":", 1)[-1]) - 1
+            if parameter_id.rsplit(":", 1)[-1].isdigit() and parameter_id.count(":") > 3
+            else 0
+        )
         matches = tuple(
             child
             for child in element
@@ -1711,7 +1718,9 @@ def _patch_support_planes(
         length = source.attributes.get("native_frame_length")
         if not isinstance(offset, int) or length not in {81, 121}:
             continue
-        origin = tuple(value / 1000.0 for value in _vector_values(target.transform.origin))
+        origin = tuple(
+            value / 1000.0 for value in _vector_values(target.transform.origin)
+        )
         x_axis = _vector_values(target.transform.x_axis)
         y_axis = _vector_values(target.transform.y_axis)
         z_axis = _vector_values(target.transform.z_axis)
@@ -1762,9 +1771,7 @@ def _patch_sketch_geometry(
     document: CadDocument, model: NativeModel, resolved: bytearray
 ) -> None:
     parameters = _parameters(model)
-    original_sketches = _sketches(
-        model, {parameter.id for parameter in parameters}
-    )
+    original_sketches = _sketches(model, {parameter.id for parameter in parameters})
     original = {sketch.id: sketch for sketch in original_sketches}
     native = {_sketch_id(sketch.object_id): sketch for sketch in model.sketches}
     desired = {sketch.id: sketch for sketch in document.sketches}
@@ -1863,12 +1870,19 @@ def _patch_rectangle_profile(
 ) -> None:
     lines: list[LineGeometry] = []
     for edge_index in range(4):
-        entity = entities.get(_profile_edge_id(sketch.object_id, profile_index, edge_index))
+        entity = entities.get(
+            _profile_edge_id(sketch.object_id, profile_index, edge_index)
+        )
         if entity is None or not isinstance(entity.geometry, LineGeometry):
             return
         lines.append(entity.geometry)
     points = tuple(
-        (_point_values(lines[0].start), _point_values(lines[0].end), _point_values(lines[1].end), _point_values(lines[2].end))
+        (
+            _point_values(lines[0].start),
+            _point_values(lines[0].end),
+            _point_values(lines[1].end),
+            _point_values(lines[2].end),
+        )
     )[0]
     if (
         _point_values(lines[1].start) != points[1]
@@ -1945,7 +1959,9 @@ def _plane_values(planes: Sequence[SupportPlane]) -> tuple[Any, ...]:
 
 def _geometry_values(geometry: Any) -> Any:
     if isinstance(geometry, PointGeometry):
-        return "point", tuple(_round_number(value) for value in _point_values(geometry.point))
+        return "point", tuple(
+            _round_number(value) for value in _point_values(geometry.point)
+        )
     if isinstance(geometry, LineGeometry):
         return (
             "line",
@@ -2046,7 +2062,10 @@ def _native_feature_definitions_unchanged(
         source = originals.get(feature.id)
         if source is None:
             return False
-        if isinstance(source.definition, NativeFeatureDefinition) and feature.definition != source.definition:
+        if (
+            isinstance(source.definition, NativeFeatureDefinition)
+            and feature.definition != source.definition
+        ):
             return False
     return True
 
@@ -2094,7 +2113,9 @@ def _native_body_values(
         name=body_feature.name if body_feature is not None else "Body 1",
         final_feature_id=_final_body_feature_id(
             timeline,
-            frozenset(_feature_id(operation.object_id) for operation in model.operations),
+            frozenset(
+                _feature_id(operation.object_id) for operation in model.operations
+            ),
         ),
         topology=TopologySummary(
             solid_count=1 if model.operations else 0,
@@ -2208,9 +2229,7 @@ def _patch_native_assembly(
     definitions = {
         definition.id: definition for definition in document.assembly.definitions
     }
-    document_ids = {
-        component.id for component in document.assembly.documents
-    }
+    document_ids = {component.id for component in document.assembly.documents}
     preserved_documents = all(
         isinstance(component.document, CadDocument)
         and _preserved_source(component.document, None) is not None
@@ -2298,7 +2317,8 @@ def _patch_assembly_instances(
             "swConfigurationName": target.configuration_name,
             "swConfigurationId": target.configuration_id,
             "swTransform": " ".join(
-                format(value, ".17g") for value in _native_assembly_matrix(target.transform)
+                format(value, ".17g")
+                for value in _native_assembly_matrix(target.transform)
             ),
             "swSuppressed": _yes_text(target.suppressed),
             "swHidden": _yes_text(target.hidden),
@@ -2372,7 +2392,15 @@ def _patch_assembly_mates(
     }
     _, _, original_mates, _ = _assembly_mates(
         native,
-        ((native, SldprtArchive.from_bytes(build_sldprt(streams)), definition_map, occurrence_map, source_path),),
+        (
+            (
+                native,
+                SldprtArchive.from_bytes(build_sldprt(streams)),
+                definition_map,
+                occurrence_map,
+                source_path,
+            ),
+        ),
     )
     original = {mate.id: mate for mate in original_mates}
     desired = {mate.id: mate for mate in assembly.mates}
@@ -2467,7 +2495,11 @@ def _native_mate_values(
             value.unit.casefold()
         )
         return (number * factor,) if factor is not None else None
-    if semantic == "ratio" and value.kind is ValueKind.NUMBER and len(mate.dimensions) >= 2:
+    if (
+        semantic == "ratio"
+        and value.kind is ValueKind.NUMBER
+        and len(mate.dimensions) >= 2
+    ):
         denominator = mate.dimensions[1].value
         return number * denominator, denominator
     return None
@@ -2490,7 +2522,12 @@ def _assembly_structure_values(assembly: AssemblyData) -> tuple[Any, ...]:
     return (
         assembly.root_definition_id,
         tuple(
-            (definition.id, definition.name, definition.kind, definition.configuration_name)
+            (
+                definition.id,
+                definition.name,
+                definition.kind,
+                definition.configuration_name,
+            )
             for definition in assembly.definitions
         ),
         tuple(
@@ -2575,8 +2612,10 @@ def _mate_values(
 
 
 def _mate_parameter_value(value: ParameterValue | None) -> Any:
-    if value is None or isinstance(value.value, bool) or not isinstance(
-        value.value, (int, float)
+    if (
+        value is None
+        or isinstance(value.value, bool)
+        or not isinstance(value.value, (int, float))
     ):
         return value
     number = float(value.value)
