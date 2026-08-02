@@ -2208,11 +2208,16 @@ def _patch_native_assembly(
     definitions = {
         definition.id: definition for definition in document.assembly.definitions
     }
-    if all(
+    document_ids = {
+        component.id for component in document.assembly.documents
+    }
+    preserved_documents = all(
         isinstance(component.document, CadDocument)
         and _preserved_source(component.document, None) is not None
         for component in document.assembly.documents
-    ):
+    )
+    bundled_documents = bool(document_ids) and document_ids <= set(bundle_names)
+    if preserved_documents or bundled_documents:
         result.add(Capability.COMPONENT_DOCUMENTS)
         if all(
             not component.document.bodies
