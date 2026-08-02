@@ -34,6 +34,7 @@ from convert.adapters.catia import (
     read_catia,
     write_catia,
 )
+from convert.adapters.catia.adapter import _semantic_digest
 from convert.adapters.catia.format import (
     DOCUMENT_TYPE_BY_SUFFIX,
     INFO,
@@ -1548,6 +1549,32 @@ def test_changed_cgm_bytes_disable_exact_native_replay(tmp_path: Path) -> None:
     assert result.metadata["mode"] == "native_base_with_neutral_edits"
     assert result.metadata["native_base_preserved"] is True
     assert result.metadata["native_geometry"] is False
+
+
+def test_recomputed_roundtrip_digest_cannot_forge_native_catpart_semantics() -> None:
+    document = open_document(CATPARTS / "Banjo.CATPart")
+    feature = document.feature_timeline[0]
+    changed = replace(
+        document,
+        feature_timeline=(replace(feature, name="Forged CATIA feature"),),
+    )
+    changed = replace(
+        changed,
+        metadata=frozen_mapping(
+            {
+                **changed.metadata,
+                "catia.roundtrip_sha256": _semantic_digest(changed),
+            }
+        ),
+    )
+    output = BytesIO()
+    result = write_catia(changed, output, allow_non_native=True)
+    assert result.metadata["mode"] == "native_base_with_neutral_edits"
+    assert result.application_usable is False
+    assert result.vendor_loadable is False
+    assert read_catia(output.getvalue()).feature_timeline[0].name == (
+        "Forged CATIA feature"
+    )
 
 
 def test_swapped_native_document_cannot_exact_replay() -> None:
