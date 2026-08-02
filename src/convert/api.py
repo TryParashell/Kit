@@ -73,6 +73,7 @@ def write_document(
     if values is not None:
         selected_values.update(values)
     selected_values["allow_carrier"] = allow_carrier
+    selected_values["require_self_contained"] = True
     return _engine.write(
         document,
         destination,
@@ -104,6 +105,7 @@ def convert(
     if write_values is not None:
         values.update(write_values)
     values["allow_carrier"] = allow_carrier
+    values["require_self_contained"] = True
     return _engine.convert(
         source,
         destination,
