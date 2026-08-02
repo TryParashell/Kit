@@ -164,8 +164,7 @@ def test_structural_validator_requires_exact_physical_version_line() -> None:
     )
     unsupported_first = data.replace(
         version,
-        b"CASCADE Topology V2, (c) Matra-Datavision\n"
-        + version,
+        b"CASCADE Topology V2, (c) Matra-Datavision\n" + version,
         1,
     )
     payload = data[data.index(version) :]
