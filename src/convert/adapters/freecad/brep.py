@@ -76,6 +76,31 @@ class _EdgePcurve:
     last: float
 
 
+@dataclass(frozen=True, slots=True)
+class _GeneratedPcurve:
+    record: str
+    first: float
+    last: float
+    start: tuple[float, float]
+    end: tuple[float, float]
+
+
+@dataclass(frozen=True, slots=True)
+class _SeamBand:
+    face_id: str
+    loop_ids: tuple[str, str]
+    low_coedge_id: str
+    high_coedge_id: str
+    low_reversed: bool
+    high_reversed: bool
+    low_vertex_id: str
+    high_vertex_id: str
+    curve_record: str
+    length: float
+    first_pcurve_index: int
+    second_pcurve_index: int
+
+
 class _ModelGraph:
     __slots__ = (
         "bodies",
@@ -1009,6 +1034,46 @@ def _unwrap_periodic(
     return tuple(result)
 
 
+def _unwrap_surface_uv(
+    values: Sequence[tuple[float, float]],
+    surface: object,
+) -> tuple[tuple[float, float], ...]:
+    if not isinstance(surface, SphereSurface) or not values:
+        return _unwrap_periodic(values, _surface_periods(surface))
+    resolved = list(values)
+    for index, (u_value, v_value) in enumerate(resolved):
+        if abs(abs(v_value) - math.pi / 2.0) > 1e-10:
+            continue
+        neighbor = next(
+            (
+                resolved[candidate][0]
+                for distance in range(1, len(resolved))
+                for candidate in (index - distance, index + distance)
+                if 0 <= candidate < len(resolved)
+                and abs(abs(resolved[candidate][1]) - math.pi / 2.0) > 1e-10
+            ),
+            u_value,
+        )
+        resolved[index] = neighbor, v_value
+    result = [resolved[0]]
+    for u_value, v_value in resolved[1:]:
+        candidates = []
+        for u_turn in range(-3, 4):
+            candidate_u = u_value + u_turn * math.pi
+            base_v = v_value if u_turn % 2 == 0 else math.pi - v_value
+            for v_turn in range(-2, 3):
+                candidates.append((candidate_u, base_v + v_turn * math.tau))
+        previous = result[-1]
+        result.append(
+            min(
+                candidates,
+                key=lambda value: (value[0] - previous[0]) ** 2
+                + (value[1] - previous[1]) ** 2,
+            )
+        )
+    return tuple(result)
+
+
 def _surface_uv(value: object, point: Point) -> tuple[float, float] | None:
     if isinstance(value, PlaneSurface):
         axis, reference, y_direction = _frame(
@@ -1107,7 +1172,7 @@ def _plane_conic_pcurve(
     surface: PlaneSurface,
     edge: BrepEdge,
     tolerance: float,
-) -> tuple[str, float, float] | None:
+) -> _GeneratedPcurve | None:
     if not isinstance(curve, (CircleCurve, EllipseCurve)):
         return None
     normal, surface_x, surface_y = _frame(
@@ -1142,10 +1207,28 @@ def _plane_conic_pcurve(
         if isinstance(curve, CircleCurve)
         else (curve.major_radius, curve.minor_radius)
     )
-    return (
+    start = (
+        center[0]
+        + radii[0] * math.cos(first) * x_direction[0]
+        + radii[-1] * math.sin(first) * y_direction[0],
+        center[1]
+        + radii[0] * math.cos(first) * x_direction[1]
+        + radii[-1] * math.sin(first) * y_direction[1],
+    )
+    end = (
+        center[0]
+        + radii[0] * math.cos(last) * x_direction[0]
+        + radii[-1] * math.sin(last) * y_direction[0],
+        center[1]
+        + radii[0] * math.cos(last) * x_direction[1]
+        + radii[-1] * math.sin(last) * y_direction[1],
+    )
+    return _GeneratedPcurve(
         f"{kind} {_values(center + x_direction + y_direction + radii)} ",
         first,
         last,
+        start,
+        end,
     )
 
 
@@ -1154,8 +1237,8 @@ def _linear_surface_pcurve(
     surface: object,
     edge: BrepEdge,
     tolerance: float,
-    branch: int,
-) -> tuple[str, float, float] | None:
+    offset: tuple[float, float],
+) -> _GeneratedPcurve | None:
     low, high = sorted((edge.start_parameter, edge.end_parameter))
     if high == low:
         return None
@@ -1171,9 +1254,9 @@ def _linear_surface_pcurve(
     raw_uv = tuple(_surface_uv(surface, point) for point in concrete_points)
     if any(value is None for value in raw_uv):
         return None
-    uv = _unwrap_periodic(
+    uv = _unwrap_surface_uv(
         tuple(value for value in raw_uv if value is not None),
-        _surface_periods(surface),
+        surface,
     )
     delta_parameter = high - low
     direction = (
@@ -1194,19 +1277,16 @@ def _linear_surface_pcurve(
         )
         if math.hypot(value[0] - expected[0], value[1] - expected[1]) > allowed:
             return None
-    periods = _surface_periods(surface)
-    if branch:
-        for axis, period in enumerate(periods):
-            if period is not None and abs(direction[axis]) <= allowed:
-                shifted = list(origin)
-                shifted[axis] += branch * period
-                origin = shifted[0], shifted[1]
-                break
+    origin = origin[0] + offset[0], origin[1] + offset[1]
     unit = direction[0] / magnitude, direction[1] / magnitude
-    return (
+    first = low * magnitude
+    last = high * magnitude
+    return _GeneratedPcurve(
         f"1 {_values(origin + unit)} ",
-        low * magnitude,
-        high * magnitude,
+        first,
+        last,
+        (origin[0] + unit[0] * first, origin[1] + unit[1] * first),
+        (origin[0] + unit[0] * last, origin[1] + unit[1] * last),
     )
 
 
@@ -1215,8 +1295,8 @@ def _generated_pcurve(
     surface: object,
     edge: BrepEdge,
     tolerance: float,
-    branch: int,
-) -> tuple[str, float, float]:
+    offset: tuple[float, float],
+) -> _GeneratedPcurve:
     result = (
         _plane_conic_pcurve(curve, surface, edge, tolerance)
         if isinstance(surface, PlaneSurface)
@@ -1228,7 +1308,7 @@ def _generated_pcurve(
             surface,
             edge,
             tolerance,
-            branch,
+            offset,
         )
     if result is None:
         _unsupported(
@@ -1237,46 +1317,229 @@ def _generated_pcurve(
     return result
 
 
+def _seam_band(
+    face: BrepFace,
+    graph: _ModelGraph,
+    tolerance: float,
+) -> tuple[
+    BrepCoedge,
+    BrepCoedge,
+    _GeneratedPcurve,
+    _GeneratedPcurve,
+    bool,
+    bool,
+    Point,
+    Point,
+    float,
+] | None:
+    surface = graph.surfaces[face.surface_id]
+    if not isinstance(surface, (CylinderSurface, ConeSurface)):
+        return None
+    if len(face.loop_ids) != 2:
+        return None
+    loops = tuple(graph.loops[loop_id] for loop_id in face.loop_ids)
+    if any(len(loop.coedge_ids) != 1 for loop in loops):
+        return None
+    coedges = tuple(graph.coedges[loop.coedge_ids[0]] for loop in loops)
+    if any(coedge.pcurve_id for coedge in coedges):
+        return None
+    edges = tuple(graph.edges[coedge.edge_id] for coedge in coedges)
+    curves = tuple(graph.curves[edge.curve_id] for edge in edges)
+    if any(not isinstance(curve, CircleCurve) for curve in curves):
+        return None
+    allowed = max(
+        tolerance,
+        *(edge.tolerance for edge in edges),
+        *(graph.vertices[edge.start_vertex_id].tolerance for edge in edges),
+        1e-7,
+    ) * 10.0
+    if any(
+        edge.start_vertex_id != edge.end_vertex_id
+        or abs(abs(edge.end_parameter - edge.start_parameter) - math.tau) > allowed
+        for edge in edges
+    ):
+        return None
+    generated = tuple(
+        _generated_pcurve(curve, surface, edge, tolerance, (0.0, 0.0))
+        for curve, edge in zip(curves, edges, strict=True)
+    )
+    if any(
+        abs(abs(value.end[0] - value.start[0]) - math.tau) > allowed
+        or abs(value.end[1] - value.start[1]) > allowed
+        for value in generated
+    ):
+        return None
+    means = tuple((value.start[1] + value.end[1]) / 2.0 for value in generated)
+    if abs(means[0] - means[1]) <= allowed:
+        return None
+    low_index = 0 if means[0] < means[1] else 1
+    high_index = 1 - low_index
+    low_coedge = coedges[low_index]
+    high_coedge = coedges[high_index]
+    low_edge = edges[low_index]
+    high_edge = edges[high_index]
+    low_generated = generated[low_index]
+    high_generated = generated[high_index]
+    low_reversed = low_generated.end[0] < low_generated.start[0]
+    high_reversed = high_generated.end[0] > high_generated.start[0]
+    low_start = low_generated.end if low_reversed else low_generated.start
+    low_end = low_generated.start if low_reversed else low_generated.end
+    high_start = high_generated.end if high_reversed else high_generated.start
+    offset = round((low_end[0] - high_start[0]) / math.tau) * math.tau
+    high_generated = _generated_pcurve(
+        curves[high_index],
+        surface,
+        high_edge,
+        tolerance,
+        (offset, 0.0),
+    )
+    high_start = high_generated.end if high_reversed else high_generated.start
+    high_end = high_generated.start if high_reversed else high_generated.end
+    if (
+        math.hypot(low_end[0] - high_start[0], low_end[1] - high_start[1])
+        > allowed
+        or math.hypot(high_end[0] - low_start[0], high_end[1] - low_start[1])
+        > allowed
+    ):
+        return None
+    low_point = _vector3(graph.vertices[low_edge.start_vertex_id].point)
+    high_point = _vector3(graph.vertices[high_edge.start_vertex_id].point)
+    vector = _subtract(high_point, low_point)
+    length = _length(vector)
+    if length <= allowed or abs(length - (means[high_index] - means[low_index])) > allowed:
+        return None
+    if any(
+        (_surface_residual(surface, tuple(low_point[axis] + vector[axis] * ratio for axis in range(3))) or 0.0)
+        > allowed
+        for ratio in (0.25, 0.5, 0.75)
+    ):
+        return None
+    return (
+        low_coedge,
+        high_coedge,
+        low_generated,
+        high_generated,
+        low_reversed,
+        high_reversed,
+        low_point,
+        high_point,
+        length,
+    )
+
+
 def _edge_pcurve_records(
     model: BrepModel,
     graph: _ModelGraph,
     tolerance: float,
-) -> tuple[tuple[str, ...], Mapping[str, _EdgePcurve]]:
+) -> tuple[
+    tuple[str, ...],
+    Mapping[str, _EdgePcurve],
+    Mapping[str, _SeamBand],
+]:
     records = [value[0] for value in (_pcurve_record(item) for item in model.pcurves)]
     explicit_indexes = {item.id: index for index, item in enumerate(model.pcurves, 1)}
     explicit_scales = {item.id: _pcurve_record(item)[1] for item in model.pcurves}
     result: dict[str, _EdgePcurve] = {}
-    branches: dict[tuple[str, str], int] = {}
-    for coedge in model.coedges:
-        face = graph.face_for_coedge(coedge.id)
-        if face is None:
-            continue
-        edge = graph.edges[coedge.edge_id]
-        if coedge.pcurve_id:
-            scale = explicit_scales[coedge.pcurve_id]
-            first, last = sorted(
-                (edge.start_parameter * scale, edge.end_parameter * scale)
-            )
-            result[coedge.id] = _EdgePcurve(
-                explicit_indexes[coedge.pcurve_id],
-                first,
-                last,
-            )
-            continue
+    seam_bands: dict[str, _SeamBand] = {}
+    for face in model.faces:
         surface = graph.surfaces[face.surface_id]
-        key = edge.id, surface.id
-        branch = branches.get(key, 0)
-        branches[key] = branch + 1
-        record, first, last = _generated_pcurve(
-            next(value for value in model.curves if value.id == edge.curve_id),
-            surface,
-            edge,
-            tolerance,
-            branch,
-        )
-        records.append(record)
-        result[coedge.id] = _EdgePcurve(len(records), first, last)
-    return tuple(records), result
+        periods = _surface_periods(surface)
+        seam = _seam_band(face, graph, tolerance)
+        if seam is not None:
+            (
+                low_coedge,
+                high_coedge,
+                low_generated,
+                high_generated,
+                low_reversed,
+                high_reversed,
+                low_point,
+                high_point,
+                length,
+            ) = seam
+            for coedge, generated in (
+                (low_coedge, low_generated),
+                (high_coedge, high_generated),
+            ):
+                records.append(generated.record)
+                result[coedge.id] = _EdgePcurve(
+                    len(records), generated.first, generated.last
+                )
+            low_start = low_generated.end if low_reversed else low_generated.start
+            low_end = low_generated.start if low_reversed else low_generated.end
+            records.append(f"1 {_values((low_end[0], low_start[1], 0.0, 1.0))} ")
+            first_pcurve_index = len(records)
+            records.append(f"1 {_values((low_start[0], low_start[1], 0.0, 1.0))} ")
+            second_pcurve_index = len(records)
+            direction = _scale(_subtract(high_point, low_point), 1.0 / length)
+            seam_bands[face.id] = _SeamBand(
+                face.id,
+                (face.loop_ids[0], face.loop_ids[1]),
+                low_coedge.id,
+                high_coedge.id,
+                low_reversed,
+                high_reversed,
+                graph.edges[low_coedge.edge_id].start_vertex_id,
+                graph.edges[high_coedge.edge_id].start_vertex_id,
+                f"1 {_values(low_point + direction)} ",
+                length,
+                first_pcurve_index,
+                second_pcurve_index,
+            )
+            continue
+        for loop_id in face.loop_ids:
+            previous_end: tuple[float, float] | None = None
+            for coedge_id in graph.loops[loop_id].coedge_ids:
+                coedge = graph.coedges[coedge_id]
+                edge = graph.edges[coedge.edge_id]
+                if coedge.pcurve_id:
+                    scale = explicit_scales[coedge.pcurve_id]
+                    first, last = sorted(
+                        (edge.start_parameter * scale, edge.end_parameter * scale)
+                    )
+                    result[coedge.id] = _EdgePcurve(
+                        explicit_indexes[coedge.pcurve_id],
+                        first,
+                        last,
+                    )
+                    previous_end = None
+                    continue
+                generated = _generated_pcurve(
+                    graph.curves[edge.curve_id],
+                    surface,
+                    edge,
+                    tolerance,
+                    (0.0, 0.0),
+                )
+                reversed_value = coedge.reversed != (
+                    edge.end_parameter < edge.start_parameter
+                )
+                start = generated.end if reversed_value else generated.start
+                end = generated.start if reversed_value else generated.end
+                offset = [0.0, 0.0]
+                if previous_end is not None:
+                    for axis, period in enumerate(periods):
+                        if period is not None:
+                            offset[axis] = (
+                                round((previous_end[axis] - start[axis]) / period)
+                                * period
+                            )
+                if offset != [0.0, 0.0]:
+                    generated = _generated_pcurve(
+                        graph.curves[edge.curve_id],
+                        surface,
+                        edge,
+                        tolerance,
+                        (offset[0], offset[1]),
+                    )
+                    start = generated.end if reversed_value else generated.start
+                    end = generated.start if reversed_value else generated.end
+                records.append(generated.record)
+                result[coedge.id] = _EdgePcurve(
+                    len(records), generated.first, generated.last
+                )
+                previous_end = end
+    return tuple(records), result, seam_bands
 
 
 def _loop_uv_points(
@@ -1306,24 +1569,7 @@ def _loop_uv_points(
             if uv is None:
                 return None
             values.append(uv)
-    return _unwrap_periodic(values, _surface_periods(surface))
-
-
-def _loop_uv_area(
-    graph: _ModelGraph,
-    face: BrepFace,
-    loop: BrepLoop,
-) -> float | None:
-    unwrapped = _loop_uv_points(graph, face, loop)
-    if unwrapped is None or len(unwrapped) < 3:
-        return None
-    return (
-        sum(
-            left[0] * right[1] - right[0] * left[1]
-            for left, right in zip(unwrapped, (*unwrapped[1:], unwrapped[0]))
-        )
-        / 2.0
-    )
+    return _unwrap_surface_uv(values, surface)
 
 
 def _check_edge_geometry(
@@ -1581,6 +1827,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
             )
         )
     for face in model.faces:
+        area_tolerance = max(tolerance * tolerance, 1e-10)
         loop_points = {
             loop_id: _loop_uv_points(graph, face, graph.loops[loop_id])
             for loop_id in face.loop_ids
@@ -1600,7 +1847,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
         measurable = {
             loop_id: area
             for loop_id, area in loop_areas.items()
-            if area is not None and abs(area) > tolerance * tolerance
+            if area is not None and abs(area) > area_tolerance
         }
         outer_loop_id = (
             max(measurable, key=lambda loop_id: abs(measurable[loop_id]))
@@ -1613,7 +1860,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
 
         def loop_reversed(loop_id: str) -> bool:
             area = loop_areas[loop_id]
-            if area is None or abs(area) <= tolerance * tolerance:
+            if area is None or abs(area) <= area_tolerance:
                 if loop_id == outer_loop_id:
                     return False
                 outer_points = loop_points[outer_loop_id]
