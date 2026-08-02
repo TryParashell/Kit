@@ -1510,9 +1510,10 @@ def _point_vector(data: bytes, offset: int) -> Vector3 | None:
     if offset < 0 or offset + 24 > len(data):
         return None
     values = struct.unpack_from(">3d", data, offset)
-    if any(not math.isfinite(value) or abs(value) >= 100.0 for value in values):
+    if any(not math.isfinite(value) for value in values):
         return None
-    return Vector3(*(value / _LENGTH_SCALE for value in values))
+    scaled = tuple(value / _LENGTH_SCALE for value in values)
+    return Vector3(*scaled) if all(math.isfinite(value) for value in scaled) else None
 
 
 def _parse_chart_record(data: bytes, offset: int) -> _ChartRecord | None:
@@ -1547,7 +1548,6 @@ def _parse_chart_record(data: bytes, offset: int) -> _ChartRecord | None:
         )
         or base_scale <= 0.0
         or chordal_error <= 0.0
-        or chordal_error >= 100.0
         or parameter_errors != (_MISSING_PARAMETER, _MISSING_PARAMETER)
     ):
         return None
@@ -2297,7 +2297,7 @@ def _analytic_geometry(
             axis,
             reference,
             values[6] / _LENGTH_SCALE,
-            math.asin(abs(sine)),
+            math.asin(sine),
         )
     if kind == 0x35:
         axis = direction(4)
@@ -2650,24 +2650,66 @@ def _provable_curve_range(
         ):
             raise ValueError("intersection chart parameters are not provable")
         tolerance = max(curve.tolerance, 1e-7)
-        direct = (
-            _distance(start, curve.samples[0]) <= tolerance
-            and _distance(end, curve.samples[-1]) <= tolerance
+        start_parameter = _intersection_chart_parameter(
+            curve.samples,
+            parameters,
+            start,
+            tolerance,
         )
-        reverse = (
-            _distance(start, curve.samples[-1]) <= tolerance
-            and _distance(end, curve.samples[0]) <= tolerance
+        end_parameter = _intersection_chart_parameter(
+            curve.samples,
+            parameters,
+            end,
+            tolerance,
         )
-        if direct and reverse and _distance(start, end) <= tolerance:
-            return parameters[0], parameters[-1]
-        if direct == reverse:
-            raise ValueError("intersection endpoints do not identify one chart range")
-        return (
-            (parameters[0], parameters[-1])
-            if direct
-            else (parameters[-1], parameters[0])
-        )
+        if start_parameter is None or end_parameter is None:
+            raise ValueError("intersection endpoints do not identify a chart range")
+        if start_parameter == end_parameter and _distance(start, end) > tolerance:
+            raise ValueError("intersection chart range collapses distinct endpoints")
+        return start_parameter, end_parameter
     raise ValueError("curve parameter range is not provable")
+
+
+def _intersection_chart_parameter(
+    samples: Sequence[Vector3],
+    parameters: Sequence[float],
+    point: Vector3,
+    tolerance: float,
+) -> float | None:
+    candidates = []
+    for index, (left, right) in enumerate(zip(samples, samples[1:])):
+        chord = _subtract(right, left)
+        length_squared = _dot(chord, chord)
+        if length_squared <= 0.0:
+            return None
+        fraction = max(
+            0.0,
+            min(1.0, _dot(_subtract(point, left), chord) / length_squared),
+        )
+        projected = Vector3(
+            left.x + chord.x * fraction,
+            left.y + chord.y * fraction,
+            left.z + chord.z * fraction,
+        )
+        distance = _distance(point, projected)
+        if distance <= tolerance:
+            parameter = parameters[index] + fraction * (
+                parameters[index + 1] - parameters[index]
+            )
+            candidates.append((distance, parameter))
+    if not candidates:
+        return None
+    candidates.sort()
+    best_distance, best_parameter = candidates[0]
+    parameter_span = abs(parameters[-1] - parameters[0])
+    parameter_tolerance = max(parameter_span * 1e-12, 1e-12)
+    for distance, parameter in candidates[1:]:
+        if (
+            abs(parameter - best_parameter) > parameter_tolerance
+            and abs(distance - best_distance) <= 1e-12
+        ):
+            return None
+    return best_parameter
 
 
 def _line_point(curve: LineCurve, parameter: float) -> Vector3:
