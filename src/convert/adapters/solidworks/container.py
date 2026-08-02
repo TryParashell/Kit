@@ -11,11 +11,21 @@ from .format import CONTENT_TYPES_STREAM, CONTAINER_VERSIONS, RELATIONSHIPS_STRE
 
 _LOCAL_SIGNATURE_PREFIX = bytes.fromhex("140006000800")
 _LOCAL_SIGNATURE_SIZE = 10
-_LOCAL_RECORD_SIGNATURE = bytes.fromhex("a1909b1f")
-_CENTRAL_RECORD_SIGNATURE = bytes.fromhex("a576970f")
-_END_RECORD_SIGNATURE = bytes.fromhex("7a004720")
+_DEFAULT_FILE_ID = 0xEC6E2386
+_DEFAULT_TYPE_ID = 0x1C34D281
+_SIGNATURES_BY_FILE_ID = {
+    _DEFAULT_FILE_ID: (
+        bytes.fromhex("64d80045"),
+        bytes.fromhex("ae0d4ef6"),
+        bytes.fromhex("54ce179a"),
+    ),
+    0x715BE98F: (
+        bytes.fromhex("a1909b1f"),
+        bytes.fromhex("a576970f"),
+        bytes.fromhex("7a004720"),
+    ),
+}
 _ARCHIVE_OFFSET = 8
-_DOS_TIMESTAMP = 0x00210000
 _MAX_STREAM_COUNT = 100_000
 _MAX_DIRECTORY_STREAM_COUNT = 0xFFFF
 _MAX_NAME_BYTES = 16_384
@@ -91,9 +101,29 @@ class SldprtArchive:
 def build_sldprt(
     streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]],
     *,
-    file_id: int = 1,
+    file_id: int | None = None,
     format_version: int = 4,
+    template: bytes | bytearray | None = None,
 ) -> bytes:
+    type_ids: dict[str, int] = {}
+    if template is None:
+        if file_id is None:
+            file_id = _DEFAULT_FILE_ID
+        signatures = _SIGNATURES_BY_FILE_ID.get(file_id)
+        if signatures is None:
+            raise ValueError(
+                "SLDPRT file id requires a native template with matching signatures"
+            )
+    else:
+        template_data = bytes(template)
+        archive = SldprtArchive.from_bytes(template_data)
+        if file_id is None:
+            file_id = archive.file_id
+        elif file_id != archive.file_id:
+            raise ValueError(
+                "SLDPRT template file id does not match the requested file id"
+            )
+        signatures, type_ids = _template_fields(template_data, archive)
     if not 0 <= file_id <= 0xFFFFFFFF:
         raise ValueError("SLDPRT file id must fit in 32 bits")
     if format_version not in CONTAINER_VERSIONS:
@@ -104,14 +134,15 @@ def build_sldprt(
         raise ValueError("SLDPRT stream names must be unique")
     if len(items) > _MAX_DIRECTORY_STREAM_COUNT:
         raise ValueError("SLDPRT stream count must fit in the native directory")
+    local_signature, central_signature, end_signature = signatures
     output = bytearray(struct.pack(">II", file_id, format_version))
     encoded: list[tuple[int, str, int, int, int, int]] = []
     for name, payload in items:
-        type_id = _DOS_TIMESTAMP
+        type_id = type_ids.get(name, _DEFAULT_TYPE_ID)
         data = bytes(payload)
         local_offset = len(output) - _ARCHIVE_OFFSET
         record, crc32_value, compressed_size = _encode_record(name, data, type_id)
-        output.extend(_LOCAL_RECORD_SIGNATURE)
+        output.extend(local_signature)
         output.extend(record)
         encoded.append(
             (
@@ -127,11 +158,11 @@ def build_sldprt(
     if central_offset > _MAX_ARCHIVE_OFFSET:
         raise ValueError("SLDPRT local records exceed the native offset range")
     for record in encoded:
-        output.extend(_encode_directory_entry(*record))
+        output.extend(_encode_directory_entry(*record, central_signature))
     central_size = len(output) - _ARCHIVE_OFFSET - central_offset
     if central_size > _MAX_ARCHIVE_OFFSET:
         raise ValueError("SLDPRT directory exceeds the native size range")
-    output.extend(_END_RECORD_SIGNATURE)
+    output.extend(end_signature)
     output.extend(
         struct.pack(
             "<HHHHIIH",
@@ -273,6 +304,7 @@ def _encode_directory_entry(
     compressed_size: int,
     size: int,
     local_offset: int,
+    signature: bytes,
 ) -> bytes:
     encoded_name = _encoded_name(name)
     package_section = int(
@@ -283,7 +315,7 @@ def _encode_directory_entry(
     )
     return b"".join(
         (
-            _CENTRAL_RECORD_SIGNATURE,
+            signature,
             struct.pack("<H", 0),
             _LOCAL_SIGNATURE_PREFIX,
             struct.pack("<I", type_id),
@@ -294,3 +326,87 @@ def _encode_directory_entry(
             encoded_name,
         )
     )
+
+
+def _template_fields(
+    blob: bytes, archive: SldprtArchive
+) -> tuple[tuple[bytes, bytes, bytes], dict[str, int]]:
+    records = tuple(sorted(archive.records, key=lambda item: item.offset))
+    local_signatures = {blob[item.offset - 4 : item.offset] for item in records}
+    if len(local_signatures) != 1 or any(len(value) != 4 for value in local_signatures):
+        raise ValueError("SLDPRT template has inconsistent local signatures")
+    expected = {
+        (item.name, item.crc32, item.compressed_size, item.uncompressed_size)
+        for item in records
+    }
+    central_markers: list[int] = []
+    cursor = max(item.payload_offset + item.compressed_size for item in records)
+    while True:
+        marker = blob.find(_LOCAL_SIGNATURE_PREFIX, cursor)
+        if marker < 0:
+            break
+        cursor = marker + 1
+        if marker + 40 > len(blob):
+            continue
+        crc32_value, compressed_size, size, name_size = struct.unpack_from(
+            "<IIII", blob, marker + 10
+        )
+        if not 0 < name_size <= _MAX_NAME_BYTES:
+            continue
+        name_start = marker + 40
+        name_end = name_start + name_size
+        if name_end > len(blob):
+            continue
+        try:
+            name = _nibble_swap(blob[name_start:name_end]).decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        if (name, crc32_value, compressed_size, size) in expected:
+            central_markers.append(marker)
+    if len(central_markers) != len(records):
+        raise ValueError("SLDPRT template central directory is incomplete")
+    central_signatures = {
+        blob[marker - 6 : marker - 2]
+        for marker in central_markers
+        if blob[marker - 2 : marker] == b"\0\0"
+    }
+    if len(central_signatures) != 1:
+        raise ValueError("SLDPRT template has inconsistent central signatures")
+    central_start = central_markers[0] - 6
+    end_signature = _end_signature(blob, central_start, len(records))
+    type_ids = {
+        item.name: struct.unpack_from("<I", item.signature, 6)[0] for item in records
+    }
+    return (
+        (
+            next(iter(local_signatures)),
+            next(iter(central_signatures)),
+            end_signature,
+        ),
+        type_ids,
+    )
+
+
+def _end_signature(blob: bytes, central_start: int, count: int) -> bytes:
+    central_offset = central_start - _ARCHIVE_OFFSET
+    for offset in range(central_start, len(blob) - 21):
+        (
+            disk_number,
+            directory_disk,
+            disk_entries,
+            total_entries,
+            directory_size,
+            directory_offset,
+            comment_size,
+        ) = struct.unpack_from("<HHHHIIH", blob, offset + 4)
+        if (
+            disk_number == 0
+            and directory_disk == 0
+            and disk_entries == count
+            and total_entries == count
+            and directory_offset == central_offset
+            and _ARCHIVE_OFFSET + directory_offset + directory_size == offset
+            and offset + 22 + comment_size <= len(blob)
+        ):
+            return blob[offset : offset + 4]
+    raise ValueError("SLDPRT template end directory is missing")

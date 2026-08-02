@@ -2478,7 +2478,7 @@ def test_direct_fcstd_roundtrip_preserves_interchange_and_brep(tmp_path) -> None
         names = set(archive.namelist())
         assert "Document.xml" in names
         assert "interchange/document.json" in names
-        assert "Fillet1.Edges" in names
+        assert "Fillet1.Edges" not in names
         assert (
             len(
                 names
@@ -2508,7 +2508,7 @@ def test_fcstd_contains_editable_native_history(tmp_path) -> None:
         assert types.count("Part::Extrusion") == 5
         assert types.count("Part::Cut") == 2
         assert types.count("Part::MultiFuse") == 2
-        assert types.count("Part::Fillet") == 1
+        assert types.count("Part::Fillet") == 0
         assert {
             "Parameters",
             "Sketch1",
@@ -2523,10 +2523,18 @@ def test_fcstd_contains_editable_native_history(tmp_path) -> None:
             "Boss_Extrude3",
             "Fillet1",
         } <= names
-        count, edge, start_radius, end_radius = struct.unpack(
-            "<IIdd", archive.read("Fillet1.Edges")
+        fillet = root.find("./Objects/Object[@name='Fillet1']")
+        assert fillet is not None
+        assert fillet.get("type") == "Part::Feature"
+        executable = root.find(
+            "./ObjectData/Object[@name='Fillet1']/Properties/Property[@name='NativeExecutable']/Bool"
         )
-        assert (count, edge, start_radius, end_radius) == (1, 3, 0.25, 0.25)
+        reason = root.find(
+            "./ObjectData/Object[@name='Fillet1']/Properties/Property[@name='NativeExecutionReason']/String"
+        )
+        assert executable is not None and executable.get("value") == "false"
+        assert reason is not None
+        assert reason.get("value") == "topology_selection_not_statically_provable"
         xml = archive.read("Document.xml")
         assert b"KitMetadata" in xml
 

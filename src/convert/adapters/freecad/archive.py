@@ -1576,7 +1576,10 @@ def _constraint_carrier_reason(
 
 
 def _constraints_property(
-    sketch: Mapping[str, Any], indices: Mapping[str, int], parameters: _Parameters
+    sketch: Mapping[str, Any],
+    indices: Mapping[str, int],
+    parameters: _Parameters,
+    profile_only: bool = False,
 ) -> tuple[
     ET.Element,
     list[tuple[str, str]],
@@ -1592,8 +1595,63 @@ def _constraints_property(
     diagnostics: list[dict[str, Any]] = []
     constraint_names: set[str] = set()
     fixed_entities: set[str] = set()
+    profile_entity_ids = {
+        _text(entity_id)
+        for profile in _sequence(sketch.get("closed_profile_entity_ids", []))
+        for entity_id in _sequence(profile)
+        if _text(entity_id)
+    }
     for constraint in source_constraints:
         kind = _text(_enum(constraint.get("kind"))).lower()
+        references = _items(constraint.get("references", []))
+        if profile_only:
+            reference_entities = [
+                entities.get(_text(reference.get("entity_id")), {})
+                for reference in references
+            ]
+            reference_kinds = [
+                _text(_enum(entity.get("kind"))).casefold()
+                for entity in reference_entities
+            ]
+            reference_points = [
+                _text(reference.get("point")).casefold() for reference in references
+            ]
+            profile_references = bool(references) and all(
+                _text(reference.get("entity_id")) in profile_entity_ids
+                for reference in references
+            )
+            statically_sound = profile_references and (
+                (
+                    kind in {"horizontal", "vertical"}
+                    and len(references) == 1
+                    and reference_kinds == ["line"]
+                    and reference_points == [""]
+                )
+                or (
+                    kind == "coincident"
+                    and len(references) == 2
+                    and all(reference_points)
+                )
+                or (
+                    kind in {"radius", "diameter"}
+                    and len(references) == 1
+                    and reference_kinds == ["circle"]
+                    and reference_points == [""]
+                )
+            )
+            if not statically_sound:
+                diagnostics.append(
+                    _constraint_diagnostic(
+                        constraint,
+                        kind,
+                        "freecad.sketch_constraint_carrier_only",
+                        "carrier_only",
+                        "the source relationship is preserved without activating an unproven solver encoding",
+                        "warning",
+                        carrier_reason="source_opaque",
+                    )
+                )
+                continue
         source_attributes = constraint.get("attributes", {})
         if not isinstance(source_attributes, Mapping):
             source_attributes = {}
@@ -1687,7 +1745,6 @@ def _constraints_property(
                 if unresolved:
                     resolved = []
             else:
-                references = _items(constraint.get("references", []))
                 resolved = []
                 for reference in references:
                     entity_id = _text(reference.get("entity_id"))
@@ -1810,7 +1867,8 @@ def _constraints_property(
     for entity in entity_items:
         entity_id = _text(entity.get("id"))
         if (
-            bool(entity.get("fixed"))
+            not profile_only
+            and bool(entity.get("fixed"))
             and entity_id not in fixed_entities
             and entity_id in indices
         ):
@@ -1874,6 +1932,7 @@ def _sketch_properties(
     plane_name: str,
     parameters: _Parameters,
     preserve_native: bool = False,
+    profile_constraints_only: bool = False,
 ) -> tuple[list[ET.Element], list[str]]:
     transform = (
         plane.get("transform", {})
@@ -1882,7 +1941,12 @@ def _sketch_properties(
     )
     geometry, indices, geometry_diagnostics = _geometry_property(sketch)
     constraints, expressions, dependencies, constraint_diagnostics = (
-        _constraints_property(sketch, indices, parameters)
+        _constraints_property(
+            sketch,
+            indices,
+            parameters,
+            profile_only=profile_constraints_only,
+        )
     )
     sketch_diagnostics = [*geometry_diagnostics, *constraint_diagnostics]
     diagnostics_property = (
@@ -1979,11 +2043,19 @@ def _native_sketch_analysis(
     manifest: Mapping[str, Any],
 ) -> tuple[tuple[int, int, frozenset[str]], ...]:
     parameters = _Parameters(_items(manifest.get("parameters", [])))
+    source = manifest.get("source", {})
+    profile_constraints_only = (
+        isinstance(source, Mapping)
+        and _text(source.get("format_id")) == "solidworks.sldprt"
+    )
     result: list[tuple[int, int, frozenset[str]]] = []
     for sketch in _items(manifest.get("sketches", [])):
         geometry, indices, geometry_diagnostics = _geometry_property(sketch)
         constraints, _, _, constraint_diagnostics = _constraints_property(
-            sketch, indices, parameters
+            sketch,
+            indices,
+            parameters,
+            profile_only=profile_constraints_only,
         )
         diagnostics = (*geometry_diagnostics, *constraint_diagnostics)
         carrier_diagnostics = tuple(
@@ -2013,6 +2085,237 @@ def _native_closed_profile_count(sketch: Mapping[str, Any]) -> int:
         if profile and profile <= emitted:
             result += 1
     return result
+
+
+def _points_close(
+    first: tuple[float, float],
+    second: tuple[float, float],
+    tolerance: float = 1e-7,
+) -> bool:
+    return math.hypot(first[0] - second[0], first[1] - second[1]) <= tolerance
+
+
+def _segment_orientation(
+    first: tuple[float, float],
+    second: tuple[float, float],
+    third: tuple[float, float],
+) -> float:
+    return (second[0] - first[0]) * (third[1] - first[1]) - (second[1] - first[1]) * (
+        third[0] - first[0]
+    )
+
+
+def _point_on_segment(
+    point: tuple[float, float],
+    first: tuple[float, float],
+    second: tuple[float, float],
+    tolerance: float = 1e-7,
+) -> bool:
+    return (
+        abs(_segment_orientation(first, second, point)) <= tolerance
+        and min(first[0], second[0]) - tolerance
+        <= point[0]
+        <= max(first[0], second[0]) + tolerance
+        and min(first[1], second[1]) - tolerance
+        <= point[1]
+        <= max(first[1], second[1]) + tolerance
+    )
+
+
+def _segments_intersect_or_touch(
+    first_start: tuple[float, float],
+    first_end: tuple[float, float],
+    second_start: tuple[float, float],
+    second_end: tuple[float, float],
+    tolerance: float = 1e-7,
+) -> bool:
+    first_a = _segment_orientation(first_start, first_end, second_start)
+    first_b = _segment_orientation(first_start, first_end, second_end)
+    second_a = _segment_orientation(second_start, second_end, first_start)
+    second_b = _segment_orientation(second_start, second_end, first_end)
+    if (
+        (first_a > tolerance and first_b < -tolerance)
+        or (first_a < -tolerance and first_b > tolerance)
+    ) and (
+        (second_a > tolerance and second_b < -tolerance)
+        or (second_a < -tolerance and second_b > tolerance)
+    ):
+        return True
+    return any(
+        (
+            abs(value) <= tolerance
+            and _point_on_segment(point, segment_start, segment_end, tolerance)
+        )
+        for value, point, segment_start, segment_end in (
+            (first_a, second_start, first_start, first_end),
+            (first_b, second_end, first_start, first_end),
+            (second_a, first_start, second_start, second_end),
+            (second_b, first_end, second_start, second_end),
+        )
+    )
+
+
+def _line_profile_polygon(
+    entities: list[Mapping[str, Any]],
+) -> tuple[tuple[float, float], ...] | None:
+    remaining: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for entity in entities:
+        geometry = entity.get("geometry", {})
+        if not isinstance(geometry, Mapping):
+            return None
+        start = _point2(geometry.get("start"))
+        end = _point2(geometry.get("end"))
+        if _points_close(start, end):
+            return None
+        remaining.append((start, end))
+    if len(remaining) < 3:
+        return None
+    first_start, first_end = remaining.pop(0)
+    points = [first_start, first_end]
+    while remaining:
+        current = points[-1]
+        next_index = next(
+            (
+                index
+                for index, (start, end) in enumerate(remaining)
+                if _points_close(current, start) or _points_close(current, end)
+            ),
+            -1,
+        )
+        if next_index < 0:
+            return None
+        start, end = remaining.pop(next_index)
+        points.append(end if _points_close(current, start) else start)
+    if not _points_close(points[-1], points[0]):
+        return None
+    points.pop()
+    area = abs(
+        sum(
+            first[0] * second[1] - second[0] * first[1]
+            for first, second in zip(points, points[1:] + points[:1], strict=True)
+        )
+    )
+    if area <= 1e-9:
+        return None
+    segments = list(zip(points, points[1:] + points[:1], strict=True))
+    for first_index, first in enumerate(segments):
+        for second_index in range(first_index + 1, len(segments)):
+            if second_index in {
+                first_index + 1,
+                (first_index - 1) % len(segments),
+            }:
+                continue
+            if _segments_intersect_or_touch(*first, *segments[second_index]):
+                return None
+    return tuple(points)
+
+
+def _point_segment_distance(
+    point: tuple[float, float],
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> float:
+    delta_x = end[0] - start[0]
+    delta_y = end[1] - start[1]
+    length_squared = delta_x * delta_x + delta_y * delta_y
+    if length_squared <= 1e-30:
+        return math.hypot(point[0] - start[0], point[1] - start[1])
+    parameter = max(
+        0.0,
+        min(
+            1.0,
+            ((point[0] - start[0]) * delta_x + (point[1] - start[1]) * delta_y)
+            / length_squared,
+        ),
+    )
+    projection = (start[0] + parameter * delta_x, start[1] + parameter * delta_y)
+    return math.hypot(point[0] - projection[0], point[1] - projection[1])
+
+
+def _profile_boundaries_intersect(
+    first: tuple[str, Any],
+    second: tuple[str, Any],
+    tolerance: float = 1e-7,
+) -> bool:
+    first_kind, first_value = first
+    second_kind, second_value = second
+    if first_kind == "circle" and second_kind == "circle":
+        first_center, first_radius = first_value
+        second_center, second_radius = second_value
+        distance = math.hypot(
+            first_center[0] - second_center[0],
+            first_center[1] - second_center[1],
+        )
+        return (
+            abs(first_radius - second_radius) - tolerance
+            <= distance
+            <= first_radius + second_radius + tolerance
+        )
+    if first_kind == "polygon" and second_kind == "polygon":
+        first_segments = list(
+            zip(first_value, first_value[1:] + first_value[:1], strict=True)
+        )
+        second_segments = list(
+            zip(second_value, second_value[1:] + second_value[:1], strict=True)
+        )
+        return any(
+            _segments_intersect_or_touch(*first_segment, *second_segment, tolerance)
+            for first_segment in first_segments
+            for second_segment in second_segments
+        )
+    circle = first_value if first_kind == "circle" else second_value
+    polygon = first_value if first_kind == "polygon" else second_value
+    center, radius = circle
+    return any(
+        _point_segment_distance(center, start, end) <= radius + tolerance
+        and max(
+            math.hypot(center[0] - start[0], center[1] - start[1]),
+            math.hypot(center[0] - end[0], center[1] - end[1]),
+        )
+        >= radius - tolerance
+        for start, end in zip(polygon, polygon[1:] + polygon[:1], strict=True)
+    )
+
+
+def _native_profiles_are_statically_sound(sketch: Mapping[str, Any]) -> bool:
+    _, indices, _ = _geometry_property(sketch)
+    entities = {
+        _text(entity.get("id")): entity
+        for entity in _items(sketch.get("entities", []))
+        if _text(entity.get("id"))
+    }
+    profiles: list[tuple[str, Any]] = []
+    for raw_profile in _sequence(sketch.get("closed_profile_entity_ids", [])):
+        identifiers = [_text(value) for value in _sequence(raw_profile) if _text(value)]
+        if not identifiers or any(
+            identifier not in indices for identifier in identifiers
+        ):
+            return False
+        profile_entities = [entities.get(identifier, {}) for identifier in identifiers]
+        kinds = [
+            _text(_enum(entity.get("kind"))).lower() for entity in profile_entities
+        ]
+        if kinds == ["circle"]:
+            geometry = profile_entities[0].get("geometry", {})
+            if not isinstance(geometry, Mapping):
+                return False
+            radius = abs(_number(geometry.get("radius")))
+            if radius <= 1e-9:
+                return False
+            profiles.append(("circle", (_point2(geometry.get("center")), radius)))
+            continue
+        if kinds and all(kind == "line" for kind in kinds):
+            polygon = _line_profile_polygon(profile_entities)
+            if polygon is None:
+                return False
+            profiles.append(("polygon", polygon))
+            continue
+        return False
+    return bool(profiles) and not any(
+        _profile_boundaries_intersect(first, second)
+        for index, first in enumerate(profiles)
+        for second in profiles[index + 1 :]
+    )
 
 
 def native_sketch_parts(manifest: Mapping[str, Any]) -> tuple[tuple[int, int], ...]:
@@ -3748,7 +4051,7 @@ def _add_assembly(
             connector_subelements.append(subelements)
         has_connector_pair = len(connector_targets) == 2 and all(connector_targets)
         resolved_joint_type = _mate_joint_type(mate.get("kind"))
-        native_joint_supported = resolved_joint_type is not None
+        native_joint_supported = resolved_joint_type is not None and has_connector_pair
         native_mate_extensions = _native_extensions(native_mate)
         obj = graph.add(
             _text(native_mate.get("type_id"), "App::FeaturePython"),
@@ -3844,6 +4147,15 @@ def _add_assembly(
             for property_element in (
                 _string_property("Label", mate_name),
                 _bool_property("KitMateCarrier", True, dynamic=True),
+                _string_property(
+                    "NativeExecutionReason",
+                    (
+                        "unsupported_mate_kind"
+                        if resolved_joint_type is None
+                        else "missing_connector_pair"
+                    ),
+                    dynamic=True,
+                ),
                 *metadata_properties,
                 *connector_properties,
                 _bool_property("Visibility", False),
@@ -4543,10 +4855,14 @@ def _document_xml(
     sketch_items = _items(manifest.get("sketches", []))
     sketch_names: dict[str, str] = {}
     sketch_native_profile_counts: dict[str, int] = {}
+    sketch_native_profile_sound: dict[str, bool] = {}
     sketch_objects: list[str] = []
     for sketch in sketch_items:
         sketch_id = _text(sketch.get("id"))
         sketch_native_profile_counts[sketch_id] = _native_closed_profile_count(sketch)
+        sketch_native_profile_sound[sketch_id] = _native_profiles_are_statically_sound(
+            sketch
+        )
         plane_id = _text(sketch.get("support_plane_id"))
         plane = plane_by_id.get(plane_id, {"transform": {}})
         plane_name = plane_names.get(plane_id, "")
@@ -4571,7 +4887,12 @@ def _document_xml(
             native_object_targets[native_sketch_name] = obj.name
         sketch_objects.append(obj.name)
         properties, dependencies = _sketch_properties(
-            sketch, plane, plane_name, parameters, native_replay
+            sketch,
+            plane,
+            plane_name,
+            parameters,
+            native_replay,
+            source_format_id == "solidworks.sldprt",
         )
         if native_replay and native_sketch:
             obj.properties = properties
@@ -4744,8 +5065,13 @@ def _document_xml(
         if kind == "extrusion" and (
             (
                 source_format_id == "solidworks.sldprt"
-                and not sketch_native_profile_counts.get(
-                    _text(feature.get("sketch_id")), 0
+                and (
+                    not sketch_native_profile_counts.get(
+                        _text(feature.get("sketch_id")), 0
+                    )
+                    or not sketch_native_profile_sound.get(
+                        _text(feature.get("sketch_id")), False
+                    )
                 )
             )
             or bool(feature.get("suppressed"))
@@ -4796,7 +5122,13 @@ def _document_xml(
                         (
                             "suppressed"
                             if bool(feature.get("suppressed"))
-                            else "no_native_closed_profile"
+                            else (
+                                "no_native_closed_profile"
+                                if not sketch_native_profile_counts.get(
+                                    _text(feature.get("sketch_id")), 0
+                                )
+                                else "profile_topology_not_statically_sound"
+                            )
                         ),
                         dynamic=True,
                     ),
@@ -4815,6 +5147,9 @@ def _document_xml(
                 final.dependencies.append(parameter_sheet.name)
             feature_names[feature_id] = final.name
             feature_objects.append(final.name)
+            if input_base_name:
+                solid_feature_names[feature_id] = input_base_name
+                current_name = input_base_name
             continue
         if kind == "extrusion":
             sketch_id = _text(feature.get("sketch_id"))
@@ -4970,6 +5305,53 @@ def _document_xml(
             solid_feature_names[feature_id] = final.name
             feature_objects.append(final.name)
             current_name = final.name
+        elif kind == "fillet" and source_format_id == "solidworks.sldprt":
+            radius = abs(
+                _number(
+                    definition.get("radius"),
+                    _number(attributes.get("radius_mm")),
+                )
+            )
+            parameter_id = _feature_parameter(feature, parameters, radius)
+            expression = parameters.expression(parameter_id)
+            final = graph.add("Part::Feature", feature_name, "Feature")
+            final.properties.extend(
+                [
+                    _string_property("Label", feature_name),
+                    _expression_property(
+                        [("DrivingRadius", expression)] if expression else []
+                    ),
+                    _float_property(
+                        "DrivingRadius",
+                        radius,
+                        "App::PropertyLength",
+                        dynamic=True,
+                    ),
+                    *_feature_metadata(feature, "feature-data"),
+                    _bool_property("NativeExecutable", False, dynamic=True),
+                    _string_property(
+                        "NativeExecutionReason",
+                        "topology_selection_not_statically_provable",
+                        dynamic=True,
+                    ),
+                    *_definition_properties(definition),
+                    _json_property("NativeDefinitionJSON", definition),
+                    _shape_property(),
+                    _bool_property("Visibility", False),
+                ]
+            )
+            if input_base_name:
+                final.properties.append(
+                    _link_property("InputFeature", input_base_name, dynamic=True)
+                )
+                final.dependencies.append(input_base_name)
+            if expression:
+                final.dependencies.append(parameter_sheet.name)
+            feature_names[feature_id] = final.name
+            feature_objects.append(final.name)
+            if input_base_name:
+                solid_feature_names[feature_id] = input_base_name
+                current_name = input_base_name
         elif kind == "fillet" and input_base_name:
             radius = abs(
                 _number(
@@ -5097,7 +5479,11 @@ def _document_xml(
                 final.dependencies.append(parameter_sheet.name)
             feature_names[feature_id] = final.name
             feature_objects.append(final.name)
-            if kind not in {"native", "reference"}:
+            if source_format_id == "solidworks.sldprt":
+                if input_base_name:
+                    solid_feature_names[feature_id] = input_base_name
+                    current_name = input_base_name
+            elif kind not in {"native", "reference"}:
                 solid_feature_names[feature_id] = final.name
                 current_name = final.name
         if bool(feature.get("suppressed")) and not native_replay:

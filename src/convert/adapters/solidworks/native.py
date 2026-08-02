@@ -423,6 +423,24 @@ _BASE_RESOLVED_FEATURES = (
     b"BTH){jC0?>g{g)^sCmytGmM^es&jE{@%^wdr%C`3k|o2<p*rl5VaR{3u&8Ke2!Q-lZHG8sXEyTR~Y_aMw@57xI}c"
     b"Tju!7W!fbD2W~aPX{ne$9`0SBUlgCi?56{xh*6X4dYdsQ`y3(wVP`ViM$F0+>YD+8YiICn;f5d!~PJaN2#tPd"
 )
+_BASE_BODY_FEATURE = (
+    b"c-s5_pOJxwAvfPCu{hN!KczB0nWf?XzyF+`47m&i4EYR23?&Sy3@HqT3{c=81!VwLF<=8lFh+nI1B1zPIWP?aAU;&<e;{W54"
+    b"+RVi4f|1zVTH3m@++0@GWKrTc8iH&O&u!(BZ^8!Ft$SCrD8aW5sO1XVkr%543q+pZx|soj$i`-o257V"
+)
+_BASE_BODY_COUNTERS = {
+    0: 0x6B,
+    4: 0x12,
+    1495: 0x80,
+    1690: 0x81,
+    1724: 0x83,
+    2315: 0x46,
+    3483: 0x94,
+    3806: 0x97,
+    4049: 0x94,
+    4376: 0x97,
+    5128: 0x52,
+    5302: 0x52,
+}
 _BASE_BIOGRAPHY = (
     b"c-s5_pOJx=AvfPCGe5m3u^^)|KADMufg!++fx+at90Mbe%?ZRjKnxP+Vt{}zsSFJN|NUp+lwd#tAQ4*fS)c#E>KA"
     b"?o=qN)?pqz*^gB3#zLpXycgCBzngFlcJ4CEIxR044cLn=cqgE4~<P=pzz*}>nH6=Ehgc7157bRen%7>XG38Pb7dB"
@@ -460,6 +478,17 @@ _HEADER_OBJECTS = (
 def encode_native_part(document: CadDocument, model_name: str) -> NativePartStreams:
     object_ids = _write_object_ids(document)
     authored = _write_objects(document, object_ids)
+    if not authored and document.brep is not None:
+        authored = (
+            _WriteObject(
+                "brep:imported",
+                26,
+                "Imported1",
+                "Feature",
+                "Imported",
+                "moBaseBody_c",
+            ),
+        )
     identity = _native_identity(document, model_name)
     system_features = {
         int(feature.attributes["native_object_id"]): feature
@@ -813,6 +842,8 @@ def _write_feature_type(feature: FeatureStep) -> tuple[str, str, str]:
         return "Feature", "Fillet", "Fillet_c"
     native = feature.attributes.get("native_type")
     if isinstance(native, str) and native.strip():
+        if native.strip().casefold() in {"basebody", "imported"}:
+            return "Feature", "Imported", "moBaseBody_c"
         return "Feature", native.strip(), "moCompFeature_c"
     names = {
         FeatureKind.REVOLUTION.value: ("Revolution", "moRevolution_c"),
@@ -1359,6 +1390,16 @@ def _xml_text(value: str) -> str:
 
 
 def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
+    authored = objects[len(_BASE_OBJECTS) :]
+    if (
+        len(authored) == 1
+        and authored[0].object_id == 26
+        and authored[0].name == "Imported1"
+        and authored[0].class_name == "moBaseBody_c"
+        and not authored[0].dimensions
+        and not authored[0].payload
+    ):
+        return _base_body_payload()
     output = bytearray(struct.pack("<IH", len(objects), max(0, len(objects) - 1)))
     for item in objects:
         output.extend(_class_declaration(item.class_name))
@@ -1376,6 +1417,13 @@ def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
         for dimension in item.dimensions:
             output.extend(_scalar_record(dimension))
     return bytes(output)
+
+
+def _base_body_payload() -> bytes:
+    output = bytearray(_base_record(_BASE_RESOLVED_FEATURES))
+    for offset, value in _BASE_BODY_COUNTERS.items():
+        output[offset] = value
+    return bytes(output[:-4]) + _base_record(_BASE_BODY_FEATURE) + bytes(output[-4:])
 
 
 def _class_declaration(name: str) -> bytes:

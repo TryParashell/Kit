@@ -12,6 +12,7 @@ from convert.adapters.solidworks.format import PARTITION_STREAM
 from convert.parasolid import (
     _ENTITY_MAGIC,
     _RecordTables,
+    _TopologyRecord,
     _array_record_fields,
     _curve_parameter_domain,
     _curve_point_at_parameter,
@@ -269,6 +270,73 @@ def test_neutral_binary_writer_uses_v12_body_and_fin_topology() -> None:
     assert len(restored.faces) == 1
     assert len(restored.edges) == 3
     assert len(restored.vertices) == 3
+
+
+def test_v12_loop_direction_is_selected_from_fin_vertex_connectivity() -> None:
+    loop = 10
+    fins = {
+        20: _TopologyRecord(20, (1, loop, 21, 22, 100, 30, 40, 1, 1), 0),
+        21: _TopologyRecord(21, (1, loop, 22, 20, 101, 31, 41, 1, 1), 0),
+        22: _TopologyRecord(22, (1, loop, 20, 21, 102, 32, 42, 1, 1), 0),
+        30: _TopologyRecord(30, (1, 1, 1, 1, 102, 20, 40, 1, 1), 0),
+        31: _TopologyRecord(31, (1, 1, 1, 1, 100, 21, 41, 1, 1), 0),
+        32: _TopologyRecord(32, (1, 1, 1, 1, 101, 22, 42, 1, 1), 0),
+    }
+    tables = _RecordTables({}, {}, {}, fins, {}, {}, {}, {}, {}, True)
+    assert _walk_coedge_ring(tables, loop, 20) == (20, 22, 21)
+
+
+def test_v12_solidworks_body_attributes_bind_the_modifying_feature() -> None:
+    model = triangle_brep()
+    body_id = model.bodies[0].id
+    payload = encode_brep_model(
+        model,
+        partition=False,
+        solidworks_feature_ids={body_id: 26},
+    )
+    header = _parasolid_header(payload)
+    assert header is not None
+    body = payload[header.body_offset :]
+    assert len(payload) == 1797
+    assert body[12:16] == bytes.fromhex("00030004")
+    assert b"BODY_RECIPE_2001" in body
+    assert b"SWIMPLICITBODYNAME_ID_U" in body
+    assert b"LAST_BODY_MODIFYING_FEATURE_ID" in body
+    assert b"ENT_TIME_STAMP_2001" in body
+    assert b"ATOM_ID_2001" in body
+    assert b"ATOM_FACE_ID_2001" in body
+    assert b"SDL/TYSA_COLOUR" in body
+    assert bytes.fromhex("005200000001002f0000001a") in body
+    restored = decode_brep_model(payload)
+    assert restored is not None
+    assert restored.validate() == ()
+    changed = encode_brep_model(
+        model,
+        partition=False,
+        solidworks_feature_ids={body_id: 314},
+    )
+    assert bytes.fromhex("005200000001002f0000013a") in changed
+
+
+def test_v12_solidworks_body_attributes_require_complete_feature_ids() -> None:
+    model = triangle_brep()
+    with pytest.raises(ValueError, match="body-root"):
+        encode_brep_model(
+            model,
+            solidworks_feature_ids={model.bodies[0].id: 26},
+        )
+    with pytest.raises(ValueError, match="cover every"):
+        encode_brep_model(
+            model,
+            partition=False,
+            solidworks_feature_ids={"missing": 26},
+        )
+    with pytest.raises(ValueError, match="positive i32"):
+        encode_brep_model(
+            model,
+            partition=False,
+            solidworks_feature_ids={model.bodies[0].id: 0},
+        )
 
 
 @pytest.mark.parametrize(("path", "expected"), COMPACT_FIN_PARTS)

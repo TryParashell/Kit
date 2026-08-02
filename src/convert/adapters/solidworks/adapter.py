@@ -727,12 +727,9 @@ class SldprtAdapter:
             file_id = (
                 SldprtArchive.from_bytes(template).file_id
                 if template is not None
-                else int.from_bytes(
-                    hashlib.sha256(streams[KIT_DOCUMENT_STREAM]).digest()[:4],
-                    "big",
-                )
+                else None
             )
-            data = build_sldprt(streams, file_id=file_id or 1)
+            data = build_sldprt(streams, file_id=file_id, template=template)
             mode = "template" if template is not None else "generated"
             native_content = (
                 "source-preserved"

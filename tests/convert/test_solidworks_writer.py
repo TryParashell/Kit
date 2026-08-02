@@ -49,6 +49,7 @@ from convert.adapters.solidworks.format import (
     RELATIONSHIPS_STREAM,
     RESOLVED_FEATURES_STREAM,
 )
+from convert.parasolid import _parasolid_header, _scan_partition_records
 from interchange import (
     BooleanOperation,
     BrepPayload,
@@ -635,7 +636,7 @@ def test_neutral_brep_writes_native_parasolid_partition() -> None:
     partition = archive.require(PARTITION_STREAM)
     native = decode_partition_stream(partition)[0]
     restored = read_sldprt(output.getvalue())
-    assert native.schema == "SCH_SW_32001_11000"
+    assert native.schema == "SCH_1200000_12006"
     assert native.data == encode_brep_model(source.brep)
     assert partition != native.data
     assert restored.brep == source.brep
@@ -704,9 +705,12 @@ def test_native_sldprt_read_preserves_partition_and_adds_typed_brep() -> None:
 def test_parasolid_decoder_rejects_open_topology_and_deltas() -> None:
     encoded = encode_brep_model(triangle_brep())
     broken = bytearray(encoded)
-    coedge = broken.find(bytes((0, 0x11)))
-    assert coedge >= 0
-    struct.pack_into(">H", broken, coedge + 10, 0)
+    header = _parasolid_header(encoded)
+    assert header is not None
+    tables = _scan_partition_records(encoded[header.body_offset :])
+    assert tables is not None
+    loop = next(iter(tables.loops.values()))
+    struct.pack_into(">H", broken, header.body_offset + loop.offset + 10, 1)
     assert decode_brep_model(broken) is None
     deltas = encoded.replace(b"partition", b"deltasxxx", 1)
     assert decode_brep_model(deltas) is None

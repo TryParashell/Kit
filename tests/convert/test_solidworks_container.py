@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import struct
 
+import pytest
+
 from convert.adapters.solidworks import SldprtArchive, build_sldprt
 
 
@@ -81,7 +83,7 @@ def test_generated_container_has_complete_native_directory() -> None:
         assert archive.require(expected_name) == expected_data
         cursor += 46 + name_size
     assert cursor == end_offset
-    assert timestamps == {0x00210000}
+    assert timestamps == {0x1C34D281}
 
 
 def test_generated_container_is_deterministic() -> None:
@@ -90,3 +92,42 @@ def test_generated_container_is_deterministic() -> None:
         "Contents/Config-0-Partition": b"PS\0\0body",
     }
     assert build_sldprt(streams) == build_sldprt(streams)
+
+
+def test_generated_container_uses_coherent_source_less_identity() -> None:
+    blob = build_sldprt({"Contents/SolidWorks": b"<swSolidWorks/>"})
+    assert blob[:8] == bytes.fromhex("ec6e238600000004")
+    archive = SldprtArchive.from_bytes(blob)
+    record = archive.records[0]
+    assert blob[record.offset - 4 : record.offset] == bytes.fromhex("64d80045")
+    assert blob[-22:-18] == bytes.fromhex("54ce179a")
+
+
+def test_generated_container_supports_variable_stream_sizes_and_counts() -> None:
+    streams = {
+        "Contents/SolidWorks": b"<swSolidWorks/>" + b"x" * 4096,
+        "ThirdPty/KitData": bytes(range(256)) * 3,
+        "swXmlContents/KeyWords": b"<KeyWords/>" + b"y" * 127,
+    }
+    blob = build_sldprt(streams)
+    assert SldprtArchive.from_bytes(blob).streams == streams
+
+
+def test_generated_container_reuses_template_identity() -> None:
+    template = build_sldprt(
+        {"Contents/SolidWorks": b"<swSolidWorks/>"}, file_id=0x715BE98F
+    )
+    streams = {
+        "Contents/SolidWorks": b"<swSolidWorks version='2'/>",
+        "ThirdPty/KitData": b"kit",
+    }
+    blob = build_sldprt(streams, template=template)
+    assert blob[:4] == template[:4]
+    assert blob[8:12] == template[8:12]
+    assert blob[-22:-18] == template[-22:-18]
+    assert SldprtArchive.from_bytes(blob).streams == streams
+
+
+def test_generated_container_rejects_unpaired_file_identity() -> None:
+    with pytest.raises(ValueError, match="native template"):
+        build_sldprt({"Contents/SolidWorks": b"<swSolidWorks/>"}, file_id=1)

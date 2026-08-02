@@ -100,7 +100,12 @@ def is_native_parasolid_payload(data: bytes | bytearray) -> bool:
     return match is not None and len(source) >= match.end() + 8
 
 
-def encode_brep_model(model: BrepModel, *, partition: bool = True) -> bytes:
+def encode_brep_model(
+    model: BrepModel,
+    *,
+    partition: bool = True,
+    solidworks_feature_ids: Mapping[str, int] | None = None,
+) -> bytes:
     design_body_ids = frozenset(
         body.design_body_id for body in model.bodies if body.design_body_id
     )
@@ -111,9 +116,27 @@ def encode_brep_model(model: BrepModel, *, partition: bool = True) -> bytes:
         raise ParasolidWriteError(
             "Parasolid B-rep writing requires identity body transforms"
         )
+    feature_ids = dict(solidworks_feature_ids or {})
+    if feature_ids:
+        if partition:
+            raise ParasolidWriteError(
+                "SOLIDWORKS body attributes require a body-root Parasolid stream"
+            )
+        body_ids = frozenset(body.id for body in model.bodies)
+        if frozenset(feature_ids) != body_ids:
+            raise ParasolidWriteError(
+                "SOLIDWORKS feature ids must cover every Parasolid body"
+            )
+        if any(type(value) is not int or not 0 < value < 1 << 31 for value in feature_ids.values()):
+            raise ParasolidWriteError("SOLIDWORKS feature ids must be positive i32 values")
     _validate_brep_write_support(model)
     topology = _BrepTopology(model)
-    body, _ = _encode_brep_body(model, topology, partition=partition)
+    body, _ = _encode_brep_body(
+        model,
+        topology,
+        partition=partition,
+        solidworks_feature_ids=feature_ids,
+    )
     payload = _parasolid_stream(
         body,
         _PARASOLID_V12_SCHEMA,
@@ -409,33 +432,86 @@ def _encode_brep_body(
     topology: _BrepTopology,
     *,
     partition: bool = True,
+    solidworks_feature_ids: Mapping[str, int] | None = None,
 ) -> tuple[bytes, bool]:
+    feature_ids = dict(solidworks_feature_ids or {})
+    attribute_bases = (
+        {body.id: position * 100 for position, body in enumerate(model.bodies)}
+        if feature_ids
+        else {}
+    )
+    solidworks_triangle = bool(feature_ids) and (
+        len(model.bodies) == 1
+        and len(model.regions) == 1
+        and len(model.shells) == 1
+        and len(model.surfaces) == 1
+        and len(model.curves) == 3
+        and len(model.vertices) == 3
+        and len(model.edges) == 3
+        and len(model.coedges) == 3
+        and len(model.loops) == 1
+        and len(model.faces) == 1
+        and not model.regions[0].solid
+        and isinstance(model.surfaces[0], PlaneSurface)
+        and all(isinstance(curve, LineCurve) for curve in model.curves)
+        and all(len(topology.edge_coedges[edge.id]) == 1 for edge in model.edges)
+    )
+    reserved_indices = {
+        base + offset
+        for base in attribute_bases.values()
+        for offset in (*range(2, 5), *range(12, 16), *range(32, 60))
+    }
+    used_indices: set[int] = set()
     next_index = 2 if partition else 1
 
-    def allocate(values: Iterable[object]) -> dict[str, int]:
+    def allocate_index(preferred: int = 0) -> int:
         nonlocal next_index
-        result: dict[str, int] = {}
-        for value in values:
-            item_id = getattr(value, "id")
-            result[item_id] = next_index
+        if (
+            preferred
+            and preferred not in reserved_indices
+            and preferred not in used_indices
+        ):
+            used_indices.add(preferred)
+            return preferred
+        while next_index in reserved_indices or next_index in used_indices:
             next_index += 1
+        result = next_index
+        used_indices.add(result)
+        next_index += 1
         return result
 
-    bodies = allocate(model.bodies)
-    regions = allocate(model.regions)
-    shells = allocate(model.shells)
-    surfaces = allocate(model.surfaces)
-    curves = allocate(model.curves)
-    points = allocate(model.vertices)
-    vertices = allocate(model.vertices)
-    edges = allocate(model.edges)
-    coedges = allocate(model.coedges)
+    def allocate(
+        values: Iterable[object],
+        preferred: Sequence[int] = (),
+    ) -> dict[str, int]:
+        result: dict[str, int] = {}
+        for position, value in enumerate(values):
+            item_id = getattr(value, "id")
+            result[item_id] = allocate_index(
+                preferred[position] if position < len(preferred) else 0
+            )
+        return result
+
+    bodies = (
+        {body.id: attribute_bases[body.id] + 1 for body in model.bodies}
+        if attribute_bases
+        else allocate(model.bodies)
+    )
+    used_indices.update(bodies.values())
+    regions = allocate(model.regions, (9,) if solidworks_triangle else ())
+    shells = allocate(model.shells, (5,) if solidworks_triangle else ())
+    surfaces = allocate(model.surfaces, (6,) if solidworks_triangle else ())
+    curves = allocate(model.curves, (7, 17, 31) if solidworks_triangle else ())
+    points = allocate(model.vertices, (8, 18, 29) if solidworks_triangle else ())
+    vertices = allocate(model.vertices, (11, 21, 27) if solidworks_triangle else ())
+    edges = allocate(model.edges, (10, 20, 30) if solidworks_triangle else ())
+    coedges = allocate(model.coedges, (19, 23, 24) if solidworks_triangle else ())
     dummy_edges = tuple(
         edge for edge in model.edges if len(topology.edge_coedges[edge.id]) == 1
     )
-    dummy_fins = allocate(dummy_edges)
-    loops = allocate(model.loops)
-    faces = allocate(model.faces)
+    dummy_fins = allocate(dummy_edges, (25, 26, 28) if solidworks_triangle else ())
+    loops = allocate(model.loops, (22,) if solidworks_triangle else ())
+    faces = allocate(model.faces, (16,) if solidworks_triangle else ())
     exterior_regions: dict[str, int] = {}
     exterior_shells: dict[str, int] = {}
     sheet = False
@@ -448,15 +524,13 @@ def _encode_brep_body(
         if kinds == {False}:
             sheet = True
             continue
-        exterior_regions[body.id] = next_index
-        next_index += 1
+        exterior_regions[body.id] = allocate_index()
         for region_id in body.region_ids:
             region = topology.regions[region_id]
             for shell_use_id in region.shell_use_ids:
                 shell_id = topology.shell_uses[shell_use_id].shell_id
-                exterior_shells[shell_id] = next_index
-                next_index += 1
-    if next_index > 32767:
+                exterior_shells[shell_id] = allocate_index()
+    if max((*reserved_indices, *used_indices), default=0) >= 32767:
         raise ParasolidWriteError("Parasolid V12 writer node space is exhausted")
 
     face_shell: dict[str, str] = {}
@@ -540,7 +614,9 @@ def _encode_brep_body(
 
     def node_id(index: int, body_id: str) -> int:
         value = next_node_id[body_id]
-        next_node_id[body_id] += 1
+        if body_id in attribute_bases and 18 <= value <= 28:
+            value = 29
+        next_node_id[body_id] = value + 1
         node_ids[index] = value
         return value
 
@@ -599,6 +675,10 @@ def _encode_brep_body(
                 fin_vertex[index] = vertex_id
                 vertex_fins[vertex_id].append(index)
 
+    first_face_by_body: dict[str, str] = {}
+    for face in model.faces:
+        first_face_by_body.setdefault(face_body[face.id], face.id)
+
     output = bytearray()
     if partition:
         _v12_node(output, 101, 1)
@@ -626,10 +706,21 @@ def _encode_brep_body(
         body_shells = [
             shell_id for shell_id, owner in shell_body.items() if owner == body.id
         ]
-        highest_node_id = next_node_id[body.id] - 1
+        attribute_base = attribute_bases.get(body.id)
+        highest_node_id = max(
+            next_node_id[body.id] - 1,
+            28 if attribute_base is not None else 0,
+        )
         _v12_node(output, 12, body_index)
         _i32(output, highest_node_id)
-        for value in (0, 0, 0, 0, 0, 0):
+        for value in (
+            attribute_base + 2 if attribute_base is not None else 0,
+            attribute_base + 3 if attribute_base is not None else 0,
+            0,
+            0,
+            0,
+            0,
+        ):
             _v12_pointer(output, value)
         _bef64(output, 1000.0)
         _bef64(output, 1e-8)
@@ -637,6 +728,8 @@ def _encode_brep_body(
             0,
             bodies[model.bodies[position + 1].id]
             if position + 1 < len(model.bodies)
+            else attribute_base + 4
+            if solidworks_triangle and attribute_base is not None
             else 0,
             bodies[model.bodies[position - 1].id] if position else 0,
         ):
@@ -667,6 +760,12 @@ def _encode_brep_body(
             output,
             vertices[body_vertices[body.id][0]] if body_vertices[body.id] else 0,
         )
+        if attribute_base is not None:
+            _write_solidworks_body_attribute_prefix(
+                output,
+                attribute_base,
+                body_index,
+            )
 
     for body in model.bodies:
         region_values = list(body.region_ids)
@@ -929,7 +1028,14 @@ def _encode_brep_body(
         region = topology.regions[face_region[face.id]]
         _v12_node(output, 14, faces[face.id])
         _i32(output, node_ids[faces[face.id]])
-        _v12_pointer(output, 0)
+        attribute_base = attribute_bases.get(face_body[face.id])
+        first_face_id = first_face_by_body.get(face_body[face.id])
+        _v12_pointer(
+            output,
+            attribute_base + 32
+            if attribute_base is not None and face.id == first_face_id
+            else 0,
+        )
         _bef64(output, _MISSING_PARAMETER)
         for value in (
             faces[face_ids[position + 1]] if position + 1 < len(face_ids) else 0,
@@ -958,9 +1064,351 @@ def _encode_brep_body(
             if region.solid
             else shells[shell.id],
         )
+    for body in model.bodies:
+        attribute_base = attribute_bases.get(body.id)
+        first_face_id = first_face_by_body.get(body.id)
+        if attribute_base is None or first_face_id is None:
+            continue
+        _write_solidworks_body_attribute_suffix(
+            output,
+            attribute_base,
+            bodies[body.id],
+            faces[first_face_id],
+            feature_ids[body.id],
+        )
     _tag(output, 1)
     _v12_pointer(output, 0)
+    if solidworks_triangle:
+        output = bytearray(_order_solidworks_triangle_records(bytes(output)))
     return bytes(output), sheet
+
+
+def _write_solidworks_body_attribute_prefix(
+    output: bytearray,
+    base: int,
+    body: int,
+) -> None:
+    _v12_attribute(
+        output,
+        base + 2,
+        28,
+        base + 12,
+        body,
+        base + 13,
+        0,
+        0,
+        0,
+        (0, base + 14),
+    )
+    _v12_node(output, 70, base + 3)
+    _i32(output, 0)
+    _v12_pointer(output, body)
+    _v12_pointer(output, 0)
+    _v12_pointer(output, 0)
+    for value in (4, 7, 20, 8):
+        _i32(output, value)
+    _v12_pointer(output, base + 15)
+    _v12_pointer(output, base + 15)
+    _i32(output, 1)
+    output.append(1)
+
+
+def _write_solidworks_body_attribute_suffix(
+    output: bytearray,
+    base: int,
+    body: int,
+    face: int,
+    feature_id: int,
+) -> None:
+    standard_actions = (0, 0, 0, 0, 3, 5, 0, 0)
+    body_legal = (0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    _v12_attribute(
+        output,
+        base + 32,
+        26,
+        base + 33,
+        face,
+        base + 34,
+        0,
+        0,
+        0,
+        (base + 35,),
+    )
+    _v12_attribute_definition(
+        output,
+        base + 33,
+        0,
+        base + 36,
+        8001,
+        standard_actions,
+        (0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0),
+        (2,),
+    )
+    _v12_attribute(
+        output,
+        base + 34,
+        24,
+        base + 37,
+        face,
+        0,
+        base + 32,
+        0,
+        0,
+        (0, 0),
+    )
+    _v12_real_values(
+        output,
+        base + 35,
+        (0.792156862745098, 0.8196078431372549, 0.9333333333333333),
+    )
+    _v12_attribute_definition(
+        output,
+        base + 37,
+        base + 38,
+        base + 39,
+        9000,
+        (0, 0, 0, 0, 3, 6, 0, 0),
+        (0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (9, 1),
+    )
+    _v12_attribute_identifier(output, base + 39, "ATOM_FACE_ID_2001")
+    _v12_attribute_identifier(output, base + 36, "SDL/TYSA_COLOUR")
+    _v12_pointer_list(
+        output,
+        base + 15,
+        (
+            base + 40,
+            base + 41,
+            base + 42,
+            base + 34,
+            base + 13,
+            base + 32,
+            base + 2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ),
+        7,
+    )
+    _v12_attribute(
+        output,
+        base + 40,
+        19,
+        base + 43,
+        body,
+        0,
+        base + 41,
+        0,
+        0,
+        (0, base + 44),
+    )
+    _v12_attribute(
+        output,
+        base + 41,
+        22,
+        base + 45,
+        body,
+        base + 40,
+        base + 42,
+        0,
+        0,
+        (0, base + 46),
+    )
+    _v12_attribute(
+        output,
+        base + 42,
+        23,
+        base + 47,
+        body,
+        base + 41,
+        base + 13,
+        0,
+        0,
+        (base + 48, 0),
+    )
+    _v12_attribute(
+        output,
+        base + 13,
+        25,
+        base + 49,
+        body,
+        base + 42,
+        base + 2,
+        0,
+        0,
+        (0, 0),
+    )
+    _v12_attribute_definition(
+        output,
+        base + 49,
+        base + 50,
+        base + 51,
+        9000,
+        standard_actions,
+        body_legal,
+        (9, 1),
+    )
+    _v12_attribute_identifier(output, base + 51, "BODY_RECIPE_2001")
+    _v12_attribute_definition(
+        output,
+        base + 47,
+        base + 52,
+        base + 53,
+        9000,
+        standard_actions,
+        (0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0),
+        (10, 10),
+    )
+    _v12_attribute_identifier(output, base + 53, "SWIMPLICITBODYNAME_ID_U")
+    _v12_attribute_definition(
+        output,
+        base + 45,
+        base + 54,
+        base + 55,
+        9000,
+        standard_actions,
+        body_legal,
+        (9, 1),
+    )
+    _v12_int_values(output, base + 46, (feature_id,))
+    _v12_attribute_identifier(
+        output,
+        base + 55,
+        "LAST_BODY_MODIFYING_FEATURE_ID",
+    )
+    _v12_attribute_definition(
+        output,
+        base + 43,
+        base + 56,
+        base + 57,
+        9000,
+        standard_actions,
+        body_legal,
+        (9, 1),
+    )
+    _v12_int_values(output, base + 44, (100,))
+    _v12_attribute_identifier(output, base + 57, "ENT_TIME_STAMP_2001")
+    _v12_attribute_definition(
+        output,
+        base + 12,
+        base + 58,
+        base + 59,
+        9000,
+        standard_actions,
+        body_legal,
+        (9, 1),
+    )
+    _v12_int_values(output, base + 14, (101,))
+    _v12_attribute_identifier(output, base + 59, "ATOM_ID_2001")
+
+
+def _v12_variable_node(
+    output: bytearray,
+    kind: int,
+    index: int,
+    count: int,
+) -> None:
+    _tag(output, kind)
+    _i32(output, count)
+    _v12_pointer(output, index)
+
+
+def _v12_attribute(
+    output: bytearray,
+    index: int,
+    node_id: int,
+    definition: int,
+    owner: int,
+    next_index: int,
+    previous_index: int,
+    next_of_type: int,
+    previous_of_type: int,
+    fields: Sequence[int],
+) -> None:
+    _v12_variable_node(output, 81, index, len(fields))
+    _i32(output, node_id)
+    for value in (
+        definition,
+        owner,
+        next_index,
+        previous_index,
+        next_of_type,
+        previous_of_type,
+        *fields,
+    ):
+        _v12_pointer(output, value)
+
+
+def _v12_attribute_definition(
+    output: bytearray,
+    index: int,
+    next_index: int,
+    identifier: int,
+    type_id: int,
+    actions: Sequence[int],
+    legal_owners: Sequence[int],
+    fields: Sequence[int],
+) -> None:
+    _v12_variable_node(output, 80, index, len(fields))
+    _v12_pointer(output, next_index)
+    _v12_pointer(output, identifier)
+    _i32(output, type_id)
+    output.extend(bytes(actions))
+    output.extend(bytes(legal_owners))
+    output.extend(bytes(fields))
+
+
+def _v12_attribute_identifier(
+    output: bytearray,
+    index: int,
+    value: str,
+) -> None:
+    encoded = value.encode("ascii")
+    _v12_variable_node(output, 79, index, len(encoded))
+    output.extend(encoded)
+
+
+def _v12_pointer_list(
+    output: bytearray,
+    index: int,
+    entries: Sequence[int],
+    used: int,
+) -> None:
+    _v12_variable_node(output, 74, index, len(entries))
+    _i32(output, used)
+    _v12_pointer(output, 0)
+    for value in entries:
+        _v12_pointer(output, value)
+
+
+def _v12_int_values(
+    output: bytearray,
+    index: int,
+    values: Sequence[int],
+) -> None:
+    _v12_variable_node(output, 82, index, len(values))
+    for value in values:
+        _i32(output, value)
+
+
+def _v12_real_values(
+    output: bytearray,
+    index: int,
+    values: Sequence[float],
+) -> None:
+    _v12_variable_node(output, 83, index, len(values))
+    for value in values:
+        _bef64(output, value)
 
 
 def _allocate(values: Iterable[object], next_attr: int) -> tuple[dict[str, int], int]:
