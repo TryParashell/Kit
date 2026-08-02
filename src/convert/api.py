@@ -66,7 +66,7 @@ def write_document(
     configuration: str | None = None,
     overwrite: bool = False,
     validate: bool = True,
-    allow_carrier: bool = False,
+    allow_carrier: bool = True,
     values: Mapping[str, Any] | None = None,
 ) -> WriteResult:
     selected_values = {"portable": True}
@@ -97,7 +97,7 @@ def convert(
     include_tessellation: bool = True,
     strict: bool = True,
     overwrite: bool = False,
-    allow_carrier: bool = False,
+    allow_carrier: bool = True,
     write_values: Mapping[str, Any] | None = None,
 ) -> ConversionResult:
     values = {"portable": True}
