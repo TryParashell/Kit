@@ -1067,6 +1067,60 @@ class _EntityRecord:
     offset: int
 
 
+@dataclass(frozen=True, slots=True)
+class _IntersectionRecord:
+    attribute: int
+    header_references: tuple[int, ...]
+    references: tuple[int, ...]
+    sense: bool
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _ChartRecord:
+    attribute: int
+    base_parameter: float
+    base_scale: float
+    chordal_error: float
+    angular_error: float
+    parameter_errors: tuple[float, float]
+    points: tuple[Vector3, ...]
+    parameters: tuple[float, ...]
+    tangents: tuple[Vector3, ...]
+    support_uv: tuple[tuple[tuple[float, float], ...], ...]
+    layout: str
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _TermRecord:
+    attribute: int
+    count: int
+    form: str
+    point: Vector3
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _SupportUvRecord:
+    attribute: int
+    marker: int
+    values: tuple[float, ...]
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _CompactSupportUvRecord:
+    attribute: int
+    marker: int
+    values_offset: int
+    offset: int
+
+
 @dataclass(slots=True)
 class _RecordTables:
     bridges: dict[int, _TopologyRecord]
