@@ -1116,6 +1116,74 @@ def _feature_selections(obj: _NativeObject) -> tuple[Selection, ...]:
     return tuple(result)
 
 
+def _explicit_selections(objects: tuple[_NativeObject, ...]) -> tuple[Selection, ...]:
+    result: list[Selection] = []
+    for obj in objects:
+        selection_id = _string(obj, "KitSelectionId")
+        node = obj.properties.get("Selection")
+        if not selection_id or node is None:
+            continue
+        kinds_node = obj.properties.get("EntityKinds")
+        kinds = (
+            [
+                child.get("value", "")
+                for child in kinds_node.findall("./StringList/String")
+            ]
+            if kinds_node is not None
+            else []
+        )
+        paths: list[SelectionPathElement] = []
+        for index, link in enumerate(node.findall("./LinkSubList/Link")):
+            target = link.get("obj", link.get("value", ""))
+            subelements = [
+                value
+                for child in link.findall("./Sub")
+                if (value := child.get("value", ""))
+            ]
+            if link.get("sub") is not None:
+                subelements.insert(0, link.get("sub", ""))
+            if not subelements:
+                subelements.append("")
+            for subelement in subelements:
+                token = subelement.rsplit(".", 1)[-1]
+                inferred = next(
+                    (
+                        kind.value
+                        for prefix, kind in SUBELEMENT_KIND_BY_PREFIX.items()
+                        if token.startswith(prefix)
+                    ),
+                    MateEntityKind.NATIVE.value,
+                )
+                paths.append(
+                    SelectionPathElement(
+                        kinds[index] if index < len(kinds) and kinds[index] else inferred,
+                        target,
+                        subelement,
+                    )
+                )
+        point_node = _child(obj, "SelectionPoint", "PropertyVector")
+        point = (
+            Vector3(
+                _number(point_node.get("valueX")),
+                _number(point_node.get("valueY")),
+                _number(point_node.get("valueZ")),
+            )
+            if point_node is not None
+            else None
+        )
+        result.append(
+            Selection(
+                selection_id,
+                _string(obj, "Label", obj.name),
+                tuple(paths),
+                point=point,
+                provenance=Provenance(FORMAT_ID, obj.name),
+                attributes={"freecad": _native_object_data(obj)},
+            )
+        )
+    return tuple(result)
+
+
 def _feature_parameters(
     obj: _NativeObject,
     feature_id: str,
@@ -2200,6 +2268,30 @@ def _remaining_expressions(
                     attributes={"freecad_path": path},
                 )
             )
+
+
+def _native_configurations(
+    objects: tuple[_NativeObject, ...], feature_ids: dict[str, str]
+) -> tuple[Configuration, ...]:
+    values = [obj for obj in objects if _string(obj, "KitConfigurationId")]
+    if not values:
+        return (Configuration("freecad:configuration:default", "Default", active=True),)
+    ids = {obj.name: _string(obj, "KitConfigurationId") for obj in values}
+    return tuple(
+        Configuration(
+            ids[obj.name],
+            _string(obj, "Label", obj.name),
+            active=_bool(obj, "Active"),
+            parent_id=ids.get(_link(obj, "ParentConfiguration")),
+            suppressed_feature_ids=tuple(
+                feature_ids[name]
+                for name in _link_list(obj, "SuppressedFeatures")
+                if name in feature_ids
+            ),
+            attributes={"freecad": _native_object_data(obj)},
+        )
+        for obj in values
+    )
 
 
 def read_native_fcstd(
