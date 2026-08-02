@@ -1137,7 +1137,9 @@ def _marker_semantic(
     profile_role: int,
 ) -> str:
     if profile_role == 2:
-        return "relation"
+        if native_kind == 2 and endpoints is not None and endpoints[0] != endpoints[1]:
+            return "line"
+        return "native"
     if locus == _CIRCLE_LOCUS and coordinates is not None:
         return "circle"
     if locus == _POINT_LOCUS:
@@ -1152,14 +1154,15 @@ def _marker_semantic(
 def _profiles(
     markers: list[NativeMarker], dimensions: tuple[NativeDimension, ...]
 ) -> tuple[tuple[NativeProfile, ...], set[int], tuple[NativeDimension, ...]]:
-    circle = _circle_profile(markers, dimensions)
-    if circle is not None:
-        profile, selected_index, semantic = circle
-        normalized = tuple(
-            replace(dimension, kind=semantic) if index == selected_index else dimension
-            for index, dimension in enumerate(dimensions)
+    circle_profiles, circle_dimensions = _circle_profiles(markers, dimensions)
+    normalized = tuple(
+        (
+            replace(dimension, kind=circle_dimensions[index])
+            if index in circle_dimensions
+            else dimension
         )
-        return (profile,), set(profile.marker_offsets), normalized
+        for index, dimension in enumerate(dimensions)
+    )
     points = [
         marker
         for marker in markers
@@ -1248,13 +1251,17 @@ def _profiles(
         for index in range(0, len(run), 6)
         if len(run[index : index + 4]) == 4
     ]
-    profiles: list[NativeProfile] = []
-    used: set[int] = set()
+    profiles: list[NativeProfile] = list(circle_profiles)
+    used: set[int] = {
+        offset for profile in circle_profiles for offset in profile.marker_offsets
+    }
     for index, rectangle in enumerate(selected):
         span = tuple(
             marker.offset
             for marker in (profile_lines[index] if index < len(profile_lines) else ())
         )
+        if circle_profiles and len(span) != 4:
+            continue
         used.update(span)
         corners = {
             (rectangle[0], rectangle[1]),
@@ -1268,41 +1275,28 @@ def _profiles(
             if marker.semantic == "point" and marker.coordinates_mm in corners
         )
         profiles.append(NativeProfile("rectangle", rectangle, span))
-    return tuple(profiles), used, dimensions
+    profiles.sort(key=lambda profile: min(profile.marker_offsets, default=1 << 62))
+    return tuple(profiles), used, normalized
 
 
-def _circle_profile(
+def _circle_profiles(
     markers: list[NativeMarker], dimensions: tuple[NativeDimension, ...]
-) -> tuple[NativeProfile, int, str] | None:
+) -> tuple[tuple[NativeProfile, ...], dict[int, str]]:
     centers = [
         marker
         for marker in markers
         if marker.semantic == "circle" and marker.coordinates_mm is not None
     ]
     if not centers:
-        return None
-    preferred = next(
-        (
-            marker
-            for marker in reversed(centers)
-            if marker.native_kind != 0
-            and any(
-                candidate.offset > marker.offset
-                and candidate.native_kind == 0
-                and candidate.semantic == "circle"
-                for candidate in centers
-            )
-        ),
-        centers[-1],
-    )
-    ordered_centers = (
-        preferred,
-        *tuple(marker for marker in centers if marker != preferred),
-    )
-    candidates: list[
-        tuple[tuple[bool, bool, bool, bool, int, int], NativeProfile, int, str]
-    ] = []
-    for center_order, center in enumerate(ordered_centers):
+        return (), {}
+    candidates: dict[
+        int,
+        dict[
+            tuple[float, float, float],
+            list[tuple[NativeMarker, NativeMarker, str]],
+        ],
+    ] = {}
+    for center in centers:
         following = next(
             (
                 marker
@@ -1331,68 +1325,48 @@ def _circle_profile(
                 normalized_radius = dimension.value_mm / 2.0
             if semantic is None:
                 continue
-            profile = NativeProfile(
-                "circle",
-                (
-                    center.coordinates_mm[0],
-                    center.coordinates_mm[1],
-                    normalized_radius,
-                ),
-                (center.offset, following.offset),
-                dimension.name,
-                semantic,
-            )
-            rank = (
-                center_order != 0,
-                len(dimension.operands) != 1,
-                dimension.kind not in {"radius", "diameter"},
-                dimension.native_role == "display",
-                (
-                    dimension.native_offset
-                    if dimension.native_offset is not None
-                    else index
-                ),
-                index,
-            )
-            candidates.append((rank, profile, index, semantic))
-    if candidates:
-        _, profile, index, semantic = min(candidates, key=lambda item: item[0])
-        return profile, index, semantic
-    diameter = next(
-        (
-            (index, dimension)
-            for index, dimension in enumerate(dimensions)
-            if dimension.kind == "diameter"
-        ),
-        None,
-    )
-    if diameter is None:
-        return None
-    index, dimension = diameter
-    center = preferred
-    following = next(
-        (
-            marker
-            for marker in markers
-            if marker.offset > center.offset and marker.coordinates_mm is not None
-        ),
-        center,
-    )
-    return (
-        NativeProfile(
-            "circle",
-            (
+            geometry = (
                 center.coordinates_mm[0],
                 center.coordinates_mm[1],
-                dimension.value_mm / 2.0,
-            ),
-            (center.offset, following.offset),
-            dimension.name,
-            "diameter",
-        ),
-        index,
-        "diameter",
-    )
+                normalized_radius,
+            )
+            candidates.setdefault(index, {}).setdefault(geometry, []).append(
+                (center, following, semantic)
+            )
+    result: list[NativeProfile] = []
+    geometries: set[tuple[float, float, float]] = set()
+    normalized: dict[int, str] = {}
+    for index, dimension in enumerate(dimensions):
+        matches = candidates.get(index, {})
+        if len(matches) != 1:
+            continue
+        geometry, records = next(iter(matches.items()))
+        if geometry in geometries:
+            continue
+        semantics = {semantic for _, _, semantic in records}
+        if len(semantics) != 1:
+            continue
+        geometries.add(geometry)
+        normalized[index] = next(iter(semantics))
+        result.append(
+            NativeProfile(
+                "circle",
+                geometry,
+                tuple(
+                    sorted(
+                        {
+                            offset
+                            for center, following, _ in records
+                            for offset in (center.offset, following.offset)
+                        }
+                    )
+                ),
+                dimension.name,
+                normalized[index],
+            )
+        )
+    result.sort(key=lambda profile: min(profile.marker_offsets))
+    return tuple(result), normalized
 
 
 def _same_point(left: tuple[float, float], right: tuple[float, float]) -> bool:
