@@ -4379,7 +4379,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
             raise ValueError("face boundary is absent")
         face_loops[bridge_attribute] = tuple(loops)
         for _, ring in loops:
-            for index, coedge_attribute in enumerate(ring):
+            for coedge_attribute in ring:
                 coedge = tables.coedges[coedge_attribute]
                 if coedge.isolated:
                     if len(ring) != 1 or not _isolated_fin(
@@ -4598,23 +4598,50 @@ def _walk_coedge_ring(
 ) -> tuple[int, ...]:
     if first_attribute <= 1:
         raise ValueError("empty coedge ring")
-    ring: list[int] = []
-    seen: set[int] = set()
-    attribute = first_attribute
-    while attribute not in seen:
-        if len(ring) >= 1_000_000:
-            raise ValueError("coedge ring exceeds record bound")
-        seen.add(attribute)
-        record = tables.coedges.get(attribute)
-        if record is None or record.references[1] != loop_attribute:
-            raise ValueError("invalid coedge owner")
-        ring.append(attribute)
-        attribute = record.references[2 if tables.v12_partition else 3]
-        if attribute <= 1:
-            raise ValueError("open coedge ring")
-    if attribute != first_attribute:
-        raise ValueError("coedge ring joins another cycle")
-    return tuple(ring)
+
+    def walk(link: int) -> tuple[int, ...]:
+        ring: list[int] = []
+        seen: set[int] = set()
+        attribute = first_attribute
+        while attribute not in seen:
+            if len(ring) >= 1_000_000:
+                raise ValueError("coedge ring exceeds record bound")
+            seen.add(attribute)
+            record = tables.coedges.get(attribute)
+            if record is None or record.references[1] != loop_attribute:
+                raise ValueError("invalid coedge owner")
+            ring.append(attribute)
+            attribute = record.references[link]
+            if attribute <= 1:
+                raise ValueError("open coedge ring")
+        if attribute != first_attribute:
+            raise ValueError("coedge ring joins another cycle")
+        return tuple(ring)
+
+    if not tables.v12_partition:
+        return walk(3)
+    candidates: list[tuple[int, ...]] = []
+    for link in (2, 3):
+        candidate = walk(link)
+        if candidate not in candidates:
+            candidates.append(candidate)
+    connected = []
+    for candidate in candidates:
+        valid = True
+        for position, attribute in enumerate(candidate):
+            record = tables.coedges[attribute]
+            if record.isolated and len(candidate) == 1:
+                continue
+            other = tables.coedges.get(record.references[5])
+            following = tables.coedges[candidate[(position + 1) % len(candidate)]]
+            if other is None or other.references[4] != following.references[4]:
+                valid = False
+                break
+        if valid:
+            connected.append(candidate)
+    if not connected:
+        raise ValueError("disconnected coedge ring")
+    return connected[0]
 
 
 def _provable_curve_range(
