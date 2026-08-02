@@ -292,8 +292,7 @@ class CatiaAdapter:
         carrier_document = _carrier_manifest_document(document)
         native_base = None
         if not settings.values.get("rebuild", False) and not (
-            settings.values.get("portable") is True
-            and document.assembly is not None
+            settings.values.get("portable") is True and document.assembly is not None
         ):
             native_base = _native_base_payload(document, document_type)
         if native_base is not None:
@@ -355,9 +354,7 @@ class CatiaAdapter:
                         "referenced_files_written": 0,
                         "container": "V5_CFV2",
                         "document_type": document_type,
-                        "native_base_sha256": hashlib.sha256(
-                            native_base
-                        ).hexdigest(),
+                        "native_base_sha256": hashlib.sha256(native_base).hexdigest(),
                         "manifest_sha256": hashlib.sha256(
                             carrier_document.to_json(indent=None).encode("utf-8")
                         ).hexdigest(),
@@ -1043,9 +1040,7 @@ def _replay_compatibility(data: bytes) -> str:
     return "kit-neutral-only"
 
 
-def _native_base_overlay_matches(
-    archive: Cfv2Archive, document: CadDocument
-) -> bool:
+def _native_base_overlay_matches(archive: Cfv2Archive, document: CadDocument) -> bool:
     manifest_matches = tuple(
         (directory, stream)
         for directory in (archive.outer, *archive.nested)
@@ -1067,10 +1062,7 @@ def _native_base_overlay_matches(
             base = Cfv2Archive.from_bytes(payload.data)
             if _manifest_bytes(base) is not None:
                 continue
-            if (
-                _document_type(base, f"candidate.{payload.schema}")
-                != payload.schema
-            ):
+            if _document_type(base, f"candidate.{payload.schema}") != payload.schema:
                 continue
             if _overlay_preserves_native_base(
                 archive,
