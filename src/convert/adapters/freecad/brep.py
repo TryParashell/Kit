@@ -1585,6 +1585,322 @@ def _loop_uv_points(
     return _unwrap_surface_uv(values, surface)
 
 
+def _face_loop_reversals(
+    graph: _ModelGraph,
+    face: BrepFace,
+    tolerance: float,
+) -> dict[str, bool]:
+    area_tolerance = max(tolerance * tolerance, 1e-10)
+    loop_points = {
+        loop_id: _loop_uv_points(graph, face, graph.loops[loop_id])
+        for loop_id in face.loop_ids
+    }
+    loop_areas = {
+        loop_id: (
+            None
+            if points is None or len(points) < 3
+            else sum(
+                left[0] * right[1] - right[0] * left[1]
+                for left, right in zip(points, (*points[1:], points[0]))
+            )
+            / 2.0
+        )
+        for loop_id, points in loop_points.items()
+    }
+    measurable = {
+        loop_id: area
+        for loop_id, area in loop_areas.items()
+        if area is not None and abs(area) > area_tolerance
+    }
+    if len(measurable) != len(face.loop_ids):
+        _unsupported(f"face {face.id} has an unprovable loop orientation")
+    outer_loop_id = max(measurable, key=lambda loop_id: abs(measurable[loop_id]))
+    return {
+        loop_id: (area > 0.0) != (loop_id == outer_loop_id)
+        for loop_id, area in measurable.items()
+    }
+
+
+def _coedge_shape_reversed(coedge: BrepCoedge, edge: BrepEdge) -> bool:
+    return coedge.reversed != (edge.end_parameter < edge.start_parameter)
+
+
+def _planar_line_loop_is_proven(
+    graph: _ModelGraph,
+    face: BrepFace,
+    loop: BrepLoop,
+    tolerance: float,
+) -> bool:
+    if len(loop.coedge_ids) < 3:
+        return False
+    surface = graph.surfaces[face.surface_id]
+    if not isinstance(surface, PlaneSurface):
+        return False
+    points: list[tuple[float, float]] = []
+    allowed = max(tolerance, face.tolerance, 1e-7) * 10.0
+    for coedge_id in loop.coedge_ids:
+        coedge = graph.coedges[coedge_id]
+        edge = graph.edges[coedge.edge_id]
+        curve = graph.curves[edge.curve_id]
+        if not isinstance(curve, LineCurve):
+            return False
+        first = edge.end_parameter if coedge.reversed else edge.start_parameter
+        last = edge.start_parameter if coedge.reversed else edge.end_parameter
+        start = _curve_point(curve, first)
+        end = _curve_point(curve, last)
+        middle = _curve_point(curve, (first + last) / 2.0)
+        if start is None or end is None or middle is None:
+            return False
+        if any(
+            residual is None or residual > allowed
+            for residual in (
+                _surface_residual(surface, start),
+                _surface_residual(surface, middle),
+                _surface_residual(surface, end),
+            )
+        ):
+            return False
+        uv = _surface_uv(surface, start)
+        if uv is None:
+            return False
+        points.append(uv)
+    if len(points) < 3:
+        return False
+    span = max(
+        max(value[axis] for value in points) - min(value[axis] for value in points)
+        for axis in (0, 1)
+    )
+    epsilon = allowed * max(1.0, span)
+    turns = []
+    for index, middle in enumerate(points):
+        left = points[index - 1]
+        right = points[(index + 1) % len(points)]
+        turn = (middle[0] - left[0]) * (right[1] - middle[1]) - (
+            middle[1] - left[1]
+        ) * (right[0] - middle[0])
+        if abs(turn) <= epsilon:
+            return False
+        turns.append(turn > 0.0)
+    if any(value != turns[0] for value in turns[1:]):
+        return False
+    for first_index, first_start in enumerate(points):
+        first_end = points[(first_index + 1) % len(points)]
+        for second_index in range(first_index + 1, len(points)):
+            if second_index in {
+                first_index,
+                (first_index + 1) % len(points),
+                (first_index - 1) % len(points),
+            }:
+                continue
+            second_start = points[second_index]
+            second_end = points[(second_index + 1) % len(points)]
+            crosses = []
+            for left, right, point in (
+                (first_start, first_end, second_start),
+                (first_start, first_end, second_end),
+                (second_start, second_end, first_start),
+                (second_start, second_end, first_end),
+            ):
+                value = (right[0] - left[0]) * (point[1] - left[1]) - (
+                    right[1] - left[1]
+                ) * (point[0] - left[0])
+                if abs(value) <= epsilon:
+                    return False
+                crosses.append(value > 0.0)
+            if crosses[0] != crosses[1] and crosses[2] != crosses[3]:
+                return False
+    return True
+
+
+def _planar_circle_loop(
+    graph: _ModelGraph,
+    face: BrepFace,
+    loop: BrepLoop,
+    tolerance: float,
+) -> tuple[tuple[float, float], float] | None:
+    if len(loop.coedge_ids) != 1:
+        return None
+    surface = graph.surfaces[face.surface_id]
+    if not isinstance(surface, PlaneSurface):
+        return None
+    coedge = graph.coedges[loop.coedge_ids[0]]
+    edge = graph.edges[coedge.edge_id]
+    curve = graph.curves[edge.curve_id]
+    if not isinstance(curve, CircleCurve):
+        return None
+    allowed = max(tolerance, face.tolerance, edge.tolerance, 1e-7) * 10.0
+    if (
+        edge.start_vertex_id != edge.end_vertex_id
+        or abs(abs(edge.end_parameter - edge.start_parameter) - math.tau) > allowed
+    ):
+        return None
+    surface_axis, _, _ = _frame(
+        surface.normal,
+        surface.reference_direction,
+        f"plane surface {surface.id}",
+    )
+    curve_axis, _, _ = _frame(
+        curve.axis,
+        curve.reference_direction,
+        f"circle curve {curve.id}",
+    )
+    if abs(abs(_dot(surface_axis, curve_axis)) - 1.0) > allowed:
+        return None
+    center = _surface_uv(surface, _vector3(curve.center))
+    residual = _surface_residual(surface, _vector3(curve.center))
+    if center is None or residual is None or residual > allowed:
+        return None
+    return center, curve.radius
+
+
+def _face_is_proven(
+    graph: _ModelGraph,
+    face: BrepFace,
+    tolerance: float,
+    seam_bands: Mapping[str, _SeamBand],
+) -> None:
+    if face.id in seam_bands:
+        return
+    surface = graph.surfaces[face.surface_id]
+    if not isinstance(surface, PlaneSurface):
+        _unsupported(
+            f"face {face.id} on {type(surface).__name__} lacks a proven native topology"
+        )
+    loops = tuple(graph.loops[loop_id] for loop_id in face.loop_ids)
+    if len(loops) == 1 and _planar_line_loop_is_proven(
+        graph, face, loops[0], tolerance
+    ):
+        return
+    circles = tuple(_planar_circle_loop(graph, face, loop, tolerance) for loop in loops)
+    if len(circles) not in {1, 2} or any(value is None for value in circles):
+        _unsupported(f"planar face {face.id} lacks a proven wire arrangement")
+    concrete = tuple(value for value in circles if value is not None)
+    allowed = max(tolerance, face.tolerance, 1e-7) * 10.0
+    if len(concrete) == 2:
+        if (
+            math.dist(concrete[0][0], concrete[1][0]) > allowed
+            or abs(concrete[0][1] - concrete[1][1]) <= allowed
+        ):
+            _unsupported(f"planar face {face.id} has unproven circle containment")
+
+
+def _face_edge_orientations(
+    graph: _ModelGraph,
+    face: BrepFace,
+    loop_reversals: Mapping[str, bool],
+    seam_bands: Mapping[str, _SeamBand],
+) -> tuple[tuple[str, bool], ...]:
+    band = seam_bands.get(face.id)
+    if band is not None:
+        return (
+            (graph.coedges[band.low_coedge_id].edge_id, band.low_reversed),
+            (graph.coedges[band.high_coedge_id].edge_id, band.high_reversed),
+        )
+    return tuple(
+        (
+            graph.coedges[coedge_id].edge_id,
+            _coedge_shape_reversed(
+                graph.coedges[coedge_id],
+                graph.edges[graph.coedges[coedge_id].edge_id],
+            )
+            != loop_reversals[loop_id],
+        )
+        for loop_id in face.loop_ids
+        for coedge_id in graph.loops[loop_id].coedge_ids
+    )
+
+
+def _shell_face_orientations(
+    model: BrepModel,
+    graph: _ModelGraph,
+    face_edges: Mapping[str, tuple[tuple[str, bool], ...]],
+) -> dict[str, bool]:
+    result: dict[str, bool] = {}
+    for shell in model.shells:
+        face_uses = tuple(graph.face_uses[value] for value in shell.face_use_ids)
+        face_ids = tuple(value.face_id for value in face_uses)
+        if len(face_ids) != len(set(face_ids)):
+            _unsupported(f"shell {shell.id} reuses a face")
+        by_edge: dict[str, list[tuple[str, bool]]] = {}
+        for face_use in face_uses:
+            for edge_id, reversed_value in face_edges[face_use.face_id]:
+                by_edge.setdefault(edge_id, []).append((face_use.id, reversed_value))
+        if any(len(values) > 2 for values in by_edge.values()):
+            _unsupported(f"shell {shell.id} is non-manifold")
+        if shell.closed and any(len(values) != 2 for values in by_edge.values()):
+            _unsupported(f"closed shell {shell.id} has a free edge")
+        adjacency: dict[str, list[tuple[str, bool]]] = {
+            value.id: [] for value in face_uses
+        }
+        for values in by_edge.values():
+            if len(values) != 2:
+                continue
+            (left_id, left_value), (right_id, right_value) = values
+            parity = left_value != right_value
+            required = not parity
+            if left_id == right_id:
+                if required:
+                    _unsupported(f"shell {shell.id} is not orientable")
+                continue
+            adjacency[left_id].append((right_id, required))
+            adjacency[right_id].append((left_id, required))
+        assigned: dict[str, bool] = {}
+        for start in adjacency:
+            if start in assigned:
+                continue
+            assigned[start] = False
+            component = [start]
+            pending = deque((start,))
+            while pending:
+                current = pending.popleft()
+                for neighbor, parity in adjacency[current]:
+                    expected = assigned[current] != parity
+                    if neighbor in assigned:
+                        if assigned[neighbor] != expected:
+                            _unsupported(f"shell {shell.id} is not orientable")
+                        continue
+                    assigned[neighbor] = expected
+                    component.append(neighbor)
+                    pending.append(neighbor)
+            preferred = {
+                value.id: not (graph.faces[value.face_id].same_sense != value.reversed)
+                for value in face_uses
+                if value.id in component
+            }
+            direct_score = sum(
+                assigned[value] != preferred[value] for value in component
+            )
+            reverse_score = sum(
+                (not assigned[value]) != preferred[value] for value in component
+            )
+            if reverse_score < direct_score:
+                for value in component:
+                    assigned[value] = not assigned[value]
+        result.update(assigned)
+    return result
+
+
+def _shell_use_orientations(
+    model: BrepModel,
+    graph: _ModelGraph,
+) -> dict[str, bool]:
+    result: dict[str, bool] = {}
+    for region in model.regions:
+        if region.solid:
+            if len(region.shell_use_ids) != 1:
+                _unsupported(
+                    f"solid region {region.id} has unproven nested shell containment"
+                )
+            shell_use = graph.shell_uses[region.shell_use_ids[0]]
+            if not graph.shells[shell_use.shell_id].closed:
+                _unsupported(f"solid region {region.id} contains an open shell")
+            result[shell_use.id] = False
+            continue
+        for shell_use_id in region.shell_use_ids:
+            result[shell_use_id] = graph.shell_uses[shell_use_id].reversed
+    return result
+
+
 def _check_edge_geometry(
     edge: BrepEdge,
     curve: object,
@@ -1731,6 +2047,22 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
     pcurve_records, edge_pcurves, seam_bands = _edge_pcurve_records(
         model, graph, tolerance
     )
+    loop_reversals: dict[str, bool] = {}
+    for face in model.faces:
+        _face_is_proven(graph, face, tolerance, seam_bands)
+        if face.id not in seam_bands:
+            loop_reversals.update(_face_loop_reversals(graph, face, tolerance))
+    face_edges = {
+        face.id: _face_edge_orientations(
+            graph,
+            face,
+            loop_reversals,
+            seam_bands,
+        )
+        for face in model.faces
+    }
+    face_use_reversals = _shell_face_orientations(model, graph, face_edges)
+    shell_use_reversals = _shell_use_orientations(model, graph)
     curve_records = base_curve_records + tuple(
         (band.curve_record, 1.0) for band in seam_bands.values()
     )
@@ -1896,62 +2228,6 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                 )
             )
             continue
-        area_tolerance = max(tolerance * tolerance, 1e-10)
-        loop_points = {
-            loop_id: _loop_uv_points(graph, face, graph.loops[loop_id])
-            for loop_id in face.loop_ids
-        }
-        loop_areas = {
-            loop_id: (
-                None
-                if points is None or len(points) < 3
-                else sum(
-                    left[0] * right[1] - right[0] * left[1]
-                    for left, right in zip(points, (*points[1:], points[0]))
-                )
-                / 2.0
-            )
-            for loop_id, points in loop_points.items()
-        }
-        measurable = {
-            loop_id: area
-            for loop_id, area in loop_areas.items()
-            if area is not None and abs(area) > area_tolerance
-        }
-        outer_loop_id = (
-            max(measurable, key=lambda loop_id: abs(measurable[loop_id]))
-            if measurable
-            else next(
-                (loop_id for loop_id in face.loop_ids if graph.loops[loop_id].outer),
-                face.loop_ids[0],
-            )
-        )
-
-        def loop_reversed(loop_id: str) -> bool:
-            area = loop_areas[loop_id]
-            if area is None or abs(area) <= area_tolerance:
-                if loop_id == outer_loop_id:
-                    return False
-                outer_points = loop_points[outer_loop_id]
-                points = loop_points[loop_id]
-                if (
-                    outer_points is None
-                    or points is None
-                    or len(outer_points) < 2
-                    or len(points) < 2
-                ):
-                    return not graph.loops[loop_id].outer
-                outer_delta = (
-                    outer_points[-1][0] - outer_points[0][0],
-                    outer_points[-1][1] - outer_points[0][1],
-                )
-                delta = (
-                    points[-1][0] - points[0][0],
-                    points[-1][1] - points[0][1],
-                )
-                return outer_delta[0] * delta[0] + outer_delta[1] * delta[1] > 0.0
-            return (area > 0.0) != (loop_id == outer_loop_id)
-
         shapes.append(
             _ShapeRecord(
                 f"face:{face.id}",
@@ -1961,7 +2237,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                 ),
                 "0101000",
                 tuple(
-                    (f"loop:{loop_id}", loop_reversed(loop_id))
+                    (f"loop:{loop_id}", loop_reversals[loop_id])
                     for loop_id in face.loop_ids
                 ),
             )
@@ -1974,7 +2250,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
             children.append(
                 (
                     f"face:{face.id}",
-                    not (face.same_sense != face_use.reversed),
+                    face_use_reversals[face_use.id],
                 )
             )
         shapes.append(
@@ -1991,7 +2267,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
         shell_children = tuple(
             (
                 f"shell:{graph.shell_uses[shell_use_id].shell_id}",
-                graph.shell_uses[shell_use_id].reversed,
+                shell_use_reversals[shell_use_id],
             )
             for shell_use_id in region.shell_use_ids
         )
@@ -2029,6 +2305,20 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
         root = (root_key, False)
     lines.extend(_shape_lines(shapes, root))
     return ("\n".join(lines) + "\n").encode("ascii")
+
+
+def proven_ascii_brep(data: bytes) -> bytes | None:
+    if not isinstance(data, bytes):
+        raise TypeError("data must be bytes")
+    from convert.opencascade import decode_ascii_brep
+
+    model = decode_ascii_brep(data, id_prefix="freecad:proof")
+    if model is None:
+        return None
+    try:
+        return brep_model_brep(model)
+    except FreeCADBrepWriteError:
+        return None
 
 
 def triangle_mesh_brep(
