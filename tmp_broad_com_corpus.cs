@@ -17,7 +17,7 @@ public static class BroadComCorpus
     private static string AssemblyTemplate;
 
     [STAThread]
-    public static int Main()
+    public static int Main(string[] args)
     {
         Directory.CreateDirectory(Root);
         App = new SldWorks();
@@ -30,27 +30,41 @@ public static class BroadComCorpus
             "ISldWorks.GetUserPreferenceStringValue.assembly",
             () => App.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateAssembly)
         );
-        GeneratePart("01_sketch_geometry_suite", SketchGeometrySuite);
-        GeneratePart("02_sketch_transform_suite", SketchTransformSuite);
-        GeneratePart("03_boss_cut_hole_suite", BossCutHoleSuite);
-        GeneratePart("04_revolve_suite", RevolveSuite);
-        GeneratePart("05_fillet_suite", FilletSuite);
-        GeneratePart("06_chamfer_suite", ChamferSuite);
-        GeneratePart("07_shell_dome_suite", ShellDomeSuite);
-        GeneratePart("08_multibody_suite", MultibodySuite);
-        GeneratePart("09_equation_configuration_suite", EquationConfigurationSuite);
-        GeneratePart("10_reference_surface_suite", ReferenceSurfaceSuite);
-        GenerateAssembly("11_mated_assembly_suite");
-        WriteJson(Path.Combine(Root, "generation_log.json"), new Dictionary<string, object>
+        var selected = new HashSet<string>(args, StringComparer.OrdinalIgnoreCase);
+        try
         {
-            { "generated_at_utc", DateTime.UtcNow.ToString("o") },
-            { "solidworks_revision", App.RevisionNumber() },
-            { "part_template", PartTemplate },
-            { "assembly_template", AssemblyTemplate },
-            { "artifacts", Artifacts },
-            { "calls", Calls }
-        });
-        return Artifacts.Any(item => Convert.ToString(item["status"]) != "verified") ? 1 : 0;
+            if (Selected(selected, "01")) GeneratePart("01_sketch_geometry_suite", SketchGeometrySuite);
+            if (Selected(selected, "02")) GeneratePart("02_sketch_transform_suite", SketchTransformSuite);
+            if (Selected(selected, "03")) GeneratePart("03_boss_cut_hole_suite", BossCutHoleSuite);
+            if (Selected(selected, "04")) GeneratePart("04_revolve_suite", RevolveSuite);
+            if (Selected(selected, "05")) GeneratePart("05_fillet_suite", FilletSuite);
+            if (Selected(selected, "06")) GeneratePart("06_chamfer_suite", ChamferSuite);
+            if (Selected(selected, "07")) GeneratePart("07_shell_dome_suite", ShellDomeSuite);
+            if (Selected(selected, "08")) GeneratePart("08_multibody_suite", MultibodySuite);
+            if (Selected(selected, "09")) GeneratePart("09_equation_configuration_suite", EquationConfigurationSuite);
+            if (Selected(selected, "10")) GeneratePart("10_reference_surface_suite", ReferenceSurfaceSuite);
+            if (Selected(selected, "11")) GenerateAssembly("11_mated_assembly_suite");
+            WriteJson(Path.Combine(Root, "generation_log.json"), new Dictionary<string, object>
+            {
+                { "generated_at_utc", DateTime.UtcNow.ToString("o") },
+                { "solidworks_revision", App.RevisionNumber() },
+                { "part_template", PartTemplate },
+                { "assembly_template", AssemblyTemplate },
+                { "artifacts", Artifacts },
+                { "calls", Calls }
+            });
+            return Artifacts.Any(item => Convert.ToString(item["status"]) != "verified") ? 1 : 0;
+        }
+        finally
+        {
+            try { App.CloseAllDocuments(true); } catch { }
+            try { App.ExitApp(); } catch { }
+        }
+    }
+
+    private static bool Selected(HashSet<string> selected, string value)
+    {
+        return selected.Count == 0 || selected.Contains(value);
     }
 
     private static void GeneratePart(string name, Action<ModelDoc2, Dictionary<string, object>> build)
@@ -191,15 +205,14 @@ public static class BroadComCorpus
         Call("ISketchSegment.Select4", () => line.Select4(false, null));
         Call("IModelDoc2.SketchAddConstraints.horizontal", () => { doc.SketchAddConstraints("sgHORIZONTAL2D"); return true; });
         Call("IModelDoc2.AddDimension2", () => doc.AddDimension2(0.0, -0.01, 0.0));
-        Call("ISketchManager.FullyDefineSketch", () => manager.FullyDefineSketch(true, true, 1, true, 0, null, 0, null, 0, 0));
         doc.ClearSelection2(true);
         var circle = Required("ISketchManager.CreateCircle.pattern_seed", () => manager.CreateCircleByRadius(-0.02, -0.025, 0.0, 0.003));
         Call("ISketchSegment.Select4.pattern_seed", () => circle.Select4(false, null));
-        Call("ISketchManager.CreateLinearSketchStepAndRepeat", () => manager.CreateLinearSketchStepAndRepeat(4, 3, 0.01, 0.01, 0.0, Math.PI / 2.0, "", true, true, true, true, true));
+        Call("ISketchManager.CreateLinearSketchStepAndRepeat", () => manager.CreateLinearSketchStepAndRepeat(3, 2, 0.01, 0.01, 0.0, Math.PI / 2.0, "", false, false, false, false, false));
         doc.ClearSelection2(true);
         var arc = Required("ISketchManager.CreateArc.circular_seed", () => manager.CreateArc(0.035, -0.02, 0.0, 0.04, -0.02, 0.0, 0.035, -0.015, 0.0, 1));
         Call("ISketchSegment.Select4.circular_seed", () => arc.Select4(false, null));
-        Call("ISketchManager.CreateCircularSketchStepAndRepeat", () => manager.CreateCircularSketchStepAndRepeat(0.02, Math.PI * 2.0, 8, Math.PI / 4.0, true, "", true, true, true));
+        Call("ISketchManager.CreateCircularSketchStepAndRepeat", () => manager.CreateCircularSketchStepAndRepeat(0.02, Math.PI * 2.0, 4, Math.PI / 2.0, true, "", false, false, false));
         EndSketch(doc);
         artifact["sketch_geometry_count"] = SketchGeometryCount(doc);
     }
