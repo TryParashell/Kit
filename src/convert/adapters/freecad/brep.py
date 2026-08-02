@@ -1309,10 +1309,13 @@ def _loop_uv_area(
     unwrapped = _unwrap_periodic(values, _surface_periods(surface))
     if len(unwrapped) < 3:
         return None
-    return sum(
-        left[0] * right[1] - right[0] * left[1]
-        for left, right in zip(unwrapped, (*unwrapped[1:], unwrapped[0]))
-    ) / 2.0
+    return (
+        sum(
+            left[0] * right[1] - right[0] * left[1]
+            for left, right in zip(unwrapped, (*unwrapped[1:], unwrapped[0]))
+        )
+        / 2.0
+    )
 
 
 def _check_edge_geometry(
@@ -1583,11 +1586,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
             max(measurable, key=lambda loop_id: abs(measurable[loop_id]))
             if measurable
             else next(
-                (
-                    loop_id
-                    for loop_id in face.loop_ids
-                    if graph.loops[loop_id].outer
-                ),
+                (loop_id for loop_id in face.loop_ids if graph.loops[loop_id].outer),
                 face.loop_ids[0],
             )
         )
