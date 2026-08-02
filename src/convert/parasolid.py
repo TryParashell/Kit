@@ -2639,6 +2639,34 @@ def _provable_curve_range(
         while end_parameter <= start_parameter:
             end_parameter += math.tau
         return start_parameter, end_parameter
+    if isinstance(curve, IntersectionCurve):
+        parameters = curve.attributes.get("chart_parameters")
+        if (
+            not isinstance(parameters, tuple)
+            or len(parameters) != len(curve.samples)
+            or len(parameters) < 2
+            or not all(isinstance(value, float) and math.isfinite(value) for value in parameters)
+            or not all(left < right for left, right in zip(parameters, parameters[1:]))
+        ):
+            raise ValueError("intersection chart parameters are not provable")
+        tolerance = max(curve.tolerance, 1e-7)
+        direct = (
+            _distance(start, curve.samples[0]) <= tolerance
+            and _distance(end, curve.samples[-1]) <= tolerance
+        )
+        reverse = (
+            _distance(start, curve.samples[-1]) <= tolerance
+            and _distance(end, curve.samples[0]) <= tolerance
+        )
+        if direct and reverse and _distance(start, end) <= tolerance:
+            return parameters[0], parameters[-1]
+        if direct == reverse:
+            raise ValueError("intersection endpoints do not identify one chart range")
+        return (
+            (parameters[0], parameters[-1])
+            if direct
+            else (parameters[-1], parameters[0])
+        )
     raise ValueError("curve parameter range is not provable")
 
 
