@@ -9,6 +9,7 @@ from enum import Enum
 import hashlib
 import io
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -31,7 +32,6 @@ from convert.adapters.base import (
     is_binary_destination,
     is_windows_device_name,
 )
-from convert.opencascade import is_structurally_valid_ascii_brep
 from interchange import (
     BrepPayload,
     CadDocument,
@@ -59,17 +59,21 @@ from interchange import (
 from .archive import (
     DOCUMENT_ENTRY,
     MANIFEST_ENTRY,
+    NATIVE_DOCUMENT_SHA256_ATTRIBUTE,
+    NativeBrepKey,
     _MAX_ENTRY_SIZE,
     _MAX_EXTERNAL_FILES,
     _MAX_TOTAL_SIZE,
+    _native_brep_key as _manifest_native_brep_key,
     _validated_archive_members,
+    _validated_document_xml,
     build_fcstd_archive,
     extract_manifest_from_fcstd,
     native_expression_parts,
     native_sketch_carrier_reasons,
     native_sketch_parts,
 )
-from .brep import FreeCADBrepWriteError, brep_model_brep
+from .brep import FreeCADBrepWriteError, brep_model_brep, proven_ascii_brep
 from .format import CAPABILITY_CARRIER_REASONS, INFO, SUFFIX
 from .native import NativeFreeCADError, probe_native_fcstd, read_native_fcstd
 from .protocol import (
@@ -432,6 +436,12 @@ def _unchanged_native_source(document: CadDocument) -> bytes | None:
         archive.close()
     except (OSError, ValueError, zipfile.BadZipFile):
         return None
+    try:
+        reparsed = read_native_fcstd(data, document.source.path)
+    except (NativeFreeCADError, OSError, TypeError, ValueError):
+        return None
+    if _semantic_digest(reparsed) != expected:
+        return None
     return data
 
 
@@ -692,12 +702,256 @@ def _mate_parts(document: CadDocument) -> tuple[int, int]:
     return native, carrier
 
 
-def _payload_is_reattachable_brep(payload: BrepPayload) -> bool:
+def _payload_is_exact_native_brep(payload: BrepPayload) -> bool:
+    data = payload.data
+    provenance = payload.provenance
+    attributes = payload.attributes
+    freecad_object = attributes.get("freecad_object")
+    freecad_object_type = attributes.get("freecad_object_type")
+    freecad_property = attributes.get("freecad_property")
+    native_document_sha256 = attributes.get(NATIVE_DOCUMENT_SHA256_ATTRIBUTE)
+    property_data = attributes.get("freecad_property_data")
+    property_attributes = (
+        property_data.get("attributes", {})
+        if isinstance(property_data, Mapping)
+        else {}
+    )
+    property_children = (
+        property_data.get("children", ()) if isinstance(property_data, Mapping) else ()
+    )
+    part_files = tuple(
+        child_attributes.get("file")
+        for child in property_children
+        if isinstance(child, Mapping)
+        and child.get("tag") == "Part"
+        and isinstance((child_attributes := child.get("attributes")), Mapping)
+    )
     return (
+        payload.role == PayloadRole.BREP
+        and data is not None
+        and payload.format_id.casefold() in FREECAD_BREP_FORMAT_IDS
+        and payload.kind == "shape"
+        and payload.schema.startswith("CASCADE Topology V")
+        and payload.sha256 == hashlib.sha256(data).hexdigest()
+        and provenance is not None
+        and provenance.adapter == INFO.format_id
+        and provenance.confidence == 1.0
+        and isinstance(freecad_object, str)
+        and bool(freecad_object)
+        and isinstance(freecad_object_type, str)
+        and bool(freecad_object_type)
+        and isinstance(freecad_property, str)
+        and bool(freecad_property)
+        and isinstance(native_document_sha256, str)
+        and re.fullmatch(r"[0-9a-f]{64}", native_document_sha256) is not None
+        and provenance.native_id == f"{freecad_object}.{freecad_property}"
+        and payload.source_stream == f"{freecad_object}.{freecad_property}.brp"
+        and isinstance(property_data, Mapping)
+        and property_data.get("tag") == "Property"
+        and property_attributes.get("name") == freecad_property
+        and property_attributes.get("type") == "Part::PropertyPartShape"
+        and part_files == (payload.source_stream,)
+    )
+
+
+def _manifest_brep_payloads(document: CadDocument) -> tuple[Mapping[str, Any], ...]:
+    values = document_to_manifest(document).get("brep_payloads", ())
+    if isinstance(values, Mapping):
+        values = values.get("$tuple", ())
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes, bytearray)):
+        return ()
+    result = tuple(value for value in values if isinstance(value, Mapping))
+    return result if len(result) == len(document.brep_payloads) else ()
+
+
+def _native_document_sha256(document: CadDocument) -> str:
+    pair = _native_document_pair(document)
+    if pair is not None and pair[0].data is not None:
+        return hashlib.sha256(pair[0].data).hexdigest()
+    values = {
+        value
+        for payload in document.brep_payloads
+        if isinstance(
+            (value := payload.attributes.get(NATIVE_DOCUMENT_SHA256_ATTRIBUTE)),
+            str,
+        )
+        and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+    }
+    return next(iter(values)) if len(values) == 1 else ""
+
+
+def _xml_element_data(node: ET.Element) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "tag": node.tag,
+        "attributes": dict(sorted(node.attrib.items())),
+    }
+    text = (node.text or "").strip()
+    if text:
+        result["text"] = text
+    children = [_xml_element_data(child) for child in node]
+    if children:
+        result["children"] = children
+    return result
+
+
+def _archive_member_data(
+    archive: zipfile.ZipFile,
+    members: Mapping[str, zipfile.ZipInfo],
+    name: str,
+) -> bytes | None:
+    info = members.get(name)
+    if info is None or info.is_dir():
+        return None
+    try:
+        return archive.read(info)
+    except (OSError, RuntimeError, NotImplementedError, zipfile.BadZipFile):
+        return None
+
+
+def _payload_matches_native_archive(
+    payload: BrepPayload,
+    archive: zipfile.ZipFile,
+    members: Mapping[str, zipfile.ZipInfo],
+    root: ET.Element,
+    native_document_sha256: str,
+) -> bool:
+    if not _payload_is_exact_native_brep(payload) or payload.data is None:
+        return False
+    if _archive_member_data(archive, members, payload.source_stream) != payload.data:
+        return False
+    attributes = payload.attributes
+    if attributes[NATIVE_DOCUMENT_SHA256_ATTRIBUTE] != native_document_sha256:
+        return False
+    object_name = str(attributes["freecad_object"])
+    object_type = str(attributes["freecad_object_type"])
+    property_name = str(attributes["freecad_property"])
+    declarations = tuple(
+        value
+        for value in root.findall("./Objects/Object")
+        if value.get("name") == object_name and value.get("type") == object_type
+    )
+    objects = tuple(
+        value
+        for value in root.findall("./ObjectData/Object")
+        if value.get("name") == object_name
+    )
+    if len(declarations) != 1 or len(objects) != 1:
+        return False
+    properties = tuple(
+        value
+        for value in objects[0].findall("./Properties/Property")
+        if value.get("name") == property_name
+    )
+    if len(properties) != 1:
+        return False
+    property_element = properties[0]
+    if _xml_element_data(property_element) != attributes["freecad_property_data"]:
+        return False
+    referenced_sidecars = tuple(
+        name
+        for child in property_element.findall(".//*[@file]")
+        if (name := child.get("file", "")) and name != payload.source_stream
+    )
+    sidecars = attributes.get("freecad_sidecars", ())
+    if not isinstance(sidecars, Sequence) or isinstance(
+        sidecars, (str, bytes, bytearray)
+    ):
+        return False
+    if len(sidecars) != len(referenced_sidecars):
+        return False
+    for sidecar, source_stream in zip(sidecars, referenced_sidecars, strict=True):
+        if not isinstance(sidecar, Mapping):
+            return False
+        sidecar_data = sidecar.get("data")
+        if (
+            sidecar.get("source_stream") != source_stream
+            or not isinstance(sidecar_data, bytes)
+            or _archive_member_data(archive, members, source_stream) != sidecar_data
+        ):
+            return False
+    return True
+
+
+def _trusted_native_breps(
+    document: CadDocument,
+) -> frozenset[NativeBrepKey]:
+    trusted: set[NativeBrepKey] = set()
+    for item in _document_tree(document):
+        native_source = _unchanged_native_source(item)
+        mapped_payloads = _manifest_brep_payloads(item)
+        if native_source is None or not mapped_payloads:
+            continue
+        try:
+            archive, members = _validated_archive_members(native_source)
+            root, _ = _validated_document_xml(archive, members)
+        except (OSError, TypeError, ValueError, zipfile.BadZipFile):
+            continue
+        try:
+            native_document_sha256 = hashlib.sha256(native_source).hexdigest()
+            for payload, mapped in zip(
+                item.brep_payloads,
+                mapped_payloads,
+                strict=True,
+            ):
+                if not _payload_matches_native_archive(
+                    payload,
+                    archive,
+                    members,
+                    root,
+                    native_document_sha256,
+                ):
+                    continue
+                if payload.data is None:
+                    continue
+                key = _manifest_native_brep_key(
+                    mapped,
+                    payload.data,
+                    native_document_sha256,
+                )
+                if key is not None:
+                    trusted.add(key)
+        finally:
+            archive.close()
+    return frozenset(trusted)
+
+
+def _payload_native_brep(
+    payload: BrepPayload,
+    mapped_payload: Mapping[str, Any] | None = None,
+    native_document_sha256: str = "",
+    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
+) -> bytes | None:
+    if not (
         payload.role == PayloadRole.BREP
         and payload.data is not None
         and payload.format_id.casefold() in FREECAD_BREP_FORMAT_IDS
-        and is_structurally_valid_ascii_brep(payload.data)
+    ):
+        return None
+    if mapped_payload is not None:
+        key = _manifest_native_brep_key(
+            mapped_payload,
+            payload.data,
+            native_document_sha256,
+        )
+        if key in trusted_native_breps:
+            return payload.data
+    return proven_ascii_brep(payload.data)
+
+
+def _payload_is_reattachable_brep(
+    payload: BrepPayload,
+    mapped_payload: Mapping[str, Any] | None = None,
+    native_document_sha256: str = "",
+    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
+) -> bool:
+    return (
+        _payload_native_brep(
+            payload,
+            mapped_payload,
+            native_document_sha256,
+            trusted_native_breps,
+        )
+        is not None
     )
 
 
@@ -707,6 +961,72 @@ def _neutral_brep_is_native(document: CadDocument) -> bool:
     try:
         brep_model_brep(document.brep)
     except FreeCADBrepWriteError:
+        return False
+    return True
+
+
+def _mesh_is_usable(mesh: Mesh) -> bool:
+    points = tuple((value.x, value.y, value.z) for value in mesh.vertices)
+    if not points or any(not all(map(math.isfinite, point)) for point in points):
+        return False
+    for triangle in mesh.triangles:
+        if len(set(triangle)) != 3 or any(
+            index < 0 or index >= len(points) for index in triangle
+        ):
+            continue
+        first, second, third = (points[index] for index in triangle)
+        left = tuple(second[index] - first[index] for index in range(3))
+        right = tuple(third[index] - first[index] for index in range(3))
+        cross = (
+            left[1] * right[2] - left[2] * right[1],
+            left[2] * right[0] - left[0] * right[2],
+            left[0] * right[1] - left[1] * right[0],
+        )
+        if sum(value * value for value in cross) > 1e-24:
+            return True
+    return False
+
+
+def _native_geometry_is_usable(
+    document: CadDocument,
+    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
+) -> bool:
+    for item in _document_tree(document):
+        mapped_payloads = _manifest_brep_payloads(item)
+        mapped_by_identity = (
+            {
+                id(payload): mapped
+                for payload, mapped in zip(
+                    item.brep_payloads,
+                    mapped_payloads,
+                    strict=True,
+                )
+            }
+            if mapped_payloads
+            else {}
+        )
+        native_document_sha256 = _native_document_sha256(item)
+        raw_breps = tuple(
+            payload
+            for payload in item.brep_payloads
+            if payload.role == PayloadRole.BREP and payload.data is not None
+        )
+        if item.brep is None and not raw_breps:
+            continue
+        if item.brep is not None and _neutral_brep_is_native(item):
+            continue
+        if any(
+            _payload_is_reattachable_brep(
+                payload,
+                mapped_by_identity.get(id(payload)),
+                native_document_sha256,
+                trusted_native_breps,
+            )
+            for payload in raw_breps
+        ):
+            continue
+        if any(_mesh_is_usable(mesh) for mesh in item.meshes):
+            continue
         return False
     return True
 
@@ -739,6 +1059,7 @@ def _capability_transfers(
     destination_path: Path | None,
     portable: bool,
     exact: bool,
+    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
 ) -> tuple[CapabilityTransfer, ...]:
     required = document.capabilities | infer_capabilities(
         document,
@@ -754,6 +1075,20 @@ def _capability_transfers(
     for item in _document_tree(document):
         source_native = _has_native_freecad_graph(item)
         manifest = document_to_manifest(item)
+        mapped_payloads = _manifest_brep_payloads(item)
+        mapped_by_identity = (
+            {
+                id(payload): mapped
+                for payload, mapped in zip(
+                    item.brep_payloads,
+                    mapped_payloads,
+                    strict=True,
+                )
+            }
+            if mapped_payloads
+            else {}
+        )
+        native_document_sha256 = _native_document_sha256(item)
         sketch_parts = native_sketch_parts(manifest)
         sketch_reason_parts = native_sketch_carrier_reasons(manifest)
         sketch_native: dict[str, bool] = {}
@@ -812,7 +1147,12 @@ def _capability_transfers(
             [True] * native_expressions + [False] * carrier_expressions
         )
         raw_breps = [
-            _payload_is_reattachable_brep(payload)
+            _payload_is_reattachable_brep(
+                payload,
+                mapped_by_identity.get(id(payload)),
+                native_document_sha256,
+                trusted_native_breps,
+            )
             for payload in item.brep_payloads
             if payload.role == PayloadRole.BREP and payload.data is not None
         ]
@@ -858,10 +1198,21 @@ def _capability_transfers(
         for index, payload in enumerate(item.brep_payloads):
             if index in envelope_indexes:
                 continue
-            native_payload = _payload_is_reattachable_brep(payload)
-            parts[Capability.NATIVE_PAYLOADS].append(native_payload)
-            if native_payload:
+            native_payload = _payload_native_brep(
+                payload,
+                mapped_by_identity.get(id(payload)),
+                native_document_sha256,
+                trusted_native_breps,
+            )
+            if native_payload is not None:
+                parts[Capability.NATIVE_PAYLOADS].append(True)
+                if native_payload != payload.data:
+                    parts[Capability.NATIVE_PAYLOADS].append(False)
+                    carrier_reasons[Capability.NATIVE_PAYLOADS].add(
+                        CarrierReason.WRITER_UNIMPLEMENTED
+                    )
                 continue
+            parts[Capability.NATIVE_PAYLOADS].append(False)
             carrier_reasons[Capability.NATIVE_PAYLOADS].add(
                 (
                     CarrierReason.TARGET_UNSUPPORTED
@@ -1382,6 +1733,7 @@ def _write_components(
     validate: bool,
     document_timestamp: str,
     timestamp_epoch: float,
+    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
 ) -> tuple[dict[str, dict[str, Any]], int]:
     assembly = document.assembly
     if assembly is None:
@@ -1425,6 +1777,7 @@ def _write_components(
             document_to_manifest(component),
             external_links=nested_links,
             document_timestamp=document_timestamp,
+            trusted_native_breps=trusted_native_breps,
         )
         target, occurrences = _external_link_details(data)
         _write_bytes(path, data, overwrite)
@@ -1676,6 +2029,8 @@ class FreeCADAdapter:
             raise FileExistsError(destination_path)
         portable = selected.values.get("portable", True) is True
         native_external_documents = _native_external_documents(document)
+        verified_native_source = _unchanged_native_source(document)
+        trusted_native_breps = _trusted_native_breps(document)
         native_source = (
             None
             if selected.values.get("rebuild", False) is True
@@ -1683,7 +2038,7 @@ class FreeCADAdapter:
                 portable
                 and (document.assembly is not None or bool(native_external_documents))
             )
-            else _unchanged_native_source(document)
+            else verified_native_source
         )
         if native_source is not None:
             path = _write_bytes(destination, native_source, should_overwrite)
@@ -1737,6 +2092,7 @@ class FreeCADAdapter:
                 selected.validate,
                 document_timestamp,
                 timestamp_epoch,
+                trusted_native_breps,
             )
         if destination_path is not None and native_external_documents and portable:
             native_external_links, native_external_bytes_written = (
@@ -1753,10 +2109,22 @@ class FreeCADAdapter:
             external_links=external_links,
             native_external_links=native_external_links,
             document_timestamp=document_timestamp,
+            trusted_native_breps=trusted_native_breps,
         )
         path = _write_bytes(destination, data, should_overwrite)
         if path is not None and timestamp_epoch is not None:
             os.utime(path, (timestamp_epoch, timestamp_epoch))
+        transfers = _capability_transfers(
+            document,
+            destination_path,
+            portable,
+            False,
+            trusted_native_breps,
+        )
+        application_usable = not carrier_only_references and _native_geometry_is_usable(
+            document,
+            trusted_native_breps,
+        )
         metadata = {
             "schema_version": document.schema_version,
             "sketch_count": len(document.sketches),
@@ -1783,7 +2151,7 @@ class FreeCADAdapter:
                     else 0
                 )
             ),
-            "application_usable": not carrier_only_references,
+            "application_usable": application_usable,
             "vendor_loadable": True,
         }
         diagnostics = document.diagnostics
@@ -1802,13 +2170,8 @@ class FreeCADAdapter:
             bytes_written=len(data),
             diagnostics=diagnostics,
             metadata=metadata,
-            transfers=_capability_transfers(
-                document,
-                destination_path,
-                portable,
-                False,
-            ),
-            application_usable=not carrier_only_references,
+            transfers=transfers,
+            application_usable=application_usable,
             vendor_loadable=True,
         )
 
