@@ -58,6 +58,7 @@ from .container import (
     OsmxArchive,
     OsmxFormatError,
     OsmxSymbol,
+    append_cfv2_stream,
     build_cfv2,
     build_declaration,
 )
@@ -249,6 +250,7 @@ class CatiaAdapter:
             native, _ = native_candidate
             compatibility = _replay_compatibility(native)
             native_exact = compatibility == "native-exact"
+            native_base_preserved = compatibility == "native-base-neutral-overlay"
             path = _write_bytes(destination, native, settings.overwrite)
             requirements = (
                 ("referenced CATIA component files",)
@@ -271,6 +273,8 @@ class CatiaAdapter:
                         and document.assembly is not None,
                         "native_self_contained": native_exact
                         and document.assembly is None,
+                        "native_base_preserved": native_base_preserved,
+                        "native_streams_preserved": native_base_preserved,
                         "referenced_files_written": 0,
                         "container": "V5_CFV2",
                         "document_type": document_type,
@@ -286,6 +290,83 @@ class CatiaAdapter:
                 "WriteOptions(values={'allow_non_native': True})"
             )
         carrier_document = _carrier_manifest_document(document)
+        native_base = None
+        if not settings.values.get("rebuild", False) and not (
+            settings.values.get("portable") is True
+            and document.assembly is not None
+        ):
+            native_base = _native_base_payload(document, document_type)
+        if native_base is not None:
+            data = append_cfv2_stream(
+                native_base,
+                _MANIFEST_NAME,
+                _pack_manifest(carrier_document),
+            )
+            restored = _restore_generated(data)
+            if (
+                restored != carrier_document
+                or _replay_compatibility(data) != "native-base-neutral-overlay"
+            ):
+                raise CatiaAdapterError(
+                    "CATIA native-base output failed semantic validation"
+                )
+            path = _write_bytes(destination, data, settings.overwrite)
+            diagnostic = Diagnostic(
+                "catia.native_base_preserved",
+                "The native CATIA streams are byte-exact; changed geometry, history, sketches, and assembly semantics remain neutral Kit data rather than native CATIA feature records.",
+                Severity.WARNING,
+            )
+            requirements = (
+                ("referenced CATIA component files",)
+                if document.assembly is not None
+                else ()
+            )
+            return WriteResult(
+                path,
+                _FORMAT_ID,
+                len(data),
+                diagnostics=(*document.diagnostics, diagnostic),
+                metadata=MappingProxyType(
+                    {
+                        "mode": "native_base_with_neutral_edits",
+                        "compatibility": "native-base-neutral-overlay",
+                        "vendor_loadable": False,
+                        "native_geometry": False,
+                        "native_history": False,
+                        "native_assembly": False,
+                        "native_self_contained": False,
+                        "native_base_vendor_loadable": True,
+                        "native_base_preserved": True,
+                        "native_streams_preserved": True,
+                        "neutral_geometry_embedded": document.brep is not None
+                        or any(
+                            payload.role == PayloadRole.BREP
+                            for payload in document.brep_payloads
+                        ),
+                        "neutral_history_embedded": bool(
+                            document.parameters
+                            or document.support_planes
+                            or document.sketches
+                            or document.selections
+                            or document.feature_timeline
+                            or document.bodies
+                        ),
+                        "neutral_assembly_embedded": document.assembly is not None,
+                        "referenced_files_written": 0,
+                        "container": "V5_CFV2",
+                        "document_type": document_type,
+                        "native_base_sha256": hashlib.sha256(
+                            native_base
+                        ).hexdigest(),
+                        "manifest_sha256": hashlib.sha256(
+                            carrier_document.to_json(indent=None).encode("utf-8")
+                        ).hexdigest(),
+                    }
+                ),
+                requirements=requirements,
+                application_usable=False,
+                vendor_loadable=False,
+            )
         data = _generated_archive(carrier_document, document_type)
         restored = _restore_generated(data)
         if restored != carrier_document:
