@@ -1118,8 +1118,9 @@ class _SupportUvRecord:
 class _CompactSupportUvRecord:
     attribute: int
     marker: int
-    values_offset: int
+    values: tuple[float, ...]
     offset: int
+    raw: bytes
 
 
 @dataclass(slots=True)
@@ -1234,15 +1235,14 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
             target, record = topology
             if record is not None:
                 target[record.attribute] = record
-        if kind == 0x08:
-            record = _parse_compact_support_uv_record(body, offset)
-            if record is not None:
-                _store_unique_record(
-                    compact_support_uv,
-                    ambiguous_compact_support_uv,
-                    record.attribute,
-                    record,
-                )
+        record = _parse_compact_support_uv_record(body, offset)
+        if record is not None:
+            _store_unique_record(
+                compact_support_uv,
+                ambiguous_compact_support_uv,
+                record.attribute,
+                record,
+            )
         if kind == 0x26:
             record = _parse_intersection_record(body, offset)
             if record is not None:
@@ -1409,6 +1409,526 @@ def _u32(data: bytes, offset: int) -> int | None:
     if offset < 0 or offset + 4 > len(data):
         return None
     return struct.unpack_from(">I", data, offset)[0]
+
+
+def _xmt(data: bytes, offset: int) -> tuple[int, int] | None:
+    if offset < 0 or offset + 2 > len(data):
+        return None
+    first = struct.unpack_from(">h", data, offset)[0]
+    if first >= 0:
+        return first, 2
+    if first == -32768 or offset + 4 > len(data):
+        return None
+    quotient = _u16(data, offset + 2)
+    if quotient is None:
+        return None
+    return quotient * 32767 + abs(first), 4
+
+
+def _xmt_sequence(
+    data: bytes, offset: int, count: int
+) -> tuple[tuple[int, ...], int] | None:
+    values = []
+    cursor = offset
+    for _ in range(count):
+        decoded = _xmt(data, cursor)
+        if decoded is None:
+            return None
+        value, width = decoded
+        values.append(value)
+        cursor += width
+    return tuple(values), cursor
+
+
+def _parse_intersection_fields(
+    data: bytes, offset: int, start: int
+) -> _IntersectionRecord | None:
+    decoded = _xmt(data, start)
+    if decoded is None:
+        return None
+    attribute, width = decoded
+    cursor = start + width
+    if attribute <= 1 or _u32(data, cursor) is None:
+        return None
+    cursor += 4
+    header = _xmt_sequence(data, cursor, 5)
+    if header is None:
+        return None
+    header_references, cursor = header
+    if header_references[0] != 1 or any(value < 1 for value in header_references):
+        return None
+    if cursor >= len(data) or data[cursor] not in {0x2B, 0x2D}:
+        return None
+    sense = data[cursor] == 0x2B
+    cursor += 1
+    construction = _xmt_sequence(data, cursor, 6)
+    if construction is None:
+        return None
+    references, cursor = construction
+    if (
+        any(value < 1 for value in references)
+        or references[0] <= 1
+        or references[1] <= 1
+        or references[2] <= 1
+    ):
+        return None
+    return _IntersectionRecord(
+        attribute,
+        header_references,
+        references,
+        sense,
+        offset,
+        data[offset:cursor],
+    )
+
+
+def _parse_intersection_record(
+    data: bytes, offset: int
+) -> _IntersectionRecord | None:
+    start = _record_start(data, offset, 0x26)
+    return (
+        _parse_intersection_fields(data, offset, start)
+        if start is not None
+        else None
+    )
+
+
+def _parse_intersection_data_record(
+    data: bytes, offset: int
+) -> _IntersectionRecord | None:
+    if offset < 0 or offset >= len(data) or data[offset] != 0x5A:
+        return None
+    descriptor = b"intersection_data"
+    lower = max(0, offset - 96)
+    position = data.rfind(descriptor, lower, offset)
+    if position < 0 or offset - position - len(descriptor) > 64:
+        return None
+    return _parse_intersection_fields(data, offset, offset + 1)
+
+
+def _point_vector(data: bytes, offset: int) -> Vector3 | None:
+    if offset < 0 or offset + 24 > len(data):
+        return None
+    values = struct.unpack_from(">3d", data, offset)
+    if any(not math.isfinite(value) or abs(value) >= 100.0 for value in values):
+        return None
+    return Vector3(*(value / _LENGTH_SCALE for value in values))
+
+
+def _parse_chart_record(data: bytes, offset: int) -> _ChartRecord | None:
+    start = _record_start(data, offset, 0x28)
+    if start is None:
+        return None
+    count = _u32(data, start)
+    decoded = _xmt(data, start + 4)
+    if count is None or not 2 <= count <= 1024 or decoded is None:
+        return None
+    attribute, width = decoded
+    preamble = start + 4 + width
+    if attribute <= 1 or preamble + 52 > len(data):
+        return None
+    base_parameter = struct.unpack_from(">d", data, preamble)[0]
+    base_scale = struct.unpack_from(">d", data, preamble + 8)[0]
+    chart_count = _u32(data, preamble + 16)
+    chordal_error = struct.unpack_from(">d", data, preamble + 20)[0]
+    angular_error = struct.unpack_from(">d", data, preamble + 28)[0]
+    parameter_errors = struct.unpack_from(">2d", data, preamble + 36)
+    if (
+        chart_count != count
+        or not all(
+            math.isfinite(value)
+            for value in (
+                base_parameter,
+                base_scale,
+                chordal_error,
+                angular_error,
+                *parameter_errors,
+            )
+        )
+        or base_scale <= 0.0
+        or chordal_error <= 0.0
+        or chordal_error >= 100.0
+        or parameter_errors != (_MISSING_PARAMETER, _MISSING_PARAMETER)
+    ):
+        return None
+    block = preamble + 52
+    extended = _parse_extended_chart_points(data, block, count)
+    if extended is not None:
+        points, parameters, tangents, support_uv, end = extended
+        layout = "ext11"
+    else:
+        compact = _parse_compact_chart_points(
+            data,
+            block,
+            count,
+            base_parameter,
+            base_scale,
+        )
+        if compact is None:
+            return None
+        points, parameters, end = compact
+        tangents = ()
+        support_uv = ((), ())
+        layout = "xyz3"
+    return _ChartRecord(
+        attribute,
+        base_parameter,
+        base_scale,
+        chordal_error / _LENGTH_SCALE,
+        angular_error,
+        parameter_errors,
+        points,
+        parameters,
+        tangents,
+        support_uv,
+        layout,
+        offset,
+        data[offset:end],
+    )
+
+
+def _parse_extended_chart_points(
+    data: bytes, offset: int, count: int
+) -> tuple[
+    tuple[Vector3, ...],
+    tuple[float, ...],
+    tuple[Vector3, ...],
+    tuple[tuple[tuple[float, float], ...], ...],
+    int,
+] | None:
+    end = offset + count * 88
+    if end > len(data):
+        return None
+    points = []
+    parameters = []
+    tangents = []
+    first_uv = []
+    second_uv = []
+    for index in range(count):
+        cursor = offset + index * 88
+        point = _point_vector(data, cursor)
+        values = struct.unpack_from(">8d", data, cursor + 24)
+        parameter = struct.unpack_from(">d", data, cursor + 80)[0]
+        tangent_values = values[4:7]
+        tangent_length = math.sqrt(sum(value * value for value in tangent_values))
+        if (
+            point is None
+            or not all(math.isfinite(value) for value in (*values, parameter))
+            or abs(tangent_length - 1.0) > 1e-9
+        ):
+            return None
+        points.append(point)
+        parameters.append(parameter)
+        tangents.append(Vector3(*tangent_values))
+        first_uv.append((values[0], values[2]))
+        second_uv.append((values[1], values[3]))
+    if not _ordered_chart(points, parameters):
+        return None
+    return (
+        tuple(points),
+        tuple(parameters),
+        tuple(tangents),
+        (tuple(first_uv), tuple(second_uv)),
+        end,
+    )
+
+
+def _parse_compact_chart_points(
+    data: bytes,
+    offset: int,
+    count: int,
+    base_parameter: float,
+    base_scale: float,
+) -> tuple[tuple[Vector3, ...], tuple[float, ...], int] | None:
+    end = offset + count * 24
+    if end > len(data):
+        return None
+    points = tuple(_point_vector(data, offset + index * 24) for index in range(count))
+    if any(point is None for point in points):
+        return None
+    typed_points = tuple(point for point in points if point is not None)
+    parameters = [base_parameter]
+    for left, right in zip(typed_points, typed_points[1:]):
+        chord = _distance(left, right) * _LENGTH_SCALE
+        if chord <= 0.0:
+            return None
+        parameters.append(parameters[-1] + chord * base_scale)
+    if not _ordered_chart(typed_points, tuple(parameters)):
+        return None
+    return typed_points, tuple(parameters), end
+
+
+def _ordered_chart(
+    points: Sequence[Vector3], parameters: Sequence[float]
+) -> bool:
+    return (
+        len(points) >= 2
+        and len(points) == len(parameters)
+        and all(left < right for left, right in zip(parameters, parameters[1:]))
+        and all(_distance(left, right) > 0.0 for left, right in zip(points, points[1:]))
+    )
+
+
+def _parse_term_payload(data: bytes, start: int, offset: int) -> _TermRecord | None:
+    count = _u32(data, start)
+    decoded = _xmt(data, start + 4)
+    if count is None or decoded is None:
+        return None
+    attribute, width = decoded
+    payload = start + 4 + width
+    if payload + 26 > len(data):
+        return None
+    form_bytes = data[payload : payload + 2]
+    if not (
+        (count == 1 and form_bytes == b"L?")
+        or (count == 2 and form_bytes in {b"TF", b"TS"})
+    ):
+        return None
+    point = _point_vector(data, payload + 2)
+    if attribute <= 1 or point is None:
+        return None
+    end = payload + 26
+    return _TermRecord(
+        attribute,
+        count,
+        form_bytes.decode("ascii"),
+        point,
+        offset,
+        data[offset:end],
+    )
+
+
+def _parse_term_record(data: bytes, offset: int) -> _TermRecord | None:
+    start = _record_start(data, offset, 0x29)
+    return _parse_term_payload(data, start, offset) if start is not None else None
+
+
+def _parse_support_uv_payload(
+    data: bytes, start: int, offset: int
+) -> _SupportUvRecord | None:
+    count = _u32(data, start)
+    decoded = _xmt(data, start + 4)
+    if count is None or count > 4096 or decoded is None:
+        return None
+    attribute, width = decoded
+    payload = start + 4 + width
+    if payload >= len(data):
+        return None
+    marker = data[payload]
+    stride = 4 if marker == 4 else 2
+    if marker not in {2, 3, 4} or count < stride * 2 or count % stride:
+        return None
+    values_offset = payload + 1
+    end = values_offset + count * 8
+    if attribute <= 1 or end > len(data):
+        return None
+    values = struct.unpack_from(f">{count}d", data, values_offset)
+    if any(not math.isfinite(value) for value in values):
+        return None
+    return _SupportUvRecord(attribute, marker, values, offset, data[offset:end])
+
+
+def _parse_support_uv_record(
+    data: bytes, offset: int
+) -> _SupportUvRecord | None:
+    start = _record_start(data, offset, 0xCC)
+    return (
+        _parse_support_uv_payload(data, start, offset) if start is not None else None
+    )
+
+
+def _parse_compact_support_uv_record(
+    data: bytes, offset: int
+) -> _CompactSupportUvRecord | None:
+    if offset < 0 or offset + 5 > len(data) or data[offset] != 0:
+        return None
+    count = data[offset + 1]
+    start = offset + 2
+    decoded = _xmt(data, start)
+    if decoded is None:
+        return None
+    attribute, width = decoded
+    marker_offset = start + width
+    if attribute <= 1 or marker_offset >= len(data):
+        return None
+    marker = data[marker_offset]
+    stride = 4 if marker == 4 else 2
+    values_offset = marker_offset + 1
+    end = values_offset + count * 8
+    if (
+        marker not in {2, 3, 4}
+        or count < stride * 2
+        or count % stride
+        or end > len(data)
+    ):
+        return None
+    values = struct.unpack_from(f">{count}d", data, values_offset)
+    if any(not math.isfinite(value) for value in values):
+        return None
+    return _CompactSupportUvRecord(
+        attribute,
+        marker,
+        values,
+        offset,
+        data[offset:end],
+    )
+
+
+def _support_uv_lanes(
+    marker: int, values: Sequence[float]
+) -> tuple[tuple[tuple[float, float], ...], ...] | None:
+    width = 4 if marker == 4 else 2
+    if len(values) < width * 2 or len(values) % width:
+        return None
+    first = tuple(
+        (values[index], values[index + 1])
+        for index in range(0, len(values), width)
+    )
+    second = (
+        tuple(
+            (values[index + 2], values[index + 3])
+            for index in range(0, len(values), 4)
+        )
+        if marker == 4
+        else ()
+    )
+    return first, second
+
+
+def _resolved_support_uv(
+    data: bytes,
+    attribute: int,
+    point_count: int,
+    records: Mapping[int, _SupportUvRecord],
+    compact_records: Mapping[int, _CompactSupportUvRecord],
+) -> tuple[tuple[tuple[tuple[float, float], ...], ...], int, bytes] | None:
+    if attribute <= 1:
+        return ((), ()), 0, b""
+    candidates = []
+    record = records.get(attribute)
+    if record is not None:
+        lanes = _support_uv_lanes(record.marker, record.values)
+        if lanes is not None:
+            candidates.append((lanes, record.marker, record.raw))
+    compact = compact_records.get(attribute)
+    if compact is not None:
+        lanes = _support_uv_lanes(compact.marker, compact.values)
+        if lanes is not None:
+            candidates.append((lanes, compact.marker, compact.raw))
+    if not candidates:
+        return None
+    first = candidates[0]
+    if any(candidate[:2] != first[:2] for candidate in candidates[1:]):
+        return None
+    return first
+
+
+def _resolve_intersection_curve(
+    data: bytes,
+    record: _IntersectionRecord,
+    charts: Mapping[int, _ChartRecord],
+    terms: Mapping[int, _TermRecord],
+    support_uv: Mapping[int, _SupportUvRecord],
+    compact_support_uv: Mapping[int, _CompactSupportUvRecord],
+    surfaces: Mapping[int, object],
+) -> IntersectionCurve | None:
+    first_surface, second_surface, chart_id, start_id, end_id, uv_id = (
+        record.references
+    )
+    chart = charts.get(chart_id)
+    first = surfaces.get(first_surface)
+    second = surfaces.get(second_surface)
+    if chart is None or first is None or second is None or first_surface == second_surface:
+        return None
+    limits: tuple[_TermRecord, ...]
+    if start_id == 1 and end_id == 1:
+        limits = ()
+    elif start_id > 1 and end_id > 1:
+        start = terms.get(start_id)
+        end = terms.get(end_id)
+        if start is None or end is None:
+            return None
+        tolerance = max(chart.chordal_error, 1e-7)
+        if (
+            _distance(start.point, chart.points[0]) > tolerance
+            or _distance(end.point, chart.points[-1]) > tolerance
+        ):
+            return None
+        limits = start, end
+    else:
+        return None
+    tolerance = max(chart.chordal_error, 1e-7)
+    for surface in (first, second):
+        residuals = tuple(_analytic_surface_residual(surface, point) for point in chart.points)
+        if any(residual is None or residual > tolerance for residual in residuals):
+            return None
+    resolved_uv = _resolved_support_uv(
+        data,
+        uv_id,
+        len(chart.points),
+        support_uv,
+        compact_support_uv,
+    )
+    if resolved_uv is None:
+        return None
+    uv_lanes, uv_marker, uv_raw = resolved_uv
+    attributes = frozen_mapping(
+        {
+            "base_parameter": chart.base_parameter,
+            "base_scale": chart.base_scale,
+            "chart_layout": chart.layout,
+            "chart_parameters": chart.parameters,
+            "chart_tangents": chart.tangents,
+            "chart_support_uv": chart.support_uv,
+            "support_uv": uv_lanes,
+            "support_uv_marker": uv_marker,
+            "sense": record.sense,
+            "limit_forms": tuple(limit.form for limit in limits),
+            "limit_points": tuple(limit.point for limit in limits),
+            "chordal_error": chart.chordal_error,
+            "angular_error": chart.angular_error,
+            "parameter_errors": chart.parameter_errors,
+            "header_references": record.header_references,
+            "references": record.references,
+            "intersection_record": record.raw,
+            "chart_record": chart.raw,
+            "limit_records": tuple(limit.raw for limit in limits),
+            "support_uv_record": uv_raw,
+        }
+    )
+    return IntersectionCurve(
+        _native_id("curve", record.attribute),
+        _native_id("surface", first_surface),
+        _native_id("surface", second_surface),
+        chart.points,
+        chart.chordal_error,
+        attributes=attributes,
+    )
+
+
+def _analytic_surface_residual(surface: object, point: Vector3) -> float | None:
+    if isinstance(surface, PlaneSurface):
+        return abs(_dot(_subtract(point, surface.origin), surface.normal))
+    center = surface.center if hasattr(surface, "center") else surface.origin
+    difference = _subtract(point, center)
+    if isinstance(surface, SphereSurface):
+        return abs(math.sqrt(_dot(difference, difference)) - surface.radius)
+    if not isinstance(surface, (CylinderSurface, ConeSurface, TorusSurface)):
+        return None
+    axial = _dot(difference, surface.axis)
+    radial_vector = Vector3(
+        difference.x - axial * surface.axis.x,
+        difference.y - axial * surface.axis.y,
+        difference.z - axial * surface.axis.z,
+    )
+    radial = math.sqrt(_dot(radial_vector, radial_vector))
+    if isinstance(surface, CylinderSurface):
+        return abs(radial - surface.radius)
+    if isinstance(surface, ConeSurface):
+        return abs(radial - (surface.radius - axial * math.tan(surface.half_angle)))
+    return abs(
+        math.hypot(radial - surface.major_radius, axial) - surface.minor_radius
+    )
 
 
 def _refs(data: bytes, offset: int, count: int) -> tuple[int, ...] | None:
