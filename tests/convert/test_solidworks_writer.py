@@ -53,6 +53,12 @@ SAMPLE = Path(__file__).parents[2] / "examples" / ".SLDPRT" / "example.SLDPRT"
 ASSEMBLY = (
     Path(__file__).parents[2] / "examples" / "Random" / "Pistons" / "Piston.SLDASM"
 )
+CATPRODUCT = (
+    Path(__file__).parents[2]
+    / "examples"
+    / ".CATProduct"
+    / "Tilton_Set.CATProduct"
+)
 
 
 def test_pre_payload_field_solidworks_carrier_restores_payload_semantics() -> None:
@@ -765,6 +771,57 @@ def test_public_sdk_defaults_to_portable_assembly_writes(tmp_path) -> None:
     assert exact_result.requirements == ("referenced SOLIDWORKS component files",)
     assert exact_result.near_lossless is False
     assert exact.read_bytes() == ASSEMBLY.read_bytes()
+
+
+def test_incomplete_portable_assembly_downgrades_to_root_carrier(tmp_path) -> None:
+    isolated = tmp_path / "isolated" / ASSEMBLY.name
+    isolated.parent.mkdir()
+    isolated.write_bytes(ASSEMBLY.read_bytes())
+    source = read_sldprt(isolated)
+    assert source.assembly is not None
+    assert source.assembly.documents == ()
+    assert source.meshes
+    output = tmp_path / "portable" / ASSEMBLY.name
+    result = write_document(source, output)
+    assert result.application_usable is False
+    assert result.vendor_loadable is False
+    assert result.metadata["native_self_contained"] is False
+    assert result.metadata["referenced_files_written"] == 0
+    assert result.requirements == ()
+    assert tuple(output.parent.iterdir()) == (output,)
+    attestation = json.loads(
+        SldprtArchive.open(output).require(KIT_NATIVE_STREAM).decode("utf-8")
+    )
+    assert attestation["compatibility"] == result.metadata["compatibility"]
+    assert attestation["application_usable"] is False
+    assert attestation["vendor_loadable"] is False
+    restored = read_sldprt(output)
+    assert restored.assembly == source.assembly
+    assert restored.meshes == source.meshes
+    blocked = tmp_path / "blocked" / ASSEMBLY.name
+    with pytest.raises(ApplicationUsabilityError) as captured:
+        write_document(source, blocked, allow_carrier=False)
+    assert captured.value.requirements == (
+        "referenced SOLIDWORKS component files",
+    )
+    assert not blocked.exists()
+
+
+def test_catproduct_defaults_to_relocatable_solidworks_root_carrier(tmp_path) -> None:
+    source = open_document(CATPRODUCT)
+    output = tmp_path / "converted" / "Tilton_Set.SLDASM"
+    result = convert(CATPRODUCT, output)
+    assert result.requirements == ()
+    assert result.application_usable is False
+    assert result.vendor_loadable is False
+    assert result.output.metadata["native_self_contained"] is False
+    assert result.output.metadata["referenced_files_written"] == 0
+    relocated = tmp_path / "relocated" / output.name
+    relocated.parent.mkdir()
+    relocated.write_bytes(output.read_bytes())
+    restored = open_document(relocated)
+    assert restored.assembly == source.assembly
+    assert restored.meshes == source.meshes
 
 
 def test_portable_assembly_patches_transform_mate_and_linked_part(tmp_path) -> None:

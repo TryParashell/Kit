@@ -21,8 +21,18 @@ from convert.adapters.freecad.brep import (
 )
 from convert.opencascade import decode_ascii_brep, is_structurally_valid_ascii_brep
 from interchange import (
+    BrepBody,
+    BrepCoedge,
+    BrepEdge,
+    BrepFace,
+    BrepFaceUse,
+    BrepLoop,
     BrepModel,
     BrepPayload,
+    BrepRegion,
+    BrepShell,
+    BrepShellUse,
+    BrepVertex,
     BrepWire,
     CadDocument,
     CadSource,
@@ -63,6 +73,89 @@ def _raw_brep_document(data: bytes) -> CadDocument:
         data,
         role=PayloadRole.BREP,
         file_extension=".brp",
+    )
+
+
+def _cylinder_band_brep() -> BrepModel:
+    vertices = (
+        BrepVertex("vertex:lower", Vector3(10.0, 0.0, 0.0)),
+        BrepVertex("vertex:upper", Vector3(10.0, 0.0, 20.0)),
+    )
+    curves = (
+        CircleCurve(
+            "curve:lower",
+            Vector3(0.0, 0.0, 0.0),
+            Vector3(0.0, 0.0, 1.0),
+            Vector3(1.0, 0.0, 0.0),
+            10.0,
+        ),
+        CircleCurve(
+            "curve:upper",
+            Vector3(0.0, 0.0, 20.0),
+            Vector3(0.0, 0.0, 1.0),
+            Vector3(1.0, 0.0, 0.0),
+            10.0,
+        ),
+    )
+    edges = (
+        BrepEdge(
+            "edge:lower",
+            "vertex:lower",
+            "vertex:lower",
+            "curve:lower",
+            0.0,
+            2.0 * 3.141592653589793,
+        ),
+        BrepEdge(
+            "edge:upper",
+            "vertex:upper",
+            "vertex:upper",
+            "curve:upper",
+            0.0,
+            2.0 * 3.141592653589793,
+        ),
+    )
+    coedges = (
+        BrepCoedge("coedge:lower", "edge:lower"),
+        BrepCoedge("coedge:upper", "edge:upper"),
+    )
+    return BrepModel(
+        curves=curves,
+        surfaces=(
+            CylinderSurface(
+                "surface:cylinder",
+                Vector3(0.0, 0.0, 0.0),
+                Vector3(0.0, 0.0, 1.0),
+                Vector3(1.0, 0.0, 0.0),
+                10.0,
+            ),
+        ),
+        vertices=vertices,
+        edges=edges,
+        coedges=coedges,
+        loops=(
+            BrepLoop("loop:lower", ("coedge:lower",), True),
+            BrepLoop("loop:upper", ("coedge:upper",), False),
+        ),
+        faces=(
+            BrepFace(
+                "face:cylinder",
+                "surface:cylinder",
+                ("loop:lower", "loop:upper"),
+            ),
+        ),
+        face_uses=(BrepFaceUse("face-use:cylinder", "face:cylinder"),),
+        shells=(BrepShell("shell:cylinder", ("face-use:cylinder",), False),),
+        shell_uses=(BrepShellUse("shell-use:cylinder", "shell:cylinder"),),
+        regions=(BrepRegion("region:cylinder", ("shell-use:cylinder",), False),),
+        bodies=(
+            BrepBody(
+                "brep-body:cylinder",
+                ("region:cylinder",),
+                Transform(),
+                "body:cylinder",
+            ),
+        ),
     )
     return CadDocument(
         source=CadSource("test", "shape.brp", ""),
@@ -128,6 +221,16 @@ def test_neutral_brep_is_deterministic_open_cascade_serialization() -> None:
     assert b"TShapes 9\n" in first
     assert b"\nFa\n0  9.9999999999999995e-08 1 0\n" in first
     assert first.endswith(b"\n+1 0 \n")
+
+
+def test_periodic_cylinder_band_serializes_with_exact_seam_topology() -> None:
+    encoded = brep_model_brep(_cylinder_band_brep())
+    assert is_structurally_valid_ascii_brep(encoded)
+    assert b"Curve2ds 4\n" in encoded
+    assert b"Curves 3\n" in encoded
+    assert b"TShapes 8\n" in encoded
+    assert b"3  3 4 CN 1 0 0 20\n" in encoded
+    assert encoded.count(b"edge:seam") == 0
 
 
 @pytest.mark.parametrize(
@@ -531,6 +634,30 @@ def test_unsupported_neutral_brep_remains_an_explicit_carrier() -> None:
     assert Capability.BREP not in result.native_capabilities
     with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
         assert not any(name.endswith(".Shape.brp") for name in archive.namelist())
+
+
+@pytest.mark.skipif(not ORACLE.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
+def test_periodic_cylinder_band_is_valid_in_freecad(tmp_path: Path) -> None:
+    path = tmp_path / "cylinder-band.brp"
+    path.write_bytes(brep_model_brep(_cylinder_band_brep()))
+    code = (
+        "import Part;"
+        "s=Part.Shape();"
+        f"s.read(r'{path}');"
+        "print('KIT_SEAM',s.ShapeType,len(s.Faces),len(s.Wires),len(s.Edges),"
+        "len(s.Vertexes),s.isValid())"
+    )
+    completed = subprocess.run(
+        [str(ORACLE), "-c", code],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    line = next(
+        value for value in completed.stdout.splitlines() if value.startswith("KIT_SEAM")
+    )
+    assert line.split()[1:] == ["Shell", "1", "1", "3", "2", "True"]
 
 
 @pytest.mark.skipif(not ORACLE.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
