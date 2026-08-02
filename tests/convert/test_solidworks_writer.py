@@ -37,6 +37,8 @@ from interchange import (
     BrepPayload,
     Capability,
     Diagnostic,
+    MateAlignment,
+    Matrix4,
     NativeSurface,
     PayloadRole,
     Severity,
@@ -577,7 +579,9 @@ def test_native_template_patches_driving_dimension_without_carrier_opt_in(
             format_version=archive.format_version,
         )
     )
-    native_parameter = next(item for item in native.parameters if item.id == parameter.id)
+    native_parameter = next(
+        item for item in native.parameters if item.id == parameter.id
+    )
     assert native_parameter.value.value == pytest.approx(target_value)
 
 
@@ -770,3 +774,51 @@ def test_public_sdk_defaults_to_portable_assembly_writes(tmp_path) -> None:
     assert exact_result.requirements == ("referenced SOLIDWORKS component files",)
     assert exact_result.near_lossless is False
     assert exact.read_bytes() == ASSEMBLY.read_bytes()
+
+
+def test_portable_assembly_patches_transform_mate_and_linked_part(tmp_path) -> None:
+    source = read_sldprt(ASSEMBLY)
+    assembly = source.assembly
+    instance = assembly.instances[0]
+    transform = list(instance.transform.values)
+    transform[3] += 12.5
+    mate = assembly.mates[0]
+    alignment = (
+        MateAlignment.ANTI_ALIGNED
+        if mate.alignment is MateAlignment.ALIGNED
+        else MateAlignment.ALIGNED
+    )
+    component = assembly.documents[0]
+    part = component.document
+    parameter = part.parameters[0]
+    target_value = float(parameter.value.value) + 0.5
+    part = replace(
+        part,
+        parameters=(
+            replace(parameter, value=replace(parameter.value, value=target_value)),
+            *part.parameters[1:],
+        ),
+    )
+    edited = replace(
+        source,
+        assembly=replace(
+            assembly,
+            instances=(
+                replace(instance, transform=Matrix4(tuple(transform))),
+                *assembly.instances[1:],
+            ),
+            mates=(replace(mate, alignment=alignment), *assembly.mates[1:]),
+            documents=(replace(component, document=part), *assembly.documents[1:]),
+        ),
+    )
+    output = tmp_path / "edited.SLDASM"
+    result = write_document(edited, output)
+    assert result.near_lossless is True
+    assert result.requirements == ()
+    assert result.metadata["referenced_files_written"] == len(assembly.documents)
+    restored = read_sldprt(output)
+    assert restored.assembly.instances[0].transform == Matrix4(tuple(transform))
+    assert restored.assembly.mates[0].alignment is alignment
+    assert restored.assembly.documents[0].document.parameters[
+        0
+    ].value.value == pytest.approx(target_value)

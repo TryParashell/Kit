@@ -1279,11 +1279,11 @@ def _edge_pcurve_records(
     return tuple(records), result
 
 
-def _loop_uv_area(
+def _loop_uv_points(
     graph: _ModelGraph,
     face: BrepFace,
     loop: BrepLoop,
-) -> float | None:
+) -> tuple[tuple[float, float], ...] | None:
     surface = graph.surfaces[face.surface_id]
     values: list[tuple[float, float]] = []
     for coedge_id in loop.coedge_ids:
@@ -1306,8 +1306,16 @@ def _loop_uv_area(
             if uv is None:
                 return None
             values.append(uv)
-    unwrapped = _unwrap_periodic(values, _surface_periods(surface))
-    if len(unwrapped) < 3:
+    return _unwrap_periodic(values, _surface_periods(surface))
+
+
+def _loop_uv_area(
+    graph: _ModelGraph,
+    face: BrepFace,
+    loop: BrepLoop,
+) -> float | None:
+    unwrapped = _loop_uv_points(graph, face, loop)
+    if unwrapped is None or len(unwrapped) < 3:
         return None
     return (
         sum(
@@ -1573,9 +1581,21 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
             )
         )
     for face in model.faces:
-        loop_areas = {
-            loop_id: _loop_uv_area(graph, face, graph.loops[loop_id])
+        loop_points = {
+            loop_id: _loop_uv_points(graph, face, graph.loops[loop_id])
             for loop_id in face.loop_ids
+        }
+        loop_areas = {
+            loop_id: (
+                None
+                if points is None or len(points) < 3
+                else sum(
+                    left[0] * right[1] - right[0] * left[1]
+                    for left, right in zip(points, (*points[1:], points[0]))
+                )
+                / 2.0
+            )
+            for loop_id, points in loop_points.items()
         }
         measurable = {
             loop_id: area
@@ -1594,7 +1614,26 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
         def loop_reversed(loop_id: str) -> bool:
             area = loop_areas[loop_id]
             if area is None or abs(area) <= tolerance * tolerance:
-                return False
+                if loop_id == outer_loop_id:
+                    return False
+                outer_points = loop_points[outer_loop_id]
+                points = loop_points[loop_id]
+                if (
+                    outer_points is None
+                    or points is None
+                    or len(outer_points) < 2
+                    or len(points) < 2
+                ):
+                    return not graph.loops[loop_id].outer
+                outer_delta = (
+                    outer_points[-1][0] - outer_points[0][0],
+                    outer_points[-1][1] - outer_points[0][1],
+                )
+                delta = (
+                    points[-1][0] - points[0][0],
+                    points[-1][1] - points[0][1],
+                )
+                return outer_delta[0] * delta[0] + outer_delta[1] * delta[1] > 0.0
             return (area > 0.0) != (loop_id == outer_loop_id)
 
         shapes.append(
