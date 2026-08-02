@@ -4885,6 +4885,157 @@ def _document_xml(
         body_names[body_id] = obj.name
         body_shape_targets[body_id] = final_feature or obj.name
         body_objects.append(obj.name)
+    target_by_id = {
+        **plane_names,
+        **sketch_names,
+        **feature_names,
+        **body_names,
+    }
+    target_by_id.update({name: name for name in graph.names})
+    selection_names: dict[str, str] = {}
+    selection_objects: list[str] = []
+    for selection in selection_items.values():
+        selection_id = _text(selection.get("id"))
+        obj = graph.add(
+            "App::FeaturePython",
+            selection.get("name", selection_id),
+            "Selection",
+        )
+        targets: list[tuple[str, str]] = []
+        entity_kinds: list[str] = []
+        for path_item in _items(selection.get("path", [])):
+            entity_id = _text(path_item.get("entity_id"))
+            target = target_by_id.get(
+                entity_id, native_object_targets.get(entity_id, "")
+            )
+            if not target:
+                continue
+            targets.append((target, _text(path_item.get("subelement"))))
+            entity_kinds.append(_text(path_item.get("entity_kind")))
+        obj.properties.extend(
+            [
+                _string_property(
+                    "Label", selection.get("name", selection_id)
+                ),
+                _string_property("KitSelectionId", selection_id, dynamic=True),
+                _link_sub_list_property("Selection", targets, dynamic=True),
+                _string_list_property(
+                    "EntityKinds", entity_kinds, dynamic=True
+                ),
+                _json_property("QueryJSON", selection.get("query", {})),
+                _json_property("SourceSelectionJSON", selection),
+                _bool_property("Visibility", False),
+            ]
+        )
+        point = selection.get("point")
+        if point is not None:
+            obj.properties.append(
+                _vector_property(
+                    "SelectionPoint",
+                    _vector(point, (0.0, 0.0, 0.0)),
+                    dynamic=True,
+                )
+            )
+        obj.dependencies.extend(target for target, _ in targets)
+        selection_names[selection_id] = obj.name
+        selection_objects.append(obj.name)
+    for feature in feature_items:
+        target = next(
+            (
+                item
+                for item in graph.objects
+                if item.name == feature_names.get(_text(feature.get("id")), "")
+            ),
+            None,
+        )
+        linked_selections = [
+            selection_names[selection_id]
+            for value in _sequence(feature.get("selection_ids", []))
+            if (selection_id := _text(value)) in selection_names
+        ]
+        if target is not None and linked_selections:
+            _merge_named_property(
+                target.properties,
+                _link_list_property(
+                    "Selections", linked_selections, dynamic=True
+                ),
+            )
+            target.dependencies.extend(linked_selections)
+    for plane in plane_items:
+        selection_name = selection_names.get(
+            _text(plane.get("support_selection_id")), ""
+        )
+        target = next(
+            (
+                item
+                for item in graph.objects
+                if item.name == plane_names.get(_text(plane.get("id")), "")
+            ),
+            None,
+        )
+        if target is not None and selection_name:
+            _merge_named_property(
+                target.properties,
+                _link_property(
+                    "SupportSelection", selection_name, dynamic=True
+                ),
+            )
+            target.dependencies.append(selection_name)
+    configuration_items = _items(manifest.get("configurations", []))
+    configuration_names: dict[str, str] = {}
+    configuration_objects: list[str] = []
+    for configuration in configuration_items:
+        configuration_id = _text(configuration.get("id"))
+        obj = graph.add(
+            "App::FeaturePython",
+            configuration.get("name", configuration_id),
+            "Configuration",
+        )
+        configuration_names[configuration_id] = obj.name
+        configuration_objects.append(obj.name)
+    for configuration, object_name in zip(
+        configuration_items, configuration_objects, strict=True
+    ):
+        obj = next(item for item in graph.objects if item.name == object_name)
+        configuration_id = _text(configuration.get("id"))
+        parent_name = configuration_names.get(
+            _text(configuration.get("parent_id")), ""
+        )
+        suppressed_features = [
+            feature_names[feature_id]
+            for value in _sequence(configuration.get("suppressed_feature_ids", []))
+            if (feature_id := _text(value)) in feature_names
+        ]
+        obj.properties.extend(
+            [
+                _string_property(
+                    "Label", configuration.get("name", configuration_id)
+                ),
+                _string_property(
+                    "KitConfigurationId", configuration_id, dynamic=True
+                ),
+                _bool_property(
+                    "Active", bool(configuration.get("active")), dynamic=True
+                ),
+                _link_list_property(
+                    "SuppressedFeatures", suppressed_features, dynamic=True
+                ),
+                _link_property("Parameters", parameter_sheet.name, dynamic=True),
+                _json_property(
+                    "ParameterOverridesJSON", configuration.get("overrides", [])
+                ),
+                _json_property("SourceConfigurationJSON", configuration),
+                _bool_property("Visibility", False),
+            ]
+        )
+        if parent_name:
+            obj.properties.append(
+                _link_property("ParentConfiguration", parent_name, dynamic=True)
+            )
+        obj.dependencies.extend(
+            [parameter_sheet.name, *suppressed_features]
+            + ([parent_name] if parent_name else [])
+        )
     payloads = _items(
         manifest.get("brep_payloads", manifest.get("native_payloads", []))
     )
@@ -5010,6 +5161,22 @@ def _document_xml(
         ]
     )
     sketches_group.dependencies.extend(sketch_objects)
+    selections_group.properties.extend(
+        [
+            _string_property("Label", "Selections"),
+            _link_list_property("Group", selection_objects),
+            _bool_property("Visibility", False),
+        ]
+    )
+    selections_group.dependencies.extend(selection_objects)
+    configurations_group.properties.extend(
+        [
+            _string_property("Label", "Configurations"),
+            _link_list_property("Group", configuration_objects),
+            _bool_property("Visibility", False),
+        ]
+    )
+    configurations_group.dependencies.extend(configuration_objects)
     timeline_group.properties.extend(
         [
             _string_property("Label", "Feature Timeline"),
