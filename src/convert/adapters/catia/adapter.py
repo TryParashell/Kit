@@ -251,6 +251,9 @@ class CatiaAdapter:
             compatibility = _replay_compatibility(native)
             native_exact = compatibility == "native-exact"
             native_base_preserved = compatibility == "native-base-neutral-overlay"
+            mode = (
+                "exact_native_roundtrip" if native_exact else "exact_carrier_roundtrip"
+            )
             path = _write_bytes(destination, native, settings.overwrite)
             requirements = (
                 ("referenced CATIA component files",)
@@ -264,7 +267,7 @@ class CatiaAdapter:
                 diagnostics=document.diagnostics,
                 metadata=MappingProxyType(
                     {
-                        "mode": "exact_native_roundtrip",
+                        "mode": mode,
                         "compatibility": compatibility,
                         "vendor_loadable": native_exact,
                         "native_geometry": native_exact,
