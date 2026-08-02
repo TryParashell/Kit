@@ -1008,11 +1008,12 @@ def _edge_geometry(
 ) -> tuple[str, ...]:
     if edge.degenerate:
         _unsupported(f"degenerate edge {edge.id} is unsupported")
-    if edge.end_parameter <= edge.start_parameter:
-        _unsupported(f"edge {edge.id} requires an increasing parameter range")
+    if edge.end_parameter == edge.start_parameter:
+        _unsupported(f"edge {edge.id} requires a nonzero parameter range")
     curve_scale = curve_scales[edge.curve_id]
-    first = edge.start_parameter * curve_scale
-    last = edge.end_parameter * curve_scale
+    first, last = sorted(
+        (edge.start_parameter * curve_scale, edge.end_parameter * curve_scale)
+    )
     lines = [
         f" {_number(max(tolerance, edge.tolerance))} 1 1 0",
         f"1  {curve_indexes[edge.curve_id]} 0 {_number(first)} {_number(last)}",
@@ -1027,10 +1028,6 @@ def _edge_geometry(
             continue
         surface = graph.surfaces[face.surface_id]
         if not coedge.pcurve_id:
-            if not isinstance(surface, PlaneSurface):
-                _unsupported(
-                    f"coedge {coedge.id} on a curved surface requires a pcurve"
-                )
             continue
         if abs(pcurve_scales[coedge.pcurve_id] - curve_scale) > 1e-9:
             _unsupported(
@@ -1094,30 +1091,6 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
         raise TypeError("model must be a BrepModel")
     if not math.isfinite(tolerance) or tolerance <= 0.0:
         raise ValueError("tolerance must be finite and positive")
-    unsupported_curve = next(
-        (value for value in model.curves if not isinstance(value, LineCurve)), None
-    )
-    if unsupported_curve is not None:
-        _unsupported(
-            f"curve {unsupported_curve.id} of type {type(unsupported_curve).__name__} is not proven native"
-        )
-    if model.pcurves:
-        unsupported_pcurve = model.pcurves[0]
-        _unsupported(
-            f"pcurve {unsupported_pcurve.id} of type {type(unsupported_pcurve).__name__} is not proven native"
-        )
-    unsupported_surface = next(
-        (value for value in model.surfaces if not isinstance(value, PlaneSurface)),
-        None,
-    )
-    if unsupported_surface is not None:
-        _unsupported(
-            f"surface {unsupported_surface.id} of type {type(unsupported_surface).__name__} is not proven native"
-        )
-    if model.wires:
-        _unsupported("free wire bodies are not proven native")
-    if any(body.vertex_ids for body in model.bodies):
-        _unsupported("point bodies are not proven native")
     errors = model.validate(
         frozenset(body.design_body_id for body in model.bodies if body.design_body_id)
     )
@@ -1178,6 +1151,9 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
             graph.vertices,
             tolerance,
         )
+        range_reversed = edge.end_parameter < edge.start_parameter
+        first_vertex_id = edge.end_vertex_id if range_reversed else edge.start_vertex_id
+        last_vertex_id = edge.start_vertex_id if range_reversed else edge.end_vertex_id
         shapes.append(
             _ShapeRecord(
                 f"edge:{edge.id}",
@@ -1194,8 +1170,8 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                 ),
                 "0101000",
                 (
-                    (f"vertex:{edge.start_vertex_id}", False),
-                    (f"vertex:{edge.end_vertex_id}", True),
+                    (f"vertex:{first_vertex_id}", False),
+                    (f"vertex:{last_vertex_id}", True),
                 ),
             )
         )
@@ -1209,7 +1185,13 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                 tuple(
                     (
                         f"edge:{graph.coedges[coedge_id].edge_id}",
-                        graph.coedges[coedge_id].reversed,
+                        graph.coedges[coedge_id].reversed
+                        != (
+                            graph.edges[graph.coedges[coedge_id].edge_id].end_parameter
+                            < graph.edges[
+                                graph.coedges[coedge_id].edge_id
+                            ].start_parameter
+                        ),
                     )
                     for coedge_id in loop.coedge_ids
                 ),
@@ -1225,7 +1207,13 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                 tuple(
                     (
                         f"edge:{graph.coedges[coedge_id].edge_id}",
-                        graph.coedges[coedge_id].reversed,
+                        graph.coedges[coedge_id].reversed
+                        != (
+                            graph.edges[graph.coedges[coedge_id].edge_id].end_parameter
+                            < graph.edges[
+                                graph.coedges[coedge_id].edge_id
+                            ].start_parameter
+                        ),
                     )
                     for coedge_id in wire.coedge_ids
                 ),
