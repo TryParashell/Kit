@@ -1076,6 +1076,7 @@ def _assembly_bundle(
     payloads: dict[Path, bytes] = {}
     used = {destination.name.casefold()}
     complete = True
+    targets: list[tuple[ComponentDefinition, CadDocument, str, Path]] = []
     for definition in definitions:
         if not definition.document_id:
             complete = False
@@ -1106,6 +1107,10 @@ def _assembly_bundle(
             candidate = f"{stem}-{index}{suffix}"
         used.add(candidate.casefold())
         target = destination.parent / candidate
+        names[definition.document_id] = candidate
+        targets.append((definition, component, candidate, target))
+    available_names = {name.casefold() for name in names.values()}
+    for definition, component, candidate, target in targets:
         buffer = BytesIO()
         values = dict(settings.values)
         values["portable"] = False
@@ -1127,11 +1132,12 @@ def _assembly_bundle(
         native_result = (
             result.application_usable
             and result.vendor_loadable
-            and not result.requirements
+            and (
+                not result.requirements
+                or _bundle_requirements_satisfied(component, available_names)
+            )
         )
-        if native_result:
-            names[definition.document_id] = candidate
-        else:
+        if not native_result:
             complete = False
     if any(
         definition.document_id and definition.document_id not in names
@@ -1143,6 +1149,23 @@ def _assembly_bundle(
         frozen_mapping(payloads),
         complete,
     )
+
+
+def _bundle_requirements_satisfied(
+    document: CadDocument, available_names: set[str]
+) -> bool:
+    if document.assembly is None:
+        return True
+    for definition in document.assembly.definitions:
+        if definition.id == document.assembly.root_definition_id:
+            continue
+        source = str(
+            definition.attributes.get("native_source_path") or definition.source_path
+        )
+        name = PureWindowsPath(source).name.casefold()
+        if not name or name not in available_names:
+            return False
+    return True
 
 
 def _solidworks_transfers(
@@ -1435,8 +1458,10 @@ def _patch_native_template(
         patched_sketches
     ) or desired_sketch_values == _sketch_values(original_sketches):
         native.add(Capability.EDITABLE_SKETCHES)
-    if _feature_values(document.feature_timeline) == _feature_values(
-        patched_timeline
+    if _feature_values(
+        document.feature_timeline, document.parameters
+    ) == _feature_values(
+        patched_timeline, patched_parameters
     ) and _native_feature_definitions_unchanged(
         document.feature_timeline, original_timeline
     ):
@@ -1464,6 +1489,8 @@ def _patch_native_template(
     if document.assembly is not None:
         assembly_native = _patch_native_assembly(document, streams, bundle_names)
         native.update(assembly_native)
+        if Capability.COMPONENT_DOCUMENTS in assembly_native and brep_native:
+            native.add(Capability.NATIVE_PAYLOADS)
     required = _required_capabilities(document)
     blockers = (
         required
@@ -2012,29 +2039,36 @@ def _sketch_values(sketches: Sequence[Sketch]) -> tuple[Any, ...]:
     )
 
 
-def _definition_value(definition: Any) -> Any:
+def _definition_value(
+    definition: Any, parameter_value: ParameterValue | None = None
+) -> Any:
     if isinstance(definition, ExtrusionFeature):
+        length = parameter_value or definition.length
         return (
             "extrusion",
-            _round_number(float(definition.length.value)),
-            definition.length.kind,
-            definition.length.unit,
+            _round_number(float(length.value)),
+            length.kind,
+            length.unit,
             definition.end_condition,
             definition.reversed,
         )
     if isinstance(definition, FilletFeature):
+        radius = parameter_value or definition.radius
         return (
             "fillet",
-            _round_number(float(definition.radius.value)),
-            definition.radius.kind,
-            definition.radius.unit,
+            _round_number(float(radius.value)),
+            radius.kind,
+            radius.unit,
         )
     if isinstance(definition, NativeFeatureDefinition):
         return "native", definition.format_id, definition.type_id
     return definition
 
 
-def _feature_values(features: Sequence[FeatureStep]) -> tuple[Any, ...]:
+def _feature_values(
+    features: Sequence[FeatureStep], parameters: Sequence[Parameter] = ()
+) -> tuple[Any, ...]:
+    parameter_by_id = {parameter.id: parameter for parameter in parameters}
     return tuple(
         (
             feature.id,
@@ -2045,7 +2079,17 @@ def _feature_values(features: Sequence[FeatureStep]) -> tuple[Any, ...]:
             feature.sketch_id,
             feature.parameter_ids,
             feature.operation,
-            _definition_value(feature.definition),
+            _definition_value(
+                feature.definition,
+                next(
+                    (
+                        parameter_by_id[parameter_id].value
+                        for parameter_id in feature.parameter_ids
+                        if parameter_id in parameter_by_id
+                    ),
+                    None,
+                ),
+            ),
             feature.selection_ids,
             feature.suppressed,
             feature.configuration_states,
@@ -2265,11 +2309,35 @@ def _patch_native_assembly(
             ),
         ),
     )
-    if _mate_values(
-        document.assembly.mate_entities,
-        document.assembly.mates,
-        document.assembly.mate_groups,
-    ) == _mate_values(entities, mates, groups):
+    desired_entities = {entity.id: entity for entity in document.assembly.mate_entities}
+    root_entity_ids = {entity_id for mate in mates for entity_id in mate.entity_ids}
+    selected_entities = tuple(
+        desired_entities[entity.id]
+        for entity in entities
+        if entity.id in root_entity_ids and entity.id in desired_entities
+    )
+    desired_mates = {mate.id: mate for mate in document.assembly.mates}
+    selected_mates = tuple(
+        desired_mates[mate.id] for mate in mates if mate.id in desired_mates
+    )
+    desired_groups = {group.id: group for group in document.assembly.mate_groups}
+    selected_groups = tuple(
+        desired_groups[group.id] for group in groups if group.id in desired_groups
+    )
+    root_mates_native = _mate_values(
+        selected_entities,
+        selected_mates,
+        selected_groups,
+    ) == _mate_values(entities, mates, groups)
+    all_root_records_found = (
+        len(selected_entities) == len(entities)
+        and len(selected_mates) == len(mates)
+        and len(selected_groups) == len(groups)
+    )
+    nested_mates_native = len(document.assembly.mates) == len(mates) or (
+        Capability.COMPONENT_DOCUMENTS in result
+    )
+    if root_mates_native and all_root_records_found and nested_mates_native:
         result.add(Capability.ASSEMBLY_MATES)
     native_meshes, _ = _assembly_meshes(native)
     if _mesh_values(document.meshes) == _mesh_values(native_meshes):
@@ -2284,7 +2352,7 @@ def _patch_assembly_instances(
 ) -> bool:
     original = {instance.id: instance for instance in _assembly_instances(native)}
     desired = {instance.id: instance for instance in assembly.instances}
-    if set(original) != set(desired):
+    if not set(original) <= set(desired):
         return False
     prefix, root, trailing = _keywords_root(streams[COMPONENT_TREE_STREAM])
     elements: dict[int, ET.Element] = {}
@@ -4127,6 +4195,7 @@ def _sketches(model: NativeModel, parameter_ids: set[str]) -> tuple[Sketch, ...]
 def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
     entities: list[SketchEntity] = []
     reference_map: dict[str, str] = {}
+    profile_entities: dict[int, str] = {}
     profile_offsets = {
         offset for profile in sketch.profiles for offset in profile.marker_offsets
     }
@@ -4174,6 +4243,8 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
                 reference_map[
                     f"{sketch.object_id}:profile:{profile_index}:edge:{edge_index}"
                 ] = entity_id
+                if marker_offset is not None:
+                    profile_entities[marker_offset] = entity_id
         elif profile.kind == "circle":
             x, y, radius = profile.coordinates
             entity_id = _profile_id(sketch.object_id, profile_index)
@@ -4199,7 +4270,9 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
                 )
             )
             reference_map[f"{sketch.object_id}:profile:{profile_index}"] = entity_id
-    index_map: dict[int, str] = {}
+            profile_entities.update(
+                {offset: entity_id for offset in profile.marker_offsets}
+            )
     coordinates_by_prefix = {
         prefix: tuple(
             marker.coordinates_mm
@@ -4208,16 +4281,37 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
         )
         for prefix in {marker.prefix for marker in sketch.markers}
     }
-    for marker in sketch.markers:
+    coordinates_by_index = tuple(marker.coordinates_mm for marker in sketch.markers)
+    marker_entities: dict[int, str] = {}
+    for marker_index, marker in enumerate(sketch.markers):
         if marker.offset in profile_offsets:
+            entity_id = profile_entities.get(marker.offset)
+            if entity_id is not None:
+                marker_entities[marker_index] = entity_id
             continue
-        entity = _marker_entity(sketch, marker, coordinates_by_prefix)
+        entity = _marker_entity(
+            sketch,
+            marker,
+            coordinates_by_prefix,
+            coordinates_by_index,
+        )
         entities.append(entity)
-        if marker.object_index is not None:
-            index_map[marker.object_index] = entity.id
+        marker_entities[marker_index] = entity.id
     reference_map.update(
-        {f"native-index:{index}": entity_id for index, entity_id in index_map.items()}
+        {
+            f"native-index:{index}": entity_id
+            for index, entity_id in marker_entities.items()
+        }
     )
+    for dimension in sketch.dimensions:
+        if dimension.kind != "length":
+            continue
+        for operand in dimension.operands:
+            entity_id = marker_entities.get(operand.entity_index)
+            if entity_id is not None:
+                reference_map[
+                    f"native:{operand.kind_code:04x}:{operand.entity_index}"
+                ] = entity_id
     constraints = _sketch_constraints(sketch, reference_map, parameter_ids)
     closed_profiles: list[tuple[str, ...]] = []
     for profile_index, profile in enumerate(sketch.profiles):
@@ -4261,13 +4355,18 @@ def _marker_entity(
     sketch: NativeSketch,
     marker: NativeMarker,
     coordinates_by_prefix: dict[str, tuple[tuple[float, float] | None, ...]],
+    coordinates_by_index: tuple[tuple[float, float] | None, ...],
 ) -> SketchEntity:
     entity_id = _marker_id(sketch.object_id, marker.offset)
     if marker.semantic == "point" and marker.coordinates_mm is not None:
         kind = GeometryKind.POINT
         geometry: Any = PointGeometry(Vector2(*marker.coordinates_mm))
     elif marker.semantic == "line" and marker.endpoint_indices is not None:
-        coordinates = coordinates_by_prefix[marker.prefix]
+        coordinates = (
+            coordinates_by_index
+            if marker.profile_role == 2 and marker.native_kind == 2
+            else coordinates_by_prefix[marker.prefix]
+        )
         start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
         end = _coordinate_reference(coordinates, marker.endpoint_indices[1])
         if start is not None and end is not None and start != end:
@@ -4357,11 +4456,14 @@ def _sketch_constraints(
     parameter_usage: defaultdict[str, int] = defaultdict(int)
     constraint_id_usage: defaultdict[str, int] = defaultdict(int)
     for constraint in sketch.constraints:
-        references = [
-            ConstraintReference(reference_map[reference])
-            for reference in constraint.references
-            if reference in reference_map
+        resolved_references = [
+            reference_map.get(reference) for reference in constraint.references
         ]
+        references = (
+            [ConstraintReference(reference) for reference in resolved_references]
+            if resolved_references and all(resolved_references)
+            else []
+        )
         kind = constraint.kind
         native_name = (
             constraint.parameter.rsplit(":", 1)[-1]
