@@ -21,12 +21,16 @@ CAPABILITY_WRITE_TYPE_IDS = MappingProxyType(
         Capability.PARAMETRIC_HISTORY: frozenset().union(
             *FEATURE_WRITE_TYPE_IDS.values()
         ),
-        Capability.SUPPORT_PLANES: frozenset(),
+        Capability.SUPPORT_PLANES: frozenset({"App::Plane"}),
         Capability.EDITABLE_SKETCHES: frozenset({SKETCH_TYPE_ID}),
-        Capability.SELECTIONS: frozenset(),
-        Capability.BODY_STRUCTURE: frozenset(),
-        Capability.CONFIGURATIONS: frozenset(),
-        Capability.EXPRESSIONS: frozenset(),
+        Capability.SELECTIONS: frozenset({"App::PropertyLinkSubList"}),
+        Capability.BODY_STRUCTURE: frozenset({"App::Part"}),
+        Capability.CONFIGURATIONS: frozenset(
+            {"App::PropertyString:KitConfigurationId"}
+        ),
+        Capability.EXPRESSIONS: frozenset(
+            {"App::PropertyExpressionEngine", "Spreadsheet::PropertySheet"}
+        ),
         Capability.BREP: frozenset({"Part::PropertyPartShape"}),
         Capability.TESSELLATION: frozenset(
             {"Mesh::Feature", "Mesh::PropertyMeshKernel"}
@@ -39,7 +43,7 @@ CAPABILITY_WRITE_TYPE_IDS = MappingProxyType(
         ),
         Capability.COMPONENT_DOCUMENTS: frozenset({"App::PropertyXLink"}),
         Capability.EXTERNAL_REFERENCES: frozenset({"App::PropertyXLink"}),
-        Capability.MATERIALS: frozenset(),
+        Capability.MATERIALS: frozenset({"App::PropertyString:MaterialId"}),
         Capability.NATIVE_PAYLOADS: frozenset(),
         Capability.PROVENANCE: frozenset(),
         Capability.ROUNDTRIP_METADATA: frozenset(),
@@ -53,7 +57,7 @@ CAPABILITY_CARRIER_REASONS = MappingProxyType(
         Capability.PARAMETRIC_HISTORY: CarrierReason.WRITER_UNIMPLEMENTED,
         Capability.SUPPORT_PLANES: CarrierReason.WRITER_UNIMPLEMENTED,
         Capability.EDITABLE_SKETCHES: CarrierReason.WRITER_UNIMPLEMENTED,
-        Capability.SELECTIONS: CarrierReason.WRITER_UNIMPLEMENTED,
+        Capability.SELECTIONS: CarrierReason.TARGET_UNSUPPORTED,
         Capability.BODY_STRUCTURE: CarrierReason.WRITER_UNIMPLEMENTED,
         Capability.CONFIGURATIONS: CarrierReason.TARGET_UNSUPPORTED,
         Capability.EXPRESSIONS: CarrierReason.WRITER_UNIMPLEMENTED,
