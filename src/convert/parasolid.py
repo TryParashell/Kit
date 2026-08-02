@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import math
 import re
@@ -690,7 +690,7 @@ def _write_nurbs_curve(
     _be16(output, 4 if curve.weights else 3)
     _be32(output, 2)
     output.append(0)
-    _be32(output, 0)
+    output.extend((0, 0, 1 if curve.weights else 0, 0))
     for attribute in (control, multiplicity, knots):
         _be16(output, attribute)
     poles = _homogeneous_points(curve.control_points, curve.weights)
@@ -1057,6 +1057,7 @@ class _TopologyRecord:
     owner: int = 0
     point: Vector3 | None = None
     isolated: bool = False
+    tolerance: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1119,6 +1120,116 @@ class _CompactSupportUvRecord:
     attribute: int
     marker: int
     values: tuple[float, ...]
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _BSurfaceRecord:
+    attribute: int
+    state: int
+    header_references: tuple[int, ...]
+    descriptor_reference: int
+    data_reference: int
+    sense: bool
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _NurbsSurfaceRecord:
+    attribute: int
+    periodic: tuple[bool, bool]
+    degrees: tuple[int, int]
+    counts: tuple[int, int]
+    knot_types: tuple[int, int]
+    knot_counts: tuple[int, int]
+    rational: bool
+    closed: tuple[bool, bool]
+    surface_form: int
+    vertex_dimension: int
+    references: tuple[int, ...]
+    layout: str
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _SurfaceDataRecord:
+    attribute: int
+    intervals: tuple[tuple[float, float], ...]
+    self_intersection: int
+    flags: bytes
+    references: tuple[int, ...]
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _BCurveRecord:
+    attribute: int
+    state: int
+    header_references: tuple[int, ...]
+    descriptor_reference: int
+    data_reference: int
+    sense: bool
+    layout: str
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _NurbsCurveRecord:
+    attribute: int
+    degree: int
+    control_count: int
+    vertex_dimension: int
+    knot_count: int
+    knot_type: int
+    periodic: bool
+    closed: bool
+    rational: bool
+    curve_form: int
+    references: tuple[int, ...]
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _CurveDataRecord:
+    attribute: int
+    self_intersection: int
+    analytic_form_reference: int
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _TrimmedCurveRecord:
+    attribute: int
+    state: int
+    header_references: tuple[int, ...]
+    basis_reference: int
+    points: tuple[Vector3, Vector3]
+    parameters: tuple[float, float]
+    sense: bool
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _FloatArrayRecord:
+    attribute: int
+    kind: int
+    values: tuple[float, ...]
+    offset: int
+    raw: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _ShortArrayRecord:
+    attribute: int
+    values: tuple[int, ...]
     offset: int
     raw: bytes
 
@@ -1202,12 +1313,31 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
     terms: dict[int, _TermRecord] = {}
     support_uv: dict[int, _SupportUvRecord] = {}
     compact_support_uv: dict[int, _CompactSupportUvRecord] = {}
+    b_surfaces: dict[int, _BSurfaceRecord] = {}
+    nurbs_surfaces: dict[int, _NurbsSurfaceRecord] = {}
+    surface_data: dict[int, _SurfaceDataRecord] = {}
+    b_curves: dict[int, _BCurveRecord] = {}
+    nurbs_curves: dict[int, _NurbsCurveRecord] = {}
+    curve_data: dict[int, _CurveDataRecord] = {}
+    trimmed_curves: dict[int, _TrimmedCurveRecord] = {}
+    float_arrays: dict[int, _FloatArrayRecord] = {}
+    short_arrays: dict[int, _ShortArrayRecord] = {}
     ambiguous_intersections: set[int] = set()
     ambiguous_charts: set[int] = set()
     ambiguous_terms: set[int] = set()
     ambiguous_support_uv: set[int] = set()
     ambiguous_compact_support_uv: set[int] = set()
+    ambiguous_b_surfaces: set[int] = set()
+    ambiguous_nurbs_surfaces: set[int] = set()
+    ambiguous_surface_data: set[int] = set()
+    ambiguous_b_curves: set[int] = set()
+    ambiguous_nurbs_curves: set[int] = set()
+    ambiguous_curve_data: set[int] = set()
+    ambiguous_trimmed_curves: set[int] = set()
+    ambiguous_float_arrays: set[int] = set()
+    ambiguous_short_arrays: set[int] = set()
     chart_point_count = 0
+    spline_scalar_count = 0
     for offset in range(max(0, len(body) - 1)):
         if body[offset] != 0:
             continue
@@ -1291,6 +1421,93 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
                     record.attribute,
                     record,
                 )
+        if kind == 0x7C:
+            record = _parse_b_surface_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    b_surfaces,
+                    ambiguous_b_surfaces,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x7E:
+            record = _parse_nurbs_surface_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    nurbs_surfaces,
+                    ambiguous_nurbs_surfaces,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x7D:
+            record = _parse_surface_data_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    surface_data,
+                    ambiguous_surface_data,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x86:
+            record = _parse_b_curve_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    b_curves,
+                    ambiguous_b_curves,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x88:
+            record = _parse_nurbs_curve_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    nurbs_curves,
+                    ambiguous_nurbs_curves,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x87:
+            record = _parse_curve_data_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    curve_data,
+                    ambiguous_curve_data,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x85:
+            record = _parse_trimmed_curve_record(body, offset)
+            if record is not None:
+                _store_unique_record(
+                    trimmed_curves,
+                    ambiguous_trimmed_curves,
+                    record.attribute,
+                    record,
+                )
+        if kind in {0x2D, 0x80}:
+            record = _parse_float_array_record(body, offset, kind)
+            if record is not None:
+                spline_scalar_count += len(record.values)
+                if spline_scalar_count > 8_000_000:
+                    return None
+                _store_unique_record(
+                    float_arrays,
+                    ambiguous_float_arrays,
+                    record.attribute,
+                    record,
+                )
+        if kind == 0x7F:
+            record = _parse_short_array_record(body, offset)
+            if record is not None:
+                spline_scalar_count += len(record.values)
+                if spline_scalar_count > 8_000_000:
+                    return None
+                _store_unique_record(
+                    short_arrays,
+                    ambiguous_short_arrays,
+                    record.attribute,
+                    record,
+                )
         if (
             sum(
                 len(values)
@@ -1309,6 +1526,15 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
                     terms,
                     support_uv,
                     compact_support_uv,
+                    b_surfaces,
+                    nurbs_surfaces,
+                    surface_data,
+                    b_curves,
+                    nurbs_curves,
+                    curve_data,
+                    trimmed_curves,
+                    float_arrays,
+                    short_arrays,
                 )
             )
             > 1_000_000
@@ -1351,6 +1577,30 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
                 record,
             )
         cursor = position + 1
+    for attribute, record in b_surfaces.items():
+        if attribute in tables.surfaces:
+            continue
+        surface = _resolve_nurbs_surface(
+            record,
+            nurbs_surfaces,
+            surface_data,
+            float_arrays,
+            short_arrays,
+        )
+        if surface is not None:
+            tables.surfaces[attribute] = surface
+    for attribute, record in b_curves.items():
+        if attribute in tables.curves:
+            continue
+        curve = _resolve_nurbs_curve(
+            record,
+            nurbs_curves,
+            curve_data,
+            float_arrays,
+            short_arrays,
+        )
+        if curve is not None:
+            tables.curves[attribute] = curve
     for attribute, record in intersections.items():
         if attribute in tables.curves:
             continue
@@ -1363,6 +1613,12 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
             compact_support_uv,
             tables.surfaces,
         )
+        if curve is not None:
+            tables.curves[attribute] = curve
+    for attribute, record in trimmed_curves.items():
+        if attribute in tables.curves:
+            continue
+        curve = _resolve_trimmed_curve(record, tables.curves)
         if curve is not None:
             tables.curves[attribute] = curve
     tables.loops = {
@@ -1438,6 +1694,796 @@ def _xmt_sequence(
         values.append(value)
         cursor += width
     return tuple(values), cursor
+
+
+def _parse_b_surface_record(data: bytes, offset: int) -> _BSurfaceRecord | None:
+    start = _record_start(data, offset, 0x7C)
+    if start is None:
+        return None
+    decoded = _xmt(data, start)
+    if decoded is None:
+        return None
+    attribute, width = decoded
+    cursor = start + width
+    state = _u32(data, cursor)
+    if attribute <= 1 or state is None:
+        return None
+    cursor += 4
+    header = _xmt_sequence(data, cursor, 5)
+    if header is None:
+        return None
+    header_references, cursor = header
+    if cursor >= len(data) or data[cursor] not in {0x2B, 0x2D}:
+        return None
+    sense = data[cursor] == 0x2B
+    construction = _xmt_sequence(data, cursor + 1, 2)
+    if construction is None:
+        return None
+    references, cursor = construction
+    native_layout = header_references[0] == 1 and all(
+        value >= 1 for value in header_references
+    )
+    compact_layout = (
+        state == 1
+        and header_references == (0, 0, 0, 0, 0)
+        and sense
+        and references[1] == 0
+    )
+    if references[0] <= 1 or not (native_layout or compact_layout):
+        return None
+    return _BSurfaceRecord(
+        attribute,
+        state,
+        header_references,
+        references[0],
+        references[1],
+        sense,
+        offset,
+        data[offset:cursor],
+    )
+
+
+def _parse_nurbs_surface_record(data: bytes, offset: int) -> _NurbsSurfaceRecord | None:
+    start = _record_start(data, offset, 0x7E)
+    if start is None:
+        return None
+    decoded = _xmt(data, start)
+    if decoded is None:
+        return None
+    attribute, width = decoded
+    cursor = start + width
+    if attribute <= 1:
+        return None
+    if data[cursor : cursor + 12] == bytes(12):
+        references = _xmt_sequence(data, cursor + 12, 5)
+        if references is None or any(value <= 1 for value in references[0]):
+            return None
+        values, end = references
+        return _NurbsSurfaceRecord(
+            attribute,
+            (False, False),
+            (0, 0),
+            (0, 0),
+            (0, 0),
+            (0, 0),
+            False,
+            (False, False),
+            0,
+            0,
+            values,
+            "compact",
+            offset,
+            data[offset:end],
+        )
+    if cursor + 30 > len(data):
+        return None
+    periodic_values = data[cursor : cursor + 2]
+    degrees = (_u16(data, cursor + 2), _u16(data, cursor + 4))
+    counts = (_u32(data, cursor + 6), _u32(data, cursor + 10))
+    knot_types = (data[cursor + 14], data[cursor + 15])
+    knot_counts = (_u32(data, cursor + 16), _u32(data, cursor + 20))
+    rational_value = data[cursor + 24]
+    closed_values = data[cursor + 25 : cursor + 27]
+    surface_form = data[cursor + 27]
+    vertex_dimension = _u16(data, cursor + 28)
+    references = _xmt_sequence(data, cursor + 30, 5)
+    if (
+        any(value not in {0, 1} for value in periodic_values)
+        or any(value is None for value in degrees)
+        or any(value is None for value in counts)
+        or any(value is None for value in knot_counts)
+        or rational_value not in {0, 1}
+        or any(value not in {0, 1} for value in closed_values)
+        or vertex_dimension not in {3, 4}
+        or references is None
+    ):
+        return None
+    degree_u, degree_v = degrees
+    count_u, count_v = counts
+    knot_count_u, knot_count_v = knot_counts
+    if (
+        degree_u is None
+        or degree_v is None
+        or count_u is None
+        or count_v is None
+        or knot_count_u is None
+        or knot_count_v is None
+        or degree_u < 1
+        or degree_v < 1
+        or count_u <= degree_u
+        or count_v <= degree_v
+        or count_u > 1_000_000
+        or count_v > 1_000_000
+        or count_u * count_v > 1_000_000
+        or not 2 <= knot_count_u <= 1_000_000
+        or not 2 <= knot_count_v <= 1_000_000
+        or (vertex_dimension == 4) != bool(rational_value)
+        or any(value <= 1 for value in references[0])
+    ):
+        return None
+    values, end = references
+    return _NurbsSurfaceRecord(
+        attribute,
+        tuple(bool(value) for value in periodic_values),
+        (degree_u, degree_v),
+        (count_u, count_v),
+        knot_types,
+        (knot_count_u, knot_count_v),
+        bool(rational_value),
+        tuple(bool(value) for value in closed_values),
+        surface_form,
+        vertex_dimension,
+        values,
+        "extended",
+        offset,
+        data[offset:end],
+    )
+
+
+def _parse_surface_data_record(data: bytes, offset: int) -> _SurfaceDataRecord | None:
+    start = _record_start(data, offset, 0x7D)
+    if start is None:
+        return None
+    decoded = _xmt(data, start)
+    if decoded is None:
+        return None
+    attribute, width = decoded
+    cursor = start + width
+    fixed_end = cursor + 77
+    if attribute <= 1 or fixed_end > len(data):
+        return None
+    values = struct.unpack_from(">8d", data, cursor)
+    if any(not math.isfinite(value) for value in values):
+        return None
+    intervals = tuple((values[index], values[index + 1]) for index in range(0, 8, 2))
+    self_intersection = data[cursor + 64]
+    flags = data[cursor + 65 : fixed_end]
+    references = _xmt_sequence(data, fixed_end, 4)
+    if references is None or any(value < 1 for value in references[0]):
+        return None
+    values, end = references
+    return _SurfaceDataRecord(
+        attribute,
+        intervals,
+        self_intersection,
+        flags,
+        values,
+        offset,
+        data[offset:end],
+    )
+
+
+def _parse_b_curve_record(data: bytes, offset: int) -> _BCurveRecord | None:
+    start = _record_start(data, offset, 0x86)
+    if start is None:
+        return None
+    if start == offset + 2:
+        compact_attribute = _u16(data, start)
+        compact_descriptor = _u16(data, start + 2)
+        compact_end = start + 12
+        if (
+            compact_attribute is not None
+            and compact_descriptor is not None
+            and compact_attribute > 1
+            and compact_descriptor > 1
+            and compact_end <= len(data)
+            and data[start + 4 : compact_end] == bytes(8)
+        ):
+            return _BCurveRecord(
+                compact_attribute,
+                0,
+                (0, 0, 0, 0, 0),
+                compact_descriptor,
+                0,
+                True,
+                "compact",
+                offset,
+                data[offset:compact_end],
+            )
+    decoded = _xmt(data, start)
+    if decoded is None:
+        return None
+    attribute, width = decoded
+    cursor = start + width
+    if attribute <= 1:
+        return None
+    state = _u32(data, cursor)
+    if state is None:
+        return None
+    header = _xmt_sequence(data, cursor + 4, 5)
+    if header is None:
+        return None
+    header_references, cursor = header
+    if header_references[0] != 1 or any(value < 1 for value in header_references):
+        return None
+    if cursor >= len(data) or data[cursor] not in {0x2B, 0x2D}:
+        return None
+    sense = data[cursor] == 0x2B
+    construction = _xmt_sequence(data, cursor + 1, 2)
+    if construction is None:
+        return None
+    references, end = construction
+    if references[0] <= 1 or references[1] < 1:
+        return None
+    return _BCurveRecord(
+        attribute,
+        state,
+        header_references,
+        references[0],
+        references[1],
+        sense,
+        "extended",
+        offset,
+        data[offset:end],
+    )
+
+
+def _parse_nurbs_curve_record(data: bytes, offset: int) -> _NurbsCurveRecord | None:
+    start = _record_start(data, offset, 0x88)
+    if start is None:
+        return None
+    decoded = _xmt(data, start)
+    if decoded is None:
+        return None
+    attribute, width = decoded
+    cursor = start + width
+    if attribute <= 1 or cursor + 17 > len(data):
+        return None
+    degree = _u16(data, cursor)
+    control_count = _u32(data, cursor + 2)
+    vertex_dimension = _u16(data, cursor + 6)
+    knot_count = _u32(data, cursor + 8)
+    knot_type = data[cursor + 12]
+    periodic_value = data[cursor + 13]
+    closed_value = data[cursor + 14]
+    rational_value = data[cursor + 15]
+    curve_form = data[cursor + 16]
+    references = _xmt_sequence(data, cursor + 17, 3)
+    if (
+        degree is None
+        or control_count is None
+        or vertex_dimension not in {3, 4}
+        or knot_count is None
+        or periodic_value not in {0, 1}
+        or closed_value not in {0, 1}
+        or rational_value not in {0, 1}
+        or references is None
+        or degree < 1
+        or control_count <= degree
+        or control_count > 1_000_000
+        or not 2 <= knot_count <= 1_000_000
+        or (vertex_dimension == 4) != bool(rational_value)
+        or any(value <= 1 for value in references[0])
+    ):
+        return None
+    values, end = references
+    return _NurbsCurveRecord(
+        attribute,
+        degree,
+        control_count,
+        vertex_dimension,
+        knot_count,
+        knot_type,
+        bool(periodic_value),
+        bool(closed_value),
+        bool(rational_value),
+        curve_form,
+        values,
+        offset,
+        data[offset:end],
+    )
+
+
+def _parse_curve_data_record(data: bytes, offset: int) -> _CurveDataRecord | None:
+    start = _record_start(data, offset, 0x87)
+    if start is None:
+        return None
+    decoded = _xmt(data, start)
+    if decoded is None:
+        return None
+    attribute, width = decoded
+    cursor = start + width
+    if attribute <= 1 or cursor >= len(data):
+        return None
+    self_intersection = data[cursor]
+    analytic_form = _xmt(data, cursor + 1)
+    if analytic_form is None or analytic_form[0] < 1:
+        return None
+    reference, reference_width = analytic_form
+    end = cursor + 1 + reference_width
+    return _CurveDataRecord(
+        attribute,
+        self_intersection,
+        reference,
+        offset,
+        data[offset:end],
+    )
+
+
+def _parse_trimmed_curve_record(data: bytes, offset: int) -> _TrimmedCurveRecord | None:
+    start = _record_start(data, offset, 0x85)
+    if start is None:
+        return None
+    decoded = _xmt(data, start)
+    if decoded is None:
+        return None
+    attribute, width = decoded
+    cursor = start + width
+    state = _u32(data, cursor)
+    if attribute <= 1 or state is None:
+        return None
+    header = _xmt_sequence(data, cursor + 4, 5)
+    if header is None:
+        return None
+    header_references, cursor = header
+    if header_references[0] != 1 or any(value < 1 for value in header_references):
+        return None
+    if cursor >= len(data) or data[cursor] not in {0x2B, 0x2D}:
+        return None
+    sense = data[cursor] == 0x2B
+    basis = _xmt(data, cursor + 1)
+    if basis is None or basis[0] <= 1:
+        return None
+    basis_reference, basis_width = basis
+    values_offset = cursor + 1 + basis_width
+    end = values_offset + 64
+    if end > len(data):
+        return None
+    point_1 = _point_vector(data, values_offset)
+    point_2 = _point_vector(data, values_offset + 24)
+    parameters = struct.unpack_from(">2d", data, values_offset + 48)
+    if (
+        point_1 is None
+        or point_2 is None
+        or any(not math.isfinite(value) for value in parameters)
+    ):
+        return None
+    return _TrimmedCurveRecord(
+        attribute,
+        state,
+        header_references,
+        basis_reference,
+        (point_1, point_2),
+        parameters,
+        sense,
+        offset,
+        data[offset:end],
+    )
+
+
+def _array_record_fields(
+    data: bytes, offset: int, kind: int
+) -> tuple[int, int, int] | None:
+    if data[offset : offset + 2] != bytes((0, kind)):
+        return None
+    cursor = offset + 2
+    if cursor < len(data) and data[cursor] in {0x2B, 0x2D}:
+        cursor += 1
+    if cursor < len(data) and data[cursor] == 0xFF:
+        cursor += 1
+    count = _u32(data, cursor)
+    decoded = _xmt(data, cursor + 4)
+    if count is None or decoded is None or not 1 <= count <= 1_000_000:
+        return None
+    attribute, width = decoded
+    if attribute <= 1:
+        return None
+    return attribute, count, cursor + 4 + width
+
+
+def _parse_float_array_record(
+    data: bytes, offset: int, kind: int
+) -> _FloatArrayRecord | None:
+    fields = _array_record_fields(data, offset, kind)
+    if fields is None:
+        return None
+    attribute, count, values_offset = fields
+    end = values_offset + count * 8
+    if end > len(data):
+        return None
+    values = struct.unpack_from(f">{count}d", data, values_offset)
+    if any(not math.isfinite(value) for value in values):
+        return None
+    return _FloatArrayRecord(
+        attribute,
+        kind,
+        values,
+        offset,
+        data[offset:end],
+    )
+
+
+def _parse_short_array_record(data: bytes, offset: int) -> _ShortArrayRecord | None:
+    fields = _array_record_fields(data, offset, 0x7F)
+    if fields is None:
+        return None
+    attribute, count, values_offset = fields
+    end = values_offset + count * 2
+    if end > len(data):
+        return None
+    values = struct.unpack_from(f">{count}H", data, values_offset)
+    if any(value == 0 for value in values):
+        return None
+    return _ShortArrayRecord(attribute, values, offset, data[offset:end])
+
+
+def _compact_nurbs_surface_shape(
+    control_count: int,
+    u_multiplicities: Sequence[int],
+    v_multiplicities: Sequence[int],
+) -> tuple[int, int, int, int, int] | None:
+    candidates = []
+    u_sum = sum(u_multiplicities)
+    v_sum = sum(v_multiplicities)
+    for dimension in (3, 4):
+        if control_count % dimension:
+            continue
+        pole_count = control_count // dimension
+        for degree_u in range(1, 9):
+            count_u = u_sum - degree_u - 1
+            if count_u <= degree_u:
+                continue
+            for degree_v in range(1, 9):
+                count_v = v_sum - degree_v - 1
+                if count_v > degree_v and count_u * count_v == pole_count:
+                    candidates.append((count_u, count_v, degree_u, degree_v, dimension))
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _resolve_nurbs_surface(
+    record: _BSurfaceRecord,
+    descriptors: Mapping[int, _NurbsSurfaceRecord],
+    surface_data: Mapping[int, _SurfaceDataRecord],
+    float_arrays: Mapping[int, _FloatArrayRecord],
+    short_arrays: Mapping[int, _ShortArrayRecord],
+) -> NurbsSurface | None:
+    descriptor = descriptors.get(record.descriptor_reference)
+    data_record = (
+        surface_data.get(record.data_reference) if record.data_reference > 1 else None
+    )
+    if (
+        descriptor is None
+        or len(set(descriptor.references)) != 5
+        or (record.data_reference > 1 and data_record is None)
+    ):
+        return None
+    control = float_arrays.get(descriptor.references[0])
+    u_multiplicities = short_arrays.get(descriptor.references[1])
+    v_multiplicities = short_arrays.get(descriptor.references[2])
+    u_knots = float_arrays.get(descriptor.references[3])
+    v_knots = float_arrays.get(descriptor.references[4])
+    if (
+        control is None
+        or control.kind != 0x2D
+        or u_multiplicities is None
+        or v_multiplicities is None
+        or u_knots is None
+        or u_knots.kind != 0x80
+        or v_knots is None
+        or v_knots.kind != 0x80
+        or len(u_multiplicities.values) != len(u_knots.values)
+        or len(v_multiplicities.values) != len(v_knots.values)
+        or any(
+            left >= right
+            for values in (u_knots.values, v_knots.values)
+            for left, right in zip(values, values[1:])
+        )
+    ):
+        return None
+    if descriptor.layout == "compact":
+        inferred = _compact_nurbs_surface_shape(
+            len(control.values),
+            u_multiplicities.values,
+            v_multiplicities.values,
+        )
+        if inferred is None:
+            return None
+        count_u, count_v, degree_u, degree_v, dimension = inferred
+        periodic = (False, False)
+        closed = (False, False)
+        rational = dimension == 4
+        knot_types = (0, 0)
+        knot_counts = (len(u_knots.values), len(v_knots.values))
+        surface_form = 0
+    else:
+        count_u, count_v = descriptor.counts
+        degree_u, degree_v = descriptor.degrees
+        dimension = descriptor.vertex_dimension
+        periodic = descriptor.periodic
+        closed = descriptor.closed
+        rational = descriptor.rational
+        knot_types = descriptor.knot_types
+        knot_counts = descriptor.knot_counts
+        surface_form = descriptor.surface_form
+    if (
+        len(control.values) != count_u * count_v * dimension
+        or len(u_knots.values) != knot_counts[0]
+        or len(v_knots.values) != knot_counts[1]
+        or sum(u_multiplicities.values) != count_u + degree_u + 1
+        or sum(v_multiplicities.values) != count_v + degree_v + 1
+    ):
+        return None
+    points = []
+    weights = []
+    for pole in (
+        control.values[index : index + dimension]
+        for index in range(0, len(control.values), dimension)
+    ):
+        weight = pole[3] if rational else 1.0
+        if not math.isfinite(weight) or weight <= 0.0:
+            return None
+        coordinates = tuple(value / weight / _LENGTH_SCALE for value in pole[:3])
+        if any(not math.isfinite(value) for value in coordinates):
+            return None
+        points.append(Vector3(*coordinates))
+        if rational:
+            weights.append(weight)
+    rows = tuple(
+        tuple(points[index * count_v : (index + 1) * count_v])
+        for index in range(count_u)
+    )
+    weight_rows = (
+        tuple(
+            tuple(weights[index * count_v : (index + 1) * count_v])
+            for index in range(count_u)
+        )
+        if rational
+        else ()
+    )
+    attributes = frozen_mapping(
+        {
+            "state": record.state,
+            "sense": record.sense,
+            "header_references": record.header_references,
+            "descriptor_reference": record.descriptor_reference,
+            "data_reference": record.data_reference,
+            "descriptor_layout": descriptor.layout,
+            "degrees": (degree_u, degree_v),
+            "counts": (count_u, count_v),
+            "periodic": periodic,
+            "knot_types": knot_types,
+            "knot_counts": knot_counts,
+            "array_references": descriptor.references,
+            "rational": rational,
+            "closed": closed,
+            "surface_form": surface_form,
+            "vertex_dimension": dimension,
+            "surface_data_intervals": (
+                data_record.intervals if data_record is not None else ()
+            ),
+            "surface_data_self_intersection": (
+                data_record.self_intersection if data_record is not None else 0
+            ),
+            "surface_data_flags": data_record.flags if data_record is not None else b"",
+            "surface_data_references": (
+                data_record.references if data_record is not None else ()
+            ),
+            "surface_record": record.raw,
+            "descriptor_record": descriptor.raw,
+            "surface_data_record": data_record.raw if data_record is not None else b"",
+            "control_record": control.raw,
+            "u_multiplicity_record": u_multiplicities.raw,
+            "v_multiplicity_record": v_multiplicities.raw,
+            "u_knot_record": u_knots.raw,
+            "v_knot_record": v_knots.raw,
+        }
+    )
+    return NurbsSurface(
+        _native_id("surface", record.attribute),
+        degree_u,
+        degree_v,
+        rows,
+        u_knots.values,
+        v_knots.values,
+        u_multiplicities.values,
+        v_multiplicities.values,
+        weight_rows,
+        periodic[0],
+        periodic[1],
+        attributes=attributes,
+    )
+
+
+def _resolve_nurbs_curve(
+    record: _BCurveRecord,
+    descriptors: Mapping[int, _NurbsCurveRecord],
+    curve_data: Mapping[int, _CurveDataRecord],
+    float_arrays: Mapping[int, _FloatArrayRecord],
+    short_arrays: Mapping[int, _ShortArrayRecord],
+) -> NurbsCurve | None:
+    descriptor = descriptors.get(record.descriptor_reference)
+    data_record = (
+        curve_data.get(record.data_reference) if record.data_reference > 1 else None
+    )
+    if (
+        descriptor is None
+        or len(set(descriptor.references)) != 3
+        or (record.data_reference > 1 and data_record is None)
+    ):
+        return None
+    control = float_arrays.get(descriptor.references[0])
+    multiplicities = short_arrays.get(descriptor.references[1])
+    knots = float_arrays.get(descriptor.references[2])
+    if (
+        control is None
+        or control.kind != 0x2D
+        or multiplicities is None
+        or knots is None
+        or knots.kind != 0x80
+        or len(control.values) != descriptor.control_count * descriptor.vertex_dimension
+        or len(multiplicities.values) != descriptor.knot_count
+        or len(knots.values) != descriptor.knot_count
+        or sum(multiplicities.values)
+        != descriptor.control_count + descriptor.degree + 1
+        or any(left >= right for left, right in zip(knots.values, knots.values[1:]))
+    ):
+        return None
+    points = []
+    weights = []
+    dimension = descriptor.vertex_dimension
+    for pole in (
+        control.values[index : index + dimension]
+        for index in range(0, len(control.values), dimension)
+    ):
+        weight = pole[3] if descriptor.rational else 1.0
+        if not math.isfinite(weight) or weight <= 0.0:
+            return None
+        coordinates = tuple(value / weight / _LENGTH_SCALE for value in pole[:3])
+        if any(not math.isfinite(value) for value in coordinates):
+            return None
+        points.append(Vector3(*coordinates))
+        if descriptor.rational:
+            weights.append(weight)
+    attributes = frozen_mapping(
+        {
+            "state": record.state,
+            "sense": record.sense,
+            "header_references": record.header_references,
+            "descriptor_reference": record.descriptor_reference,
+            "data_reference": record.data_reference,
+            "carrier_layout": record.layout,
+            "control_count": descriptor.control_count,
+            "vertex_dimension": descriptor.vertex_dimension,
+            "knot_count": descriptor.knot_count,
+            "knot_type": descriptor.knot_type,
+            "closed": descriptor.closed,
+            "rational": descriptor.rational,
+            "curve_form": descriptor.curve_form,
+            "array_references": descriptor.references,
+            "curve_data_self_intersection": (
+                data_record.self_intersection if data_record is not None else 0
+            ),
+            "analytic_form_reference": (
+                data_record.analytic_form_reference if data_record is not None else 0
+            ),
+            "curve_record": record.raw,
+            "descriptor_record": descriptor.raw,
+            "curve_data_record": data_record.raw if data_record is not None else b"",
+            "control_record": control.raw,
+            "multiplicity_record": multiplicities.raw,
+            "knot_record": knots.raw,
+        }
+    )
+    return NurbsCurve(
+        _native_id("curve", record.attribute),
+        descriptor.degree,
+        tuple(points),
+        knots.values,
+        multiplicities.values,
+        tuple(weights),
+        descriptor.periodic,
+        attributes=attributes,
+    )
+
+
+def _resolve_trimmed_curve(
+    record: _TrimmedCurveRecord, curves: Mapping[int, object]
+) -> object | None:
+    basis = curves.get(record.basis_reference)
+    if (
+        not record.sense
+        or record.attribute == record.basis_reference
+        or not isinstance(
+            basis,
+            (LineCurve, CircleCurve, EllipseCurve, NurbsCurve, IntersectionCurve),
+        )
+    ):
+        return None
+    parameter_1, parameter_2 = record.parameters
+    basis_sense = basis.attributes.get("sense", True)
+    if type(basis_sense) is not bool:
+        return None
+    if (basis_sense and parameter_2 <= parameter_1) or (
+        not basis_sense and parameter_2 >= parameter_1
+    ):
+        return None
+    if isinstance(basis, LineCurve):
+        periodic = False
+        closed = False
+    else:
+        domain = _curve_parameter_domain(basis)
+        if domain is None:
+            return None
+        lower, upper, periodic, closed = domain
+        epsilon = max(abs(lower), abs(upper), 1.0) * 1e-12
+        if periodic:
+            if (
+                parameter_1 < lower - epsilon
+                or parameter_1 > upper + epsilon
+                or abs(parameter_2 - parameter_1) > upper - lower + epsilon
+            ):
+                return None
+        elif (
+            parameter_1 < lower - epsilon
+            or parameter_1 > upper + epsilon
+            or parameter_2 < lower - epsilon
+            or parameter_2 > upper + epsilon
+        ):
+            return None
+    evaluation_parameters = (
+        (
+            parameter_1 / _LENGTH_SCALE,
+            parameter_2 / _LENGTH_SCALE,
+        )
+        if isinstance(basis, LineCurve)
+        else record.parameters
+    )
+    evaluated = tuple(
+        _curve_point_at_parameter(basis, parameter)
+        for parameter in evaluation_parameters
+    )
+    tolerance = (
+        max(basis.tolerance, 1e-7) if isinstance(basis, IntersectionCurve) else 1e-7
+    )
+    if any(value is None for value in evaluated) or any(
+        _distance(value, point) > tolerance
+        for value, point in zip(evaluated, record.points)
+        if value is not None
+    ):
+        return None
+    if not periodic and not closed and _distance(*record.points) <= tolerance:
+        return None
+    attributes = dict(basis.attributes)
+    attributes.update(
+        {
+            "trimmed": True,
+            "sense": record.sense,
+            "basis_sense": basis_sense,
+            "state": record.state,
+            "header_references": record.header_references,
+            "basis_reference": record.basis_reference,
+            "basis_curve_id": basis.id,
+            "trim_points": record.points,
+            "trim_parameters": evaluation_parameters,
+            "trim_parameters_native": record.parameters,
+            "trim_record": record.raw,
+        }
+    )
+    return replace(
+        basis,
+        id=_native_id("curve", record.attribute),
+        attributes=frozen_mapping(attributes),
+    )
 
 
 def _parse_intersection_fields(
@@ -1847,13 +2893,6 @@ def _resolve_intersection_curve(
         limits = start, end
     else:
         return None
-    tolerance = max(chart.chordal_error, 1e-7)
-    for surface in (first, second):
-        residuals = tuple(
-            _analytic_surface_residual(surface, point) for point in chart.points
-        )
-        if any(residual is None or residual > tolerance for residual in residuals):
-            return None
     resolved_uv = _resolved_support_uv(
         uv_id,
         support_uv,
@@ -1862,6 +2901,30 @@ def _resolve_intersection_curve(
     if resolved_uv is None:
         return None
     uv_lanes, uv_marker, uv_raw = resolved_uv
+    tolerance = max(chart.chordal_error, 1e-7)
+    for index, surface in enumerate((first, second)):
+        if isinstance(surface, NurbsSurface):
+            candidate_lanes = tuple(
+                lanes[index]
+                for lanes in (uv_lanes, chart.support_uv)
+                if index < len(lanes) and len(lanes[index]) == len(chart.points)
+            )
+            if not candidate_lanes or not any(
+                all(
+                    (residual := _surface_residual(surface, point, parameters))
+                    is not None
+                    and residual <= tolerance
+                    for point, parameters in zip(chart.points, lane)
+                )
+                for lane in candidate_lanes
+            ):
+                return None
+        else:
+            residuals = tuple(
+                _surface_residual(surface, point) for point in chart.points
+            )
+            if any(residual is None or residual > tolerance for residual in residuals):
+                return None
     attributes = frozen_mapping(
         {
             "base_parameter": chart.base_parameter,
@@ -1896,9 +2959,209 @@ def _resolve_intersection_curve(
     )
 
 
-def _analytic_surface_residual(surface: object, point: Vector3) -> float | None:
+def _nurbs_basis(
+    degree: int,
+    count: int,
+    knots: Sequence[float],
+    multiplicities: Sequence[int],
+    parameter: float,
+    periodic: bool,
+) -> tuple[tuple[int, float], ...] | None:
+    if not math.isfinite(parameter):
+        return None
+    expanded = tuple(
+        knot
+        for knot, multiplicity in zip(knots, multiplicities)
+        for _ in range(multiplicity)
+    )
+    if len(expanded) != count + degree + 1:
+        return None
+    lower = expanded[degree]
+    upper = expanded[count]
+    if not math.isfinite(lower) or not math.isfinite(upper) or lower >= upper:
+        return None
+    epsilon = max(abs(lower), abs(upper), 1.0) * 1e-12
+    if periodic and (parameter < lower - epsilon or parameter > upper + epsilon):
+        parameter = lower + (parameter - lower) % (upper - lower)
+    elif parameter < lower - epsilon or parameter > upper + epsilon:
+        return None
+    parameter = min(upper, max(lower, parameter))
+    if parameter == upper:
+        span = count - 1
+    else:
+        span = degree
+        while span + 1 < count and parameter >= expanded[span + 1]:
+            span += 1
+    values = [0.0] * (degree + 1)
+    left = [0.0] * (degree + 1)
+    right = [0.0] * (degree + 1)
+    values[0] = 1.0
+    for column in range(1, degree + 1):
+        left[column] = parameter - expanded[span + 1 - column]
+        right[column] = expanded[span + column] - parameter
+        saved = 0.0
+        for row in range(column):
+            denominator = right[row + 1] + left[column - row]
+            ratio = values[row] / denominator if denominator else 0.0
+            values[row] = saved + right[row + 1] * ratio
+            saved = left[column - row] * ratio
+        values[column] = saved
+    basis = tuple(
+        (span - degree + index, value)
+        for index, value in enumerate(values)
+        if value != 0.0
+    )
+    return basis if basis else None
+
+
+def _nurbs_curve_point(curve: NurbsCurve, parameter: float) -> Vector3 | None:
+    basis = _nurbs_basis(
+        curve.degree,
+        len(curve.control_points),
+        curve.knots,
+        curve.multiplicities,
+        parameter,
+        curve.periodic,
+    )
+    if basis is None:
+        return None
+    x_value = 0.0
+    y_value = 0.0
+    z_value = 0.0
+    denominator = 0.0
+    for index, value in basis:
+        weight = curve.weights[index] if curve.weights else 1.0
+        coefficient = value * weight
+        point = curve.control_points[index]
+        denominator += coefficient
+        x_value += point.x * coefficient
+        y_value += point.y * coefficient
+        z_value += point.z * coefficient
+    if not math.isfinite(denominator) or denominator <= 0.0:
+        return None
+    values = (
+        x_value / denominator,
+        y_value / denominator,
+        z_value / denominator,
+    )
+    return Vector3(*values) if all(math.isfinite(value) for value in values) else None
+
+
+def _curve_parameter_domain(
+    curve: object,
+) -> tuple[float, float, bool, bool] | None:
+    if isinstance(curve, (CircleCurve, EllipseCurve)):
+        return 0.0, math.tau, True, True
+    if isinstance(curve, NurbsCurve):
+        expanded = tuple(
+            knot
+            for knot, multiplicity in zip(curve.knots, curve.multiplicities)
+            for _ in range(multiplicity)
+        )
+        count = len(curve.control_points)
+        if len(expanded) != count + curve.degree + 1:
+            return None
+        closed = curve.attributes.get("closed", curve.periodic)
+        if type(closed) is not bool:
+            return None
+        return expanded[curve.degree], expanded[count], curve.periodic, closed
+    if isinstance(curve, IntersectionCurve):
+        parameters = curve.attributes.get("chart_parameters")
+        if (
+            not isinstance(parameters, tuple)
+            or len(parameters) < 2
+            or not all(
+                type(value) is float and math.isfinite(value) for value in parameters
+            )
+            or not all(left < right for left, right in zip(parameters, parameters[1:]))
+        ):
+            return None
+        return parameters[0], parameters[-1], False, False
+    return None
+
+
+def _curve_point_at_parameter(curve: object, parameter: float) -> Vector3 | None:
+    if isinstance(curve, LineCurve):
+        return _line_point(curve, parameter)
+    if isinstance(curve, (CircleCurve, EllipseCurve)):
+        return _conic_point(curve, parameter)
+    if isinstance(curve, NurbsCurve):
+        return _nurbs_curve_point(curve, parameter)
+    if isinstance(curve, IntersectionCurve):
+        parameters = curve.attributes.get("chart_parameters")
+        if not isinstance(parameters, tuple) or len(parameters) != len(curve.samples):
+            return None
+        tolerance = max(abs(parameter), 1.0) * 1e-12
+        matches = tuple(
+            point
+            for value, point in zip(parameters, curve.samples)
+            if type(value) is float and abs(value - parameter) <= tolerance
+        )
+        return matches[0] if len(matches) == 1 else None
+    return None
+
+
+def _nurbs_surface_point(
+    surface: NurbsSurface, parameters: tuple[float, float]
+) -> Vector3 | None:
+    rows = surface.control_points
+    if not rows or not rows[0]:
+        return None
+    basis_u = _nurbs_basis(
+        surface.degree_u,
+        len(rows),
+        surface.knots_u,
+        surface.multiplicities_u,
+        parameters[0],
+        surface.periodic_u,
+    )
+    basis_v = _nurbs_basis(
+        surface.degree_v,
+        len(rows[0]),
+        surface.knots_v,
+        surface.multiplicities_v,
+        parameters[1],
+        surface.periodic_v,
+    )
+    if basis_u is None or basis_v is None:
+        return None
+    x_value = 0.0
+    y_value = 0.0
+    z_value = 0.0
+    denominator = 0.0
+    for u_index, u_value in basis_u:
+        for v_index, v_value in basis_v:
+            weight = surface.weights[u_index][v_index] if surface.weights else 1.0
+            coefficient = u_value * v_value * weight
+            point = rows[u_index][v_index]
+            denominator += coefficient
+            x_value += point.x * coefficient
+            y_value += point.y * coefficient
+            z_value += point.z * coefficient
+    if not math.isfinite(denominator) or denominator <= 0.0:
+        return None
+    values = (
+        x_value / denominator,
+        y_value / denominator,
+        z_value / denominator,
+    )
+    return Vector3(*values) if all(math.isfinite(value) for value in values) else None
+
+
+def _surface_residual(
+    surface: object,
+    point: Vector3,
+    parameters: tuple[float, float] | None = None,
+) -> float | None:
     if isinstance(surface, PlaneSurface):
         return abs(_dot(_subtract(point, surface.origin), surface.normal))
+    if isinstance(surface, NurbsSurface):
+        evaluated = (
+            _nurbs_surface_point(surface, parameters)
+            if parameters is not None
+            else None
+        )
+        return _distance(evaluated, point) if evaluated is not None else None
     center = surface.center if hasattr(surface, "center") else surface.origin
     difference = _subtract(point, center)
     if isinstance(surface, SphereSurface):
@@ -2097,9 +3360,20 @@ def _parse_vertex_use(data: bytes, offset: int) -> _TopologyRecord | None:
     if start is None:
         return None
     attribute = _u16(data, start)
+    tolerance = 0.0
     if data[start + 16 : start + 24] == _ENTITY_MAGIC:
         references = _refs(data, start + 6, 5)
+    elif start + 24 <= len(data):
+        direct = _refs(data, start + 6, 5)
+        value = struct.unpack_from(">d", data, start + 16)[0]
+        if direct is not None and math.isfinite(value) and value >= 0.0:
+            references = direct
+            tolerance = value / _LENGTH_SCALE
+        else:
+            references = None
     else:
+        references = None
+    if references is None:
         magic = next(
             (
                 position
@@ -2117,9 +3391,18 @@ def _parse_vertex_use(data: bytes, offset: int) -> _TopologyRecord | None:
         if count < 5:
             return None
         references = _tripled_refs(data, start + 6, count)
-    if attribute is None or attribute <= 1 or references is None:
+    if (
+        attribute is None
+        or attribute <= 1
+        or references is None
+        or not references
+        or references[0] > 1
+        or len(references) < 5
+        or references[4] <= 1
+        or not math.isfinite(tolerance)
+    ):
         return None
-    return _TopologyRecord(attribute, references, offset)
+    return _TopologyRecord(attribute, references, offset, tolerance=tolerance)
 
 
 def _parse_point(
@@ -2203,6 +3486,16 @@ def _parse_analytic_carrier(data: bytes, offset: int) -> tuple[int, object] | No
         return None
     identifier = _native_id("curve" if kind < 0x32 else "surface", attribute)
     geometry = _analytic_geometry(kind, identifier, values)
+    if geometry is not None:
+        geometry = replace(
+            geometry,
+            attributes=frozen_mapping(
+                {
+                    "sense": data[marker_offset] == 0x2B,
+                    "carrier_record": data[offset:values_end],
+                }
+            ),
+        )
     return (attribute, geometry) if geometry is not None else None
 
 
@@ -2371,6 +3664,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
     used_surfaces: set[int] = set()
     synthetic_vertices: dict[int, Vector3] = {}
     synthetic_curves: dict[int, NativeCurve] = {}
+    vertex_tolerances: dict[int, float] = {}
     owner_faces: dict[int, int] = {}
     for bridge_attribute, bridge in sorted(tables.bridges.items()):
         if bridge.owner in owner_faces:
@@ -2471,6 +3765,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         if vertex_attribute in synthetic_vertices:
             point = synthetic_vertices[vertex_attribute]
             points_by_vertex[vertex_attribute] = point
+            vertex_tolerances[vertex_attribute] = 0.0
             vertices.append(BrepVertex(_native_id("vertex", vertex_attribute), point))
             continue
         vertex_use = tables.vertex_uses.get(vertex_attribute)
@@ -2482,8 +3777,13 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
             raise ValueError("missing vertex point")
         used_points.add(point_attribute)
         points_by_vertex[vertex_attribute] = point_record.point
+        vertex_tolerances[vertex_attribute] = vertex_use.tolerance
         vertices.append(
-            BrepVertex(_native_id("vertex", vertex_attribute), point_record.point)
+            BrepVertex(
+                _native_id("vertex", vertex_attribute),
+                point_record.point,
+                tolerance=vertex_use.tolerance,
+            )
         )
     curves = tuple(
         (
@@ -2493,6 +3793,20 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         )
         for attribute in sorted(used_curves)
     )
+    for curve in curves:
+        if not isinstance(curve, IntersectionCurve):
+            continue
+        references = curve.attributes.get("references")
+        if (
+            not isinstance(references, tuple)
+            or len(references) < 2
+            or any(
+                type(attribute) is not int or attribute not in tables.surfaces
+                for attribute in references[:2]
+            )
+        ):
+            raise ValueError("intersection support surfaces are unresolved")
+        used_surfaces.update(references[:2])
     edges: list[BrepEdge] = []
     for edge_attribute in sorted(used_edges):
         start_vertex, end_vertex = edge_endpoints[edge_attribute]
@@ -2506,6 +3820,8 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
                 curve,
                 points_by_vertex[start_vertex],
                 points_by_vertex[end_vertex],
+                vertex_tolerances[start_vertex],
+                vertex_tolerances[end_vertex],
             )
         edges.append(
             BrepEdge(
@@ -2515,6 +3831,10 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
                 _native_id("curve", curve_attribute),
                 start_parameter,
                 end_parameter,
+                tolerance=max(
+                    vertex_tolerances[start_vertex],
+                    vertex_tolerances[end_vertex],
+                ),
                 degenerate=degenerate,
             )
         )
@@ -2608,8 +3928,36 @@ def _walk_coedge_ring(
 
 
 def _provable_curve_range(
-    curve: object, start: Vector3, end: Vector3
+    curve: object,
+    start: Vector3,
+    end: Vector3,
+    start_tolerance: float = 0.0,
+    end_tolerance: float = 0.0,
 ) -> tuple[float, float]:
+    trim_parameters = getattr(curve, "attributes", {}).get("trim_parameters")
+    trim_points = getattr(curve, "attributes", {}).get("trim_points")
+    if trim_parameters is not None or trim_points is not None:
+        if (
+            not isinstance(trim_parameters, tuple)
+            or len(trim_parameters) != 2
+            or not all(
+                type(value) is float and math.isfinite(value)
+                for value in trim_parameters
+            )
+            or not isinstance(trim_points, tuple)
+            or len(trim_points) != 2
+            or not all(isinstance(value, Vector3) for value in trim_points)
+        ):
+            raise ValueError("trimmed curve range is invalid")
+        direct = _distance(start, trim_points[0]) <= max(
+            start_tolerance, 1e-7
+        ) and _distance(end, trim_points[1]) <= max(end_tolerance, 1e-7)
+        reverse = _distance(start, trim_points[1]) <= max(
+            start_tolerance, 1e-7
+        ) and _distance(end, trim_points[0]) <= max(end_tolerance, 1e-7)
+        if direct == reverse:
+            raise ValueError("trimmed curve endpoints are not uniquely bound")
+        return trim_parameters if direct else tuple(reversed(trim_parameters))
     if isinstance(curve, LineCurve):
         start_parameter = _dot(_subtract(start, curve.origin), curve.direction)
         end_parameter = _dot(_subtract(end, curve.origin), curve.direction)
@@ -2627,6 +3975,26 @@ def _provable_curve_range(
         while end_parameter <= start_parameter:
             end_parameter += math.tau
         return start_parameter, end_parameter
+    if isinstance(curve, NurbsCurve):
+        domain = _curve_parameter_domain(curve)
+        if domain is None:
+            raise ValueError("NURBS curve domain is not provable")
+        lower, upper, _, _ = domain
+        lower_point = _nurbs_curve_point(curve, lower)
+        upper_point = _nurbs_curve_point(curve, upper)
+        if lower_point is None or upper_point is None:
+            raise ValueError("NURBS curve endpoints are not evaluable")
+        direct = (
+            _distance(start, lower_point) <= 1e-7
+            and _distance(end, upper_point) <= 1e-7
+        )
+        reverse = (
+            _distance(start, upper_point) <= 1e-7
+            and _distance(end, lower_point) <= 1e-7
+        )
+        if direct == reverse:
+            raise ValueError("NURBS curve endpoints do not identify its range")
+        return (lower, upper) if direct else (upper, lower)
     if isinstance(curve, IntersectionCurve):
         parameters = curve.attributes.get("chart_parameters")
         if (
