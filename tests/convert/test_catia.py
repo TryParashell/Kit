@@ -19,6 +19,7 @@ from convert.adapters.catia import (
     Cfv2FormatError,
     OsmxArchive,
     OsmxFormatError,
+    append_cfv2_stream,
     build_cfv2,
     build_declaration,
     read_catia,
@@ -416,6 +417,23 @@ def test_real_catia_corpus_uses_valid_cfv2_directories() -> None:
         assert output.getvalue() == source
 
 
+def test_cfv2_native_stream_append_preserves_every_source_stream() -> None:
+    source = (CATPARTS / "Banjo.CATPart").read_bytes()
+    original = Cfv2Archive.from_bytes(source)
+    generated = Cfv2Archive.from_bytes(
+        append_cfv2_stream(source, "KitInterchange", b"manifest")
+    )
+    assert generated.named_stream("KitInterchange") == b"manifest"
+    assert tuple(
+        (stream.name, generated.stream_bytes(stream, generated.outer))
+        for stream in generated.outer.streams
+        if stream.name != "KitInterchange"
+    ) == tuple(
+        (stream.name, original.stream_bytes(stream, original.outer))
+        for stream in original.outer.streams
+    )
+
+
 @pytest.mark.parametrize(
     "source",
     (
@@ -545,7 +563,9 @@ def test_stripped_carrier_metadata_cannot_promote_catia_replay(tmp_path: Path) -
     assert first.vendor_loadable is False
     restored = open_document(carrier)
     metadata = dict(restored.metadata)
-    assert metadata.pop("catia.container_compatibility") == "kit-neutral-only"
+    assert (
+        metadata.pop("catia.container_compatibility") == "native-base-neutral-overlay"
+    )
     stripped = replace(restored, metadata=frozen_mapping(metadata))
     blocked = tmp_path / "blocked.CATPart"
     with pytest.raises(ApplicationUsabilityError) as captured:
@@ -1242,7 +1262,7 @@ def test_catia_reader_rejects_contradictory_part_and_product_roots() -> None:
         CatiaAdapter().read(data)
 
 
-def test_modified_native_document_rebuilds_instead_of_replaying(
+def test_modified_native_document_preserves_native_base_with_neutral_edits(
     tmp_path: Path,
 ) -> None:
     source = CATPARTS / "Banjo.CATPart"
@@ -1257,10 +1277,31 @@ def test_modified_native_document_rebuilds_instead_of_replaying(
         output,
         allow_carrier=True,
     )
-    assert result.metadata["mode"] == "generated_cfv2"
+    assert result.metadata["mode"] == "native_base_with_neutral_edits"
+    assert result.metadata["compatibility"] == "native-base-neutral-overlay"
+    assert result.metadata["vendor_loadable"] is False
+    assert result.metadata["native_geometry"] is False
+    assert result.metadata["native_history"] is False
+    assert result.metadata["native_base_vendor_loadable"] is True
+    assert result.metadata["native_base_preserved"] is True
+    assert result.metadata["native_streams_preserved"] is True
     assert output.read_bytes() != source.read_bytes()
+    original_archive = Cfv2Archive.from_bytes(source.read_bytes())
+    output_archive = Cfv2Archive.from_bytes(output.read_bytes())
+    assert tuple(
+        (stream.name, output_archive.stream_bytes(stream, output_archive.outer))
+        for stream in output_archive.outer.streams
+        if stream.name != "KitInterchange"
+    ) == tuple(
+        (stream.name, original_archive.stream_bytes(stream, original_archive.outer))
+        for stream in original_archive.outer.streams
+    )
     restored = open_document(output)
     assert restored.source.format_id == "catia.v5"
+    assert (
+        restored.metadata["catia.container_compatibility"]
+        == "native-base-neutral-overlay"
+    )
     assert restored.configurations == changed.configurations
     retained = tuple(
         payload
@@ -1291,8 +1332,19 @@ def test_modified_native_document_rebuilds_instead_of_replaying(
     )
     assert "catia.replay_semantic_sha256" not in preserved.attributes
     replay = tmp_path / "ChangedReplay.CATPart"
-    write_document(restored, replay, allow_carrier=True)
-    assert replay.read_bytes() != source.read_bytes()
+    replay_result = write_document(restored, replay, allow_carrier=True)
+    assert replay_result.metadata["mode"] == "exact_native_roundtrip"
+    assert replay_result.metadata["compatibility"] == "native-base-neutral-overlay"
+    assert replay.read_bytes() == output.read_bytes()
+    tampered = bytearray(output.read_bytes())
+    tolerance = output_archive.outer.stream("GesToler")
+    assert tolerance is not None
+    assert len(tolerance.extents) == 1
+    tampered[tolerance.extents[0].physical_offset + 10] ^= 1
+    tampered_document = read_catia(bytes(tampered))
+    assert tampered_document.metadata["catia.container_compatibility"] == (
+        "kit-neutral-only"
+    )
 
 
 def test_embedded_manifest_applies_read_options_and_replays_exactly(
@@ -1436,7 +1488,9 @@ def test_changed_cgm_bytes_disable_exact_native_replay(tmp_path: Path) -> None:
     )
     output = tmp_path / "ChangedGeometry.CATPart"
     result = write_catia(changed, output, allow_non_native=True)
-    assert result.metadata["mode"] == "generated_cfv2"
+    assert result.metadata["mode"] == "native_base_with_neutral_edits"
+    assert result.metadata["native_base_preserved"] is True
+    assert result.metadata["native_geometry"] is False
 
 
 def test_swapped_native_document_cannot_exact_replay() -> None:

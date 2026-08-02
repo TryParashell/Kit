@@ -407,6 +407,47 @@ def test_every_native_catproduct_replays_byte_exactly(
     assert output.read_bytes() == source.read_bytes()
 
 
+def test_changed_native_catproduct_preserves_native_base_and_neutral_assembly(
+    tmp_path: Path,
+) -> None:
+    source = CATPRODUCTS / "Tilton_Set.CATProduct"
+    original = Cfv2Archive.from_bytes(source.read_bytes())
+    document = CatiaAdapter().read(source)
+    assert document.assembly is not None
+    changed_assembly = replace(
+        document.assembly,
+        attributes=frozen_mapping(
+            {**document.assembly.attributes, "user.edit": "changed"}
+        ),
+    )
+    changed = replace(document, assembly=changed_assembly)
+    output = tmp_path / "Changed.CATProduct"
+    result = write_catia(changed, output)
+    assert result.metadata["mode"] == "native_base_with_neutral_edits"
+    assert result.metadata["compatibility"] == "native-base-neutral-overlay"
+    assert result.metadata["vendor_loadable"] is False
+    assert result.metadata["native_assembly"] is False
+    assert result.metadata["native_base_preserved"] is True
+    assert result.metadata["native_streams_preserved"] is True
+    assert result.metadata["neutral_assembly_embedded"] is True
+    assert result.requirements == ("referenced CATIA component files",)
+    generated = Cfv2Archive.from_bytes(output.read_bytes())
+    assert tuple(
+        (stream.name, generated.stream_bytes(stream, generated.outer))
+        for stream in generated.outer.streams
+        if stream.name != "KitInterchange"
+    ) == tuple(
+        (stream.name, original.stream_bytes(stream, original.outer))
+        for stream in original.outer.streams
+    )
+    restored = CatiaAdapter().read(output)
+    assert restored.assembly == changed_assembly
+    assert (
+        restored.metadata["catia.container_compatibility"]
+        == "native-base-neutral-overlay"
+    )
+
+
 def test_catproduct_memory_source_retains_structure_without_file_resolution() -> None:
     source = CATPRODUCTS / "Brake_Pedal_Assembly - Backup 1.CATProduct"
     document = CatiaAdapter().read(
