@@ -865,7 +865,7 @@ def _embedded_document(
             "embedded_source_format_id": original.format_id,
             "embedded_source_path": original.path,
             "embedded_source_sha256": original.sha256,
-            "solidworks.container_compatibility": "kit-neutral-only",
+            "solidworks.container_compatibility": _replay_compatibility(data),
         }
     )
     document = replace(
@@ -1033,16 +1033,181 @@ def _source_template(document: CadDocument, destination: Path | None) -> bytes |
     return data
 
 
+def _required_capabilities(document: CadDocument) -> frozenset[Capability]:
+    return document.capabilities | infer_capabilities(
+        document,
+        roundtrip_metadata=Capability.ROUNDTRIP_METADATA in document.capabilities,
+    )
+
+
+def _solidworks_transfers(
+    required: frozenset[Capability], native: frozenset[Capability]
+) -> tuple[CapabilityTransfer, ...]:
+    target_unsupported = {
+        Capability.PROVENANCE,
+        Capability.ROUNDTRIP_METADATA,
+    }
+    return tuple(
+        CapabilityTransfer(
+            capability,
+            TransferMode.NATIVE if capability in native else TransferMode.CARRIER,
+            (
+                None
+                if capability in native
+                else (
+                    CarrierReason.TARGET_UNSUPPORTED
+                    if capability in target_unsupported
+                    else CarrierReason.WRITER_UNIMPLEMENTED
+                )
+            ),
+        )
+        for capability in sorted(required, key=lambda value: value.value)
+    )
+
+
+def _native_stream_sha256(streams: Mapping[str, bytes]) -> str:
+    digest = hashlib.sha256()
+    for name in sorted(
+        (
+            name
+            for name in streams
+            if name not in {KIT_DOCUMENT_STREAM, KIT_NATIVE_STREAM}
+        ),
+        key=lambda value: (value.casefold(), value),
+    ):
+        encoded = name.encode("utf-8")
+        data = streams[name]
+        digest.update(struct.pack(">I", len(encoded)))
+        digest.update(encoded)
+        digest.update(struct.pack(">Q", len(data)))
+        digest.update(data)
+    return digest.hexdigest()
+
+
+def _native_attestation_bytes(
+    streams: Mapping[str, bytes],
+    compatibility: str,
+    application_usable: bool,
+    vendor_loadable: bool,
+    transfers: tuple[CapabilityTransfer, ...],
+    native_brep: str,
+) -> bytes:
+    embedded = streams[KIT_DOCUMENT_STREAM]
+    value = {
+        "version": 1,
+        "compatibility": compatibility,
+        "application_usable": application_usable,
+        "vendor_loadable": vendor_loadable,
+        "native_brep": native_brep,
+        "native_stream_sha256": _native_stream_sha256(streams),
+        "embedded_sha256": hashlib.sha256(embedded).hexdigest(),
+        "transfers": [
+            {
+                "capability": transfer.capability.value,
+                "mode": transfer.mode.value,
+                "carrier_reason": (
+                    transfer.carrier_reason.value
+                    if transfer.carrier_reason is not None
+                    else None
+                ),
+            }
+            for transfer in transfers
+        ],
+    }
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _native_attestation(data: bytes) -> dict[str, Any] | None:
+    try:
+        archive = SldprtArchive.from_bytes(data)
+        raw = archive.require(KIT_NATIVE_STREAM)
+        embedded = archive.require(KIT_DOCUMENT_STREAM)
+        value = json.loads(raw.decode("utf-8"))
+    except (KeyError, SldprtFormatError, TypeError, ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(value, dict) or value.get("version") != 1:
+        return None
+    if value.get("embedded_sha256") != hashlib.sha256(embedded).hexdigest():
+        return None
+    if value.get("native_stream_sha256") != _native_stream_sha256(archive.streams):
+        return None
+    if not isinstance(value.get("application_usable"), bool) or not isinstance(
+        value.get("vendor_loadable"), bool
+    ):
+        return None
+    if value["application_usable"] and not value["vendor_loadable"]:
+        return None
+    compatibility = value.get("compatibility")
+    if not isinstance(compatibility, str):
+        return None
+    records = value.get("transfers")
+    if not isinstance(records, list):
+        return None
+    try:
+        parsed = tuple(
+            CapabilityTransfer(
+                Capability(record["capability"]),
+                TransferMode(record["mode"]),
+                (
+                    CarrierReason(record["carrier_reason"])
+                    if record.get("carrier_reason") is not None
+                    else None
+                ),
+            )
+            for record in records
+            if isinstance(record, dict)
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+    if len(parsed) != len(records) or len({item.capability for item in parsed}) != len(
+        parsed
+    ):
+        return None
+    if value["application_usable"]:
+        try:
+            if COMPONENT_TREE_STREAM in archive.streams:
+                decode_native_assembly(archive)
+            else:
+                decode_native_model(
+                    archive.require(KEYWORDS_STREAM),
+                    archive.require(RESOLVED_FEATURES_STREAM),
+                )
+        except (SldprtFormatError, ValueError):
+            return None
+    value["parsed_transfers"] = parsed
+    return value
+
+
+def _attested_transfers(
+    attestation: Mapping[str, Any], required: frozenset[Capability]
+) -> tuple[CapabilityTransfer, ...]:
+    parsed = attestation.get("parsed_transfers")
+    if not isinstance(parsed, tuple):
+        return _solidworks_transfers(required, frozenset())
+    by_capability = {item.capability: item for item in parsed}
+    if set(by_capability) != set(required):
+        return _solidworks_transfers(required, frozenset())
+    return tuple(
+        by_capability[capability]
+        for capability in sorted(required, key=lambda value: value.value)
+    )
+
+
 def _replay_compatibility(data: bytes) -> str:
     archive = SldprtArchive.from_bytes(data)
+    if KIT_DOCUMENT_STREAM not in archive.streams:
+        return "native-exact"
+    attestation = _native_attestation(data)
     return (
-        "kit-neutral-only" if KIT_DOCUMENT_STREAM in archive.streams else "native-exact"
+        str(attestation["compatibility"])
+        if attestation is not None
+        else "kit-neutral-only"
     )
 
 
 def _generated_streams(
     document: CadDocument, template: bytes | None = None
-) -> tuple[dict[str, bytes], str]:
+) -> _GeneratedStreams:
     portable = _document_without_source(document)
     if isinstance(document.source.attributes.get("embedded_source_format_id"), str):
         envelope_indexes = source_payload_indexes(document)
@@ -1058,7 +1223,7 @@ def _generated_streams(
     if template is not None:
         streams = SldprtArchive.from_bytes(template).streams
         streams[KIT_DOCUMENT_STREAM] = embedded
-        return streams, "template"
+        return _patch_native_template(document, streams)
     configuration = next(
         (item.name for item in portable.configurations if item.active),
         portable.configurations[0].name if portable.configurations else "Default",
@@ -1082,7 +1247,18 @@ def _generated_streams(
     payload, native_brep = _parasolid_payload(portable)
     if payload is not None:
         streams[PARTITION_STREAM] = payload
-    return streams, native_brep
+    return _GeneratedStreams(
+        streams,
+        native_brep,
+        frozenset(),
+        (
+            "native-brep-with-kit-neutral"
+            if native_brep in {"generated", "preserved"}
+            else "kit-neutral-only"
+        ),
+        False,
+        False,
+    )
 
 
 def _parasolid_payload(document: CadDocument) -> tuple[bytes | None, str]:
