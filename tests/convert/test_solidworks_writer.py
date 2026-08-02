@@ -4,8 +4,9 @@ from dataclasses import replace
 from io import BytesIO, StringIO
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import struct
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -23,41 +24,65 @@ from convert.adapters.solidworks import (
     SldprtArchive,
     SldprtFormatError,
     build_sldprt,
+    decode_native_assembly,
+    decode_native_model,
     decode_brep_model,
     decode_partition_stream,
+    encode_blank_partition_stream,
     encode_brep_model,
     read_sldprt,
     write_sldprt,
 )
 from convert.adapters.solidworks.adapter import (
+    _document_without_source,
     _native_stream_sha256,
     _semantic_sha256,
 )
 from convert.adapters.solidworks.format import (
+    COMPONENT_TREE_STREAM,
+    CONTENT_TYPES_STREAM,
+    FEATURES_STREAM,
+    KEYWORDS_STREAM,
     KIT_DOCUMENT_STREAM,
     KIT_NATIVE_STREAM,
     PARTITION_STREAM,
+    RELATIONSHIPS_STREAM,
+    RESOLVED_FEATURES_STREAM,
 )
 from interchange import (
+    BooleanOperation,
     BrepPayload,
     CadDocument,
     Capability,
+    Configuration,
     Diagnostic,
+    ExtrusionFeature,
+    GeometryKind,
+    LineGeometry,
     MateAlignment,
     Matrix4,
     NativeSurface,
+    Parameter,
+    ParameterValue,
     PayloadRole,
     Severity,
+    Sketch,
+    SketchEntity,
+    ValueKind,
+    Vector2,
     frozen_mapping,
 )
 from tests.interchange.test_assembly import assembly_document
 from tests.interchange.test_brep import triangle_brep
 from tests.interchange.test_document import document
 
-
 SAMPLE = Path(__file__).parents[2] / "examples" / ".SLDPRT" / "example.SLDPRT"
 ASSEMBLY = (
     Path(__file__).parents[2] / "examples" / "Random" / "Pistons" / "Piston.SLDASM"
+)
+CONROD = Path(__file__).parents[2] / "examples" / "Random" / "Pistons" / "Conrod.SLDASM"
+PISTON_RING = (
+    Path(__file__).parents[2] / "examples" / "Random" / "Pistons" / "Piston_ring.SLDPRT"
 )
 CATPRODUCT = (
     Path(__file__).parents[2] / "examples" / ".CATProduct" / "Tilton_Set.CATProduct"
@@ -278,8 +303,23 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     archive = SldprtArchive.open(output)
     assert archive.format_version == 4
     assert archive.require("Kit/Interchange")
-    assert archive.get("swXmlContents/KeyWords") is None
-    assert archive.get("Contents/Config-0-ResolvedFeatures") is None
+    keywords = archive.require(KEYWORDS_STREAM)
+    resolved_features = archive.require(RESOLVED_FEATURES_STREAM)
+    features = archive.require(FEATURES_STREAM)
+    assert keywords.startswith(b"\x86<?xml")
+    assert features.startswith(b"<?xml")
+    native = decode_native_model(keywords, resolved_features)
+    assert native.diagnostics == ()
+    assert [(item.name, item.configuration_id) for item in native.configurations] == [
+        ("Default", 0)
+    ]
+    assert [item.name for item in native.features[-2:]] == ["Sketch1", "Boss1"]
+    assert [(item.name, item.support_plane_id) for item in native.sketches] == [
+        ("Sketch1", 2)
+    ]
+    assert [(item.name, item.profile_id) for item in native.operations] == [
+        ("Boss1", native.sketches[0].object_id)
+    ]
     assert output.read_bytes()[:1] not in {b"{", b"["}
     assert output.read_bytes()[:4] != b"PK\x03\x04"
     reread = read_sldprt(output)
@@ -289,8 +329,8 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     assert reread.feature_timeline == source.feature_timeline
     assert reread.bodies == source.bodies
     assert result.metadata["mode"] == "generated"
-    assert result.metadata["native_content"] == "none"
-    assert result.metadata["compatibility"] == "kit-neutral-only"
+    assert result.metadata["native_content"] == "native-metadata"
+    assert result.metadata["compatibility"] == "native-metadata-with-kit-neutral"
     assert result.metadata["neutral_edits_are_native"] is False
     assert result.metadata["vendor_loadable"] is False
     assert result.metadata["native_geometry"] is False
@@ -302,8 +342,284 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     replay = BytesIO()
     replay_result = write_sldprt(reread, replay)
     assert replay.getvalue() == output.read_bytes()
-    assert replay_result.metadata["compatibility"] == "kit-neutral-only"
+    assert replay_result.metadata["compatibility"] == "native-metadata-with-kit-neutral"
     assert replay_result.metadata["vendor_loadable"] is False
+
+
+def test_source_less_native_part_streams_are_deterministic() -> None:
+    first = BytesIO()
+    second = BytesIO()
+    write_sldprt(document(), first)
+    write_sldprt(document(), second)
+    assert first.getvalue() == second.getvalue()
+    archive = SldprtArchive.from_bytes(first.getvalue())
+    content_types = archive.require(CONTENT_TYPES_STREAM)
+    relationships = archive.require(RELATIONSHIPS_STREAM)
+    assert len(content_types) == 556
+    assert len(relationships) == 597
+    assert ET.fromstring(content_types).tag.endswith("Types")
+    targets = {
+        item.attrib["Target"]
+        for item in ET.fromstring(relationships)
+        if item.tag.endswith("Relationship")
+    }
+    assert targets == {
+        "docProps/app.xml",
+        "docProps/core.xml",
+        "docProps/custom.xml",
+    }
+    assert targets <= set(archive.streams)
+    assert len(archive.require("docProps/app.xml")) == 570
+    assert b"<dc:lastModifiedBy>Kit</dc:lastModifiedBy>" in archive.require(
+        "docProps/core.xml"
+    )
+    assert len(archive.require("docProps/custom.xml")) == 853
+    keywords = archive.require(KEYWORDS_STREAM)
+    features = archive.require(FEATURES_STREAM)
+    assert keywords.startswith(
+        b'\x86<?xml version="1.0" encoding="UTF-8"?>\r\n<Keywords '
+    )
+    assert keywords.endswith(b"</Keywords>\r\n")
+    assert features.startswith(
+        b'<?xml version="1.0" encoding="UTF-8"?>\r\n<swSolidWorks '
+    )
+    assert features.endswith(b"</swSolidWorks>\r\n")
+    assert b" />" not in keywords
+    assert b" />" not in features
+    keyword_root = ET.fromstring(keywords[keywords.find(b"<") :])
+    features_root = ET.fromstring(features)
+    assert keyword_root.tag == "Keywords"
+    assert keyword_root.attrib["Name"] == "Part1"
+    assert features_root.tag.rsplit("}", 1)[-1] == "swSolidWorks"
+    assert features_root.attrib == {"swObjCount": "3", "swVersion": "18000"}
+    native_elements = {
+        item.tag.rsplit("}", 1)[-1]: item for item in features_root.iter()
+    }
+    native_file = native_elements["swFile"]
+    native_model = native_elements["swModel"]
+    native_configuration = native_elements["swConfiguration"]
+    assert keyword_root.attrib["id"] == native_file.attrib["swCreationTime"]
+    assert native_file.attrib["swPath"] == "memory.sldprt"
+    assert native_model.attrib["swName"] == "memory"
+    assert native_model.attrib["swConfigurationFlags"] == "-2143288960"
+    assert native_configuration.attrib["swReference"] == "Part1"
+    assert native_configuration.attrib["swConfigurationNeedsUpdate"] == "NO"
+    model_stamps = struct.unpack("<III", archive.require("ModelStamps"))
+    assert model_stamps == (
+        int(keyword_root.attrib["id"]),
+        int(native_model.attrib["swLastModifiedStamp"]),
+        101,
+    )
+    assert archive.require("Contents/CnfgObjs") == bytes.fromhex(
+        "00000000fffeff00fffeff00"
+    )
+    assert archive.require("Contents/OleItems") == b"\0" * 4
+    assert archive.require("Contents/eModelLic") == b"\0" * 4
+    assert len(archive.require("Contents/CusProps")) == 102
+    assert len(archive.require("Contents/CMgrHdr2")) == 137
+    assert len(archive.require("_MO_VERSION_18000/History")) == 101
+    assert archive.require("_MO_VERSION_18000/Biography")
+
+
+def test_source_less_blank_part_writes_native_blank_partition() -> None:
+    marker = b"blank-part"
+    source = replace(
+        _document_without_source(document()),
+        sketches=(),
+        feature_timeline=(),
+        bodies=(),
+        brep_payloads=(
+            BrepPayload(
+                "blank-part",
+                "kit",
+                "blank",
+                "1",
+                hashlib.sha256(marker).hexdigest(),
+                data=marker,
+                role=PayloadRole.AUXILIARY,
+            ),
+        ),
+        capabilities=frozenset(),
+    )
+    output = BytesIO()
+    write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    assert archive.require(PARTITION_STREAM) == encode_blank_partition_stream()
+
+
+def test_source_less_native_system_features_are_emitted_once() -> None:
+    source = _document_without_source(read_sldprt(PISTON_RING, include_brep=False))
+    output = BytesIO()
+    write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    native = decode_native_model(
+        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
+    )
+    system_ids = {
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        21,
+        22,
+        23,
+        24,
+        25,
+    }
+    assert {item.object_id for item in native.features if item.object_id <= 25} == (
+        system_ids
+    )
+    assert all(
+        sum(item.object_id == object_id for item in native.features) == 1
+        for object_id in system_ids
+    )
+    assert [
+        (item.object_id, item.name) for item in native.features if item.object_id > 25
+    ] == [(26, "Sketch1"), (36, "Boss-Extrude1")]
+    sketch = next(item for item in native.features if item.object_id == 26)
+    extrusion = next(item for item in native.features if item.object_id == 36)
+    assert sketch.properties == {
+        "id": "26",
+        "Name": "Sketch1",
+        "Dissectable": "true",
+    }
+    assert [(item.name, item.source_text) for item in sketch.dimensions] == [
+        ("D1", "<MOD-DIAM>90"),
+        ("D2", "<MOD-DIAM>89"),
+    ]
+    assert extrusion.properties == {
+        "id": "36",
+        "Name": "Boss-Extrude1",
+        "Type": "Boss-Extrude",
+    }
+    assert [(item.name, item.source_text) for item in extrusion.dimensions] == [
+        ("D1", "1")
+    ]
+    configurations = ET.fromstring(
+        archive.require(KEYWORDS_STREAM)[archive.require(KEYWORDS_STREAM).find(b"<") :]
+    )
+    configuration = next(item for item in configurations if item.tag == "Configuration")
+    assert configuration.attrib["Material"] == "Rubber"
+
+
+def test_source_less_native_dimension_scalar_roundtrips() -> None:
+    source = document()
+    feature = source.feature_timeline[0]
+    value = ParameterValue(12.5, ValueKind.LENGTH, "mm")
+    parameter = Parameter("length", "D1", value, owner_id=feature.id)
+    feature = replace(
+        feature,
+        parameter_ids=(parameter.id,),
+        operation=BooleanOperation.JOIN,
+        definition=ExtrusionFeature(value),
+    )
+    source = replace(source, parameters=(parameter,), feature_timeline=(feature,))
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    native = decode_native_model(
+        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
+    )
+    operation = next(item for item in native.operations if item.name == feature.name)
+    dimension = next(
+        dimension
+        for native_feature in native.features
+        if native_feature.object_id == operation.object_id
+        for dimension in native_feature.dimensions
+        if dimension.name == "D1"
+    )
+    assert operation.length_mm == pytest.approx(12.5)
+    assert operation.operation_code == 0
+    assert operation.termination_code == 0
+    assert dimension.native_value == pytest.approx(0.0125)
+    assert dimension.native_role == "driving"
+    assert Capability.PARAMETERS in result.native_capabilities
+    assert result.vendor_loadable is False
+
+
+def test_source_less_native_configuration_lanes_are_complete() -> None:
+    source = replace(
+        document(),
+        configurations=(
+            Configuration("config:default", "Default"),
+            Configuration("config:machined", "Machined", True),
+        ),
+    )
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    assert archive.require("Contents/Config-0-ResolvedFeatures")
+    assert archive.require("Contents/Config-1-ResolvedFeatures")
+    features = ET.fromstring(archive.require(FEATURES_STREAM))
+    configurations = [
+        item
+        for item in features.iter()
+        if item.tag.rsplit("}", 1)[-1] == "swConfiguration"
+    ]
+    assert [item.attrib["swName"] for item in configurations] == [
+        "Default",
+        "Machined",
+    ]
+    assert [item.attrib["swMostRecentConfiguration"] for item in configurations] == [
+        "NO",
+        "YES",
+    ]
+    assert {item.attrib["swConfigurationNeedsUpdate"] for item in configurations} == {
+        "NO"
+    }
+    assert Capability.CONFIGURATIONS in result.native_capabilities
+
+
+def test_source_less_native_rectangle_markers_roundtrip() -> None:
+    source = document()
+    points = (
+        Vector2(0.0, 0.0),
+        Vector2(20.0, 0.0),
+        Vector2(20.0, 10.0),
+        Vector2(0.0, 10.0),
+    )
+    entities = tuple(
+        SketchEntity(
+            f"edge:{index}",
+            GeometryKind.LINE,
+            LineGeometry(points[index], points[(index + 1) % len(points)]),
+        )
+        for index in range(len(points))
+    )
+    sketch = Sketch(
+        source.sketches[0].id,
+        source.sketches[0].name,
+        source.sketches[0].support_plane_id,
+        entities,
+        closed_profile_entity_ids=(tuple(item.id for item in entities),),
+    )
+    source = replace(source, sketches=(sketch,))
+    output = BytesIO()
+    write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    native = decode_native_model(
+        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
+    )
+    decoded = next(item for item in native.sketches if item.name == sketch.name)
+    assert len(decoded.markers) == 8
+    assert [(item.kind, item.coordinates) for item in decoded.profiles] == [
+        ("rectangle", (0.0, 0.0, 20.0, 10.0))
+    ]
 
 
 def test_neutral_brep_writes_native_parasolid_partition() -> None:
@@ -320,10 +636,11 @@ def test_neutral_brep_writes_native_parasolid_partition() -> None:
     native = decode_partition_stream(partition)[0]
     restored = read_sldprt(output.getvalue())
     assert native.schema == "SCH_SW_32001_11000"
-    assert native.data == partition
+    assert native.data == encode_brep_model(source.brep)
+    assert partition != native.data
     assert restored.brep == source.brep
     assert result.metadata["mode"] == "generated"
-    assert result.metadata["native_content"] == "neutral-brep"
+    assert result.metadata["native_content"] == "native-metadata-and-neutral-brep"
     assert result.metadata["compatibility"] == "native-brep-with-kit-neutral"
     assert result.metadata["native_brep"] == "generated"
     assert result.metadata["native_geometry"] is True
@@ -429,7 +746,7 @@ def test_unsupported_neutral_brep_remains_an_honest_carrier() -> None:
     restored = read_sldprt(output.getvalue())
     assert archive.get(PARTITION_STREAM) is None
     assert restored.brep == source.brep
-    assert result.metadata["native_content"] == "none"
+    assert result.metadata["native_content"] == "native-metadata"
     assert result.metadata["native_brep"].startswith("unsupported:")
     assert result.metadata["native_geometry"] is False
     assert result.metadata["vendor_loadable"] is False
@@ -841,6 +1158,108 @@ def test_generated_sldasm_stream_retains_assembly_identity() -> None:
     assert restored.assembly == source.assembly
 
 
+def test_source_less_assembly_emits_redecodable_native_component_graph() -> None:
+    source = assembly_document()
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    native = decode_native_assembly(archive)
+    transfers = {item.capability: item.mode.value for item in result.transfers}
+    assert COMPONENT_TREE_STREAM in archive.streams
+    assert transfers[Capability.ASSEMBLIES] == "native"
+    assert transfers[Capability.ASSEMBLY_MATES] == "carrier"
+    assert result.application_usable is False
+    assert result.vendor_loadable is False
+    assert native.name == "Engine"
+    assert tuple(item.name for item in native.definitions) == (
+        "Engine",
+        "Piston",
+        "Piston",
+    )
+    assert tuple(item.document_type for item in native.definitions) == (
+        "ASSEMBLY",
+        "ASSEMBLY",
+        "PART",
+    )
+    assert native.occurrences[0].transform[12:15] == (0.1, 0.02, 0.03)
+
+
+def test_source_less_assembly_encodes_only_exactly_redecodable_mates() -> None:
+    source = assembly_document()
+    assembly = source.assembly
+    component_entity, root_entity = assembly.mate_entities
+    component_entity = replace(
+        component_entity,
+        id="mate-entity:component",
+        instance_path=("instance:subassembly", "instance:part"),
+        source_entity_id="moPlaneSurfIdRep_c,1,2, ",
+        attributes=frozen_mapping(
+            {"persistent_references": ("moPlaneSurfIdRep_c,1,2, ",)}
+        ),
+    )
+    root_entity = replace(
+        root_entity,
+        id="mate-entity:root",
+        instance_path=(),
+        source_entity_id="moPlaneSurfIdRep_c,3,4, ",
+        attributes=frozen_mapping(
+            {"persistent_references": ("moPlaneSurfIdRep_c,3,4, ",)}
+        ),
+    )
+    mate = replace(
+        assembly.mates[0],
+        entity_ids=(component_entity.id, root_entity.id),
+        alignment=MateAlignment.ALIGNED,
+    )
+    source = replace(
+        source,
+        assembly=replace(
+            assembly,
+            mate_entities=(component_entity, root_entity),
+            mates=(mate,),
+        ),
+    )
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    native = decode_native_assembly(SldprtArchive.from_bytes(output.getvalue()))
+    transfers = {item.capability: item.mode.value for item in result.transfers}
+    assert transfers[Capability.ASSEMBLY_MATES] == "native"
+    assert len(native.mate_lists) == 1
+    assert native.mate_lists[0].declared_count == 1
+    restored = native.mate_lists[0].mates[0]
+    assert restored.name == "Coincident1"
+    assert restored.kind == "coincident"
+    assert restored.alignment_code == 1
+    assert tuple(
+        (
+            entity.component_path,
+            entity.persistent_references[-1],
+        )
+        for entity in restored.entities
+    ) == (
+        (
+            "Piston-1@Engine/Piston-1@Piston",
+            "moPlaneSurfIdRep_c,1,2, ",
+        ),
+        ("", "moPlaneSurfIdRep_c,3,4, "),
+    )
+
+
+def test_source_less_native_mate_payload_is_replayed_without_template() -> None:
+    source = _document_without_source(read_sldprt(CONROD))
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    native = decode_native_assembly(SldprtArchive.from_bytes(output.getvalue()))
+    transfers = {item.capability: item.mode.value for item in result.transfers}
+    assert transfers[Capability.ASSEMBLY_MATES] == "native"
+    assert sum(len(item.mates) for item in native.mate_lists) == len(
+        source.assembly.mates
+    )
+    assert tuple(
+        mate.name for item in native.mate_lists for mate in item.mates
+    ) == tuple(mate.name for mate in source.assembly.mates)
+
+
 def test_public_sdk_requires_explicit_carrier_opt_in(tmp_path) -> None:
     source = document()
     direct = tmp_path / "direct.SLDPRT"
@@ -849,7 +1268,7 @@ def test_public_sdk_requires_explicit_carrier_opt_in(tmp_path) -> None:
         write_document(source, blocked, allow_carrier=False)
     assert not blocked.exists()
     written = write_document(source, direct, allow_carrier=True)
-    assert written.metadata["compatibility"] == "kit-neutral-only"
+    assert written.metadata["compatibility"] == "native-metadata-with-kit-neutral"
     fcstd = tmp_path / "source.FCStd"
     converted = tmp_path / "converted.SLDPRT"
     write_freecad(source, fcstd)
@@ -863,7 +1282,7 @@ def test_public_sdk_requires_explicit_carrier_opt_in(tmp_path) -> None:
         allow_carrier=True,
     )
     assert result.destination_format == "solidworks.sldprt"
-    assert result.output.metadata["compatibility"] == "kit-neutral-only"
+    assert result.output.metadata["compatibility"] == "native-metadata-with-kit-neutral"
 
 
 def test_attested_native_template_survives_wrapper_metadata_removal(tmp_path) -> None:
@@ -960,7 +1379,18 @@ def test_catproduct_defaults_to_relocatable_solidworks_root_carrier(tmp_path) ->
     assert result.application_usable is False
     assert result.vendor_loadable is False
     assert result.output.metadata["native_self_contained"] is False
-    assert result.output.metadata["referenced_files_written"] == 0
+    assert result.output.metadata["referenced_files_written"] == len(
+        source.assembly.documents
+    )
+    native = decode_native_assembly(SldprtArchive.open(output))
+    referenced = tuple(
+        output.parent / PureWindowsPath(definition.source_path).name
+        for definition in native.definitions
+        if definition.object_id != native.root_definition_id
+    )
+    assert referenced
+    assert all(path.is_file() for path in referenced)
+    assert all(SldprtArchive.open(path).records for path in referenced)
     relocated = tmp_path / "relocated" / output.name
     relocated.parent.mkdir()
     relocated.write_bytes(output.read_bytes())

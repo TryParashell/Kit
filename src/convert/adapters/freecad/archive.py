@@ -1213,6 +1213,12 @@ def _geometry_property(
     sketch: Mapping[str, Any],
 ) -> tuple[ET.Element, dict[str, int], list[dict[str, Any]]]:
     entities = _items(sketch.get("entities", []))
+    closed_entity_ids = {
+        _text(entity_id)
+        for profile in _sequence(sketch.get("closed_profile_entity_ids", []))
+        for entity_id in _sequence(profile)
+        if _text(entity_id)
+    }
     result = _property("Geometry", "Part::PropertyGeometryList", status="8192")
     geometry_list = ET.SubElement(result, "GeometryList", {"count": "0"})
     indices: dict[str, int] = {}
@@ -1261,7 +1267,9 @@ def _geometry_property(
             {"type": type_id, "id": str(index + 1), "migrated": "1"},
         )
         extensions = ET.SubElement(item, "GeoExtensions", {"count": "1"})
-        construction = bool(entity.get("construction"))
+        construction = bool(entity.get("construction")) or (
+            bool(closed_entity_ids) and entity_id not in closed_entity_ids
+        )
         flags = (
             "00000000000000000000000000000010"
             if construction
@@ -1403,6 +1411,28 @@ def _geometry_property(
 def _reference_point(value: Any) -> int:
     point = _text(value).lower()
     return CONSTRAINT_POINT_INDEX_BY_NAME.get(point, 0)
+
+
+def _neutral_reference_point(
+    constraint_kind: str,
+    entity: Mapping[str, Any],
+    value: Any,
+) -> int:
+    point = _reference_point(value)
+    if point:
+        return point
+    entity_kind = _text(_enum(entity.get("kind"))).casefold()
+    if entity_kind == "point":
+        return 1
+    if entity_kind in CIRCULAR_GEOMETRY_KINDS and constraint_kind in {
+        "coincident",
+        "concentric",
+        "distance",
+        "distance_x",
+        "distance_y",
+    }:
+        return 3
+    return 0
 
 
 def _raw_constraint_slots(attributes: Mapping[str, Any]) -> list[tuple[int, int]]:
@@ -1666,7 +1696,14 @@ def _constraints_property(
                         unresolved = True
                         break
                     resolved.append(
-                        (entity_index, _reference_point(reference.get("point")))
+                        (
+                            entity_index,
+                            _neutral_reference_point(
+                                kind,
+                                entities.get(entity_id, {}),
+                                reference.get("point"),
+                            ),
+                        )
                     )
                 if unresolved:
                     resolved = []
@@ -1965,6 +2002,17 @@ def _native_sketch_analysis(
             )
         )
     return tuple(result)
+
+
+def _native_closed_profile_count(sketch: Mapping[str, Any]) -> int:
+    _, indices, _ = _geometry_property(sketch)
+    emitted = set(indices)
+    result = 0
+    for value in _sequence(sketch.get("closed_profile_entity_ids", [])):
+        profile = {_text(item) for item in _sequence(value) if _text(item)}
+        if profile and profile <= emitted:
+            result += 1
+    return result
 
 
 def native_sketch_parts(manifest: Mapping[str, Any]) -> tuple[tuple[int, int], ...]:
@@ -4326,6 +4374,10 @@ def _document_xml(
     external_links = external_links or {}
     native_external_links = native_external_links or {}
     native_document_sha256 = _native_document_sha256(manifest)
+    source_data = manifest.get("source", {})
+    source_format_id = (
+        _text(source_data.get("format_id")) if isinstance(source_data, Mapping) else ""
+    )
     manifest_metadata = manifest.get("metadata", {})
     freecad_metadata = (
         manifest_metadata.get("freecad", {})
@@ -4490,9 +4542,11 @@ def _document_xml(
             obj.dependencies.append(parameter_sheet.name)
     sketch_items = _items(manifest.get("sketches", []))
     sketch_names: dict[str, str] = {}
+    sketch_native_profile_counts: dict[str, int] = {}
     sketch_objects: list[str] = []
     for sketch in sketch_items:
         sketch_id = _text(sketch.get("id"))
+        sketch_native_profile_counts[sketch_id] = _native_closed_profile_count(sketch)
         plane_id = _text(sketch.get("support_plane_id"))
         plane = plane_by_id.get(plane_id, {"transform": {}})
         plane_name = plane_names.get(plane_id, "")
@@ -4599,14 +4653,15 @@ def _document_xml(
         inputs = [
             _text(value) for value in _sequence(feature.get("input_feature_ids", []))
         ]
-        base_name = next(
+        input_base_name = next(
             (
                 solid_feature_names[value]
                 for value in reversed(inputs)
                 if value in solid_feature_names
             ),
-            current_name,
+            "",
         )
+        base_name = input_base_name or current_name
         feature_sketch_name = sketch_names.get(_text(feature.get("sketch_id")), "")
         native_feature = attributes.get("freecad", {})
         native_feature_name = (
@@ -4685,6 +4740,81 @@ def _document_xml(
             feature_objects.append(final.name)
             current_name = final.name
             native_object_targets[native_feature_name] = final.name
+            continue
+        if kind == "extrusion" and (
+            (
+                source_format_id == "solidworks.sldprt"
+                and not sketch_native_profile_counts.get(
+                    _text(feature.get("sketch_id")), 0
+                )
+            )
+            or bool(feature.get("suppressed"))
+        ):
+            length = abs(
+                _number(
+                    definition.get("length"),
+                    _number(attributes.get("length_mm")),
+                )
+            )
+            second_length = abs(_number(definition.get("second_length")))
+            parameter_id = _feature_parameter(feature, parameters, length)
+            expression = parameters.expression(parameter_id)
+            final = graph.add("Part::Feature", feature_name, "Feature")
+            final.properties.extend(
+                [
+                    _string_property("Label", feature_name),
+                    _expression_property(
+                        [("Length", expression)] if expression else []
+                    ),
+                    _float_property(
+                        "Length", length, "App::PropertyLength", dynamic=True
+                    ),
+                    _float_property(
+                        "SecondLength",
+                        second_length,
+                        "App::PropertyLength",
+                        dynamic=True,
+                    ),
+                    _bool_property(
+                        "Midplane", bool(definition.get("symmetric")), dynamic=True
+                    ),
+                    _bool_property(
+                        "Reversed", bool(definition.get("reversed")), dynamic=True
+                    ),
+                    _vector_property(
+                        "Direction",
+                        _vector(
+                            definition.get("direction"),
+                            (0.0, 0.0, 1.0),
+                        ),
+                        dynamic=True,
+                    ),
+                    *_feature_metadata(feature, "feature-data"),
+                    _bool_property("NativeExecutable", False, dynamic=True),
+                    _string_property(
+                        "NativeExecutionReason",
+                        (
+                            "suppressed"
+                            if bool(feature.get("suppressed"))
+                            else "no_native_closed_profile"
+                        ),
+                        dynamic=True,
+                    ),
+                    *_definition_properties(definition),
+                    _json_property("NativeDefinitionJSON", definition),
+                    _shape_property(),
+                    _bool_property("Visibility", False),
+                ]
+            )
+            if feature_sketch_name:
+                final.properties.append(
+                    _link_property("Profile", feature_sketch_name, dynamic=True)
+                )
+                final.dependencies.append(feature_sketch_name)
+            if expression:
+                final.dependencies.append(parameter_sheet.name)
+            feature_names[feature_id] = final.name
+            feature_objects.append(final.name)
             continue
         if kind == "extrusion":
             sketch_id = _text(feature.get("sketch_id"))
@@ -4840,7 +4970,7 @@ def _document_xml(
             solid_feature_names[feature_id] = final.name
             feature_objects.append(final.name)
             current_name = final.name
-        elif kind == "fillet" and base_name:
+        elif kind == "fillet" and input_base_name:
             radius = abs(
                 _number(
                     definition.get("radius"),
@@ -4967,8 +5097,9 @@ def _document_xml(
                 final.dependencies.append(parameter_sheet.name)
             feature_names[feature_id] = final.name
             feature_objects.append(final.name)
-            solid_feature_names[feature_id] = final.name
-            current_name = final.name
+            if kind not in {"native", "reference"}:
+                solid_feature_names[feature_id] = final.name
+                current_name = final.name
         if bool(feature.get("suppressed")) and not native_replay:
             _replace_named_property(
                 final.properties,
@@ -5038,7 +5169,7 @@ def _document_xml(
             native_object_targets[native_body_name] = obj.name
         else:
             obj = graph.add(
-                _text(native_body.get("type_id"), "App::Part"),
+                _text(native_body.get("type_id"), "App::DocumentObjectGroup"),
                 native_body.get("name", body.get("name", body_id)),
                 "Body",
             )

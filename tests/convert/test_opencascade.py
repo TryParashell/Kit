@@ -148,10 +148,36 @@ def test_ascii_brep_decoder_rejects_unsupported_curve_family() -> None:
     assert decode_ascii_brep(malformed) is None
 
 
-def test_structural_validator_accepts_complete_opaque_native_brep() -> None:
+def test_ascii_brep_decoder_applies_complete_native_location() -> None:
     data = _located_triangle_brep()
     assert is_structurally_valid_ascii_brep(data)
-    assert decode_ascii_brep(data) is None
+    model = decode_ascii_brep(data)
+    assert model is not None
+    assert model.validate() == ()
+    assert {
+        (vertex.point.x, vertex.point.y, vertex.point.z) for vertex in model.vertices
+    } == {
+        (0.0, 0.0, 0.0),
+        (2.0, 0.0, 0.0),
+        (0.0, 3.0, 0.0),
+    }
+
+
+def test_ascii_brep_decoder_applies_location_translation() -> None:
+    data = _located_triangle_brep().replace(
+        b"1 0 0 0\n0 1 0 0\n0 0 1 0\n",
+        b"1 0 0 11\n0 1 0 -7\n0 0 1 5\n",
+        1,
+    )
+    model = decode_ascii_brep(data)
+    assert model is not None
+    assert {
+        (vertex.point.x, vertex.point.y, vertex.point.z) for vertex in model.vertices
+    } == {
+        (11.0, -7.0, 5.0),
+        (13.0, -7.0, 5.0),
+        (11.0, -4.0, 5.0),
+    }
 
 
 def test_structural_validator_requires_exact_physical_version_line() -> None:

@@ -151,6 +151,7 @@ class _Tokens:
 class _Reference:
     orientation: str
     record: int
+    location: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,7 +232,9 @@ def _zero_table(tokens: _Tokens, label: bytes) -> None:
         raise _DecodeFailure("unsupported BRep table")
 
 
-def _reference(tokens: _Tokens, shape_count: int) -> _Reference | None:
+def _reference(
+    tokens: _Tokens, shape_count: int, location_count: int = 0
+) -> _Reference | None:
     token = tokens.take()
     if token == b"*":
         return None
@@ -241,9 +244,10 @@ def _reference(tokens: _Tokens, shape_count: int) -> _Reference | None:
     if _INTEGER_PATTERN.fullmatch(number) is None:
         raise _DecodeFailure("invalid BRep shape reference")
     record = int(number)
-    if record < 1 or record > shape_count or tokens.integer(0, 0) != 0:
+    if record < 1 or record > shape_count:
         raise _DecodeFailure("unsupported BRep shape location")
-    return _Reference(token[:1].decode("ascii"), record)
+    location = tokens.integer(0, location_count)
+    return _Reference(token[:1].decode("ascii"), record, location)
 
 
 def _boolean(tokens: _Tokens) -> bool:
@@ -436,7 +440,7 @@ def _orthogonalized_vectors(
     return first, second, third
 
 
-def _location_transform(tokens: _Tokens) -> None:
+def _location_transform(tokens: _Tokens) -> tuple[float, ...]:
     values = tuple(tokens.number() for _ in range(12))
     determinant = (
         values[0] * (values[5] * values[10] - values[6] * values[9])
@@ -457,6 +461,244 @@ def _location_transform(tokens: _Tokens) -> None:
     columns = _orthogonalized_vectors(columns)
     rows = tuple(tuple(columns[column][row] for column in range(3)) for row in range(3))
     _orthogonalized_vectors(rows)
+    return values
+
+
+_IDENTITY_LOCATION = (
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+)
+
+
+def _location_product(
+    left: tuple[float, ...], right: tuple[float, ...]
+) -> tuple[float, ...]:
+    result: list[float] = []
+    for row in range(3):
+        for column in range(3):
+            result.append(
+                sum(
+                    left[row * 4 + inner] * right[inner * 4 + column]
+                    for inner in range(3)
+                )
+            )
+        result.append(
+            left[row * 4 + 3]
+            + sum(left[row * 4 + inner] * right[inner * 4 + 3] for inner in range(3))
+        )
+    if not all(isfinite(value) for value in result):
+        raise _DecodeFailure("invalid BRep location transform")
+    return tuple(result)
+
+
+def _location_inverse(value: tuple[float, ...]) -> tuple[float, ...]:
+    a, b, c, tx, d, e, f, ty, g, h, i, tz = value
+    determinant = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+    if not isfinite(determinant) or abs(determinant) < float_info.min:
+        raise _DecodeFailure("singular BRep location transform")
+    inverse = (
+        (e * i - f * h) / determinant,
+        (c * h - b * i) / determinant,
+        (b * f - c * e) / determinant,
+        0.0,
+        (f * g - d * i) / determinant,
+        (a * i - c * g) / determinant,
+        (c * d - a * f) / determinant,
+        0.0,
+        (d * h - e * g) / determinant,
+        (b * g - a * h) / determinant,
+        (a * e - b * d) / determinant,
+        0.0,
+    )
+    translated = (
+        *inverse[:3],
+        -(inverse[0] * tx + inverse[1] * ty + inverse[2] * tz),
+        *inverse[4:7],
+        -(inverse[4] * tx + inverse[5] * ty + inverse[6] * tz),
+        *inverse[8:11],
+        -(inverse[8] * tx + inverse[9] * ty + inverse[10] * tz),
+    )
+    if not all(isfinite(component) for component in translated):
+        raise _DecodeFailure("invalid BRep location transform")
+    return translated
+
+
+def _location_matrix_power(value: tuple[float, ...], power: int) -> tuple[float, ...]:
+    if power < 0:
+        value = _location_inverse(value)
+        power = -power
+    result = _IDENTITY_LOCATION
+    factor = value
+    while power:
+        if power & 1:
+            result = _location_product(result, factor)
+        power >>= 1
+        if power:
+            factor = _location_product(factor, factor)
+    return result
+
+
+def _model_locations(tokens: _Tokens) -> tuple[tuple[float, ...], ...]:
+    count = _count(tokens, b"Locations", _MAX_GEOMETRY)
+    chains: list[tuple[tuple[int, int], ...]] = []
+    direct: dict[int, tuple[float, ...]] = {}
+    matrices: list[tuple[float, ...]] = []
+    unique_locations: set[tuple[tuple[int, int], ...]] = set()
+    for index in range(1, count + 1):
+        kind = tokens.integer(1, 2)
+        if kind == 1:
+            direct[index] = _location_transform(tokens)
+            location = ((index, 1),)
+        else:
+            location = ()
+            reference = tokens.integer(0, len(chains))
+            while reference:
+                power = tokens.signed_integer()
+                location = _location_multiply(
+                    _location_power(chains[reference - 1], power), location
+                )
+                reference = tokens.integer(0, len(chains))
+        if not location or location in unique_locations:
+            raise _DecodeFailure("invalid BRep location record")
+        matrix = _IDENTITY_LOCATION
+        for datum, power in location:
+            base = direct.get(datum)
+            if base is None:
+                raise _DecodeFailure("invalid BRep location record")
+            matrix = _location_product(matrix, _location_matrix_power(base, power))
+        chains.append(location)
+        matrices.append(matrix)
+        unique_locations.add(location)
+    return tuple(matrices)
+
+
+def _location_scale(value: tuple[float, ...]) -> float:
+    columns = tuple(
+        tuple(value[row * 4 + column] for row in range(3)) for column in range(3)
+    )
+    lengths = tuple(
+        sqrt(sum(component * component for component in item)) for item in columns
+    )
+    if (
+        any(not isfinite(length) or length <= float_info.min for length in lengths)
+        or not isclose(lengths[0], lengths[1], rel_tol=1e-10, abs_tol=1e-12)
+        or not isclose(lengths[0], lengths[2], rel_tol=1e-10, abs_tol=1e-12)
+        or any(
+            not isclose(
+                sum(left[index] * right[index] for index in range(3)),
+                0.0,
+                rel_tol=0.0,
+                abs_tol=1e-10 * lengths[0] * lengths[0],
+            )
+            for left, right in (
+                (columns[0], columns[1]),
+                (columns[0], columns[2]),
+                (columns[1], columns[2]),
+            )
+        )
+    ):
+        raise _DecodeFailure("unsupported BRep location transform")
+    determinant = (
+        value[0] * (value[5] * value[10] - value[6] * value[9])
+        - value[1] * (value[4] * value[10] - value[6] * value[8])
+        + value[2] * (value[4] * value[9] - value[5] * value[8])
+    )
+    if determinant <= 0.0:
+        raise _DecodeFailure("unsupported BRep location transform")
+    return lengths[0]
+
+
+def _location_point(value: tuple[float, ...], point: Vector3) -> Vector3:
+    components = (point.x, point.y, point.z)
+    return Vector3(
+        *(
+            value[row * 4 + 3]
+            + sum(value[row * 4 + column] * components[column] for column in range(3))
+            for row in range(3)
+        )
+    )
+
+
+def _location_direction(value: tuple[float, ...], direction: Vector3) -> Vector3:
+    components = (direction.x, direction.y, direction.z)
+    transformed = tuple(
+        sum(value[row * 4 + column] * components[column] for column in range(3))
+        for row in range(3)
+    )
+    normalized = _normalized_vector(transformed)
+    return Vector3(*normalized)
+
+
+def _located_model_inputs(
+    curves: tuple[LineCurve, ...],
+    surfaces: tuple[PlaneSurface, ...],
+    records: Mapping[int, _ShapeRecord],
+    location: tuple[float, ...],
+) -> tuple[
+    tuple[LineCurve, ...],
+    tuple[PlaneSurface, ...],
+    dict[int, _ShapeRecord],
+]:
+    scale = _location_scale(location)
+    transformed_curves = tuple(
+        LineCurve(
+            curve.id,
+            _location_point(location, curve.origin),
+            _location_direction(location, curve.direction),
+            provenance=curve.provenance,
+            attributes=curve.attributes,
+        )
+        for curve in curves
+    )
+    transformed_surfaces = tuple(
+        PlaneSurface(
+            surface.id,
+            _location_point(location, surface.origin),
+            _location_direction(location, surface.normal),
+            _location_direction(location, surface.reference_direction),
+            provenance=surface.provenance,
+            attributes=surface.attributes,
+        )
+        for surface in surfaces
+    )
+    transformed_records: dict[int, _ShapeRecord] = {}
+    for number, record in records.items():
+        geometry = record.geometry
+        if isinstance(geometry, _VertexData):
+            geometry = _VertexData(
+                geometry.tolerance * scale,
+                _location_point(location, geometry.point),
+            )
+        elif isinstance(geometry, _EdgeData):
+            geometry = _EdgeData(
+                geometry.tolerance * scale,
+                geometry.curve,
+                geometry.first * scale,
+                geometry.last * scale,
+            )
+        elif isinstance(geometry, _FaceData):
+            geometry = _FaceData(
+                geometry.natural,
+                geometry.tolerance * scale,
+                geometry.surface,
+            )
+        transformed_records[number] = _ShapeRecord(
+            record.kind,
+            record.flags,
+            record.children,
+            geometry,
+        )
+    return transformed_curves, transformed_surfaces, transformed_records
 
 
 def _locations(tokens: _Tokens) -> int:
@@ -855,6 +1097,7 @@ def _shape_records(
     curve_count: int,
     curve2d_count: int,
     surface_count: int,
+    location_count: int = 0,
 ) -> dict[int, _ShapeRecord]:
     records: dict[int, _ShapeRecord] = {}
     for ordinal in range(1, shape_count + 1):
@@ -878,10 +1121,12 @@ def _shape_records(
             raise _DecodeFailure("invalid BRep shape flags")
         children: list[_Reference] = []
         while True:
-            child = _reference(tokens, shape_count)
+            child = _reference(tokens, shape_count, location_count)
             if child is None:
                 break
             children.append(child)
+        if any(child.location for child in children):
+            raise _DecodeFailure("unsupported BRep shape location")
         record_number = shape_count - ordinal + 1
         if any(child.record <= record_number for child in children):
             raise _DecodeFailure("BRep topology is not ordered bottom-up")
@@ -910,6 +1155,34 @@ def _compose(outer: str, inner: str) -> str:
     raise _DecodeFailure("unsupported BRep topology orientation")
 
 
+def _ordered_wire_uses(
+    uses: list[_Reference], edge_vertices: Mapping[int, tuple[int, int]]
+) -> list[_Reference]:
+    def endpoints(reference: _Reference) -> tuple[int, int]:
+        start, end = edge_vertices[reference.record]
+        return (end, start) if reference.orientation == "-" else (start, end)
+
+    for first_index in range(len(uses)):
+        ordered = [uses[first_index]]
+        remaining = uses[:first_index] + uses[first_index + 1 :]
+        while remaining:
+            end = endpoints(ordered[-1])[1]
+            match = next(
+                (
+                    index
+                    for index, reference in enumerate(remaining)
+                    if endpoints(reference)[0] == end
+                ),
+                None,
+            )
+            if match is None:
+                break
+            ordered.append(remaining.pop(match))
+        if not remaining and endpoints(ordered[-1])[1] == endpoints(ordered[0])[0]:
+            return ordered
+    raise _DecodeFailure("BRep wire is disconnected or open")
+
+
 def _model(
     curves: tuple[LineCurve, ...],
     surfaces: tuple[PlaneSurface, ...],
@@ -923,6 +1196,7 @@ def _model(
     edges: list[BrepEdge] = []
     vertex_ids: dict[int, str] = {}
     edge_ids: dict[int, str] = {}
+    edge_vertices: dict[int, tuple[int, int]] = {}
     for number, record in sorted(records.items(), reverse=True):
         if record.kind == b"Ve":
             geometry = record.geometry
@@ -947,6 +1221,7 @@ def _model(
             raise _DecodeFailure("BRep edge references a non-vertex")
         identifier = f"{id_prefix}:edge:{number}"
         edge_ids[number] = identifier
+        edge_vertices[number] = (forward[0].record, reversed_values[0].record)
         edges.append(
             BrepEdge(
                 identifier,
@@ -982,6 +1257,7 @@ def _model(
                 _Reference(_opposite(use.orientation), use.record)
                 for use in reversed(uses)
             ]
+        uses = _ordered_wire_uses(uses, edge_vertices)
         coedge_ids: list[str] = []
         for index, use in enumerate(uses, 1):
             if use.orientation not in {"+", "-"}:
@@ -1102,6 +1378,24 @@ def _model(
             regions.append(BrepRegion(region_id, (use_id,), False))
             root_regions.append(region_id)
             return
+        if record.kind == b"Fa" and reference.orientation in {"+", "-"}:
+            ordinal = len(root_regions) + 1
+            face_use_id = f"{id_prefix}:face-use:root:{ordinal}"
+            face_uses.append(
+                BrepFaceUse(
+                    face_use_id,
+                    face_ids[reference.record],
+                    reversed=reference.orientation == "-",
+                )
+            )
+            shell_id = f"{id_prefix}:shell:root:{ordinal}"
+            shells.append(BrepShell(shell_id, (face_use_id,), False))
+            shell_use_id = f"{id_prefix}:shell-use:root:{ordinal}"
+            shell_uses.append(BrepShellUse(shell_use_id, shell_id))
+            region_id = f"{id_prefix}:region:root:{ordinal}"
+            regions.append(BrepRegion(region_id, (shell_use_id,), False))
+            root_regions.append(region_id)
+            return
         if record.kind == b"Ve" and reference.orientation == "+":
             root_vertices.append(vertex_ids[reference.record])
             return
@@ -1164,7 +1458,7 @@ def decode_ascii_brep(
         tokens.expect(b"V1,")
         tokens.expect(b"(c)")
         tokens.expect(b"Matra-Datavision")
-        _zero_table(tokens, b"Locations")
+        locations = _model_locations(tokens)
         curve2d_count = _curves(tokens, b"Curve2ds", 2)
         curve_count = _count(tokens, b"Curves", _MAX_GEOMETRY)
         curves: list[LineCurve] = []
@@ -1222,10 +1516,19 @@ def decode_ascii_brep(
             curve_count,
             curve2d_count,
             surface_count,
+            len(locations),
         )
-        root = _reference(tokens, shape_count)
+        root = _reference(tokens, shape_count, len(locations))
         if root is None or root.orientation != "+" or tokens.peek() is not None:
             raise _DecodeFailure("unsupported BRep root")
+        if root.location:
+            curves, surfaces, records = _located_model_inputs(
+                tuple(curves),
+                tuple(surfaces),
+                records,
+                locations[root.location - 1],
+            )
+            root = _Reference(root.orientation, root.record)
         return _model(
             tuple(curves),
             tuple(surfaces),

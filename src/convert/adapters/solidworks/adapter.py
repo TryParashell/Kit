@@ -99,11 +99,14 @@ from .assembly import (
     NATIVE_MATE_NEUTRAL_KIND_ALIASES,
     NativeAssembly,
     NativeAssemblyDefinition,
+    NativeAssemblyEncoding,
     NativeAssemblyOccurrence,
     NativeMate,
     NativeMateEntity,
     NativeMateList,
+    decode_mate_list,
     decode_native_assembly,
+    encode_native_assembly,
 )
 from .container import SldprtArchive, SldprtFormatError, build_sldprt
 from .format import (
@@ -111,11 +114,14 @@ from .format import (
     CONTAINER_VERSIONS,
     CONTENT_TYPES_STREAM,
     DISPLAY_LISTS_STREAM,
+    FEATURES_STREAM,
     FORMAT_ID_BY_SUFFIX,
     INFO,
     KEYWORDS_STREAM,
     KIT_DOCUMENT_STREAM,
     KIT_NATIVE_STREAM,
+    MATES_STREAM_NAME,
+    MATES_STREAM_SUFFIX,
     PARTITION_STREAM,
     PLANE_FEATURE_TYPES,
     RELATIONSHIPS_STREAM,
@@ -133,6 +139,7 @@ from .native import (
     NativeProfile,
     NativeSketch,
     decode_native_model,
+    encode_native_part,
 )
 from .parasolid import (
     ParasolidPayload,
@@ -140,10 +147,11 @@ from .parasolid import (
     contains_parasolid_payload,
     decode_brep_model,
     decode_partition_stream,
+    encode_blank_partition_stream,
     encode_brep_model,
+    encode_partition_stream,
     is_native_parasolid_payload,
 )
-
 
 _FORMAT_ID = INFO.format_id
 _ASSEMBLY_FORMAT_ID = INFO.aliases[0]
@@ -155,6 +163,7 @@ _ATTESTED_COMPATIBILITIES = frozenset(
     {
         "kit-neutral-only",
         "native-brep-with-kit-neutral",
+        "native-metadata-with-kit-neutral",
         "native-source-with-kit-neutral",
         "native-template",
     }
@@ -642,7 +651,13 @@ class SldprtAdapter:
         format_id = _destination_format_id(document)
         preserved = (
             None
-            if settings.values.get("portable") is True and document.assembly is not None
+            if (
+                document.assembly is not None
+                and (
+                    settings.values.get("portable") is True
+                    or settings.values.get("bundle_member") is True
+                )
+            )
             else _preserved_source(document, path)
         )
         diagnostics = document.diagnostics
@@ -670,9 +685,21 @@ class SldprtAdapter:
                 and settings.values.get("allow_carrier") is True
                 and not bundle.complete
             )
-            if portable_carrier:
-                bundle = _AssemblyBundle({}, {}, False)
-            generated = _generated_streams(document, template, bundle.names)
+            configured_bundle_names = settings.values.get("bundle_names")
+            selected_bundle_names = (
+                bundle.names
+                if bundle.names
+                else (
+                    configured_bundle_names
+                    if isinstance(configured_bundle_names, Mapping)
+                    else {}
+                )
+            )
+            generated = _generated_streams(
+                document,
+                template,
+                selected_bundle_names,
+            )
             if portable_carrier:
                 generated = replace(
                     generated,
@@ -711,12 +738,22 @@ class SldprtAdapter:
                 "source-preserved"
                 if template is not None
                 else (
-                    "neutral-brep"
+                    (
+                        "native-metadata-and-neutral-brep"
+                        if document.assembly is None
+                        else "neutral-brep"
+                    )
                     if generated.native_brep == "generated"
                     else (
-                        "parasolid-import"
+                        (
+                            "native-metadata-and-parasolid-import"
+                            if document.assembly is None
+                            else "parasolid-import"
+                        )
                         if generated.native_brep == "preserved"
-                        else "none"
+                        else (
+                            "native-metadata" if document.assembly is None else "none"
+                        )
                     )
                 )
             )
@@ -1136,12 +1173,16 @@ def _assembly_bundle(
     complete = True
     targets: list[tuple[ComponentDefinition, CadDocument, str, Path]] = []
     for definition in definitions:
-        if not definition.document_id:
-            complete = False
-            continue
-        if definition.document_id in names:
+        key = definition.document_id or definition.id
+        if key in names:
+            names[definition.id] = names[key]
             continue
         component = documents.get(definition.document_id)
+        if (
+            not isinstance(component, CadDocument)
+            and str(definition.kind) == ComponentKind.ASSEMBLY.value
+        ):
+            component = _nested_assembly_document(document, definition.id)
         if not isinstance(component, CadDocument):
             complete = False
             continue
@@ -1157,7 +1198,7 @@ def _assembly_bundle(
         ).name
         candidate = Path(source_name).name if source_name else ""
         if Path(candidate).suffix.casefold() != suffix:
-            candidate = f"{definition.name or definition.document_id}{suffix}"
+            candidate = f"{definition.name or key}{suffix}"
         stem = Path(candidate).stem or "component"
         index = 1
         while candidate.casefold() in used:
@@ -1165,13 +1206,18 @@ def _assembly_bundle(
             candidate = f"{stem}-{index}{suffix}"
         used.add(candidate.casefold())
         target = destination.parent / candidate
-        names[definition.document_id] = candidate
+        names[key] = candidate
+        names[definition.id] = candidate
+        if definition.document_id:
+            names[definition.document_id] = candidate
         targets.append((definition, component, candidate, target))
     available_names = {name.casefold() for name in names.values()}
     for definition, component, candidate, target in targets:
         buffer = BytesIO()
         values = dict(settings.values)
         values["portable"] = False
+        values["bundle_member"] = component.assembly is not None
+        values["bundle_names"] = frozen_mapping(names)
         result = SldprtAdapter().write(
             component,
             buffer,
@@ -1198,7 +1244,7 @@ def _assembly_bundle(
         if not native_result:
             complete = False
     if any(
-        definition.document_id and definition.document_id not in names
+        (definition.document_id or definition.id) not in names
         for definition in definitions
     ):
         complete = False
@@ -1206,6 +1252,128 @@ def _assembly_bundle(
         frozen_mapping(names),
         frozen_mapping(payloads),
         complete,
+    )
+
+
+def _nested_assembly_document(
+    document: CadDocument,
+    root_definition_id: str,
+) -> CadDocument | None:
+    assembly = document.assembly
+    if assembly is None:
+        return None
+    definitions = {definition.id: definition for definition in assembly.definitions}
+    root = definitions.get(root_definition_id)
+    if root is None or str(root.kind) != ComponentKind.ASSEMBLY.value:
+        return None
+    reachable = {root_definition_id}
+    pending = [root_definition_id]
+    while pending:
+        owner_id = pending.pop()
+        for instance in assembly.instances:
+            if instance.owner_definition_id != owner_id:
+                continue
+            if instance.definition_id not in reachable:
+                reachable.add(instance.definition_id)
+                pending.append(instance.definition_id)
+    selected_definitions = tuple(
+        (
+            replace(definition, document_id="")
+            if definition.id == root_definition_id
+            else definition
+        )
+        for definition in assembly.definitions
+        if definition.id in reachable
+    )
+    selected_instances = tuple(
+        instance
+        for instance in assembly.instances
+        if instance.owner_definition_id in reachable
+        and instance.definition_id in reachable
+    )
+    selected_mates = tuple(
+        mate for mate in assembly.mates if mate.owner_definition_id in reachable
+    )
+    entity_ids = {entity_id for mate in selected_mates for entity_id in mate.entity_ids}
+    selected_entities = tuple(
+        entity
+        for entity in assembly.mate_entities
+        if entity.id in entity_ids and entity.owner_definition_id in reachable
+    )
+    selected_groups = tuple(
+        group
+        for group in assembly.mate_groups
+        if group.owner_definition_id in reachable
+    )
+    document_ids = {
+        definition.document_id
+        for definition in selected_definitions
+        if definition.id != root_definition_id and definition.document_id
+    }
+    selected_documents = tuple(
+        component for component in assembly.documents if component.id in document_ids
+    )
+    selected_mesh_ids = {
+        mesh_id
+        for definition in selected_definitions
+        for mesh_id in definition.mesh_ids
+    }
+    selected_payloads: list[BrepPayload] = []
+    native_root_id = _native_id(root_definition_id, "sldasm:definition:")
+    if native_root_id is not None:
+        for payload in document.brep_payloads:
+            if (
+                payload.role is not PayloadRole.ASSEMBLY_STRUCTURE
+                or payload.format_id.casefold() != "solidworks.mates"
+                or payload.data is None
+            ):
+                continue
+            try:
+                owner_id = int(payload.attributes.get("owner_definition_id", -1))
+            except (TypeError, ValueError):
+                continue
+            if owner_id != native_root_id:
+                continue
+            source_stream = payload.source_stream.rsplit("::", 1)[-1]
+            selected_payloads.append(replace(payload, source_stream=source_stream))
+    nested_assembly = AssemblyData(
+        root_definition_id=root_definition_id,
+        definitions=selected_definitions,
+        instances=selected_instances,
+        documents=selected_documents,
+        mate_entities=selected_entities,
+        mates=selected_mates,
+        mate_groups=selected_groups,
+        attributes=assembly.attributes,
+    )
+    source_path = root.source_path or f"{root.name}.SLDASM"
+    nested = replace(
+        document,
+        source=CadSource(_ASSEMBLY_FORMAT_ID, source_path, ""),
+        parameters=(),
+        support_planes=(),
+        sketches=(),
+        selections=(),
+        feature_timeline=(),
+        bodies=(),
+        brep=None,
+        brep_payloads=tuple(selected_payloads),
+        meshes=tuple(mesh for mesh in document.meshes if mesh.id in selected_mesh_ids),
+        assembly=nested_assembly,
+        metadata=frozen_mapping(
+            {
+                key: value
+                for key, value in document.metadata.items()
+                if key not in _SOURCE_KEYS
+            }
+        ),
+    )
+    return replace(
+        nested,
+        capabilities=infer_capabilities(
+            nested,
+            roundtrip_metadata=Capability.ROUNDTRIP_METADATA in document.capabilities,
+        ),
     )
 
 
@@ -1357,7 +1525,7 @@ def _native_attestation(data: bytes) -> dict[str, Any] | None:
         parsed
     ):
         return None
-    proof = _attested_native_proof(document, archive)
+    proof = _attested_native_proof(document, archive, compatibility)
     if proof is None:
         return None
     expected_transfers = _solidworks_transfers(
@@ -1376,20 +1544,59 @@ def _native_attestation(data: bytes) -> dict[str, Any] | None:
 
 
 def _attested_native_proof(
-    document: CadDocument, archive: SldprtArchive
+    document: CadDocument, archive: SldprtArchive, compatibility: str
 ) -> _GeneratedStreams | None:
     streams = archive.streams
     before = _native_stream_sha256(streams)
+    bundle_names = _attested_generated_bundle_names(document, archive)
     try:
-        if KEYWORDS_STREAM in streams and RESOLVED_FEATURES_STREAM in streams:
+        if compatibility in {
+            "native-brep-with-kit-neutral",
+            "native-metadata-with-kit-neutral",
+        }:
+            proof = _generated_streams(document, bundle_names=bundle_names)
+        elif KEYWORDS_STREAM in streams and RESOLVED_FEATURES_STREAM in streams:
             proof = _patch_native_template(document, streams, {})
         else:
-            proof = _generated_streams(document)
+            proof = _generated_streams(document, bundle_names=bundle_names)
     except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
         return None
     if _native_stream_sha256(proof.streams) != before:
         return None
     return proof
+
+
+def _attested_generated_bundle_names(
+    document: CadDocument,
+    archive: SldprtArchive,
+) -> Mapping[str, str]:
+    assembly = document.assembly
+    if assembly is None or COMPONENT_TREE_STREAM not in archive.streams:
+        return {}
+    model_name = PureWindowsPath(document.source.path).stem
+    try:
+        encoding = encode_native_assembly(
+            assembly,
+            document.configurations,
+            model_name or assembly.definition(assembly.root_definition_id).name,
+        )
+        native = decode_native_assembly(archive, include_tessellation=False)
+    except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
+        return {}
+    definitions = {item.object_id: item for item in native.definitions}
+    result: dict[str, str] = {}
+    for definition in assembly.definitions:
+        if definition.id == assembly.root_definition_id:
+            continue
+        native_id = encoding.definition_ids.get(definition.id)
+        target = definitions.get(native_id) if native_id is not None else None
+        if target is None or not target.source_path:
+            continue
+        name = PureWindowsPath(target.source_path).name
+        result[definition.id] = name
+        if definition.document_id:
+            result[definition.document_id] = name
+    return result
 
 
 def _attested_transfers(
@@ -1446,35 +1653,347 @@ def _generated_streams(
     )
     model_name = PureWindowsPath(portable.source.path).stem
     streams = {
-        CONTENT_TYPES_STREAM: (
-            b'<?xml version="1.0" encoding="UTF-8"?>'
-            b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-            b'<Default Extension="xml" ContentType="application/xml"/>'
-            b'<Default Extension="bin" ContentType="application/octet-stream"/>'
-            b"</Types>"
-        ),
-        RELATIONSHIPS_STREAM: (
-            b'<?xml version="1.0" encoding="UTF-8"?>'
-            b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
-        ),
+        **_solidworks_package_streams(),
         SOLIDWORKS_STREAM: _solidworks_xml(model_name, configuration),
         KIT_DOCUMENT_STREAM: embedded,
     }
+    encoding: NativeAssemblyEncoding | None = None
+    part_capabilities: frozenset[Capability] = frozenset()
+    if portable.assembly is None:
+        part = encode_native_part(portable, model_name)
+        streams.update(part.envelope_streams)
+        streams[KEYWORDS_STREAM] = part.keywords
+        streams[FEATURES_STREAM] = part.features
+        streams.update(
+            {
+                f"Contents/Config-{index}-ResolvedFeatures": lane
+                for index, lane in part.configuration_lanes
+            }
+        )
+        part_capabilities = part.native_capabilities
+    else:
+        encoding = encode_native_assembly(
+            portable.assembly,
+            portable.configurations,
+            model_name
+            or portable.assembly.definition(portable.assembly.root_definition_id).name,
+            bundle_names,
+        )
+        preserved_mates, mates_complete = _preserved_generated_mate_streams(
+            portable,
+            encoding,
+        )
+        if mates_complete:
+            encoding = replace(
+                encoding,
+                mate_streams=preserved_mates,
+                mates_complete=True,
+                unsupported_mate_ids=(),
+            )
+        streams[COMPONENT_TREE_STREAM] = encoding.component_tree
+        streams.update(encoding.mate_streams)
     payload, native_brep = _parasolid_payload(portable)
     if payload is not None:
         streams[PARTITION_STREAM] = payload
+    native_capabilities = (
+        _generated_assembly_capabilities(portable.assembly, encoding, streams)
+        if portable.assembly is not None and encoding is not None
+        else part_capabilities
+    )
     return _GeneratedStreams(
         streams,
         native_brep,
-        frozenset(),
+        native_capabilities,
         (
             "native-brep-with-kit-neutral"
             if native_brep in {"generated", "preserved"}
-            else "kit-neutral-only"
+            else (
+                "native-metadata-with-kit-neutral"
+                if portable.assembly is None
+                else "kit-neutral-only"
+            )
         ),
         False,
         False,
     )
+
+
+def _preserved_generated_mate_streams(
+    document: CadDocument,
+    encoding: NativeAssemblyEncoding,
+) -> tuple[dict[str, bytes], bool]:
+    assembly = document.assembly
+    if assembly is None or encoding.mates_complete:
+        return dict(encoding.mate_streams), encoding.mates_complete
+    root_id = encoding.definition_ids[assembly.root_definition_id]
+    candidates: dict[str, tuple[BrepPayload, NativeMateList]] = {}
+    for payload in document.brep_payloads:
+        if (
+            payload.role is not PayloadRole.ASSEMBLY_STRUCTURE
+            or payload.format_id.casefold() != "solidworks.mates"
+            or payload.data is None
+            or "::" in payload.source_stream
+        ):
+            continue
+        leaf = payload.source_stream.replace("\\", "/").rsplit("/", 1)[-1]
+        if (
+            leaf.casefold() != MATES_STREAM_NAME.casefold()
+            and not leaf.casefold().endswith(MATES_STREAM_SUFFIX.casefold())
+        ):
+            continue
+        try:
+            owner_id = int(payload.attributes.get("owner_definition_id", -1))
+            decoded = decode_mate_list(payload.data, payload.source_stream, owner_id)
+        except (SldprtFormatError, TypeError, ValueError, struct.error):
+            continue
+        if owner_id != root_id or payload.source_stream in candidates:
+            continue
+        candidates[payload.source_stream] = (payload, decoded)
+    if not candidates:
+        return {}, False
+    payload_ids = {payload.id for payload, _ in candidates.values()}
+    desired_payload_ids = {
+        str(value)
+        for value in (
+            *(mate.attributes.get("native_payload_id") for mate in assembly.mates),
+            *(
+                group.attributes.get("native_payload_id")
+                for group in assembly.mate_groups
+            ),
+        )
+        if isinstance(value, str) and value
+    }
+    if desired_payload_ids != payload_ids:
+        return {}, False
+    desired_mates = {
+        (
+            str(mate.attributes.get("native_payload_id", "")),
+            _generated_integer(mate.attributes.get("native_record_offset")),
+        ): mate
+        for mate in assembly.mates
+    }
+    desired_entities = {entity.id: entity for entity in assembly.mate_entities}
+    matched_mates: set[str] = set()
+    matched_group_offsets: set[tuple[str, int]] = set()
+    for payload, mate_list in candidates.values():
+        for native_mate in mate_list.mates:
+            key = (payload.id, native_mate.record_offset)
+            if native_mate.kind == "group":
+                matched_group_offsets.add(key)
+                continue
+            mate = desired_mates.get(key)
+            if mate is None or not _preserved_native_mate_matches(
+                mate,
+                native_mate,
+                desired_entities,
+            ):
+                return {}, False
+            matched_mates.add(mate.id)
+    if matched_mates != {mate.id for mate in assembly.mates}:
+        return {}, False
+    expected_group_offsets = {
+        (
+            str(group.attributes.get("native_payload_id", "")),
+            _generated_integer(group.attributes.get(name)),
+        )
+        for group in assembly.mate_groups
+        for name in ("start_record_offset", "end_record_offset")
+    }
+    if matched_group_offsets != expected_group_offsets:
+        return {}, False
+    return {
+        payload.source_stream: bytes(payload.data) for payload, _ in candidates.values()
+    }, True
+
+
+def _preserved_native_mate_matches(
+    mate: MateConstraint,
+    native: NativeMate,
+    entities: Mapping[str, MateEntity],
+) -> bool:
+    if (
+        mate.name != native.name
+        or mate.kind != _neutral_mate_kind(native.kind)
+        or mate.alignment != _neutral_mate_alignment(native)
+        or _mate_parameter_value(mate.value)
+        != _mate_parameter_value(_neutral_mate_value(native))
+        or mate.suppressed
+        or not mate.driving
+        or mate.parameter_ids
+        or len(mate.entity_ids) != len(native.entities)
+    ):
+        return False
+    for entity_id, native_entity in zip(mate.entity_ids, native.entities):
+        entity = entities.get(entity_id)
+        if entity is None:
+            return False
+        component_path = entity.attributes.get("component_path", "")
+        persistent = entity.attributes.get("persistent_references", ())
+        if (
+            component_path != native_entity.component_path
+            or persistent != native_entity.persistent_references
+            or entity.source_entity_id
+            != (
+                native_entity.persistent_references[-1]
+                if native_entity.persistent_references
+                else ""
+            )
+        ):
+            return False
+    return True
+
+
+def _generated_assembly_capabilities(
+    assembly: AssemblyData,
+    encoding: NativeAssemblyEncoding,
+    streams: Mapping[str, bytes],
+) -> frozenset[Capability]:
+    try:
+        native = decode_native_assembly(
+            SldprtArchive.from_bytes(build_sldprt(dict(streams))),
+            include_tessellation=False,
+        )
+    except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
+        return frozenset()
+    result: set[Capability] = set()
+    if encoding.structure_complete and _generated_assembly_structure_matches(
+        assembly,
+        encoding,
+        native,
+    ):
+        result.add(Capability.ASSEMBLIES)
+        if len(assembly.definitions) > 1:
+            result.add(Capability.EXTERNAL_REFERENCES)
+    if (
+        encoding.mates_complete
+        and assembly.mates
+        and len(native.mate_lists) == 1
+        and native.mate_lists[0].declared_count == len(assembly.mates)
+    ):
+        result.add(Capability.ASSEMBLY_MATES)
+    return frozenset(result)
+
+
+def _generated_assembly_structure_matches(
+    assembly: AssemblyData,
+    encoding: NativeAssemblyEncoding,
+    native: NativeAssembly,
+) -> bool:
+    definitions = {item.object_id: item for item in native.definitions}
+    if native.root_definition_id != encoding.definition_ids.get(
+        assembly.root_definition_id
+    ):
+        return False
+    if set(definitions) != set(encoding.definition_ids.values()):
+        return False
+    for source in assembly.definitions:
+        target = definitions.get(encoding.definition_ids[source.id])
+        if target is None:
+            return False
+        expected_kind = (
+            "ASSEMBLY" if str(source.kind) == ComponentKind.ASSEMBLY.value else "PART"
+        )
+        if (
+            target.name != source.name
+            or target.document_type != expected_kind
+            or target.configuration_name != (source.configuration_name or "Default")
+        ):
+            return False
+        if source.bounding_box is not None:
+            expected_box = tuple(
+                value / 1000.0
+                for value in (
+                    source.bounding_box.minimum.x,
+                    source.bounding_box.minimum.y,
+                    source.bounding_box.minimum.z,
+                    source.bounding_box.maximum.x,
+                    source.bounding_box.maximum.y,
+                    source.bounding_box.maximum.z,
+                )
+            )
+            if target.bounding_box_m != expected_box:
+                return False
+    occurrences = {item.object_id: item for item in native.occurrences}
+    if set(occurrences) != set(encoding.occurrence_ids.values()):
+        return False
+    by_owner: defaultdict[str, list[tuple[int, int, ComponentInstance]]] = defaultdict(
+        list
+    )
+    for index, source in enumerate(assembly.instances):
+        by_owner[source.owner_definition_id].append((source.order, index, source))
+        target = occurrences.get(encoding.occurrence_ids[source.id])
+        if target is None:
+            return False
+        reference = _generated_reference_number(source, index + 1)
+        suffix = f"-{reference}"
+        base_name = (
+            source.name[: -len(suffix)] if source.name.endswith(suffix) else source.name
+        )
+        configuration_id = _generated_integer(source.configuration_id)
+        if (
+            target.name != base_name
+            or target.reference_number != reference
+            or target.owner_definition_id
+            != encoding.definition_ids[source.owner_definition_id]
+            or target.definition_id != encoding.definition_ids[source.definition_id]
+            or target.configuration_name
+            != (
+                source.configuration_name
+                or assembly.definition(source.definition_id).configuration_name
+                or "Default"
+            )
+            or target.configuration_id != configuration_id
+            or target.transform != _native_assembly_matrix(source.transform)
+            or target.suppressed != source.suppressed
+            or target.hidden != source.hidden
+            or target.flexible != source.flexible
+            or target.exclude_from_bom != source.exclude_from_bom
+            or (target.feature_id == 24) != source.fixed
+        ):
+            return False
+    native_by_owner: defaultdict[int, list[NativeAssemblyOccurrence]] = defaultdict(
+        list
+    )
+    for target in native.occurrences:
+        native_by_owner[target.owner_definition_id].append(target)
+    for owner_id, values in by_owner.items():
+        expected = [
+            encoding.occurrence_ids[item.id]
+            for _, _, item in sorted(values, key=lambda value: (value[0], value[1]))
+        ]
+        actual = [
+            item.object_id
+            for item in native_by_owner[encoding.definition_ids[owner_id]]
+        ]
+        if actual != expected:
+            return False
+    return True
+
+
+def _generated_reference_number(instance: ComponentInstance, fallback: int) -> int:
+    for value in (
+        instance.reference_number,
+        instance.attributes.get("native_reference_number"),
+    ):
+        if isinstance(value, bool):
+            continue
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if number > 0:
+            return number
+    match = re.search(r"-(\d+)$", instance.name)
+    return int(match.group(1)) if match is not None else fallback
+
+
+def _generated_integer(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _patch_native_template(
@@ -2313,11 +2832,11 @@ def _patch_native_assembly(
     if bundle_names:
         prefix, root, trailing = _keywords_root(streams[COMPONENT_TREE_STREAM])
         path_by_file_id = {
-            int(definition.attributes["native_file_id"]): bundle_names[
-                definition.document_id
-            ]
+            int(definition.attributes["native_file_id"]): (
+                bundle_names.get(definition.document_id) or bundle_names[definition.id]
+            )
             for definition in document.assembly.definitions
-            if definition.document_id in bundle_names
+            if (definition.document_id in bundle_names or definition.id in bundle_names)
             and isinstance(definition.attributes.get("native_file_id"), int)
         }
         changed = False
@@ -2820,11 +3339,19 @@ def _parasolid_payload(document: CadDocument) -> tuple[bytes | None, str]:
             item.data for item in decoded if is_native_parasolid_payload(item.data)
         )
     if candidates:
-        return max(candidates, key=len), "preserved"
-    if document.brep is None or document.assembly is not None:
+        return encode_partition_stream(max(candidates, key=len)), "preserved"
+    if document.assembly is not None:
+        return None, "none"
+    if document.brep is None:
+        if (
+            not document.feature_timeline
+            and not document.sketches
+            and not document.bodies
+        ):
+            return encode_blank_partition_stream(), "generated"
         return None, "none"
     try:
-        return encode_brep_model(document.brep), "generated"
+        return encode_partition_stream(encode_brep_model(document.brep)), "generated"
     except ParasolidWriteError as exc:
         return None, f"unsupported:{exc}"
 
@@ -2837,6 +3364,59 @@ def _solidworks_xml(model: str, configuration: str) -> bytes:
         f'{model_value}" swConfigurationName="{configuration_value}"/>'
         "</swSolidWorks>"
     ).encode("utf-8")
+
+
+def _solidworks_package_streams() -> dict[str, bytes]:
+    return {
+        CONTENT_TYPES_STREAM: (
+            b'<?xml version="1.0"?>\r\n'
+            b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            b'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            b'<Default Extension="xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
+            b'<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+            b'<Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>'
+            b"</Types>\r\n"
+        ),
+        RELATIONSHIPS_STREAM: (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+            b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            b'<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
+            b'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
+            b'<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="docProps/custom.xml"/>'
+            b"</Relationships>\r\n"
+        ),
+        "docProps/app.xml": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+            '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
+            "<Template>Normal.dotm</Template><TotalTime>1526</TotalTime>"
+            "<Application>SOLIDWORKS</Application><DocSecurity>0</DocSecurity>"
+            "<Company>Dassault Systèmes SolidWorks Corporation</Company>"
+            "<LinksUpToDate>false</LinksUpToDate><SharedDoc>false</SharedDoc>"
+            "<HyperlinksChanged>false</HyperlinksChanged>"
+            "<AppVersion>23.0000</AppVersion></Properties>\r\n"
+        ).encode("utf-8"),
+        "docProps/core.xml": (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+            b'<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            b"<dc:lastModifiedBy>Kit</dc:lastModifiedBy>"
+            b"<dcterms:created>2026-08-02T17:13:26Z</dcterms:created>"
+            b"<dcterms:modified>2026-08-02T17:13:27Z</dcterms:modified>"
+            b"</cp:coreProperties>\r\n"
+        ),
+        "docProps/custom.xml": (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+            b'<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
+            b'<propertySection xmlns="" name="DocumentSummaryInformation" fmtid="{D5CDD502-2E9C-101B-9397-08002B2CF9AE}">'
+            b'<property name="" pid="1" TypeID="0"><vt:i2>65001</vt:i2></property>'
+            b'<property name="" pid="22" TypeID="0"><vt:bool>No</vt:bool></property>'
+            b'<propertyNameDictionaryElement name="" pid="0"></propertyNameDictionaryElement>'
+            b"</propertySection>"
+            b'<propertySection xmlns="" name="UserDefinedProperties" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}">'
+            b'<property name="" pid="1" TypeID="0"><vt:i2>65001</vt:i2></property>'
+            b'<propertyNameDictionaryElement name="" pid="0"></propertyNameDictionaryElement>'
+            b"</propertySection></Properties>\r\n"
+        ),
+    }
 
 
 def _xml_attribute(value: str) -> str:

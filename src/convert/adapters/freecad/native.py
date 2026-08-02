@@ -1043,6 +1043,14 @@ def _ordered_features(objects: tuple[_NativeObject, ...]) -> tuple[_NativeObject
     return tuple(result)
 
 
+def _is_body_container(obj: _NativeObject) -> bool:
+    return obj.type_id in BODY_CONTAINER_TYPE_IDS or (
+        obj.type_id == "App::DocumentObjectGroup"
+        and "SourceBodyJSON" in obj.properties
+        and "Tip" in obj.properties
+    )
+
+
 def _feature_kind(obj: _NativeObject) -> FeatureKind:
     declared = _string(obj, "FeatureKind").casefold()
     if declared:
@@ -2342,7 +2350,7 @@ def read_native_fcstd(
     body_ids = {
         obj.name: f"freecad:body:{obj.name}"
         for obj in native.objects
-        if obj.type_id in BODY_CONTAINER_TYPE_IDS
+        if _is_body_container(obj)
     }
     brep_payloads, owner_payloads = _build_brep_payloads(native, feature_ids, body_ids)
     native_document_sha256 = hashlib.sha256(data).hexdigest()
@@ -2429,7 +2437,7 @@ def read_native_fcstd(
         )
     bodies: list[Body] = []
     for obj in native.objects:
-        if obj.type_id not in BODY_CONTAINER_TYPE_IDS:
+        if not _is_body_container(obj):
             continue
         final_name = _link(obj, "Tip")
         if final_name not in feature_ids:

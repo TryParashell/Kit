@@ -7,8 +7,21 @@ import math
 import re
 import struct
 from types import MappingProxyType
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 import xml.etree.ElementTree as ET
+
+from interchange import (
+    AssemblyData,
+    ComponentDefinition,
+    ComponentInstance,
+    ComponentKind,
+    Configuration,
+    MateAlignment,
+    MateConstraint,
+    MateEntity,
+    Matrix4,
+    ValueKind,
+)
 
 from .container import SldprtArchive, SldprtFormatError
 from .display import (
@@ -20,6 +33,7 @@ from .display import (
 from .format import (
     CLASS_MARKER,
     COMPONENT_TREE_STREAM,
+    DIMENSION_SCALAR_HEADERS,
     DISPLAY_LISTS_STREAM,
     MATES_STREAM_NAME,
     MATES_STREAM_SUFFIX,
@@ -614,6 +628,784 @@ class NativeAssembly:
     mate_lists: tuple[NativeMateList, ...]
     display_components: tuple[NativeDisplayComponent, ...]
     application_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class NativeAssemblyEncoding:
+    component_tree: bytes
+    mate_streams: Mapping[str, bytes]
+    definition_ids: Mapping[str, int]
+    occurrence_ids: Mapping[str, int]
+    structure_complete: bool
+    mates_complete: bool
+    unsupported_mate_ids: tuple[str, ...]
+
+
+def encode_native_assembly(
+    assembly: AssemblyData,
+    configurations: Sequence[Configuration],
+    model_name: str,
+    bundle_names: Mapping[str, str] | None = None,
+) -> NativeAssemblyEncoding:
+    definitions = tuple(assembly.definitions)
+    instances = tuple(assembly.instances)
+    definition_by_id = {item.id: item for item in definitions}
+    if assembly.root_definition_id not in definition_by_id:
+        raise SldprtFormatError("assembly root definition is missing")
+    selected_configurations = tuple(
+        sorted(
+            configurations,
+            key=lambda item: (not item.active, configurations.index(item)),
+        )
+    )
+    if not selected_configurations:
+        raise SldprtFormatError("assembly contains no configuration")
+    names = bundle_names or {}
+    source_paths = {
+        definition.id: _definition_source_path(
+            definition,
+            definition.id == assembly.root_definition_id,
+            model_name,
+            names,
+        )
+        for definition in definitions
+    }
+    file_keys = {
+        definition.id: _definition_file_key(definition, source_paths[definition.id])
+        for definition in definitions
+    }
+    unique_file_keys = tuple(dict.fromkeys(file_keys.values()))
+    file_preferred = {
+        key: next(
+            (
+                _positive_integer(definition.attributes.get("native_file_id"))
+                for definition in definitions
+                if file_keys[definition.id] == key
+                and _positive_integer(definition.attributes.get("native_file_id"))
+                is not None
+            ),
+            None,
+        )
+        for key in unique_file_keys
+    }
+    object_preferred: dict[tuple[str, str], int | None] = {}
+    for configuration in selected_configurations:
+        object_preferred[("configuration", configuration.id)] = _positive_integer(
+            configuration.attributes.get("native_object_id")
+        )
+    for definition in definitions:
+        object_preferred[("definition", definition.id)] = _preferred_native_id(
+            definition.id,
+            "sldasm:definition:",
+            definition.attributes.get("native_object_id"),
+        )
+    for key in unique_file_keys:
+        object_preferred[("file", repr(key))] = file_preferred[key]
+    for instance in instances:
+        object_preferred[("occurrence", instance.id)] = _preferred_native_id(
+            instance.id,
+            "sldasm:instance:",
+            instance.attributes.get("native_object_id"),
+        )
+    object_ids = _allocate_object_ids(object_preferred)
+    definition_ids = {
+        definition.id: object_ids[("definition", definition.id)]
+        for definition in definitions
+    }
+    file_ids = {key: object_ids[("file", repr(key))] for key in unique_file_keys}
+    occurrence_ids = {
+        instance.id: object_ids[("occurrence", instance.id)] for instance in instances
+    }
+    configuration_ids = {
+        configuration.id: object_ids[("configuration", configuration.id)]
+        for configuration in selected_configurations
+    }
+    root = ET.Element(
+        "swSolidWorks",
+        {
+            "xmlns": "http://www.solidworks.com/sw2003/schema",
+            "swObjCount": str(max(object_ids.values(), default=0)),
+            "swVersion": "13000",
+        },
+    )
+    header = ET.SubElement(
+        root,
+        "swHeader",
+        {"swObjCount": str(len(unique_file_keys))},
+    )
+    for key in unique_file_keys:
+        definition = next(item for item in definitions if file_keys[item.id] == key)
+        ET.SubElement(
+            header,
+            "swFile",
+            {
+                "id": str(file_ids[key]),
+                "swDocType": _definition_document_type(definition),
+                "swCreationTime": str(
+                    _integer_attribute(definition, "native_creation_time", 0)
+                ),
+                "swPath": source_paths[definition.id],
+            },
+        )
+    model_list = ET.SubElement(
+        root,
+        "swModelList",
+        {"swObjCount": str(len(definitions))},
+    )
+    children: dict[str, list[tuple[int, ComponentInstance]]] = {}
+    for index, instance in enumerate(instances):
+        children.setdefault(instance.owner_definition_id, []).append((index, instance))
+    for definition in definitions:
+        attributes = {
+            "id": str(definition_ids[definition.id]),
+            "swName": definition.name,
+            "swConfigurationName": definition.configuration_name or "Default",
+            "swConfigurationId": str(
+                _configuration_integer(definition.configuration_id)
+            ),
+            "swLastModifiedStamp": str(
+                _integer_attribute(definition, "last_modified_stamp", 0)
+            ),
+            "swConfigurationFlags": str(
+                _integer_attribute(definition, "configuration_flags", 0)
+            ),
+            "swFileRef": str(file_ids[file_keys[definition.id]]),
+        }
+        alternate = definition.attributes.get("alternate_configuration_name")
+        if isinstance(alternate, str) and alternate:
+            attributes["swConfigurationAlternateName"] = alternate
+        bounding_box = _native_bounding_box(definition)
+        if bounding_box:
+            attributes["swBoundingBox"] = bounding_box
+        if definition.id == assembly.root_definition_id:
+            attributes["swAssemblyFeatureEffectedComponents"] = ""
+        model = ET.SubElement(model_list, "swModel", attributes)
+        owned = sorted(
+            children.get(definition.id, ()),
+            key=lambda item: (item[1].order, item[0]),
+        )
+        for index, instance in owned:
+            target = definition_by_id.get(instance.definition_id)
+            if target is None:
+                continue
+            reference_number = _reference_number(instance, index + 1)
+            ET.SubElement(
+                model,
+                "swReference",
+                {
+                    "id": str(occurrence_ids[instance.id]),
+                    "swName": _instance_base_name(instance, reference_number),
+                    "swReferenceNumber": str(reference_number),
+                    "swComponentReference": str(
+                        instance.attributes.get("component_reference", "")
+                    ),
+                    "swID": str(_native_feature_id(instance, index)),
+                    "swIsVirtualComponent": _yes_text(
+                        bool(instance.attributes.get("virtual", False))
+                    ),
+                    "swConfigurationId": str(
+                        _configuration_integer(instance.configuration_id)
+                    ),
+                    "swConfigurationName": instance.configuration_name
+                    or target.configuration_name
+                    or "Default",
+                    "swDisplayMode": str(
+                        _integer_attribute(instance, "display_mode", 6)
+                    ),
+                    "swHlrDisplayQuality": str(
+                        _integer_attribute(instance, "display_quality", 1)
+                    ),
+                    "swSuppressed": _yes_text(instance.suppressed),
+                    "swHidden": _yes_text(instance.hidden),
+                    "swEdgesInShadedMode": _yes_text(
+                        bool(instance.attributes.get("edges_in_shaded_mode", False))
+                    ),
+                    "swFlexible": _yes_text(instance.flexible),
+                    "swExcludeFromBOM": _yes_text(instance.exclude_from_bom),
+                    "swZone": _yes_text(bool(instance.attributes.get("zone", False))),
+                    "swModelRef": str(definition_ids[target.id]),
+                    "swTransform": " ".join(
+                        format(value, ".17g")
+                        for value in _native_matrix(instance.transform)
+                    ),
+                    "swTransformStamp": str(
+                        _integer_attribute(instance, "transform_stamp", 0)
+                    ),
+                },
+            )
+    configuration_list = ET.SubElement(
+        root,
+        "swConfigurationList",
+        {"swObjCount": str(len(selected_configurations))},
+    )
+    for configuration in selected_configurations:
+        ET.SubElement(
+            configuration_list,
+            "swConfiguration",
+            {
+                "id": str(configuration_ids[configuration.id]),
+                "swName": configuration.name,
+                "swID": str(
+                    _configuration_integer(
+                        configuration.attributes.get("native_configuration_id", 0)
+                    )
+                ),
+                "swReference": definition_by_id[assembly.root_definition_id].name,
+                "swMostRecentConfiguration": _yes_text(configuration.active),
+                "swConfigurationNeedsUpdate": "NO",
+                "swModelRef": str(definition_ids[assembly.root_definition_id]),
+            },
+        )
+    ET.SubElement(root, "swExtFeatureList", {"swObjCount": "0"})
+    mate_streams, mates_complete, unsupported = _encode_mate_streams(
+        assembly,
+        definition_by_id,
+        definition_ids,
+        occurrence_ids,
+    )
+    component_tree = ET.tostring(
+        root,
+        encoding="utf-8",
+        xml_declaration=True,
+        short_empty_elements=True,
+    )
+    structure_complete = all(
+        _definition_supported(definition) for definition in definitions
+    ) and all(
+        instance.definition_id in definition_by_id
+        and instance.owner_definition_id in definition_by_id
+        for instance in instances
+    )
+    return NativeAssemblyEncoding(
+        component_tree=component_tree,
+        mate_streams=MappingProxyType(mate_streams),
+        definition_ids=MappingProxyType(definition_ids),
+        occurrence_ids=MappingProxyType(occurrence_ids),
+        structure_complete=structure_complete,
+        mates_complete=mates_complete,
+        unsupported_mate_ids=unsupported,
+    )
+
+
+def _definition_supported(definition: ComponentDefinition) -> bool:
+    return str(definition.kind) in {
+        ComponentKind.PART.value,
+        ComponentKind.ASSEMBLY.value,
+    }
+
+
+def _definition_document_type(definition: ComponentDefinition) -> str:
+    return (
+        "ASSEMBLY" if str(definition.kind) == ComponentKind.ASSEMBLY.value else "PART"
+    )
+
+
+def _definition_source_path(
+    definition: ComponentDefinition,
+    root: bool,
+    model_name: str,
+    bundle_names: Mapping[str, str],
+) -> str:
+    suffix = (
+        ".SLDASM"
+        if root or _definition_document_type(definition) == "ASSEMBLY"
+        else ".SLDPRT"
+    )
+    if root:
+        stem = PureWindowsPath(model_name).stem or definition.name or "Assembly"
+        return f"{_file_stem(stem)}{suffix}"
+    bundled = bundle_names.get(definition.document_id) or bundle_names.get(
+        definition.id
+    )
+    if isinstance(bundled, str) and bundled:
+        return bundled
+    for candidate in (
+        definition.attributes.get("native_source_path"),
+        definition.source_path,
+    ):
+        if not isinstance(candidate, str) or not candidate:
+            continue
+        if PureWindowsPath(candidate).suffix.casefold() == suffix.casefold():
+            return candidate
+    return f"{_file_stem(definition.name or definition.id)}{suffix}"
+
+
+def _file_stem(value: str) -> str:
+    result = "".join(
+        "_" if character in '<>:"/\\|?*' else character for character in value
+    ).strip(" .")
+    return result or "Component"
+
+
+def _definition_file_key(
+    definition: ComponentDefinition, source_path: str
+) -> tuple[str, str | int, str]:
+    native_id = _positive_integer(definition.attributes.get("native_file_id"))
+    if native_id is not None:
+        return "native", native_id, _definition_document_type(definition)
+    return (
+        "path",
+        source_path.casefold(),
+        _definition_document_type(definition),
+    )
+
+
+def _preferred_native_id(value: str, prefix: str, attribute: Any) -> int | None:
+    native = _positive_integer(attribute)
+    if native is not None:
+        return native
+    if not value.startswith(prefix):
+        return None
+    return _positive_integer(value.removeprefix(prefix).split(":", 1)[0])
+
+
+def _positive_integer(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        return None
+    return result if 0 < result <= 0x7FFFFFFF else None
+
+
+def _allocate_object_ids(
+    preferred: Mapping[tuple[str, str], int | None],
+) -> dict[tuple[str, str], int]:
+    counts: dict[int, int] = {}
+    for value in preferred.values():
+        if value is not None:
+            counts[value] = counts.get(value, 0) + 1
+    reserved = {value for value, count in counts.items() if count == 1}
+    result: dict[tuple[str, str], int] = {}
+    used: set[int] = set()
+    candidate = 1
+    for key, value in preferred.items():
+        if value in reserved:
+            result[key] = value
+            used.add(value)
+            continue
+        while candidate in used or candidate in reserved:
+            candidate += 1
+        result[key] = candidate
+        used.add(candidate)
+        candidate += 1
+    return result
+
+
+def _integer_attribute(
+    item: ComponentDefinition | ComponentInstance,
+    name: str,
+    default: int,
+) -> int:
+    value = item.attributes.get(name, default)
+    if isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _configuration_integer(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _native_bounding_box(definition: ComponentDefinition) -> str:
+    box = definition.bounding_box
+    if box is None:
+        return ""
+    values = (
+        box.minimum.x,
+        box.minimum.y,
+        box.minimum.z,
+        box.maximum.x,
+        box.maximum.y,
+        box.maximum.z,
+    )
+    if not all(math.isfinite(value) for value in values):
+        raise SldprtFormatError("component bounding box contains a non-finite value")
+    return " ".join(format(value / 1000.0, ".17g") for value in values)
+
+
+def _reference_number(instance: ComponentInstance, fallback: int) -> int:
+    value = _positive_integer(instance.reference_number)
+    if value is not None:
+        return value
+    match = re.search(r"-(\d+)$", instance.name)
+    if match is not None:
+        value = _positive_integer(match.group(1))
+        if value is not None:
+            return value
+    native = _positive_integer(instance.attributes.get("native_reference_number"))
+    return native or fallback
+
+
+def _instance_base_name(instance: ComponentInstance, reference_number: int) -> str:
+    suffix = f"-{reference_number}"
+    return (
+        instance.name[: -len(suffix)]
+        if instance.name.endswith(suffix)
+        else instance.name
+    )
+
+
+def _native_feature_id(instance: ComponentInstance, index: int) -> int:
+    value = _positive_integer(instance.attributes.get("native_feature_id"))
+    if value is not None:
+        return value
+    return 24 if instance.fixed else 25 + index
+
+
+def _native_matrix(matrix: Matrix4) -> tuple[float, ...]:
+    values = matrix.values
+    if len(values) != 16 or not all(math.isfinite(value) for value in values):
+        raise SldprtFormatError("component transform contains a non-finite value")
+    return (
+        values[0],
+        values[4],
+        values[8],
+        values[12],
+        values[1],
+        values[5],
+        values[9],
+        values[13],
+        values[2],
+        values[6],
+        values[10],
+        values[14],
+        values[3] / 1000.0,
+        values[7] / 1000.0,
+        values[11] / 1000.0,
+        values[15],
+    )
+
+
+def _yes_text(value: bool) -> str:
+    return "YES" if value else "NO"
+
+
+def _encode_mate_streams(
+    assembly: AssemblyData,
+    definitions: Mapping[str, ComponentDefinition],
+    definition_ids: Mapping[str, int],
+    occurrence_ids: Mapping[str, int],
+) -> tuple[dict[str, bytes], bool, tuple[str, ...]]:
+    if not assembly.mates and not assembly.mate_entities and not assembly.mate_groups:
+        return {}, True, ()
+    unsupported = tuple(mate.id for mate in assembly.mates)
+    if assembly.mate_groups:
+        return {}, False, unsupported
+    if any(
+        mate.owner_definition_id != assembly.root_definition_id
+        for mate in assembly.mates
+    ):
+        return {}, False, unsupported
+    entities = {entity.id: entity for entity in assembly.mate_entities}
+    referenced = {entity_id for mate in assembly.mates for entity_id in mate.entity_ids}
+    if referenced != set(entities):
+        return {}, False, unsupported
+    ordered = tuple(
+        item[1]
+        for item in sorted(
+            enumerate(assembly.mates),
+            key=lambda item: (item[1].order, item[0]),
+        )
+    )
+    records: list[bytes] = []
+    for mate in ordered:
+        record = _encode_mate_record(
+            mate,
+            entities,
+            assembly,
+            definitions,
+        )
+        if record is None:
+            return {}, False, unsupported
+        records.append(record)
+    if len(records) > 0xFFFF:
+        return {}, False, unsupported
+    native_id = (definition_ids[assembly.root_definition_id] | 0x10000) & 0xFFFFFFFF
+    stream = struct.pack("<IH", native_id, len(records)) + b"".join(records)
+    try:
+        decoded = decode_mate_list(
+            stream,
+            "Contents/Config-0-MatesList",
+            definition_ids[assembly.root_definition_id],
+        )
+    except SldprtFormatError:
+        return {}, False, unsupported
+    if len(decoded.mates) != len(ordered):
+        return {}, False, unsupported
+    for source, target in zip(ordered, decoded.mates):
+        if not _encoded_mate_matches(source, target, entities, assembly, definitions):
+            return {}, False, unsupported
+    return {"Contents/Config-0-MatesList": stream}, True, ()
+
+
+def _encode_mate_record(
+    mate: MateConstraint,
+    entities: Mapping[str, MateEntity],
+    assembly: AssemblyData,
+    definitions: Mapping[str, ComponentDefinition],
+) -> bytes | None:
+    if mate.suppressed or not mate.driving or mate.parameter_ids:
+        return None
+    native_kind, class_name = _native_mate_class(mate)
+    if not class_name:
+        return None
+    serialized_name = _serialized_string(mate.name)
+    if serialized_name is None:
+        return None
+    entity_values: list[str] = []
+    for entity_id in mate.entity_ids:
+        entity = entities.get(entity_id)
+        if entity is None or entity.owner_definition_id != mate.owner_definition_id:
+            return None
+        values = _mate_entity_strings(entity, assembly, definitions)
+        if values is None:
+            return None
+        entity_values.extend(values)
+    alignment_code = _mate_alignment_code(mate.alignment)
+    if alignment_code is None:
+        return None
+    dimensions = _mate_dimension_values(mate, native_kind)
+    if dimensions is None:
+        return None
+    encoded_class = class_name.encode("ascii")
+    prefix = CLASS_MARKER + struct.pack("<H", len(encoded_class)) + encoded_class
+    object_prefix = struct.pack("<H", 0x8001)
+    record = bytearray(prefix + object_prefix + serialized_name)
+    body = bytearray(168)
+    struct.pack_into("<H", body, 159, alignment_code)
+    struct.pack_into("<I", body, 164, len(mate.entity_ids))
+    record.extend(body)
+    for value in entity_values:
+        serialized = _serialized_string(value)
+        if serialized is None:
+            return None
+        record.extend(serialized)
+    for name, value in dimensions:
+        serialized = _serialized_string(name)
+        if serialized is None:
+            return None
+        record.extend(serialized)
+        record.extend(DIMENSION_SCALAR_HEADERS[0])
+        record.extend(struct.pack("<d", value))
+    return bytes(record)
+
+
+def _native_mate_class(mate: MateConstraint) -> tuple[str, str]:
+    neutral = str(mate.kind)
+    requested = mate.attributes.get("native_kind")
+    candidates = tuple(
+        record
+        for record in NATIVE_MATE_TYPE_RECORDS
+        if record.class_names and (record.neutral_kind or record.kind) == neutral
+    )
+    if isinstance(requested, str):
+        selected = next(
+            (record for record in candidates if record.kind == requested), None
+        )
+        if selected is not None:
+            class_name = mate.attributes.get("native_class_name")
+            if isinstance(class_name, str) and class_name in selected.class_names:
+                return selected.kind, class_name
+            return selected.kind, selected.class_names[0]
+    if not candidates:
+        return "", ""
+    return candidates[0].kind, candidates[0].class_names[0]
+
+
+def _mate_entity_strings(
+    entity: MateEntity,
+    assembly: AssemblyData,
+    definitions: Mapping[str, ComponentDefinition],
+) -> tuple[str, ...] | None:
+    if entity.selection_id or entity.frame is not None or entity.radius is not None:
+        return None
+    persistent = entity.attributes.get("persistent_references")
+    if isinstance(persistent, tuple) and all(
+        isinstance(value, str) for value in persistent
+    ):
+        references = persistent
+    elif entity.source_entity_id:
+        references = (entity.source_entity_id,)
+    else:
+        return None
+    if not references or references[-1] != entity.source_entity_id:
+        return None
+    component_path = _native_component_path(
+        entity.instance_path,
+        assembly,
+        definitions,
+    )
+    if component_path is None:
+        return None
+    values: list[str] = []
+    if component_path:
+        if all(value.casefold().startswith("mo") for value in references):
+            values.extend(references)
+            values.append(component_path)
+        elif all("@" in value and "^" not in value for value in references):
+            values.append(component_path)
+            values.extend(references)
+        else:
+            return None
+    else:
+        if not all(
+            value.casefold().startswith("mo") or ("^" in value and "@" in value)
+            for value in references
+        ):
+            return None
+        values.extend(references)
+    source_path = entity.attributes.get("source_path")
+    if isinstance(source_path, str) and source_path:
+        values.append(source_path)
+    return tuple(values)
+
+
+def _native_component_path(
+    path: Sequence[str],
+    assembly: AssemblyData,
+    definitions: Mapping[str, ComponentDefinition],
+) -> str | None:
+    if not path:
+        return ""
+    instances = {instance.id: instance for instance in assembly.instances}
+    result: list[str] = []
+    owner_id = assembly.root_definition_id
+    for index, instance_id in enumerate(path):
+        instance = instances.get(instance_id)
+        owner = definitions.get(owner_id)
+        if (
+            instance is None
+            or owner is None
+            or instance.owner_definition_id != owner_id
+        ):
+            return None
+        reference_number = _reference_number(instance, index + 1)
+        result.append(
+            f"{_instance_base_name(instance, reference_number)}-{reference_number}@{owner.name}"
+        )
+        owner_id = instance.definition_id
+    return "/".join(result)
+
+
+def _mate_alignment_code(value: MateAlignment | str) -> int | None:
+    kind = str(value)
+    return next(
+        (int(record.code) for record in NATIVE_MATE_ALIGNMENTS if record.kind == kind),
+        None,
+    )
+
+
+def _mate_dimension_values(
+    mate: MateConstraint, native_kind: str
+) -> tuple[tuple[str, float], ...] | None:
+    semantic = MATE_VALUE_SEMANTICS.get(native_kind)
+    if semantic is None:
+        return () if mate.value is None else None
+    value = mate.value
+    if (
+        value is None
+        or isinstance(value.value, bool)
+        or not isinstance(value.value, (int, float))
+    ):
+        return None
+    number = float(value.value)
+    if not math.isfinite(number):
+        return None
+    dimensions = mate.attributes.get("native_dimensions")
+    names = (
+        tuple(
+            item.get("name", "")
+            for item in dimensions
+            if isinstance(item, Mapping) and isinstance(item.get("name", ""), str)
+        )
+        if isinstance(dimensions, tuple)
+        else ()
+    )
+    first_name = names[0] if names and names[0] else f"D1@{mate.name}"
+    if semantic == "length" and value.kind is ValueKind.LENGTH:
+        factor = {"": 1.0, "mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4}.get(
+            value.unit.casefold()
+        )
+        return ((first_name, number * factor / 1000.0),) if factor is not None else None
+    if semantic == "angle" and value.kind is ValueKind.ANGLE:
+        factor = {"": 1.0, "rad": 1.0, "deg": math.pi / 180.0}.get(
+            value.unit.casefold()
+        )
+        return ((first_name, number * factor),) if factor is not None else None
+    if semantic == "ratio" and value.kind is ValueKind.NUMBER:
+        denominator = 1.0
+        if isinstance(dimensions, tuple) and len(dimensions) >= 2:
+            candidate = dimensions[1]
+            if isinstance(candidate, Mapping) and isinstance(
+                candidate.get("value"), (int, float)
+            ):
+                denominator = float(candidate["value"])
+        if not math.isfinite(denominator) or denominator == 0.0:
+            return None
+        second_name = names[1] if len(names) > 1 and names[1] else f"D2@{mate.name}"
+        return ((first_name, number * denominator), (second_name, denominator))
+    return None
+
+
+def _serialized_string(value: str) -> bytes | None:
+    encoded = value.encode("utf-16le")
+    units = len(encoded) // 2
+    if units > 0xFE:
+        return None
+    return SERIALIZED_STRING_MARKER + bytes((units,)) + encoded
+
+
+def _encoded_mate_matches(
+    source: MateConstraint,
+    target: NativeMate,
+    entities: Mapping[str, MateEntity],
+    assembly: AssemblyData,
+    definitions: Mapping[str, ComponentDefinition],
+) -> bool:
+    native_kind, _ = _native_mate_class(source)
+    if target.name != source.name or target.kind != native_kind:
+        return False
+    expected_entities: list[tuple[str, str]] = []
+    for entity_id in source.entity_ids:
+        entity = entities[entity_id]
+        component_path = _native_component_path(
+            entity.instance_path,
+            assembly,
+            definitions,
+        )
+        expected_entities.append((component_path or "", entity.source_entity_id))
+    actual_entities = [
+        (
+            entity.component_path,
+            entity.persistent_references[-1] if entity.persistent_references else "",
+        )
+        for entity in target.entities
+    ]
+    if actual_entities != expected_entities:
+        return False
+    expected_alignment = _mate_alignment_code(source.alignment)
+    if len(source.entity_ids) == 2 and target.alignment_code != expected_alignment:
+        return False
+    dimensions = _mate_dimension_values(source, native_kind)
+    if dimensions is None or len(dimensions) != len(target.dimensions):
+        return False
+    return all(
+        expected_name == actual.name
+        and math.isclose(expected_value, actual.value, rel_tol=1e-12, abs_tol=1e-12)
+        for (expected_name, expected_value), actual in zip(
+            dimensions, target.dimensions
+        )
+    )
 
 
 def decode_native_assembly(

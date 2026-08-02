@@ -16,6 +16,7 @@ from convert.adapters.solidworks.adapter import (
     _final_body_feature_id,
     _feature_kind,
     _is_geometry_brep_payload,
+    _sketch,
     _sketch_constraints,
     _solid_body_feature,
     _timeline,
@@ -23,12 +24,15 @@ from convert.adapters.solidworks.adapter import (
 from convert.adapters.solidworks.native import (
     NativeConstraint,
     NativeFeature,
+    NativeMarker,
     NativeModel,
     NativeOperation,
     NativePlane,
     NativeSketch,
     _decode_planes,
     _parse_keywords,
+    _constraints,
+    _profiles,
     decode_native_model,
 )
 from interchange import (
@@ -951,6 +955,59 @@ def test_adapter_resolves_line_endpoints_by_native_marker_index() -> None:
         assert (geometry.end.x, geometry.end.y) == pytest.approx(end)
 
 
+def test_adapter_decodes_linked_rectangle_records_from_newer_native_streams() -> None:
+    values = (
+        (100, 178, 0, (-20.0, -10.0), None, "circle"),
+        (278, 162, 0, (20.0, 10.0), None, "circle"),
+        (440, 162, 0, (-20.0, 10.0), None, "circle"),
+        (602, 166, 0, (20.0, -10.0), None, "circle"),
+        (768, 92, 0, None, (0, 1), "native"),
+        (860, 92, 1, None, (0, 3), "native"),
+        (952, 92, 1, None, (0, 2), "native"),
+        (1044, 92, 1, None, (2, 1), "native"),
+        (1136, 208, 1, None, (3, 1), "native"),
+    )
+    markers = tuple(
+        NativeMarker(
+            offset,
+            length,
+            "ffff1f0003",
+            native_kind,
+            "05000100",
+            1,
+            None,
+            None,
+            None,
+            coordinates,
+            endpoints,
+            False,
+            semantic,
+        )
+        for offset, length, native_kind, coordinates, endpoints, semantic in values
+    )
+    profiles, used, dimensions = _profiles(list(markers), ())
+    assert dimensions == ()
+    assert used == {marker.offset for marker in markers}
+    assert len(profiles) == 1
+    assert profiles[0].coordinates == (-20.0, -10.0, 20.0, 10.0)
+    assert profiles[0].marker_offsets[:4] == (860, 1136, 1044, 952)
+    feature = NativeFeature(26, "Sketch1", "Sketch", "Sketch", 0, 1344, {}, ())
+    constraints = _constraints(feature, markers, profiles)
+    sketch = NativeSketch(26, "Sketch1", 2, 0, 1344, markers, profiles, (), constraints)
+    decoded = _sketch(sketch, set())
+    assert len(decoded.entities) == 4
+    assert all(isinstance(entity.geometry, LineGeometry) for entity in decoded.entities)
+    assert len(decoded.constraints) == 8
+    assert {str(constraint.kind) for constraint in decoded.constraints} == {
+        "coincident",
+        "horizontal",
+        "vertical",
+    }
+    assert decoded.closed_profile_entity_ids == (
+        tuple(entity.id for entity in decoded.entities),
+    )
+
+
 def test_adapter_preserves_unknown_locus_before_resolving_native_indices() -> None:
     document = read_sldprt(CORPUS / "Engine_Block.SLDPRT", include_brep=False)
     sketch = document.sketch("sldprt:sketch:200")
@@ -1027,7 +1084,9 @@ def test_entire_local_solidworks_corpus_decodes() -> None:
     parts = sorted(
         path
         for path in examples.rglob("*")
-        if path.is_file() and path.suffix.lower() == ".sldprt"
+        if path.is_file()
+        and path.suffix.lower() == ".sldprt"
+        and not path.name.startswith("~$")
     )
     documents = [read_sldprt(path) for path in parts]
     assert len(parts) == 54

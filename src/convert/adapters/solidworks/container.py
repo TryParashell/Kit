@@ -6,14 +6,21 @@ import struct
 from typing import Iterable, Mapping
 import zlib
 
-from .format import CONTAINER_VERSIONS
+from .format import CONTENT_TYPES_STREAM, CONTAINER_VERSIONS, RELATIONSHIPS_STREAM
 
 
 _LOCAL_SIGNATURE_PREFIX = bytes.fromhex("140006000800")
 _LOCAL_SIGNATURE_SIZE = 10
+_LOCAL_RECORD_SIGNATURE = bytes.fromhex("a1909b1f")
+_CENTRAL_RECORD_SIGNATURE = bytes.fromhex("a576970f")
+_END_RECORD_SIGNATURE = bytes.fromhex("7a004720")
+_ARCHIVE_OFFSET = 8
+_DOS_TIMESTAMP = 0x00210000
 _MAX_STREAM_COUNT = 100_000
+_MAX_DIRECTORY_STREAM_COUNT = 0xFFFF
 _MAX_NAME_BYTES = 16_384
 _MAX_UNCOMPRESSED_STREAM = 1 << 31
+_MAX_ARCHIVE_OFFSET = 0xFFFFFFFF
 
 
 class SldprtFormatError(ValueError):
@@ -95,15 +102,48 @@ def build_sldprt(
     names = [name for name, _ in items]
     if len(names) != len(set(names)):
         raise ValueError("SLDPRT stream names must be unique")
+    if len(items) > _MAX_DIRECTORY_STREAM_COUNT:
+        raise ValueError("SLDPRT stream count must fit in the native directory")
     output = bytearray(struct.pack(">II", file_id, format_version))
-    encoded: list[tuple[int, str, bytes]] = []
-    for index, (name, payload) in enumerate(items):
-        type_id = 0x20 + index
+    encoded: list[tuple[int, str, int, int, int, int]] = []
+    for name, payload in items:
+        type_id = _DOS_TIMESTAMP
         data = bytes(payload)
-        output.extend(_encode_record(name, data, type_id))
-        encoded.append((type_id, name, data))
-    for type_id, name, data in encoded:
-        output.extend(_encode_directory_entry(name, len(data), type_id))
+        local_offset = len(output) - _ARCHIVE_OFFSET
+        record, crc32_value, compressed_size = _encode_record(name, data, type_id)
+        output.extend(_LOCAL_RECORD_SIGNATURE)
+        output.extend(record)
+        encoded.append(
+            (
+                type_id,
+                name,
+                crc32_value,
+                compressed_size,
+                len(data),
+                local_offset,
+            )
+        )
+    central_offset = len(output) - _ARCHIVE_OFFSET
+    if central_offset > _MAX_ARCHIVE_OFFSET:
+        raise ValueError("SLDPRT local records exceed the native offset range")
+    for record in encoded:
+        output.extend(_encode_directory_entry(*record))
+    central_size = len(output) - _ARCHIVE_OFFSET - central_offset
+    if central_size > _MAX_ARCHIVE_OFFSET:
+        raise ValueError("SLDPRT directory exceeds the native size range")
+    output.extend(_END_RECORD_SIGNATURE)
+    output.extend(
+        struct.pack(
+            "<HHHHIIH",
+            0,
+            0,
+            len(encoded),
+            len(encoded),
+            central_size,
+            central_offset,
+            0,
+        )
+    )
     return bytes(output)
 
 
@@ -205,36 +245,52 @@ def _encoded_name(name: str) -> bytes:
     return _nibble_swap(value)
 
 
-def _encode_record(name: str, data: bytes, type_id: int) -> bytes:
-    compressor = zlib.compressobj(level=6, wbits=-15)
+def _encode_record(name: str, data: bytes, type_id: int) -> tuple[bytes, int, int]:
+    if len(data) > _MAX_UNCOMPRESSED_STREAM:
+        raise ValueError("SLDPRT stream is too large")
+    compressor = zlib.compressobj(level=1, wbits=-15)
     compressed = compressor.compress(data) + compressor.flush()
     encoded_name = _encoded_name(name)
-    return b"".join(
+    crc32_value = zlib.crc32(data) & 0xFFFFFFFF
+    record = b"".join(
         (
             _LOCAL_SIGNATURE_PREFIX,
             struct.pack("<I", type_id),
             struct.pack(
-                "<IIII",
-                zlib.crc32(data) & 0xFFFFFFFF,
-                len(compressed),
-                len(data),
-                len(encoded_name),
+                "<IIIHH", crc32_value, len(compressed), len(data), len(encoded_name), 0
             ),
             encoded_name,
             compressed,
         )
     )
+    return record, crc32_value, len(compressed)
 
 
-def _encode_directory_entry(name: str, size: int, type_id: int) -> bytes:
+def _encode_directory_entry(
+    type_id: int,
+    name: str,
+    crc32_value: int,
+    compressed_size: int,
+    size: int,
+    local_offset: int,
+) -> bytes:
     encoded_name = _encoded_name(name)
+    package_section = int(
+        name == CONTENT_TYPES_STREAM
+        or name == RELATIONSHIPS_STREAM
+        or name.startswith("docProps/")
+        or name.startswith("swXmlContents/")
+    )
     return b"".join(
         (
+            _CENTRAL_RECORD_SIGNATURE,
+            struct.pack("<H", 0),
             _LOCAL_SIGNATURE_PREFIX,
             struct.pack("<I", type_id),
-            struct.pack("<IIII", 0, size, 0, len(encoded_name)),
-            bytes(14),
+            struct.pack(
+                "<IIIHH", crc32_value, compressed_size, size, len(encoded_name), 0
+            ),
+            struct.pack("<HHHII", 0, 0, package_section, 0, local_offset),
             encoded_name,
-            bytes.fromhex("e54b575b0000"),
         )
     )

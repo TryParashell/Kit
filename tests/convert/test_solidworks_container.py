@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import struct
+
+from convert.adapters.solidworks import SldprtArchive, build_sldprt
+
+
+_MARKER = bytes.fromhex("140006000800")
+_LOCAL_SIGNATURE = bytes.fromhex("a1909b1f")
+_CENTRAL_SIGNATURE = bytes.fromhex("a576970f")
+_END_SIGNATURE = bytes.fromhex("7a004720")
+
+
+def _decoded_name(value: bytes) -> str:
+    return bytes((byte >> 4) | ((byte & 0x0F) << 4) for byte in value).decode("utf-8")
+
+
+def test_generated_container_has_complete_native_directory() -> None:
+    streams = (
+        ("Contents/Config-0-Partition", b"PS\0\0native body"),
+        ("swXmlContents/KeyWords", b"<?xml version='1.0'?><KeyWords/>"),
+        ("Contents/OleItems", b""),
+    )
+    blob = build_sldprt(streams, file_id=0x715BE98F)
+    archive = SldprtArchive.from_bytes(blob)
+    assert archive.streams == dict(streams)
+    end_offset = len(blob) - 22
+    (
+        disk_number,
+        directory_disk,
+        disk_entries,
+        total_entries,
+        directory_size,
+        directory_offset,
+        comment_size,
+    ) = struct.unpack_from("<HHHHIIH", blob, end_offset + 4)
+    assert blob[end_offset : end_offset + 4] == _END_SIGNATURE
+    assert disk_number == 0
+    assert directory_disk == 0
+    assert disk_entries == len(streams)
+    assert total_entries == len(streams)
+    assert comment_size == 0
+    assert 8 + directory_offset + directory_size == end_offset
+    cursor = 8 + directory_offset
+    timestamps = set()
+    for expected_name, expected_data in streams:
+        assert blob[cursor : cursor + 4] == _CENTRAL_SIGNATURE
+        assert blob[cursor + 6 : cursor + 12] == _MARKER
+        type_id, crc32_value, compressed_size, size = struct.unpack_from(
+            "<IIII", blob, cursor + 12
+        )
+        timestamps.add(type_id)
+        name_size, extra_size = struct.unpack_from("<HH", blob, cursor + 28)
+        (
+            entry_comment_size,
+            entry_disk,
+            internal_attributes,
+            external_attributes,
+            local_offset,
+        ) = struct.unpack_from("<HHHII", blob, cursor + 32)
+        encoded_name = blob[cursor + 46 : cursor + 46 + name_size]
+        assert _decoded_name(encoded_name) == expected_name
+        assert extra_size == 0
+        assert entry_comment_size == 0
+        assert entry_disk == 0
+        assert internal_attributes == int(expected_name.startswith("swXmlContents/"))
+        assert external_attributes == 0
+        local_cursor = 8 + local_offset
+        assert blob[local_cursor : local_cursor + 4] == _LOCAL_SIGNATURE
+        assert blob[local_cursor + 4 : local_cursor + 10] == _MARKER
+        assert struct.unpack_from("<I", blob, local_cursor + 10)[0] == type_id
+        assert struct.unpack_from("<I", blob, local_cursor + 14)[0] == crc32_value
+        assert struct.unpack_from("<I", blob, local_cursor + 18)[0] == compressed_size
+        assert struct.unpack_from("<I", blob, local_cursor + 22)[0] == size
+        assert struct.unpack_from("<H", blob, local_cursor + 26)[0] == name_size
+        assert struct.unpack_from("<H", blob, local_cursor + 28)[0] == 0
+        assert (
+            _decoded_name(blob[local_cursor + 30 : local_cursor + 30 + name_size])
+            == expected_name
+        )
+        assert archive.require(expected_name) == expected_data
+        cursor += 46 + name_size
+    assert cursor == end_offset
+    assert timestamps == {0x00210000}
+
+
+def test_generated_container_is_deterministic() -> None:
+    streams = {
+        "Contents/SolidWorks": b"<swSolidWorks/>",
+        "Contents/Config-0-Partition": b"PS\0\0body",
+    }
+    assert build_sldprt(streams) == build_sldprt(streams)

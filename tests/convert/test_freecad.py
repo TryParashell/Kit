@@ -1414,7 +1414,7 @@ def test_neutral_sections_are_exposed_by_native_freecad_graph() -> None:
             for item in root.findall("./Objects/Object")
         }
         assert declarations["XY"] == "App::Plane"
-        assert declarations["Body"] == "App::Part"
+        assert declarations["Body"] == "App::DocumentObjectGroup"
         assert declarations["Revolve_fallback"] == "Part::Feature"
         formula = root.find(
             "./ObjectData/Object[@name='Parameters']/Properties/"
@@ -1460,6 +1460,50 @@ def test_neutral_sections_are_exposed_by_native_freecad_graph() -> None:
     assert native.bodies[0].material_id == "material:steel"
     assert native.configurations[0].id == "config:default"
     assert any(item.id == selection.id for item in native.selections)
+
+
+def test_neutral_feature_scope_ignores_native_and_reference_carriers() -> None:
+    source = neutral_document()
+    system = FeatureStep("system:history", "History carrier", FeatureKind.NATIVE, 0)
+    reference = FeatureStep(
+        "reference:sketch",
+        "Sketch feature carrier",
+        FeatureKind.REFERENCE,
+        1,
+        sketch_id=source.sketches[0].id,
+    )
+    extrusion = replace(
+        source.feature_timeline[0],
+        order=2,
+        input_feature_ids=(reference.id,),
+    )
+    document = replace(
+        source,
+        feature_timeline=(system, reference, extrusion),
+    )
+    document.assert_valid()
+    output = io.BytesIO()
+    FreeCADAdapter().write(document, output)
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+    declarations = {
+        item.get("name", ""): item.get("type", "")
+        for item in root.findall("./Objects/Object")
+    }
+    assert declarations["Boss1"] == "Part::Extrusion"
+    assert declarations["Body"] == "App::DocumentObjectGroup"
+    assert "Boss1_Profile" not in declarations
+    dependencies = root.find("./Objects/ObjectDeps[@Name='Boss1']")
+    assert dependencies is not None
+    assert [item.get("Name") for item in dependencies.findall("./Dep")] == [
+        "Sketch1",
+        "Sketches",
+    ]
+    base = root.find(
+        "./ObjectData/Object[@name='Boss1']/Properties/" "Property[@name='Base']/Link"
+    )
+    assert base is not None
+    assert base.get("value") == "Sketch1"
 
 
 def test_native_quantities_preserve_value_kind_and_internal_units() -> None:
@@ -1963,6 +2007,64 @@ def test_constraint_carrier_fallback_and_sound_midpoint_composition() -> None:
     assert adapter.read(output.getvalue()) == document
 
 
+def test_neutral_point_distance_uses_valid_sketcher_point_slots() -> None:
+    source = neutral_document()
+    first = SketchEntity(
+        "sketch:1:point:1",
+        GeometryKind.POINT,
+        PointGeometry(Vector2(0.0, 0.0)),
+    )
+    second = SketchEntity(
+        "sketch:1:point:2",
+        GeometryKind.POINT,
+        PointGeometry(Vector2(10.0, 0.0)),
+    )
+    distance = SketchConstraint(
+        "distance:points",
+        ConstraintKind.DISTANCE,
+        (ConstraintReference(first.id), ConstraintReference(second.id)),
+        attributes={"Value": 10.0},
+    )
+    sketch = replace(
+        source.sketches[0],
+        entities=(first, second),
+        constraints=(distance,),
+    )
+    document = replace(source, sketches=(sketch,))
+    output = io.BytesIO()
+    FreeCADAdapter().write(document, output)
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+    encoded = root.find(".//Property[@name='Constraints']/ConstraintList/Constrain")
+    assert encoded is not None
+    assert encoded.get("Type") == "6"
+    assert encoded.get("FirstPos") == "1"
+    assert encoded.get("SecondPos") == "1"
+    assert encoded.get("ElementPositions") == "1 1 0"
+
+
+def test_solidworks_opaque_extrusion_is_typed_non_executable_feature() -> None:
+    source = neutral_document()
+    document = replace(
+        source,
+        source=replace(source.source, format_id="solidworks.sldprt"),
+    )
+    output = io.BytesIO()
+    FreeCADAdapter().write(document, output)
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+    declaration = root.find("./Objects/Object[@name='Boss1']")
+    assert declaration is not None
+    assert declaration.get("type") == "Part::Feature"
+    properties = root.find("./ObjectData/Object[@name='Boss1']/Properties")
+    assert properties is not None
+    executable = properties.find("./Property[@name='NativeExecutable']/Bool")
+    reason = properties.find("./Property[@name='NativeExecutionReason']/String")
+    assert executable is not None and executable.get("value") == "false"
+    assert reason is not None and reason.get("value") == "no_native_closed_profile"
+    assert FreeCADAdapter().read(output.getvalue()) == document
+
+
 @pytest.mark.parametrize(
     ("type_id", "type_code", "expected"),
     (
@@ -2405,7 +2507,7 @@ def test_fcstd_contains_editable_native_history(tmp_path) -> None:
         assert types.count("Sketcher::SketchObject") == 5
         assert types.count("Part::Extrusion") == 5
         assert types.count("Part::Cut") == 2
-        assert types.count("Part::MultiFuse") == 3
+        assert types.count("Part::MultiFuse") == 2
         assert types.count("Part::Fillet") == 1
         assert {
             "Parameters",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 import math
 import struct
@@ -28,11 +29,15 @@ from convert.parasolid import (
     _record_start,
     _resolve_trimmed_curve,
     _scan_partition_records,
+    _walk_coedge_ring,
     _write_nurbs_curve,
     _write_nurbs_surface,
     _xmt,
     decode_brep_model,
     decode_partition_stream,
+    encode_blank_partition_stream,
+    encode_brep_model,
+    encode_partition_stream,
 )
 from interchange import (
     CircleCurve,
@@ -43,6 +48,7 @@ from interchange import (
     NurbsSurface,
     Vector3,
 )
+from tests.interchange.test_brep import triangle_brep
 
 
 ROOT = Path(__file__).parents[2]
@@ -144,6 +150,125 @@ def _tables(path: Path) -> _RecordTables:
 
 def _coordinates(value: Vector3) -> tuple[float, float, float]:
     return value.x, value.y, value.z
+
+
+def test_partition_stream_encoder_roundtrips_raw_parasolid() -> None:
+    raw = b"PS\x00\x00partition"
+    encoded = encode_partition_stream(raw)
+    decoded = decode_partition_stream(encoded, PARTITION_STREAM)
+    assert len(encoded) == decoded[0].compressed_size + 36
+    assert struct.unpack_from("<I", encoded)[0] == len(encoded) - 4
+    assert decoded[0].data == raw
+    assert decoded[0].wrapper_offset == 0
+    assert encoded[-8:] == bytes(8)
+
+
+def test_partition_stream_encoder_rejects_non_parasolid_data() -> None:
+    with pytest.raises(ValueError, match="must start"):
+        encode_partition_stream(b"not parasolid")
+
+
+def test_blank_partition_stream_matches_solidworks_2025_protocol() -> None:
+    encoded = encode_blank_partition_stream()
+    decoded = decode_partition_stream(encoded, PARTITION_STREAM)
+    assert encoded == encode_blank_partition_stream()
+    assert len(encoded) == 577
+    assert sha256(encoded).hexdigest() == (
+        "97c3bc3b7aa7219186bc61dfe8e5f9f26a61e5f54853280406d9abd5ece1ad26"
+    )
+    assert tuple(payload.kind for payload in decoded) == ("partition", "deltas")
+    assert tuple(payload.schema for payload in decoded) == (
+        "SCH_3601228_36001_13006",
+        "SCH_3601228_36001_13006",
+    )
+    assert tuple(payload.uncompressed_size for payload in decoded) == (307, 411)
+    assert tuple(payload.compressed_size for payload in decoded) == (236, 269)
+    assert tuple(payload.wrapper_offset for payload in decoded) == (0, 272)
+    assert tuple(payload.sha256 for payload in decoded) == (
+        "8ff1cd4d3369dd45b2f9a3bc9df280b4358d61ec38682dc605bc29c64af77942",
+        "adca164ebfcb9dc73683bc121e0682a0d15346e59bad67fd921febe9046ef7d8",
+    )
+    assert tuple(payload.description for payload in decoded) == (
+        "TRANSMIT FILE (partition) created by modeller version 3601228",
+        "TRANSMIT FILE (deltas) created by modeller version 3601228",
+    )
+    assert all(_parasolid_header(payload.data) is not None for payload in decoded)
+
+
+def test_neutral_binary_header_uses_big_endian_schema_length() -> None:
+    payload = encode_brep_model(triangle_brep())
+    description_length = struct.unpack_from(">H", payload, 4)[0]
+    schema_length_offset = 6 + description_length
+    schema_length = struct.unpack_from(">I", payload, schema_length_offset)[0]
+    header = _parasolid_header(payload)
+    assert header is not None
+    assert schema_length == len(header.schema.encode("ascii"))
+    malformed = payload[:schema_length_offset] + payload[schema_length_offset + 1 :]
+    assert _parasolid_header(malformed) is None
+
+
+def test_neutral_binary_writer_uses_v12_partition_topology() -> None:
+    payload = encode_brep_model(triangle_brep())
+    header = _parasolid_header(payload)
+    assert header is not None
+    assert header.description == (
+        ": TRANSMIT FILE (partition) created by modeller version 1200000"
+    )
+    assert header.schema == "SCH_1200000_12006"
+    body = payload[header.body_offset :]
+    assert body[:8] == bytes.fromhex("0000000000650002")
+    assert body[12:14] == bytes.fromhex("0003")
+    assert body[33:37] == bytes.fromhex("000c0003")
+    assert body[-4:] == bytes.fromhex("00010001")
+    tables = _scan_partition_records(body)
+    assert tables is not None
+    assert tables.v12_partition is True
+    assert len(tables.bridges) == 1
+    assert len(tables.loops) == 1
+    assert len(tables.edge_uses) == 3
+    assert len(tables.coedges) == 6
+    assert len(tables.vertex_uses) == 3
+    assert len(tables.points) == 3
+    assert len(tables.curves) == 3
+    assert len(tables.surfaces) == 1
+    restored = decode_brep_model(payload)
+    assert restored is not None
+    assert restored.validate() == ()
+    assert len(restored.bodies) == 1
+    assert len(restored.regions) == 1
+    assert len(restored.shells) == 1
+    assert len(restored.faces) == 1
+    assert len(restored.edges) == 3
+    assert len(restored.vertices) == 3
+
+
+def test_neutral_binary_writer_uses_v12_body_and_fin_topology() -> None:
+    payload = encode_brep_model(triangle_brep(), partition=False)
+    header = _parasolid_header(payload)
+    assert header is not None
+    assert header.description == (
+        ": TRANSMIT FILE created by modeller version 1200000"
+    )
+    assert header.schema == "SCH_1200000_12006"
+    body = payload[header.body_offset :]
+    assert body[:8] == bytes.fromhex("00000000000c0002")
+    assert body[-4:] == bytes.fromhex("00010001")
+    tables = _scan_partition_records(body)
+    assert tables is not None
+    loop = next(iter(tables.loops.values()))
+    ring = _walk_coedge_ring(tables, loop.attribute, loop.references[1])
+    assert len(ring) == 3
+    for position, attribute in enumerate(ring):
+        fin = tables.coedges[attribute]
+        assert fin.references[2] == ring[position - 1]
+        assert fin.references[3] == ring[(position + 1) % len(ring)]
+    restored = decode_brep_model(payload)
+    assert restored is not None
+    assert restored.validate() == ()
+    assert len(restored.bodies) == 1
+    assert len(restored.faces) == 1
+    assert len(restored.edges) == 3
+    assert len(restored.vertices) == 3
 
 
 @pytest.mark.parametrize(("path", "expected"), COMPACT_FIN_PARTS)

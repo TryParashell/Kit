@@ -48,6 +48,35 @@ _MISSING_PARAMETER = -31_415_800_000_000.0
 _LENGTH_SCALE = 0.001
 _SOLID_SCHEMA = "SCH_SW_33103_11000"
 _SHEET_SCHEMA = "SCH_SW_32001_11000"
+_PARASOLID_V12_SCHEMA = "SCH_1200000_12006"
+_PARASOLID_V12_PARTITION_DESCRIPTION = (
+    b": TRANSMIT FILE (partition) created by modeller version 1200000"
+)
+_PARASOLID_V12_PART_DESCRIPTION = (
+    b": TRANSMIT FILE created by modeller version 1200000"
+)
+_SOLIDWORKS_2025_SCHEMA = "SCH_3601228_36001_13006"
+_BLANK_PARTITION_BODY = bytes.fromhex(
+    "00e7000000000065134343434343434349046d65736803ee00014908706f6c79"
+    "6c696e6503f0000149076c61747469636500de00014343490b6174746465665f"
+    "6c697374004a000143434110696e6465785f6d61705f6f666673657400000001"
+    "01644109696e6465785f6d6170005200014114736368656d615f656d62656464"
+    "696e675f6d61700052000141106d6573685f6f66667365745f6461746100ce00"
+    "015a000200010001000100010001000100010001000100010100010001000000"
+    "03000000030000000000010001000100010001"
+)
+_BLANK_DELTAS_BODY = bytes.fromhex(
+    "00e7000000000003ff00030004000000030004ff000400050001000100010000"
+    "000000000000000000000000000e000000000300010001000100000001006513"
+    "4343434343434349046d65736803ee00014908706f6c796c696e6503f0000149"
+    "076c61747469636500de00014343490b6174746465665f6c697374004a000143"
+    "434110696e6465785f6d61705f6f66667365740000000101644109696e646578"
+    "5f6d6170005200014114736368656d615f656d62656464696e675f6d61700052"
+    "000141106d6573685f6f66667365745f6461746100ce00015a00020001010001"
+    "0100010100010100010100010100010100010100010100010100000101000101"
+    "0000000000000000000000000001010001010001010001000100040005000100"
+    "040001000100000000000000000000000000000000000000000100010001"
+)
 
 
 class ParasolidFormatError(ValueError):
@@ -71,7 +100,7 @@ def is_native_parasolid_payload(data: bytes | bytearray) -> bool:
     return match is not None and len(source) >= match.end() + 8
 
 
-def encode_brep_model(model: BrepModel) -> bytes:
+def encode_brep_model(model: BrepModel, *, partition: bool = True) -> bytes:
     design_body_ids = frozenset(
         body.design_body_id for body in model.bodies if body.design_body_id
     )
@@ -82,9 +111,142 @@ def encode_brep_model(model: BrepModel) -> bytes:
         raise ParasolidWriteError(
             "Parasolid B-rep writing requires identity body transforms"
         )
+    _validate_brep_write_support(model)
     topology = _BrepTopology(model)
-    body, sheet = _encode_brep_body(model, topology)
-    return _parasolid_stream(body, _SHEET_SCHEMA if sheet else _SOLID_SCHEMA)
+    body, _ = _encode_brep_body(model, topology, partition=partition)
+    payload = _parasolid_stream(
+        body,
+        _PARASOLID_V12_SCHEMA,
+        (
+            _PARASOLID_V12_PARTITION_DESCRIPTION
+            if partition
+            else _PARASOLID_V12_PART_DESCRIPTION
+        ),
+        user_field_size=0,
+    )
+    _verify_encoded_brep(model, payload)
+    return payload
+
+
+def encode_partition_stream(data: bytes | bytearray) -> bytes:
+    payload = bytes(data)
+    if not payload.startswith(b"PS\x00\x00"):
+        raise ParasolidWriteError("Parasolid partition data must start with PS\\0\\0")
+    compressed = zlib.compress(payload, level=1)
+    if len(payload) > 0xFFFFFFFF or len(compressed) + 32 > 0xFFFFFFFF:
+        raise ParasolidWriteError("Parasolid partition data is too large")
+    return b"".join(
+        (
+            struct.pack("<I", len(compressed) + 32),
+            _WRAPPER_MAGIC,
+            struct.pack("<II", len(payload), len(compressed)),
+            compressed,
+            bytes(8),
+        )
+    )
+
+
+def encode_blank_partition_stream() -> bytes:
+    payloads = (
+        _parasolid_stream(
+            _BLANK_PARTITION_BODY,
+            _SOLIDWORKS_2025_SCHEMA,
+            b": TRANSMIT FILE (partition) created by modeller version 3601228",
+        ),
+        _parasolid_stream(
+            _BLANK_DELTAS_BODY,
+            _SOLIDWORKS_2025_SCHEMA,
+            b": TRANSMIT FILE (deltas) created by modeller version 3601228",
+        ),
+    )
+    return b"".join(encode_partition_stream(payload) for payload in payloads)
+
+
+def _validate_brep_write_support(model: BrepModel) -> None:
+    if model.pcurves or any(coedge.pcurve_id for coedge in model.coedges):
+        raise ParasolidWriteError("Parasolid B-rep writing does not support pcurves")
+    if model.wires or any(body.wire_ids for body in model.bodies):
+        raise ParasolidWriteError(
+            "Parasolid B-rep writing does not support wire bodies"
+        )
+    if any(body.vertex_ids for body in model.bodies):
+        raise ParasolidWriteError(
+            "Parasolid B-rep writing does not support standalone vertex bodies"
+        )
+    if any(edge.degenerate for edge in model.edges):
+        raise ParasolidWriteError(
+            "Parasolid B-rep writing does not support degenerate edges"
+        )
+    if any(
+        item.tolerance != 0.0
+        for values in (model.vertices, model.edges, model.faces)
+        for item in values
+    ):
+        raise ParasolidWriteError(
+            "Parasolid B-rep writing does not support explicit topology tolerances"
+        )
+    loops = {loop.id: loop for loop in model.loops}
+    for face in model.faces:
+        outer = tuple(loops[loop_id].outer for loop_id in face.loop_ids)
+        if outer != (True, *(False for _ in face.loop_ids[1:])):
+            raise ParasolidWriteError(
+                f"Parasolid B-rep face {face.id} requires its first loop to be the only outer loop"
+            )
+    shells = {shell.id: shell for shell in model.shells}
+    shell_uses = {shell_use.id: shell_use for shell_use in model.shell_uses}
+    for region in model.regions:
+        for shell_use_id in region.shell_use_ids:
+            shell = shells[shell_uses[shell_use_id].shell_id]
+            if shell.closed != region.solid:
+                raise ParasolidWriteError(
+                    f"Parasolid B-rep shell {shell.id} closure contradicts region {region.id}"
+                )
+
+
+def _verify_encoded_brep(model: BrepModel, payload: bytes) -> None:
+    decoded = decode_brep_model(payload)
+    if decoded is None:
+        raise ParasolidWriteError("generated Parasolid B-rep cannot be decoded")
+    errors = decoded.validate()
+    if errors:
+        raise ParasolidWriteError(errors[0])
+    collections = (
+        "curves",
+        "surfaces",
+        "vertices",
+        "edges",
+        "coedges",
+        "loops",
+        "faces",
+        "face_uses",
+        "shells",
+        "shell_uses",
+        "regions",
+        "bodies",
+    )
+    if any(
+        len(getattr(model, name)) != len(getattr(decoded, name)) for name in collections
+    ):
+        raise ParasolidWriteError("generated Parasolid B-rep changes topology counts")
+    if any(
+        tuple(type(item) for item in getattr(model, name))
+        != tuple(type(item) for item in getattr(decoded, name))
+        for name in ("curves", "surfaces")
+    ):
+        raise ParasolidWriteError("generated Parasolid B-rep changes geometry classes")
+    if tuple(region.solid for region in model.regions) != tuple(
+        region.solid for region in decoded.regions
+    ):
+        raise ParasolidWriteError("generated Parasolid B-rep changes region solidity")
+    if tuple(loop.outer for loop in model.loops) != tuple(
+        loop.outer for loop in decoded.loops
+    ):
+        raise ParasolidWriteError("generated Parasolid B-rep changes loop roles")
+    if any(
+        _distance(source.point, restored.point) > 1e-9
+        for source, restored in zip(model.vertices, decoded.vertices)
+    ):
+        raise ParasolidWriteError("generated Parasolid B-rep changes vertex geometry")
 
 
 class _BrepTopology:
@@ -242,143 +404,562 @@ def _require_complete(
         )
 
 
-def _encode_brep_body(model: BrepModel, topology: _BrepTopology) -> tuple[bytes, bool]:
-    next_attr = 2
-    surfaces, next_attr = _allocate(model.surfaces, next_attr)
-    curves, next_attr = _allocate(model.curves, next_attr)
-    points, next_attr = _allocate(model.vertices, next_attr)
-    vertices, next_attr = _allocate(model.vertices, next_attr)
-    edges, next_attr = _allocate(model.edges, next_attr)
-    coedges, next_attr = _allocate(model.coedges, next_attr)
-    loops, next_attr = _allocate(model.loops, next_attr)
-    faces, next_attr = _allocate(model.faces, next_attr)
+def _encode_brep_body(
+    model: BrepModel,
+    topology: _BrepTopology,
+    *,
+    partition: bool = True,
+) -> tuple[bytes, bool]:
+    next_index = 2 if partition else 1
+
+    def allocate(values: Iterable[object]) -> dict[str, int]:
+        nonlocal next_index
+        result: dict[str, int] = {}
+        for value in values:
+            item_id = getattr(value, "id")
+            result[item_id] = next_index
+            next_index += 1
+        return result
+
+    bodies = allocate(model.bodies)
+    regions = allocate(model.regions)
+    shells = allocate(model.shells)
+    surfaces = allocate(model.surfaces)
+    curves = allocate(model.curves)
+    points = allocate(model.vertices)
+    vertices = allocate(model.vertices)
+    edges = allocate(model.edges)
+    coedges = allocate(model.coedges)
+    dummy_edges = tuple(
+        edge for edge in model.edges if len(topology.edge_coedges[edge.id]) == 1
+    )
+    dummy_fins = allocate(dummy_edges)
+    loops = allocate(model.loops)
+    faces = allocate(model.faces)
+    exterior_regions: dict[str, int] = {}
+    exterior_shells: dict[str, int] = {}
+    sheet = False
+    for body in model.bodies:
+        kinds = {topology.regions[region_id].solid for region_id in body.region_ids}
+        if len(kinds) != 1:
+            raise ParasolidWriteError(
+                f"B-rep body {body.id} mixes solid and sheet regions"
+            )
+        if kinds == {False}:
+            sheet = True
+            continue
+        exterior_regions[body.id] = next_index
+        next_index += 1
+        for region_id in body.region_ids:
+            region = topology.regions[region_id]
+            for shell_use_id in region.shell_use_ids:
+                shell_id = topology.shell_uses[shell_use_id].shell_id
+                exterior_shells[shell_id] = next_index
+                next_index += 1
+    if next_index > 32767:
+        raise ParasolidWriteError("Parasolid V12 writer node space is exhausted")
+
+    face_shell: dict[str, str] = {}
+    face_region: dict[str, str] = {}
+    face_body: dict[str, str] = {}
+    shell_region: dict[str, str] = {}
+    shell_body: dict[str, str] = {}
+    for region in model.regions:
+        body_id = topology.region_body[region.id]
+        for shell_use_id in region.shell_use_ids:
+            shell_use = topology.shell_uses[shell_use_id]
+            shell = topology.shells[shell_use.shell_id]
+            shell_region[shell.id] = region.id
+            shell_body[shell.id] = body_id
+            for face_use_id in shell.face_use_ids:
+                face_id = topology.face_uses[face_use_id].face_id
+                face_shell[face_id] = shell.id
+                face_region[face_id] = region.id
+                face_body[face_id] = body_id
+
+    edge_body: dict[str, str] = {}
+    vertex_body: dict[str, str] = {}
+    for edge in model.edges:
+        uses = topology.edge_coedges[edge.id]
+        body_ids = {
+            face_body[
+                topology.loop_face[topology.coedge_loop[coedge_id]]
+            ]
+            for coedge_id in uses
+        }
+        if len(body_ids) != 1:
+            raise ParasolidWriteError(
+                f"Parasolid edge {edge.id} spans multiple bodies"
+            )
+        body_id = next(iter(body_ids))
+        edge_body[edge.id] = body_id
+        for vertex_id in (edge.start_vertex_id, edge.end_vertex_id):
+            prior = vertex_body.setdefault(vertex_id, body_id)
+            if prior != body_id:
+                raise ParasolidWriteError(
+                    f"Parasolid vertex {vertex_id} spans multiple bodies"
+                )
+
+    surface_faces: dict[str, list[str]] = {surface.id: [] for surface in model.surfaces}
+    curve_edges: dict[str, list[str]] = {curve.id: [] for curve in model.curves}
+    for face in model.faces:
+        surface_faces[face.surface_id].append(face.id)
+    for edge in model.edges:
+        curve_edges[edge.curve_id].append(edge.id)
+
+    body_surfaces: dict[str, list[str]] = {body.id: [] for body in model.bodies}
+    body_curves: dict[str, list[str]] = {body.id: [] for body in model.bodies}
+    body_vertices: dict[str, list[str]] = {body.id: [] for body in model.bodies}
+    body_edges: dict[str, list[str]] = {body.id: [] for body in model.bodies}
+    for surface in model.surfaces:
+        owners = {face_body[face_id] for face_id in surface_faces[surface.id]}
+        if len(owners) != 1:
+            raise ParasolidWriteError(
+                f"Parasolid surface {surface.id} spans multiple bodies"
+            )
+        body_surfaces[next(iter(owners))].append(surface.id)
+    for curve in model.curves:
+        owners = {edge_body[edge_id] for edge_id in curve_edges[curve.id]}
+        if len(owners) != 1:
+            raise ParasolidWriteError(
+                f"Parasolid curve {curve.id} spans multiple bodies"
+            )
+        body_curves[next(iter(owners))].append(curve.id)
+    for vertex in model.vertices:
+        body_id = vertex_body.get(vertex.id)
+        if body_id is None:
+            raise ParasolidWriteError(
+                f"Parasolid vertex {vertex.id} has no owning body"
+            )
+        body_vertices[body_id].append(vertex.id)
+    for edge in model.edges:
+        body_edges[edge_body[edge.id]].append(edge.id)
+
+    node_ids: dict[int, int] = {}
+    next_node_id: dict[str, int] = {body.id: 1 for body in model.bodies}
+
+    def node_id(index: int, body_id: str) -> int:
+        value = next_node_id[body_id]
+        next_node_id[body_id] += 1
+        node_ids[index] = value
+        return value
+
+    for region in model.regions:
+        node_id(regions[region.id], topology.region_body[region.id])
+    for body_id, index in exterior_regions.items():
+        node_id(index, body_id)
+    for shell in model.shells:
+        node_id(shells[shell.id], shell_body[shell.id])
+    for shell_id, index in exterior_shells.items():
+        node_id(index, shell_body[shell_id])
+    for surface in model.surfaces:
+        node_id(surfaces[surface.id], face_body[surface_faces[surface.id][0]])
+    for curve in model.curves:
+        node_id(curves[curve.id], edge_body[curve_edges[curve.id][0]])
+    for vertex in model.vertices:
+        node_id(points[vertex.id], vertex_body[vertex.id])
+        node_id(vertices[vertex.id], vertex_body[vertex.id])
+    for edge in model.edges:
+        node_id(edges[edge.id], edge_body[edge.id])
+    for loop in model.loops:
+        node_id(loops[loop.id], face_body[topology.loop_face[loop.id]])
+    for face in model.faces:
+        node_id(faces[face.id], face_body[face.id])
+
+    vertex_fins: dict[str, list[int]] = {vertex.id: [] for vertex in model.vertices}
+    fin_vertex: dict[int, str] = {}
+    fin_other: dict[int, int] = {}
+    for edge in model.edges:
+        uses = topology.edge_coedges[edge.id]
+        if len(uses) == 1:
+            real_index = coedges[uses[0]]
+            dummy_index = dummy_fins[edge.id]
+            fin_other[real_index] = dummy_index
+            fin_other[dummy_index] = real_index
+            real = topology.coedges[uses[0]]
+            real_vertex = (
+                edge.end_vertex_id if real.reversed else edge.start_vertex_id
+            )
+            dummy_vertex = (
+                edge.start_vertex_id if real.reversed else edge.end_vertex_id
+            )
+            fin_vertex[real_index] = real_vertex
+            fin_vertex[dummy_index] = dummy_vertex
+            vertex_fins[real_vertex].append(real_index)
+            vertex_fins[dummy_vertex].append(dummy_index)
+        else:
+            for position, coedge_id in enumerate(uses):
+                index = coedges[coedge_id]
+                other = coedges[uses[(position + 1) % len(uses)]]
+                fin_other[index] = other
+                coedge = topology.coedges[coedge_id]
+                vertex_id = (
+                    edge.end_vertex_id if coedge.reversed else edge.start_vertex_id
+                )
+                fin_vertex[index] = vertex_id
+                vertex_fins[vertex_id].append(index)
+
     output = bytearray()
+    if partition:
+        _v12_node(output, 101, 1)
+        for value in (
+            0,
+            0,
+            bodies[model.bodies[0].id] if model.bodies else 0,
+            0,
+            0,
+            0,
+            0,
+        ):
+            _v12_pointer(output, value)
+        output.append(1)
+        _v12_pointer(output, 0)
+        _i32(output, 0)
+        _i32(output, 0)
+
+    for position, body in enumerate(model.bodies):
+        body_index = bodies[body.id]
+        region_values = [regions[region_id] for region_id in body.region_ids]
+        solid = all(topology.regions[region_id].solid for region_id in body.region_ids)
+        if solid:
+            region_values.insert(0, exterior_regions[body.id])
+        body_shells = [
+            shell_id for shell_id, owner in shell_body.items() if owner == body.id
+        ]
+        highest_node_id = next_node_id[body.id] - 1
+        _v12_node(output, 12, body_index)
+        _i32(output, highest_node_id)
+        for value in (0, 0, 0, 0, 0, 0):
+            _v12_pointer(output, value)
+        _bef64(output, 1000.0)
+        _bef64(output, 1e-8)
+        for value in (
+            0,
+            bodies[model.bodies[position + 1].id]
+            if position + 1 < len(model.bodies)
+            else 0,
+            bodies[model.bodies[position - 1].id] if position else 0,
+        ):
+            _v12_pointer(output, value)
+        output.append(1)
+        _v12_pointer(output, 1 if partition else 0)
+        output.append(1 if solid else 3)
+        output.append(1)
+        _v12_pointer(output, shells[body_shells[0]] if body_shells else 0)
+        _v12_pointer(
+            output,
+            surfaces[body_surfaces[body.id][0]] if body_surfaces[body.id] else 0,
+        )
+        _v12_pointer(
+            output,
+            curves[body_curves[body.id][0]] if body_curves[body.id] else 0,
+        )
+        _v12_pointer(
+            output,
+            points[body_vertices[body.id][0]] if body_vertices[body.id] else 0,
+        )
+        _v12_pointer(output, region_values[0] if region_values else 0)
+        _v12_pointer(
+            output,
+            edges[body_edges[body.id][0]] if body_edges[body.id] else 0,
+        )
+        _v12_pointer(
+            output,
+            vertices[body_vertices[body.id][0]] if body_vertices[body.id] else 0,
+        )
+
+    for body in model.bodies:
+        region_values = list(body.region_ids)
+        solid = all(topology.regions[region_id].solid for region_id in body.region_ids)
+        if solid:
+            exterior_index = exterior_regions[body.id]
+            _v12_node(output, 19, exterior_index)
+            _i32(output, node_ids[exterior_index])
+            _v12_pointer(output, 0)
+            _v12_pointer(output, bodies[body.id])
+            _v12_pointer(output, regions[region_values[0]] if region_values else 0)
+            _v12_pointer(output, 0)
+            exterior = [
+                exterior_shells[shell_id]
+                for shell_id, owner in shell_body.items()
+                if owner == body.id and shell_id in exterior_shells
+            ]
+            _v12_pointer(output, exterior[0] if exterior else 0)
+            output.extend(b"V")
+        for position, region_id in enumerate(region_values):
+            region = topology.regions[region_id]
+            region_index = regions[region_id]
+            shell_ids = [
+                topology.shell_uses[shell_use_id].shell_id
+                for shell_use_id in region.shell_use_ids
+            ]
+            _v12_node(output, 19, region_index)
+            _i32(output, node_ids[region_index])
+            _v12_pointer(output, 0)
+            _v12_pointer(output, bodies[body.id])
+            _v12_pointer(
+                output,
+                regions[region_values[position + 1]]
+                if position + 1 < len(region_values)
+                else 0,
+            )
+            _v12_pointer(
+                output,
+                exterior_regions[body.id]
+                if solid and position == 0
+                else regions[region_values[position - 1]]
+                if position
+                else 0,
+            )
+            _v12_pointer(output, shells[shell_ids[0]] if shell_ids else 0)
+            output.extend(b"S" if region.solid else b"V")
+
+    for shell in model.shells:
+        shell_index = shells[shell.id]
+        region_id = shell_region[shell.id]
+        region = topology.regions[region_id]
+        body_id = shell_body[shell.id]
+        shell_ids = [
+            topology.shell_uses[shell_use_id].shell_id
+            for shell_use_id in region.shell_use_ids
+        ]
+        position = shell_ids.index(shell.id)
+        face_ids = [
+            topology.face_uses[face_use_id].face_id
+            for face_use_id in shell.face_use_ids
+        ]
+        _v12_node(output, 13, shell_index)
+        _i32(output, node_ids[shell_index])
+        _v12_pointer(output, 0)
+        _v12_pointer(output, bodies[body_id])
+        _v12_pointer(
+            output,
+            shells[shell_ids[position + 1]] if position + 1 < len(shell_ids) else 0,
+        )
+        _v12_pointer(output, faces[face_ids[0]] if face_ids else 0)
+        _v12_pointer(output, 0)
+        _v12_pointer(output, 0)
+        _v12_pointer(output, regions[region_id])
+        _v12_pointer(output, 0)
+        if shell.id in exterior_shells:
+            exterior_index = exterior_shells[shell.id]
+            exterior_ids = [
+                shell_id
+                for shell_id, owner in shell_body.items()
+                if owner == body_id and shell_id in exterior_shells
+            ]
+            exterior_position = exterior_ids.index(shell.id)
+            _v12_node(output, 13, exterior_index)
+            _i32(output, node_ids[exterior_index])
+            _v12_pointer(output, 0)
+            _v12_pointer(output, bodies[body_id])
+            _v12_pointer(
+                output,
+                exterior_shells[exterior_ids[exterior_position + 1]]
+                if exterior_position + 1 < len(exterior_ids)
+                else 0,
+            )
+            _v12_pointer(output, 0)
+            _v12_pointer(output, 0)
+            _v12_pointer(output, 0)
+            _v12_pointer(output, exterior_regions[body_id])
+            _v12_pointer(output, faces[face_ids[0]] if face_ids else 0)
+
     for surface in model.surfaces:
         if isinstance(surface, NurbsSurface):
-            next_attr = _write_nurbs_surface(
-                output,
-                surfaces[surface.id],
-                surface,
-                next_attr,
+            raise ParasolidWriteError(
+                f"Parasolid V12 writer does not support NURBS surface {surface.id}"
             )
-        else:
-            kind, values = _surface_values(surface)
-            _compact(output, kind, surfaces[surface.id], values)
+        kind, values = _surface_values(surface)
+        face_ids = surface_faces[surface.id]
+        body_id = face_body[face_ids[0]]
+        chain = body_surfaces[body_id]
+        position = chain.index(surface.id)
+        _v12_geometry_node(
+            output,
+            kind,
+            surfaces[surface.id],
+            node_ids[surfaces[surface.id]],
+            faces[face_ids[0]],
+            surfaces[chain[position + 1]] if position + 1 < len(chain) else 0,
+            surfaces[chain[position - 1]] if position else 0,
+            values,
+        )
     for curve in model.curves:
         if isinstance(curve, NurbsCurve):
-            next_attr = _write_nurbs_curve(
-                output,
-                curves[curve.id],
-                curve,
-                next_attr,
+            raise ParasolidWriteError(
+                f"Parasolid V12 writer does not support NURBS curve {curve.id}"
             )
-        else:
-            kind, values = _curve_values(curve)
-            _compact(output, kind, curves[curve.id], values)
-    face_owners, next_attr = _allocate(model.faces, next_attr)
+        kind, values = _curve_values(curve)
+        edge_ids = curve_edges[curve.id]
+        body_id = edge_body[edge_ids[0]]
+        chain = body_curves[body_id]
+        position = chain.index(curve.id)
+        _v12_geometry_node(
+            output,
+            kind,
+            curves[curve.id],
+            node_ids[curves[curve.id]],
+            edges[edge_ids[0]],
+            curves[chain[position + 1]] if position + 1 < len(chain) else 0,
+            curves[chain[position - 1]] if position else 0,
+            values,
+        )
     for vertex in model.vertices:
-        _tag(output, 0x1D)
-        _be16(output, points[vertex.id])
-        _be32(output, 0)
-        output.extend(bytes(8))
+        body_id = vertex_body[vertex.id]
+        chain = body_vertices[body_id]
+        position = chain.index(vertex.id)
+        _v12_node(output, 29, points[vertex.id])
+        _i32(output, node_ids[points[vertex.id]])
+        _v12_pointer(output, 0)
+        _v12_pointer(output, vertices[vertex.id])
+        _v12_pointer(
+            output,
+            points[chain[position + 1]] if position + 1 < len(chain) else 0,
+        )
+        _v12_pointer(output, points[chain[position - 1]] if position else 0)
         _vector(output, vertex.point, _LENGTH_SCALE)
     for vertex in model.vertices:
-        _tag(output, 0x12)
-        _be16(output, vertices[vertex.id])
-        _be32(output, 0)
-        for value in (0, 0, 0, 0, points[vertex.id]):
-            _be16(output, value)
-        output.extend(_ENTITY_MAGIC)
+        body_id = vertex_body[vertex.id]
+        chain = body_vertices[body_id]
+        position = chain.index(vertex.id)
+        fins = vertex_fins[vertex.id]
+        _v12_node(output, 18, vertices[vertex.id])
+        _i32(output, node_ids[vertices[vertex.id]])
+        _v12_pointer(output, 0)
+        _v12_pointer(output, fins[0] if fins else 0)
+        _v12_pointer(output, vertices[chain[position - 1]] if position else 0)
+        _v12_pointer(
+            output,
+            vertices[chain[position + 1]] if position + 1 < len(chain) else 0,
+        )
+        _v12_pointer(output, points[vertex.id])
+        _bef64(output, _MISSING_PARAMETER)
+        _v12_pointer(output, bodies[body_id])
     for edge in model.edges:
-        _tag(output, 0x10)
-        _be16(output, edges[edge.id])
-        _be32(output, 0)
-        _be16(output, 0)
-        output.extend(_ENTITY_MAGIC)
-        for value in (0, 0, 0, curves[edge.curve_id], 0, 0):
-            _be16(output, value)
+        body_id = edge_body[edge.id]
+        chain = body_edges[body_id]
+        position = chain.index(edge.id)
+        curve_chain = curve_edges[edge.curve_id]
+        curve_position = curve_chain.index(edge.id)
+        first_fin = coedges[topology.edge_coedges[edge.id][0]]
+        _v12_node(output, 16, edges[edge.id])
+        _i32(output, node_ids[edges[edge.id]])
+        _v12_pointer(output, 0)
+        _bef64(output, _MISSING_PARAMETER)
+        _v12_pointer(output, first_fin)
+        _v12_pointer(output, edges[chain[position - 1]] if position else 0)
+        _v12_pointer(
+            output,
+            edges[chain[position + 1]] if position + 1 < len(chain) else 0,
+        )
+        _v12_pointer(output, curves[edge.curve_id])
+        _v12_pointer(
+            output,
+            edges[curve_chain[curve_position + 1]]
+            if curve_position + 1 < len(curve_chain)
+            else 0,
+        )
+        _v12_pointer(
+            output,
+            edges[curve_chain[curve_position - 1]] if curve_position else 0,
+        )
+        _v12_pointer(output, bodies[body_id])
     for coedge in model.coedges:
         loop = topology.loops[topology.coedge_loop[coedge.id]]
         position = loop.coedge_ids.index(coedge.id)
         previous_id = loop.coedge_ids[position - 1]
         next_id = loop.coedge_ids[(position + 1) % len(loop.coedge_ids)]
-        radial = topology.edge_coedges[coedge.edge_id]
-        radial_position = radial.index(coedge.id)
-        radial_next_id = radial[(radial_position + 1) % len(radial)]
-        edge = topology.edges[coedge.edge_id]
-        start_vertex_id = (
-            edge.end_vertex_id if coedge.reversed else edge.start_vertex_id
-        )
-        _tag(output, 0x11)
-        _be16(output, coedges[coedge.id])
-        for value in (
+        fin_index = coedges[coedge.id]
+        _v12_fin(
+            output,
+            fin_index,
             0,
             loops[loop.id],
             coedges[previous_id],
             coedges[next_id],
-            vertices[start_vertex_id],
-            coedges[radial_next_id],
+            vertices[fin_vertex[fin_index]],
+            fin_other[fin_index],
+            edges[coedge.edge_id],
+            0,
+            _next_fin_at_vertex(fin_index, vertex_fins),
+            not coedge.reversed,
+        )
+    for edge in dummy_edges:
+        fin_index = dummy_fins[edge.id]
+        real = topology.coedges[topology.edge_coedges[edge.id][0]]
+        _v12_fin(
+            output,
+            fin_index,
+            0,
+            0,
+            0,
+            0,
+            vertices[fin_vertex[fin_index]],
+            fin_other[fin_index],
             edges[edge.id],
             0,
-            0,
-        ):
-            _be16(output, value)
-        output.append(0x2D if coedge.reversed else 0x2B)
+            _next_fin_at_vertex(fin_index, vertex_fins),
+            real.reversed,
+        )
     for loop in model.loops:
         face = topology.faces[topology.loop_face[loop.id]]
         position = face.loop_ids.index(loop.id)
         next_loop_id = (
             face.loop_ids[position + 1] if position + 1 < len(face.loop_ids) else ""
         )
-        _tag(output, 0x0F)
-        _be16(output, loops[loop.id])
-        _be32(output, 0)
+        _v12_node(output, 15, loops[loop.id])
+        _i32(output, node_ids[loops[loop.id]])
         for value in (
             0,
             coedges[loop.coedge_ids[0]],
             faces[face.id],
             loops.get(next_loop_id, 0),
         ):
-            _be16(output, value)
+            _v12_pointer(output, value)
     for face in model.faces:
-        _tag(output, 0x0E)
-        _be16(output, faces[face.id])
-        _be32(output, 0)
-        _be16(output, face_owners[face.id])
-        output.extend(_ENTITY_MAGIC)
+        shell = topology.shells[face_shell[face.id]]
+        face_ids = [
+            topology.face_uses[face_use_id].face_id
+            for face_use_id in shell.face_use_ids
+        ]
+        position = face_ids.index(face.id)
+        surface_chain = surface_faces[face.surface_id]
+        surface_position = surface_chain.index(face.id)
+        region = topology.regions[face_region[face.id]]
+        _v12_node(output, 14, faces[face.id])
+        _i32(output, node_ids[faces[face.id]])
+        _v12_pointer(output, 0)
+        _bef64(output, _MISSING_PARAMETER)
         for value in (
-            0,
-            0,
+            faces[face_ids[position + 1]] if position + 1 < len(face_ids) else 0,
+            faces[face_ids[position - 1]] if position else 0,
             loops[face.loop_ids[0]],
-            0,
+            shells[shell.id],
             surfaces[face.surface_id],
         ):
-            _be16(output, value)
-        output.append(0x2B if topology.face_forward(face.id) else 0x2D)
-        output.extend(bytes(10))
-    sheet = any(
-        not topology.regions[region_id].solid
-        for body in model.bodies
-        for region_id in body.region_ids
-    )
-    next_attr = _write_body_hierarchy(
-        model,
-        topology,
-        face_owners,
-        sheet,
-        next_attr,
-        output,
-    )
-    for face in model.faces:
-        _entity51(
+            _v12_pointer(output, value)
+        output.extend(b"+" if face.same_sense else b"-")
+        _v12_pointer(
             output,
-            1,
-            face_owners[face.id],
-            0x001F if sheet else 0x0015,
-            (0, 0, 0, 0, 0, 0),
+            faces[surface_chain[surface_position + 1]]
+            if surface_position + 1 < len(surface_chain)
+            else 0,
         )
-    if next_attr > 0xFFFF:
-        raise ParasolidWriteError("Parasolid B-rep attribute space is exhausted")
+        _v12_pointer(
+            output,
+            faces[surface_chain[surface_position - 1]] if surface_position else 0,
+        )
+        _v12_pointer(output, 0)
+        _v12_pointer(output, 0)
+        _v12_pointer(
+            output,
+            exterior_shells[shell.id]
+            if region.solid
+            else shells[shell.id],
+        )
+    _tag(output, 1)
+    _v12_pointer(output, 0)
     return bytes(output), sheet
 
 
@@ -908,19 +1489,105 @@ def _vector(output: bytearray, value: Vector3, scale: float) -> None:
         _bef64(output, component * scale)
 
 
-def _parasolid_stream(body: bytes, schema: str) -> bytes:
-    description = b"partition body"
+def _parasolid_stream(
+    body: bytes,
+    schema: str,
+    description: bytes = b"partition body",
+    user_field_size: int | None = None,
+) -> bytes:
     encoded_schema = schema.encode("ascii")
     if len(encoded_schema) > 0xFF:
         raise ParasolidWriteError("Parasolid schema name is too long")
     output = bytearray(b"PS\x00\x00")
     _be16(output, len(description))
     output.extend(description)
-    output.extend(bytes(2))
-    output.append(len(encoded_schema))
+    _be32(output, len(encoded_schema))
     output.extend(encoded_schema)
+    if user_field_size is not None:
+        _be32(output, user_field_size)
     output.extend(body)
     return bytes(output)
+
+
+def _v12_node(output: bytearray, kind: int, index: int) -> None:
+    _tag(output, kind)
+    _v12_pointer(output, index)
+
+
+def _v12_pointer(output: bytearray, index: int) -> None:
+    if index < 0:
+        raise ParasolidWriteError("Parasolid pointer index is negative")
+    if index < 32767:
+        output.extend(struct.pack(">h", index + 1))
+        return
+    output.extend(struct.pack(">hH", -(index % 32767 + 1), index // 32767))
+
+
+def _i32(output: bytearray, value: int) -> None:
+    if not -(1 << 31) <= value < 1 << 31:
+        raise ParasolidWriteError("Parasolid i32 field is out of range")
+    output.extend(struct.pack(">i", value))
+
+
+def _v12_geometry_node(
+    output: bytearray,
+    kind: int,
+    index: int,
+    node_id: int,
+    owner: int,
+    next_index: int,
+    previous_index: int,
+    values: Sequence[float],
+) -> None:
+    _v12_node(output, kind, index)
+    _i32(output, node_id)
+    _v12_pointer(output, 0)
+    _v12_pointer(output, owner)
+    _v12_pointer(output, next_index)
+    _v12_pointer(output, previous_index)
+    _v12_pointer(output, 0)
+    output.extend(b"+")
+    for value in values:
+        _bef64(output, value)
+
+
+def _v12_fin(
+    output: bytearray,
+    index: int,
+    attributes: int,
+    loop: int,
+    forward: int,
+    backward: int,
+    vertex: int,
+    other: int,
+    edge: int,
+    curve: int,
+    next_at_vertex: int,
+    positive: bool,
+) -> None:
+    _v12_node(output, 17, index)
+    for value in (
+        attributes,
+        loop,
+        forward,
+        backward,
+        vertex,
+        other,
+        edge,
+        curve,
+        next_at_vertex,
+    ):
+        _v12_pointer(output, value)
+    output.extend(b"+" if positive else b"-")
+
+
+def _next_fin_at_vertex(index: int, vertex_fins: Mapping[str, Sequence[int]]) -> int:
+    for values in vertex_fins.values():
+        if index not in values:
+            continue
+        position = values.index(index)
+        return values[position + 1] if position + 1 < len(values) else 0
+    raise ParasolidWriteError("Parasolid fin has no vertex chain")
 
 
 def _tag(output: bytearray, kind: int) -> None:
@@ -1245,6 +1912,7 @@ class _RecordTables:
     curves: dict[int, object]
     surfaces: dict[int, object]
     entities: dict[int, _EntityRecord]
+    v12_partition: bool = False
 
 
 def decode_brep_model(
@@ -1255,7 +1923,7 @@ def decode_brep_model(
     if header is None:
         return None
     description = header.description.casefold()
-    if "partition" not in description or "delta" in description:
+    if "delta" in description or "transmit file" not in description:
         return None
     return _decode_partition_model(data, header)
 
@@ -1266,15 +1934,14 @@ def _parasolid_header(data: bytes) -> _ParasolidHeader | None:
     description_length = struct.unpack_from(">H", data, 4)[0]
     description_start = 6
     description_end = description_start + description_length
-    if description_end > len(data):
+    if description_end + 4 > len(data):
         return None
-    schema_window_end = min(len(data), description_end + 64)
-    schema_offset = data.find(b"SCH_", description_end, schema_window_end)
-    if schema_offset <= description_end or schema_offset < 1:
-        return None
-    schema_length = data[schema_offset - 1]
+    schema_length = struct.unpack_from(">I", data, description_end)[0]
+    schema_offset = description_end + 4
     schema_end = schema_offset + schema_length
-    if schema_length < 4 or schema_end > len(data):
+    if schema_length < 4 or schema_length > 255 or schema_end > len(data):
+        return None
+    if data[schema_offset : schema_offset + 4] != b"SCH_":
         return None
     try:
         description = data[description_start:description_end].decode("ascii")
@@ -1306,7 +1973,19 @@ def _decode_partition_model(
 
 
 def _scan_partition_records(body: bytes) -> _RecordTables | None:
-    tables = _RecordTables({}, {}, {}, {}, {}, {}, {}, {}, {})
+    tables = _RecordTables(
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        body.startswith(b"\x00\x00\x00\x00\x00\x65\x00\x02")
+        or body.startswith(b"\x00\x00\x00\x00\x00\x0c\x00\x02"),
+    )
     loop_candidates: list[_TopologyRecord] = []
     intersections: dict[int, _IntersectionRecord] = {}
     charts: dict[int, _ChartRecord] = {}
@@ -1346,7 +2025,11 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
             None
         )
         if kind == 0x0E:
-            topology = tables.bridges, _parse_bridge(body, offset)
+            topology = tables.bridges, _parse_bridge(
+                body,
+                offset,
+                allow_null_owner=tables.v12_partition,
+            )
         elif kind == 0x0F:
             record = _parse_loop(body, offset)
             if record is not None:
@@ -1364,7 +2047,7 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
         if topology is not None:
             target, record = topology
             if record is not None:
-                target[record.attribute] = record
+                target.setdefault(record.attribute, record)
         record = _parse_compact_support_uv_record(body, offset)
         if record is not None:
             _store_unique_record(
@@ -3208,7 +3891,11 @@ def _tripled_refs(
     return tuple(values)
 
 
-def _parse_bridge(data: bytes, offset: int) -> _TopologyRecord | None:
+def _parse_bridge(
+    data: bytes,
+    offset: int,
+    allow_null_owner: bool = False,
+) -> _TopologyRecord | None:
     start = _record_start(data, offset, 0x0E)
     if start is None:
         return None
@@ -3237,7 +3924,7 @@ def _parse_bridge(data: bytes, offset: int) -> _TopologyRecord | None:
         return None
     if marker_offset >= len(data) or data[marker_offset] not in {0x2B, 0x2D}:
         return None
-    if attribute <= 1 or owner <= 1:
+    if attribute <= 1 or (owner <= 1 and not allow_null_owner):
         return None
     return _TopologyRecord(
         attribute,
@@ -3667,9 +4354,10 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
     vertex_tolerances: dict[int, float] = {}
     owner_faces: dict[int, int] = {}
     for bridge_attribute, bridge in sorted(tables.bridges.items()):
-        if bridge.owner in owner_faces:
-            raise ValueError("ambiguous face owner")
-        owner_faces[bridge.owner] = bridge_attribute
+        if bridge.owner > 1:
+            if bridge.owner in owner_faces:
+                raise ValueError("ambiguous face owner")
+            owner_faces[bridge.owner] = bridge_attribute
         surface_attribute = bridge.references[4]
         if surface_attribute not in tables.surfaces:
             raise ValueError("unresolved face surface")

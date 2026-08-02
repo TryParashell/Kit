@@ -44,7 +44,9 @@ from .parasolid import (
     contains_parasolid_payload,
     decode_brep_model,
     decode_partition_stream,
+    encode_blank_partition_stream,
     encode_brep_model,
+    encode_partition_stream,
     is_native_parasolid_payload,
 )
 
