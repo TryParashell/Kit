@@ -813,7 +813,9 @@ class _Parameters:
             return source
         if language != "kit":
             return None
-        references = [_text(value) for value in _sequence(expression.get("parameter_ids", []))]
+        references = [
+            _text(value) for value in _sequence(expression.get("parameter_ids", []))
+        ]
         translated = source
         allowed_identifiers = {
             "abs",
@@ -844,7 +846,9 @@ class _Parameters:
             if not alias:
                 return None
             parameter = self.by_id.get(parameter_id, {})
-            name = _text(parameter.get("name")) if isinstance(parameter, Mapping) else ""
+            name = (
+                _text(parameter.get("name")) if isinstance(parameter, Mapping) else ""
+            )
             replaced = False
             for token in (parameter_id, name):
                 if token and token in translated:
@@ -1877,6 +1881,10 @@ def _sketch_properties(
         _expression_property(expressions),
         _shape_property("", "InternalShape"),
         _shape_property(),
+        _link_sub_list_property(
+            "AttachmentSupport",
+            [(plane_name, "")] if plane_name else [],
+        ),
         _link_property("SupportPlane", plane_name, dynamic=True),
         _string_property("KitId", sketch.get("id"), dynamic=True),
         _json_property(
@@ -1940,12 +1948,8 @@ def _feature_metadata(feature: Mapping[str, Any], role: str) -> list[ET.Element]
     return [
         _string_property("KitId", feature.get("id"), dynamic=True),
         _string_property("KitRole", role, dynamic=True),
-        _string_property(
-            "FeatureKind", _enum(feature.get("kind")), dynamic=True
-        ),
-        _string_property(
-            "Operation", _enum(feature.get("operation")), dynamic=True
-        ),
+        _string_property("FeatureKind", _enum(feature.get("kind")), dynamic=True),
+        _string_property("Operation", _enum(feature.get("operation")), dynamic=True),
         _integer_property("TimelineOrder", feature.get("order", 0), dynamic=True),
         _bool_property("Suppressed", bool(feature.get("suppressed")), dynamic=True),
         _json_property("SourceFeatureJSON", feature),
@@ -4436,6 +4440,7 @@ def _document_xml(
             ),
             current_name,
         )
+        feature_sketch_name = sketch_names.get(_text(feature.get("sketch_id")), "")
         native_feature = attributes.get("freecad", {})
         native_feature_name = (
             _text(native_feature.get("name"))
@@ -4762,7 +4767,7 @@ def _document_xml(
                     ),
                     *_definition_properties(definition),
                     _json_property("NativeDefinitionJSON", definition),
-                    _bool_property("Visibility", imported),
+                    _bool_property("Visibility", not bool(feature.get("suppressed"))),
                     _shape_property(),
                 ]
             )
@@ -4771,6 +4776,11 @@ def _document_xml(
                     _link_property("InputFeature", base_name, dynamic=True)
                 )
                 final.dependencies.append(base_name)
+            if feature_sketch_name:
+                final.properties.append(
+                    _link_property("Profile", feature_sketch_name, dynamic=True)
+                )
+                final.dependencies.append(feature_sketch_name)
             if parameters_data:
                 final.properties.extend(
                     [
@@ -4781,9 +4791,7 @@ def _document_xml(
                             "ParameterIds",
                             [
                                 _text(value)
-                                for value in _sequence(
-                                    feature.get("parameter_ids", [])
-                                )
+                                for value in _sequence(feature.get("parameter_ids", []))
                             ],
                             dynamic=True,
                         ),
@@ -4792,9 +4800,14 @@ def _document_xml(
                 final.dependencies.append(parameter_sheet.name)
             feature_names[feature_id] = final.name
             feature_objects.append(final.name)
-            if imported:
-                solid_feature_names[feature_id] = final.name
-                current_name = final.name
+            solid_feature_names[feature_id] = final.name
+            current_name = final.name
+        if bool(feature.get("suppressed")) and not native_replay:
+            _replace_named_property(
+                final.properties,
+                "Visibility",
+                _bool_property("Visibility", False),
+            )
         if isinstance(native_feature, Mapping):
             if native_feature_name:
                 native_object_targets[native_feature_name] = final.name
@@ -4914,14 +4927,10 @@ def _document_xml(
             entity_kinds.append(_text(path_item.get("entity_kind")))
         obj.properties.extend(
             [
-                _string_property(
-                    "Label", selection.get("name", selection_id)
-                ),
+                _string_property("Label", selection.get("name", selection_id)),
                 _string_property("KitSelectionId", selection_id, dynamic=True),
                 _link_sub_list_property("Selection", targets, dynamic=True),
-                _string_list_property(
-                    "EntityKinds", entity_kinds, dynamic=True
-                ),
+                _string_list_property("EntityKinds", entity_kinds, dynamic=True),
                 _json_property("QueryJSON", selection.get("query", {})),
                 _json_property("SourceSelectionJSON", selection),
                 _bool_property("Visibility", False),
@@ -4956,9 +4965,7 @@ def _document_xml(
         if target is not None and linked_selections:
             _merge_named_property(
                 target.properties,
-                _link_list_property(
-                    "Selections", linked_selections, dynamic=True
-                ),
+                _link_list_property("Selections", linked_selections, dynamic=True),
             )
             target.dependencies.extend(linked_selections)
     for plane in plane_items:
@@ -4976,9 +4983,7 @@ def _document_xml(
         if target is not None and selection_name:
             _merge_named_property(
                 target.properties,
-                _link_property(
-                    "SupportSelection", selection_name, dynamic=True
-                ),
+                _link_property("SupportSelection", selection_name, dynamic=True),
             )
             target.dependencies.append(selection_name)
     configuration_items = _items(manifest.get("configurations", []))
@@ -4998,9 +5003,7 @@ def _document_xml(
     ):
         obj = next(item for item in graph.objects if item.name == object_name)
         configuration_id = _text(configuration.get("id"))
-        parent_name = configuration_names.get(
-            _text(configuration.get("parent_id")), ""
-        )
+        parent_name = configuration_names.get(_text(configuration.get("parent_id")), "")
         suppressed_features = [
             feature_names[feature_id]
             for value in _sequence(configuration.get("suppressed_feature_ids", []))
@@ -5008,12 +5011,8 @@ def _document_xml(
         ]
         obj.properties.extend(
             [
-                _string_property(
-                    "Label", configuration.get("name", configuration_id)
-                ),
-                _string_property(
-                    "KitConfigurationId", configuration_id, dynamic=True
-                ),
+                _string_property("Label", configuration.get("name", configuration_id)),
+                _string_property("KitConfigurationId", configuration_id, dynamic=True),
                 _bool_property(
                     "Active", bool(configuration.get("active")), dynamic=True
                 ),
