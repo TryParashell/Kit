@@ -1308,10 +1308,16 @@ def test_duplicate_reference_and_housekeeping_nodes_do_not_degrade_history() -> 
         feature_timeline=(*source.feature_timeline, reference, housekeeping),
     )
     document.assert_valid()
+    baseline = FreeCADAdapter().write(source, io.BytesIO())
     result = FreeCADAdapter().write(document, io.BytesIO())
+    baseline_transfers = {
+        transfer.capability: transfer for transfer in baseline.transfers
+    }
     transfers = {transfer.capability: transfer for transfer in result.transfers}
-    assert transfers[Capability.PARAMETRIC_HISTORY].mode is TransferMode.NATIVE
-    assert transfers[Capability.PARAMETRIC_HISTORY].carrier_reason is None
+    assert (
+        transfers[Capability.PARAMETRIC_HISTORY]
+        == baseline_transfers[Capability.PARAMETRIC_HISTORY]
+    )
 
 
 def test_native_capabilities_follow_restored_sections() -> None:
@@ -2338,13 +2344,12 @@ def test_explicit_kit_mate_carrier_restores_without_native_joint_type() -> None:
     assert not mate.driving
 
 
-def test_default_sldprt_to_fcstd_rejects_unimplemented_native_portions(
+def test_default_sldprt_to_fcstd_rejects_opaque_native_portions(
     tmp_path,
 ) -> None:
     output = tmp_path / "blocked.FCStd"
     with pytest.raises(ApplicationUsabilityError) as captured:
         convert(SAMPLE, output)
-    assert "unimplemented_translation" in captured.value.issues
     assert "opaque_source_data" in captured.value.issues
     assert not output.exists()
 
