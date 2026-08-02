@@ -260,8 +260,8 @@ def test_neutral_binary_writer_uses_v12_body_and_fin_topology() -> None:
     assert len(ring) == 3
     for position, attribute in enumerate(ring):
         fin = tables.coedges[attribute]
-        assert fin.references[2] == ring[position - 1]
-        assert fin.references[3] == ring[(position + 1) % len(ring)]
+        assert fin.references[2] == ring[(position + 1) % len(ring)]
+        assert fin.references[3] == ring[position - 1]
     restored = decode_brep_model(payload)
     assert restored is not None
     assert restored.validate() == ()

@@ -876,8 +876,8 @@ def _encode_brep_body(
             fin_index,
             0,
             loops[loop.id],
-            coedges[previous_id],
             coedges[next_id],
+            coedges[previous_id],
             vertices[fin_vertex[fin_index]],
             fin_other[fin_index],
             edges[coedge.edge_id],
@@ -4381,7 +4381,6 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         for _, ring in loops:
             for index, coedge_attribute in enumerate(ring):
                 coedge = tables.coedges[coedge_attribute]
-                next_coedge = tables.coedges[ring[(index + 1) % len(ring)]]
                 if coedge.isolated:
                     if len(ring) != 1 or not _isolated_fin(
                         coedge.attribute, coedge.references
@@ -4408,7 +4407,10 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
                     continue
                 edge_attribute = coedge.references[6]
                 start_vertex = coedge.references[4]
-                end_vertex = next_coedge.references[4]
+                other_coedge = tables.coedges.get(coedge.references[5])
+                if other_coedge is None:
+                    raise ValueError("missing opposite coedge")
+                end_vertex = other_coedge.references[4]
                 if edge_attribute <= 1:
                     raise ValueError("incomplete coedge topology")
                 edge_use = tables.edge_uses.get(edge_attribute)
@@ -4607,7 +4609,7 @@ def _walk_coedge_ring(
         if record is None or record.references[1] != loop_attribute:
             raise ValueError("invalid coedge owner")
         ring.append(attribute)
-        attribute = record.references[3]
+        attribute = record.references[2 if tables.v12_partition else 3]
         if attribute <= 1:
             raise ValueError("open coedge ring")
     if attribute != first_attribute:
