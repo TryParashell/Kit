@@ -239,9 +239,11 @@ def test_structural_validator_rejects_incomplete_or_ambiguous_brep() -> None:
         for index, line in enumerate(data.splitlines())
         if index > 0 and data.splitlines()[index - 1].startswith(b"Surfaces ")
     )
+    surface_tokens = surface_line.split()
+    surface_tokens[-1] = b"0" * 40
     long_number = data.replace(
         surface_line,
-        surface_line.rsplit(b" ", 1)[0] + b" " + b"0" * 40,
+        b" ".join(surface_tokens),
         1,
     )
     root_head, root_separator, root_tail = data.rpartition(b"+1 1")
