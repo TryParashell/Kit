@@ -459,11 +459,17 @@ def _encode_brep_body(
         and all(isinstance(curve, LineCurve) for curve in model.curves)
         and all(len(topology.edge_coedges[edge.id]) == 1 for edge in model.edges)
     )
+    solidworks_solid = (
+        bool(feature_ids)
+        and len(model.bodies) == 1
+        and all(region.solid for region in model.regions)
+    )
     reserved_indices = {
         base + offset
         for base in attribute_bases.values()
         for offset in (*range(2, 5), *range(12, 16), *range(32, 60))
     }
+    reserved_topology_indices = set(range(5, 12)) if feature_ids else set()
     used_indices: set[int] = set()
     next_index = 2 if partition else 1
 
@@ -476,7 +482,11 @@ def _encode_brep_body(
         ):
             used_indices.add(preferred)
             return preferred
-        while next_index in reserved_indices or next_index in used_indices:
+        while (
+            next_index in reserved_indices
+            or next_index in reserved_topology_indices
+            or next_index in used_indices
+        ):
             next_index += 1
         result = next_index
         used_indices.add(result)
@@ -501,13 +511,28 @@ def _encode_brep_body(
         else allocate(model.bodies)
     )
     used_indices.update(bodies.values())
-    regions = allocate(model.regions, (9,) if solidworks_triangle else ())
-    shells = allocate(model.shells, (5,) if solidworks_triangle else ())
-    surfaces = allocate(model.surfaces, (6,) if solidworks_triangle else ())
-    curves = allocate(model.curves, (7, 17, 31) if solidworks_triangle else ())
-    points = allocate(model.vertices, (8, 18, 29) if solidworks_triangle else ())
-    vertices = allocate(model.vertices, (11, 21, 27) if solidworks_triangle else ())
-    edges = allocate(model.edges, (10, 20, 30) if solidworks_triangle else ())
+    regions = allocate(
+        model.regions,
+        (17,) if solidworks_solid else (9,) if feature_ids else (),
+    )
+    shells = allocate(model.shells, (5,) if feature_ids else ())
+    surfaces = allocate(model.surfaces, (6,) if feature_ids else ())
+    curves = allocate(
+        model.curves,
+        (7, 17, 31) if solidworks_triangle else (7,) if feature_ids else (),
+    )
+    points = allocate(
+        model.vertices,
+        (8, 18, 29) if solidworks_triangle else (8,) if feature_ids else (),
+    )
+    vertices = allocate(
+        model.vertices,
+        (11, 21, 27) if solidworks_triangle else (11,) if feature_ids else (),
+    )
+    edges = allocate(
+        model.edges,
+        (10, 20, 30) if solidworks_triangle else (10,) if feature_ids else (),
+    )
     coedges = allocate(model.coedges, (19, 23, 24) if solidworks_triangle else ())
     dummy_edges = tuple(
         edge for edge in model.edges if len(topology.edge_coedges[edge.id]) == 1
@@ -527,7 +552,7 @@ def _encode_brep_body(
         if kinds == {False}:
             sheet = True
             continue
-        exterior_regions[body.id] = allocate_index()
+        exterior_regions[body.id] = allocate_index(9 if solidworks_solid else 0)
         for region_id in body.region_ids:
             region = topology.regions[region_id]
             for shell_use_id in region.shell_use_ids:
@@ -726,7 +751,7 @@ def _encode_brep_body(
                 if position + 1 < len(model.bodies)
                 else (
                     attribute_base + 4
-                    if solidworks_triangle and attribute_base is not None
+                    if len(model.bodies) == 1 and attribute_base is not None
                     else 0
                 )
             ),

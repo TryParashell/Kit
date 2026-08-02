@@ -427,6 +427,35 @@ _BASE_BODY_FEATURE = (
     b"c-s5_pOJxwAvfPCu{hN!KczB0nWf?XzyF+`47m&i4EYR23?&Sy3@HqT3{c=81!VwLF<=8lFh+nI1B1zPIWP?aAU;&<e;{W54"
     b"+RVi4f|1zVTH3m@++0@GWKrTc8iH&O&u!(BZ^8!Ft$SCrD8aW5sO1XVkr%543q+pZx|soj$i`-o257V"
 )
+_BASE_RECTANGLE_BOSS_FEATURES = (
+    b"c-rk+Uu+ab7@ys{D}@$X%3o^&4bk{Oh?4k%F<j|gPiiQfcO)kG&@6k?>(ag5V{fl%A(AygOf<X^UsMF5B}O!aL=${D5)<RIq"
+    b"A?1JO2lZ0CH_GTa(=VBv;S`QZm;c?COVhP?#=GZe82DeecyaDa|MLZDpaj9s0S6~gj^_KNiC&hF^82AKB`skR@)OuMg{m_Bq"
+    b"0@*kXicM%^P?J`IT4bO*)0pqc=9_S6aw#vuPE+k*Zk`(kkw5V%8mberD5E=Ejj}o<--5#1P|nkAg^X6S5+x*ac!~3UO!xfG9"
+    b"`+5ZD1@T>}`eE({DO6vl+J65#9<N~)|(xzH@x2`EZ{gW#F6kgRWj<h52I*)r{igw-*ub6~)nI;7%4l2f@6-g>d$7{(Z!H0d&"
+    b"^SS0V46+FUk)>ss}R6WJ-9Rj=;uGbIA2PQOsNhY<H4BH3S8!#*Zx)y+Dv50w9kfkhET}ED!1)7TR<-yPbm|B9iq|WJs_cbv2"
+    b"$%Qq!P2FxCnpBb%H*>Rk7%Az@wPCDn00aAJaz0?Zo%{Q#S{MYt3ILFld3P*ap43B!fbzOE2H;LYIjB=CC`%eZd3|9mLc>TBt"
+    b"DGPvxc!2JRTE9e4v<~~Q>YLeDaUN1Ff~XFk0z|$EvvY+L&021bsIRgTkp>qU{@|K<G!frg7(;gZbc*dXHYlhUQkBftf3Hk78"
+    b"it<T<+$4Lhp~e`aQKUoO70$xcf@ExQ4`qvNFo?ctFlgc_UsKJZTgRz=KMOf5~7F!NsO!4NP%*p(CCf-ztJn7KL05y3Q=15dl"
+    b"pu0NK(8$j;n5WGM^VkTgEbDdXj$JFE|b%@i~a_A5FNtyz3weK}wlJSe%7!$EWqB=?Jf-S+~)?x(LX=SP43%pU>Cafdk-D*`9"
+    b"FV5}e3Az(en<$!8^=y5Z=_W`7$o=OPdUW9fzwA}*P(E#Kd3p{0+Vi2&M05*e1(;_EfI%}l>pscS&`cN8Ra&T|i;SzhVI2RlX"
+    b"g9{U~E?oIwsFU6N!pjxodMsWmt1}8G@hDdoRb9IhP05=n&d?t8f+<qmE1G#Vm3jwMcqbrd_SMNrV-8=s7l=^wr9tF>8qnW=z"
+    b"IE%9;r;y;Hw{i}&03iWY4!km%v3_R^JmS3`Fo-fYYwk|_la*0sqp~TbY%1dek>q>ME|?YaWm*xy!YX&541h^e7rg4)DnbBqy"
+    b"@aF&5bcN%(0o$WV{Jt4vCrTA!hDTguEc76?s$;v9&#+v#M>6KJVuBB_ZWftO1waY}L$~_$`=A1WY?B<+I~h<;T2B_l@p>jK@"
+    b"(}`Wbg*=xDITH`Za}-Fgvz9tz{qLe1lq`U2Jvgyw>!d|DPHbtfm~L>$l#WjwScs$k5{m?pno|1`F|h+4_mOpxqNcy>k$tFMT"
+    b"=$5Y1`iyqzP4xF8OwPY`hbos}=Ucrzh%zQ$q_m|n@m=CW>a_sA#OR}&!A$w;$wA*T>zP$|`bh=dzdRRCc=%DAcXnm)ooigE^"
+    b"a)TMyPE?HR(F)zl=>!khB}mwC0LCKUMU8b3u{p<O=TqXiDRG?idr^xxB#h2l!bmH0YD&mDB#g{j!e}dWSTQ7I=BUG%$IU}X8"
+    b"LO8fFf}tiQ-3lt`eqtyfLNOG^c@XiXw!YOHGM~dxYcCetff4=Z#IY(P4*q}>AU$7tv}VqTvM$(nAB+&^)zF`HS>-Zo!w}Wkk"
+    b"dcWU(6gfwxHAhvJfdiM%S8o{-P&%8JrhnX@t*!V%+h`KN19M!Y>`6=RIB4c!@DifZ?K6jubJKZHV6H0ZG+p%)mhd2jnUjv_+"
+    b"Jc&>jV^k?FSMq^gulx-E>uB(e!yg3lH-h$bO5QBYYwOxjA%U;6uM(h~-~?;8DVs}hvyul*Ag!|0DWeqm(mi7_37o)e|9LN>w"
+    b"^W3pVrim}UNq#hmmQ9X|##T?=35N*ir>)8)aJowJgg}wA@C~`GXq?98q$uYuEE`y6?<BB|MBVA@jc!$FG>_32c)u<xJV2P}%"
+    b"2vXk2cc2<nb4@?CO6wcgD%wVje}$aS64x}pK1_m)lAHySvx+hjp`o|Xb6zJ4$XR$wkqg;zbx=}W@?X)uv6>JveXqIeB0hDjP"
+    b"aPAuHSvWOPRm~g^ynQa8ZdeoDI<YWB9lBMkslb4ClgpwDRKN_A6>C0_kFs3YT|6XHmkU7&UlwCa()gmBdj*QLf6p`=tuO^9J"
+    b"P8A{eo_xU(xS%aNpKui_q<!qgvOT7t_>5!Pl}y%sc+B;qxN#^rTQKirf@jR8Hb?QYh5!CtE=XS*f8P4>Z)?x?KVY*96GNb>F"
+    b"GDcCCDVd1n;w#I99>Q>NAxHuN67T_3daC8cN9CjrNAzIW>ON9VWGYyFlqi6Ft<T($#$Xpo-&`Q4|PP3B&d<`hm8v8Zo-xCqT"
+    b"SPI-4>DX)%^cMDjx4&m6OV|T&%cOvS@WTA-eM}dy+T=M$Yd!L8hCGtCxw^Q1A+S{kAV)yT(m6~?W`PJrNkO0@>cl1+?;vBb#"
+    b"z1lun30q%pLCiwjXVGjVW8w2q)ZQ4k&pxYFYG)D*yB+B^t*3vNbN=bk=`(H*n5hse|Fh$}YvGY?yTmkc-q-j!Gdps{{kTHV*"
+    b")g^JWLKR9N;CVX);JFB)r*mS?dPzAJ%_^^@0z2_%r+fUIIIsh<<jIj_006(BQwia_{G700hAaL#s"
+)
 _BASE_BODY_COUNTERS = {
     0: 0x6B,
     4: 0x12,
@@ -441,6 +470,11 @@ _BASE_BODY_COUNTERS = {
     5128: 0x52,
     5302: 0x52,
 }
+_RECTANGLE_BOSS_POINT_OFFSETS = (6119, 6297, 6459, 6621)
+_RECTANGLE_BOSS_DEPTH_OFFSET = 10092
+_BLIND_END_SPEC = bytes.fromhex(
+    "ffff01000b006d6f456e64537065635f63000001000000000000000000000000000000000000000000"
+)
 _BASE_BIOGRAPHY = (
     b"c-s5_pOJx=AvfPCGe5m3u^^)|KADMufg!++fx+at90Mbe%?ZRjKnxP+Vt{}zsSFJN|NUp+lwd#tAQ4*fS)c#E>KA"
     b"?o=qN)?pqz*^gB3#zLpXycgCBzngFlcJ4CEIxR044cLn=cqgE4~<P=pzz*}>nH6=Ehgc7157bRen%7>XG38Pb7dB"
@@ -489,6 +523,7 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
                 "moBaseBody_c",
             ),
         )
+    authored = _canonical_rectangle_boss_objects(authored, object_ids)
     identity = _native_identity(document, model_name)
     system_features = {
         int(feature.attributes["native_object_id"]): feature
@@ -708,6 +743,59 @@ def _write_objects(
         if sketch.id not in emitted_sketches:
             result.append(_write_sketch(sketch, parameters, object_ids))
     return tuple(result)
+
+
+def _canonical_rectangle_boss_objects(
+    objects: tuple[_WriteObject, ...], object_ids: dict[str, int]
+) -> tuple[_WriteObject, ...]:
+    if len(objects) != 2:
+        return objects
+    sketch, extrusion = objects
+    bounds = _write_rectangle_bounds(sketch)
+    if (
+        sketch.object_id != 26
+        or len(sketch.payload) < 4
+        or struct.unpack_from("<I", sketch.payload)[0] != 2
+        or sketch.class_name != "moProfileFeature_c"
+        or extrusion.class_name != "moExtrusion_c"
+        or extrusion.payload != _BLIND_END_SPEC
+        or bounds is None
+        or len(extrusion.dimensions) != 1
+        or not math.isfinite(extrusion.dimensions[0].value_mm)
+        or extrusion.dimensions[0].value_mm <= 0.0
+    ):
+        return objects
+    dimension = replace(
+        extrusion.dimensions[0],
+        name="D1",
+        text=format(extrusion.dimensions[0].value_mm, ".15g"),
+    )
+    object_ids[f"sketch:{sketch.source_id}"] = 26
+    object_ids[f"feature:{extrusion.source_id}"] = 32
+    return (
+        replace(sketch, object_id=26, name="Sketch1"),
+        replace(
+            extrusion,
+            object_id=32,
+            name="Boss-Extrude1",
+            dimensions=(dimension,),
+        ),
+    )
+
+
+def _write_rectangle_bounds(
+    sketch: _WriteObject,
+) -> tuple[float, float, float, float] | None:
+    if sketch.kind != "Sketch" or not sketch.payload:
+        return None
+    markers = list(_parse_markers(sketch.payload, 0, len(sketch.payload)))
+    profiles, _, _ = _profiles(markers, ())
+    if len(profiles) != 1 or profiles[0].kind != "rectangle":
+        return None
+    coordinates = profiles[0].coordinates
+    if len(coordinates) != 4 or not all(math.isfinite(value) for value in coordinates):
+        return None
+    return coordinates
 
 
 def _is_native_system_feature(feature: FeatureStep) -> bool:
@@ -1392,6 +1480,17 @@ def _xml_text(value: str) -> str:
 def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
     authored = objects[len(_BASE_OBJECTS) :]
     if (
+        len(authored) == 2
+        and authored[0].object_id == 26
+        and authored[0].name == "Sketch1"
+        and authored[0].class_name == "moProfileFeature_c"
+        and authored[1].object_id == 32
+        and authored[1].name == "Boss-Extrude1"
+        and authored[1].class_name == "moExtrusion_c"
+        and len(authored[1].dimensions) == 1
+    ):
+        return _base_rectangle_boss_payload(authored[0], authored[1])
+    if (
         len(authored) == 1
         and authored[0].object_id == 26
         and authored[0].name == "Imported1"
@@ -1424,6 +1523,31 @@ def _base_body_payload() -> bytes:
     for offset, value in _BASE_BODY_COUNTERS.items():
         output[offset] = value
     return bytes(output[:-4]) + _base_record(_BASE_BODY_FEATURE) + bytes(output[-4:])
+
+
+def _base_rectangle_boss_payload(
+    sketch: _WriteObject, extrusion: _WriteObject
+) -> bytes:
+    bounds = _write_rectangle_bounds(sketch)
+    if bounds is None:
+        raise SldprtFormatError("native rectangle record requires one closed rectangle")
+    minimum_x, minimum_y, maximum_x, maximum_y = bounds
+    points = (
+        (minimum_x, minimum_y),
+        (maximum_x, maximum_y),
+        (minimum_x, maximum_y),
+        (maximum_x, minimum_y),
+    )
+    output = bytearray(_base_record(_BASE_RECTANGLE_BOSS_FEATURES))
+    for offset, (x, y) in zip(_RECTANGLE_BOSS_POINT_OFFSETS, points, strict=True):
+        struct.pack_into("<2d", output, offset, x / 1000.0, y / 1000.0)
+    struct.pack_into(
+        "<d",
+        output,
+        _RECTANGLE_BOSS_DEPTH_OFFSET,
+        extrusion.dimensions[0].value_mm / 1000.0,
+    )
+    return bytes(output)
 
 
 def _class_declaration(name: str) -> bytes:

@@ -623,6 +623,51 @@ def test_source_less_native_rectangle_markers_roundtrip() -> None:
     ]
 
 
+def test_source_less_native_rectangle_boss_records_are_parametric() -> None:
+    source = document()
+    points = (
+        Vector2(-30.0, -15.0),
+        Vector2(30.0, -15.0),
+        Vector2(30.0, 15.0),
+        Vector2(-30.0, 15.0),
+    )
+    entities = tuple(
+        SketchEntity(
+            f"edge:{index}",
+            GeometryKind.LINE,
+            LineGeometry(points[index], points[(index + 1) % len(points)]),
+        )
+        for index in range(len(points))
+    )
+    sketch = Sketch(
+        source.sketches[0].id,
+        source.sketches[0].name,
+        source.sketches[0].support_plane_id,
+        entities,
+        closed_profile_entity_ids=(tuple(item.id for item in entities),),
+    )
+    length = ParameterValue(12.0, ValueKind.LENGTH, "mm")
+    feature = replace(source.feature_timeline[0], definition=ExtrusionFeature(length))
+    source = replace(source, sketches=(sketch,), feature_timeline=(feature,))
+    output = BytesIO()
+    write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    resolved = archive.require(RESOLVED_FEATURES_STREAM)
+    native = decode_native_model(archive.require(KEYWORDS_STREAM), resolved)
+    assert len(resolved) == 11285
+    assert native.sketches[0].object_id == 26
+    assert native.sketches[0].profiles[0].coordinates == (
+        -30.0,
+        -15.0,
+        30.0,
+        15.0,
+    )
+    assert native.operations[0].object_id == 32
+    assert native.operations[0].name == "Boss-Extrude1"
+    assert native.operations[0].length_mm == pytest.approx(12.0)
+    assert struct.unpack_from("<d", resolved, 10092)[0] == pytest.approx(0.012)
+
+
 def test_neutral_brep_writes_native_parasolid_partition() -> None:
     base = document()
     source = replace(
