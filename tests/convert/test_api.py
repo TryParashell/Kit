@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 from dataclasses import replace
 from importlib.metadata import distribution
+from io import BytesIO
 from inspect import isabstract
 from pathlib import Path
 from pkgutil import iter_modules
@@ -10,6 +11,7 @@ import tomllib
 
 import pytest
 
+import convert.api as api_module
 import convert.adapters as adapter_package
 from convert import (
     ApplicationUsabilityError,
@@ -120,6 +122,53 @@ def test_write_document_uses_the_same_default_and_strict_gate(tmp_path: Path) ->
     with pytest.raises(ApplicationUsabilityError):
         write_document(document, strict_destination, allow_carrier=False)
     assert not strict_destination.exists()
+
+
+def test_public_writes_force_self_containment_after_user_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[dict[str, object]] = []
+    sentinel = object()
+
+    class CapturingEngine:
+        def write(self, document, destination, *, format_id, options):
+            captured.append(dict(options.values))
+            return sentinel
+
+        def convert(
+            self,
+            source,
+            destination,
+            *,
+            source_format,
+            destination_format,
+            read_options,
+            write_options,
+        ):
+            captured.append(dict(write_options.values))
+            return sentinel
+
+    monkeypatch.setattr(api_module, "_engine", CapturingEngine())
+    assert (
+        write_document(
+            object(),
+            BytesIO(),
+            values={"require_self_contained": False},
+        )
+        is sentinel
+    )
+    assert (
+        convert(
+            b"source",
+            BytesIO(),
+            write_values={"require_self_contained": False},
+        )
+        is sentinel
+    )
+    assert len(captured) == 2
+    assert all(values["portable"] is True for values in captured)
+    assert all(values["allow_carrier"] is True for values in captured)
+    assert all(values["require_self_contained"] is True for values in captured)
 
 
 def test_public_api_reports_vendor_carriers_as_carrier_only(tmp_path) -> None:

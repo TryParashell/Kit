@@ -12,11 +12,12 @@ import zipfile
 import pytest
 
 from convert import ApplicationUsabilityError, open_document, write_document
-from convert.adapters.base import CarrierReason
+from convert.adapters.base import CarrierReason, TransferMode
 from convert.adapters.freecad import FreeCADAdapter
 from convert.adapters.freecad.brep import (
     FreeCADBrepWriteError,
     brep_model_brep,
+    proven_ascii_brep,
     triangle_mesh_brep,
 )
 from convert.opencascade import decode_ascii_brep, is_structurally_valid_ascii_brep
@@ -44,17 +45,20 @@ from interchange import (
     CylinderSurface,
     EllipseCurve,
     LinePcurve,
+    Mesh,
     NativeCurve,
     NurbsCurve,
     NurbsPcurve,
     NurbsSurface,
     OffsetSurface,
     PayloadRole,
+    Provenance,
     SphereSurface,
     TorusSurface,
     Transform,
     Vector2,
     Vector3,
+    frozen_mapping,
 )
 from tests.interchange.test_brep import triangle_brep
 
@@ -232,22 +236,29 @@ def test_periodic_cylinder_band_serializes_with_exact_seam_topology() -> None:
     assert b"3  3 4 CN 1 0 0 20\n" in encoded
 
 
-@pytest.mark.parametrize(
-    "source",
-    (
-        ROOT / "examples" / ".SLDPRT" / "example.SLDPRT",
-        ROOT / "examples" / "Random" / "Cover.SLDPRT",
-    ),
-)
-def test_supplied_solidworks_analytic_brep_serializes_to_native_open_cascade(
-    source: Path,
-) -> None:
-    document = open_document(source)
-    assert document.brep is not None
-    encoded = brep_model_brep(document.brep)
-    assert is_structurally_valid_ascii_brep(encoded)
-    pcurve_count = int(encoded.split(b"Curve2ds ", 1)[1].splitlines()[0])
-    assert pcurve_count >= len(document.brep.coedges)
+def test_supplied_solidworks_breps_pass_only_the_proven_native_gate() -> None:
+    expected = {
+        "Random/Addons/Belt_tensioner_pulley.SLDPRT",
+        "Random/Cylinder_heads/Cam_roller.SLDPRT",
+        "Random/Cylinder_heads/Timing_belt_roller.SLDPRT",
+        "Random/Cylinder_heads/Timing_belt_roller_2.SLDPRT",
+        "Random/Pistons/Piston_ring.SLDPRT",
+        "Random/Pistons/Piston_shaft.SLDPRT",
+    }
+    accepted: set[str] = set()
+    for source in sorted((ROOT / "examples").rglob("*.SLDPRT")):
+        if not source.is_file():
+            continue
+        document = open_document(source)
+        if document.brep is None:
+            continue
+        try:
+            encoded = brep_model_brep(document.brep)
+        except FreeCADBrepWriteError:
+            continue
+        assert is_structurally_valid_ascii_brep(encoded)
+        accepted.add(source.relative_to(ROOT / "examples").as_posix())
+    assert accepted == expected
 
 
 @pytest.mark.parametrize(
@@ -565,6 +576,87 @@ def test_public_sdk_accepts_supported_neutral_brep_as_near_lossless(
     assert open_document(destination).brep == model
 
 
+def test_unproven_brep_falls_back_to_visible_faceted_native_shape() -> None:
+    model = triangle_brep()
+    surface = model.surfaces[0]
+    unproven = replace(
+        model,
+        surfaces=(
+            CylinderSurface(
+                surface.id,
+                Vector3(0.0, 0.0, 0.0),
+                Vector3(0.0, 0.0, 1.0),
+                Vector3(1.0, 0.0, 0.0),
+                1.0,
+            ),
+        ),
+        bodies=(replace(model.bodies[0], design_body_id=""),),
+    )
+    mesh = Mesh(
+        "mesh:fallback",
+        "Fallback",
+        (
+            Vector3(0.0, 0.0, 0.0),
+            Vector3(1.0, 0.0, 0.0),
+            Vector3(0.0, 1.0, 0.0),
+        ),
+        ((0, 1, 2),),
+    )
+    document = CadDocument(
+        source=CadSource("json", "unproven.json", ""),
+        configurations=(Configuration("default", "Default", active=True),),
+        parameters=(),
+        support_planes=(),
+        sketches=(),
+        selections=(),
+        feature_timeline=(),
+        bodies=(),
+        meshes=(mesh,),
+        brep=unproven,
+        capabilities=frozenset({Capability.BREP, Capability.TESSELLATION}),
+    )
+    output = io.BytesIO()
+    result = FreeCADAdapter().write(document, output)
+    transfers = {value.capability: value for value in result.transfers}
+    assert transfers[Capability.BREP].mode is TransferMode.CARRIER
+    assert (
+        transfers[Capability.BREP].carrier_reason is CarrierReason.WRITER_UNIMPLEMENTED
+    )
+    assert transfers[Capability.TESSELLATION].mode is TransferMode.NATIVE
+    assert result.application_usable is True
+    assert result.vendor_loadable is True
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+        mesh_names = {
+            value.get("name", "")
+            for value in root.findall("./Objects/Object")
+            if value.get("type") == "Mesh::Feature"
+        }
+        assert mesh_names
+        assert any(
+            boolean.get("value", "").casefold() in {"1", "true"}
+            for value in root.findall("./ObjectData/Object")
+            if value.get("name") in mesh_names
+            for prop in value.findall("./Properties/Property[@name='Visibility']")
+            if (boolean := prop.find("Bool")) is not None
+        )
+        representations = {
+            string.get("value")
+            for prop in root.findall(".//Property[@name='Representation']")
+            if (string := prop.find("String")) is not None
+        }
+        assert "faceted" in representations
+        assert "neutral-brep" not in representations
+        shape_entries = [
+            name for name in archive.namelist() if name.endswith(".Shape.brp")
+        ]
+        assert len(shape_entries) == 1
+        assert is_structurally_valid_ascii_brep(archive.read(shape_entries[0]))
+    restored = FreeCADAdapter().read(output.getvalue())
+    assert restored.brep == unproven
+    assert restored.meshes == (mesh,)
+
+
 def test_public_sdk_rejects_header_only_brep_and_preserves_explicit_carrier(
     tmp_path: Path,
 ) -> None:
@@ -591,19 +683,93 @@ def test_public_sdk_rejects_header_only_brep_and_preserves_explicit_carrier(
     assert restored.brep_payloads[0].data == data
 
 
-def test_public_sdk_accepts_strictly_decoded_raw_brep_payload(tmp_path: Path) -> None:
+def test_structural_brep_with_unproven_wire_is_never_bound_as_native() -> None:
+    data = brep_model_brep(triangle_brep()).replace(
+        b"+6 0 +5 0 +4 0 *",
+        b"-6 0 +5 0 +4 0 *",
+    )
+    assert is_structurally_valid_ascii_brep(data)
+    assert proven_ascii_brep(data) is None
+    document = _raw_brep_document(data)
+    output = io.BytesIO()
+    result = FreeCADAdapter().write(document, output)
+    transfers = {value.capability: value for value in result.transfers}
+    assert transfers[Capability.BREP].mode is TransferMode.CARRIER
+    assert transfers[Capability.BREP].carrier_reason is CarrierReason.SOURCE_OPAQUE
+    assert result.application_usable is False
+    assert result.vendor_loadable is True
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        assert not any(name.endswith(".Shape.brp") for name in archive.namelist())
+    assert FreeCADAdapter().read(output.getvalue()).brep_payloads[0].data == data
+
+
+def test_forged_native_identity_cannot_bypass_the_brep_proof_gate() -> None:
+    data = brep_model_brep(triangle_brep()).replace(
+        b"+6 0 +5 0 +4 0 *",
+        b"-6 0 +5 0 +4 0 *",
+    )
+    document = _raw_brep_document(data)
+    payload = replace(
+        document.brep_payloads[0],
+        source_stream="Forged.Shape.brp",
+        provenance=Provenance("freecad.fcstd", "Forged.Shape", 1.0),
+        attributes=frozen_mapping(
+            {
+                "freecad_object": "Forged",
+                "freecad_property": "Shape",
+                "freecad_property_data": {
+                    "tag": "Property",
+                    "attributes": {
+                        "name": "Shape",
+                        "type": "Part::PropertyPartShape",
+                    },
+                    "children": (
+                        {
+                            "tag": "Part",
+                            "attributes": {"file": "Forged.Shape.brp"},
+                            "children": (),
+                        },
+                    ),
+                },
+            }
+        ),
+    )
+    document = replace(document, brep_payloads=(payload,))
+    output = io.BytesIO()
+    result = FreeCADAdapter().write(document, output)
+    transfers = {value.capability: value for value in result.transfers}
+    assert transfers[Capability.BREP].mode is TransferMode.CARRIER
+    assert transfers[Capability.NATIVE_PAYLOADS].mode is TransferMode.CARRIER
+    assert result.application_usable is False
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        assert not any(name.endswith(".Shape.brp") for name in archive.namelist())
+    assert FreeCADAdapter().read(output.getvalue()).brep_payloads[0].data == data
+
+
+def test_public_sdk_normalizes_proven_raw_brep_and_carries_exact_bytes(
+    tmp_path: Path,
+) -> None:
     data = brep_model_brep(triangle_brep())
     document = _raw_brep_document(data)
     destination = tmp_path / "valid.FCStd"
     result = write_document(document, destination)
-    assert result.near_lossless is True
-    assert {Capability.BREP, Capability.NATIVE_PAYLOADS} <= result.native_capabilities
+    assert result.near_lossless is False
+    assert Capability.BREP in result.native_capabilities
+    assert Capability.NATIVE_PAYLOADS in result.native_capabilities
+    assert Capability.NATIVE_PAYLOADS in result.carrier_capabilities
+    transfers = {value.capability: value for value in result.transfers}
+    assert transfers[Capability.NATIVE_PAYLOADS].mode is TransferMode.MIXED
+    assert (
+        transfers[Capability.NATIVE_PAYLOADS].carrier_reason
+        is CarrierReason.WRITER_UNIMPLEMENTED
+    )
     with zipfile.ZipFile(destination) as archive:
         shape_entries = [
             name for name in archive.namelist() if name.endswith(".Shape.brp")
         ]
         assert len(shape_entries) == 1
-        assert archive.read(shape_entries[0]) == data
+        assert archive.read(shape_entries[0]) == proven_ascii_brep(data)
+    assert open_document(destination).brep_payloads[0].data == data
 
 
 def test_unsupported_neutral_brep_remains_an_explicit_carrier() -> None:
@@ -632,6 +798,8 @@ def test_unsupported_neutral_brep_remains_an_explicit_carrier() -> None:
     result = FreeCADAdapter().write(document, output)
     assert Capability.BREP in result.carrier_capabilities
     assert Capability.BREP not in result.native_capabilities
+    assert result.application_usable is False
+    assert result.vendor_loadable is True
     with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
         assert not any(name.endswith(".Shape.brp") for name in archive.namelist())
 

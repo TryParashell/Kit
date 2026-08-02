@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import math
 import struct
 
 import pytest
@@ -9,20 +10,45 @@ from convert.adapters.solidworks.container import SldprtArchive
 from convert.adapters.solidworks.format import PARTITION_STREAM
 from convert.parasolid import (
     _ENTITY_MAGIC,
+    _RecordTables,
+    _array_record_fields,
+    _curve_parameter_domain,
+    _curve_point_at_parameter,
+    _nurbs_curve_point,
+    _nurbs_surface_point,
     _parasolid_header,
+    _parse_b_curve_record,
     _parse_chart_record,
     _parse_coedge,
     _parse_intersection_data_record,
     _parse_intersection_record,
+    _parse_nurbs_curve_record,
+    _parse_nurbs_surface_record,
+    _parse_trimmed_curve_record,
+    _record_start,
+    _resolve_trimmed_curve,
+    _scan_partition_records,
+    _write_nurbs_curve,
+    _write_nurbs_surface,
+    _xmt,
     decode_brep_model,
     decode_partition_stream,
 )
-from interchange import IntersectionCurve, NativeCurve
+from interchange import (
+    CircleCurve,
+    IntersectionCurve,
+    LineCurve,
+    NativeCurve,
+    NurbsCurve,
+    NurbsSurface,
+    Vector3,
+)
 
 
 ROOT = Path(__file__).parents[2]
 CRANKSHAFT = ROOT / "examples" / "Random" / "Crank" / "Crankshaft.SLDPRT"
 FUEL_INJECTOR = ROOT / "examples" / "Random" / "Cylinder_heads" / "Fuel_injector.SLDPRT"
+POPPET = ROOT / "examples" / "Random" / "Cylinder_heads" / "Poppet.SLDPRT"
 INTERSECTION_PARTS = (
     (ROOT / "examples" / "Random" / "Engine_mount_support.SLDPRT", 27, 2),
     (ROOT / "examples" / "Random" / "Pistons" / "Conrod.SLDPRT", 43, 2),
@@ -39,6 +65,63 @@ COMPACT_FIN_PARTS = (
         1,
     ),
 )
+NURBS_SURFACE_PARTS = (
+    (
+        ROOT / "examples" / "Random" / "Cylinder_heads" / "Cylinder_head.SLDPRT",
+        16,
+        16,
+    ),
+    (
+        ROOT / "examples" / "Random" / "Cylinder_heads" / "Exhaust_manifold.SLDPRT",
+        9,
+        9,
+    ),
+    (
+        ROOT / "examples" / "Random" / "Cylinder_heads" / "Exhaust_manifold_2.SLDPRT",
+        9,
+        9,
+    ),
+    (POPPET, 1, 1),
+    (ROOT / "examples" / "Random" / "Supercharger" / "Screw_1.SLDPRT", 6, 6),
+    (
+        ROOT / "examples" / "Random" / "Supercharger" / "Screw_2.SLDPRT",
+        12,
+        12,
+    ),
+    (
+        ROOT / "examples" / "Random" / "Supercharger" / "Supercharger_housing.SLDPRT",
+        3,
+        1,
+    ),
+    (
+        ROOT / "examples" / "Random" / "Supercharger" / "Throttle_housing.SLDPRT",
+        1,
+        1,
+    ),
+)
+NURBS_CURVE_PARTS = (
+    (ROOT / "examples" / "Random" / "Supercharger" / "Screw_1.SLDPRT", 18, 6),
+    (ROOT / "examples" / "Random" / "Supercharger" / "Screw_2.SLDPRT", 30, 12),
+)
+WATER_PUMP = ROOT / "examples" / "Random" / "Addons" / "Water_pump.SLDPRT"
+INTERSECTION_SUPPORT_PARTS = (
+    (
+        ROOT / "examples" / "Random" / "Cylinder_heads" / "Cylinder_head_cover.SLDPRT",
+        144,
+        99,
+        71,
+    ),
+    (
+        ROOT
+        / "examples"
+        / "Random"
+        / "Cylinder_heads"
+        / "Cylinder_head_cover_2.SLDPRT",
+        148,
+        103,
+        72,
+    ),
+)
 
 
 def _partition(path: Path) -> bytes:
@@ -48,6 +131,19 @@ def _partition(path: Path) -> bytes:
         for payload in decode_partition_stream(stream, PARTITION_STREAM)
         if payload.kind == "partition"
     )
+
+
+def _tables(path: Path) -> _RecordTables:
+    payload = _partition(path)
+    header = _parasolid_header(payload)
+    assert header is not None
+    tables = _scan_partition_records(payload[header.body_offset :])
+    assert tables is not None
+    return tables
+
+
+def _coordinates(value: Vector3) -> tuple[float, float, float]:
+    return value.x, value.y, value.z
 
 
 @pytest.mark.parametrize(("path", "expected"), COMPACT_FIN_PARTS)
@@ -177,3 +273,345 @@ def test_chart_parameter_sentinel_is_fail_closed() -> None:
     assert sentinel >= 0
     encoded[sentinel : sentinel + len(_ENTITY_MAGIC)] = bytes(len(_ENTITY_MAGIC))
     assert _parse_chart_record(bytes(encoded), 0) is None
+
+
+@pytest.mark.parametrize(("path", "surface_count", "used_count"), NURBS_SURFACE_PARTS)
+def test_native_b_surfaces_decode_complete_nurbs_descriptors_and_arrays(
+    path: Path, surface_count: int, used_count: int
+) -> None:
+    tables = _tables(path)
+    surfaces = tuple(
+        surface
+        for surface in tables.surfaces.values()
+        if isinstance(surface, NurbsSurface)
+    )
+    used_ids = {
+        f"sldprt:brep:surface:{record.references[4]}"
+        for record in tables.bridges.values()
+    }
+    assert len(surfaces) == surface_count
+    assert sum(surface.id in used_ids for surface in surfaces) == used_count
+    for surface in surfaces:
+        attributes = surface.attributes
+        assert attributes["descriptor_layout"] == "extended"
+        assert attributes["rational"] == bool(surface.weights)
+        assert attributes["vertex_dimension"] == (4 if surface.weights else 3)
+        assert attributes["surface_record"]
+        assert attributes["descriptor_record"]
+        assert attributes["surface_data_record"]
+        assert attributes["control_record"]
+        assert attributes["u_multiplicity_record"]
+        assert attributes["v_multiplicity_record"]
+        assert attributes["u_knot_record"]
+        assert attributes["v_knot_record"]
+
+
+@pytest.mark.parametrize(("path", "face_count", "curve_count"), NURBS_CURVE_PARTS)
+def test_native_b_curves_decode_exact_descriptors_arrays_and_edge_ranges(
+    path: Path, face_count: int, curve_count: int
+) -> None:
+    model = decode_brep_model(_partition(path))
+    assert model is not None
+    assert model.validate() == ()
+    assert len(model.faces) == face_count
+    curves = tuple(curve for curve in model.curves if isinstance(curve, NurbsCurve))
+    assert len(curves) == curve_count
+    vertices = {vertex.id: vertex for vertex in model.vertices}
+    edges_by_curve = {
+        curve.id: tuple(edge for edge in model.edges if edge.curve_id == curve.id)
+        for curve in curves
+    }
+    for curve in curves:
+        attributes = curve.attributes
+        assert attributes["carrier_layout"] == "extended"
+        assert attributes["rational"] is True
+        assert attributes["vertex_dimension"] == 4
+        assert attributes["control_count"] == len(curve.control_points)
+        assert attributes["knot_count"] == len(curve.knots)
+        assert len(attributes["array_references"]) == 3
+        assert attributes["curve_record"]
+        assert attributes["descriptor_record"]
+        assert attributes["curve_data_record"]
+        assert attributes["control_record"]
+        assert attributes["multiplicity_record"]
+        assert attributes["knot_record"]
+        assert len(curve.weights) == len(curve.control_points)
+        assert all(weight > 0.0 for weight in curve.weights)
+        domain = _curve_parameter_domain(curve)
+        assert domain is not None
+        assert domain[:2] == (0.0, 1.0)
+        edges = edges_by_curve[curve.id]
+        assert len(edges) == 1
+        edge = edges[0]
+        start = _nurbs_curve_point(curve, edge.start_parameter)
+        end = _nurbs_curve_point(curve, edge.end_parameter)
+        assert start is not None
+        assert end is not None
+        assert (
+            math.dist(
+                (start.x, start.y, start.z),
+                _coordinates(vertices[edge.start_vertex_id].point),
+            )
+            <= 1e-7
+        )
+        assert (
+            math.dist(
+                (end.x, end.y, end.z),
+                _coordinates(vertices[edge.end_vertex_id].point),
+            )
+            <= 1e-7
+        )
+
+
+def test_native_b_curve_descriptor_and_weight_corruption_fail_closed() -> None:
+    payload = _partition(NURBS_CURVE_PARTS[0][0])
+    model = decode_brep_model(payload)
+    assert model is not None
+    curve = next(curve for curve in model.curves if isinstance(curve, NurbsCurve))
+    descriptor = bytearray(curve.attributes["descriptor_record"])
+    start = _record_start(descriptor, 0, 0x88)
+    assert start is not None
+    decoded = _xmt(descriptor, start)
+    assert decoded is not None
+    descriptor_cursor = start + decoded[1]
+    assert descriptor[descriptor_cursor + 15] == 1
+    descriptor[descriptor_cursor + 15] = 0
+    assert _parse_nurbs_curve_record(bytes(descriptor), 0) is None
+    descriptor_offset = payload.find(curve.attributes["descriptor_record"])
+    assert descriptor_offset >= 0
+    corrupted_descriptor = bytearray(payload)
+    corrupted_descriptor[descriptor_offset : descriptor_offset + len(descriptor)] = (
+        descriptor
+    )
+    assert decode_brep_model(corrupted_descriptor) is None
+    control = bytearray(curve.attributes["control_record"])
+    fields = _array_record_fields(control, 0, 0x2D)
+    assert fields is not None
+    values_offset = fields[2]
+    control[values_offset + 24 : values_offset + 32] = bytes(8)
+    control_offset = payload.find(curve.attributes["control_record"])
+    assert control_offset >= 0
+    corrupted_control = bytearray(payload)
+    corrupted_control[control_offset : control_offset + len(control)] = control
+    assert decode_brep_model(corrupted_control) is None
+
+
+def test_compact_b_curve_requires_exact_writer_layout() -> None:
+    generated = NurbsCurve(
+        "curve:generated",
+        2,
+        (
+            Vector3(0.0, 0.0, 0.0),
+            Vector3(1.0, 2.0, 0.0),
+            Vector3(3.0, 2.0, 1.0),
+        ),
+        (0.0, 1.0),
+        (3, 3),
+        (1.0, 0.75, 1.0),
+    )
+    encoded = bytearray()
+    assert _write_nurbs_curve(encoded, 2, generated, 3) == 7
+    tables = _scan_partition_records(bytes(encoded))
+    assert tables is not None
+    decoded = tables.curves[2]
+    assert isinstance(decoded, NurbsCurve)
+    assert decoded.degree == generated.degree
+    assert decoded.knots == generated.knots
+    assert decoded.multiplicities == generated.multiplicities
+    assert decoded.weights == generated.weights
+    assert decoded.attributes["carrier_layout"] == "compact"
+    assert all(
+        math.dist(_coordinates(actual), _coordinates(expected)) <= 1e-12
+        for actual, expected in zip(decoded.control_points, generated.control_points)
+    )
+    long_attribute = b"\x00\x86\xff\xff\xff\x00\x02\x00\x03" + bytes(8)
+    long_descriptor = b"\x00\x86\x00\x02\xff\xff" + bytes(8)
+    assert _parse_b_curve_record(long_attribute, 0) is None
+    high_descriptor = _parse_b_curve_record(long_descriptor, 0)
+    assert high_descriptor is not None
+    assert high_descriptor.descriptor_reference == 0xFFFF
+
+
+def test_used_trimmed_curves_preserve_native_ranges_and_validate_geometry() -> None:
+    tables = _tables(WATER_PUMP)
+    used_curve_attributes = {
+        record.references[3]
+        for record in tables.edge_uses.values()
+        if len(record.references) > 3
+    }
+    curves = tuple(
+        curve
+        for attribute, curve in tables.curves.items()
+        if attribute in used_curve_attributes
+        and curve.attributes.get("trimmed") is True
+    )
+    assert len(curves) == 5
+    assert sum(isinstance(curve, LineCurve) for curve in curves) == 3
+    assert sum(isinstance(curve, CircleCurve) for curve in curves) == 2
+    for curve in curves:
+        attributes = curve.attributes
+        assert len(attributes["header_references"]) == 5
+        assert attributes["basis_reference"] > 1
+        assert attributes["basis_curve_id"]
+        assert attributes["trim_record"]
+        evaluated = tuple(
+            _curve_point_at_parameter(curve, parameter)
+            for parameter in attributes["trim_parameters"]
+        )
+        assert all(point is not None for point in evaluated)
+        assert all(
+            math.dist(_coordinates(actual), _coordinates(expected)) <= 1e-7
+            for actual, expected in zip(evaluated, attributes["trim_points"])
+            if actual is not None
+        )
+        if isinstance(curve, LineCurve):
+            assert attributes["trim_parameters"] == pytest.approx(
+                tuple(value * 1000.0 for value in attributes["trim_parameters_native"])
+            )
+        else:
+            assert attributes["trim_parameters"] == attributes["trim_parameters_native"]
+
+
+def test_trimmed_curve_range_and_point_corruption_fail_closed() -> None:
+    tables = _tables(WATER_PUMP)
+    curve = next(
+        curve
+        for curve in tables.curves.values()
+        if isinstance(curve, LineCurve) and curve.attributes.get("trimmed") is True
+    )
+    raw = curve.attributes["trim_record"]
+    record = _parse_trimmed_curve_record(raw, 0)
+    assert record is not None
+    basis = tables.curves[record.basis_reference]
+    reversed_range = bytearray(raw)
+    struct.pack_into(">d", reversed_range, len(raw) - 8, record.parameters[0] - 0.001)
+    range_record = _parse_trimmed_curve_record(bytes(reversed_range), 0)
+    assert range_record is not None
+    assert _resolve_trimmed_curve(range_record, {record.basis_reference: basis}) is None
+    displaced_point = bytearray(raw)
+    struct.pack_into(
+        ">d", displaced_point, len(raw) - 64, record.points[0].x / 1000.0 + 0.001
+    )
+    point_record = _parse_trimmed_curve_record(bytes(displaced_point), 0)
+    assert point_record is not None
+    assert _resolve_trimmed_curve(point_record, {record.basis_reference: basis}) is None
+
+
+def test_periodic_nurbs_support_proves_the_poppet_intersection() -> None:
+    model = decode_brep_model(_partition(POPPET))
+    assert model is not None
+    assert model.validate() == ()
+    assert len(model.faces) == 12
+    surface = next(
+        surface for surface in model.surfaces if isinstance(surface, NurbsSurface)
+    )
+    curve = next(
+        curve for curve in model.curves if isinstance(curve, IntersectionCurve)
+    )
+    assert surface.id == curve.second_surface_id
+    assert surface.periodic_u is True
+    assert surface.periodic_v is False
+    assert surface.degree_u == 3
+    assert surface.degree_v == 2
+    assert len(surface.control_points) == 7
+    assert len(surface.control_points[0]) == 97
+    lane = curve.attributes["support_uv"][1]
+    assert len(lane) == len(curve.samples) == 21
+    evaluated = tuple(_nurbs_surface_point(surface, parameters) for parameters in lane)
+    assert all(point is not None for point in evaluated)
+    assert all(
+        math.dist(
+            (point.x, point.y, point.z),
+            (sample.x, sample.y, sample.z),
+        )
+        <= curve.tolerance
+        for point, sample in zip(evaluated, curve.samples)
+        if point is not None
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "face_count", "surface_count", "intersection_count"),
+    INTERSECTION_SUPPORT_PARTS,
+)
+def test_intersection_support_surfaces_remain_reachable_without_owning_faces(
+    path: Path, face_count: int, surface_count: int, intersection_count: int
+) -> None:
+    model = decode_brep_model(_partition(path))
+    assert model is not None
+    assert model.validate() == ()
+    assert len(model.faces) == face_count
+    assert len(model.surfaces) == surface_count
+    intersections = tuple(
+        curve for curve in model.curves if isinstance(curve, IntersectionCurve)
+    )
+    assert len(intersections) == intersection_count
+    surface_ids = frozenset(surface.id for surface in model.surfaces)
+    assert all(
+        curve.first_surface_id in surface_ids and curve.second_surface_id in surface_ids
+        for curve in intersections
+    )
+
+
+def test_nurbs_surface_descriptor_and_weight_corruption_fail_closed() -> None:
+    payload = _partition(POPPET)
+    model = decode_brep_model(payload)
+    assert model is not None
+    surface = next(
+        surface for surface in model.surfaces if isinstance(surface, NurbsSurface)
+    )
+    descriptor = bytearray(surface.attributes["descriptor_record"])
+    start = _record_start(descriptor, 0, 0x7E)
+    assert start is not None
+    decoded = _xmt(descriptor, start)
+    assert decoded is not None
+    descriptor_cursor = start + decoded[1]
+    assert descriptor[descriptor_cursor + 24] == 1
+    descriptor[descriptor_cursor + 24] = 0
+    assert _parse_nurbs_surface_record(bytes(descriptor), 0) is None
+    descriptor_offset = payload.find(surface.attributes["descriptor_record"])
+    assert descriptor_offset >= 0
+    corrupted_descriptor = bytearray(payload)
+    corrupted_descriptor[descriptor_offset : descriptor_offset + len(descriptor)] = (
+        descriptor
+    )
+    assert decode_brep_model(corrupted_descriptor) is None
+    control = bytearray(surface.attributes["control_record"])
+    fields = _array_record_fields(control, 0, 0x2D)
+    assert fields is not None
+    values_offset = fields[2]
+    control[values_offset + 24 : values_offset + 32] = bytes(8)
+    control_offset = payload.find(surface.attributes["control_record"])
+    assert control_offset >= 0
+    corrupted_control = bytearray(payload)
+    corrupted_control[control_offset : control_offset + len(control)] = control
+    assert decode_brep_model(corrupted_control) is None
+
+
+def test_compact_generated_nurbs_surface_redecodes_without_inference_ambiguity() -> (
+    None
+):
+    surface = NurbsSurface(
+        "surface:generated",
+        1,
+        1,
+        (
+            (Vector3(0.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0)),
+            (Vector3(1.0, 0.0, 0.0), Vector3(1.0, 1.0, 0.0)),
+        ),
+        (0.0, 1.0),
+        (0.0, 1.0),
+        (2, 2),
+        (2, 2),
+    )
+    encoded = bytearray()
+    assert _write_nurbs_surface(encoded, 2, surface, 3) == 9
+    tables = _scan_partition_records(bytes(encoded))
+    assert tables is not None
+    decoded = tables.surfaces[2]
+    assert isinstance(decoded, NurbsSurface)
+    assert decoded.degree_u == decoded.degree_v == 1
+    assert decoded.control_points == surface.control_points
+    assert decoded.knots_u == decoded.knots_v == (0.0, 1.0)
+    assert decoded.multiplicities_u == decoded.multiplicities_v == (2, 2)
+    assert decoded.attributes["descriptor_layout"] == "compact"

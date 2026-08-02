@@ -11,8 +11,8 @@ import struct
 
 import pytest
 
-from convert import convert, open_document, registry
-from interchange import AssemblyData, CadDocument, source_payload_indexes
+from convert import CarrierReason, convert, open_document, registry
+from interchange import AssemblyData, CadDocument, Capability, source_payload_indexes
 
 
 ROOT = Path(__file__).parents[2]
@@ -232,6 +232,26 @@ def _assert_truthful_vendor_result(
     suffix: str,
     is_assembly: bool,
 ) -> None:
+    assert not result.application_usable or result.vendor_loadable
+    expected_near_lossless = (
+        result.application_usable
+        and result.vendor_loadable
+        and not result.requirements
+        and not result.dropped
+        and all(
+            transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
+            for transfer in result.transfers
+            if transfer.carrier_reason is not None
+        )
+    )
+    assert result.near_lossless is expected_near_lossless
+    geometry_transfers = {
+        transfer.capability
+        for transfer in result.transfers
+        if transfer.capability in {Capability.BREP, Capability.TESSELLATION}
+    }
+    if suffix == ".FCStd" and geometry_transfers and result.application_usable:
+        assert geometry_transfers & result.output.native_capabilities
     if suffix not in {".SLDPRT", ".SLDASM", ".CATPart", ".CATProduct"}:
         return
     metadata = result.output.metadata
@@ -240,19 +260,38 @@ def _assert_truthful_vendor_result(
     assert isinstance(metadata["native_history"], bool)
     assert isinstance(metadata["native_assembly"], bool)
     assert isinstance(metadata["native_self_contained"], bool)
-    assert metadata["referenced_files_written"] == 0
+    referenced_files_written = metadata["referenced_files_written"]
+    assert isinstance(referenced_files_written, int)
+    assert referenced_files_written >= 0
+    if referenced_files_written:
+        assert is_assembly
+        assert result.application_usable is True
+        assert result.vendor_loadable is True
+    if not result.vendor_loadable:
+        assert referenced_files_written == 0
     if metadata["compatibility"] == "native-exact":
         assert metadata["vendor_loadable"] is True
         assert metadata["native_geometry"] is True
         assert metadata["native_history"] is True
         assert metadata["native_assembly"] is is_assembly
         assert metadata["native_self_contained"] is (not is_assembly)
-    else:
-        assert metadata["vendor_loadable"] is False
-        assert metadata["native_geometry"] is False
-        assert metadata["native_history"] is False
-        assert metadata["native_assembly"] is False
-        assert metadata["native_self_contained"] is False
+        return
+    native = result.output.native_capabilities
+    if metadata["native_geometry"]:
+        assert Capability.BREP in native
+    if metadata["native_history"]:
+        history = tuple(
+            transfer
+            for transfer in result.output.transfers
+            if transfer.capability is Capability.PARAMETRIC_HISTORY
+        )
+        assert not history or Capability.PARAMETRIC_HISTORY in native
+    if metadata["native_assembly"]:
+        assert is_assembly
+        assert Capability.ASSEMBLIES in native
+    if metadata["native_self_contained"]:
+        assert result.application_usable is True
+        assert result.vendor_loadable is True
 
 
 def _convert_with_application_gate(source, destination):

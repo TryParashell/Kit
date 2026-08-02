@@ -6,12 +6,21 @@ from io import BytesIO, StringIO
 import json
 from pathlib import Path
 import struct
+from xml.etree import ElementTree as ET
+import zipfile
 import zlib
 
 import pytest
 
-from convert import ApplicationUsabilityError, convert, open_document, write_document
-from convert.adapters import ReadOptions
+from convert import (
+    ApplicationUsabilityError,
+    convert,
+    open_document,
+    registry,
+    write_document,
+)
+from convert.adapters import ReadOptions, WriteOptions
+from convert.adapters.base import CarrierReason, TransferMode
 from convert.adapters.catia import (
     CatiaAdapter,
     CatiaAdapterError,
@@ -446,19 +455,23 @@ def test_native_catia_roundtrip_is_byte_exact(source: Path, tmp_path: Path) -> N
     output = tmp_path / source.name
     if document.assembly is not None:
         with pytest.raises(ApplicationUsabilityError) as captured:
-            write_document(
+            registry.write(
                 document,
                 output,
-                values={"portable": False},
-                allow_carrier=False,
+                options=WriteOptions(values={"portable": False}),
             )
         assert captured.value.requirements == ("referenced CATIA component files",)
         assert not output.exists()
-    result = write_document(
+    result = registry.write(
         document,
         output,
-        values={"portable": False},
-        allow_carrier=document.assembly is not None,
+        options=WriteOptions(
+            values={
+                "portable": False,
+                "allow_carrier": document.assembly is not None,
+                "require_self_contained": document.assembly is None,
+            }
+        ),
     )
     assert result.metadata["mode"] == "exact_native_roundtrip"
     assert result.metadata["vendor_loadable"] is True
@@ -534,11 +547,16 @@ def test_generated_carrier_preserves_native_pair_for_exact_replay(
         preserved_document.attributes["catia.replay_semantic_sha256"], str
     )
     replay = tmp_path / f"replay{source.suffix}"
-    replay_result = write_document(
+    replay_result = registry.write(
         restored,
         replay,
-        values={"portable": False},
-        allow_carrier=source.suffix.casefold() == ".catproduct",
+        options=WriteOptions(
+            values={
+                "portable": False,
+                "allow_carrier": source.suffix.casefold() == ".catproduct",
+                "require_self_contained": source.suffix.casefold() != ".catproduct",
+            }
+        ),
     )
     assert replay_result.metadata["mode"] == "exact_native_roundtrip"
     assert replay_result.requirements == (
@@ -1104,6 +1122,39 @@ def test_native_catpart_retains_declared_cgr_tessellation_on_request() -> None:
     assert Capability.BREP not in document.capabilities
 
 
+def test_unresolved_catpart_visibility_fails_closed_and_reverses_exactly(
+    tmp_path: Path,
+) -> None:
+    source = CATPARTS / "Banjo.CATPart"
+    original = open_document(source)
+    output = tmp_path / "Banjo.FCStd"
+    result = convert(source, output)
+    transfers = {value.capability: value for value in result.transfers}
+    assert result.application_usable is False
+    assert result.vendor_loadable is True
+    assert result.near_lossless is False
+    for capability in (Capability.BREP, Capability.TESSELLATION):
+        assert transfers[capability].mode is TransferMode.CARRIER
+        assert transfers[capability].carrier_reason is CarrierReason.SOURCE_OPAQUE
+    with zipfile.ZipFile(output) as archive:
+        names = archive.namelist()
+        root = ET.fromstring(archive.read("Document.xml"))
+        assert not any(name.endswith(".Shape.brp") for name in names)
+        assert not any(name.endswith(".MeshKernel.bms") for name in names)
+        assert not any(
+            value.get("type") == "Mesh::Feature"
+            for value in root.findall("./Objects/Object")
+        )
+        assert not root.findall(".//Part[@file]")
+        assert not root.findall(".//Mesh[@file]")
+    assert open_document(output) == original
+    reversed_part = tmp_path / "Banjo.CATPart"
+    reversed_result = convert(output, reversed_part)
+    assert reversed_result.application_usable is True
+    assert reversed_result.vendor_loadable is True
+    assert reversed_part.read_bytes() == source.read_bytes()
+
+
 def test_solidworks_part_roundtrips_through_generated_catpart(
     tmp_path: Path,
 ) -> None:
@@ -1339,7 +1390,7 @@ def test_modified_native_document_preserves_native_base_with_neutral_edits(
     assert "catia.replay_semantic_sha256" not in preserved.attributes
     replay = tmp_path / "ChangedReplay.CATPart"
     replay_result = write_document(restored, replay, allow_carrier=True)
-    assert replay_result.metadata["mode"] == "exact_native_roundtrip"
+    assert replay_result.metadata["mode"] == "exact_carrier_roundtrip"
     assert replay_result.metadata["compatibility"] == "native-base-neutral-overlay"
     assert replay.read_bytes() == output.read_bytes()
     tampered = bytearray(output.read_bytes())
@@ -1391,7 +1442,7 @@ def test_embedded_manifest_applies_read_options_and_replays_exactly(
     complete = open_document(output)
     replay = tmp_path / "Replay.CATPart"
     result = write_catia(complete, replay)
-    assert result.metadata["mode"] == "exact_native_roundtrip"
+    assert result.metadata["mode"] == "exact_carrier_roundtrip"
     assert replay.read_bytes() == output.read_bytes()
 
 
@@ -1562,7 +1613,7 @@ def test_generated_carrier_binding_rejects_mutated_physical_stream() -> None:
     document = CatiaAdapter().read(carrier_data)
     unchanged = BytesIO()
     result = write_catia(document, unchanged)
-    assert result.metadata["mode"] == "exact_native_roundtrip"
+    assert result.metadata["mode"] == "exact_carrier_roundtrip"
     assert result.metadata["compatibility"] == "kit-neutral-only"
     assert result.metadata["vendor_loadable"] is False
     assert unchanged.getvalue() == carrier_data
@@ -1809,13 +1860,11 @@ def test_engine_reports_solidworks_alias_and_output_adapter(tmp_path: Path) -> N
     result = convert(
         SLDASM,
         output,
-        write_values={"portable": False},
-        allow_carrier=True,
     )
     assert result.source_format == "solidworks.sldasm"
     assert result.destination_format == "solidworks.sldasm"
     assert result.output.adapter == "solidworks.sldasm"
-    assert result.requirements == ("referenced SOLIDWORKS component files",)
+    assert result.requirements == ()
 
 
 def test_cfv2_rejects_inconsistent_outer_directory() -> None:

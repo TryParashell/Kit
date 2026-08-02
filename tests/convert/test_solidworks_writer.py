@@ -16,6 +16,7 @@ from convert import (
     registry,
     write_document,
 )
+from convert.adapters import WriteOptions
 from convert.adapters.catia import read_catia, write_catia
 from convert.adapters.freecad import read_freecad, write_freecad
 from convert.adapters.solidworks import (
@@ -28,6 +29,10 @@ from convert.adapters.solidworks import (
     read_sldprt,
     write_sldprt,
 )
+from convert.adapters.solidworks.adapter import (
+    _native_stream_sha256,
+    _semantic_sha256,
+)
 from convert.adapters.solidworks.format import (
     KIT_DOCUMENT_STREAM,
     KIT_NATIVE_STREAM,
@@ -35,6 +40,7 @@ from convert.adapters.solidworks.format import (
 )
 from interchange import (
     BrepPayload,
+    CadDocument,
     Capability,
     Diagnostic,
     MateAlignment,
@@ -229,6 +235,35 @@ def test_semantic_edits_disable_exact_source_replay(change: str) -> None:
         assert restored.metadata["user.tag"] == "changed"
     else:
         assert restored.diagnostics[-1].code == "user.changed"
+
+
+def test_recomputed_source_semantic_digest_cannot_forge_native_exact_replay() -> None:
+    document = read_sldprt(SAMPLE)
+    feature = document.feature_timeline[0]
+    changed = replace(
+        document,
+        feature_timeline=(
+            replace(feature, name="Forged metadata cannot certify native semantics"),
+            *document.feature_timeline[1:],
+        ),
+    )
+    changed = replace(
+        changed,
+        metadata=frozen_mapping(
+            {
+                **changed.metadata,
+                "solidworks_source_semantic_sha256": _semantic_sha256(changed),
+            }
+        ),
+    )
+    output = BytesIO()
+    result = write_sldprt(changed, output)
+    assert result.metadata["mode"] == "template"
+    assert result.metadata["compatibility"] == "native-source-with-kit-neutral"
+    assert output.getvalue() != SAMPLE.read_bytes()
+    assert read_sldprt(output.getvalue()).feature_timeline[0].name == (
+        "Forged metadata cannot certify native semantics"
+    )
 
 
 def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> None:
@@ -588,6 +623,111 @@ def test_native_template_patches_driving_dimension_without_carrier_opt_in(
     assert native_parameter.value.value == pytest.approx(target_value)
 
 
+def test_recomputed_attestation_cannot_forge_native_template_claims(
+    tmp_path,
+) -> None:
+    source = read_sldprt(SAMPLE)
+    parameter = source.parameters[0]
+    native_value = float(parameter.value.value) + 1.25
+    native_document = replace(
+        source,
+        parameters=(
+            replace(parameter, value=replace(parameter.value, value=native_value)),
+            *source.parameters[1:],
+        ),
+    )
+    trusted = tmp_path / "trusted.SLDPRT"
+    trusted_result = write_document(native_document, trusted)
+    assert trusted_result.metadata["compatibility"] == "native-template"
+    archive = SldprtArchive.open(trusted)
+    streams = archive.streams
+    embedded = CadDocument.from_json(streams[KIT_DOCUMENT_STREAM].decode("utf-8"))
+    embedded_parameter = embedded.parameters[0]
+    forged_value = native_value + 7.5
+    forged_document = replace(
+        embedded,
+        parameters=(
+            replace(
+                embedded_parameter,
+                value=replace(embedded_parameter.value, value=forged_value),
+            ),
+            *embedded.parameters[1:],
+        ),
+    )
+    forged_manifest = forged_document.to_json(indent=None).encode("utf-8")
+    streams[KIT_DOCUMENT_STREAM] = forged_manifest
+    attestation = json.loads(streams[KIT_NATIVE_STREAM].decode("utf-8"))
+    attestation["embedded_sha256"] = hashlib.sha256(forged_manifest).hexdigest()
+    attestation["semantic_sha256"] = _semantic_sha256(forged_document)
+    attestation["native_stream_sha256"] = _native_stream_sha256(streams)
+    streams[KIT_NATIVE_STREAM] = json.dumps(
+        attestation, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    forged = build_sldprt(
+        streams,
+        file_id=archive.file_id,
+        format_version=archive.format_version,
+    )
+    restored = read_sldprt(forged)
+    assert restored.parameters[0].value.value == pytest.approx(forged_value)
+    blocked = tmp_path / "blocked.SLDPRT"
+    with pytest.raises(ApplicationUsabilityError):
+        write_document(restored, blocked, allow_carrier=False)
+    assert not blocked.exists()
+    output = tmp_path / "carrier.SLDPRT"
+    result = write_document(restored, output)
+    assert result.application_usable is False
+    assert result.vendor_loadable is False
+    assert result.metadata["compatibility"] == "kit-neutral-only"
+    assert result.near_lossless is False
+    assert output.read_bytes() == forged
+
+
+def test_attestation_cannot_promote_kit_stream_to_native_exact(tmp_path) -> None:
+    source = read_sldprt(SAMPLE)
+    parameter = source.parameters[0]
+    edited = replace(
+        source,
+        parameters=(
+            replace(
+                parameter,
+                value=replace(
+                    parameter.value,
+                    value=float(parameter.value.value) + 1.25,
+                ),
+            ),
+            *source.parameters[1:],
+        ),
+    )
+    trusted = tmp_path / "trusted.SLDPRT"
+    write_document(edited, trusted)
+    archive = SldprtArchive.open(trusted)
+    streams = archive.streams
+    attestation = json.loads(streams[KIT_NATIVE_STREAM].decode("utf-8"))
+    attestation["compatibility"] = "native-exact"
+    attestation["application_usable"] = False
+    attestation["vendor_loadable"] = False
+    streams[KIT_NATIVE_STREAM] = json.dumps(
+        attestation, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    forged = build_sldprt(
+        streams,
+        file_id=archive.file_id,
+        format_version=archive.format_version,
+    )
+    restored = read_sldprt(forged)
+    blocked = tmp_path / "blocked.SLDPRT"
+    with pytest.raises(ApplicationUsabilityError):
+        write_document(restored, blocked, allow_carrier=False)
+    assert not blocked.exists()
+    output = tmp_path / "carrier.SLDPRT"
+    result = write_document(restored, output)
+    assert result.application_usable is False
+    assert result.vendor_loadable is False
+    assert result.metadata["compatibility"] == "kit-neutral-only"
+    assert result.carrier_capabilities == result.transferred_capabilities
+
+
 def test_native_template_patches_same_width_feature_name(tmp_path) -> None:
     source = read_sldprt(SAMPLE)
     feature = source.feature_timeline[0]
@@ -762,7 +902,17 @@ def test_public_sdk_defaults_to_portable_assembly_writes(tmp_path) -> None:
     assert portable_result.near_lossless is True
     assert read_sldprt(portable).assembly == source.assembly
     exact = tmp_path / "exact.SLDASM"
-    exact_result = write_document(source, exact, values={"portable": False})
+    exact_result = registry.write(
+        source,
+        exact,
+        options=WriteOptions(
+            values={
+                "portable": False,
+                "allow_carrier": True,
+                "require_self_contained": False,
+            },
+        ),
+    )
     assert exact_result.metadata["compatibility"] == "native-exact"
     assert exact_result.metadata["native_self_contained"] is False
     assert exact_result.requirements == ("referenced SOLIDWORKS component files",)

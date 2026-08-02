@@ -578,7 +578,7 @@ def test_catproduct_to_fcstd_structural_roundtrip(tmp_path: Path) -> None:
     assert not output.exists()
     assert tuple(tmp_path.iterdir()) == ()
     result = convert(source, output, allow_carrier=True)
-    assert result.application_usable is True
+    assert result.application_usable is False
     assert result.vendor_loadable is True
     assert result.near_lossless is False
     restored = open_document(output)
@@ -613,6 +613,14 @@ def test_catproduct_to_fcstd_structural_roundtrip(tmp_path: Path) -> None:
             target = target_node.get("value", "")
             assert target
             assert root.find(f"./Objects/Object[@name='{target}']") is not None
+            assert not any(name.endswith(".Shape.brp") for name in names)
+            assert not any(name.endswith(".MeshKernel.bms") for name in names)
+            assert not any(
+                value.get("type") == "Mesh::Feature"
+                for value in root.findall("./Objects/Object")
+            )
+            assert not root.findall(".//Part[@file]")
+            assert not root.findall(".//Mesh[@file]")
             if cgm_payloads:
                 assert len(cgm_payloads) == 1
                 cgm = cgm_payloads[0]
@@ -620,7 +628,6 @@ def test_catproduct_to_fcstd_structural_roundtrip(tmp_path: Path) -> None:
                 assert entry in names
                 assert archive.read(entry) == cgm.data
                 assert "interchange/native/catia_native_cgm.brp" not in names
-                assert not any(name.endswith(".Shape.brp") for name in names)
                 cgm_count += 1
     assert cgm_count == 18
     with zipfile.ZipFile(output) as archive:

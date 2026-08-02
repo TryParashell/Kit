@@ -650,7 +650,10 @@ def test_carrier_opt_in_cannot_promote_usability_flags() -> None:
     assert result.metadata["vendor_loadable"] is False
 
 
-def test_default_write_requires_no_external_requirements() -> None:
+@pytest.mark.parametrize("values", ({}, {"allow_carrier": True}))
+def test_default_write_requires_no_external_requirements(
+    values: dict[str, bool],
+) -> None:
     class RequirementAdapter(_ResultAdapter):
         def write(self, document, destination, options=None):
             return replace(
@@ -670,10 +673,109 @@ def test_default_write_requires_no_external_requirements() -> None:
     registry.register(RequirementAdapter(info))
     destination = BytesIO()
     with pytest.raises(ApplicationUsabilityError) as captured:
-        registry.write(document(), destination, format_id=info.format_id)
+        registry.write(
+            document(),
+            destination,
+            format_id=info.format_id,
+            options=WriteOptions(values=values),
+        )
     assert destination.getvalue() == b""
     assert captured.value.issues == ("external_requirements",)
     assert captured.value.requirements == ("external application",)
+
+
+def test_self_contained_stream_rejects_requirements_with_carriers_allowed() -> None:
+    class RequirementAdapter(_ResultAdapter):
+        def write(self, document, destination, options=None):
+            return replace(
+                super().write(document, destination, options),
+                requirements=("external application",),
+            )
+
+    info = AdapterInfo(
+        "format.self-contained-stream",
+        "Self-contained stream",
+        "1",
+        (".stream",),
+        capabilities=frozenset(Capability),
+        native_capabilities=frozenset(Capability),
+    )
+    registry = AdapterRegistry()
+    registry.register(RequirementAdapter(info))
+    destination = BytesIO(b"original")
+    with pytest.raises(ApplicationUsabilityError) as captured:
+        registry.write(
+            document(),
+            destination,
+            format_id=info.format_id,
+            options=WriteOptions(
+                values={
+                    "allow_carrier": True,
+                    "require_self_contained": True,
+                }
+            ),
+        )
+    assert destination.getvalue() == b"original"
+    assert captured.value.issues == ("external_requirements",)
+    assert captured.value.requirements == ("external application",)
+
+
+def test_self_contained_path_rejects_requirement_bundle_before_commit(
+    tmp_path: Path,
+) -> None:
+    class RequirementBundleAdapter(_ResultAdapter):
+        def supports(self, document, destination):
+            return isinstance(destination, (str, Path))
+
+        def write(self, document, destination, options=None):
+            path = Path(destination).expanduser().resolve()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"generated")
+            (path.parent / "component.bin").write_bytes(b"generated component")
+            return WriteResult(
+                path,
+                self.info.format_id,
+                len(b"generated"),
+                requirements=("external component file",),
+                application_usable=True,
+                vendor_loadable=True,
+            )
+
+    info = AdapterInfo(
+        "format.self-contained-path",
+        "Self-contained path",
+        "1",
+        (".bundle",),
+        capabilities=frozenset(Capability),
+        native_capabilities=frozenset(Capability),
+    )
+    registry = AdapterRegistry()
+    registry.register(RequirementBundleAdapter(info))
+    destination = tmp_path / "existing.bundle"
+    component = tmp_path / "component.bin"
+    destination.write_bytes(b"original")
+    component.write_bytes(b"original component")
+    with pytest.raises(ApplicationUsabilityError) as captured:
+        registry.write(
+            document(),
+            destination,
+            format_id=info.format_id,
+            options=WriteOptions(
+                overwrite=True,
+                values={
+                    "allow_carrier": True,
+                    "require_self_contained": True,
+                },
+            ),
+        )
+    assert destination.read_bytes() == b"original"
+    assert component.read_bytes() == b"original component"
+    assert tuple(sorted(path.name for path in tmp_path.iterdir())) == (
+        "component.bin",
+        "existing.bundle",
+    )
+    assert captured.value.issues == ("external_requirements",)
+    assert captured.value.requirements == ("external component file",)
 
 
 def test_mixed_transfer_is_truthful_in_native_and_carrier_views() -> None:

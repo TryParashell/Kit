@@ -14,7 +14,13 @@ import zlib
 
 import pytest
 
-from convert import ApplicationUsabilityError, convert, open_document, write_document
+from convert import (
+    ApplicationUsabilityError,
+    convert,
+    open_document,
+    registry,
+    write_document,
+)
 from convert.adapters.base import CarrierReason, ReadOptions, TransferMode, WriteOptions
 from convert.adapters.freecad import (
     FreeCADAdapter,
@@ -3529,20 +3535,24 @@ def test_nonportable_freecad_replay_requires_explicit_opt_in(tmp_path) -> None:
     document = open_document(source)
     blocked = tmp_path / "blocked.FCStd"
     with pytest.raises(ApplicationUsabilityError) as captured:
-        write_document(
+        registry.write(
             document,
             blocked,
-            values={"portable": False},
-            allow_carrier=False,
+            options=WriteOptions(values={"portable": False}),
         )
     assert captured.value.requirements == ("referenced FreeCAD component files",)
     assert not blocked.exists()
     explicit = tmp_path / "explicit.FCStd"
-    result = write_document(
+    result = registry.write(
         document,
         explicit,
-        values={"portable": False},
-        allow_carrier=True,
+        options=WriteOptions(
+            values={
+                "portable": False,
+                "allow_carrier": True,
+                "require_self_contained": False,
+            },
+        ),
     )
     assert result.requirements == ("referenced FreeCAD component files",)
     assert result.metadata["native_self_contained"] is False
@@ -3561,6 +3571,117 @@ def test_native_freecad_part_exact_replay_remains_default_usable(tmp_path) -> No
     assert result.requirements == ()
     assert result.near_lossless is True
     assert destination.read_bytes() == source.read_bytes()
+
+
+def _forged_native_brep_document(document, data: bytes):
+    payload = next(
+        value for value in document.brep_payloads if value.role is PayloadRole.BREP
+    )
+    forged_payload = replace(
+        payload,
+        data=data,
+        sha256=hashlib.sha256(data).hexdigest(),
+    )
+    forged = replace(
+        document,
+        brep_payloads=tuple(
+            forged_payload if value.id == payload.id else value
+            for value in document.brep_payloads
+        ),
+    )
+    return freecad_adapter_module._annotate_native_sources(forged)
+
+
+@pytest.mark.parametrize("rebuild", (False, True))
+def test_recomputed_semantic_digest_cannot_authorize_changed_native_brep(
+    rebuild: bool,
+) -> None:
+    document = FreeCADAdapter().read(_native_part_fixture())
+    forged_data = b"\nCASCADE Topology V1, (c) Matra-Datavision\nchanged-invalid\n"
+    forged = _forged_native_brep_document(document, forged_data)
+    assert freecad_adapter_module._unchanged_native_source(forged) is None
+    output = io.BytesIO()
+    result = FreeCADAdapter().write(
+        forged,
+        output,
+        WriteOptions(values={"rebuild": rebuild}),
+    )
+    transfers = {value.capability: value for value in result.transfers}
+    assert result.metadata.get("mode") != "exact_native_roundtrip"
+    assert transfers[Capability.BREP].mode is TransferMode.CARRIER
+    assert transfers[Capability.BREP].carrier_reason is CarrierReason.SOURCE_OPAQUE
+    assert result.application_usable is False
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+        native_shape_files = tuple(
+            value.get("file", "")
+            for value in root.findall(".//Part[@file]")
+            if value.get("file", "")
+        )
+        assert all(archive.read(name) != forged_data for name in native_shape_files)
+    restored = FreeCADAdapter().read(output.getvalue())
+    forged_payload_id = next(
+        value.id for value in forged.brep_payloads if value.role is PayloadRole.BREP
+    )
+    restored_payload = next(
+        value for value in restored.brep_payloads if value.id == forged_payload_id
+    )
+    assert restored_payload.data == forged_data
+
+
+def test_root_envelope_cannot_authorize_changed_nested_brep(tmp_path) -> None:
+    child = tmp_path / "Child.FCStd"
+    child.write_bytes(_native_part_fixture())
+    parent = tmp_path / "Parent.FCStd"
+    parent.write_bytes(
+        _native_external_assembly_fixture(
+            (("Child", "Assembly::AssemblyLink", child.name, "Body"),)
+        )
+    )
+    document = FreeCADAdapter().read(parent)
+    assert document.assembly is not None
+    nested_entry = next(
+        value
+        for value in document.assembly.documents
+        if any(
+            payload.role is PayloadRole.BREP
+            for payload in getattr(value.document, "brep_payloads", ())
+        )
+    )
+    forged_data = b"\nCASCADE Topology V1, (c) Matra-Datavision\nnested-invalid\n"
+    forged_nested = _forged_native_brep_document(nested_entry.document, forged_data)
+    assembly = replace(
+        document.assembly,
+        documents=tuple(
+            (
+                replace(value, document=forged_nested)
+                if value.id == nested_entry.id
+                else value
+            )
+            for value in document.assembly.documents
+        ),
+    )
+    forged = freecad_adapter_module._annotate_native_sources(
+        replace(document, assembly=assembly)
+    )
+    destination = tmp_path / "rebuilt" / "Parent.FCStd"
+    result = write_document(forged, destination, values={"rebuild": True})
+    transfers = {value.capability: value for value in result.transfers}
+    assert transfers[Capability.BREP].mode is TransferMode.CARRIER
+    assert transfers[Capability.BREP].carrier_reason is CarrierReason.SOURCE_OPAQUE
+    assert result.application_usable is False
+    component_files = tuple(destination.parent.rglob("*.FCStd"))
+    assert destination in component_files
+    assert len(component_files) > 1
+    for component_file in component_files:
+        with zipfile.ZipFile(component_file) as archive:
+            root = ET.fromstring(archive.read("Document.xml"))
+            native_shape_files = tuple(
+                value.get("file", "")
+                for value in root.findall(".//Part[@file]")
+                if value.get("file", "")
+            )
+            assert all(archive.read(name) != forged_data for name in native_shape_files)
 
 
 def test_native_assembly_link_recursively_restores_subassembly(tmp_path) -> None:
