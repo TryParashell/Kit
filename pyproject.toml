@@ -36,6 +36,15 @@ convert = "convert:convert"
 [tool.hatch.build.targets.wheel]
 packages = ["src/interchange", "src/convert"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "/LICENSE",
+    "/README.md",
+    "/pyproject.toml",
+    "/src",
+    "/uv.lock",
+]
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
