@@ -1122,7 +1122,7 @@ def _decode_partition_model(
     if not body or len(body) > 268_435_456:
         return None
     tables = _scan_partition_records(body)
-    if tables is None or not tables.bridges or not tables.entities:
+    if tables is None or not tables.bridges:
         return None
     try:
         model = _build_partition_model(tables)
@@ -1673,48 +1673,48 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         if not loops:
             raise ValueError("face boundary is absent")
         face_loops[bridge_attribute] = tuple(loops)
-        ring = loops[0][1]
-        for index, coedge_attribute in enumerate(ring):
-            coedge = tables.coedges[coedge_attribute]
-            next_coedge = tables.coedges[ring[(index + 1) % len(ring)]]
-            edge_attribute = coedge.references[6]
-            start_vertex = coedge.references[4]
-            end_vertex = next_coedge.references[4]
-            if edge_attribute <= 1:
-                raise ValueError("incomplete coedge topology")
-            edge_use = tables.edge_uses.get(edge_attribute)
-            if edge_use is None:
-                raise ValueError("missing edge use")
-            curve_attribute = edge_use.references[3]
-            curve = tables.curves.get(curve_attribute)
-            if curve is None:
-                raise ValueError("unresolved edge curve")
-            if start_vertex <= 1 or end_vertex <= 1:
-                if not (
-                    start_vertex <= 1
-                    and end_vertex <= 1
-                    and isinstance(curve, (CircleCurve, EllipseCurve))
-                ):
+        for _, ring in loops:
+            for index, coedge_attribute in enumerate(ring):
+                coedge = tables.coedges[coedge_attribute]
+                next_coedge = tables.coedges[ring[(index + 1) % len(ring)]]
+                edge_attribute = coedge.references[6]
+                start_vertex = coedge.references[4]
+                end_vertex = next_coedge.references[4]
+                if edge_attribute <= 1:
                     raise ValueError("incomplete coedge topology")
-                synthetic = 0x10000 + edge_attribute
-                synthetic_vertices[synthetic] = _conic_point(curve, 0.0)
-                start_vertex = synthetic
-                end_vertex = synthetic
-            canonical = (
-                (end_vertex, start_vertex)
-                if coedge.reversed
-                else (start_vertex, end_vertex)
-            )
-            previous = edge_endpoints.setdefault(edge_attribute, canonical)
-            if previous != canonical:
-                raise ValueError("inconsistent edge orientation")
-            previous_curve = edge_curves.setdefault(edge_attribute, curve_attribute)
-            if previous_curve != curve_attribute:
-                raise ValueError("inconsistent edge curve")
-            used_coedges.add(coedge_attribute)
-            used_edges.add(edge_attribute)
-            used_vertices.update(canonical)
-            used_curves.add(curve_attribute)
+                edge_use = tables.edge_uses.get(edge_attribute)
+                if edge_use is None:
+                    raise ValueError("missing edge use")
+                curve_attribute = edge_use.references[3]
+                curve = tables.curves.get(curve_attribute)
+                if curve is None:
+                    raise ValueError("unresolved edge curve")
+                if start_vertex <= 1 or end_vertex <= 1:
+                    if not (
+                        start_vertex <= 1
+                        and end_vertex <= 1
+                        and isinstance(curve, (CircleCurve, EllipseCurve))
+                    ):
+                        raise ValueError("incomplete coedge topology")
+                    synthetic = 0x10000 + edge_attribute
+                    synthetic_vertices[synthetic] = _conic_point(curve, 0.0)
+                    start_vertex = synthetic
+                    end_vertex = synthetic
+                canonical = (
+                    (end_vertex, start_vertex)
+                    if coedge.reversed
+                    else (start_vertex, end_vertex)
+                )
+                previous = edge_endpoints.setdefault(edge_attribute, canonical)
+                if previous != canonical:
+                    raise ValueError("inconsistent edge orientation")
+                previous_curve = edge_curves.setdefault(edge_attribute, curve_attribute)
+                if previous_curve != curve_attribute:
+                    raise ValueError("inconsistent edge curve")
+                used_coedges.add(coedge_attribute)
+                used_edges.add(edge_attribute)
+                used_vertices.update(canonical)
+                used_curves.add(curve_attribute)
     if set(tables.bridges) != set(face_loops):
         raise ValueError("partial face topology")
     vertices: list[BrepVertex] = []
@@ -1723,9 +1723,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         if vertex_attribute in synthetic_vertices:
             point = synthetic_vertices[vertex_attribute]
             points_by_vertex[vertex_attribute] = point
-            vertices.append(
-                BrepVertex(_native_id("vertex", vertex_attribute), point)
-            )
+            vertices.append(BrepVertex(_native_id("vertex", vertex_attribute), point))
             continue
         vertex_use = tables.vertex_uses.get(vertex_attribute)
         if vertex_use is None:
