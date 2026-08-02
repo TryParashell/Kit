@@ -1043,6 +1043,12 @@ def _ordered_features(objects: tuple[_NativeObject, ...]) -> tuple[_NativeObject
 
 
 def _feature_kind(obj: _NativeObject) -> FeatureKind:
+    declared = _string(obj, "FeatureKind").casefold()
+    if declared:
+        try:
+            return FeatureKind(declared)
+        except ValueError:
+            pass
     if obj.type_id == "Part::Feature":
         return FeatureKind.IMPORTED
     if obj.type_id in PRIMITIVE_FEATURE_TYPE_IDS:
@@ -1155,7 +1161,11 @@ def _explicit_selections(objects: tuple[_NativeObject, ...]) -> tuple[Selection,
                 )
                 paths.append(
                     SelectionPathElement(
-                        kinds[index] if index < len(kinds) and kinds[index] else inferred,
+                        (
+                            kinds[index]
+                            if index < len(kinds) and kinds[index]
+                            else inferred
+                        ),
                         target,
                         subelement,
                     )
@@ -2355,6 +2365,12 @@ def read_native_fcstd(
         profile = _link(obj, "Profile") or _link(obj, "Base")
         sketch_id = sketch_ids.get(profile)
         operation: BooleanOperation | str | None = None
+        declared_operation = _string(obj, "Operation").casefold()
+        if declared_operation:
+            try:
+                operation = BooleanOperation(declared_operation)
+            except ValueError:
+                operation = declared_operation
         definition: FeatureDefinition | None = None
         if kind == FeatureKind.EXTRUSION:
             if obj.type_id == POCKET_TYPE_ID:
