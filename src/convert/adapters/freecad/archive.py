@@ -1229,8 +1229,15 @@ def _geometry_property(
             geometry_type == "NativeGeometry"
             or (geometry_type and geometry_type != expected_geometry_type)
         ):
+            carrier_reason = (
+                "source_opaque"
+                if geometry_type == "NativeGeometry"
+                or (geometry_type and geometry_type != expected_geometry_type)
+                else "writer_unimplemented"
+            )
             diagnostics.append(
                 {
+                    "carrier_reason": carrier_reason,
                     "code": "freecad.sketch_geometry_carrier_only",
                     "entity_id": entity_id,
                     "kind": kind,
@@ -1500,6 +1507,7 @@ def _constraint_diagnostic(
     reason: str,
     severity: str,
     native_kind: str = "",
+    carrier_reason: str = "",
 ) -> dict[str, Any]:
     result = {
         "code": code,
@@ -1511,7 +1519,24 @@ def _constraint_diagnostic(
     }
     if native_kind:
         result["native_kind"] = native_kind
+    if carrier_reason:
+        result["carrier_reason"] = carrier_reason
     return result
+
+
+def _constraint_carrier_reason(
+    constraint: Mapping[str, Any], native_constraint: bool
+) -> str:
+    kind = _text(_enum(constraint.get("kind"))).casefold()
+    attributes = constraint.get("attributes", {})
+    has_native_attributes = isinstance(attributes, Mapping) and any(
+        _text(key).casefold().startswith("native_") for key in attributes
+    )
+    return (
+        "source_opaque"
+        if native_constraint or kind.startswith("native") or has_native_attributes
+        else "writer_unimplemented"
+    )
 
 
 def _constraints_property(
@@ -1561,6 +1586,9 @@ def _constraints_property(
                         "carrier_only",
                         "the midpoint relationship cannot be expressed as a sound FreeCAD symmetry constraint",
                         "warning",
+                        carrier_reason=_constraint_carrier_reason(
+                            constraint, native_constraint
+                        ),
                     )
                 )
                 continue
@@ -1580,6 +1608,9 @@ def _constraints_property(
                     "carrier_only",
                     "no equivalent FreeCAD constraint type is available",
                     "warning",
+                    carrier_reason=_constraint_carrier_reason(
+                        constraint, native_constraint
+                    ),
                 )
             )
             continue
@@ -1659,6 +1690,9 @@ def _constraints_property(
                     "carrier_only",
                     "the constraint has no sound native reference encoding",
                     "warning",
+                    carrier_reason=_constraint_carrier_reason(
+                        constraint, native_constraint
+                    ),
                 )
             )
             continue
@@ -1898,24 +1932,45 @@ def _sketch_properties(
     return properties, dependencies
 
 
-def native_sketch_parts(manifest: Mapping[str, Any]) -> tuple[tuple[int, int], ...]:
+def _native_sketch_analysis(
+    manifest: Mapping[str, Any],
+) -> tuple[tuple[int, int, frozenset[str]], ...]:
     parameters = _Parameters(_items(manifest.get("parameters", [])))
-    result: list[tuple[int, int]] = []
+    result: list[tuple[int, int, frozenset[str]]] = []
     for sketch in _items(manifest.get("sketches", [])):
         geometry, indices, geometry_diagnostics = _geometry_property(sketch)
         constraints, _, _, constraint_diagnostics = _constraints_property(
             sketch, indices, parameters
         )
         diagnostics = (*geometry_diagnostics, *constraint_diagnostics)
+        carrier_diagnostics = tuple(
+            item for item in diagnostics if item.get("mode") == "carrier_only"
+        )
         result.append(
             (
                 1
                 + len(geometry.findall("./GeometryList/Geometry"))
                 + len(constraints.findall("./ConstraintList/Constrain")),
-                sum(item.get("mode") == "carrier_only" for item in diagnostics),
+                len(carrier_diagnostics),
+                frozenset(
+                    _text(item.get("carrier_reason"), "writer_unimplemented")
+                    for item in carrier_diagnostics
+                ),
             )
         )
     return tuple(result)
+
+
+def native_sketch_parts(manifest: Mapping[str, Any]) -> tuple[tuple[int, int], ...]:
+    return tuple(
+        (native, carrier) for native, carrier, _ in _native_sketch_analysis(manifest)
+    )
+
+
+def native_sketch_carrier_reasons(
+    manifest: Mapping[str, Any],
+) -> tuple[frozenset[str], ...]:
+    return tuple(reasons for _, _, reasons in _native_sketch_analysis(manifest))
 
 
 def _feature_parameter(
