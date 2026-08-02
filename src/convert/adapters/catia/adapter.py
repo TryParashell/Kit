@@ -1875,7 +1875,7 @@ def _native_payload_matches_document(
                     include_tessellation=include_tessellation,
                 ),
             )
-            if _semantic_digest(parsed) != _semantic_digest(document):
+            if _part_semantic_digest(parsed) != _part_semantic_digest(document):
                 return False
         candidate = _native_payloads(
             archive,
@@ -1937,6 +1937,14 @@ def _semantic_digest(document: CadDocument) -> str:
 
 def _carrier_semantic_digest(document: CadDocument) -> str:
     return _document_digest(document, _catia_envelope_payload)
+
+
+def _part_semantic_digest(document: CadDocument) -> str:
+    return _document_digest(
+        document,
+        lambda payload: _is_catia_document_payload(payload)
+        or _is_catia_document_binding(payload),
+    )
 
 
 def _document_digest(
