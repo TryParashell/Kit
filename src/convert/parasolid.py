@@ -1135,6 +1135,7 @@ def _decode_partition_model(
 
 def _scan_partition_records(body: bytes) -> _RecordTables | None:
     tables = _RecordTables({}, {}, {}, {}, {}, {}, {}, {}, {})
+    loop_candidates: list[_TopologyRecord] = []
     for offset in range(max(0, len(body) - 1)):
         if body[offset] != 0:
             continue
@@ -1145,7 +1146,9 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
         if kind == 0x0E:
             topology = tables.bridges, _parse_bridge(body, offset)
         elif kind == 0x0F:
-            topology = tables.loops, _parse_loop(body, offset)
+            record = _parse_loop(body, offset)
+            if record is not None:
+                loop_candidates.append(record)
         elif kind == 0x10:
             topology = tables.edge_uses, _parse_edge_use(body, offset)
         elif kind == 0x11:
@@ -1153,23 +1156,21 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
         elif kind == 0x12:
             topology = tables.vertex_uses, _parse_vertex_use(body, offset)
         elif kind == 0x1D:
-            topology = tables.points, _parse_point(body, offset)
+            topology = tables.points, (
+                _parse_point(body, offset) or _parse_point(body, offset, True)
+            )
         if topology is not None:
             target, record = topology
-            if record is not None and not _insert_unique(target, record):
-                return None
+            if record is not None:
+                target[record.attribute] = record
         if kind in {0x1E, 0x1F, 0x20, 0x32, 0x33, 0x34, 0x35, 0x36}:
             carrier = _parse_analytic_carrier(body, offset)
             if carrier is not None:
                 target = tables.curves if kind < 0x32 else tables.surfaces
-                if carrier[0] in target:
-                    return None
                 target[carrier[0]] = carrier[1]
         if kind == 0x51:
             entity = _parse_entity(body, offset)
             if entity is not None:
-                if entity.attribute in tables.entities:
-                    return None
                 tables.entities[entity.attribute] = entity
         if (
             sum(
@@ -1189,14 +1190,16 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
             > 1_000_000
         ):
             return None
+    tables.loops = {
+        record.attribute: record
+        for record in loop_candidates
+        if record.references[2] in tables.bridges
+        and (
+            first := tables.coedges.get(record.references[1])
+        ) is not None
+        and first.references[1] == record.attribute
+    }
     return tables
-
-
-def _insert_unique(target: dict[int, _TopologyRecord], record: _TopologyRecord) -> bool:
-    if record.attribute in target:
-        return False
-    target[record.attribute] = record
-    return True
 
 
 def _record_start(data: bytes, offset: int, kind: int) -> int | None:
@@ -1226,14 +1229,50 @@ def _refs(data: bytes, offset: int, count: int) -> tuple[int, ...] | None:
     return struct.unpack_from(f">{count}H", data, offset)
 
 
+def _tripled_refs(
+    data: bytes, offset: int, count: int, prefix: bool = False
+) -> tuple[int, ...] | None:
+    values = []
+    for index in range(count):
+        position = offset + index * 3
+        if prefix:
+            if position + 3 > len(data) or data[position] != 1:
+                return None
+            value = _u16(data, position + 1)
+        else:
+            if position + 3 > len(data) or data[position + 2] != 1:
+                return None
+            value = _u16(data, position)
+        if value is None:
+            return None
+        values.append(value)
+    return tuple(values)
+
+
 def _parse_bridge(data: bytes, offset: int) -> _TopologyRecord | None:
     start = _record_start(data, offset, 0x0E)
-    if start is None or data[start + 8 : start + 16] != _ENTITY_MAGIC:
+    if start is None:
         return None
     attribute = _u16(data, start)
     owner = _u16(data, start + 6)
-    references = _refs(data, start + 16, 5)
-    marker_offset = start + 26
+    if data[start + 8 : start + 9] == b"\x01" and data[
+        start + 9 : start + 17
+    ] == _ENTITY_MAGIC:
+        references = _tripled_refs(data, start + 17, 5)
+        marker_offset = start + 32
+    elif data[start + 8 : start + 16] == _ENTITY_MAGIC:
+        tripled = all(
+            data[start + 18 + index * 3 : start + 19 + index * 3] == b"\x01"
+            for index in range(5)
+        )
+        references = (
+            _tripled_refs(data, start + 16, 5)
+            if tripled
+            else _refs(data, start + 16, 5)
+        )
+        marker_offset = start + (31 if tripled else 26)
+    else:
+        return None
     if attribute is None or owner is None or references is None:
         return None
     if marker_offset >= len(data) or data[marker_offset] not in {0x2B, 0x2D}:
@@ -1254,7 +1293,7 @@ def _parse_loop(data: bytes, offset: int) -> _TopologyRecord | None:
     if start is None:
         return None
     attribute = _u16(data, start)
-    references = _refs(data, start + 6, 4)
+    references = _tripled_refs(data, start + 6, 4) or _refs(data, start + 6, 4)
     if attribute is None or attribute <= 1 or references is None:
         return None
     return _TopologyRecord(attribute, references, offset)
@@ -1262,10 +1301,48 @@ def _parse_loop(data: bytes, offset: int) -> _TopologyRecord | None:
 
 def _parse_edge_use(data: bytes, offset: int) -> _TopologyRecord | None:
     start = _record_start(data, offset, 0x10)
-    if start is None or data[start + 8 : start + 16] != _ENTITY_MAGIC:
+    if start is None:
         return None
     attribute = _u16(data, start)
-    references = _refs(data, start + 16, 6)
+    if data[start + 8 : start + 16] == _ENTITY_MAGIC:
+        references = _refs(data, start + 16, 6)
+    else:
+        magic = next(
+            (
+                position
+                for position in range(
+                    start + 9,
+                    min(start + 17, len(data) - len(_ENTITY_MAGIC) + 1),
+                )
+                if data[position : position + len(_ENTITY_MAGIC)] == _ENTITY_MAGIC
+            ),
+            None,
+        )
+        if magic is None:
+            return None
+        cursor = magic + len(_ENTITY_MAGIC)
+        decoded = []
+        if cursor < len(data) and data[cursor] == 1:
+            while cursor + 3 <= len(data) and data[cursor] == 1 and len(decoded) < 8:
+                value = _u16(data, cursor + 1)
+                if value is None:
+                    return None
+                decoded.append(value)
+                cursor += 3
+        else:
+            while (
+                cursor + 3 <= len(data)
+                and data[cursor + 2] == 1
+                and len(decoded) < 8
+            ):
+                value = _u16(data, cursor)
+                if value is None:
+                    return None
+                decoded.append(value)
+                cursor += 3
+        if len(decoded) < 3:
+            return None
+        references = (0, 0, 0, decoded[2], 0, 0)
     if attribute is None or attribute <= 1 or references is None:
         return None
     return _TopologyRecord(attribute, references, offset)
@@ -1278,6 +1355,13 @@ def _parse_coedge(data: bytes, offset: int) -> _TopologyRecord | None:
     attribute = _u16(data, start)
     references = _refs(data, start + 2, 9)
     marker_offset = start + 20
+    if (
+        references is None
+        or marker_offset >= len(data)
+        or data[marker_offset] not in {0x2B, 0x2D}
+    ):
+        references = _tripled_refs(data, start + 2, 9)
+        marker_offset = start + 29
     if attribute is None or attribute <= 1 or references is None:
         return None
     if marker_offset >= len(data) or data[marker_offset] not in {0x2B, 0x2D}:
@@ -1292,26 +1376,68 @@ def _parse_coedge(data: bytes, offset: int) -> _TopologyRecord | None:
 
 def _parse_vertex_use(data: bytes, offset: int) -> _TopologyRecord | None:
     start = _record_start(data, offset, 0x12)
-    if start is None or data[start + 16 : start + 24] != _ENTITY_MAGIC:
+    if start is None:
         return None
     attribute = _u16(data, start)
-    references = _refs(data, start + 6, 5)
+    if data[start + 16 : start + 24] == _ENTITY_MAGIC:
+        references = _refs(data, start + 6, 5)
+    else:
+        magic = next(
+            (
+                position
+                for position in range(
+                    start + 21,
+                    min(start + 33, len(data) - len(_ENTITY_MAGIC) + 1),
+                )
+                if data[position : position + len(_ENTITY_MAGIC)] == _ENTITY_MAGIC
+            ),
+            None,
+        )
+        if magic is None or (magic - (start + 6)) % 3:
+            return None
+        count = (magic - (start + 6)) // 3
+        if count < 5:
+            return None
+        references = _tripled_refs(data, start + 6, count)
     if attribute is None or attribute <= 1 or references is None:
         return None
     return _TopologyRecord(attribute, references, offset)
 
 
-def _parse_point(data: bytes, offset: int) -> _TopologyRecord | None:
+def _parse_point(
+    data: bytes, offset: int, prefixed: bool = False
+) -> _TopologyRecord | None:
     start = _record_start(data, offset, 0x1D)
     if start is None or start + 38 > len(data):
         return None
     attribute = _u16(data, start)
-    references = _refs(data, start + 6, 4)
+    if prefixed:
+        values = []
+        cursor = start + 6
+        while (
+            cursor + 3 <= len(data)
+            and data[cursor + 2] == 1
+            and len(values) < 16
+        ):
+            value = _u16(data, cursor)
+            if value is None:
+                return None
+            values.append(value)
+            cursor += 3
+        if not values:
+            return None
+        references = tuple(values)
+        values_offset = cursor
+    else:
+        references = _refs(data, start + 6, 4)
+        values_offset = start + 14
     if attribute is None or attribute <= 1 or references is None:
         return None
     if any(reference > 1 for reference in references):
         return None
-    values = struct.unpack_from(">3d", data, start + 14)
+    if values_offset + 24 > len(data):
+        return None
+    values = struct.unpack_from(">3d", data, values_offset)
     if any(not math.isfinite(value) or abs(value) > 10_000 for value in values):
         return None
     return _TopologyRecord(
@@ -1339,6 +1465,22 @@ def _parse_analytic_carrier(data: bytes, offset: int) -> tuple[int, object] | No
         return None
     attribute = _u16(data, start)
     marker_offset = start + 16
+    if (
+        marker_offset >= len(data)
+        or data[marker_offset] not in {0x2B, 0x2D}
+    ):
+        marker_offset = next(
+            (
+                position
+                for position in range(start + 8, min(start + 64, len(data)))
+                if data[position] in {0x2B, 0x2D}
+                and position > 0
+                and data[position - 1] == 1
+            ),
+            -1,
+        )
+        if marker_offset < 0:
+            return None
     values_offset = marker_offset + 1
     values_end = values_offset + value_count * 8
     if attribute is None or attribute <= 1 or values_end > len(data):
