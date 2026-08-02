@@ -338,6 +338,63 @@ class FilletFeature(FeatureDefinition):
 
 
 @dataclass(frozen=True, slots=True)
+class RevolutionFeature(FeatureDefinition):
+    angle: ParameterValue
+    axis_entity_id: str
+    reversed: bool = False
+    symmetric: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class HoleFeature(FeatureDefinition):
+    diameter: ParameterValue
+    depth: ParameterValue
+    end_condition: ExtrusionEndCondition | str = ExtrusionEndCondition.BLIND
+
+
+@dataclass(frozen=True, slots=True)
+class ChamferFeature(FeatureDefinition):
+    distance: ParameterValue
+    mode: str = "equal_distance"
+    second_distance: ParameterValue | None = None
+    angle: ParameterValue | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ShellFeature(FeatureDefinition):
+    thickness: ParameterValue
+    outward: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReferencePlaneFeature(FeatureDefinition):
+    support_plane_id: str
+    reference_plane_id: str
+    offset: ParameterValue
+
+
+@dataclass(frozen=True, slots=True)
+class DomeFeature(FeatureDefinition):
+    height: ParameterValue
+
+
+@dataclass(frozen=True, slots=True)
+class MoveBodyFeature(FeatureDefinition):
+    translation: Vector3
+    copy: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CombineFeature(FeatureDefinition):
+    operation: BooleanOperation = BooleanOperation.JOIN
+
+
+@dataclass(frozen=True, slots=True)
+class ScaleFeature(FeatureDefinition):
+    factors: Vector3
+
+
+@dataclass(frozen=True, slots=True)
 class NativeFeatureDefinition(FeatureDefinition):
     format_id: str
     type_id: str

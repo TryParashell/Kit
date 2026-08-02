@@ -41,6 +41,17 @@ from interchange import (
 
 
 _WRAPPER_MAGIC = bytes.fromhex("231dd571da8148a2a85898b21b89ef99")
+_SOLIDWORKS_RECTANGLE_PARTITION_SHA256 = (
+    "56df5b4e4ccac3158b60ea75dd57959b991660d6d9c7bc05cbff795e56f44439"
+)
+_SOLIDWORKS_RECTANGLE_PRIMARY_SHA256 = (
+    "472872dbe3f562c633ad1bc33a52bd78f10cc3c264f987bbc090e5794309bcca"
+)
+_SOLIDWORKS_RECTANGLE_DELTAS_SHA256 = (
+    "17e7adf822244b6d3f17e7fa5fd891d74e2230d9aad265a0f86b30d8eee3506a"
+)
+_SOLIDWORKS_RECTANGLE_SCHEMA = "SCH_3601228_36001_13006"
+_SOLIDWORKS_RECTANGLE_SOURCE_BOUNDS = (-20.0, -10.0, 20.0, 10.0, 10.0)
 _ENTITY_MAGIC = bytes.fromhex("c2bc928f996e0000")
 _INLINE_TERM_TAIL = bytes.fromhex("000000010163435a")
 _INLINE_UV_TAIL = bytes.fromhex("00000002016601")
@@ -430,6 +441,47 @@ def _require_complete(
         )
 
 
+def _ordered_ids(
+    values: Sequence[str],
+    entities: Mapping[str, object],
+    attribute_name: str,
+) -> list[str]:
+    ranks = [
+        getattr(entities[value], "attributes", {}).get(attribute_name)
+        for value in values
+    ]
+    if all(type(rank) is int and rank >= 0 for rank in ranks) and len(
+        set(ranks)
+    ) == len(ranks):
+        return [
+            value
+            for _, value in sorted(
+                zip(ranks, values),
+                key=lambda item: item[0],
+            )
+        ]
+    return list(values)
+
+
+def _fin_index(
+    descriptor: object,
+    coedges: Mapping[str, int],
+    dummy_fins: Mapping[str, int],
+) -> int | None:
+    if (
+        not isinstance(descriptor, (tuple, list))
+        or len(descriptor) != 2
+        or not all(isinstance(value, str) for value in descriptor)
+    ):
+        return None
+    kind, identifier = descriptor
+    if kind == "coedge":
+        return coedges.get(identifier)
+    if kind == "dummy":
+        return dummy_fins.get(identifier)
+    return None
+
+
 def _encode_brep_body(
     model: BrepModel,
     topology: _BrepTopology,
@@ -579,9 +631,7 @@ def _encode_brep_body(
             solidworks_face_attributes[face.id] = tuple(
                 allocate_index() for _ in range(3)
             )
-            solidworks_face_values[face.id] = tuple(
-                allocate_index() for _ in range(3)
-            )
+            solidworks_face_values[face.id] = tuple(allocate_index() for _ in range(3))
         solidworks_body_attributes = {
             "timestamp": allocate_index(),
             "feature": allocate_index(),
@@ -603,7 +653,14 @@ def _encode_brep_body(
             solidworks_body_definitions[name] = allocate_index()
             solidworks_body_definition_next[name] = allocate_index()
             solidworks_body_identifiers[name] = allocate_index()
-        for name in ("timestamp", "feature", "match", "density", "lightweight"):
+        for name in (
+            "timestamp",
+            "feature",
+            "implicit",
+            "match",
+            "density",
+            "lightweight",
+        ):
             solidworks_body_values[name] = allocate_index()
     if max((*reserved_indices, *used_indices), default=0) >= 32767:
         raise ParasolidWriteError("Parasolid V12 writer node space is exhausted")
@@ -651,9 +708,22 @@ def _encode_brep_body(
         surface_faces[face.surface_id].append(face.id)
     for edge in model.edges:
         curve_edges[edge.curve_id].append(edge.id)
+    for surface_id, face_ids in surface_faces.items():
+        surface_faces[surface_id] = _ordered_ids(
+            face_ids,
+            topology.faces,
+            "parasolid.surface_face_order",
+        )
+    for curve_id, edge_ids in curve_edges.items():
+        curve_edges[curve_id] = _ordered_ids(
+            edge_ids,
+            topology.edges,
+            "parasolid.curve_edge_order",
+        )
 
     body_surfaces: dict[str, list[str]] = {body.id: [] for body in model.bodies}
     body_curves: dict[str, list[str]] = {body.id: [] for body in model.bodies}
+    body_points: dict[str, list[str]] = {body.id: [] for body in model.bodies}
     body_vertices: dict[str, list[str]] = {body.id: [] for body in model.bodies}
     body_edges: dict[str, list[str]] = {body.id: [] for body in model.bodies}
     for surface in model.surfaces:
@@ -676,9 +746,36 @@ def _encode_brep_body(
             raise ParasolidWriteError(
                 f"Parasolid vertex {vertex.id} has no owning body"
             )
+        body_points[body_id].append(vertex.id)
         body_vertices[body_id].append(vertex.id)
     for edge in model.edges:
         body_edges[edge_body[edge.id]].append(edge.id)
+    for body in model.bodies:
+        body_surfaces[body.id] = _ordered_ids(
+            body_surfaces[body.id],
+            topology.surface_by_id,
+            "parasolid.surface_order",
+        )
+        body_curves[body.id] = _ordered_ids(
+            body_curves[body.id],
+            topology.curve_by_id,
+            "parasolid.curve_order",
+        )
+        body_points[body.id] = _ordered_ids(
+            body_points[body.id],
+            topology.vertex_by_id,
+            "parasolid.point_order",
+        )
+        body_vertices[body.id] = _ordered_ids(
+            body_vertices[body.id],
+            topology.vertex_by_id,
+            "parasolid.vertex_order",
+        )
+        body_edges[body.id] = _ordered_ids(
+            body_edges[body.id],
+            topology.edges,
+            "parasolid.edge_order",
+        )
 
     node_ids: dict[int, int] = {}
     next_node_id: dict[str, int] = {body.id: 1 for body in model.bodies}
@@ -712,6 +809,21 @@ def _encode_brep_body(
         node_id(loops[loop.id], face_body[topology.loop_face[loop.id]])
     for face in model.faces:
         node_id(faces[face.id], face_body[face.id])
+    if solidworks_solid:
+        body_id = model.bodies[0].id
+        for face in model.faces:
+            for index in solidworks_face_attributes[face.id]:
+                node_id(index, body_id)
+        for name in (
+            "timestamp",
+            "feature",
+            "implicit",
+            "match",
+            "density",
+            "lightweight",
+            "recipe",
+        ):
+            node_id(solidworks_body_attributes[name], body_id)
 
     vertex_fins: dict[str, list[int]] = {vertex.id: [] for vertex in model.vertices}
     fin_vertex: dict[int, str] = {}
@@ -741,6 +853,19 @@ def _encode_brep_body(
                 )
                 fin_vertex[index] = vertex_id
                 vertex_fins[vertex_id].append(index)
+    for vertex in model.vertices:
+        requested = vertex.attributes.get("parasolid.vertex_fins")
+        if not isinstance(requested, (tuple, list)):
+            continue
+        ordered = [
+            _fin_index(descriptor, coedges, dummy_fins) for descriptor in requested
+        ]
+        if (
+            all(index is not None for index in ordered)
+            and len(set(ordered)) == len(ordered)
+            and set(ordered) == set(vertex_fins[vertex.id])
+        ):
+            vertex_fins[vertex.id] = [index for index in ordered if index is not None]
 
     first_face_by_body: dict[str, str] = {}
     for face in model.faces:
@@ -789,7 +914,10 @@ def _encode_brep_body(
             0,
         ):
             _v12_pointer(output, value)
-        _bef64(output, 1000.0)
+        _bef64(
+            output,
+            math.nextafter(1000.0, math.inf) if solidworks_solid else 1000.0,
+        )
         _bef64(output, 1e-8)
         for value in (
             0,
@@ -820,7 +948,7 @@ def _encode_brep_body(
         )
         _v12_pointer(
             output,
-            points[body_vertices[body.id][0]] if body_vertices[body.id] else 0,
+            points[body_points[body.id][0]] if body_points[body.id] else 0,
         )
         _v12_pointer(output, region_values[0] if region_values else 0)
         _v12_pointer(
@@ -836,6 +964,7 @@ def _encode_brep_body(
                 output,
                 attribute_base,
                 body_index,
+                11 if solidworks_solid else 7,
             )
 
     for body in model.bodies:
@@ -896,10 +1025,14 @@ def _encode_brep_body(
             for shell_use_id in region.shell_use_ids
         ]
         position = shell_ids.index(shell.id)
-        face_ids = [
-            topology.face_uses[face_use_id].face_id
-            for face_use_id in shell.face_use_ids
-        ]
+        face_ids = _ordered_ids(
+            [
+                topology.face_uses[face_use_id].face_id
+                for face_use_id in shell.face_use_ids
+            ],
+            topology.faces,
+            "parasolid.face_order",
+        )
         _v12_node(output, 13, shell_index)
         _i32(output, node_ids[shell_index])
         _v12_pointer(output, 0)
@@ -924,7 +1057,7 @@ def _encode_brep_body(
             _v12_node(output, 13, exterior_index)
             _i32(output, node_ids[exterior_index])
             _v12_pointer(output, 0)
-            _v12_pointer(output, bodies[body_id])
+            _v12_pointer(output, 0)
             _v12_pointer(
                 output,
                 (
@@ -981,7 +1114,7 @@ def _encode_brep_body(
         )
     for vertex in model.vertices:
         body_id = vertex_body[vertex.id]
-        chain = body_vertices[body_id]
+        chain = body_points[body_id]
         position = chain.index(vertex.id)
         _v12_node(output, 29, points[vertex.id])
         _i32(output, node_ids[points[vertex.id]])
@@ -1016,7 +1149,13 @@ def _encode_brep_body(
         position = chain.index(edge.id)
         curve_chain = curve_edges[edge.curve_id]
         curve_position = curve_chain.index(edge.id)
-        first_fin = coedges[topology.edge_coedges[edge.id][0]]
+        first_fin = _fin_index(
+            edge.attributes.get("parasolid.first_fin"),
+            coedges,
+            dummy_fins,
+        )
+        if first_fin is None:
+            first_fin = coedges[topology.edge_coedges[edge.id][0]]
         _v12_node(output, 16, edges[edge.id])
         _i32(output, node_ids[edges[edge.id]])
         _v12_pointer(output, 0)
@@ -1043,6 +1182,8 @@ def _encode_brep_body(
         _v12_pointer(output, bodies[body_id])
     for coedge in model.coedges:
         loop = topology.loops[topology.coedge_loop[coedge.id]]
+        face = topology.faces[topology.loop_face[loop.id]]
+        region = topology.regions[face_region[face.id]]
         position = loop.coedge_ids.index(coedge.id)
         previous_id = loop.coedge_ids[position - 1]
         next_id = loop.coedge_ids[(position + 1) % len(loop.coedge_ids)]
@@ -1052,8 +1193,8 @@ def _encode_brep_body(
             fin_index,
             0,
             loops[loop.id],
-            coedges[next_id],
-            coedges[previous_id],
+            coedges[previous_id] if region.solid else coedges[next_id],
+            coedges[next_id] if region.solid else coedges[previous_id],
             vertices[fin_vertex[fin_index]],
             fin_other[fin_index],
             edges[coedge.edge_id],
@@ -1095,11 +1236,21 @@ def _encode_brep_body(
             _v12_pointer(output, value)
     for face in model.faces:
         shell = topology.shells[face_shell[face.id]]
-        face_ids = [
-            topology.face_uses[face_use_id].face_id
-            for face_use_id in shell.face_use_ids
-        ]
+        face_ids = _ordered_ids(
+            [
+                topology.face_uses[face_use_id].face_id
+                for face_use_id in shell.face_use_ids
+            ],
+            topology.faces,
+            "parasolid.face_order",
+        )
         position = face_ids.index(face.id)
+        front_face_ids = _ordered_ids(
+            face_ids,
+            topology.faces,
+            "parasolid.front_face_order",
+        )
+        front_position = front_face_ids.index(face.id)
         surface_chain = surface_faces[face.surface_id]
         surface_position = surface_chain.index(face.id)
         region = topology.regions[face_region[face.id]]
@@ -1110,9 +1261,13 @@ def _encode_brep_body(
         _v12_pointer(
             output,
             (
-                attribute_base + 32
-                if attribute_base is not None and face.id == first_face_id
-                else 0
+                solidworks_face_attributes[face.id][0]
+                if face.id in solidworks_face_attributes
+                else (
+                    attribute_base + 32
+                    if attribute_base is not None and face.id == first_face_id
+                    else 0
+                )
             ),
         )
         _bef64(output, _MISSING_PARAMETER)
@@ -1137,8 +1292,18 @@ def _encode_brep_body(
             output,
             faces[surface_chain[surface_position - 1]] if surface_position else 0,
         )
-        _v12_pointer(output, 0)
-        _v12_pointer(output, 0)
+        _v12_pointer(
+            output,
+            (
+                faces[front_face_ids[front_position + 1]]
+                if front_position + 1 < len(front_face_ids)
+                else 0
+            ),
+        )
+        _v12_pointer(
+            output,
+            faces[front_face_ids[front_position - 1]] if front_position else 0,
+        )
         _v12_pointer(
             output,
             exterior_shells[shell.id] if region.solid else shells[shell.id],
@@ -1147,6 +1312,34 @@ def _encode_brep_body(
         attribute_base = attribute_bases.get(body.id)
         first_face_id = first_face_by_body.get(body.id)
         if attribute_base is None or first_face_id is None:
+            continue
+        if solidworks_solid:
+            _write_solidworks_solid_attributes(
+                output,
+                attribute_base,
+                bodies[body.id],
+                tuple(
+                    (
+                        face.id,
+                        faces[face.id],
+                        solidworks_face_attributes[face.id],
+                        solidworks_face_values[face.id],
+                        face.attributes.get("solidworks.unchanged_id"),
+                        face.attributes,
+                    )
+                    for face in model.faces
+                ),
+                solidworks_face_definitions,
+                solidworks_face_definition_next,
+                solidworks_face_identifiers,
+                solidworks_body_attributes,
+                solidworks_body_values,
+                solidworks_body_definitions,
+                solidworks_body_definition_next,
+                solidworks_body_identifiers,
+                node_ids,
+                feature_ids[body.id],
+            )
             continue
         _write_solidworks_body_attribute_suffix(
             output,
@@ -1166,6 +1359,7 @@ def _write_solidworks_body_attribute_prefix(
     output: bytearray,
     base: int,
     body: int,
+    attribute_count: int,
 ) -> None:
     _v12_attribute(
         output,
@@ -1184,12 +1378,377 @@ def _write_solidworks_body_attribute_prefix(
     _v12_pointer(output, body)
     _v12_pointer(output, 0)
     _v12_pointer(output, 0)
-    for value in (4, 7, 20, 8):
+    for value in (4, attribute_count, 20, 8):
         _i32(output, value)
     _v12_pointer(output, base + 15)
     _v12_pointer(output, base + 15)
     _i32(output, 1)
     output.append(1)
+
+
+def _write_solidworks_solid_attributes(
+    output: bytearray,
+    base: int,
+    body: int,
+    faces: Sequence[
+        tuple[
+            str,
+            int,
+            tuple[int, int, int],
+            tuple[int, int, int],
+            object,
+            Mapping[str, object],
+        ]
+    ],
+    face_definitions: Mapping[str, int],
+    face_definition_next: Mapping[str, int],
+    face_identifiers: Mapping[str, int],
+    body_attributes: Mapping[str, int],
+    body_values: Mapping[str, int],
+    body_definitions: Mapping[str, int],
+    body_definition_next: Mapping[str, int],
+    body_identifiers: Mapping[str, int],
+    node_ids: Mapping[int, int],
+    feature_id: int,
+) -> None:
+    standard_actions = (0, 0, 0, 0, 3, 5, 0, 0)
+    retained_actions = (1, 1, 1, 1, 1, 1, 1, 1)
+    face_legal = (0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    coloured_face_legal = (0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0)
+    body_legal = (0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    implicit_body_legal = (0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0)
+    ordered_faces: dict[str, Sequence[tuple[object, ...]]] = {}
+    neighbors: dict[tuple[str, str], tuple[int, int]] = {}
+    for kind, attribute_position in (
+        ("unchanged", 0),
+        ("downstream", 1),
+        ("colour", 2),
+    ):
+        values = list(faces)
+        ranks = [value[5].get(f"solidworks.{kind}_order") for value in values]
+        if all(type(rank) is int and rank >= 0 for rank in ranks) and len(
+            set(ranks)
+        ) == len(ranks):
+            values.sort(key=lambda value: value[5][f"solidworks.{kind}_order"])
+        ordered_faces[kind] = values
+        for position, value in enumerate(values):
+            previous_attribute = (
+                values[position - 1][2][attribute_position] if position else 0
+            )
+            next_attribute = (
+                values[position + 1][2][attribute_position]
+                if position + 1 < len(values)
+                else 0
+            )
+            neighbors[(value[0], kind)] = next_attribute, previous_attribute
+    for face_id, owner, attributes, values, unchanged_id, _ in faces:
+        unchanged, downstream, colour = attributes
+        unchanged_value, downstream_value, colour_value = values
+        _v12_attribute(
+            output,
+            unchanged,
+            node_ids[unchanged],
+            face_definitions["unchanged"],
+            owner,
+            downstream,
+            0,
+            neighbors[(face_id, "unchanged")][0],
+            neighbors[(face_id, "unchanged")][1],
+            (unchanged_value,),
+        )
+        _v12_attribute(
+            output,
+            downstream,
+            node_ids[downstream],
+            face_definitions["downstream"],
+            owner,
+            colour,
+            unchanged,
+            neighbors[(face_id, "downstream")][0],
+            neighbors[(face_id, "downstream")][1],
+            (downstream_value, 0, 0),
+        )
+        _v12_attribute(
+            output,
+            colour,
+            node_ids[colour],
+            face_definitions["colour"],
+            owner,
+            0,
+            downstream,
+            neighbors[(face_id, "colour")][0],
+            neighbors[(face_id, "colour")][1],
+            (colour_value,),
+        )
+        preserved_unchanged_id = (
+            unchanged_id
+            if type(unchanged_id) is int and 0 < unchanged_id < 1 << 31
+            else zlib.crc32(face_id.encode("utf-8")) & 0x7FFFFFFF or 1
+        )
+        _v12_int_values(output, unchanged_value, (preserved_unchanged_id,))
+        _v12_int_values(
+            output,
+            downstream_value,
+            (0, 1671915899, 31269538, 0, 0, 0),
+        )
+        _v12_real_values(
+            output,
+            colour_value,
+            (0.792156862745098, 0.8196078431372549, 0.9333333333333333),
+        )
+    _v12_attribute_definition(
+        output,
+        face_definitions["unchanged"],
+        face_definition_next["unchanged"],
+        face_identifiers["unchanged"],
+        9000,
+        retained_actions,
+        coloured_face_legal,
+        (1,),
+    )
+    _v12_attribute_identifier(
+        output,
+        face_identifiers["unchanged"],
+        "SWEntUnchanged",
+    )
+    _v12_attribute_definition(
+        output,
+        face_definitions["downstream"],
+        face_definition_next["downstream"],
+        face_identifiers["downstream"],
+        9000,
+        standard_actions,
+        face_legal,
+        (1, 1, 1),
+    )
+    _v12_attribute_identifier(
+        output,
+        face_identifiers["downstream"],
+        "DOWNSTREAM_FACE_ID",
+    )
+    _v12_attribute_definition(
+        output,
+        face_definitions["colour"],
+        face_definition_next["colour"],
+        face_identifiers["colour"],
+        8001,
+        standard_actions,
+        coloured_face_legal,
+        (2,),
+    )
+    _v12_attribute_identifier(
+        output,
+        face_identifiers["colour"],
+        "SDL/TYSA_COLOUR",
+    )
+    first_unchanged = ordered_faces["unchanged"][0][2][0]
+    first_downstream = ordered_faces["downstream"][0][2][1]
+    first_colour = ordered_faces["colour"][0][2][2]
+    _v12_pointer_list(
+        output,
+        base + 15,
+        (
+            first_downstream,
+            body_attributes["timestamp"],
+            body_attributes["feature"],
+            body_attributes["implicit"],
+            first_unchanged,
+            body_attributes["match"],
+            body_attributes["density"],
+            body_attributes["lightweight"],
+            body_attributes["recipe"],
+            first_colour,
+            base + 2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ),
+        11,
+    )
+    timestamp = body_attributes["timestamp"]
+    feature = body_attributes["feature"]
+    implicit = body_attributes["implicit"]
+    match = body_attributes["match"]
+    density = body_attributes["density"]
+    lightweight = body_attributes["lightweight"]
+    recipe = body_attributes["recipe"]
+    _v12_attribute(
+        output,
+        timestamp,
+        node_ids[timestamp],
+        body_definitions["timestamp"],
+        body,
+        0,
+        feature,
+        0,
+        0,
+        (0, body_values["timestamp"]),
+    )
+    _v12_attribute(
+        output,
+        feature,
+        node_ids[feature],
+        body_definitions["feature"],
+        body,
+        timestamp,
+        implicit,
+        0,
+        0,
+        (0, body_values["feature"]),
+    )
+    _v12_attribute(
+        output,
+        implicit,
+        node_ids[implicit],
+        body_definitions["implicit"],
+        body,
+        feature,
+        match,
+        0,
+        0,
+        (body_values["implicit"], 0),
+    )
+    _v12_attribute(
+        output,
+        match,
+        node_ids[match],
+        body_definitions["match"],
+        body,
+        implicit,
+        density,
+        0,
+        0,
+        (body_values["match"],),
+    )
+    _v12_attribute(
+        output,
+        density,
+        node_ids[density],
+        body_definitions["density"],
+        body,
+        match,
+        lightweight,
+        0,
+        0,
+        (body_values["density"], 0),
+    )
+    _v12_attribute(
+        output,
+        lightweight,
+        node_ids[lightweight],
+        body_definitions["lightweight"],
+        body,
+        density,
+        recipe,
+        0,
+        0,
+        (0, body_values["lightweight"]),
+    )
+    _v12_attribute(
+        output,
+        recipe,
+        node_ids[recipe],
+        body_definitions["recipe"],
+        body,
+        lightweight,
+        base + 2,
+        0,
+        0,
+        (0, 0),
+    )
+    definitions = (
+        (
+            "recipe",
+            9000,
+            standard_actions,
+            body_legal,
+            (9, 1),
+            "BODY_RECIPE_2001",
+        ),
+        (
+            "lightweight",
+            9000,
+            standard_actions,
+            body_legal,
+            (9, 1),
+            "BODY_IN_LIGHTWEIGHT_PERM",
+        ),
+        (
+            "density",
+            8004,
+            standard_actions,
+            body_legal,
+            (2, 3),
+            "SDL/TYSA_DENSITY",
+        ),
+        (
+            "match",
+            9000,
+            retained_actions,
+            body_legal,
+            (1,),
+            "BODY_MATCH",
+        ),
+        (
+            "implicit",
+            9000,
+            standard_actions,
+            implicit_body_legal,
+            (10, 10),
+            "SWIMPLICITBODYNAME_ID_U",
+        ),
+        (
+            "feature",
+            9000,
+            standard_actions,
+            body_legal,
+            (9, 1),
+            "LAST_BODY_MODIFYING_FEATURE_ID",
+        ),
+        (
+            "timestamp",
+            9000,
+            standard_actions,
+            body_legal,
+            (9, 1),
+            "ENT_TIME_STAMP_2001",
+        ),
+    )
+    for name, type_id, actions, legal, fields, identifier in definitions:
+        _v12_attribute_definition(
+            output,
+            body_definitions[name],
+            body_definition_next[name],
+            body_identifiers[name],
+            type_id,
+            actions,
+            legal,
+            fields,
+        )
+        _v12_attribute_identifier(output, body_identifiers[name], identifier)
+    _v12_int_values(output, body_values["timestamp"], (121,))
+    _v12_int_values(output, body_values["feature"], (feature_id,))
+    _v12_int_values(output, body_values["match"], (27421,))
+    _v12_real_values(output, body_values["density"], (1000.0,))
+    _v12_int_values(output, body_values["lightweight"], (1,))
+    _v12_attribute_definition(
+        output,
+        base + 12,
+        base + 58,
+        base + 59,
+        9000,
+        standard_actions,
+        body_legal,
+        (9, 1),
+    )
+    _v12_int_values(output, base + 14, (101,))
+    _v12_attribute_identifier(output, base + 59, "ATOM_ID_2001")
 
 
 def _write_solidworks_body_attribute_suffix(
@@ -2555,6 +3114,402 @@ def decode_brep_model(
     return _decode_partition_model(data, header)
 
 
+def transform_solidworks_rectangle_partition_stream(
+    data: bytes | bytearray,
+    *,
+    minimum_x_mm: float,
+    minimum_y_mm: float,
+    maximum_x_mm: float,
+    maximum_y_mm: float,
+    depth_mm: float,
+) -> bytes:
+    bounds = _solidworks_rectangle_bounds(
+        minimum_x_mm,
+        minimum_y_mm,
+        maximum_x_mm,
+        maximum_y_mm,
+        depth_mm,
+    )
+    source = bytes(data)
+    if hashlib.sha256(source).hexdigest() != _SOLIDWORKS_RECTANGLE_PARTITION_SHA256:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle Partition does not match the validated donor"
+        )
+    payloads = decode_partition_stream(source, "Contents/Config-0-Partition")
+    if not _is_solidworks_rectangle_partition(payloads):
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle Partition donor framing is invalid"
+        )
+    primary = payloads[0].data
+    header = _parasolid_header(primary)
+    if header is None or header.body_offset != 96:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle Partition donor header is invalid"
+        )
+    original_body = primary[header.body_offset :]
+    tables = _scan_partition_records(original_body)
+    source_model = decode_brep_model(primary)
+    if tables is None or source_model is None:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle Partition donor cannot be decoded"
+        )
+    _validate_solidworks_rectangle_source(source_model, tables)
+    if bounds == _SOLIDWORKS_RECTANGLE_SOURCE_BOUNDS:
+        return source
+    body = bytearray(original_body)
+    point_records = tuple(tables.points.values())
+    used_curve_attributes = frozenset(
+        record.references[3] for record in tables.edge_uses.values()
+    )
+    used_surface_attributes = frozenset(
+        record.references[4] for record in tables.bridges.values()
+    )
+    for record in point_records:
+        values_offset = _solidworks_rectangle_point_offset(original_body, record)
+        transformed = _solidworks_rectangle_vector(record.point, bounds)
+        _pack_solidworks_rectangle_vector(body, values_offset, transformed)
+    for attribute in sorted(used_curve_attributes):
+        geometry = tables.curves[attribute]
+        values_offset = _solidworks_rectangle_carrier_offset(
+            original_body,
+            attribute,
+            geometry,
+        )
+        transformed = _solidworks_rectangle_vector(geometry.origin, bounds)
+        _pack_solidworks_rectangle_vector(body, values_offset, transformed)
+    for attribute in sorted(used_surface_attributes):
+        geometry = tables.surfaces[attribute]
+        values_offset = _solidworks_rectangle_carrier_offset(
+            original_body,
+            attribute,
+            geometry,
+        )
+        transformed = _solidworks_rectangle_vector(geometry.origin, bounds)
+        _pack_solidworks_rectangle_vector(body, values_offset, transformed)
+    patched_primary = primary[: header.body_offset] + bytes(body)
+    transformed_stream = (
+        encode_partition_stream(patched_primary) + source[payloads[1].wrapper_offset :]
+    )
+    transformed_payloads = decode_partition_stream(
+        transformed_stream,
+        "Contents/Config-0-Partition",
+    )
+    if (
+        len(transformed_payloads) != 2
+        or transformed_payloads[0].data != patched_primary
+        or transformed_payloads[1].sha256 != _SOLIDWORKS_RECTANGLE_DELTAS_SHA256
+        or transformed_payloads[1].data != payloads[1].data
+    ):
+        raise ParasolidWriteError(
+            "transformed SOLIDWORKS rectangle Partition framing is invalid"
+        )
+    transformed_model = decode_brep_model(patched_primary)
+    if transformed_model is None:
+        raise ParasolidWriteError(
+            "transformed SOLIDWORKS rectangle Partition cannot be decoded"
+        )
+    _validate_solidworks_rectangle_transform(
+        source_model,
+        transformed_model,
+        bounds,
+    )
+    return transformed_stream
+
+
+def _solidworks_rectangle_bounds(
+    minimum_x_mm: float,
+    minimum_y_mm: float,
+    maximum_x_mm: float,
+    maximum_y_mm: float,
+    depth_mm: float,
+) -> tuple[float, float, float, float, float]:
+    values = (
+        minimum_x_mm,
+        minimum_y_mm,
+        maximum_x_mm,
+        maximum_y_mm,
+        depth_mm,
+    )
+    if any(isinstance(value, bool) for value in values):
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle bounds and depth must be finite numbers"
+        )
+    try:
+        bounds = tuple(float(value) for value in values)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle bounds and depth must be finite numbers"
+        ) from exc
+    if any(not math.isfinite(value) for value in bounds):
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle bounds and depth must be finite numbers"
+        )
+    minimum_x, minimum_y, maximum_x, maximum_y, depth = bounds
+    if minimum_x >= maximum_x or minimum_y >= maximum_y or depth <= 0.0:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle bounds must have positive width, height, and depth"
+        )
+    return minimum_x, minimum_y, maximum_x, maximum_y, depth
+
+
+def _is_solidworks_rectangle_partition(
+    payloads: tuple[ParasolidPayload, ...],
+) -> bool:
+    if len(payloads) != 2:
+        return False
+    primary, deltas = payloads
+    return (
+        primary.wrapper_offset == 0
+        and primary.magic_offset == 4
+        and primary.compressed_offset == 28
+        and primary.compressed_size == 3076
+        and primary.uncompressed_size == 6730
+        and primary.kind == "partition"
+        and primary.schema == _SOLIDWORKS_RECTANGLE_SCHEMA
+        and primary.sha256 == _SOLIDWORKS_RECTANGLE_PRIMARY_SHA256
+        and deltas.wrapper_offset == 3112
+        and deltas.kind == "deltas"
+        and deltas.schema == _SOLIDWORKS_RECTANGLE_SCHEMA
+        and deltas.uncompressed_size == 1124
+        and deltas.sha256 == _SOLIDWORKS_RECTANGLE_DELTAS_SHA256
+    )
+
+
+def _validate_solidworks_rectangle_source(
+    model: BrepModel,
+    tables: _RecordTables,
+) -> None:
+    counts = (
+        len(model.bodies),
+        len(model.regions),
+        len(model.shells),
+        len(model.shell_uses),
+        len(model.faces),
+        len(model.face_uses),
+        len(model.loops),
+        len(model.coedges),
+        len(model.edges),
+        len(model.vertices),
+        len(model.curves),
+        len(model.surfaces),
+        len(model.pcurves),
+        len(model.wires),
+    )
+    expected_counts = (1, 1, 1, 1, 6, 6, 6, 24, 12, 8, 12, 6, 0, 0)
+    expected_vertices = frozenset(
+        (x, y, z) for x in (-20.0, 20.0) for y in (-10.0, 10.0) for z in (0.0, 10.0)
+    )
+    vertices = frozenset(
+        (vertex.point.x, vertex.point.y, vertex.point.z) for vertex in model.vertices
+    )
+    used_curve_attributes = frozenset(
+        record.references[3] for record in tables.edge_uses.values()
+    )
+    used_surface_attributes = frozenset(
+        record.references[4] for record in tables.bridges.values()
+    )
+    if (
+        counts != expected_counts
+        or model.validate()
+        or model.bodies[0].transform != Transform()
+        or not model.regions[0].solid
+        or not model.shells[0].closed
+        or vertices != expected_vertices
+        or len(tables.points) != 8
+        or len(used_curve_attributes) != 12
+        or len(used_surface_attributes) != 6
+        or any(
+            attribute not in tables.curves
+            or not isinstance(tables.curves[attribute], LineCurve)
+            for attribute in used_curve_attributes
+        )
+        or any(
+            attribute not in tables.surfaces
+            or not isinstance(tables.surfaces[attribute], PlaneSurface)
+            for attribute in used_surface_attributes
+        )
+    ):
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle Partition donor geometry is invalid"
+        )
+
+
+def _solidworks_rectangle_point_offset(
+    body: bytes,
+    record: _TopologyRecord,
+) -> int:
+    for prefixed in (False, True):
+        fields = _point_record_fields(body, record.offset, prefixed)
+        parsed = _parse_point(body, record.offset, prefixed)
+        if (
+            fields is not None
+            and parsed is not None
+            and parsed.attribute == record.attribute
+            and parsed.references == record.references
+            and parsed.point == record.point
+        ):
+            return fields[2]
+    raise ParasolidWriteError("SOLIDWORKS rectangle Partition point record is invalid")
+
+
+def _solidworks_rectangle_carrier_offset(
+    body: bytes,
+    attribute: int,
+    geometry: object,
+) -> int:
+    attributes = getattr(geometry, "attributes", {})
+    carrier = attributes.get("carrier_record")
+    if not isinstance(carrier, bytes) or not carrier:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle Partition analytic record is invalid"
+        )
+    offset = body.find(carrier)
+    if offset < 0 or body.find(carrier, offset + 1) >= 0:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle Partition analytic record is ambiguous"
+        )
+    fields = _analytic_record_fields(body, offset)
+    if fields is None or fields[0] != attribute:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle Partition analytic record is invalid"
+        )
+    return fields[1]
+
+
+def _solidworks_rectangle_vector(
+    vector: Vector3 | None,
+    bounds: tuple[float, float, float, float, float],
+) -> tuple[float, float, float]:
+    if vector is None:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle Partition coordinate is missing"
+        )
+    minimum_x, minimum_y, maximum_x, maximum_y, depth = bounds
+    return (
+        _solidworks_rectangle_axis(vector.x, -20.0, 20.0, minimum_x, maximum_x),
+        _solidworks_rectangle_axis(vector.y, -10.0, 10.0, minimum_y, maximum_y),
+        _solidworks_rectangle_axis(vector.z, 0.0, 10.0, 0.0, depth),
+    )
+
+
+def _solidworks_rectangle_axis(
+    value: float,
+    source_minimum: float,
+    source_maximum: float,
+    target_minimum: float,
+    target_maximum: float,
+) -> float:
+    if value == source_minimum:
+        return target_minimum
+    if value == source_maximum:
+        return target_maximum
+    if value == (source_minimum + source_maximum) / 2.0:
+        return target_minimum / 2.0 + target_maximum / 2.0
+    raise ParasolidWriteError(
+        "SOLIDWORKS rectangle Partition contains an unexpected coordinate"
+    )
+
+
+def _pack_solidworks_rectangle_vector(
+    body: bytearray,
+    offset: int,
+    vector: tuple[float, float, float],
+) -> None:
+    try:
+        values = tuple(value / 1000.0 for value in vector)
+        if any(not math.isfinite(value) for value in values):
+            raise OverflowError
+        struct.pack_into(">3d", body, offset, *values)
+    except (OverflowError, struct.error) as exc:
+        raise ParasolidWriteError(
+            "SOLIDWORKS rectangle bounds exceed the Parasolid coordinate range"
+        ) from exc
+
+
+def _validate_solidworks_rectangle_transform(
+    source: BrepModel,
+    transformed: BrepModel,
+    bounds: tuple[float, float, float, float, float],
+) -> None:
+    if transformed.validate():
+        raise ParasolidWriteError(
+            "transformed SOLIDWORKS rectangle Partition geometry is invalid"
+        )
+    collection_names = (
+        "bodies",
+        "regions",
+        "shells",
+        "shell_uses",
+        "faces",
+        "face_uses",
+        "loops",
+        "coedges",
+        "edges",
+        "vertices",
+        "curves",
+        "surfaces",
+    )
+    if any(
+        tuple(item.id for item in getattr(source, name))
+        != tuple(item.id for item in getattr(transformed, name))
+        for name in collection_names
+    ):
+        raise ParasolidWriteError(
+            "transformed SOLIDWORKS rectangle Partition changes topology"
+        )
+    transformed_vertices = {item.id: item for item in transformed.vertices}
+    transformed_curves = {item.id: item for item in transformed.curves}
+    transformed_surfaces = {item.id: item for item in transformed.surfaces}
+    for vertex in source.vertices:
+        expected = _solidworks_rectangle_vector(vertex.point, bounds)
+        if not _solidworks_rectangle_vector_matches(
+            transformed_vertices[vertex.id].point,
+            expected,
+        ):
+            raise ParasolidWriteError(
+                "transformed SOLIDWORKS rectangle Partition changes a vertex"
+            )
+    for curve in source.curves:
+        target = transformed_curves[curve.id]
+        expected = _solidworks_rectangle_vector(curve.origin, bounds)
+        if (
+            not isinstance(curve, LineCurve)
+            or not isinstance(target, LineCurve)
+            or target.direction != curve.direction
+            or not _solidworks_rectangle_vector_matches(target.origin, expected)
+        ):
+            raise ParasolidWriteError(
+                "transformed SOLIDWORKS rectangle Partition changes a curve"
+            )
+    for surface in source.surfaces:
+        target = transformed_surfaces[surface.id]
+        expected = _solidworks_rectangle_vector(surface.origin, bounds)
+        if (
+            not isinstance(surface, PlaneSurface)
+            or not isinstance(target, PlaneSurface)
+            or target.normal != surface.normal
+            or target.reference_direction != surface.reference_direction
+            or not _solidworks_rectangle_vector_matches(target.origin, expected)
+        ):
+            raise ParasolidWriteError(
+                "transformed SOLIDWORKS rectangle Partition changes a surface"
+            )
+
+
+def _solidworks_rectangle_vector_matches(
+    vector: Vector3,
+    expected: tuple[float, float, float],
+) -> bool:
+    return all(
+        math.isclose(actual, intended, rel_tol=1e-12, abs_tol=1e-9)
+        for actual, intended in zip(
+            (vector.x, vector.y, vector.z),
+            expected,
+            strict=True,
+        )
+    )
+
+
 def _parasolid_header(data: bytes) -> _ParasolidHeader | None:
     if len(data) < 12 or not data.startswith(b"PS\x00\x00"):
         return None
@@ -2590,13 +3545,118 @@ def _decode_partition_model(
     tables = _scan_partition_records(body)
     if tables is None or not tables.bridges:
         return None
+    unchanged_ids, attribute_orders = _solidworks_face_data(body)
     try:
-        model = _build_partition_model(tables)
+        model = _build_partition_model(tables, unchanged_ids, attribute_orders)
     except (KeyError, ValueError, OverflowError):
         return None
     if model.validate():
         return None
     return model
+
+
+def _solidworks_unchanged_ids(body: bytes) -> dict[int, int]:
+    return _solidworks_face_data(body)[0]
+
+
+def _solidworks_face_data(
+    body: bytes,
+) -> tuple[dict[int, int], dict[str, dict[int, int]]]:
+    names = {
+        "unchanged": b"SWEntUnchanged",
+        "downstream": b"DOWNSTREAM_FACE_ID",
+        "colour": b"SDL/TYSA_COLOUR",
+    }
+    identifier_kinds: dict[int, str] = {}
+    cursor = 0
+    while (offset := body.find(b"\x00\x4f", cursor)) >= 0:
+        cursor = offset + 1
+        count = _u32(body, offset + 2)
+        index = _u16(body, offset + 6)
+        if count is None or index is None or offset + 8 + count > len(body):
+            continue
+        value = body[offset + 8 : offset + 8 + count]
+        kind = next((name for name, encoded in names.items() if value == encoded), None)
+        if kind is not None:
+            identifier_kinds[index] = kind
+    definition_kinds: dict[int, str] = {}
+    cursor = 0
+    while (offset := body.find(b"\x00\x50", cursor)) >= 0:
+        cursor = offset + 1
+        count = _u32(body, offset + 2)
+        index = _u16(body, offset + 6)
+        identifier = _u16(body, offset + 10)
+        if (
+            count is None
+            or count > 64
+            or offset + 38 + count > len(body)
+            or index is None
+            or identifier not in identifier_kinds
+        ):
+            continue
+        definition_kinds[index] = identifier_kinds[identifier]
+    if not definition_kinds:
+        return {}, {}
+    value_records: dict[int, int] = {}
+    cursor = 0
+    while (offset := body.find(b"\x00\x52", cursor)) >= 0:
+        cursor = offset + 1
+        count = _u32(body, offset + 2)
+        index = _u16(body, offset + 6)
+        if count != 1 or index is None or offset + 12 > len(body):
+            continue
+        value = struct.unpack_from(">i", body, offset + 8)[0]
+        if value > 0:
+            value_records[index] = value
+    records: dict[str, dict[int, tuple[int, int, int, int]]] = {
+        kind: {} for kind in names
+    }
+    cursor = 0
+    while (offset := body.find(b"\x00\x51", cursor)) >= 0:
+        cursor = offset + 1
+        count = _u32(body, offset + 2)
+        index = _u16(body, offset + 6)
+        attribute_definition = _u16(body, offset + 12)
+        owner = _u16(body, offset + 14)
+        next_of_type = _u16(body, offset + 20)
+        previous_of_type = _u16(body, offset + 22)
+        value_index = _u16(body, offset + 24)
+        if (
+            count is None
+            or count < 1
+            or count > 64
+            or offset + 24 + count * 2 > len(body)
+            or index is None
+            or attribute_definition not in definition_kinds
+            or owner is None
+            or next_of_type is None
+            or previous_of_type is None
+            or value_index is None
+        ):
+            continue
+        kind = definition_kinds[attribute_definition]
+        records[kind][index] = owner, next_of_type, previous_of_type, value_index
+    orders: dict[str, dict[int, int]] = {}
+    for kind, values in records.items():
+        ordered = _linked_subset_order(
+            values,
+            {attribute: (record[1], record[2]) for attribute, record in values.items()},
+        )
+        owners = [values[attribute][0] for attribute in ordered]
+        if len(set(owners)) == len(owners):
+            orders[kind] = {owner: rank for rank, owner in enumerate(owners)}
+    unchanged: dict[int, int] = {}
+    ambiguous: set[int] = set()
+    for owner, _, _, value_index in records["unchanged"].values():
+        if value_index not in value_records:
+            continue
+        if owner in unchanged:
+            ambiguous.add(owner)
+        else:
+            unchanged[owner] = value_records[value_index]
+    for owner in ambiguous:
+        unchanged.pop(owner, None)
+    return unchanged, orders
 
 
 def _scan_partition_records(body: bytes) -> _RecordTables | None:
@@ -4553,6 +5613,9 @@ def _parse_bridge(
         return None
     if attribute <= 1 or (owner <= 1 and not allow_null_owner):
         return None
+    trailing = _refs(data, marker_offset + 1, 5)
+    if trailing is not None:
+        references += trailing
     return _TopologyRecord(
         attribute,
         references,
@@ -4719,9 +5782,9 @@ def _parse_vertex_use(data: bytes, offset: int) -> _TopologyRecord | None:
     return _TopologyRecord(attribute, references, offset, tolerance=tolerance)
 
 
-def _parse_point(
+def _point_record_fields(
     data: bytes, offset: int, prefixed: bool = False
-) -> _TopologyRecord | None:
+) -> tuple[int, tuple[int, ...], int] | None:
     start = _record_start(data, offset, 0x1D)
     if start is None or start + 38 > len(data):
         return None
@@ -4748,6 +5811,16 @@ def _parse_point(
         return None
     if values_offset + 24 > len(data):
         return None
+    return attribute, references, values_offset
+
+
+def _parse_point(
+    data: bytes, offset: int, prefixed: bool = False
+) -> _TopologyRecord | None:
+    fields = _point_record_fields(data, offset, prefixed)
+    if fields is None:
+        return None
+    attribute, references, values_offset = fields
     values = struct.unpack_from(">3d", data, values_offset)
     if any(not math.isfinite(value) or abs(value) > 10_000 for value in values):
         return None
@@ -4759,18 +5832,27 @@ def _parse_point(
     )
 
 
-def _parse_analytic_carrier(data: bytes, offset: int) -> tuple[int, object] | None:
+_ANALYTIC_VALUE_COUNTS = {
+    0x1E: 6,
+    0x1F: 10,
+    0x20: 11,
+    0x32: 9,
+    0x33: 10,
+    0x34: 12,
+    0x35: 10,
+    0x36: 11,
+}
+
+
+def _analytic_record_fields(
+    data: bytes, offset: int
+) -> tuple[int, int, int, int] | None:
+    if offset < 0 or offset + 2 > len(data):
+        return None
     kind = data[offset + 1]
-    value_count = {
-        0x1E: 6,
-        0x1F: 10,
-        0x20: 11,
-        0x32: 9,
-        0x33: 10,
-        0x34: 12,
-        0x35: 10,
-        0x36: 11,
-    }[kind]
+    value_count = _ANALYTIC_VALUE_COUNTS.get(kind)
+    if value_count is None:
+        return None
     start = _record_start(data, offset, kind)
     if start is None:
         return None
@@ -4795,6 +5877,16 @@ def _parse_analytic_carrier(data: bytes, offset: int) -> tuple[int, object] | No
         return None
     if data[marker_offset] not in {0x2B, 0x2D}:
         return None
+    return attribute, values_offset, values_end, marker_offset
+
+
+def _parse_analytic_carrier(data: bytes, offset: int) -> tuple[int, object] | None:
+    kind = data[offset + 1]
+    value_count = _ANALYTIC_VALUE_COUNTS[kind]
+    fields = _analytic_record_fields(data, offset)
+    if fields is None:
+        return None
+    attribute, values_offset, values_end, marker_offset = fields
     values = struct.unpack_from(f">{value_count}d", data, values_offset)
     if any(not math.isfinite(value) or abs(value) > 1_000_000 for value in values):
         return None
@@ -4965,7 +6057,110 @@ def _parse_entity(data: bytes, offset: int) -> _EntityRecord | None:
     return _EntityRecord(flags, attribute, discriminator, references, offset)
 
 
-def _build_partition_model(tables: _RecordTables) -> BrepModel:
+def _linked_subset_order(
+    attributes: Iterable[int],
+    links: Mapping[int, tuple[int, int]],
+) -> tuple[int, ...]:
+    selected = set(attributes)
+    linked = selected.intersection(links)
+    if not linked:
+        return tuple(sorted(selected))
+    ordered: list[int] = []
+    visited: set[int] = set()
+    heads = sorted(
+        attribute
+        for attribute, (_, previous) in links.items()
+        if previous <= 1 or previous not in links
+    )
+    for head in heads:
+        attribute = head
+        previous = 0
+        component: set[int] = set()
+        while attribute > 1 and attribute in links:
+            if attribute in component or attribute in visited:
+                break
+            next_attribute, previous_attribute = links[attribute]
+            if previous and previous_attribute != previous:
+                break
+            component.add(attribute)
+            visited.add(attribute)
+            ordered.append(attribute)
+            previous = attribute
+            attribute = next_attribute
+    result = tuple(attribute for attribute in ordered if attribute in linked)
+    if len(result) != len(linked):
+        result = tuple(sorted(linked))
+    return result + tuple(sorted(selected - linked))
+
+
+def _geometry_chain_links(values: Mapping[int, object]) -> dict[int, tuple[int, int]]:
+    result: dict[int, tuple[int, int]] = {}
+    for attribute, geometry in values.items():
+        attributes = getattr(geometry, "attributes", {})
+        header = attributes.get("header_references")
+        if (
+            isinstance(header, tuple)
+            and len(header) >= 4
+            and all(type(value) is int for value in header[:4])
+        ):
+            result[attribute] = header[3], header[2]
+            continue
+        raw = attributes.get("carrier_record")
+        if not isinstance(raw, bytes) or len(raw) < 16:
+            continue
+        next_attribute = _u16(raw, 12)
+        previous_attribute = _u16(raw, 14)
+        if next_attribute is not None and previous_attribute is not None:
+            result[attribute] = next_attribute, previous_attribute
+    return result
+
+
+def _fin_descriptor(
+    attribute: int,
+    used_coedges: set[int],
+    used_edges: set[int],
+    tables: _RecordTables,
+) -> tuple[str, str] | None:
+    if attribute in used_coedges:
+        return "coedge", _native_id("coedge", attribute)
+    fin = tables.coedges.get(attribute)
+    if fin is None or fin.references[6] not in used_edges:
+        return None
+    return "dummy", _native_id("edge", fin.references[6])
+
+
+def _vertex_fin_order(
+    vertex_attribute: int,
+    first_attribute: int,
+    used_coedges: set[int],
+    used_edges: set[int],
+    tables: _RecordTables,
+) -> tuple[tuple[str, str], ...]:
+    result: list[tuple[str, str]] = []
+    seen: set[int] = set()
+    attribute = first_attribute
+    while attribute > 1:
+        if attribute in seen:
+            return ()
+        seen.add(attribute)
+        fin = tables.coedges.get(attribute)
+        if fin is None or fin.references[4] != vertex_attribute:
+            return ()
+        descriptor = _fin_descriptor(attribute, used_coedges, used_edges, tables)
+        if descriptor is None:
+            return ()
+        result.append(descriptor)
+        attribute = fin.references[8]
+    return tuple(result)
+
+
+def _build_partition_model(
+    tables: _RecordTables,
+    solidworks_unchanged_ids: Mapping[int, int] | None = None,
+    solidworks_attribute_orders: Mapping[str, Mapping[int, int]] | None = None,
+) -> BrepModel:
+    unchanged_ids = solidworks_unchanged_ids or {}
+    attribute_orders = solidworks_attribute_orders or {}
     face_loops: dict[int, tuple[tuple[int, tuple[int, ...]], ...]] = {}
     edge_endpoints: dict[int, tuple[int, int]] = {}
     edge_curves: dict[int, int] = {}
@@ -5076,14 +6271,74 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
                 used_curves.add(curve_attribute)
     if set(tables.bridges) != set(face_loops):
         raise ValueError("partial face topology")
-    vertices: list[BrepVertex] = []
+    face_order = _linked_subset_order(
+        face_loops,
+        {
+            attribute: (record.references[0], record.references[1])
+            for attribute, record in tables.bridges.items()
+        },
+    )
+    face_surface_order = _linked_subset_order(
+        face_loops,
+        {
+            attribute: (record.references[5], record.references[6])
+            for attribute, record in tables.bridges.items()
+            if len(record.references) >= 7
+        },
+    )
+    face_front_order = _linked_subset_order(
+        face_loops,
+        {
+            attribute: (record.references[7], record.references[8])
+            for attribute, record in tables.bridges.items()
+            if len(record.references) >= 9
+        },
+    )
+    edge_order = _linked_subset_order(
+        used_edges,
+        {
+            attribute: (record.references[2], record.references[1])
+            for attribute, record in tables.edge_uses.items()
+        },
+    )
+    curve_edge_order = _linked_subset_order(
+        used_edges,
+        {
+            attribute: (record.references[4], record.references[5])
+            for attribute, record in tables.edge_uses.items()
+        },
+    )
+    vertex_order = _linked_subset_order(
+        used_vertices,
+        {
+            attribute: (record.references[3], record.references[2])
+            for attribute, record in tables.vertex_uses.items()
+        },
+    )
+    curve_order = _linked_subset_order(
+        used_curves,
+        _geometry_chain_links(tables.curves),
+    )
+    face_ranks = {attribute: rank for rank, attribute in enumerate(face_order)}
+    face_surface_ranks = {
+        attribute: rank for rank, attribute in enumerate(face_surface_order)
+    }
+    face_front_ranks = {
+        attribute: rank for rank, attribute in enumerate(face_front_order)
+    }
+    edge_ranks = {attribute: rank for rank, attribute in enumerate(edge_order)}
+    curve_edge_ranks = {
+        attribute: rank for rank, attribute in enumerate(curve_edge_order)
+    }
+    vertex_ranks = {attribute: rank for rank, attribute in enumerate(vertex_order)}
+    curve_ranks = {attribute: rank for rank, attribute in enumerate(curve_order)}
     points_by_vertex: dict[int, Vector3] = {}
-    for vertex_attribute in sorted(used_vertices):
+    point_attributes: dict[int, int] = {}
+    for vertex_attribute in vertex_order:
         if vertex_attribute in synthetic_vertices:
             point = synthetic_vertices[vertex_attribute]
             points_by_vertex[vertex_attribute] = point
             vertex_tolerances[vertex_attribute] = 0.0
-            vertices.append(BrepVertex(_native_id("vertex", vertex_attribute), point))
             continue
         vertex_use = tables.vertex_uses.get(vertex_attribute)
         if vertex_use is None:
@@ -5093,22 +6348,79 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         if point_record is None or point_record.point is None:
             raise ValueError("missing vertex point")
         used_points.add(point_attribute)
+        point_attributes[vertex_attribute] = point_attribute
         points_by_vertex[vertex_attribute] = point_record.point
         vertex_tolerances[vertex_attribute] = vertex_use.tolerance
+    point_order = _linked_subset_order(
+        used_points,
+        {
+            attribute: (record.references[2], record.references[3])
+            for attribute, record in tables.points.items()
+            if len(record.references) >= 4
+        },
+    )
+    point_ranks = {attribute: rank for rank, attribute in enumerate(point_order)}
+    vertices: list[BrepVertex] = []
+    for vertex_attribute in vertex_order:
+        if vertex_attribute in synthetic_vertices:
+            vertices.append(
+                BrepVertex(
+                    _native_id("vertex", vertex_attribute),
+                    points_by_vertex[vertex_attribute],
+                    attributes=frozen_mapping(
+                        {"parasolid.vertex_order": vertex_ranks[vertex_attribute]}
+                    ),
+                )
+            )
+            continue
+        vertex_use = tables.vertex_uses[vertex_attribute]
+        point_attribute = point_attributes[vertex_attribute]
+        attributes: dict[str, object] = {
+            "parasolid.vertex_order": vertex_ranks[vertex_attribute],
+            "parasolid.point_order": point_ranks[point_attribute],
+        }
+        fin_order = _vertex_fin_order(
+            vertex_attribute,
+            vertex_use.references[1],
+            used_coedges,
+            used_edges,
+            tables,
+        )
+        if fin_order:
+            attributes["parasolid.vertex_fins"] = fin_order
         vertices.append(
             BrepVertex(
                 _native_id("vertex", vertex_attribute),
-                point_record.point,
+                points_by_vertex[vertex_attribute],
                 tolerance=vertex_use.tolerance,
+                attributes=frozen_mapping(attributes),
             )
         )
     curves = tuple(
-        (
-            tables.curves[attribute]
-            if attribute in tables.curves
-            else synthetic_curves[attribute]
+        replace(
+            (
+                tables.curves[attribute]
+                if attribute in tables.curves
+                else synthetic_curves[attribute]
+            ),
+            attributes=frozen_mapping(
+                {
+                    **dict(
+                        getattr(
+                            (
+                                tables.curves[attribute]
+                                if attribute in tables.curves
+                                else synthetic_curves[attribute]
+                            ),
+                            "attributes",
+                            {},
+                        )
+                    ),
+                    "parasolid.curve_order": curve_ranks[attribute],
+                }
+            ),
         )
-        for attribute in sorted(used_curves)
+        for attribute in curve_order
     )
     for curve in curves:
         if not isinstance(curve, IntersectionCurve):
@@ -5124,8 +6436,13 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         ):
             raise ValueError("intersection support surfaces are unresolved")
         used_surfaces.update(references[:2])
+    surface_order = _linked_subset_order(
+        used_surfaces,
+        _geometry_chain_links(tables.surfaces),
+    )
+    surface_ranks = {attribute: rank for rank, attribute in enumerate(surface_order)}
     edges: list[BrepEdge] = []
-    for edge_attribute in sorted(used_edges):
+    for edge_attribute in edge_order:
         start_vertex, end_vertex = edge_endpoints[edge_attribute]
         curve_attribute = edge_curves[edge_attribute]
         degenerate = curve_attribute in synthetic_curves
@@ -5140,6 +6457,19 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
                 vertex_tolerances[start_vertex],
                 vertex_tolerances[end_vertex],
             )
+        edge_attributes: dict[str, object] = {
+            "parasolid.edge_order": edge_ranks[edge_attribute],
+            "parasolid.curve_edge_order": curve_edge_ranks[edge_attribute],
+        }
+        if edge_attribute in tables.edge_uses:
+            first_fin = _fin_descriptor(
+                tables.edge_uses[edge_attribute].references[0],
+                used_coedges,
+                used_edges,
+                tables,
+            )
+            if first_fin is not None:
+                edge_attributes["parasolid.first_fin"] = first_fin
         edges.append(
             BrepEdge(
                 _native_id("edge", edge_attribute),
@@ -5153,6 +6483,7 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
                     vertex_tolerances[end_vertex],
                 ),
                 degenerate=degenerate,
+                attributes=frozen_mapping(edge_attributes),
             )
         )
     coedges = tuple(
@@ -5185,7 +6516,18 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
         for values in face_loops.values()
         for loop_attribute, ring in values
     )
-    surfaces = tuple(tables.surfaces[attribute] for attribute in sorted(used_surfaces))
+    surfaces = tuple(
+        replace(
+            tables.surfaces[attribute],
+            attributes=frozen_mapping(
+                {
+                    **dict(getattr(tables.surfaces[attribute], "attributes", {})),
+                    "parasolid.surface_order": surface_ranks[attribute],
+                }
+            ),
+        )
+        for attribute in surface_order
+    )
     faces = tuple(
         BrepFace(
             _native_id("face", bridge_attribute),
@@ -5195,14 +6537,53 @@ def _build_partition_model(tables: _RecordTables) -> BrepModel:
                 for loop_attribute, _ in face_loops[bridge_attribute]
             ),
             not tables.bridges[bridge_attribute].reversed,
+            attributes=frozen_mapping(
+                {
+                    **(
+                        {
+                            "solidworks.unchanged_id": unchanged_ids[bridge_attribute],
+                        }
+                        if bridge_attribute in unchanged_ids
+                        else {}
+                    ),
+                    "parasolid.face_order": face_ranks[bridge_attribute],
+                    "parasolid.surface_face_order": face_surface_ranks[
+                        bridge_attribute
+                    ],
+                    "parasolid.front_face_order": face_front_ranks[bridge_attribute],
+                    **{
+                        f"solidworks.{kind}_order": ranks[bridge_attribute]
+                        for kind, ranks in attribute_orders.items()
+                        if bridge_attribute in ranks
+                    },
+                }
+            ),
         )
-        for bridge_attribute in sorted(face_loops)
+        for bridge_attribute in face_order
     )
     try:
         hierarchy = _build_body_hierarchy(tables.entities, owner_faces, set(face_loops))
     except ValueError:
         hierarchy = _derive_body_hierarchy(face_loops, tables)
     face_uses, shells, shell_uses, regions, bodies = hierarchy
+    face_rank_by_id = {
+        _native_id("face", attribute): rank for attribute, rank in face_ranks.items()
+    }
+    face_use_by_id = {face_use.id: face_use for face_use in face_uses}
+    shells = tuple(
+        replace(
+            shell,
+            face_use_ids=tuple(
+                sorted(
+                    shell.face_use_ids,
+                    key=lambda face_use_id: face_rank_by_id[
+                        face_use_by_id[face_use_id].face_id
+                    ],
+                )
+            ),
+        )
+        for shell in shells
+    )
     model = BrepModel(
         curves=curves,
         surfaces=surfaces,

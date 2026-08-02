@@ -16,11 +16,13 @@ from convert.adapters.solidworks.adapter import (
     _final_body_feature_id,
     _feature_kind,
     _is_geometry_brep_payload,
+    _marker_curve_semantic,
     _sketch,
     _sketch_constraints,
     _solid_body_feature,
     _timeline,
 )
+from convert.adapters.solidworks.format import CLASS_MARKER, SERIALIZED_STRING_MARKER
 from convert.adapters.solidworks.native import (
     NativeConstraint,
     NativeFeature,
@@ -30,7 +32,10 @@ from convert.adapters.solidworks.native import (
     NativePlane,
     NativeSketch,
     _decode_planes,
+    _native_scale_factors,
+    _parse_native_equations,
     _parse_keywords,
+    _reference_plane_ids,
     _constraints,
     _profiles,
     decode_native_model,
@@ -1006,6 +1011,152 @@ def test_adapter_decodes_linked_rectangle_records_from_newer_native_streams() ->
     assert decoded.closed_profile_entity_ids == (
         tuple(entity.id for entity in decoded.entities),
     )
+
+
+def test_broad_source_less_byte_decoders_require_native_record_shapes() -> None:
+    def declaration(name: str) -> bytes:
+        return CLASS_MARKER + struct.pack("<H", len(name)) + name.encode("ascii")
+
+    equation_source = '"Width" = 40mm'
+    equation_data = (
+        declaration("moRelMgr_c")
+        + declaration("moRelation_c")
+        + SERIALIZED_STRING_MARKER
+        + bytes((len(equation_source),))
+        + equation_source.encode("utf-16le")
+    )
+    equations = _parse_native_equations(equation_data, 1, "Contents/Config-1")
+    assert [(item.lhs, item.rhs, item.native_stream) for item in equations] == [
+        ("Width", "40mm", "Contents/Config-1")
+    ]
+    reference_data = b"head" + b"\0" * 6 + struct.pack("<II", 1, 2) + b"\0\x05tail"
+    assert _reference_plane_ids(
+        reference_data, 0, len(reference_data), 35, frozenset({2, 3, 35})
+    ) == (2,)
+    scale_data = (
+        struct.pack("<I3d", 1, 1.1, 1.1, 1.1) + b"\0" * 8 + struct.pack("<H", 0x80AC)
+    )
+    assert _native_scale_factors(scale_data, 0, len(scale_data)) == pytest.approx(
+        (1.1, 1.1, 1.1)
+    )
+    assert _native_scale_factors(scale_data[:-1], 0, len(scale_data) - 1) is None
+
+
+def test_broad_structural_rectangle_uses_saved_endpoint_indices() -> None:
+    values = (
+        ((0.0, -35.0), None, 0, 1),
+        ((0.0, 35.0), None, 0, 1),
+        (None, (17768, 29816), 1, 1),
+        ((10.0, -25.0), None, 0, 1),
+        ((25.0, -25.0), None, 0, 1),
+        ((25.0, 25.0), None, 0, 1),
+        ((10.0, 25.0), None, 0, 1),
+        (None, (0, 1), 2, 2),
+        (None, (3, 4), 1, 1),
+        (None, (4, 5), 1, 1),
+        (None, (5, 6), 1, 1),
+        (None, (6, 3), 1, 1),
+    )
+    markers = [
+        NativeMarker(
+            offset=100 + index * 100,
+            length=92,
+            prefix="ffff1f0003",
+            native_kind=native_kind,
+            locus="04000200" if index in {2, 7} else "05000100",
+            profile_role=role,
+            state=1.0,
+            object_index=index,
+            local_id=index,
+            coordinates_mm=coordinates,
+            endpoint_indices=endpoints,
+            construction=role == 2,
+            semantic="line" if index == 7 else "native",
+        )
+        for index, (coordinates, endpoints, native_kind, role) in enumerate(values)
+    ]
+    profiles, used, dimensions = _profiles(markers, ())
+    assert dimensions == ()
+    assert [(item.kind, item.coordinates) for item in profiles] == [
+        ("rectangle", (10.0, -25.0, 25.0, 25.0))
+    ]
+    assert used == {900, 1000, 1100, 1200}
+
+
+@pytest.mark.parametrize(
+    ("length", "semantic", "locus", "role", "endpoints", "record", "expected"),
+    (
+        (92, "native", "05000100", 1, (0, 1), b"", "line"),
+        (92, "native", "03000300", 0, (0, 1), b"", "native"),
+        (104, "native", "05000100", 1, (0, 1), b"", "line"),
+        (104, "native", "03000300", 0, (0, 0), b"", "ellipse"),
+        (108, "native", "03000300", 0, (0, 1), b"", "arc_ellipse"),
+        (112, "native", "03000300", 0, (0, 0), b"", "circle"),
+        (116, "native", "03000300", 0, (0, 1), b"", "arc"),
+        (124, "native", "03000300", 0, (0, 1), b"", "parabola"),
+        (128, "native", "03000300", 0, (0, 1), b"", "conic"),
+        (132, "native", "03000300", 0, (0, 1), b"", "spline"),
+        (200, "line", "04000200", 1, (0, 1), b"", "line"),
+        (
+            200,
+            "line",
+            "04000200",
+            1,
+            (0, 1),
+            b"cptsSplineList_c",
+            "spline",
+        ),
+    ),
+)
+def test_broad_marker_curve_semantics_use_record_structure(
+    length: int,
+    semantic: str,
+    locus: str,
+    role: int,
+    endpoints: tuple[int, int],
+    record: bytes,
+    expected: str,
+) -> None:
+    data = record.ljust(length, b"\0")
+    marker = NativeMarker(
+        0,
+        length,
+        "ffff1f0003",
+        0,
+        locus,
+        role,
+        None,
+        None,
+        None,
+        None,
+        endpoints,
+        False,
+        semantic,
+        data,
+    )
+    assert _marker_curve_semantic(marker) == expected
+
+
+def test_broad_marker_curve_semantics_use_circular_sentinel() -> None:
+    data = bytearray(140)
+    data[86:102] = b"\xfe\xff\xff\xff" * 4
+    marker = NativeMarker(
+        0,
+        len(data),
+        "ffff1f0003",
+        0,
+        "03000300",
+        0,
+        None,
+        None,
+        None,
+        None,
+        (4, 4),
+        False,
+        "native",
+        bytes(data),
+    )
+    assert _marker_curve_semantic(marker) == "circle"
 
 
 def test_adapter_preserves_unknown_locus_before_resolving_native_indices() -> None:

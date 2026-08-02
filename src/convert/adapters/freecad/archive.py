@@ -631,7 +631,7 @@ def _xlink_property(
     return result
 
 
-def _python_proxy_property(module: str, class_name: str) -> ET.Element:
+def _python_proxy_property() -> ET.Element:
     result = _property("Proxy", "App::PropertyPythonObject")
     ET.SubElement(
         result,
@@ -639,8 +639,7 @@ def _python_proxy_property(module: str, class_name: str) -> ET.Element:
         {
             "value": "bnVsbA==",
             "encoded": "yes",
-            "module": module,
-            "class": class_name,
+            "json": "yes",
         },
     )
     return result
@@ -1152,6 +1151,41 @@ def _native_geometry_element(entity: Mapping[str, Any]) -> ET.Element | None:
                 value.set("MajorAxisY", _fmt(major_axis[1]))
             value.set("MajorRadius", _fmt(geometry.get("major_radius")))
             value.set("MinorRadius", _fmt(geometry.get("minor_radius")))
+    elif not native_geometry and kind in {
+        "arc_ellipse",
+        "hyperbola",
+        "arc_hyperbola",
+    }:
+        tag = {
+            "arc_ellipse": "ArcOfEllipse",
+            "hyperbola": "Hyperbola",
+            "arc_hyperbola": "ArcOfHyperbola",
+        }[kind]
+        value = element.find(f"./{tag}")
+        if value is not None:
+            center = _point2(geometry.get("center"))
+            major_axis = _point2(geometry.get("major_axis"))
+            value.set("CenterX", _fmt(center[0]))
+            value.set("CenterY", _fmt(center[1]))
+            value.set("AngleXU", _fmt(math.atan2(major_axis[1], major_axis[0])))
+            value.set("MajorRadius", _fmt(geometry.get("major_radius")))
+            value.set("MinorRadius", _fmt(geometry.get("minor_radius")))
+            if kind != "hyperbola":
+                value.set("StartAngle", _fmt(geometry.get("start_angle")))
+                value.set("EndAngle", _fmt(geometry.get("end_angle")))
+    elif not native_geometry and kind in {"parabola", "arc_parabola"}:
+        tag = "Parabola" if kind == "parabola" else "ArcOfParabola"
+        value = element.find(f"./{tag}")
+        if value is not None:
+            center = _point2(geometry.get("center"))
+            axis = _point2(geometry.get("axis"))
+            value.set("CenterX", _fmt(center[0]))
+            value.set("CenterY", _fmt(center[1]))
+            value.set("AngleXU", _fmt(math.atan2(axis[1], axis[0])))
+            value.set("Focal", _fmt(geometry.get("focal_length")))
+            if kind == "arc_parabola":
+                value.set("StartAngle", _fmt(geometry.get("start_angle")))
+                value.set("EndAngle", _fmt(geometry.get("end_angle")))
     elif not native_geometry and kind in SPLINE_GEOMETRY_KINDS:
         value = element.find("./BezierCurve" if kind == "bezier" else "./BSplineCurve")
         if value is not None:
@@ -1244,7 +1278,11 @@ def _geometry_property(
             carrier_reason = (
                 "source_opaque"
                 if geometry_type == "NativeGeometry"
-                or (geometry_type and geometry_type != expected_geometry_type)
+                or (
+                    type_id is not None
+                    and geometry_type
+                    and geometry_type != expected_geometry_type
+                )
                 else "writer_unimplemented"
             )
             diagnostics.append(
@@ -1337,6 +1375,47 @@ def _geometry_property(
                     "AngleXU": _fmt(math.atan2(major_axis[1], major_axis[0])),
                 },
             )
+        elif kind in {"arc_ellipse", "hyperbola", "arc_hyperbola"}:
+            center = _point2(geometry.get("center"))
+            major_axis = _point2(geometry.get("major_axis"))
+            tag = {
+                "arc_ellipse": "ArcOfEllipse",
+                "hyperbola": "Hyperbola",
+                "arc_hyperbola": "ArcOfHyperbola",
+            }[kind]
+            attributes = {
+                "CenterX": _fmt(center[0]),
+                "CenterY": _fmt(center[1]),
+                "CenterZ": _fmt(0),
+                "NormalX": _fmt(0),
+                "NormalY": _fmt(0),
+                "NormalZ": _fmt(1),
+                "MajorRadius": _fmt(geometry.get("major_radius")),
+                "MinorRadius": _fmt(geometry.get("minor_radius")),
+                "AngleXU": _fmt(math.atan2(major_axis[1], major_axis[0])),
+            }
+            if kind != "hyperbola":
+                attributes["StartAngle"] = _fmt(geometry.get("start_angle"))
+                attributes["EndAngle"] = _fmt(geometry.get("end_angle"))
+            ET.SubElement(item, tag, attributes)
+        elif kind in {"parabola", "arc_parabola"}:
+            center = _point2(geometry.get("center"))
+            axis = _point2(geometry.get("axis"))
+            tag = "Parabola" if kind == "parabola" else "ArcOfParabola"
+            attributes = {
+                "CenterX": _fmt(center[0]),
+                "CenterY": _fmt(center[1]),
+                "CenterZ": _fmt(0),
+                "NormalX": _fmt(0),
+                "NormalY": _fmt(0),
+                "NormalZ": _fmt(1),
+                "Focal": _fmt(geometry.get("focal_length")),
+                "AngleXU": _fmt(math.atan2(axis[1], axis[0])),
+            }
+            if kind == "arc_parabola":
+                attributes["StartAngle"] = _fmt(geometry.get("start_angle"))
+                attributes["EndAngle"] = _fmt(geometry.get("end_angle"))
+            ET.SubElement(item, tag, attributes)
         elif kind in SPLINE_GEOMETRY_KINDS:
             points = _items(geometry.get("control_points", []))
             weights = [
@@ -1799,7 +1878,13 @@ def _constraints_property(
         parameter_id = _text(constraint.get("parameter_id"))
         value = parameters.value(
             parameter_id,
-            _number(constraint.get("value"), _number(raw_attributes.get("Value"))),
+            _number(
+                constraint.get("value"),
+                _number(
+                    source_attributes.get("native_value"),
+                    _number(raw_attributes.get("Value")),
+                ),
+            ),
         )
         elements = resolved + [(-2000, 0)] * max(0, 3 - len(resolved))
         values = elements[:3]
@@ -2316,6 +2401,55 @@ def _native_profiles_are_statically_sound(sketch: Mapping[str, Any]) -> bool:
         for index, first in enumerate(profiles)
         for second in profiles[index + 1 :]
     )
+
+
+def native_shape_feature_count(manifest: Mapping[str, Any]) -> int:
+    source = manifest.get("source", {})
+    source_format_id = (
+        _text(source.get("format_id")) if isinstance(source, Mapping) else ""
+    )
+    sketches = {
+        _text(sketch.get("id")): sketch
+        for sketch in _items(manifest.get("sketches", []))
+        if _text(sketch.get("id"))
+    }
+    count = 0
+    for feature in _items(
+        manifest.get("feature_timeline", manifest.get("timeline", []))
+    ):
+        if _text(_enum(feature.get("kind"))).casefold() != "extrusion" or bool(
+            feature.get("suppressed")
+        ):
+            continue
+        definition = feature.get("definition", {})
+        attributes = feature.get("attributes", {})
+        if not isinstance(definition, Mapping):
+            definition = {}
+        if not isinstance(attributes, Mapping):
+            attributes = {}
+        if (
+            max(
+                abs(
+                    _number(
+                        definition.get("length"),
+                        _number(attributes.get("length_mm")),
+                    )
+                ),
+                abs(_number(definition.get("second_length"))),
+            )
+            <= 1e-12
+        ):
+            continue
+        sketch = sketches.get(_text(feature.get("sketch_id")))
+        if sketch is None or not _native_closed_profile_count(sketch):
+            continue
+        if (
+            source_format_id == "solidworks.sldprt"
+            and not _native_profiles_are_statically_sound(sketch)
+        ):
+            continue
+        count += 1
+    return count
 
 
 def native_sketch_parts(manifest: Mapping[str, Any]) -> tuple[tuple[int, int], ...]:
@@ -3292,7 +3426,7 @@ def _grounded_joint(
         ET.SubElement(label2, "String", {"value": ""})
         joint.properties.append(label2)
     if not any(item.get("name") == "Proxy" for item in joint.properties):
-        joint.properties.append(_python_proxy_property("JointObject", "GroundedJoint"))
+        joint.properties.append(_python_proxy_property())
     if not any(item.get("name") == "Visibility" for item in joint.properties):
         visibility = _property("Visibility", "App::PropertyBool", status="648")
         ET.SubElement(visibility, "Bool", {"value": "true"})
@@ -4315,7 +4449,7 @@ def _add_assembly(
                     "EnableAngleMax", "AngleMax" in parameter_values, dynamic=True
                 ),
                 *connector_properties,
-                _python_proxy_property("JointObject", "Joint"),
+                _python_proxy_property(),
                 _bool_property("Visibility", False),
             ]
 

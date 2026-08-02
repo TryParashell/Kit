@@ -49,6 +49,7 @@ from convert.adapters.solidworks.format import (
     RELATIONSHIPS_STREAM,
     RESOLVED_FEATURES_STREAM,
 )
+from convert.adapters.solidworks.native import _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE
 from convert.parasolid import _parasolid_header, _scan_partition_records
 from interchange import (
     BooleanOperation,
@@ -71,6 +72,7 @@ from interchange import (
     SketchEntity,
     ValueKind,
     Vector2,
+    Vector3,
     frozen_mapping,
 )
 from tests.interchange.test_assembly import assembly_document
@@ -88,6 +90,110 @@ PISTON_RING = (
 CATPRODUCT = (
     Path(__file__).parents[2] / "examples" / ".CATProduct" / "Tilton_Set.CATProduct"
 )
+
+
+def _freecad_rectangle_pad_document(
+    bounds: tuple[float, float, float, float] = (-30.0, -15.0, 30.0, 15.0),
+    depth: float = 12.0,
+) -> CadDocument:
+    source = document()
+    minimum_x, minimum_y, maximum_x, maximum_y = bounds
+    points = (
+        Vector2(minimum_x, minimum_y),
+        Vector2(maximum_x, minimum_y),
+        Vector2(maximum_x, maximum_y),
+        Vector2(minimum_x, maximum_y),
+    )
+    entities = tuple(
+        SketchEntity(
+            f"freecad:edge:{index}",
+            GeometryKind.LINE,
+            LineGeometry(points[index], points[(index + 1) % 4]),
+        )
+        for index in range(4)
+    )
+    sketch = Sketch(
+        source.sketches[0].id,
+        "Sketch",
+        source.sketches[0].support_plane_id,
+        entities,
+        closed_profile_entity_ids=(tuple(item.id for item in entities),),
+        attributes=frozen_mapping({"freecad": {"type_id": "Sketcher::SketchObject"}}),
+    )
+    feature = replace(
+        source.feature_timeline[0],
+        name="Pad",
+        operation=BooleanOperation.CREATE,
+        definition=ExtrusionFeature(
+            ParameterValue(depth, ValueKind.LENGTH, "mm"),
+            direction=Vector3(0.0, 0.0, 1.0),
+            second_length=ParameterValue(10.0, ValueKind.LENGTH, "mm"),
+            offset=ParameterValue(0.0, ValueKind.LENGTH, "mm"),
+            second_offset=ParameterValue(0.0, ValueKind.LENGTH, "mm"),
+            draft_angle=ParameterValue(0.0, ValueKind.ANGLE, "deg"),
+            second_draft_angle=ParameterValue(0.0, ValueKind.ANGLE, "deg"),
+        ),
+        attributes=frozen_mapping({"freecad": {"type_id": "PartDesign::Pad"}}),
+    )
+    values = (
+        ("AllowMultiFace", True, ValueKind.BOOLEAN, ""),
+        ("AlongSketchNormal", True, ValueKind.BOOLEAN, ""),
+        ("FuzzyTolerance", 0.0, ValueKind.NUMBER, ""),
+        ("Label", "Pad", ValueKind.STRING, ""),
+        ("Label2", "", ValueKind.STRING, ""),
+        ("Length", depth, ValueKind.LENGTH, "mm"),
+        ("Length2", 10.0, ValueKind.LENGTH, "mm"),
+        ("Midplane", False, ValueKind.BOOLEAN, ""),
+        ("Offset", 0.0, ValueKind.LENGTH, "mm"),
+        ("Offset2", 0.0, ValueKind.LENGTH, "mm"),
+        ("Refine", True, ValueKind.BOOLEAN, ""),
+        ("Reversed", False, ValueKind.BOOLEAN, ""),
+        ("SideType", 0, ValueKind.INTEGER, ""),
+        ("Suppressed", False, ValueKind.BOOLEAN, ""),
+        ("TaperAngle", 0.0, ValueKind.ANGLE, "deg"),
+        ("TaperAngle2", 0.0, ValueKind.ANGLE, "deg"),
+        ("Type", 0, ValueKind.INTEGER, ""),
+        ("Type2", 0, ValueKind.INTEGER, ""),
+        ("UseCustomVector", False, ValueKind.BOOLEAN, ""),
+        ("Visibility", True, ValueKind.BOOLEAN, ""),
+    )
+    parameters = tuple(
+        Parameter(
+            f"freecad:parameter:Pad:{path}",
+            f"Pad.{path}",
+            ParameterValue(value, kind, unit),
+            owner_id=feature.id,
+            attributes=frozen_mapping({"freecad_path": path}),
+        )
+        for path, value, kind, unit in values
+    )
+    feature = replace(feature, parameter_ids=tuple(item.id for item in parameters))
+    return replace(
+        source,
+        source=replace(
+            source.source,
+            format_id="freecad.fcstd",
+            path="FreeCADRectanglePad.FCStd",
+        ),
+        parameters=parameters,
+        sketches=(sketch,),
+        feature_timeline=(feature,),
+        bodies=(replace(source.bodies[0], final_feature_id=feature.id),),
+        capabilities=frozenset(
+            {
+                Capability.PARAMETERS,
+                Capability.PARAMETRIC_HISTORY,
+                Capability.SUPPORT_PLANES,
+                Capability.EDITABLE_SKETCHES,
+                Capability.BODY_STRUCTURE,
+                Capability.CONFIGURATIONS,
+                Capability.BREP,
+                Capability.NATIVE_PAYLOADS,
+                Capability.PROVENANCE,
+                Capability.ROUNDTRIP_METADATA,
+            }
+        ),
+    )
 
 
 def test_pre_payload_field_solidworks_carrier_restores_payload_semantics() -> None:
@@ -647,7 +753,12 @@ def test_source_less_native_rectangle_boss_records_are_parametric() -> None:
         closed_profile_entity_ids=(tuple(item.id for item in entities),),
     )
     length = ParameterValue(12.0, ValueKind.LENGTH, "mm")
-    feature = replace(source.feature_timeline[0], definition=ExtrusionFeature(length))
+    feature = replace(
+        source.feature_timeline[0],
+        name="Boss-Extrude1",
+        operation=BooleanOperation.JOIN,
+        definition=ExtrusionFeature(length),
+    )
     source = replace(source, sketches=(sketch,), feature_timeline=(feature,))
     output = BytesIO()
     write_sldprt(source, output)
@@ -666,6 +777,177 @@ def test_source_less_native_rectangle_boss_records_are_parametric() -> None:
     assert native.operations[0].name == "Boss-Extrude1"
     assert native.operations[0].length_mm == pytest.approx(12.0)
     assert struct.unpack_from("<d", resolved, 10092)[0] == pytest.approx(0.012)
+    profile = _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE
+    assert profile["resolved_features_size"] == len(resolved)
+    assert profile["resolved_features_fixed_bytes"] == 11213
+    for name, (size, sha256) in profile["envelope_streams"].items():
+        payload = archive.require(name)
+        assert len(payload) == size
+        assert hashlib.sha256(payload).hexdigest() == sha256
+
+
+def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
+    tmp_path: Path,
+) -> None:
+    source = _freecad_rectangle_pad_document()
+    target = tmp_path / "FreeCADRectanglePad.SLDPRT"
+    result = write_document(source, target, allow_carrier=False)
+    data = target.read_bytes()
+    archive = SldprtArchive.from_bytes(data)
+    resolved = archive.require(RESOLVED_FEATURES_STREAM)
+    partition = archive.require(PARTITION_STREAM)
+    native = decode_native_model(archive.require(KEYWORDS_STREAM), resolved)
+    transfers = {item.capability: item for item in result.transfers}
+    assert result.application_usable is True
+    assert result.vendor_loadable is True
+    assert result.near_lossless is True
+    assert result.requirements == ()
+    assert len(resolved) == 11285
+    assert len(partition) == 3791
+    assert (
+        hashlib.sha256(partition).hexdigest()
+        == "7e8daf279693883c58ecd9b15c26ee9f18ade2844c2d7731993ed328565563a3"
+    )
+    assert native.sketches[0].object_id == 26
+    assert native.sketches[0].profiles[0].coordinates == (
+        -30.0,
+        -15.0,
+        30.0,
+        15.0,
+    )
+    assert native.operations[0].object_id == 32
+    assert native.operations[0].length_mm == pytest.approx(12.0)
+    assert transfers[Capability.PARAMETERS].mode.value == "mixed"
+    assert transfers[Capability.PARAMETERS].carrier_reason.value == "target_unsupported"
+    for capability in (
+        Capability.NATIVE_PAYLOADS,
+        Capability.PROVENANCE,
+        Capability.ROUNDTRIP_METADATA,
+    ):
+        assert transfers[capability].mode.value == "carrier"
+        assert transfers[capability].carrier_reason.value == "target_unsupported"
+    restored = read_sldprt(data)
+    replay = BytesIO()
+    replay_result = write_sldprt(restored, replay)
+    assert replay.getvalue() == data
+    assert replay_result.application_usable is True
+    assert replay_result.vendor_loadable is True
+
+
+@pytest.mark.parametrize(
+    "variant",
+    ("foreign", "reversed", "midplane", "construction", "open", "taper"),
+)
+def test_freecad_rectangle_pad_native_gate_rejects_non_equivalent_models(
+    variant: str,
+) -> None:
+    source = _freecad_rectangle_pad_document()
+    feature = source.feature_timeline[0]
+    sketch = source.sketches[0]
+    parameters = source.parameters
+    if variant == "foreign":
+        source = replace(source, source=replace(source.source, format_id="test"))
+    elif variant == "reversed":
+        source = replace(
+            source,
+            feature_timeline=(
+                replace(feature, definition=replace(feature.definition, reversed=True)),
+            ),
+        )
+    elif variant == "midplane":
+        parameters = tuple(
+            (
+                replace(
+                    item,
+                    value=ParameterValue(True, ValueKind.BOOLEAN),
+                )
+                if item.attributes.get("freecad_path") == "Midplane"
+                else item
+            )
+            for item in parameters
+        )
+        source = replace(source, parameters=parameters)
+    elif variant == "construction":
+        entities = (
+            replace(sketch.entities[0], construction=True),
+            *sketch.entities[1:],
+        )
+        source = replace(source, sketches=(replace(sketch, entities=entities),))
+    elif variant == "open":
+        source = replace(
+            source,
+            sketches=(
+                replace(
+                    sketch,
+                    entities=sketch.entities[:-1],
+                    closed_profile_entity_ids=(),
+                ),
+            ),
+        )
+    else:
+        source = replace(
+            source,
+            feature_timeline=(
+                replace(
+                    feature,
+                    definition=replace(
+                        feature.definition,
+                        draft_angle=ParameterValue(1.0, ValueKind.ANGLE, "deg"),
+                    ),
+                ),
+            ),
+        )
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    assert result.application_usable is False
+    assert result.vendor_loadable is False
+    assert "Contents/DisplayLists" not in archive.streams
+    assert (
+        hashlib.sha256(archive.require(PARTITION_STREAM)).hexdigest()
+        != "56df5b4e4ccac3158b60ea75dd57959b991660d6d9c7bc05cbff795e56f44439"
+    )
+
+
+def test_source_less_native_rectangle_boss_profile_preserves_custom_names() -> None:
+    source = document()
+    points = (
+        Vector2(-20.0, -10.0),
+        Vector2(20.0, -10.0),
+        Vector2(20.0, 10.0),
+        Vector2(-20.0, 10.0),
+    )
+    entities = tuple(
+        SketchEntity(
+            f"edge:{index}",
+            GeometryKind.LINE,
+            LineGeometry(points[index], points[(index + 1) % len(points)]),
+        )
+        for index in range(len(points))
+    )
+    sketch = Sketch(
+        source.sketches[0].id,
+        "CustomSketch",
+        source.sketches[0].support_plane_id,
+        entities,
+        closed_profile_entity_ids=(tuple(item.id for item in entities),),
+    )
+    feature = replace(
+        source.feature_timeline[0],
+        name="CustomBoss",
+        operation=BooleanOperation.JOIN,
+        definition=ExtrusionFeature(ParameterValue(10.0, ValueKind.LENGTH, "mm")),
+    )
+    source = replace(source, sketches=(sketch,), feature_timeline=(feature,))
+    output = BytesIO()
+    write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    native = decode_native_model(
+        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
+    )
+    assert native.sketches[0].name == "CustomSketch"
+    assert native.operations[0].name == "CustomBoss"
+    assert "Contents/DisplayLists" not in archive.streams
 
 
 def test_neutral_brep_writes_native_parasolid_partition() -> None:

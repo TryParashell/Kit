@@ -42,6 +42,50 @@ class EllipseGeometry:
 
 
 @dataclass(frozen=True, slots=True)
+class ArcEllipseGeometry:
+    center: Vector2
+    major_axis: Vector2
+    major_radius: float
+    minor_radius: float
+    start_angle: float
+    end_angle: float
+
+
+@dataclass(frozen=True, slots=True)
+class HyperbolaGeometry:
+    center: Vector2
+    major_axis: Vector2
+    major_radius: float
+    minor_radius: float
+
+
+@dataclass(frozen=True, slots=True)
+class ArcHyperbolaGeometry:
+    center: Vector2
+    major_axis: Vector2
+    major_radius: float
+    minor_radius: float
+    start_angle: float
+    end_angle: float
+
+
+@dataclass(frozen=True, slots=True)
+class ParabolaGeometry:
+    center: Vector2
+    axis: Vector2
+    focal_length: float
+
+
+@dataclass(frozen=True, slots=True)
+class ArcParabolaGeometry:
+    center: Vector2
+    axis: Vector2
+    focal_length: float
+    start_angle: float
+    end_angle: float
+
+
+@dataclass(frozen=True, slots=True)
 class SplineGeometry:
     control_points: tuple[Vector2, ...]
     degree: int

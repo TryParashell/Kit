@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import base64
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 import math
 import struct
+import zlib
 
 import pytest
 
+from convert.adapters.freecad.brep import triangle_mesh_brep
 from convert.adapters.solidworks.container import SldprtArchive
 from convert.adapters.solidworks.format import PARTITION_STREAM
+from convert.opencascade import decode_ascii_brep
 from convert.parasolid import (
     _ENTITY_MAGIC,
     _RecordTables,
@@ -16,6 +21,7 @@ from convert.parasolid import (
     _array_record_fields,
     _curve_parameter_domain,
     _curve_point_at_parameter,
+    _linked_subset_order,
     _nurbs_curve_point,
     _nurbs_surface_point,
     _parasolid_header,
@@ -30,6 +36,8 @@ from convert.parasolid import (
     _record_start,
     _resolve_trimmed_curve,
     _scan_partition_records,
+    _solidworks_face_data,
+    _u16,
     _walk_coedge_ring,
     _write_nurbs_curve,
     _write_nurbs_surface,
@@ -39,6 +47,7 @@ from convert.parasolid import (
     encode_blank_partition_stream,
     encode_brep_model,
     encode_partition_stream,
+    transform_solidworks_rectangle_partition_stream,
 )
 from interchange import (
     CircleCurve,
@@ -48,11 +57,70 @@ from interchange import (
     NurbsCurve,
     NurbsSurface,
     Vector3,
+    frozen_mapping,
 )
 from tests.interchange.test_brep import triangle_brep
 
 
 ROOT = Path(__file__).parents[2]
+SOLIDWORKS_RECTANGLE_PARTITION = zlib.decompress(
+    base64.b85decode(
+        b"".join(
+            (
+                b"c-jHZ4l(g03;+Nl9o2E#fk>jLSeUXKiSL<88UO$U3;+Ol0hO5hb5unZ$IqP!C{Hth;wuml9~h7%AOb33oJ`<Ck_nj!A%I>cn",
+                b"IXhX5=<sQ05J%PsK|<n;&XL<;`{a6R#CNo!2SnXwfn<byH&g85Bq!ebNcqZnFJzi-{kh=obx@8?mpdjTGAp?x4tsd8gEWFxt",
+                b"Yoaw=r3H@BZvyv8UKG(7&v*YcQWJ=5v*uBb9vvxqP9JAFMo(9~^>MxoS;yO>OO3AQq+*n?2jry1K@zSyf%VMt+4TlAoXOi(A",
+                b"&0AKDlFk2vo2`v(dmg`WO=^f!9f6|%)*Pgh=k5hsywXVJ^$_j-k%p`vWjp?G;ue=dK>>&x!<2KMe9$``?PoLqcHI4-T?#1{;",
+                b"8?aTLNy?kG1K9}q1?^X#zDOc52*2`s!S^29tJ0&6xPt?4%WgbV$Xo%ck|50V0*-P<blCg=YoU%UGyVC{^_U8x7%GHmATi!V^",
+                b"+@H%1j(8J%PPlVILKvi2I8+)fP_8u`v3@4a>&bc78l`Dn`+5pFnN29?76uOHhl-wsu<@QEj8VvM$uya6BV_}*@$5zj;%rEcy",
+                b"!`j-m)84KM<R|R*U`CNX2?u4I18O~ls5$M+b!3bIM%zf3;FJB!85TOf;P`7Bz96qn5(%uQ+M90647bAm^+=mk}|`Q7P=0s<q",
+                b"{KF+@nOF*}<3zB_gRY25y!c9!=GEcy6=T=x*AaX;13gYe}{?S+H`MC-VW@r{YtCL0l-YbbaH>Oh-EIncdddmPj@yI=or~6#;",
+                b"00+z3?tIMiiMM52;{9FzGWRwC7yYHJNq7RXJg3PLd*<|~FmQOf1U5T!oZoOUxE)|8v@{FV@8%6KXW+DwSzZJAV4JmaRCy;`r",
+                b"9{ci(wv)n4TDHJg_<qGyV#;J0-#UQmN6K+eg6ysL8T`DGHsADCw=3~s1+YAPlBsN=TZkI)}_;P13W<0zzXBrdcN=3Ro*<Wny",
+                b"@7kB`@6P8e#3HGbJ1&R7{qe&3(s(SC#p!mpsio0PxEZyjIo_1?+<LFgVpYl#x%1kv7Reor@pQ)XT}suv4IOUtCa)nG&$P8Fs",
+                b"D)f2OXaR>gPbjQ#+fKJD4e7+#P61SLIAsH#-n4LoH2udsfY9Bu4Hq@%eeTJ&cvHq#*w1nIKnQRxDzKKY2+1Xw%pSYPnh5sTX",
+                b"bxm+*_Y&Z%$`glkq0cl4YB2#t6wpQ%o7TdYPGgT>$q<!>oimL(d7XII=$vi{lKtGy4aMgW3L}z8?RWD3C+y`EzIQ<w(d6`sv",
+                b"Ux=fbhh!a!GV^uJ{3oun~JS#T~0Swq;L>PZ#PoH3G@NEcl_IF|G8$O`^z$H-_RkDI~!b-3!%Ylr`~>FWhYE}iu2x}g3I#%m~",
+                b"-0=`9K<VulFP-n}^-^CuaxIrCaRE&{rMYbYcEj8i<#sx-MIc9l=$+`)5+TOuzUtaz}RO0?Qrf0)WnFZ?|z(jq&#o11$d<>%K",
+                b"Y5SKypF4Y@pY|$-S7W$FC@S;DOpaef=K=oL$b%tcRAOUhaILJ9^{_o855w|E6^mjGK)2D+;SEw(B2ys`LaT%}N9ttbWPd`xD",
+                b"xeBkM0LjH!8$uB0X?YU*a%-Ue2;>h2=Ff1NrUE>dC*0Y@YS35#tAkhpfy2Df>smgx&lTLzIyl?WD|Ia2^cld8li2Hgv<;uLO",
+                b"UUvG7q}I;mBrYG$}PD7%|2iak)Qjg{#q6)U4sGM&waQDH6ygnK?lu#rQUPgb-9Sk7;@t716WvMmlZ8zgo6W5NTt)or&H7SBL",
+                b"DRw{8U@8xXmfP6r`xk$8zng=~km5LyfW@yS6BovdK0gagC@YrE71K?njF^2N~M$Xb@iIyl>m2|KFfhB3z2#n9HtF5WRXl<xs",
+                b"!({6c;-j*tc*O}oC2rcYgkKUdt&PTmnuyRAoJCN`s3t88442RY6Hl}X_Azn>y_X;i|?TEG0X)t>=My+f+h)|N*)}*mjmFgyR",
+                b"nWEhc?=aGhs&qBd+e(yfWlQD!{ce=*Hey?u)eX3#E;y>xMNB7Rv*dZl^wP}OZu)DO%N)IjR)GE(Y;#J`*R#oX%3jFoQaL@nU",
+                b"W~i^fOI3X&(ascsh47hv8;|(O*tp<X{igcm){i*<1EctK<tzrRs8=a$VF(@bI8Hkz4Al}M6e=)I>>vYR(num#S;u^jCuhplt",
+                b"2WF%SuQfG8u|k^}@5EBvyT9Zn1|aii!esmv$G*`hQ2oWibkLmm?~=X2TWOz$Wfhd#wu1u)4{c7#l#v<mm{Ig8DL5<%kMPWL(",
+                b"8&Hhq`cYgG(D-$Xmj*!~hPf*1$TlLIsw5Xuo1sVz~FViz^3y;jA3=(_2;8GG^yDgspjWKahxnTu{9NL^u|GA#Lr)n2RON$7i",
+                b"M=NMaA5~u(=r~~MrE>V#Kf_xRKXlAQ+tG!mmO6XbIs~IC}Ts9Y1RS`4i&Nlpbh=^}7o3@oSMmi9aiBmENehjka=w`C?8d8>?",
+                b"lB9r`9=kF`o-ZPuG6E(u=(kc0q@oP-j+sMch(y#%-r3ANSm~mXZiP@SeJnCNtjE(3vW=V=4Q7F_QeAxvA0VO`hKoM8T6zFon",
+                b"v46)ohW8Pet?wPN90!N#lg2UW2E~aRO3W9y`pABy*3>Hat|qLommmauSXc(hSMpAGlu(dO=TXsrj^XcIx<R{oPrLs{qzG*KQ",
+                b"VP>WlL7orQiZ)>rwc$1XDd~dc0!h^3smmZFsrInBP|=bH{K_P<Aj}3VJ6yfU@gX&~QxJuQjvg$U#`2=L}mehYW2*4s)68WOR",
+                b"p&gaCQy?Eu{G18BDvZ);&&V#E|ypIK0JIXE)H`!v9va)jPNIVw*9tQX+zax?@Ugzf@-%m>zPEzkY1>Cw?C$GEUgor7UBrEYQ",
+                b">x8tL>4(YW33dfFvB~PPf>TM8&+agR^l|VlYlb+*)WaVQeRtGyPr~|C2RE%1NkUkekVQn1`<F*U?w-L9e{kUmY<ED~&oDa)0",
+                b"xaU+^ps-T<l}ex~r~{tSpfMLnVK<xzEpTvk2n$B5(5KHXW5F}9={JYQVe|?XOpZaIAkZAt!T4y<m<yz?tCOJx!$f5*7Chs}K",
+                b")b=JJ_+kfEWTaxEF#C{ggj@KWf^@TGE1SHl9R0b)6gAxL0+`W_BiwxksO5PuxL+$<1gqFP|iRZHZmuno{?7l@^j?5-o^5XRd",
+                b"AY-<0u%Gmr<+g^*JklAfYMmnciW`8-+s%(%tYnfS%(03jdDboQ{m>$Es95F>v@->hYpT5fH^u1ig=G&`<F`2AYQcSvd##t0i",
+                b"c!C}Y>BJx83Mmwc%0u=vvF=pRK|Q~2}p8fdSVNWZGwQ%aX1A?)v^NT0*|^VaV-<V|baYtRpau9v^_asjTlO3+`w3i^5IM?lY",
+                b"G*HKzJHIBS3?^yH;&<}yGdG3h33)g!k=x<#G{Rs3C&^xhf1f26m_I>%IMSmCi0nnE-u1WHOd{Bb^-c`^KK|cuka_l;YoMuBu",
+                b"K9oP%S^i*3d7b5HaOy=+Cai)oBO3uj99<>)Nvpi?^PbG>ucipzh{KAZ_{;eytru9%dE@U0v-Xiic^k@Pl!(>%4k%_NnZ6?*^",
+                b"`2ri``X{Qf?U+fy@{NzFyB%~Ug|wz<)&lB<?GxDc_VB`an6K&N1p0^(aJh<xc4mW`F!MyxsPb-nMF=;^viHd8NX(SKP*r9Sw",
+                b"4}_kEaFvR^tD5f(rJ_Y55qmPvtXq?&oq*zK}2FD}K%47%zD=ei1l@B)h~UyH70jYZKcD7{U&yg!VCLzU()a_9?XIxP3?A`pn",
+                b"Y4wY1Nmo#NNTC{mvr+IPJD`T88%%Y3j#k-BJT-&?7RP|os8XB3$)ETS(Jp)cf#1<)?yOW=j?!I#k9;6peH*H?!218-m3SJ2+",
+                b"%5)(ygnW6n?Da)W-;3SVC<HzMEN&9K=CrEzL8+BBEtovt&DRuu^Z%W<2f7bGgxp6!4gZ=eASQOuj^j1ixg3XcdxYG=9!VEFD",
+                b"N%mcl+%n7@=eaEEdUNDk-j%lf4eh*be@%PDw(m2X`29bOCS1(`000000001@0ssIb9o2E#fk>jLSeUXKiSL<Y1ONbn0ssJb0",
+                b"fm!USJOZgfNw1d2m*@d_@pO~;@W~DA}+OpQ~`n34VM_2DMZs2+lb)4@B6;*8}2*!C;SP%`sVQ;;Fki5FPi4dcjwN{WM<MdhD",
+                b"D^RQj0VP8p8FVh*lG-tJWr)%65!&i55*M!%?Qz+O5TtByE+_I#nudB@<d%xzAr(TEYDj!oga7u<6?8*ZpNaU%7mzQ^eaZpQV",
+                b"?eP_p_7`oxp@iS%Up2QG!K3Nsxg(j=cGEU)lK{1Sh_FYrj1BF*v~dnI4S$T*oJ6J-$u!4FHx`JfS2(GI`@;<YkX*1&q$AVm_",
+                b"BNzx9R!G;7Rp#!$UOfacypuQO#h(iSC!$#2Qx2W4hTn3%2VVV?3DKl%uGl=%UUf2f*U>*5G%>M|Z9>k~daeNM+g)_wG@lkvc",
+                b"U%;2~C42*4$9M2;d>?n=hxh^PB)*65!WH6M_$KTkeuR(VYxpYcCq9J_<CFLVY-4UIP|!_&H@WS22VTPZ>LAS;=iw&Y#`?oh4",
+                b"^h|x2K!Nkmr)a<W)|^s;u=^@yM^{#;!3EXy%Mj0TBzndErx}>vvNF}Tt4-AQY_P9H2GY{&tV_4+2c`+I+Z6qV>a*D@u&DLbA",
+                b"5u};K%qi?!oV|hkuzzRB>?N2xY}py50LjJfWP9q}^>>3FZAsE88|4$BHWXCZ1q0lt;@{G2OP(4o@Q$D6$f!>eAyzhn|eZ(#m",
+                b"m1_Lza(-+A|Of$`~RyNVmSinl7$v=VLZ9hsgY_tAs*>Zais@>M)7GJ;Y5aSrvlpUcqk=LXi6C11D>d}Kof!|WFHQPNA1yBWi",
+                b"e0=MDKbPVp(|7PPZ**%9Jf6a#8U%+gxH~;_u000000Q{9@W&",
+            )
+        )
+    )
+)
 CRANKSHAFT = ROOT / "examples" / "Random" / "Crank" / "Crankshaft.SLDPRT"
 FUEL_INJECTOR = ROOT / "examples" / "Random" / "Cylinder_heads" / "Fuel_injector.SLDPRT"
 POPPET = ROOT / "examples" / "Random" / "Cylinder_heads" / "Poppet.SLDPRT"
@@ -153,6 +221,30 @@ def _coordinates(value: Vector3) -> tuple[float, float, float]:
     return value.x, value.y, value.z
 
 
+def _solid_tetrahedron():
+    model = decode_ascii_brep(
+        triangle_mesh_brep(
+            (
+                (0.0, 0.0, 0.0),
+                (2.0, 0.0, 0.0),
+                (0.0, 3.0, 0.0),
+                (0.0, 0.0, 4.0),
+            ),
+            ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3)),
+        ),
+        id_prefix="solidworks:ring",
+    )
+    assert model is not None
+    return replace(
+        model,
+        pcurves=(),
+        vertices=tuple(replace(vertex, tolerance=0.0) for vertex in model.vertices),
+        edges=tuple(replace(edge, tolerance=0.0) for edge in model.edges),
+        coedges=tuple(replace(coedge, pcurve_id="") for coedge in model.coedges),
+        faces=tuple(replace(face, tolerance=0.0) for face in model.faces),
+    )
+
+
 def test_partition_stream_encoder_roundtrips_raw_parasolid() -> None:
     raw = b"PS\x00\x00partition"
     encoded = encode_partition_stream(raw)
@@ -194,6 +286,169 @@ def test_blank_partition_stream_matches_solidworks_2025_protocol() -> None:
         "TRANSMIT FILE (deltas) created by modeller version 3601228",
     )
     assert all(_parasolid_header(payload.data) is not None for payload in decoded)
+
+
+def test_solidworks_rectangle_partition_transform_is_deterministic() -> None:
+    transformed = transform_solidworks_rectangle_partition_stream(
+        SOLIDWORKS_RECTANGLE_PARTITION,
+        minimum_x_mm=-30.0,
+        minimum_y_mm=-15.0,
+        maximum_x_mm=30.0,
+        maximum_y_mm=15.0,
+        depth_mm=12.0,
+    )
+    repeated = transform_solidworks_rectangle_partition_stream(
+        bytearray(SOLIDWORKS_RECTANGLE_PARTITION),
+        minimum_x_mm=-30,
+        minimum_y_mm=-15,
+        maximum_x_mm=30,
+        maximum_y_mm=15,
+        depth_mm=12,
+    )
+    source_payloads = decode_partition_stream(SOLIDWORKS_RECTANGLE_PARTITION)
+    payloads = decode_partition_stream(transformed)
+    model = decode_brep_model(payloads[0].data)
+    assert transformed == repeated
+    assert len(transformed) == 3791
+    assert sha256(transformed).hexdigest() == (
+        "7e8daf279693883c58ecd9b15c26ee9f18ade2844c2d7731993ed328565563a3"
+    )
+    assert tuple(payload.kind for payload in payloads) == ("partition", "deltas")
+    assert tuple(payload.uncompressed_size for payload in payloads) == (6730, 1124)
+    assert tuple(payload.compressed_size for payload in payloads) == (3077, 642)
+    assert payloads[1].data == source_payloads[1].data
+    assert (
+        transformed[payloads[1].wrapper_offset :]
+        == SOLIDWORKS_RECTANGLE_PARTITION[source_payloads[1].wrapper_offset :]
+    )
+    assert model is not None
+    assert model.validate() == ()
+    assert len(model.bodies) == 1
+    assert len(model.faces) == 6
+    assert len(model.edges) == 12
+    assert len(model.vertices) == 8
+    assert frozenset(_coordinates(vertex.point) for vertex in model.vertices) == (
+        frozenset(
+            (x, y, z) for x in (-30.0, 30.0) for y in (-15.0, 15.0) for z in (0.0, 12.0)
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("bounds", "expected"),
+    (
+        ((-12.5, -3.5, 47.25, 18.75, 2.25), (-12.5, -3.5, 0.0, 47.25, 18.75, 2.25)),
+        ((0.25, 4.5, 0.5, 9.75, 0.125), (0.25, 4.5, 0.0, 0.5, 9.75, 0.125)),
+        (
+            (-1000.0, -2000.0, -900.0, -1900.0, 350.0),
+            (-1000.0, -2000.0, 0.0, -900.0, -1900.0, 350.0),
+        ),
+    ),
+)
+def test_solidworks_rectangle_partition_transform_supports_finite_bounds(
+    bounds: tuple[float, float, float, float, float],
+    expected: tuple[float, float, float, float, float, float],
+) -> None:
+    transformed = transform_solidworks_rectangle_partition_stream(
+        SOLIDWORKS_RECTANGLE_PARTITION,
+        minimum_x_mm=bounds[0],
+        minimum_y_mm=bounds[1],
+        maximum_x_mm=bounds[2],
+        maximum_y_mm=bounds[3],
+        depth_mm=bounds[4],
+    )
+    model = decode_brep_model(decode_partition_stream(transformed)[0].data)
+    assert model is not None
+    xs = tuple(vertex.point.x for vertex in model.vertices)
+    ys = tuple(vertex.point.y for vertex in model.vertices)
+    zs = tuple(vertex.point.z for vertex in model.vertices)
+    observed = min(xs), min(ys), min(zs), max(xs), max(ys), max(zs)
+    assert observed == pytest.approx(expected, rel=1e-12, abs=1e-9)
+
+
+def test_solidworks_rectangle_partition_transform_preserves_identity() -> None:
+    transformed = transform_solidworks_rectangle_partition_stream(
+        SOLIDWORKS_RECTANGLE_PARTITION,
+        minimum_x_mm=-20.0,
+        minimum_y_mm=-10.0,
+        maximum_x_mm=20.0,
+        maximum_y_mm=10.0,
+        depth_mm=10.0,
+    )
+    assert transformed == SOLIDWORKS_RECTANGLE_PARTITION
+
+
+@pytest.mark.parametrize(
+    ("bounds", "message"),
+    (
+        ((math.nan, -10.0, 20.0, 10.0, 10.0), "finite numbers"),
+        ((-20.0, -10.0, math.inf, 10.0, 10.0), "finite numbers"),
+        ((-20.0, -10.0, 20.0, -math.inf, 10.0), "finite numbers"),
+        ((-20.0, -10.0, 20.0, 10.0, math.nan), "finite numbers"),
+        ((0.0, -10.0, 0.0, 10.0, 10.0), "positive width"),
+        ((10.0, -10.0, -10.0, 10.0, 10.0), "positive width"),
+        ((-20.0, 5.0, 20.0, 5.0, 10.0), "positive width"),
+        ((-20.0, 10.0, 20.0, -10.0, 10.0), "positive width"),
+        ((-20.0, -10.0, 20.0, 10.0, 0.0), "positive width"),
+        ((-20.0, -10.0, 20.0, 10.0, -1.0), "positive width"),
+        ((True, -10.0, 20.0, 10.0, 10.0), "finite numbers"),
+    ),
+)
+def test_solidworks_rectangle_partition_transform_rejects_invalid_bounds(
+    bounds: tuple[float, float, float, float, float],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        transform_solidworks_rectangle_partition_stream(
+            SOLIDWORKS_RECTANGLE_PARTITION,
+            minimum_x_mm=bounds[0],
+            minimum_y_mm=bounds[1],
+            maximum_x_mm=bounds[2],
+            maximum_y_mm=bounds[3],
+            depth_mm=bounds[4],
+        )
+
+
+def test_solidworks_rectangle_partition_transform_rejects_other_streams() -> None:
+    corrupted = bytearray(SOLIDWORKS_RECTANGLE_PARTITION)
+    corrupted[100] ^= 1
+    donors = (
+        b"",
+        encode_blank_partition_stream(),
+        bytes(corrupted),
+        SOLIDWORKS_RECTANGLE_PARTITION[:-1],
+        SOLIDWORKS_RECTANGLE_PARTITION + b"\0",
+    )
+    for donor in donors:
+        with pytest.raises(ValueError, match="validated donor"):
+            transform_solidworks_rectangle_partition_stream(
+                donor,
+                minimum_x_mm=-30.0,
+                minimum_y_mm=-15.0,
+                maximum_x_mm=30.0,
+                maximum_y_mm=15.0,
+                depth_mm=12.0,
+            )
+
+
+def test_solidworks_rectangle_partition_transform_rejects_its_output() -> None:
+    transformed = transform_solidworks_rectangle_partition_stream(
+        SOLIDWORKS_RECTANGLE_PARTITION,
+        minimum_x_mm=-30.0,
+        minimum_y_mm=-15.0,
+        maximum_x_mm=30.0,
+        maximum_y_mm=15.0,
+        depth_mm=12.0,
+    )
+    with pytest.raises(ValueError, match="validated donor"):
+        transform_solidworks_rectangle_partition_stream(
+            transformed,
+            minimum_x_mm=-40.0,
+            minimum_y_mm=-20.0,
+            maximum_x_mm=40.0,
+            maximum_y_mm=20.0,
+            depth_mm=15.0,
+        )
 
 
 def test_neutral_binary_header_uses_big_endian_schema_length() -> None:
@@ -284,6 +539,228 @@ def test_v12_loop_direction_is_selected_from_fin_vertex_connectivity() -> None:
     assert _walk_coedge_ring(tables, loop, 20) == (20, 22, 21)
 
 
+def test_linked_subset_order_follows_links_without_record_order() -> None:
+    links = {
+        40: (1, 30),
+        99: (1, 1),
+        20: (30, 10),
+        10: (20, 1),
+        30: (40, 20),
+    }
+    assert _linked_subset_order((40, 10, 30, 20), links) == (10, 20, 30, 40)
+    assert _linked_subset_order((30, 10), links) == (10, 30)
+
+
+def test_v12_body_heads_and_lists_follow_decoded_semantic_orders() -> None:
+    model = _solid_tetrahedron()
+    payload = encode_brep_model(
+        model,
+        partition=False,
+        solidworks_feature_ids={model.bodies[0].id: 32},
+    )
+    decoded = decode_brep_model(payload)
+    assert decoded is not None
+    vertex_count = len(decoded.vertices)
+    face_count = len(decoded.faces)
+    vertices = tuple(
+        replace(
+            vertex,
+            attributes=frozen_mapping(
+                {
+                    **dict(vertex.attributes),
+                    "parasolid.point_order": vertex_count - position - 1,
+                }
+            ),
+        )
+        for position, vertex in enumerate(decoded.vertices)
+    )
+    faces = tuple(
+        replace(
+            face,
+            attributes=frozen_mapping(
+                {
+                    **dict(face.attributes),
+                    "solidworks.unchanged_order": face_count - position - 1,
+                    "solidworks.downstream_order": (position + 2) % face_count,
+                    "solidworks.colour_order": (position + 1) % face_count,
+                }
+            ),
+        )
+        for position, face in enumerate(decoded.faces)
+    )
+    expected_face_orders = {
+        face.attributes["solidworks.unchanged_id"]: (
+            face.attributes["solidworks.unchanged_order"],
+            face.attributes["solidworks.downstream_order"],
+            face.attributes["solidworks.colour_order"],
+        )
+        for face in faces
+    }
+    changed = replace(decoded, vertices=vertices, faces=faces)
+    encoded = encode_brep_model(
+        changed,
+        partition=False,
+        solidworks_feature_ids={changed.bodies[0].id: 32},
+    )
+    header = _parasolid_header(encoded)
+    assert header is not None
+    body = encoded[header.body_offset :]
+    tables = _scan_partition_records(body)
+    restored = decode_brep_model(encoded)
+    assert tables is not None
+    assert restored is not None
+
+    def normalized_fins(value):
+        coedge_positions = {
+            coedge.id: position for position, coedge in enumerate(value.coedges)
+        }
+        edge_positions = {
+            edge.id: position for position, edge in enumerate(value.edges)
+        }
+
+        def normalize(descriptor):
+            kind, identifier = descriptor
+            return (
+                (kind, coedge_positions[identifier])
+                if kind == "coedge"
+                else (kind, edge_positions[identifier])
+            )
+
+        return (
+            tuple(
+                tuple(
+                    normalize(item)
+                    for item in vertex.attributes["parasolid.vertex_fins"]
+                )
+                for vertex in value.vertices
+            ),
+            tuple(
+                normalize(edge.attributes["parasolid.first_fin"])
+                for edge in value.edges
+            ),
+        )
+
+    assert normalized_fins(restored) == normalized_fins(changed)
+
+    def chain(
+        head: int, records: dict[int, _TopologyRecord], link: int
+    ) -> tuple[int, ...]:
+        result = []
+        attribute = head
+        while attribute > 1:
+            assert attribute not in result
+            result.append(attribute)
+            attribute = records[attribute].references[link]
+        return tuple(result)
+
+    vertex_by_attribute = {
+        int(vertex.id.rsplit(":", 1)[1]): vertex for vertex in restored.vertices
+    }
+    edge_by_attribute = {
+        int(edge.id.rsplit(":", 1)[1]): edge for edge in restored.edges
+    }
+    curve_by_attribute = {
+        int(curve.id.rsplit(":", 1)[1]): curve for curve in restored.curves
+    }
+    surface_by_attribute = {
+        int(surface.id.rsplit(":", 1)[1]): surface for surface in restored.surfaces
+    }
+    body_offset = body.index(b"\x00\x0c")
+    point_chain = chain(_u16(body, body_offset + 53), tables.points, 2)
+    vertex_chain = chain(_u16(body, body_offset + 59), tables.vertex_uses, 3)
+    edge_chain = chain(_u16(body, body_offset + 57), tables.edge_uses, 2)
+    assert [
+        vertex_by_attribute[tables.points[attribute].references[1]].attributes[
+            "parasolid.point_order"
+        ]
+        for attribute in point_chain
+    ] == list(range(vertex_count))
+    assert [
+        vertex_by_attribute[attribute].attributes["parasolid.vertex_order"]
+        for attribute in vertex_chain
+    ] == list(range(vertex_count))
+    assert [
+        edge_by_attribute[attribute].attributes["parasolid.edge_order"]
+        for attribute in edge_chain
+    ] == list(range(len(restored.edges)))
+    curve_head = _u16(body, body_offset + 51)
+    surface_head = _u16(body, body_offset + 49)
+    assert curve_head is not None
+    assert surface_head is not None
+    curve_links = {
+        attribute: (_u16(curve.attributes["carrier_record"], 12),)
+        for attribute, curve in curve_by_attribute.items()
+    }
+    surface_links = {
+        attribute: (_u16(surface.attributes["carrier_record"], 12),)
+        for attribute, surface in surface_by_attribute.items()
+    }
+
+    def geometry_chain(
+        head: int, links: dict[int, tuple[int | None]]
+    ) -> tuple[int, ...]:
+        result = []
+        attribute = head
+        while attribute > 1:
+            assert attribute not in result
+            result.append(attribute)
+            next_attribute = links[attribute][0]
+            assert next_attribute is not None
+            attribute = next_attribute
+        return tuple(result)
+
+    assert [
+        curve_by_attribute[attribute].attributes["parasolid.curve_order"]
+        for attribute in geometry_chain(curve_head, curve_links)
+    ] == list(range(len(restored.curves)))
+    assert [
+        surface_by_attribute[attribute].attributes["parasolid.surface_order"]
+        for attribute in geometry_chain(surface_head, surface_links)
+    ] == list(range(len(restored.surfaces)))
+    actual_face_orders = {
+        face.attributes["solidworks.unchanged_id"]: (
+            face.attributes["solidworks.unchanged_order"],
+            face.attributes["solidworks.downstream_order"],
+            face.attributes["solidworks.colour_order"],
+        )
+        for face in restored.faces
+    }
+    assert actual_face_orders == expected_face_orders
+    unchanged, orders = _solidworks_face_data(body)
+    assert len(unchanged) == face_count
+    assert {name: sorted(values.values()) for name, values in orders.items()} == {
+        "unchanged": list(range(face_count)),
+        "downstream": list(range(face_count)),
+        "colour": list(range(face_count)),
+    }
+
+
+def test_v12_native_fin_ring_direction_tracks_region_dimension() -> None:
+    solid = _solid_tetrahedron()
+    for model, link in ((triangle_brep(), 2), (solid, 3)):
+        payload = encode_brep_model(
+            model,
+            partition=False,
+            solidworks_feature_ids={model.bodies[0].id: 26},
+        )
+        header = _parasolid_header(payload)
+        assert header is not None
+        tables = _scan_partition_records(payload[header.body_offset :])
+        assert tables is not None
+        for face in tables.bridges.values():
+            loop_attribute = face.references[2]
+            first_attribute = tables.loops[loop_attribute].references[1]
+            expected = []
+            attribute = first_attribute
+            while attribute not in expected:
+                expected.append(attribute)
+                attribute = tables.coedges[attribute].references[link]
+            assert attribute == first_attribute
+            assert _walk_coedge_ring(tables, loop_attribute, first_attribute) == tuple(
+                expected
+            )
+
+
 def test_v12_solidworks_body_attributes_bind_the_modifying_feature() -> None:
     model = triangle_brep()
     body_id = model.bodies[0].id
@@ -338,6 +815,56 @@ def test_v12_solidworks_body_attributes_require_complete_feature_ids() -> None:
             partition=False,
             solidworks_feature_ids={model.bodies[0].id: 0},
         )
+
+
+def test_v12_solidworks_solid_attributes_cover_body_and_face_identity() -> None:
+    encoded = triangle_mesh_brep(
+        ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0), (0.0, 0.0, 4.0)),
+        ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3)),
+    )
+    model = decode_ascii_brep(encoded, id_prefix="solidworks:solid")
+    assert model is not None
+    model = replace(
+        model,
+        pcurves=(),
+        vertices=tuple(replace(vertex, tolerance=0.0) for vertex in model.vertices),
+        edges=tuple(replace(edge, tolerance=0.0) for edge in model.edges),
+        coedges=tuple(replace(coedge, pcurve_id="") for coedge in model.coedges),
+        faces=tuple(replace(face, tolerance=0.0) for face in model.faces),
+    )
+    payload = encode_brep_model(
+        model,
+        partition=False,
+        solidworks_feature_ids={model.bodies[0].id: 26},
+    )
+    for identifier in (
+        b"SWEntUnchanged",
+        b"DOWNSTREAM_FACE_ID",
+        b"SDL/TYSA_COLOUR",
+        b"BODY_IN_LIGHTWEIGHT_PERM",
+        b"SDL/TYSA_DENSITY",
+        b"BODY_MATCH",
+        b"LAST_BODY_MODIFYING_FEATURE_ID",
+    ):
+        assert identifier in payload
+    restored = decode_brep_model(payload)
+    assert restored is not None
+    assert restored.validate() == ()
+    assert len(restored.bodies) == 1
+    assert len(restored.faces) == 4
+    assert len(restored.edges) == 6
+    assert all(
+        type(face.attributes.get("solidworks.unchanged_id")) is int
+        for face in restored.faces
+    )
+    assert (
+        encode_brep_model(
+            restored,
+            partition=False,
+            solidworks_feature_ids={restored.bodies[0].id: 26},
+        )
+        == payload
+    )
 
 
 @pytest.mark.parametrize(("path", "expected"), COMPACT_FIN_PARTS)

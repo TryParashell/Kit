@@ -29,6 +29,9 @@ from convert.adapters.base import (
     is_binary_destination,
 )
 from interchange import (
+    ArcEllipseGeometry,
+    ArcGeometry,
+    ArcParabolaGeometry,
     AssemblyData,
     Body,
     BooleanOperation,
@@ -38,7 +41,9 @@ from interchange import (
     CadDocument,
     CadSource,
     Capability,
+    ChamferFeature,
     CircleGeometry,
+    CombineFeature,
     ComponentDefinition,
     ComponentDocument,
     ComponentInstance,
@@ -46,12 +51,16 @@ from interchange import (
     Configuration,
     ConstraintReference,
     Diagnostic,
+    DomeFeature,
     ExtrusionEndCondition,
     ExtrusionFeature,
+    Expression,
+    EllipseGeometry,
     FeatureKind,
     FeatureStep,
     FilletFeature,
     GeometryKind,
+    HoleFeature,
     LineGeometry,
     MateAlignment,
     MateConstraint,
@@ -61,6 +70,7 @@ from interchange import (
     MateKind,
     Matrix4,
     Mesh,
+    MoveBodyFeature,
     NativeFeatureDefinition,
     NativeGeometry,
     Parameter,
@@ -70,12 +80,17 @@ from interchange import (
     PayloadRole,
     Provenance,
     ProvenanceSpan,
+    ReferencePlaneFeature,
+    RevolutionFeature,
+    ScaleFeature,
     Selection,
     SelectionPathElement,
     Severity,
+    ShellFeature,
     Sketch,
     SketchConstraint,
     SketchEntity,
+    SplineGeometry,
     SupportPlane,
     TopologySummary,
     Transform,
@@ -132,6 +147,7 @@ from .format import (
 )
 from .native import (
     NativeDimension,
+    NativeEquation,
     NativeFeature,
     NativeMarker,
     NativeModel,
@@ -177,6 +193,14 @@ _SOURCE_KEYS = frozenset(
     }
 )
 _NUMBER_TEXT = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
+_RESOLVED_CONFIGURATION_STREAM = re.compile(r"^Contents/Config-(\d+)-ResolvedFeatures$")
+_TARGET_UNSUPPORTED_CAPABILITIES = frozenset(
+    {
+        Capability.NATIVE_PAYLOADS,
+        Capability.PROVENANCE,
+        Capability.ROUNDTRIP_METADATA,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +211,7 @@ class _GeneratedStreams:
     compatibility: str
     application_usable: bool
     vendor_loadable: bool
+    mixed_capabilities: frozenset[Capability] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +261,7 @@ _FEATURE_KIND_BY_NATIVE = {
     "blockdef": FeatureKind.REFERENCE,
     "blockfolder": FeatureKind.REFERENCE,
     "body-delete/keep": FeatureKind.BOOLEAN,
+    "body-move/copy": FeatureKind.NATIVE,
     "bodyexplodestep": FeatureKind.NATIVE,
     "bomfeat": FeatureKind.NATIVE,
     "bomtemplate": FeatureKind.REFERENCE,
@@ -441,6 +467,7 @@ _FEATURE_KIND_BY_NATIVE = {
     "subatomfolder": FeatureKind.REFERENCE,
     "subweldfolder": FeatureKind.REFERENCE,
     "surfacebodyfolder": FeatureKind.REFERENCE,
+    "surface-extrude": FeatureKind.SURFACE,
     "surfcut": FeatureKind.SURFACE,
     "sweep": FeatureKind.SWEEP,
     "sweepcut": FeatureKind.SWEEP,
@@ -493,7 +520,9 @@ class SldprtAdapter:
         except (OSError, SldprtFormatError, TypeError, ValueError) as exc:
             return ProbeResult(_FORMAT_ID, 0.0, str(exc))
         names = archive.streams
-        if RESOLVED_FEATURES_STREAM in names and KEYWORDS_STREAM in names:
+        if KEYWORDS_STREAM in names and any(
+            _RESOLVED_CONFIGURATION_STREAM.fullmatch(name) for name in names
+        ):
             return ProbeResult(
                 _FORMAT_ID, 1.0, "native history and resolved-feature streams found"
             )
@@ -519,9 +548,7 @@ class SldprtAdapter:
             )
             _validate_source_suffix(label, True)
             return document
-        model = decode_native_model(
-            archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
-        )
+        model = _native_part_model(archive, settings.configuration)
         configurations = _configurations(model, settings.configuration)
         parameters = _parameters(model)
         parameter_ids = {parameter.id for parameter in parameters}
@@ -531,12 +558,12 @@ class SldprtAdapter:
         timeline = _timeline(model, selections)
         payloads, payload_diagnostics = _brep_payloads(archive, settings)
         brep = _typed_brep(payloads)
-        final_feature = _final_body_feature_id(
-            timeline,
-            frozenset(
-                _feature_id(operation.object_id) for operation in model.operations
-            ),
+        solid_operation_ids = frozenset(
+            _feature_id(operation.object_id)
+            for operation in model.operations
+            if operation.kind != "surface"
         )
+        final_feature = _final_body_feature_id(timeline, solid_operation_ids)
         body_feature = _solid_body_feature(model.features)
         bodies = (
             Body(
@@ -544,7 +571,7 @@ class SldprtAdapter:
                 name=body_feature.name if body_feature is not None else "Body 1",
                 final_feature_id=final_feature,
                 topology=TopologySummary(
-                    solid_count=1 if model.operations else 0,
+                    solid_count=1 if solid_operation_ids else 0,
                     bounding_box=_bounding_box(model),
                 ),
                 provenance=(
@@ -714,6 +741,7 @@ class SldprtAdapter:
             transfers = _solidworks_transfers(
                 required,
                 generated.native_capabilities,
+                generated.mixed_capabilities,
             )
             streams = generated.streams
             streams[KIT_NATIVE_STREAM] = _native_attestation_bytes(
@@ -1392,22 +1420,27 @@ def _bundle_requirements_satisfied(
 
 
 def _solidworks_transfers(
-    required: frozenset[Capability], native: frozenset[Capability]
+    required: frozenset[Capability],
+    native: frozenset[Capability],
+    mixed: frozenset[Capability] = frozenset(),
 ) -> tuple[CapabilityTransfer, ...]:
-    target_unsupported = {
-        Capability.PROVENANCE,
-        Capability.ROUNDTRIP_METADATA,
-    }
     return tuple(
         CapabilityTransfer(
             capability,
-            TransferMode.NATIVE if capability in native else TransferMode.CARRIER,
+            (
+                TransferMode.NATIVE
+                if capability in native
+                else (
+                    TransferMode.MIXED if capability in mixed else TransferMode.CARRIER
+                )
+            ),
             (
                 None
                 if capability in native
                 else (
                     CarrierReason.TARGET_UNSUPPORTED
-                    if capability in target_unsupported
+                    if capability in mixed
+                    or capability in _TARGET_UNSUPPORTED_CAPABILITIES
                     else CarrierReason.WRITER_UNIMPLEMENTED
                 )
             ),
@@ -1526,7 +1559,9 @@ def _native_attestation(data: bytes) -> dict[str, Any] | None:
     if proof is None:
         return None
     expected_transfers = _solidworks_transfers(
-        _required_capabilities(document), proof.native_capabilities
+        _required_capabilities(document),
+        proof.native_capabilities,
+        proof.mixed_capabilities,
     )
     if (
         compatibility != proof.compatibility
@@ -1656,6 +1691,10 @@ def _generated_streams(
     }
     encoding: NativeAssemblyEncoding | None = None
     part_capabilities: frozenset[Capability] = frozenset()
+    mixed_capabilities: frozenset[Capability] = frozenset()
+    part_partition: bytes | None = None
+    part_application_usable = False
+    part_vendor_loadable = False
     if portable.assembly is None:
         part = encode_native_part(portable, model_name)
         streams.update(part.envelope_streams)
@@ -1668,6 +1707,10 @@ def _generated_streams(
             }
         )
         part_capabilities = part.native_capabilities
+        mixed_capabilities = part.mixed_capabilities
+        part_partition = part.partition
+        part_application_usable = part.application_usable
+        part_vendor_loadable = part.vendor_loadable
     else:
         encoding = encode_native_assembly(
             portable.assembly,
@@ -1689,13 +1732,27 @@ def _generated_streams(
             )
         streams[COMPONENT_TREE_STREAM] = encoding.component_tree
         streams.update(encoding.mate_streams)
-    payload, native_brep = _parasolid_payload(portable)
+    if part_partition is not None:
+        payload = part_partition
+        native_brep = "generated"
+    else:
+        payload, native_brep = _parasolid_payload(portable)
     if payload is not None:
         streams[PARTITION_STREAM] = payload
     native_capabilities = (
         _generated_assembly_capabilities(portable.assembly, encoding, streams)
         if portable.assembly is not None and encoding is not None
         else part_capabilities
+    )
+    proof_transfers = _solidworks_transfers(
+        _required_capabilities(portable),
+        native_capabilities,
+        mixed_capabilities,
+    )
+    application_usable = part_application_usable and all(
+        transfer.mode is TransferMode.NATIVE
+        or transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
+        for transfer in proof_transfers
     )
     return _GeneratedStreams(
         streams,
@@ -1710,8 +1767,9 @@ def _generated_streams(
                 else "kit-neutral-only"
             )
         ),
-        False,
-        False,
+        application_usable,
+        part_vendor_loadable,
+        mixed_capabilities,
     )
 
 
@@ -2094,14 +2152,7 @@ def _patch_native_template(
         if Capability.COMPONENT_DOCUMENTS in assembly_native and brep_native:
             native.add(Capability.NATIVE_PAYLOADS)
     required = _required_capabilities(document)
-    blockers = (
-        required
-        - native
-        - {
-            Capability.PROVENANCE,
-            Capability.ROUNDTRIP_METADATA,
-        }
-    )
+    blockers = required - native - _TARGET_UNSUPPORTED_CAPABILITIES
     usable = not blockers
     return _GeneratedStreams(
         streams,
@@ -3346,7 +3397,7 @@ def _parasolid_payload(document: CadDocument) -> tuple[bytes | None, str]:
             and not document.bodies
         ):
             return encode_blank_partition_stream(), "generated"
-        return None, "none"
+        return encode_blank_partition_stream(), "none"
     try:
         return encode_partition_stream(encode_brep_model(document.brep)), "generated"
     except ParasolidWriteError as exc:
@@ -4707,6 +4758,55 @@ def _source_bytes(source: Source) -> tuple[bytes, str]:
     return bytes(value), str(name)
 
 
+def _native_part_model(archive: SldprtArchive, requested: str | None) -> NativeModel:
+    keywords = archive.require(KEYWORDS_STREAM)
+    lanes = {
+        int(match.group(1)): name
+        for name in archive.streams
+        if (match := _RESOLVED_CONFIGURATION_STREAM.fullmatch(name)) is not None
+    }
+    if not lanes:
+        raise SldprtFormatError("required native resolved-feature stream is missing")
+    initial_id = 0 if 0 in lanes else min(lanes)
+    initial = decode_native_model(
+        keywords,
+        archive.require(lanes[initial_id]),
+        configuration_id=initial_id,
+        resolved_stream=lanes[initial_id],
+    )
+    selected_id = initial_id
+    if requested is not None:
+        selected = next(
+            (
+                item.configuration_id
+                for item in initial.configurations
+                if item.name == requested
+            ),
+            None,
+        )
+        if selected is None:
+            raise SldprtFormatError(
+                f"configuration {requested!r} is unavailable; choices are "
+                f"{sorted(item.name for item in initial.configurations)}"
+            )
+        selected_id = selected
+    if selected_id not in lanes:
+        raise SldprtFormatError(
+            f"native data for configuration {selected_id} is unavailable; "
+            f"available lanes are {sorted(lanes)}"
+        )
+    resolved_stream = lanes[selected_id]
+    configuration_stream = f"Contents/Config-{selected_id}"
+    return decode_native_model(
+        keywords,
+        archive.require(resolved_stream),
+        archive.get(configuration_stream) or b"",
+        configuration_id=selected_id,
+        resolved_stream=resolved_stream,
+        configuration_stream=configuration_stream,
+    )
+
+
 def _configurations(
     model: NativeModel, requested: str | None
 ) -> tuple[Configuration, ...]:
@@ -4715,7 +4815,14 @@ def _configurations(
         raise SldprtFormatError(
             f"configuration {requested!r} is unavailable; choices are {sorted(available)}"
         )
-    active = requested or model.configurations[0].name
+    active = requested or next(
+        (
+            item.name
+            for item in model.configurations
+            if item.configuration_id == model.active_configuration_id
+        ),
+        model.configurations[0].name,
+    )
     return tuple(
         Configuration(
             id=_configuration_id(item.configuration_id),
@@ -4735,6 +4842,7 @@ def _configurations(
 
 def _parameters(model: NativeModel) -> tuple[Parameter, ...]:
     parameters: list[Parameter] = []
+    dimension_ids: dict[tuple[str, str], str] = {}
     for feature in model.features:
         for dimension, parameter_id in _parameter_entries(
             feature.object_id, feature.dimensions
@@ -4748,7 +4856,7 @@ def _parameters(model: NativeModel) -> tuple[Parameter, ...]:
                 Parameter(
                     id=parameter_id,
                     name=dimension.name,
-                    value=ParameterValue(dimension.value_mm, ValueKind.LENGTH, "mm"),
+                    value=_dimension_parameter_value(dimension),
                     role=(
                         ParameterRole.DRIVEN
                         if dimension.native_role == "display"
@@ -4761,6 +4869,7 @@ def _parameters(model: NativeModel) -> tuple[Parameter, ...]:
                             dimension.native_offset,
                             8,
                             "dimension-scalar",
+                            stream=feature.native_stream,
                         )
                         if dimension.native_offset is not None
                         else _feature_provenance(feature)
@@ -4770,7 +4879,9 @@ def _parameters(model: NativeModel) -> tuple[Parameter, ...]:
                             "source_text": dimension.source_text,
                             "dimension_kind": dimension.kind,
                             "native_value": native_value,
-                            "native_unit": "m",
+                            "native_unit": (
+                                "rad" if dimension.kind == "angle" else "m"
+                            ),
                             "native_role": dimension.native_role or "unresolved",
                             "native_operands": tuple(
                                 {
@@ -4784,7 +4895,131 @@ def _parameters(model: NativeModel) -> tuple[Parameter, ...]:
                     ),
                 )
             )
+            dimension_ids.setdefault((feature.name, dimension.name), parameter_id)
+    return _apply_native_equations(parameters, model, dimension_ids)
+
+
+def _dimension_parameter_value(dimension: NativeDimension) -> ParameterValue:
+    if dimension.kind == "angle":
+        return ParameterValue(dimension.value_mm, ValueKind.ANGLE, "deg")
+    return ParameterValue(dimension.value_mm, ValueKind.LENGTH, "mm")
+
+
+def _apply_native_equations(
+    parameters: list[Parameter],
+    model: NativeModel,
+    dimension_ids: dict[tuple[str, str], str],
+) -> tuple[Parameter, ...]:
+    if not model.equations:
+        return tuple(parameters)
+    global_ids = {
+        equation.lhs: f"sldprt:parameter:equation:{equation.lhs}"
+        for equation in model.equations
+        if "@" not in equation.lhs
+    }
+    values: dict[str, ParameterValue] = {}
+    parameter_indexes = {
+        parameter.id: index for index, parameter in enumerate(parameters)
+    }
+    for equation in model.equations:
+        reference_ids = tuple(
+            global_ids[reference]
+            for reference in equation.references
+            if reference in global_ids
+        )
+        expression = Expression(
+            equation.rhs,
+            reference_ids,
+            "solidworks",
+        )
+        provenance = Provenance(
+            adapter=_FORMAT_ID,
+            native_id=f"equation:{equation.native_offset}",
+            spans=(
+                ProvenanceSpan(
+                    equation.native_stream,
+                    equation.native_offset,
+                    equation.native_length,
+                    "equation",
+                ),
+            ),
+        )
+        if "@" in equation.lhs:
+            dimension_name, feature_name = equation.lhs.split("@", 1)
+            parameter_id = dimension_ids.get((feature_name, dimension_name))
+            if parameter_id is None or parameter_id not in parameter_indexes:
+                continue
+            index = parameter_indexes[parameter_id]
+            parameters[index] = replace(
+                parameters[index],
+                role=ParameterRole.DERIVED,
+                expression=expression,
+                provenance=provenance,
+                attributes=frozen_mapping(
+                    {
+                        **dict(parameters[index].attributes),
+                        "equation_source": equation.source,
+                        "equation_configuration_id": equation.configuration_id,
+                    }
+                ),
+            )
+            continue
+        value = _native_equation_value(equation.rhs, values)
+        if value is None:
+            value = ParameterValue(equation.rhs, ValueKind.STRING)
+        values[equation.lhs] = value
+        parameter = Parameter(
+            id=global_ids[equation.lhs],
+            name=equation.lhs,
+            value=value,
+            role=(
+                ParameterRole.DERIVED if equation.references else ParameterRole.DRIVING
+            ),
+            expression=expression,
+            owner_id=_feature_id(16),
+            provenance=provenance,
+            attributes=frozen_mapping(
+                {
+                    "equation_source": equation.source,
+                    "equation_configuration_id": equation.configuration_id,
+                }
+            ),
+        )
+        if parameter.id in parameter_indexes:
+            parameters[parameter_indexes[parameter.id]] = parameter
+        else:
+            parameter_indexes[parameter.id] = len(parameters)
+            parameters.append(parameter)
     return tuple(parameters)
+
+
+def _native_equation_value(
+    rhs: str, values: Mapping[str, ParameterValue]
+) -> ParameterValue | None:
+    literal = re.fullmatch(
+        r"\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*mm\s*",
+        rhs,
+        re.IGNORECASE,
+    )
+    if literal is not None:
+        return ParameterValue(float(literal.group(1)), ValueKind.LENGTH, "mm")
+    quotient = re.fullmatch(
+        r'\s*"([^"\r\n]+)"\s*/\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*',
+        rhs,
+    )
+    if quotient is None:
+        return None
+    source = values.get(quotient.group(1))
+    if (
+        source is None
+        or source.kind != ValueKind.LENGTH
+        or not isinstance(source.value, (int, float))
+    ):
+        return None
+    divisor = float(quotient.group(2))
+    if not math.isfinite(divisor) or divisor == 0.0:
+        return None
+    return ParameterValue(float(source.value) / divisor, ValueKind.LENGTH, source.unit)
 
 
 def _planes(model: NativeModel, parameter_ids: set[str]) -> tuple[SupportPlane, ...]:
@@ -4829,6 +5064,7 @@ def _planes(model: NativeModel, parameter_ids: set[str]) -> tuple[SupportPlane, 
                         plane.native_offset,
                         plane.native_length or 1,
                         "support-plane-frame",
+                        stream=plane.native_stream,
                     )
                     if plane.native_offset is not None
                     else _provenance(
@@ -4841,6 +5077,7 @@ def _planes(model: NativeModel, parameter_ids: set[str]) -> tuple[SupportPlane, 
                         "native_frame_offset": plane.native_offset,
                         "native_frame_length": plane.native_length,
                         "principal": plane.principal,
+                        "native_reference_ids": plane.reference_ids,
                     }
                 ),
             )
@@ -4891,6 +5128,7 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
                                 marker_offset,
                                 92,
                                 "sketch-profile-line",
+                                stream=sketch.native_stream,
                             )
                             if marker_offset is not None
                             else _feature_span_provenance(sketch)
@@ -4921,7 +5159,7 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
                         native_id=f"{sketch.object_id}:profile:{profile_index}",
                         spans=tuple(
                             ProvenanceSpan(
-                                RESOLVED_FEATURES_STREAM,
+                                sketch.native_stream,
                                 offset,
                                 142,
                                 "sketch-circle-marker",
@@ -4945,18 +5183,47 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
         for prefix in {marker.prefix for marker in sketch.markers}
     }
     coordinates_by_index = tuple(marker.coordinates_mm for marker in sketch.markers)
+    marker_semantics = tuple(
+        _marker_curve_semantic(marker) for marker in sketch.markers
+    )
+    curve_reference_indices = {
+        reference
+        for marker, semantic in zip(sketch.markers, marker_semantics, strict=True)
+        for reference in _marker_curve_reference_indices(marker, semantic)
+    } | {
+        reference
+        for marker in sketch.markers
+        for reference in _marker_object_reference_indices(marker.data)
+    }
     marker_entities: dict[int, str] = {}
-    for marker_index, marker in enumerate(sketch.markers):
+    for marker_index, (marker, semantic) in enumerate(
+        zip(sketch.markers, marker_semantics, strict=True)
+    ):
         if marker.offset in profile_offsets:
             entity_id = profile_entities.get(marker.offset)
             if entity_id is not None:
                 marker_entities[marker_index] = entity_id
+            continue
+        if (
+            marker_index in curve_reference_indices
+            and marker.coordinates_mm is not None
+            and marker.locus == "05000100"
+        ):
+            continue
+        if (
+            marker.coordinates_mm is not None
+            and marker.object_index is None
+            and marker.locus == "05000100"
+        ):
+            continue
+        if marker.endpoint_indices is None and b"sgSlot_c" in marker.data:
             continue
         entity = _marker_entity(
             sketch,
             marker,
             coordinates_by_prefix,
             coordinates_by_index,
+            semantic,
         )
         entities.append(entity)
         marker_entities[marker_index] = entity.id
@@ -5019,15 +5286,19 @@ def _marker_entity(
     marker: NativeMarker,
     coordinates_by_prefix: dict[str, tuple[tuple[float, float] | None, ...]],
     coordinates_by_index: tuple[tuple[float, float] | None, ...],
+    semantic: str | None = None,
 ) -> SketchEntity:
     entity_id = _marker_id(sketch.object_id, marker.offset)
-    if marker.semantic == "point" and marker.coordinates_mm is not None:
+    resolved_semantic = semantic or marker.semantic
+    if resolved_semantic == "point" and marker.coordinates_mm is not None:
         kind = GeometryKind.POINT
         geometry: Any = PointGeometry(Vector2(*marker.coordinates_mm))
-    elif marker.semantic == "line" and marker.endpoint_indices is not None:
+    elif resolved_semantic == "line" and marker.endpoint_indices is not None:
         coordinates = (
             coordinates_by_index
-            if marker.profile_role == 2 and marker.native_kind == 2
+            if resolved_semantic != marker.semantic
+            or marker.profile_role == 2
+            and marker.native_kind == 2
             else coordinates_by_prefix[marker.prefix]
         )
         start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
@@ -5038,9 +5309,50 @@ def _marker_entity(
         else:
             kind = GeometryKind.NATIVE
             geometry = _native_marker_geometry(marker)
+    elif resolved_semantic in {"circle", "arc"}:
+        circular = _marker_circular_geometry(
+            marker, coordinates_by_index, resolved_semantic
+        )
+        if circular is None:
+            kind = GeometryKind.NATIVE
+            geometry = _native_marker_geometry(marker, resolved_semantic)
+        else:
+            kind, geometry = circular
+    elif resolved_semantic == "ellipse":
+        ellipse = _marker_ellipse_geometry(marker, coordinates_by_index)
+        if ellipse is None:
+            kind = GeometryKind.NATIVE
+            geometry = _native_marker_geometry(marker, resolved_semantic)
+        else:
+            kind = GeometryKind.ELLIPSE
+            geometry = ellipse
+    elif resolved_semantic == "arc_ellipse":
+        ellipse = _marker_arc_ellipse_geometry(marker, coordinates_by_index)
+        if ellipse is None:
+            kind = GeometryKind.NATIVE
+            geometry = _native_marker_geometry(marker, resolved_semantic)
+        else:
+            kind = GeometryKind.ARC_ELLIPSE
+            geometry = ellipse
+    elif resolved_semantic == "parabola":
+        parabola = _marker_parabola_geometry(marker, coordinates_by_index)
+        if parabola is None:
+            kind = GeometryKind.NATIVE
+            geometry = _native_marker_geometry(marker, resolved_semantic)
+        else:
+            kind = GeometryKind.ARC_PARABOLA
+            geometry = parabola
+    elif resolved_semantic == "spline":
+        spline = _marker_spline_geometry(marker, coordinates_by_index)
+        if spline is None:
+            kind = GeometryKind.NATIVE
+            geometry = _native_marker_geometry(marker, resolved_semantic)
+        else:
+            kind = GeometryKind.SPLINE
+            geometry = spline
     else:
         kind = GeometryKind.NATIVE
-        geometry = _native_marker_geometry(marker)
+        geometry = _native_marker_geometry(marker, resolved_semantic)
     return SketchEntity(
         id=entity_id,
         kind=kind,
@@ -5051,6 +5363,7 @@ def _marker_entity(
             marker.offset,
             marker.length,
             "sketch-native-marker",
+            stream=sketch.native_stream,
         ),
         attributes=frozen_mapping(
             {
@@ -5061,10 +5374,219 @@ def _marker_entity(
                 "object_index": marker.object_index,
                 "local_id": marker.local_id,
                 "endpoint_indices": marker.endpoint_indices,
-                "semantic": marker.semantic,
+                "semantic": resolved_semantic,
                 "marker_prefix": marker.prefix,
             }
         ),
+    )
+
+
+def _marker_curve_semantic(marker: NativeMarker) -> str:
+    endpoints = marker.endpoint_indices
+    if endpoints is None:
+        return marker.semantic
+    if marker.semantic == "line" and b"cptsSplineList_c" not in marker.data[:192]:
+        return "line"
+    if len(marker.data) >= 102 and marker.data[86:102] == b"\xfe\xff\xff\xff" * 4:
+        return "circle" if endpoints[0] == endpoints[1] else "arc"
+    if (
+        marker.length == 92 or marker.length == 104 and endpoints[0] != endpoints[1]
+    ) and (marker.locus == "05000100" or marker.profile_role == 1):
+        return "line"
+    if marker.length in {112, 116}:
+        return "circle" if endpoints[0] == endpoints[1] else "arc"
+    if marker.length == 104:
+        return "ellipse"
+    if marker.length == 108:
+        return "arc_ellipse"
+    if marker.length == 124:
+        return "parabola"
+    if marker.length == 128:
+        return "conic"
+    if marker.length > 128:
+        return "spline"
+    return marker.semantic
+
+
+def _marker_curve_reference_indices(
+    marker: NativeMarker, semantic: str
+) -> tuple[int, ...]:
+    result = list(marker.endpoint_indices or ())
+    if semantic in {"circle", "arc"} and len(marker.data) >= 86:
+        result.append(struct.unpack_from("<H", marker.data, 84)[0])
+    elif semantic in {"ellipse", "arc_ellipse"} and len(marker.data) >= 94:
+        result.extend(struct.unpack_from("<5H", marker.data, 84))
+    elif semantic == "parabola" and len(marker.data) >= 88:
+        result.extend(struct.unpack_from("<2I", marker.data, 80))
+    elif semantic == "conic" and len(marker.data) >= 96:
+        result.extend(struct.unpack_from("<2I", marker.data, 88))
+    elif semantic == "spline":
+        result.extend(_marker_spline_reference_indices(marker.data))
+    return tuple(dict.fromkeys(result))
+
+
+def _marker_spline_reference_indices(data: bytes) -> tuple[int, ...]:
+    result: list[int] = []
+    for offset in range(max(0, len(data) - 11)):
+        if data[offset : offset + 2] != b"\xa7\x80":
+            continue
+        if data[offset + 4 : offset + 12] != b"\xff\xff\xff\xff\0\0\0\0":
+            continue
+        result.append(struct.unpack_from("<H", data, offset + 2)[0])
+    return tuple(dict.fromkeys(result))
+
+
+def _marker_object_reference_indices(data: bytes) -> tuple[int, ...]:
+    result: list[int] = []
+    for offset in range(max(0, len(data) - 11)):
+        if data[offset] not in {0xA7, 0xB2, 0xB7, 0xC7} or data[offset + 1] != 0x80:
+            continue
+        if data[offset + 4 : offset + 12] != b"\xff\xff\xff\xff\0\0\0\0":
+            continue
+        result.append(struct.unpack_from("<H", data, offset + 2)[0])
+    return tuple(dict.fromkeys(result))
+
+
+def _marker_circular_geometry(
+    marker: NativeMarker,
+    coordinates: tuple[tuple[float, float] | None, ...],
+    semantic: str,
+) -> tuple[GeometryKind, CircleGeometry | ArcGeometry] | None:
+    if marker.endpoint_indices is None or len(marker.data) < 86:
+        return None
+    center = _coordinate_reference(
+        coordinates, struct.unpack_from("<H", marker.data, 84)[0]
+    )
+    start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
+    end = _coordinate_reference(coordinates, marker.endpoint_indices[1])
+    if center is None or start is None:
+        return None
+    radius = math.dist(center, start)
+    if not math.isfinite(radius) or radius <= 1e-12:
+        return None
+    if semantic == "circle":
+        return GeometryKind.CIRCLE, CircleGeometry(Vector2(*center), radius)
+    if end is None:
+        return None
+    start_angle = math.atan2(start[1] - center[1], start[0] - center[0])
+    end_angle = math.atan2(end[1] - center[1], end[0] - center[0])
+    if struct.unpack_from("<I", marker.data, 80)[0] == 0xFFFFFFFF:
+        start_angle, end_angle = end_angle, start_angle
+    return (
+        GeometryKind.ARC,
+        ArcGeometry(Vector2(*center), radius, start_angle, end_angle),
+    )
+
+
+def _marker_ellipse_geometry(
+    marker: NativeMarker,
+    coordinates: tuple[tuple[float, float] | None, ...],
+) -> EllipseGeometry | None:
+    if len(marker.data) < 90:
+        return None
+    center_index, major_index, minor_index = struct.unpack_from("<3H", marker.data, 84)
+    center = _coordinate_reference(coordinates, center_index)
+    major = _coordinate_reference(coordinates, major_index)
+    minor = _coordinate_reference(coordinates, minor_index)
+    if center is None or major is None or minor is None:
+        return None
+    major_radius = math.dist(center, major)
+    minor_radius = math.dist(center, minor)
+    if major_radius <= 1e-12 or minor_radius <= 1e-12:
+        return None
+    return EllipseGeometry(
+        Vector2(*center),
+        Vector2(
+            (major[0] - center[0]) / major_radius,
+            (major[1] - center[1]) / major_radius,
+        ),
+        major_radius,
+        minor_radius,
+    )
+
+
+def _marker_arc_ellipse_geometry(
+    marker: NativeMarker,
+    coordinates: tuple[tuple[float, float] | None, ...],
+) -> ArcEllipseGeometry | None:
+    ellipse = _marker_ellipse_geometry(marker, coordinates)
+    if ellipse is None or marker.endpoint_indices is None:
+        return None
+    start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
+    end = _coordinate_reference(coordinates, marker.endpoint_indices[1])
+    if start is None or end is None:
+        return None
+    u = ellipse.major_axis
+    v = Vector2(-u.y, u.x)
+
+    def parameter(point: tuple[float, float]) -> float:
+        delta = Vector2(point[0] - ellipse.center.x, point[1] - ellipse.center.y)
+        return math.atan2(
+            (delta.x * v.x + delta.y * v.y) / ellipse.minor_radius,
+            (delta.x * u.x + delta.y * u.y) / ellipse.major_radius,
+        )
+
+    return ArcEllipseGeometry(
+        ellipse.center,
+        ellipse.major_axis,
+        ellipse.major_radius,
+        ellipse.minor_radius,
+        parameter(start),
+        parameter(end),
+    )
+
+
+def _marker_spline_geometry(
+    marker: NativeMarker,
+    coordinates: tuple[tuple[float, float] | None, ...],
+) -> SplineGeometry | None:
+    references = _marker_spline_reference_indices(marker.data)
+    points = tuple(
+        point
+        for index in references
+        if (point := _coordinate_reference(coordinates, index)) is not None
+    )
+    if len(points) < 2:
+        return None
+    degree = min(3, len(points) - 1)
+    return SplineGeometry(tuple(Vector2(*point) for point in points), degree)
+
+
+def _marker_parabola_geometry(
+    marker: NativeMarker,
+    coordinates: tuple[tuple[float, float] | None, ...],
+) -> ArcParabolaGeometry | None:
+    if marker.endpoint_indices is None or len(marker.data) < 88:
+        return None
+    focus_index, apex_index = struct.unpack_from("<2I", marker.data, 80)
+    focus = _coordinate_reference(coordinates, focus_index)
+    apex = _coordinate_reference(coordinates, apex_index)
+    start = _coordinate_reference(coordinates, marker.endpoint_indices[0])
+    end = _coordinate_reference(coordinates, marker.endpoint_indices[1])
+    if focus is None or apex is None or start is None or end is None:
+        return None
+    focal_length = math.dist(focus, apex)
+    if not math.isfinite(focal_length) or focal_length <= 1e-12:
+        return None
+    axis = Vector2(
+        (focus[0] - apex[0]) / focal_length,
+        (focus[1] - apex[1]) / focal_length,
+    )
+    perpendicular = Vector2(-axis.y, axis.x)
+
+    def parameter(point: tuple[float, float]) -> float:
+        delta = Vector2(point[0] - apex[0], point[1] - apex[1])
+        return (delta.x * perpendicular.x + delta.y * perpendicular.y) / (
+            2.0 * focal_length
+        )
+
+    limits = sorted((parameter(start), parameter(end)))
+    return ArcParabolaGeometry(
+        Vector2(*apex),
+        axis,
+        focal_length,
+        limits[0],
+        limits[1],
     )
 
 
@@ -5074,10 +5596,12 @@ def _coordinate_reference(
     return coordinates[index] if 0 <= index < len(coordinates) else None
 
 
-def _native_marker_geometry(marker: NativeMarker) -> NativeGeometry:
+def _native_marker_geometry(
+    marker: NativeMarker, entity_type: str | None = None
+) -> NativeGeometry:
     return NativeGeometry(
         format_id=_FORMAT_ID,
-        entity_type=marker.semantic,
+        entity_type=entity_type or marker.semantic,
         data=frozen_mapping(
             {
                 "native_kind": marker.native_kind,
@@ -5176,6 +5700,7 @@ def _sketch_constraints(
                         constraint.native_offset,
                         8,
                         "sketch-constraint",
+                        stream=sketch.native_stream,
                     )
                     if constraint.native_offset is not None
                     else None
@@ -5220,18 +5745,18 @@ def _selections(model: NativeModel) -> tuple[Selection, ...]:
     for operation in model.operations:
         if not operation.selection_offsets:
             continue
-        producers = operation.dependencies
-        producer = producers[-1] if producers else 0
-        for local_id in operation.selected_local_ids:
+        for producer, local_id, offsets in _operation_selection_entries(operation):
+            selection_id = _operation_selection_id(operation, producer, local_id)
+            kind = operation.selection_kind
             result.append(
                 Selection(
-                    id=_selection_id(operation.object_id, local_id),
-                    name=f"{operation.name} edge {local_id}",
+                    id=selection_id,
+                    name=f"{operation.name} {kind} {local_id}",
                     path=(
                         SelectionPathElement(
                             entity_kind="feature",
                             entity_id=_feature_id(producer),
-                            subelement=f"edge:{local_id}",
+                            subelement=f"{kind}:{local_id}",
                         ),
                     ),
                     query=frozen_mapping(
@@ -5242,21 +5767,21 @@ def _selections(model: NativeModel) -> tuple[Selection, ...]:
                             "topology_role": (
                                 "extrusion_terminal_profile_boundary"
                                 if operation.kind == "fillet"
-                                else "native_subelement"
+                                else f"native_{kind}"
                             ),
                         }
                     ),
                     provenance=Provenance(
                         adapter=_FORMAT_ID,
-                        native_id=f"{operation.object_id}:edge:{local_id}",
+                        native_id=f"{operation.object_id}:{kind}:{local_id}",
                         spans=tuple(
                             ProvenanceSpan(
-                                RESOLVED_FEATURES_STREAM,
+                                operation.native_stream,
                                 offset,
                                 38,
-                                "edge-selection",
+                                f"{kind}-selection",
                             )
-                            for offset in operation.selection_offsets
+                            for offset in offsets
                         ),
                     ),
                 )
@@ -5264,11 +5789,54 @@ def _selections(model: NativeModel) -> tuple[Selection, ...]:
     return tuple(result)
 
 
+def _operation_selection_entries(
+    operation: NativeOperation,
+) -> tuple[tuple[int, int, tuple[int, ...]], ...]:
+    references = operation.selection_references
+    if not references:
+        producer = operation.dependencies[-1] if operation.dependencies else 0
+        references = tuple(
+            (producer, local_id) for local_id in operation.selected_local_ids
+        )
+    aligned = len(operation.selection_offsets) == len(references)
+    return tuple(
+        (
+            producer,
+            local_id,
+            (
+                (operation.selection_offsets[index],)
+                if aligned
+                else operation.selection_offsets
+            ),
+        )
+        for index, (producer, local_id) in enumerate(references)
+    )
+
+
+def _operation_selection_id(
+    operation: NativeOperation, producer: int, local_id: int
+) -> str:
+    duplicate = (
+        sum(
+            reference_local == local_id
+            for _, reference_local in operation.selection_references
+        )
+        > 1
+    )
+    return _selection_id(
+        operation.object_id,
+        local_id,
+        operation.selection_kind,
+        producer if duplicate else None,
+    )
+
+
 def _timeline(
     model: NativeModel, selections: tuple[Selection, ...]
 ) -> tuple[FeatureStep, ...]:
     operation_by_id = {operation.object_id: operation for operation in model.operations}
     sketch_by_id = {sketch.object_id: sketch for sketch in model.sketches}
+    plane_by_id = {plane.object_id: plane for plane in model.planes}
     feature_ids = {feature.object_id for feature in model.features}
     order_by_id = {
         feature.object_id: order for order, feature in enumerate(model.features)
@@ -5285,12 +5853,15 @@ def _timeline(
             inputs.extend(operation.dependencies)
         elif sketch is not None:
             inputs.append(sketch.support_plane_id)
-        elif (
-            feature.kind.casefold() in PLANE_FEATURE_TYPES
-            and feature.object_id not in principal_plane_ids
-            and previous_operation is not None
-        ):
-            inputs.append(previous_operation)
+        elif feature.object_id in plane_by_id:
+            reference_ids = plane_by_id[feature.object_id].reference_ids
+            inputs.extend(reference_ids)
+            if (
+                not reference_ids
+                and feature.object_id not in principal_plane_ids
+                and previous_operation is not None
+            ):
+                inputs.append(previous_operation)
         dependencies = tuple(
             _feature_id(native_id)
             for native_id in dict.fromkeys(inputs)
@@ -5316,17 +5887,37 @@ def _timeline(
                 operation_value = BooleanOperation.JOIN
             elif operation.kind == "cut":
                 operation_value = BooleanOperation.CUT
-            elif operation.kind == "fillet":
+            elif operation.kind in {
+                "fillet",
+                "chamfer",
+                "shell",
+                "dome",
+                "scale",
+                "move_body",
+            }:
                 operation_value = None
+            elif operation.kind == "revolve_join":
+                operation_value = BooleanOperation.JOIN
+            elif operation.kind == "revolve_cut":
+                operation_value = BooleanOperation.CUT
+            elif operation.kind == "hole":
+                operation_value = BooleanOperation.CUT
+            elif operation.kind == "combine_join":
+                operation_value = BooleanOperation.JOIN
+            elif operation.kind == "surface":
+                operation_value = BooleanOperation.CREATE
             else:
                 operation_value = operation.kind
             selected = tuple(
                 selection_id
-                for local_id in operation.selected_local_ids
-                for selection_id in (_selection_id(operation.object_id, local_id),)
+                for producer, local_id, _ in _operation_selection_entries(operation)
+                for selection_id in (
+                    _operation_selection_id(operation, producer, local_id),
+                )
                 if selection_id in selection_ids
             )
-            previous_operation = operation.object_id
+            if operation.kind != "surface":
+                previous_operation = operation.object_id
         result.append(
             FeatureStep(
                 id=_feature_id(feature.object_id),
@@ -5341,7 +5932,12 @@ def _timeline(
                 ),
                 parameter_ids=parameter_ids,
                 operation=operation_value,
-                definition=_feature_definition(feature, operation),
+                definition=_feature_definition(
+                    feature,
+                    operation,
+                    sketch_by_id,
+                    plane_by_id,
+                ),
                 selection_ids=selected,
                 provenance=_feature_provenance(feature),
                 attributes=frozen_mapping(attributes),
@@ -5396,12 +5992,17 @@ def _operation_attributes(operation: NativeOperation) -> dict[str, Any]:
         "termination_code": operation.termination_code,
         "native_selection_offsets": operation.selection_offsets,
         "selected_local_ids": operation.selected_local_ids,
+        "native_selection_references": operation.selection_references,
+        "selection_kind": operation.selection_kind,
+        "mode": operation.mode,
     }
     if operation.length_mm is not None:
         result.update(
             {
                 "length_mm": operation.length_mm,
-                "direction_multiplier": -1 if operation.kind == "cut" else 1,
+                "direction_multiplier": (
+                    -1 if operation.kind in {"cut", "revolve_cut", "hole"} else 1
+                ),
                 "end_condition": (
                     "blind"
                     if operation.termination_code == 0
@@ -5411,13 +6012,45 @@ def _operation_attributes(operation: NativeOperation) -> dict[str, Any]:
         )
     if operation.radius_mm is not None:
         result["radius_mm"] = operation.radius_mm
+    if operation.angle_degrees is not None:
+        result["angle_degrees"] = operation.angle_degrees
+    if operation.diameter_mm is not None:
+        result["diameter_mm"] = operation.diameter_mm
+    if operation.second_length_mm is not None:
+        result["second_length_mm"] = operation.second_length_mm
+    if operation.axis_marker_offset is not None:
+        result["axis_marker_offset"] = operation.axis_marker_offset
+    if operation.translation_mm is not None:
+        result["translation_mm"] = operation.translation_mm
+    if operation.scale_factors is not None:
+        result["scale_factors"] = operation.scale_factors
     return result
 
 
 def _feature_definition(
-    feature: NativeFeature, operation: NativeOperation | None
-) -> ExtrusionFeature | FilletFeature | NativeFeatureDefinition:
-    if operation is not None and operation.length_mm is not None:
+    feature: NativeFeature,
+    operation: NativeOperation | None,
+    sketches: Mapping[int, NativeSketch],
+    planes: Mapping[int, NativePlane],
+) -> (
+    ExtrusionFeature
+    | FilletFeature
+    | RevolutionFeature
+    | HoleFeature
+    | ChamferFeature
+    | ShellFeature
+    | ReferencePlaneFeature
+    | DomeFeature
+    | MoveBodyFeature
+    | CombineFeature
+    | ScaleFeature
+    | NativeFeatureDefinition
+):
+    if (
+        operation is not None
+        and operation.kind in {"join", "cut", "surface"}
+        and operation.length_mm is not None
+    ):
         return ExtrusionFeature(
             length=ParameterValue(operation.length_mm, ValueKind.LENGTH, "mm"),
             end_condition=(
@@ -5426,10 +6059,116 @@ def _feature_definition(
                 else f"native:{operation.termination_code}"
             ),
             reversed=operation.kind == "cut",
+            second_length=(
+                ParameterValue(
+                    operation.second_length_mm,
+                    ValueKind.LENGTH,
+                    "mm",
+                )
+                if operation.second_length_mm is not None
+                else None
+            ),
         )
-    if operation is not None and operation.radius_mm is not None:
+    if (
+        operation is not None
+        and operation.kind in {"revolve_join", "revolve_cut"}
+        and operation.angle_degrees is not None
+        and operation.profile_id in sketches
+        and operation.axis_marker_offset is not None
+    ):
+        return RevolutionFeature(
+            angle=ParameterValue(
+                operation.angle_degrees,
+                ValueKind.ANGLE,
+                "deg",
+            ),
+            axis_entity_id=_marker_id(
+                operation.profile_id,
+                operation.axis_marker_offset,
+            ),
+            reversed=operation.kind == "revolve_cut",
+        )
+    if (
+        operation is not None
+        and operation.kind == "hole"
+        and operation.diameter_mm is not None
+        and operation.length_mm is not None
+    ):
+        return HoleFeature(
+            diameter=ParameterValue(
+                operation.diameter_mm,
+                ValueKind.LENGTH,
+                "mm",
+            ),
+            depth=ParameterValue(
+                operation.length_mm,
+                ValueKind.LENGTH,
+                "mm",
+            ),
+        )
+    if (
+        operation is not None
+        and operation.kind == "fillet"
+        and operation.radius_mm is not None
+    ):
         return FilletFeature(
             radius=ParameterValue(operation.radius_mm, ValueKind.LENGTH, "mm")
+        )
+    if (
+        operation is not None
+        and operation.kind == "chamfer"
+        and operation.length_mm is not None
+        and operation.mode == "equal_distance"
+    ):
+        return ChamferFeature(
+            distance=ParameterValue(
+                operation.length_mm,
+                ValueKind.LENGTH,
+                "mm",
+            )
+        )
+    if (
+        operation is not None
+        and operation.kind == "shell"
+        and operation.length_mm is not None
+    ):
+        return ShellFeature(
+            thickness=ParameterValue(
+                operation.length_mm,
+                ValueKind.LENGTH,
+                "mm",
+            )
+        )
+    if (
+        operation is not None
+        and operation.kind == "dome"
+        and operation.length_mm is not None
+    ):
+        return DomeFeature(
+            height=ParameterValue(
+                operation.length_mm,
+                ValueKind.LENGTH,
+                "mm",
+            )
+        )
+    if operation is not None and operation.kind == "move_body":
+        translation = operation.translation_mm
+        if translation is not None:
+            return MoveBodyFeature(translation=Vector3(*translation))
+    if operation is not None and operation.kind == "combine_join":
+        return CombineFeature(BooleanOperation.JOIN)
+    if operation is not None and operation.kind == "scale":
+        factors = operation.scale_factors
+        if factors is not None:
+            return ScaleFeature(Vector3(*factors))
+    plane = planes.get(feature.object_id)
+    reference_ids = plane.reference_ids if plane is not None else ()
+    offset = _operation_dimension_value(feature.dimensions, "offset")
+    if plane is not None and len(reference_ids) == 1 and offset is not None:
+        return ReferencePlaneFeature(
+            support_plane_id=_plane_id(feature.object_id),
+            reference_plane_id=_plane_id(reference_ids[0]),
+            offset=ParameterValue(offset, ValueKind.LENGTH, "mm"),
         )
     return NativeFeatureDefinition(
         format_id=_FORMAT_ID,
@@ -5437,6 +6176,8 @@ def _feature_definition(
         object_data=frozen_mapping(
             {
                 "native_object_id": feature.object_id,
+                "native_class": feature.class_name,
+                "native_stream": feature.native_stream,
                 "xml_tag": feature.xml_tag,
                 "properties": feature.properties,
                 "dimensions": tuple(
@@ -5468,7 +6209,18 @@ def _feature_definition(
     )
 
 
+def _operation_dimension_value(
+    dimensions: tuple[NativeDimension, ...], kind: str
+) -> float | None:
+    return next(
+        (dimension.value_mm for dimension in dimensions if dimension.kind == kind),
+        None,
+    )
+
+
 def _feature_kind(feature: NativeFeature) -> FeatureKind:
+    if getattr(feature, "class_name", "") in {"moSketchHole", "moHoleWzd_c"}:
+        return FeatureKind.HOLE
     return _FEATURE_KIND_BY_NATIVE.get(
         feature.kind.casefold().strip(), FeatureKind.NATIVE
     )
@@ -5622,6 +6374,7 @@ def _feature_provenance(feature: NativeFeature) -> Provenance:
         ),
         "feature-record",
         confidence=1.0 if feature.native_offset is not None else 0.6,
+        stream=feature.native_stream,
     )
 
 
@@ -5631,6 +6384,7 @@ def _feature_span_provenance(sketch: NativeSketch) -> Provenance:
         sketch.native_offset,
         sketch.native_end - sketch.native_offset,
         "sketch-record",
+        stream=sketch.native_stream,
     )
 
 
@@ -5641,9 +6395,10 @@ def _provenance(
     kind: str,
     *,
     confidence: float = 1.0,
+    stream: str = RESOLVED_FEATURES_STREAM,
 ) -> Provenance:
     spans = (
-        (ProvenanceSpan(RESOLVED_FEATURES_STREAM, offset, length or 0, kind),)
+        (ProvenanceSpan(stream, offset, length or 0, kind),)
         if offset is not None
         else ()
     )
@@ -5690,8 +6445,14 @@ def _parameter_entries(
     return tuple(result)
 
 
-def _selection_id(native_id: int, local_id: int) -> str:
-    return f"sldprt:selection:{native_id}:edge:{local_id}"
+def _selection_id(
+    native_id: int,
+    local_id: int,
+    kind: str = "edge",
+    producer_id: int | None = None,
+) -> str:
+    producer = f":{producer_id}" if producer_id is not None else ""
+    return f"sldprt:selection:{native_id}:{kind}{producer}:{local_id}"
 
 
 def _profile_id(native_id: int, profile_index: int) -> str:

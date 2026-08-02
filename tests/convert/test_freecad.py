@@ -6,6 +6,7 @@ import hashlib
 import inspect
 import io
 import json
+import math
 from pathlib import Path
 import struct
 import xml.etree.ElementTree as ET
@@ -125,29 +126,39 @@ from convert.adapters.freecad.protocol import (
 )
 from convert.opencascade import is_structurally_valid_ascii_brep
 from interchange import (
+    ArcEllipseGeometry,
+    ArcHyperbolaGeometry,
+    ArcParabolaGeometry,
     BooleanOperation,
     BrepPayload,
     Capability,
+    CircleGeometry,
     Configuration,
     ConstraintKind,
     ConstraintReference,
     Expression,
     ExtrusionEndCondition,
+    ExtrusionFeature,
     FeatureKind,
     FeatureStep,
+    EllipseGeometry,
     GeometryKind,
+    HyperbolaGeometry,
+    LineGeometry,
     MateKind,
     Mesh,
     NativeFeatureDefinition,
     NativeGeometry,
     Parameter,
     ParameterValue,
+    ParabolaGeometry,
     PayloadRole,
     PointGeometry,
     Selection,
     SelectionPathElement,
     SketchConstraint,
     SketchEntity,
+    Transform,
     ValueKind,
     Vector2,
     Vector3,
@@ -168,6 +179,286 @@ FREECAD_EXAMPLES = (
     / "data"
     / "examples"
 )
+
+
+def _line_entity(
+    identifier: str,
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> SketchEntity:
+    return SketchEntity(
+        identifier,
+        GeometryKind.LINE,
+        LineGeometry(Vector2(*start), Vector2(*end)),
+    )
+
+
+def test_native_closed_profile_inference_accepts_simple_edge_cycles() -> None:
+    first = tuple(
+        _line_entity(identifier, start, end)
+        for identifier, start, end in (
+            ("edge:0", (-30.0, -15.0), (30.0, -15.0)),
+            ("edge:1", (30.0, -15.0), (30.0, 15.0)),
+            ("edge:2", (30.0, 15.0), (-30.0, 15.0)),
+            ("edge:3", (-30.0, 15.0), (-30.0, -15.0)),
+        )
+    )
+    second = tuple(
+        _line_entity(identifier, start, end)
+        for identifier, start, end in (
+            ("edge:4", (50.0, 0.0), (60.0, 0.0)),
+            ("edge:5", (60.0, 0.0), (55.0, 10.0)),
+            ("edge:6", (55.0, 10.0), (50.0, 0.0)),
+        )
+    )
+    assert freecad_native_module._closed_profile_entity_ids((*first, *second)) == (
+        ("edge:0", "edge:1", "edge:2", "edge:3"),
+        ("edge:4", "edge:5", "edge:6"),
+    )
+
+
+@pytest.mark.parametrize(
+    "entities",
+    (
+        (
+            _line_entity("open:0", (0.0, 0.0), (10.0, 0.0)),
+            _line_entity("open:1", (10.0, 0.0), (10.0, 10.0)),
+            _line_entity("open:2", (10.0, 10.0), (0.0, 10.0)),
+        ),
+        (
+            _line_entity("branch:0", (0.0, 0.0), (10.0, 0.0)),
+            _line_entity("branch:1", (10.0, 0.0), (10.0, 10.0)),
+            _line_entity("branch:2", (10.0, 10.0), (0.0, 10.0)),
+            _line_entity("branch:3", (0.0, 10.0), (0.0, 0.0)),
+            _line_entity("branch:4", (0.0, 0.0), (-10.0, 0.0)),
+        ),
+        (
+            _line_entity("cross:0", (-10.0, -10.0), (10.0, 10.0)),
+            _line_entity("cross:1", (10.0, 10.0), (-10.0, 10.0)),
+            _line_entity("cross:2", (-10.0, 10.0), (10.0, -10.0)),
+            _line_entity("cross:3", (10.0, -10.0), (-10.0, -10.0)),
+        ),
+    ),
+)
+def test_native_closed_profile_inference_rejects_ambiguous_networks(
+    entities: tuple[SketchEntity, ...],
+) -> None:
+    assert freecad_native_module._closed_profile_entity_ids(entities) == ()
+
+
+def test_native_reader_infers_closed_profile_from_unconstrained_rectangle() -> None:
+    def rectangle(root: ET.Element) -> None:
+        geometry = root.find(
+            "./ObjectData/Object[@name='Sketch']/Properties/"
+            "Property[@name='Geometry']/GeometryList"
+        )
+        constraints = root.find(
+            "./ObjectData/Object[@name='Sketch']/Properties/"
+            "Property[@name='Constraints']/ConstraintList"
+        )
+        assert geometry is not None
+        assert constraints is not None
+        geometry.clear()
+        geometry.set("count", "4")
+        constraints.clear()
+        constraints.set("count", "0")
+        points = ((-30.0, -15.0), (30.0, -15.0), (30.0, 15.0), (-30.0, 15.0))
+        for index, start in enumerate(points):
+            end = points[(index + 1) % len(points)]
+            item = ET.SubElement(
+                geometry,
+                "Geometry",
+                {
+                    "type": "Part::GeomLineSegment",
+                    "id": str(index + 1),
+                    "migrated": "1",
+                },
+            )
+            ET.SubElement(
+                item,
+                "LineSegment",
+                {
+                    "StartX": str(start[0]),
+                    "StartY": str(start[1]),
+                    "EndX": str(end[0]),
+                    "EndY": str(end[1]),
+                },
+            )
+            ET.SubElement(item, "Construction", {"value": "0"})
+
+    document = FreeCADAdapter().read(
+        _rewrite_document_xml(_native_part_fixture(), rectangle)
+    )
+    sketch = document.sketches[0]
+    assert sketch.constraints == ()
+    assert sketch.closed_profile_entity_ids == (
+        tuple(entity.id for entity in sketch.entities),
+    )
+
+
+def test_native_origin_planes_use_principal_frames_and_preserve_datum_planes() -> None:
+    def plane(
+        name: str,
+        label: str,
+        quaternion: tuple[float, float, float, float],
+        origin: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        role: str = "",
+        type_id: str = "App::Plane",
+    ):
+        placement = _native_placement()
+        value = placement.find("./PropertyPlacement")
+        assert value is not None
+        for key, coordinate in zip(("Q0", "Q1", "Q2", "Q3"), quaternion):
+            value.set(key, str(coordinate))
+        for key, coordinate in zip(("Px", "Py", "Pz"), origin):
+            value.set(key, str(coordinate))
+        properties = {
+            "Label": _native_property(
+                "Label", "App::PropertyString", "String", {"value": label}
+            ),
+            "Placement": placement,
+        }
+        if role:
+            properties["Role"] = _native_property(
+                "Role", "App::PropertyString", "String", {"value": role}
+            )
+        return freecad_native_module._NativeObject(
+            name,
+            type_id,
+            0,
+            name,
+            False,
+            (),
+            (),
+            (),
+            properties,
+        )
+
+    half = math.sqrt(0.5)
+    objects = (
+        plane("XY_Plane", "XY-plane", (0.0, 0.0, 0.0, 1.0), role="XY_Plane"),
+        plane("XZ_Plane", "XZ-plane", (half, 0.0, 0.0, half), role="XZ_Plane"),
+        plane("YZ_Plane", "YZ-plane", (0.5, 0.5, 0.5, 0.5), role="YZ_Plane"),
+        plane(
+            "DatumPlane",
+            "Datum Plane",
+            (0.0, 0.0, math.sin(math.pi / 8.0), math.cos(math.pi / 8.0)),
+            (7.0, 8.0, 9.0),
+            type_id="PartDesign::Plane",
+        ),
+    )
+    planes, sketches = freecad_native_module._parse_sketches(objects, [], set())
+    assert sketches == ()
+    assert [value.id for value in planes] == [
+        "freecad:plane:XY_Plane",
+        "freecad:plane:XZ_Plane",
+        "freecad:plane:YZ_Plane",
+        "freecad:plane:DatumPlane",
+    ]
+    assert [value.attributes.get("principal_index") for value in planes] == [
+        0,
+        1,
+        2,
+        None,
+    ]
+    frames = tuple(
+        (
+            (
+                value.transform.x_axis.x,
+                value.transform.x_axis.y,
+                value.transform.x_axis.z,
+            ),
+            (
+                value.transform.y_axis.x,
+                value.transform.y_axis.y,
+                value.transform.y_axis.z,
+            ),
+            (
+                value.transform.z_axis.x,
+                value.transform.z_axis.y,
+                value.transform.z_axis.z,
+            ),
+        )
+        for value in planes[:3]
+    )
+    assert frames == (
+        ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+        ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)),
+        ((0.0, 0.0, -1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)),
+    )
+    datum = planes[3].transform
+    assert (datum.origin.x, datum.origin.y, datum.origin.z) == (7.0, 8.0, 9.0)
+    assert (datum.x_axis.x, datum.x_axis.y, datum.x_axis.z) == pytest.approx(
+        (half, half, 0.0)
+    )
+    assert (datum.y_axis.x, datum.y_axis.y, datum.y_axis.z) == pytest.approx(
+        (-half, half, 0.0)
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "target", "expected_start", "expected_end"),
+    (
+        (
+            Transform(
+                x_axis=Vector3(1.0, 0.0, 0.0),
+                y_axis=Vector3(0.0, 0.0, 1.0),
+                z_axis=Vector3(0.0, -1.0, 0.0),
+            ),
+            Transform(
+                x_axis=Vector3(1.0, 0.0, 0.0),
+                y_axis=Vector3(0.0, 0.0, -1.0),
+                z_axis=Vector3(0.0, 1.0, 0.0),
+            ),
+            (2.0, -3.0),
+            (5.0, -7.0),
+        ),
+        (
+            Transform(
+                x_axis=Vector3(0.0, 1.0, 0.0),
+                y_axis=Vector3(0.0, 0.0, 1.0),
+                z_axis=Vector3(1.0, 0.0, 0.0),
+            ),
+            Transform(
+                x_axis=Vector3(0.0, 0.0, -1.0),
+                y_axis=Vector3(0.0, 1.0, 0.0),
+                z_axis=Vector3(1.0, 0.0, 0.0),
+            ),
+            (-3.0, 2.0),
+            (-7.0, 5.0),
+        ),
+    ),
+)
+def test_native_principal_plane_reframe_preserves_world_geometry(
+    source: Transform,
+    target: Transform,
+    expected_start: tuple[float, float],
+    expected_end: tuple[float, float],
+) -> None:
+    geometry = LineGeometry(Vector2(2.0, 3.0), Vector2(5.0, 7.0))
+    reframed = freecad_native_module._reframe_geometry(
+        geometry,
+        freecad_native_module._plane_reframe(source, target),
+    )
+    assert isinstance(reframed, LineGeometry)
+    assert (reframed.start.x, reframed.start.y) == expected_start
+    assert (reframed.end.x, reframed.end.y) == expected_end
+
+    def world(transform: Transform, point: Vector2) -> tuple[float, float, float]:
+        return (
+            transform.origin.x
+            + point.x * transform.x_axis.x
+            + point.y * transform.y_axis.x,
+            transform.origin.y
+            + point.x * transform.x_axis.y
+            + point.y * transform.y_axis.y,
+            transform.origin.z
+            + point.x * transform.x_axis.z
+            + point.y * transform.y_axis.z,
+        )
+
+    assert world(source, geometry.start) == pytest.approx(world(target, reframed.start))
+    assert world(source, geometry.end) == pytest.approx(world(target, reframed.end))
 
 
 def test_pre_payload_field_fcstd_carrier_restores_payload_semantics() -> None:
@@ -689,8 +980,7 @@ def _native_assembly_fixture(brep_data: bytes | None = None) -> bytes:
         {
             "value": "bnVsbA==",
             "encoded": "yes",
-            "module": "JointObject",
-            "class": "GroundedJoint",
+            "json": "yes",
         },
     )
     grounded_properties = (
@@ -719,8 +1009,7 @@ def _native_assembly_fixture(brep_data: bytes | None = None) -> bytes:
         {
             "value": "bnVsbA==",
             "encoded": "yes",
-            "module": "JointObject",
-            "class": "Joint",
+            "json": "yes",
         },
     )
     joint_properties = (
@@ -1264,6 +1553,52 @@ def test_non_open_cascade_brep_bytes_are_never_bound_as_freecad_shapes() -> None
         assert shape_files == set()
         assert archive.read("interchange/native/foreign_brep.x_b") == payload.data
     assert FreeCADAdapter().read(output.getvalue()) == document
+
+
+def test_solidworks_opaque_brep_with_executable_history_is_application_usable() -> None:
+    source = neutral_document()
+    circle = SketchEntity(
+        "sketch:1:circle:1",
+        GeometryKind.CIRCLE,
+        CircleGeometry(Vector2(0.0, 0.0), 10.0),
+    )
+    sketch = replace(
+        source.sketches[0],
+        entities=(circle,),
+        constraints=(),
+        closed_profile_entity_ids=((circle.id,),),
+    )
+    feature = replace(
+        source.feature_timeline[0],
+        definition=ExtrusionFeature(ParameterValue(5.0, ValueKind.LENGTH, "mm")),
+    )
+    data = b"PS\x00\x00opaque-source"
+    payload = BrepPayload(
+        "solidworks:brep",
+        "parasolid.x_b",
+        "partition",
+        "SCH_3500040",
+        hashlib.sha256(data).hexdigest(),
+        data=data,
+        role=PayloadRole.BREP,
+        file_extension=".x_b",
+    )
+    document = replace(
+        source,
+        source=replace(source.source, format_id="solidworks.sldprt"),
+        sketches=(sketch,),
+        feature_timeline=(feature,),
+        brep_payloads=(payload,),
+    )
+    output = io.BytesIO()
+    result = FreeCADAdapter().write(document, output)
+    assert result.application_usable is True
+    assert (
+        freecad_archive_module.native_shape_feature_count(
+            document_to_manifest(document)
+        )
+        == 1
+    )
 
 
 def test_decoded_brep_and_retained_source_payload_are_accounted_once() -> None:
@@ -1851,6 +2186,120 @@ def test_unavailable_sketch_geometry_uses_explicit_carrier_fallback() -> None:
     assert adapter.read(output.getvalue()) == document
 
 
+def test_neutral_conics_round_trip_through_native_fcstd_geometry() -> None:
+    source = neutral_document()
+    axis = Vector2(0.6, 0.8)
+    values = (
+        (
+            GeometryKind.ELLIPSE,
+            EllipseGeometry(Vector2(1.0, 2.0), axis, 8.0, 3.0),
+            "Part::GeomEllipse",
+        ),
+        (
+            GeometryKind.ARC_ELLIPSE,
+            ArcEllipseGeometry(Vector2(2.0, 3.0), axis, 9.0, 4.0, -0.5, 1.25),
+            "Part::GeomArcOfEllipse",
+        ),
+        (
+            GeometryKind.ARC_HYPERBOLA,
+            ArcHyperbolaGeometry(Vector2(4.0, 5.0), axis, 11.0, 6.0, -0.75, 1.5),
+            "Part::GeomArcOfHyperbola",
+        ),
+        (
+            GeometryKind.ARC_PARABOLA,
+            ArcParabolaGeometry(Vector2(6.0, 7.0), axis, 8.0, -1.0, 2.0),
+            "Part::GeomArcOfParabola",
+        ),
+    )
+    entities = tuple(
+        SketchEntity(f"conic:{index}", kind, geometry)
+        for index, (kind, geometry, _) in enumerate(values)
+    )
+    sketch = replace(
+        source.sketches[0],
+        entities=entities,
+        constraints=(),
+        closed_profile_entity_ids=(),
+    )
+    document = replace(
+        source,
+        sketches=(sketch,),
+        feature_timeline=(replace(source.feature_timeline[0], suppressed=True),),
+    )
+    document.assert_valid()
+    output = io.BytesIO()
+    result = FreeCADAdapter().write(document, output)
+    transfers = {item.capability: item.mode for item in result.transfers}
+    assert transfers[Capability.EDITABLE_SKETCHES] is TransferMode.NATIVE
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+    geometry_nodes = root.findall(".//Property[@name='Geometry']/GeometryList/Geometry")
+    assert [item.get("type") for item in geometry_nodes] == [
+        type_id for _, _, type_id in values
+    ]
+    native = freecad_native_module.read_native_fcstd(output.getvalue())
+    restored = native.sketches[0].entities
+    assert [item.kind for item in restored] == [kind for kind, _, _ in values]
+    for item, (_, expected, _) in zip(restored, values, strict=True):
+        actual = item.geometry
+        assert type(actual) is type(expected)
+        assert (actual.center.x, actual.center.y) == pytest.approx(
+            (expected.center.x, expected.center.y)
+        )
+        expected_axis = getattr(expected, "major_axis", getattr(expected, "axis", None))
+        actual_axis = getattr(actual, "major_axis", getattr(actual, "axis", None))
+        assert (actual_axis.x, actual_axis.y) == pytest.approx(
+            (expected_axis.x, expected_axis.y)
+        )
+        for name in (
+            "major_radius",
+            "minor_radius",
+            "focal_length",
+            "start_angle",
+            "end_angle",
+        ):
+            if hasattr(expected, name):
+                assert getattr(actual, name) == pytest.approx(getattr(expected, name))
+
+
+def test_unbounded_neutral_conics_are_explicit_freecad_carriers() -> None:
+    source = neutral_document()
+    axis = Vector2(0.6, 0.8)
+    values = (
+        (
+            GeometryKind.HYPERBOLA,
+            HyperbolaGeometry(Vector2(3.0, 4.0), axis, 10.0, 5.0),
+        ),
+        (GeometryKind.PARABOLA, ParabolaGeometry(Vector2(5.0, 6.0), axis, 7.0)),
+    )
+    entities = tuple(
+        SketchEntity(f"unbounded:{index}", kind, geometry)
+        for index, (kind, geometry) in enumerate(values)
+    )
+    sketch = replace(
+        source.sketches[0],
+        entities=entities,
+        constraints=(),
+        closed_profile_entity_ids=(),
+    )
+    document = replace(
+        source,
+        sketches=(sketch,),
+        feature_timeline=(replace(source.feature_timeline[0], suppressed=True),),
+    )
+    output = io.BytesIO()
+    result = FreeCADAdapter().write(document, output)
+    transfers = {item.capability: item for item in result.transfers}
+    transfer = transfers[Capability.EDITABLE_SKETCHES]
+    assert transfer.mode is TransferMode.MIXED
+    assert transfer.carrier_reason is CarrierReason.WRITER_UNIMPLEMENTED
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+    geometry_nodes = root.findall(".//Property[@name='Geometry']/GeometryList/Geometry")
+    assert geometry_nodes == []
+    assert FreeCADAdapter().read(output.getvalue()) == document
+
+
 def test_native_geometry_payload_restores_every_registered_conic_and_wrapper() -> None:
     source = neutral_document()
     kinds = (
@@ -2043,6 +2492,35 @@ def test_neutral_point_distance_uses_valid_sketcher_point_slots() -> None:
     assert encoded.get("ElementPositions") == "1 1 0"
 
 
+def test_parameterless_native_radius_constraint_retains_its_value() -> None:
+    source = neutral_document()
+    circle = SketchEntity(
+        "sketch:1:circle:1",
+        GeometryKind.CIRCLE,
+        CircleGeometry(Vector2(0.0, 0.0), 8.0),
+    )
+    radius = SketchConstraint(
+        "radius:native",
+        ConstraintKind.RADIUS,
+        (ConstraintReference(circle.id),),
+        attributes={"native_value": 8.0},
+    )
+    sketch = replace(
+        source.sketches[0],
+        entities=(circle,),
+        constraints=(radius,),
+        closed_profile_entity_ids=((circle.id,),),
+    )
+    output = io.BytesIO()
+    FreeCADAdapter().write(replace(source, sketches=(sketch,)), output)
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+    encoded = root.find(".//Property[@name='Constraints']/ConstraintList/Constrain")
+    assert encoded is not None
+    assert encoded.get("Type") == str(CONSTRAINT_CODE_BY_KIND["radius"])
+    assert float(encoded.get("Value", "")) == 8.0
+
+
 def test_solidworks_opaque_extrusion_is_typed_non_executable_feature() -> None:
     source = neutral_document()
     document = replace(
@@ -2062,6 +2540,42 @@ def test_solidworks_opaque_extrusion_is_typed_non_executable_feature() -> None:
     reason = properties.find("./Property[@name='NativeExecutionReason']/String")
     assert executable is not None and executable.get("value") == "false"
     assert reason is not None and reason.get("value") == "no_native_closed_profile"
+    assert FreeCADAdapter().read(output.getvalue()) == document
+
+
+def test_solidworks_intersecting_profiles_are_typed_non_executable_feature() -> None:
+    source = neutral_document()
+    first = SketchEntity(
+        "sketch:1:circle:1",
+        GeometryKind.CIRCLE,
+        CircleGeometry(Vector2(0.0, 0.0), 10.0),
+    )
+    second = SketchEntity(
+        "sketch:1:circle:2",
+        GeometryKind.CIRCLE,
+        CircleGeometry(Vector2(15.0, 0.0), 10.0),
+    )
+    sketch = replace(
+        source.sketches[0],
+        entities=(first, second),
+        closed_profile_entity_ids=((first.id,), (second.id,)),
+    )
+    document = replace(
+        source,
+        source=replace(source.source, format_id="solidworks.sldprt"),
+        sketches=(sketch,),
+    )
+    output = io.BytesIO()
+    FreeCADAdapter().write(document, output)
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        root = ET.fromstring(archive.read("Document.xml"))
+    declaration = root.find("./Objects/Object[@name='Boss1']")
+    reason = root.find(
+        "./ObjectData/Object[@name='Boss1']/Properties/Property[@name='NativeExecutionReason']/String"
+    )
+    assert declaration is not None and declaration.get("type") == "Part::Feature"
+    assert reason is not None
+    assert reason.get("value") == "profile_topology_not_statically_sound"
     assert FreeCADAdapter().read(output.getvalue()) == document
 
 
@@ -3411,8 +3925,11 @@ def test_native_assembly_writes_exact_joint_references_and_ground_lock() -> None
     assert grounded_link is not None
     assert grounded_link.get("value") == link_name
     assert grounded_proxy is not None
-    assert grounded_proxy.get("module") == "JointObject"
-    assert grounded_proxy.get("class") == "GroundedJoint"
+    assert grounded_proxy.attrib == {
+        "value": "bnVsbA==",
+        "encoded": "yes",
+        "json": "yes",
+    }
     joints = [
         item
         for item in objects.values()

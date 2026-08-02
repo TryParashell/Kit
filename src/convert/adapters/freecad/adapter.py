@@ -70,6 +70,7 @@ from .archive import (
     build_fcstd_archive,
     extract_manifest_from_fcstd,
     native_expression_parts,
+    native_shape_feature_count,
     native_sketch_carrier_reasons,
     native_sketch_parts,
 )
@@ -991,7 +992,22 @@ def _native_geometry_is_usable(
     document: CadDocument,
     trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
 ) -> bool:
-    for item in _document_tree(document):
+    items = [document]
+    if document.assembly is not None:
+        documents = {
+            item.id: item.document
+            for item in document.assembly.documents
+            if isinstance(item.document, CadDocument)
+        }
+        for definition in document.assembly.definitions:
+            if definition.id == document.assembly.root_definition_id:
+                continue
+            component = _component_document(document, definition, documents)
+            if component is not None:
+                items.append(component)
+    for item in items:
+        if item.assembly is not None:
+            continue
         mapped_payloads = _manifest_brep_payloads(item)
         mapped_by_identity = (
             {
@@ -1026,6 +1042,11 @@ def _native_geometry_is_usable(
         ):
             continue
         if any(_mesh_is_usable(mesh) for mesh in item.meshes):
+            continue
+        if (
+            item.source.format_id.casefold() != INFO.format_id.casefold()
+            and native_shape_feature_count(document_to_manifest(item)) > 0
+        ):
             continue
         return False
     return True

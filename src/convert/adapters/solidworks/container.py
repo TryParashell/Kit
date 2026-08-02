@@ -13,6 +13,10 @@ _LOCAL_SIGNATURE_PREFIX = bytes.fromhex("140006000800")
 _LOCAL_SIGNATURE_SIZE = 10
 _DEFAULT_FILE_ID = 0xEC6E2386
 _DEFAULT_TYPE_ID = 0x1C34D281
+_TYPE_IDS_BY_NAME = {
+    "Header2": 0x1C74D22C,
+    "Preview": 0x1C74D22C,
+}
 _SIGNATURES_BY_FILE_ID = {
     _DEFAULT_FILE_ID: (
         bytes.fromhex("64d80045"),
@@ -138,7 +142,7 @@ def build_sldprt(
     output = bytearray(struct.pack(">II", file_id, format_version))
     encoded: list[tuple[int, str, int, int, int, int]] = []
     for name, payload in items:
-        type_id = type_ids.get(name, _DEFAULT_TYPE_ID)
+        type_id = type_ids.get(name, _TYPE_IDS_BY_NAME.get(name, _DEFAULT_TYPE_ID))
         data = bytes(payload)
         local_offset = len(output) - _ARCHIVE_OFFSET
         record, crc32_value, compressed_size = _encode_record(name, data, type_id)

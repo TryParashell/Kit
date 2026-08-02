@@ -13,7 +13,10 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from interchange import (
+    ArcEllipseGeometry,
     ArcGeometry,
+    ArcHyperbolaGeometry,
+    ArcParabolaGeometry,
     AssemblyData,
     Body,
     BooleanOperation,
@@ -40,6 +43,7 @@ from interchange import (
     FeatureStep,
     FilletFeature,
     GeometryKind,
+    HyperbolaGeometry,
     LineGeometry,
     MateConstraint,
     MateEntity,
@@ -52,6 +56,7 @@ from interchange import (
     NativeFeatureDefinition,
     Parameter,
     ParameterValue,
+    ParabolaGeometry,
     PayloadRole,
     PointGeometry,
     Provenance,
@@ -695,19 +700,56 @@ def _geometry(node: ET.Element, entity_id: str) -> tuple[GeometryKind, Any]:
             center = Vector2(
                 _number(value.get("CenterX")), _number(value.get("CenterY"))
             )
-            if value.get("MajorAxisX") is not None:
-                axis = Vector2(
-                    _number(value.get("MajorAxisX"), 1.0),
-                    _number(value.get("MajorAxisY")),
-                )
-            else:
-                angle = _number(value.get("AngleXU"))
-                axis = Vector2(math.cos(angle), math.sin(angle))
+            axis = _geometry_axis(value)
             return GeometryKind.ELLIPSE, EllipseGeometry(
                 center,
                 axis,
                 abs(_number(value.get("MajorRadius"))),
                 abs(_number(value.get("MinorRadius"))),
+            )
+    if type_id == "Part::GeomArcOfEllipse":
+        value = node.find("./ArcOfEllipse")
+        if value is not None:
+            return GeometryKind.ARC_ELLIPSE, ArcEllipseGeometry(
+                Vector2(_number(value.get("CenterX")), _number(value.get("CenterY"))),
+                _geometry_axis(value),
+                abs(_number(value.get("MajorRadius"))),
+                abs(_number(value.get("MinorRadius"))),
+                _number(value.get("StartAngle")),
+                _number(value.get("EndAngle")),
+            )
+    if type_id in {"Part::GeomHyperbola", "Part::GeomArcOfHyperbola"}:
+        tag = "Hyperbola" if type_id == "Part::GeomHyperbola" else "ArcOfHyperbola"
+        value = node.find(f"./{tag}")
+        if value is not None:
+            arguments = (
+                Vector2(_number(value.get("CenterX")), _number(value.get("CenterY"))),
+                _geometry_axis(value),
+                abs(_number(value.get("MajorRadius"))),
+                abs(_number(value.get("MinorRadius"))),
+            )
+            if type_id == "Part::GeomHyperbola":
+                return GeometryKind.HYPERBOLA, HyperbolaGeometry(*arguments)
+            return GeometryKind.ARC_HYPERBOLA, ArcHyperbolaGeometry(
+                *arguments,
+                _number(value.get("StartAngle")),
+                _number(value.get("EndAngle")),
+            )
+    if type_id in {"Part::GeomParabola", "Part::GeomArcOfParabola"}:
+        tag = "Parabola" if type_id == "Part::GeomParabola" else "ArcOfParabola"
+        value = node.find(f"./{tag}")
+        if value is not None:
+            arguments = (
+                Vector2(_number(value.get("CenterX")), _number(value.get("CenterY"))),
+                _geometry_axis(value),
+                abs(_number(value.get("Focal"))),
+            )
+            if type_id == "Part::GeomParabola":
+                return GeometryKind.PARABOLA, ParabolaGeometry(*arguments)
+            return GeometryKind.ARC_PARABOLA, ArcParabolaGeometry(
+                *arguments,
+                _number(value.get("StartAngle")),
+                _number(value.get("EndAngle")),
             )
     if type_id in SPLINE_GEOMETRY_TYPE_IDS:
         value = node.find("./BSplineCurve")
@@ -745,6 +787,421 @@ def _geometry(node: ET.Element, entity_id: str) -> tuple[GeometryKind, Any]:
     return GEOMETRY_KIND_BY_TYPE_ID.get(type_id, GeometryKind.NATIVE), NativeGeometry(
         FORMAT_ID, type_id or "unknown", _element_data(node)
     )
+
+
+def _geometry_axis(value: ET.Element) -> Vector2:
+    if value.get("MajorAxisX") is not None:
+        return Vector2(
+            _number(value.get("MajorAxisX"), 1.0),
+            _number(value.get("MajorAxisY")),
+        )
+    angle = _number(value.get("AngleXU"))
+    return Vector2(math.cos(angle), math.sin(angle))
+
+
+def _points_close(first: Vector2, second: Vector2, tolerance: float = 1e-7) -> bool:
+    return math.hypot(first.x - second.x, first.y - second.y) <= tolerance
+
+
+def _segment_orientation(first: Vector2, second: Vector2, third: Vector2) -> float:
+    return (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (
+        third.x - first.x
+    )
+
+
+def _point_on_segment(
+    point: Vector2,
+    first: Vector2,
+    second: Vector2,
+    tolerance: float = 1e-7,
+) -> bool:
+    return (
+        abs(_segment_orientation(first, second, point)) <= tolerance
+        and min(first.x, second.x) - tolerance
+        <= point.x
+        <= max(first.x, second.x) + tolerance
+        and min(first.y, second.y) - tolerance
+        <= point.y
+        <= max(first.y, second.y) + tolerance
+    )
+
+
+def _segments_intersect_or_touch(
+    first_start: Vector2,
+    first_end: Vector2,
+    second_start: Vector2,
+    second_end: Vector2,
+    tolerance: float = 1e-7,
+) -> bool:
+    first_a = _segment_orientation(first_start, first_end, second_start)
+    first_b = _segment_orientation(first_start, first_end, second_end)
+    second_a = _segment_orientation(second_start, second_end, first_start)
+    second_b = _segment_orientation(second_start, second_end, first_end)
+    if (
+        (first_a > tolerance and first_b < -tolerance)
+        or (first_a < -tolerance and first_b > tolerance)
+    ) and (
+        (second_a > tolerance and second_b < -tolerance)
+        or (second_a < -tolerance and second_b > tolerance)
+    ):
+        return True
+    return any(
+        abs(value) <= tolerance and _point_on_segment(point, start, end, tolerance)
+        for value, point, start, end in (
+            (first_a, second_start, first_start, first_end),
+            (first_b, second_end, first_start, first_end),
+            (second_a, first_start, second_start, second_end),
+            (second_b, first_end, second_start, second_end),
+        )
+    )
+
+
+def _closed_profile_entity_ids(
+    entities: tuple[SketchEntity, ...],
+) -> tuple[tuple[str, ...], ...]:
+    candidates = tuple(entity for entity in entities if not entity.construction)
+    if not candidates:
+        return ()
+    closed = tuple(
+        entity
+        for entity in candidates
+        if isinstance(entity.geometry, (CircleGeometry, EllipseGeometry))
+    )
+    lines = tuple(
+        (index, entity)
+        for index, entity in enumerate(candidates)
+        if isinstance(entity.geometry, LineGeometry)
+    )
+    if len(closed) + len(lines) != len(candidates):
+        return ()
+    if closed:
+        if lines or any(
+            (
+                isinstance(entity.geometry, CircleGeometry)
+                and entity.geometry.radius <= 1e-9
+            )
+            or (
+                isinstance(entity.geometry, EllipseGeometry)
+                and min(
+                    entity.geometry.major_radius,
+                    entity.geometry.minor_radius,
+                )
+                <= 1e-9
+            )
+            for entity in closed
+        ):
+            return ()
+        return tuple((entity.id,) for entity in closed)
+    endpoints = tuple(
+        point
+        for _, entity in lines
+        for point in (entity.geometry.start, entity.geometry.end)
+    )
+    parents = list(range(len(endpoints)))
+
+    def root(index: int) -> int:
+        while parents[index] != index:
+            parents[index] = parents[parents[index]]
+            index = parents[index]
+        return index
+
+    def union(first: int, second: int) -> None:
+        first_root = root(first)
+        second_root = root(second)
+        if first_root != second_root:
+            parents[max(first_root, second_root)] = min(first_root, second_root)
+
+    for first in range(len(endpoints)):
+        for second in range(first + 1, len(endpoints)):
+            if _points_close(endpoints[first], endpoints[second]):
+                union(first, second)
+    clusters: dict[int, list[int]] = {}
+    for index in range(len(endpoints)):
+        clusters.setdefault(root(index), []).append(index)
+    if any(
+        not _points_close(endpoints[first], endpoints[second])
+        for members in clusters.values()
+        for position, first in enumerate(members)
+        for second in members[position + 1 :]
+    ):
+        return ()
+    roots = tuple(root(index) for index in range(len(endpoints)))
+    incident: dict[int, list[int]] = {}
+    for edge_index in range(len(lines)):
+        start = roots[edge_index * 2]
+        end = roots[edge_index * 2 + 1]
+        if start == end:
+            return ()
+        incident.setdefault(start, []).append(edge_index)
+        incident.setdefault(end, []).append(edge_index)
+    if any(len(values) != 2 for values in incident.values()):
+        return ()
+    remaining = set(range(len(lines)))
+    profiles: list[tuple[int, tuple[str, ...], tuple[Vector2, ...]]] = []
+    while remaining:
+        first_edge = min(remaining, key=lambda value: lines[value][0])
+        start_vertex = roots[first_edge * 2]
+        current_vertex = roots[first_edge * 2 + 1]
+        ordered = [first_edge]
+        vertices = [endpoints[first_edge * 2], endpoints[first_edge * 2 + 1]]
+        remaining.remove(first_edge)
+        while current_vertex != start_vertex:
+            next_edges = [
+                value for value in incident[current_vertex] if value in remaining
+            ]
+            if len(next_edges) != 1:
+                return ()
+            edge_index = next_edges[0]
+            edge_start = roots[edge_index * 2]
+            edge_end = roots[edge_index * 2 + 1]
+            if current_vertex == edge_start:
+                current_vertex = edge_end
+                vertices.append(endpoints[edge_index * 2 + 1])
+            elif current_vertex == edge_end:
+                current_vertex = edge_start
+                vertices.append(endpoints[edge_index * 2])
+            else:
+                return ()
+            ordered.append(edge_index)
+            remaining.remove(edge_index)
+        if len(ordered) < 3 or len(set(vertices[:-1])) != len(vertices) - 1:
+            return ()
+        area = abs(
+            sum(
+                first.x * second.y - second.x * first.y
+                for first, second in zip(vertices[:-1], vertices[1:], strict=True)
+            )
+        )
+        if area <= 1e-9:
+            return ()
+        segments = list(zip(vertices[:-1], vertices[1:], strict=True))
+        for first_index, first_segment in enumerate(segments):
+            for second_index in range(first_index + 1, len(segments)):
+                if second_index in {
+                    first_index + 1,
+                    (first_index - 1) % len(segments),
+                }:
+                    continue
+                if _segments_intersect_or_touch(
+                    *first_segment,
+                    *segments[second_index],
+                ):
+                    return ()
+        profiles.append(
+            (
+                min(lines[index][0] for index in ordered),
+                tuple(lines[index][1].id for index in ordered),
+                tuple(vertices[:-1]),
+            )
+        )
+    for first_index, (_, _, first_vertices) in enumerate(profiles):
+        first_segments = tuple(
+            zip(
+                first_vertices,
+                (*first_vertices[1:], first_vertices[0]),
+                strict=True,
+            )
+        )
+        for _, _, second_vertices in profiles[first_index + 1 :]:
+            second_segments = tuple(
+                zip(
+                    second_vertices,
+                    (*second_vertices[1:], second_vertices[0]),
+                    strict=True,
+                )
+            )
+            if any(
+                _segments_intersect_or_touch(*first_segment, *second_segment)
+                for first_segment in first_segments
+                for second_segment in second_segments
+            ):
+                return ()
+    return tuple(profile for _, profile, _ in sorted(profiles))
+
+
+_ORIGIN_PLANE_FRAMES = {
+    "XY_Plane": (
+        0,
+        Transform(),
+        Transform(),
+    ),
+    "XZ_Plane": (
+        1,
+        Transform(
+            x_axis=Vector3(1.0, 0.0, 0.0),
+            y_axis=Vector3(0.0, 0.0, 1.0),
+            z_axis=Vector3(0.0, -1.0, 0.0),
+        ),
+        Transform(
+            x_axis=Vector3(1.0, 0.0, 0.0),
+            y_axis=Vector3(0.0, 0.0, -1.0),
+            z_axis=Vector3(0.0, 1.0, 0.0),
+        ),
+    ),
+    "YZ_Plane": (
+        2,
+        Transform(
+            x_axis=Vector3(0.0, 1.0, 0.0),
+            y_axis=Vector3(0.0, 0.0, 1.0),
+            z_axis=Vector3(1.0, 0.0, 0.0),
+        ),
+        Transform(
+            x_axis=Vector3(0.0, 0.0, -1.0),
+            y_axis=Vector3(0.0, 1.0, 0.0),
+            z_axis=Vector3(1.0, 0.0, 0.0),
+        ),
+    ),
+}
+
+
+def _transform_close(
+    first: Transform,
+    second: Transform,
+    tolerance: float = 1e-9,
+) -> bool:
+    return all(
+        math.isclose(left, right, rel_tol=0.0, abs_tol=tolerance)
+        for first_vector, second_vector in (
+            (first.origin, second.origin),
+            (first.x_axis, second.x_axis),
+            (first.y_axis, second.y_axis),
+            (first.z_axis, second.z_axis),
+        )
+        for left, right in zip(
+            (first_vector.x, first_vector.y, first_vector.z),
+            (second_vector.x, second_vector.y, second_vector.z),
+            strict=True,
+        )
+    )
+
+
+def _origin_plane_frame(
+    obj: _NativeObject,
+    transform: Transform,
+) -> tuple[int, Transform] | None:
+    value = _ORIGIN_PLANE_FRAMES.get(obj.name)
+    if (
+        value is None
+        or obj.type_id != "App::Plane"
+        or _string(obj, "Role") != obj.name
+        or not _transform_close(transform, value[1])
+    ):
+        return None
+    return value[0], value[2]
+
+
+def _dot(first: Vector3, second: Vector3) -> float:
+    return first.x * second.x + first.y * second.y + first.z * second.z
+
+
+def _plane_reframe(
+    source: Transform,
+    target: Transform,
+) -> tuple[float, float, float, float, float, float]:
+    delta = Vector3(
+        source.origin.x - target.origin.x,
+        source.origin.y - target.origin.y,
+        source.origin.z - target.origin.z,
+    )
+    return (
+        _dot(source.x_axis, target.x_axis),
+        _dot(source.y_axis, target.x_axis),
+        _dot(delta, target.x_axis),
+        _dot(source.x_axis, target.y_axis),
+        _dot(source.y_axis, target.y_axis),
+        _dot(delta, target.y_axis),
+    )
+
+
+def _reframe_geometry(
+    geometry: Any,
+    reframe: tuple[float, float, float, float, float, float],
+) -> Any:
+    xx, xy, tx, yx, yy, ty = reframe
+
+    def point(value: Vector2) -> Vector2:
+        return Vector2(
+            xx * value.x + xy * value.y + tx,
+            yx * value.x + yy * value.y + ty,
+        )
+
+    def direction(value: Vector2) -> Vector2:
+        return Vector2(
+            xx * value.x + xy * value.y,
+            yx * value.x + yy * value.y,
+        )
+
+    determinant = xx * yy - xy * yx
+    rotation = math.atan2(yx, xx)
+
+    def circular_angles(start: float, end: float) -> tuple[float, float]:
+        if determinant < 0.0:
+            return rotation - end, rotation - start
+        return start + rotation, end + rotation
+
+    def conic_angles(start: float, end: float) -> tuple[float, float]:
+        return (-end, -start) if determinant < 0.0 else (start, end)
+
+    if isinstance(geometry, PointGeometry):
+        return replace(geometry, point=point(geometry.point))
+    if isinstance(geometry, LineGeometry):
+        return replace(
+            geometry,
+            start=point(geometry.start),
+            end=point(geometry.end),
+        )
+    if isinstance(geometry, CircleGeometry):
+        return replace(geometry, center=point(geometry.center))
+    if isinstance(geometry, ArcGeometry):
+        start, end = circular_angles(geometry.start_angle, geometry.end_angle)
+        return replace(
+            geometry,
+            center=point(geometry.center),
+            start_angle=start,
+            end_angle=end,
+        )
+    if isinstance(geometry, EllipseGeometry):
+        return replace(
+            geometry,
+            center=point(geometry.center),
+            major_axis=direction(geometry.major_axis),
+        )
+    if isinstance(geometry, (ArcEllipseGeometry, ArcHyperbolaGeometry)):
+        start, end = conic_angles(geometry.start_angle, geometry.end_angle)
+        return replace(
+            geometry,
+            center=point(geometry.center),
+            major_axis=direction(geometry.major_axis),
+            start_angle=start,
+            end_angle=end,
+        )
+    if isinstance(geometry, HyperbolaGeometry):
+        return replace(
+            geometry,
+            center=point(geometry.center),
+            major_axis=direction(geometry.major_axis),
+        )
+    if isinstance(geometry, ParabolaGeometry):
+        return replace(
+            geometry,
+            center=point(geometry.center),
+            axis=direction(geometry.axis),
+        )
+    if isinstance(geometry, ArcParabolaGeometry):
+        start, end = conic_angles(geometry.start_angle, geometry.end_angle)
+        return replace(
+            geometry,
+            center=point(geometry.center),
+            axis=direction(geometry.axis),
+            start_angle=start,
+            end_angle=end,
+        )
+    if isinstance(geometry, SplineGeometry):
+        return replace(
+            geometry,
+            control_points=tuple(point(value) for value in geometry.control_points),
+        )
+    return geometry
 
 
 def _support_target(obj: _NativeObject) -> str:
@@ -815,22 +1272,75 @@ def _parse_sketches(
 ) -> tuple[tuple[SupportPlane, ...], tuple[Sketch, ...]]:
     planes: list[SupportPlane] = []
     plane_ids: dict[str, str] = {}
+    source_plane_transforms: dict[str, Transform] = {}
+    plane_transforms: dict[str, Transform] = {}
     support_targets = {
         target
         for obj in objects
         if obj.type_id == SKETCH_TYPE_ID and (target := _support_target(obj))
     }
+    plane_objects = {
+        obj.name: obj
+        for obj in objects
+        if _is_support_plane_object(obj, support_targets)
+    }
+    origin_frames: dict[str, tuple[int, Transform]] = {}
+    for name, obj in plane_objects.items():
+        transform = _transform(_placement_element(obj, "Placement"))
+        source_plane_transforms[name] = transform
+        frame = _origin_plane_frame(obj, transform)
+        if frame is not None:
+            origin_frames[name] = frame
+    blocked_origin_frames: set[str] = set()
+    for obj in objects:
+        if obj.type_id != SKETCH_TYPE_ID:
+            continue
+        support_name = _support_target(obj)
+        frame = origin_frames.get(support_name)
+        source_transform = source_plane_transforms.get(support_name)
+        if (
+            frame is None
+            or source_transform is None
+            or _transform_close(source_transform, frame[1])
+        ):
+            continue
+        constraint_list = _child(obj, "Constraints", "ConstraintList")
+        if constraint_list is not None and constraint_list.findall("./Constrain"):
+            blocked_origin_frames.add(support_name)
+            continue
+        geometry_list = _child(obj, "Geometry", "GeometryList")
+        geometry_nodes = (
+            [] if geometry_list is None else geometry_list.findall("./Geometry")
+        )
+        if any(
+            isinstance(_geometry(node, "")[1], NativeGeometry)
+            for node in geometry_nodes
+        ):
+            blocked_origin_frames.add(support_name)
     for obj in objects:
         if not _is_support_plane_object(obj, support_targets):
             continue
         plane_id = f"freecad:plane:{obj.name}"
         plane_ids[obj.name] = plane_id
+        source_transform = source_plane_transforms[obj.name]
+        frame = origin_frames.get(obj.name)
+        principal = frame is not None and obj.name not in blocked_origin_frames
+        transform = frame[1] if principal else source_transform
+        plane_transforms[obj.name] = transform
+        attributes: dict[str, Any] = {"freecad": _native_object_data(obj)}
+        if principal and frame is not None:
+            attributes.update(
+                {
+                    "principal_index": frame[0],
+                    "principal_role": obj.name,
+                }
+            )
         planes.append(
             SupportPlane(
                 plane_id,
                 _string(obj, "Label", obj.name),
-                _transform(_placement_element(obj, "Placement")),
-                attributes={"freecad": _native_object_data(obj)},
+                transform,
+                attributes=attributes,
             )
         )
     sketches: list[Sketch] = []
@@ -866,6 +1376,15 @@ def _parse_sketches(
         constraint_nodes = (
             [] if constraint_list is None else constraint_list.findall("./Constrain")
         )
+        source_transform = source_plane_transforms.get(support_name)
+        target_transform = plane_transforms.get(support_name)
+        reframe = (
+            _plane_reframe(source_transform, target_transform)
+            if source_transform is not None
+            and target_transform is not None
+            and not _transform_close(source_transform, target_transform)
+            else None
+        )
         fixed_indices = {
             _constraint_element_slots(node)[0][0]
             for node in constraint_nodes
@@ -875,6 +1394,8 @@ def _parse_sketches(
         for index, node in enumerate(geometry_nodes):
             entity_id = f"{sketch_id}:entity:{index}"
             kind, geometry = _geometry(node, entity_id)
+            if reframe is not None:
+                geometry = _reframe_geometry(geometry, reframe)
             construction_node = node.find("./Construction")
             construction = (
                 construction_node is not None
@@ -979,14 +1500,16 @@ def _parse_sketches(
                     },
                 )
             )
+        entity_values = tuple(entities)
         sketches.append(
             Sketch(
                 sketch_id,
                 _string(obj, "Label", obj.name),
                 support_id,
-                tuple(entities),
+                entity_values,
                 constraints=tuple(constraints),
                 parameter_ids=tuple(sketch_parameter_ids),
+                closed_profile_entity_ids=_closed_profile_entity_ids(entity_values),
                 suppressed=not _bool(obj, "Visibility", True),
                 attributes={
                     "freecad": _native_object_data(obj),

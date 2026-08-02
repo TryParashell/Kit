@@ -103,6 +103,26 @@ def test_generated_container_uses_coherent_source_less_identity() -> None:
     assert blob[-22:-18] == bytes.fromhex("54ce179a")
 
 
+def test_generated_container_uses_native_header_stream_type_ids() -> None:
+    blob = build_sldprt(
+        {
+            "Header2": b"header",
+            "Preview": b"preview",
+            "Contents/SolidWorks": b"model",
+        }
+    )
+    archive = SldprtArchive.from_bytes(blob)
+    type_ids = {
+        record.name: struct.unpack_from("<I", blob, record.offset + 6)[0]
+        for record in archive.records
+    }
+    assert type_ids == {
+        "Header2": 0x1C74D22C,
+        "Preview": 0x1C74D22C,
+        "Contents/SolidWorks": 0x1C34D281,
+    }
+
+
 def test_generated_container_supports_variable_stream_sizes_and_counts() -> None:
     streams = {
         "Contents/SolidWorks": b"<swSolidWorks/>" + b"x" * 4096,

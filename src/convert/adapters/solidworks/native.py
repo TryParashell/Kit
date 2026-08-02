@@ -37,8 +37,11 @@ from .format import (
     DIMENSION_SCALAR_HEADERS,
     PART_SUFFIX,
     PLANE_FEATURE_TYPES,
+    RESOLVED_FEATURES_STREAM,
+    SERIALIZED_STRING_MARKER,
     dimension_scalar_value_offset,
 )
+from .parasolid import transform_solidworks_rectangle_partition_stream
 
 _CURRENT_MARKER = bytes.fromhex("ffff1f0003")
 _LEGACY_MARKER = bytes.fromhex("ffff070001")
@@ -49,6 +52,15 @@ _POINT_LOCUS = bytes.fromhex("04000200")
 _CIRCLE_LOCUS = bytes.fromhex("05000100")
 _NUMBER = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 _EDGE_SELECTION_IDENTITY = bytes.fromhex("7dc39425ad49b2547dc39425ad49b254")
+_REVOLUTION_FEATURE_TYPES = frozenset(
+    {"revolve", "revolution", "cut-revolve", "revcut"}
+)
+_SURFACE_EXTRUSION_FEATURE_TYPES = frozenset({"surface-extrude", "extrurefsurface"})
+_MOVE_BODY_FEATURE_TYPES = frozenset({"body-move/copy", "movecopybody"})
+_COMBINE_FEATURE_TYPES = frozenset({"combine", "combinebodies"})
+_HOLE_CLASS_NAMES = frozenset({"moSketchHole", "moHoleWzd_c"})
+_EQUATION = re.compile(r'^"([^"\r\n]+)"\s*=\s*(\S(?:.*\S)?)$')
+_EQUATION_REFERENCE = re.compile(r'"([^"\r\n]+)"')
 MARKER_LOCAL_ID_OFFSET_BY_LENGTH = MappingProxyType(
     {
         142: 138,
@@ -158,6 +170,8 @@ class NativePlane:
     native_offset: int | None
     native_length: int | None
     principal: bool = False
+    reference_ids: tuple[int, ...] = ()
+    native_stream: str = RESOLVED_FEATURES_STREAM
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +185,7 @@ class NativeSketch:
     profiles: tuple[NativeProfile, ...]
     dimensions: tuple[NativeDimension, ...]
     constraints: tuple[NativeConstraint, ...]
+    native_stream: str = RESOLVED_FEATURES_STREAM
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +214,16 @@ class NativeOperation:
     termination_code: int | None
     selection_offsets: tuple[int, ...]
     selected_local_ids: tuple[int, ...]
+    angle_degrees: float | None = None
+    diameter_mm: float | None = None
+    second_length_mm: float | None = None
+    axis_marker_offset: int | None = None
+    selection_kind: str = "edge"
+    mode: str | None = None
+    native_stream: str = RESOLVED_FEATURES_STREAM
+    selection_references: tuple[tuple[int, int], ...] = ()
+    translation_mm: tuple[float, float, float] | None = None
+    scale_factors: tuple[float, float, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +237,8 @@ class NativeFeature:
     properties: dict[str, str]
     dimensions: tuple[NativeDimension, ...]
     data: bytes = b""
+    class_name: str = ""
+    native_stream: str = RESOLVED_FEATURES_STREAM
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +247,18 @@ class NativeConfiguration:
     name: str
     configuration_id: int
     properties: dict[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class NativeEquation:
+    source: str
+    lhs: str
+    rhs: str
+    references: tuple[str, ...]
+    native_offset: int
+    native_length: int
+    configuration_id: int
+    native_stream: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,6 +272,8 @@ class NativeModel:
     classes: tuple[NativeClass, ...]
     scalars: tuple[NativeScalar, ...]
     diagnostics: tuple[str, ...] = field(default_factory=tuple)
+    equations: tuple[NativeEquation, ...] = field(default_factory=tuple)
+    active_configuration_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,8 +283,12 @@ class NativePartStreams:
     resolved_features: bytes
     configuration_lanes: tuple[tuple[int, bytes], ...]
     native_capabilities: frozenset[Capability]
+    mixed_capabilities: frozenset[Capability]
     object_ids: Mapping[str, int]
     envelope_streams: Mapping[str, bytes]
+    partition: bytes | None
+    application_usable: bool
+    vendor_loadable: bool
 
 
 @dataclass(slots=True)
@@ -456,6 +501,121 @@ _BASE_RECTANGLE_BOSS_FEATURES = (
     b"z1lun30q%pLCiwjXVGjVW8w2q)ZQ4k&pxYFYG)D*yB+B^t*3vNbN=bk=`(H*n5hse|Fh$}YvGY?yTmkc-q-j!Gdps{{kTHV*"
     b")g^JWLKR9N;CVX);JFB)r*mS?dPzAJ%_^^@0z2_%r+fUIIIsh<<jIj_006(BQwia_{G700hAaL#s"
 )
+_BASE_RECTANGLE_BOSS_CONFIGURATION_MANAGER = (
+    b"c-qBPONbLe5UtKfMO^W-9=t3;5JAv`cyYnZYSz`oWD^bOB^V|%ojB`cCd^DgSC9eEdhj5);2->ec=3aH$xXqVBJ4$FJ$X{2A"
+    b"YL?M^?Z_<&{-o2*3i?{Ro&H9udBKphrlS*^^C4nm0HsfEk)OIHKQy+KobrUW1NlyQKEfgC`|SEogc=6MQnZC@d?0gMOP)e9M"
+    b"j*}^p<qSz8#9ey)#K5u9UzAbh02CR>aY=#8j(LHKWUPMyykmbe!dr=vfs+Xo3n>HxBn7>&4;tu^&;)rl=MSy+I92p=Mcn@$y"
+    b"s8C7g{dSwu?|Kh>AFg=oL%_pb%u5DE1`W0nIx(c5jc9Pz$^e-TXN6p$e9xn}omVskdN1!j2u(#EtuZuJ_3!^>r097<3C19Yh"
+    b"2UxYfOU<x->(G?SQMaV-IreP9}B6k=Lq9g?woNu6me0>RIv}9o``Bocn+zo<Rth+jjas@fnl}Tt%b!~3PxjS$UOBaklV9_wR"
+    b"^mS*)S#!^mEQJ7X{BW<=dnk0%z&l`0djDGr+Yfls&-<kY|EbUz3`jPauo=GvWp}Wh;<$8r^#1<$bCz)a<D+ZepDm`JKYem;S"
+    b"-UFyy!+)<u3`)8FMPGH9=n*{`eT0E_4tFdH-4NR1P|fJ7H&3nuUz;n@Sq&-xZ1+s>OH^g%U3psy=3?kuJ0sLY=dLt#m=xN93"
+    b"B0`R14MwH(XZHPEdJ|rPrrrc2kxm>ds0HWi7_FKPXjygJ+9V7=F~0BM<MA@NdgR_fZ(Z*!G>Y@|9UCS>9u?mOW-g%TTo10a2"
+    b"4x??r$Sme0uoUNr_@JG)p+Z|3ybrE7oSQ^Kulw)+Y&oB2vsF)a@y1~4nLTkmd5ykuBo4+DI^cVSR|0mW!@R{"
+)
+_BASE_RECTANGLE_BOSS_CONFIGURATION = (
+    b"c-rk83ve67byu<-$4N+<gf>t}1#S3v8YUkGnh!oXc1%)i$H;a<GY;k~Uu0oP=blbU1RYRHm@+g#DYP9j6liFfX@}_~r2*Pzk"
+    b"bz7?DP%~Y1MNUb)0PBMz`zV)D4@RmolbYBk7LPJh*opjz5Tp>zukTB_HI)tjA~I>?T|IS*MII5L_<dlLMbSj3MK7oztS#;m0"
+    b"o}9vs85ll97gVv;^_sC4Zi+Q2(<O%^>Y&L%X%XXiN@uXzGxn=|Lsh>wos(JE9e>P2hC`ECqfco<AaG#)o+Pl7t)rHpSv1kVU"
+    b"#G-P>vX(91@^J_dd1XbApg6opg}`H`EUmaue^aOgB45x_g{IirE!C({=)lh@XSmZBci0qjyy0RCkZMjq4x9fkmvD3o=gHK-M"
+    b">M$Kp)q<rWK$nl^isILKn&gDI*A0X*)^>C;|Xn+zyAckp~0{KBmg=n51;Dsp6i=gfzsFO;i2n7<MhOkSWdDBvIQF-EA9B{h-"
+    b"?Ftq%E*NUS1Z=29se&24NMmc75NvJ(Dta2IXm=#2N4w;{5GeNynmY?}Ta`#aALx!M8ZGbjyEvE~_mJ>AsfyoUFu%F$f9Jd@)"
+    b"mpTWh1Fh>s!O;sN=77Xf#7n4AcC8tJQI*>j08f818&#P{`KYmyl$IRXMv1!LPiGB?Xhql04)|^0(J&~ZB`=DpdK#@OgG7M8{"
+    b"p>v_?D0=>m@+_O8~obNDD>+O=={n%Mrb(Tp_?Z<I$qPtTME@Mb-RDQDC|#%;|&)x~4><MJ4`nP2N;2l@M!9YcQh7TAQk?T2b"
+    b"NpR9)8M#f3{m)uC=K>If#HS{YHaK)i@RrvcEeU|1<4$S)E#)s%0?l!!lG)DimyKCGJ5@Q@l&B02+_In4$9O)+hgtj9EEP2aV"
+    b"OA1W~$<_<5L+a*3{&+sm$;RC}O89Dr;bvw^}4HH186UJzAB<fQ(c7)`J(k$z8uU{b7x$QWr{%QdAT8tDUFe-J4#dk}B>dg4="
+    b"B)>Ndi{|w&HpDmmM9R4y0xe6oFF1UAd}RY;z^@?u0RqY*m$8M-27Bv(y;lv$x_^LLigOxKJD4l0(PFd^jG7A|MGT<`q*qY$#"
+    b"E%9MvHnP&f-bbc9g)m7UWy0N7qLs*WL?pMatM0kqm?f<V9J8I3WZ#{lq*K-w7CGB;(8ua+rY>TF)`++d0?GLDF%Mbif+`^Fo"
+    b"A%x_iD7Gb~C@MHZ5s)_8?1>xQ5&0GtOt~$@mTPlM-qRa5~L>q>Y}m=~Kn)Fs<r`G3Bj7L`6RN<$Hf=>$?UrFhktMZ4T1ny@7"
+    b"w-vgf0JH$2wc@U4YCZ#S^}eGTS1_iybDu0M31G&1eO?`ZA?61%UVqm}{pO3gp@?QD5{tK?*{+eWq15GN$Fz(6uf)NF0$Qf{2"
+    b"(s$*?&nEboKh{b*$5Arz1<2^i%uoy?_-70h)jfrc7(dQ>r6RM^(Q(whThwKn_m&kyHl4+|T9RT0MLw%ee^)P}^BTh=Ew!-~p"
+    b"=dxPj;e@FRrciH%<oO^DL!Aifr~V6Z*_t2~ff_Nmj{~gBp`FgXo%oyQEv$VwWSb0`c63PAX~a6c`~WlM{moW=ckmY-(v!Xo!"
+    b"+)MSC_PlyGB4)3P7-iLoH=Q4<MpnUzW>xkx6b|ODx)2Pzhv0F`pnKV^$M6D-*D|-{jM$2P;~w`d{4e0?eb*04Y@SA$~KTjI8"
+    b"L`px$?64XxI{q0q-&#5>a!Q=Z@Y*N{70Hd(1A<m<^P1&^YL$t_ghkcGLw6Vms=FbT=%6;z>fja%{8I)06weOaDZ@jZ;r{D{y"
+    b"7Ro_bQRNc>cjxNE{zXIzo|gs;w(@qVgFUC_ZKy58WqtB4xlu8jLKANSZ~)n*Hox#3it8^%lW=BwhXja_c1S4MBecSD)a_{3("
+    b"kef38stDngzo^{iPNtV4mLf@V!IajRX7@Jlsp`YabD?1OKz3;#_NyMf%EAUk)7Y1ft;j*F|@n`<XM4uHFE_({F!#+v*Vl4FQ"
+    b"qB7^I%eMJAB9%AB`T9EI>*@Y*gPeQAxPU#9^5p=sjOFsh*1Q&!7PHYvH_ba;D&N&=5?qtvn!-n^khatFmMR;z<IU5F$G~YHo"
+    b"viBRftmTu(DLDxc&k9zuhu8HRy)=;MmzT8(x~!~)5K$8eyZa_=p@l!>rTYPV=P_^GTYqPVYE5T@TPZyoMw^n@hit=-5XD-RQ"
+    b"f2qk2xs27wz<v=<~0wu8OvnZ6CrPVsE-#V?2{|dUAzNc>cxXXb+9oDpk?w^6Uen@zVh`A=XG`G*tQ+t(I1_wW6&jm$sUp1m("
+    b"J%0wx~~bON#gKu`fhyU}XVQF3gK7u#@6JI5vK3TN8}&IrPzw{itLH+MN~)`~5!+uq*u!0|usY7jAiz%-PUpN{*-WyIjjt-$m"
+    b"aXSS_t^FxbKXmLIb&-<l3&M`Jh#=(;gaAjf{?Zi^y*l0N>UX@6*rLdzePNa?b)eK|Kx5Hq?rJD%KZqCkDUS^15jI(KiRrY0s"
+    b"d9I=V_}rV1UHSNZl86NaoVih)%B9$4MC$yevyL6Uq)rkKbJ_iwQaW94ON;G`bb5g;-wKP@OPXKJ%-ja?j<Rfl<OEaT$>XH;b"
+    b"<jfk$OWHV;-x>q>0Eu}dlA|y9KkaS4w4hDC<hHV4~@kt$78sxuy4ADeI?Ih8{f^_WafKT|4!cSP8*zTyv{eZR-^Q%_kB++U!"
+    b"u;uY01Tj#~^kuy*P0xJv0jLA$BjL4Q_eFn|`%4+qeGW1cH0_d3I?7TWv9GRqM@+Efa=?f_$#4m`kRX&^<0jA65xLpEVuytTO"
+    b"VU{MW@~jJNQA@q)1F^t0+tz(=8<)+0NYdgdYLPx|KpbPxQup+?k&Rw5tFz>TQY$Zv(bcA&Qltupc&X$~n_=#aO_lox@SJw#{"
+    b"rX6R3Yl;75~xt5ReRW{WD+_#@7?kk{Hj2<lzq<wg3&K8JUsXPNzhWTr+gPi`1x@lf}pm&Ah9D;Ng*NH)Tx=9p%`Jp#bzR0GU"
+    b"3auBl<q-bJ6he%a0&mV3J#U;xzc~75Wn@!}8tNy<s8l7OgPE=TyaydR@j&+sktTYsokCBdiwYRt8neO6pFWBMpc=z{K_#NM1"
+    b"_J{+hdrqgVDtfeHn?~go@#@V85C;<IU_}ci;v7TEN-~m=`&;!N&769o?+V8y^3G|`O&|+(8D)W8$4p?0lg^Mxs|fbb<pSJOo"
+    b"Haa_;4EWX$dUw3f_}b-kO7&;@5*}#LT3r_K`z$&44^St$f%ezDy8o6LA)HO>-u#P_}KP;ViF+tu3xd<YM3=gMp`&4+BvaMwW"
+    b"(w4EmH|#=tp(k;8>CaIwL_>E+76KaGn9o;%DL>3#k=5<YP>ydE?YPlzrC6Uf<Q^B;Q1pJoEin9*xdG`6O%H5k>?r&X;DDx2w"
+    b"9U3K-aW|Jd&!p7>Q<}=ktq=IUsZMKnQfldJGBDz*nk6QSNVS0&h!G+>dT@Nd-OjmPkCC0NMaNvNJTF!41R*ZQ0UQ2nhBow(u"
+    b"K~XC`4_8O{Gpb<k=E2aw$VQ>1eQ_yrk3wI3hJk{eakAoIyHAb_O;v@`R8>z$;*g<r78#^NCcZXVB}+<Ab)oc3s;9QDPEY*{+"
+    b"o(c$sIqBfNvWzSlq#4#SA*%RQZrcRXB*<Dmfg7Vz6air(DB=kxIKSQqV6YNJsLmEaY-y+{AACfGtYTT@~(={{u<=J!s;iFe#"
+    b"q*-+hwj_WZEW;g0?P7Q3h?RtL|EMe%pVgYYtuAyk_5l<nC`y-?L!H-#9Kq%Xc2zH21CWG3mf-pL!Nve@Ob^yBDrq`;XU>kKX"
+    b"u#H2r*tH%vO-zT#+UXsa!hw#oI>7tNsTX)d*AUs<;90qL3K8&98i@2k)KM^Lu+$gVB>zxUER(xFQeiazh4^fH&)ZeIUjM*Sj"
+    b"FHo1_+lUTDM#H<J6ZM7(}-lT?9txN6`hg;TJ+&$uQbPg)Ie_%yO^$!|HN-|$A+aZ=EHR^~x<GbwRE7SJO^V{ElMScFu-n*|{"
+    b"s_B=^+(T;i8Et$CY&s)5qUthnp9~8p>r7gxWno<v6D5)GGiWRUXFMenoF*{$^V0o!VTjX&JKAJz(5LuSt-sgrb}*J^TViwYB"
+    b"`muL{D9u3t^rMv`+dsBOcit9@DgdFUvWbl@347y;$+6#=}QfV8utJG@!M)fHcFrJFCu3B@cqR7SO2)7{*xW^f98Iqf!#maP~"
+    b"d(N4KF`9bXncY?@EPi<D8gA<S)lIL6PH>J2ZXemZ1>Q^foyn2QrVnoiz~-nMgZ3WN9ebj>R-1^?$Qw0&4"
+)
+_BASE_RECTANGLE_BOSS_LIGHTWEIGHT_DATA = (
+    b"c-mXRfC;Ka*112dDzS&qQ=oJU8a-t{l)oRQ&n4=zU1iyHdoahL-{Jp%Mg}g1^yG+)#FFHU_~ifp{!2JA_%Q@Ccrq9>7&0g@X"
+    b"aHG74EYRsK(-T*mC2CIkPVbC0gI(FXrj67gFTGJ2*m%P0K{iz0NEzYkelxl9*~omm+F_FlIoIJk_fhzCl_d75YWIhh5&{fhD"
+    b"5O8@j%Ofa@=lECzJpkfskcFvWPT*a3ng|<;laO-9F78LbutYiSLJs!vl0x!rn8F^=H}>GM89+MiSls2N<}hZic%N=7;^j5EK"
+    b"Q4t_wJH6B$Z@Ay|SG)_FjgM4(6_IJ}t~2*d_w2vDv7B_^0jjtSf$Q3XxfFkivMrS$Krur;>AeF+o)vGU_3-z10qyOg+8R$5F"
+    b"aGA3}j<HLSr9>`qEW1<YoFQax$a0daiV>&|yTE1W*IyMN05-c`Q^Ff<EEH==@_rqcXk}o=8@(nobZ6GEVD2ok5=u?(25MhcO"
+    b"t^j)w3Wo"
+)
+_BASE_RECTANGLE_BOSS_MODEL_HEADER = (
+    b"c-pO1%Wm3G5FO`*A+ILtBW1<1n=WWpm8wJ(NLWCLN><q*V>{FdwyABRkZxG?6C(8&y6P|FBf9OTQq_JzyXd0sxevf01Y1h31"
+    b"=ln8o-=c2JafZPp$yq>#ncSbYw8LSg(1;8`MqYb5qOr<E_j~SS19}!F1TcnMGnmmxQwj|sn}X?RV_crO4)X+Zrf*MOin{?1e"
+    b")D#>cq#NqpSsRsz@H0q)~u>gRellcmRzDU7l1J$qZ&;6oFYTz$J%VXxWN|H-~)S=VI`gff8L+Ya|YMj2~N{ll*%?G0uQ;bU+"
+    b">89jxD-e_rsX525egGxvh@{Vn7+y}Nhc7X|-P9VljjeHQT<TN0?v>c}e}eled6%tgG}*ymyP6R@QO+iD4t&lw%Cyym_boF|?"
+    b"`6&z|2=d-zWhkF%|Obg^n1IP|+8r-&sl9`AhBN)~i)Pw#QdL8;nmb+$ZSy<VsNd(K629I;}N>)t{cDh*6BdDDO{;vq;Q~_~o"
+    b"aU6?XJZ@D+t^|z7?GCG!`IV&d*Jd)jNWic@lVLjn!vk5pWqObNUGF?&?6(W|<R*4QcDpw`{$?V~rmUSYCQnWNl==65h@EYzi"
+    b"D!Exb64a2_7o@RCi3F3#5H)fefZ)f!ab4E+JokdqpZXy-;y>f!1&NHbUy*^>8QR;<TRS&95G!mQC~l%vJC6%r&zsFU)fPaPC"
+    b"2KJzLvkn`)ele?^}3tvb(Wv;Ny9YJf8#WAy=%s<@tB{jB|YE_qKw{vfc7|P;Z@>deGFFY6B{HlUFpy=$KIB>fRqjZ`+sbu9H"
+    b"Ee;g8h6&<H0PJq8ZJnk{QpJ%lu%$<dFzGd`L+81K?xEGtv?e0ca}|NBL-E9Of%f1H>vucUl6#FdV|?)1+-?S_$|Q1YSNqWcg"
+    b"0KVNY"
+)
+_BASE_RECTANGLE_BOSS_DEFINITION = (
+    b"c-qZZPiP!f82@IH%_h6~YsHgDZmAcoLQk#i|I(z{rerq}51MReC+V8md0}=pT0I!_B2rKgr3hXW#H$BA=wYSkMIq!Mf`>|>6"
+    b"iO=^XrZ*A+u!@%teO2kqX@obX7|l}zwi5ff8O`ro+F|WT+iat-0RqLpT70|+}=$6CyIxTeDl0~JU{&YiMi}=vGr>&rI)_jtA"
+    b"DXD_2sdTeu)u}?USF}-g)9y`F3pY>YuaEynZcq=glWqSAV@)|LTqX*wh@pUku+no4o1D_ZkOy@7x&q`0*>B$HKc;W)FUNCsz"
+    b"FN=Y`8>KCHiY@3Q&({m0@o1d{rLOP|HY9;Nk0Lj(V^NaogzFf_>d1m=q++ssujTIQP3_^S~~(Gs1dJk8_2g5N8YBRmh~NRUM"
+    b"(Dzf8p9EE{hyc#(T;WR!OK;%441**^mG9j$H!uzg2-_{i<e2z|2f-Nmkmei9A0NPZAr80+Fj=L^!zuu~-%bXR5QmlAhaluR~"
+    b"EkW(@V1>$^6g!f~eVNqUWL73Qe=8Y{4^Wch5avm;QS&NTRLKAzy)Bo`m_!e$uK_B<nxZojKAi_lI`K5AUj}W_ECq2+llh*aT"
+    b"1n>nl(4JWO=rzG>XO@ncZ!@88<%3IQo`OSZT7ATId)-3zE4n%UIi12YovfkU8ISQ;_xCA_cCp8T+=|66=IOBu|@XSWGex1<D"
+    b"Iw+I9GjIO#o%kBG*CytMFg0nIhx*Mr1ODy01X5$)#d&rXA*6RLE!=+Ozn)z}2w~4GHM+`Y1ixMh*m9v|NuX3g5QoJh*TQRxH"
+    b"NV{6=In$vzdqK+r1#y-Pr16IvV~B&!0ir~r`+uR^wh>pXaxeK49Q`e}}4fh*IWl^hTTXFxQ4YKxohsba-n#-ZXOD*o(5l5TF"
+    b"dXt6a*JtNpXb^&U5qT8AafX91>YqY|8RKM`IdSvcQREb<g4%f?o$j)TIZJX`L$iBv#$r4v*v#NVrR(f=)C#ves`X})^l7P*Z"
+    b"!B*NUu^!oT1v3-O!EWm6y|%{kysP={1LK{YCIIKrc7J`LqG|5hs`mu!$I}^D+~IB`5SPI5ne1*mfX~r?(N!X?oiBjZnSLED$"
+    b"f{EH(WSffsi|e&6-vxKNS?iCnYP`b<=o?~M{f^JB2ErhvEy^s?PMAtHd8rNlF4g-n|r0-J;1vIH}|O(=opO9_yjbK6VOV<bh"
+    b"4soS{ZwXPeH@N&9sKk*Ls8wLJ`LO-_HE5cpaSSj}Xyy%yfSKwtk%=@UYRK!L|lU9BNUv{%f7<Jzx!Y9G}(H|C&kpKSz}3?G3"
+    b"@lTuu^Q`ap>f>BMHDR1*uL=GX;`^ZQ7eS3?P_+D4~e;GW>{%C_h!<X({Bv8s9QEssbG9a3W#y!Za2h%3~ovFlv(%(bphn?vu"
+    b"gGt@2>e>eUR*X*E3"
+)
+_BASE_RECTANGLE_BOSS_DISPLAY_LISTS = (
+    b"c-rk)O>7%g5FW?*X>2EHOA#O;6d|D&)J92KgeYw{j-Ajz(nR?~NP*O~H_lRfH`=vR3I{B>a6syTQzL-{2QKu21eMCg5ki6@s"
+    b"6cSxP!y>bL=i+FgoL1GX7;VKc6PnHNeUcz*4ww<eKYgTyqS6PHUt16@M`O2mr-&aVU@1~7X~Vo5bTDcGGoa4n3j=qL+bK;x^"
+    b"k=1tU(48P*HjaK5UA>dP{_fLL<$uKem7DN9pw1v&r#~ua)0>qU(d+m2U;>rDJd3T)yvz{7vcF^}o9NUR;xYefh!J+3&8GFTe"
+    b"Dq)U_YSXWD*0HTb>cp%T8obl0I@it}$tt~0__+pL!nGyL2Fa0CA}@$*-kZa@So*uYzs=Zp<5rmWk|^E7r^oi1FRQAL%9HMKC"
+    b"7)#uX(0H?N2!C8=@0BKm{X)&5MoY2$-CCdvKNx(Rqf@v7R>kQt{z!Wnsp>xptI27S|T;d%56i9&%=b@!UyiX!c5`RNTX{Sh_"
+    b"tQ6#70VV7BUcq~&@RHR&%C01{lmK+G&2&SEx!_Z39I4VUiu7s_si?n#&Yxkrh8F2efCdKgrIk=n)-+m3XS^AcGMYs0WB7X--"
+    b"<^a><Pb+bb{$EhC0qlICFX?2hDqNxfmCruJC0mzbZrTgl4H7}UyJM-WSugIK!bCh+Qo537P;sm6{Jv(9K@1svpCnleg<*M4Q"
+    b"N6(>nGWoDfUc%Ql^k1%`2c;I@Q^&$>zl-ezJohC=7pcB7<UW&%$W!D!E$F*>(YZxWg&t0?^}ooqg0`K4!k~7d^CgGI|L`k<R"
+    b"|&Vc9)Hh;51GkY!&$>I}{y@3g$yU9!oiiTFfKzsqgKUU$S%=5vUa<SERj8z@Q%nZ_7Yi<f(BwNIlCD)`O=vCWw#0Onow`ud`"
+    b"ZCOK=HxhG&g-aUj8mpR*LXqUkD>2#JIK<DT-vPz^j^97K)r%^@=5>=*uIApg5J~hd^g2LE?taC!F3E8=BcW6zpCr;yavc@0n"
+    b"Idl;1q_Y?6K6l;CNCViWYYII{=Gb52T<LcYu<yXuJ~e|pyeWc~V(Sv^Hxvgm>;nel%d%xNm@h`y+If8Xi73CVG81X;RE6gs2"
+    b"QTU!DG_f~dQ5&)Bbferj`LChGwpHcg&ydKN8nL7g7>{}5b9?yVkdly_|KZ(2M;3!&8POqYwt+y`?%u#PnGvn5|ib_wiU2eqZ"
+    b"!PjOJ0lT&nU857*(>1h57VhZeMR=YMlb?e9Rg#kDjTB7(0ZPp(w6>>I81%P}Vy@*O(~R_adUCqRZ)mqNxJY%0+5dBnz80x?t"
+    b"*{nA2-&8j3`LE#~~T&lk!L><irP9k9lFs@{@ySC4xq@%H<|+lk$j9$hu@-fiJtb;Eo0w%|SN3vXA|zW1*R+yh^HPVLX~h9`z"
+    b"#A9~5GViZ%k30+%~^@1WB^XbpN`f0;o(f6^pOmPg;PVIb@UlZduj$u?EHNpb6D5^^9q#a@bbuFT-g2*3+IM;+tXr($KB?qA;"
+    b"Hp<Gydrm+#L0cW{>WwAfD9phG7nfPQQd;eXVcxW8i<`p~KaNEem0VBZ-6TATPt0;oM}W@n=P)&<c=MYRT&W}_C5U5QBt>0pZ"
+    b"}cpU{Bq2*2j}+V9C94gKq76(T-x4Oj#B53CZR?aaQgrLpgEdWu+I5nfx*YOgl#oDf9pO}f4}J)iS_hI>7RGX@W1Gk2all(oo"
+    b"5lWi%#Q}DxV@}gcJX})RtYU^v0VH*!JRzjlL~ev&i0UYo9xtg=<kwJ<Lgm_V#W}Ksm1FWj=#~uMe(nrQEu-y^_zqqxj?V_|<"
+    b"of*r%5zF_s^iyYSI(2QEosEQf7DWu9#5#Anw!99ZjmExZd^7rOG+tQ=VD=w!75wrk$(TXR<pOD^+DJEQT|H5akfI?j11%jd?"
+    b"HMk2xv8TxO|#{Sd"
+)
 _BASE_BODY_COUNTERS = {
     0: 0x6B,
     4: 0x12,
@@ -472,6 +632,120 @@ _BASE_BODY_COUNTERS = {
 }
 _RECTANGLE_BOSS_POINT_OFFSETS = (6119, 6297, 6459, 6621)
 _RECTANGLE_BOSS_DEPTH_OFFSET = 10092
+_BASE_RECTANGLE_BOSS_PARTITION = (
+    b"c-jHZ4l(g03;+Nl9o2E#fk>jLSeUXKiSL<88UO$U3;+Ol0hO5hb5unZ$IqP!C{Hth;wuml9~h7%AOb33oJ`<Ck_nj!A%I>cn"
+    b"IXhX5=<sQ05J%PsK|<n;&XL<;`{a6R#CNo!2SnXwfn<byH&g85Bq!ebNcqZnFJzi-{kh=obx@8?mpdjTGAp?x4tsd8gEWFxt"
+    b"Yoaw=r3H@BZvyv8UKG(7&v*YcQWJ=5v*uBb9vvxqP9JAFMo(9~^>MxoS;yO>OO3AQq+*n?2jry1K@zSyf%VMt+4TlAoXOi(A"
+    b"&0AKDlFk2vo2`v(dmg`WO=^f!9f6|%)*Pgh=k5hsywXVJ^$_j-k%p`vWjp?G;ue=dK>>&x!<2KMe9$``?PoLqcHI4-T?#1{;"
+    b"8?aTLNy?kG1K9}q1?^X#zDOc52*2`s!S^29tJ0&6xPt?4%WgbV$Xo%ck|50V0*-P<blCg=YoU%UGyVC{^_U8x7%GHmATi!V^"
+    b"+@H%1j(8J%PPlVILKvi2I8+)fP_8u`v3@4a>&bc78l`Dn`+5pFnN29?76uOHhl-wsu<@QEj8VvM$uya6BV_}*@$5zj;%rEcy"
+    b"!`j-m)84KM<R|R*U`CNX2?u4I18O~ls5$M+b!3bIM%zf3;FJB!85TOf;P`7Bz96qn5(%uQ+M90647bAm^+=mk}|`Q7P=0s<q"
+    b"{KF+@nOF*}<3zB_gRY25y!c9!=GEcy6=T=x*AaX;13gYe}{?S+H`MC-VW@r{YtCL0l-YbbaH>Oh-EIncdddmPj@yI=or~6#;"
+    b"00+z3?tIMiiMM52;{9FzGWRwC7yYHJNq7RXJg3PLd*<|~FmQOf1U5T!oZoOUxE)|8v@{FV@8%6KXW+DwSzZJAV4JmaRCy;`r"
+    b"9{ci(wv)n4TDHJg_<qGyV#;J0-#UQmN6K+eg6ysL8T`DGHsADCw=3~s1+YAPlBsN=TZkI)}_;P13W<0zzXBrdcN=3Ro*<Wny"
+    b"@7kB`@6P8e#3HGbJ1&R7{qe&3(s(SC#p!mpsio0PxEZyjIo_1?+<LFgVpYl#x%1kv7Reor@pQ)XT}suv4IOUtCa)nG&$P8Fs"
+    b"D)f2OXaR>gPbjQ#+fKJD4e7+#P61SLIAsH#-n4LoH2udsfY9Bu4Hq@%eeTJ&cvHq#*w1nIKnQRxDzKKY2+1Xw%pSYPnh5sTX"
+    b"bxm+*_Y&Z%$`glkq0cl4YB2#t6wpQ%o7TdYPGgT>$q<!>oimL(d7XII=$vi{lKtGy4aMgW3L}z8?RWD3C+y`EzIQ<w(d6`sv"
+    b"Ux=fbhh!a!GV^uJ{3oun~JS#T~0Swq;L>PZ#PoH3G@NEcl_IF|G8$O`^z$H-_RkDI~!b-3!%Ylr`~>FWhYE}iu2x}g3I#%m~"
+    b"-0=`9K<VulFP-n}^-^CuaxIrCaRE&{rMYbYcEj8i<#sx-MIc9l=$+`)5+TOuzUtaz}RO0?Qrf0)WnFZ?|z(jq&#o11$d<>%K"
+    b"Y5SKypF4Y@pY|$-S7W$FC@S;DOpaef=K=oL$b%tcRAOUhaILJ9^{_o855w|E6^mjGK)2D+;SEw(B2ys`LaT%}N9ttbWPd`xD"
+    b"xeBkM0LjH!8$uB0X?YU*a%-Ue2;>h2=Ff1NrUE>dC*0Y@YS35#tAkhpfy2Df>smgx&lTLzIyl?WD|Ia2^cld8li2Hgv<;uLO"
+    b"UUvG7q}I;mBrYG$}PD7%|2iak)Qjg{#q6)U4sGM&waQDH6ygnK?lu#rQUPgb-9Sk7;@t716WvMmlZ8zgo6W5NTt)or&H7SBL"
+    b"DRw{8U@8xXmfP6r`xk$8zng=~km5LyfW@yS6BovdK0gagC@YrE71K?njF^2N~M$Xb@iIyl>m2|KFfhB3z2#n9HtF5WRXl<xs"
+    b"!({6c;-j*tc*O}oC2rcYgkKUdt&PTmnuyRAoJCN`s3t88442RY6Hl}X_Azn>y_X;i|?TEG0X)t>=My+f+h)|N*)}*mjmFgyR"
+    b"nWEhc?=aGhs&qBd+e(yfWlQD!{ce=*Hey?u)eX3#E;y>xMNB7Rv*dZl^wP}OZu)DO%N)IjR)GE(Y;#J`*R#oX%3jFoQaL@nU"
+    b"W~i^fOI3X&(ascsh47hv8;|(O*tp<X{igcm){i*<1EctK<tzrRs8=a$VF(@bI8Hkz4Al}M6e=)I>>vYR(num#S;u^jCuhplt"
+    b"2WF%SuQfG8u|k^}@5EBvyT9Zn1|aii!esmv$G*`hQ2oWibkLmm?~=X2TWOz$Wfhd#wu1u)4{c7#l#v<mm{Ig8DL5<%kMPWL("
+    b"8&Hhq`cYgG(D-$Xmj*!~hPf*1$TlLIsw5Xuo1sVz~FViz^3y;jA3=(_2;8GG^yDgspjWKahxnTu{9NL^u|GA#Lr)n2RON$7i"
+    b"M=NMaA5~u(=r~~MrE>V#Kf_xRKXlAQ+tG!mmO6XbIs~IC}Ts9Y1RS`4i&Nlpbh=^}7o3@oSMmi9aiBmENehjka=w`C?8d8>?"
+    b"lB9r`9=kF`o-ZPuG6E(u=(kc0q@oP-j+sMch(y#%-r3ANSm~mXZiP@SeJnCNtjE(3vW=V=4Q7F_QeAxvA0VO`hKoM8T6zFon"
+    b"v46)ohW8Pet?wPN90!N#lg2UW2E~aRO3W9y`pABy*3>Hat|qLommmauSXc(hSMpAGlu(dO=TXsrj^XcIx<R{oPrLs{qzG*KQ"
+    b"VP>WlL7orQiZ)>rwc$1XDd~dc0!h^3smmZFsrInBP|=bH{K_P<Aj}3VJ6yfU@gX&~QxJuQjvg$U#`2=L}mehYW2*4s)68WOR"
+    b"p&gaCQy?Eu{G18BDvZ);&&V#E|ypIK0JIXE)H`!v9va)jPNIVw*9tQX+zax?@Ugzf@-%m>zPEzkY1>Cw?C$GEUgor7UBrEYQ"
+    b">x8tL>4(YW33dfFvB~PPf>TM8&+agR^l|VlYlb+*)WaVQeRtGyPr~|C2RE%1NkUkekVQn1`<F*U?w-L9e{kUmY<ED~&oDa)0"
+    b"xaU+^ps-T<l}ex~r~{tSpfMLnVK<xzEpTvk2n$B5(5KHXW5F}9={JYQVe|?XOpZaIAkZAt!T4y<m<yz?tCOJx!$f5*7Chs}K"
+    b")b=JJ_+kfEWTaxEF#C{ggj@KWf^@TGE1SHl9R0b)6gAxL0+`W_BiwxksO5PuxL+$<1gqFP|iRZHZmuno{?7l@^j?5-o^5XRd"
+    b"AY-<0u%Gmr<+g^*JklAfYMmnciW`8-+s%(%tYnfS%(03jdDboQ{m>$Es95F>v@->hYpT5fH^u1ig=G&`<F`2AYQcSvd##t0i"
+    b"c!C}Y>BJx83Mmwc%0u=vvF=pRK|Q~2}p8fdSVNWZGwQ%aX1A?)v^NT0*|^VaV-<V|baYtRpau9v^_asjTlO3+`w3i^5IM?lY"
+    b"G*HKzJHIBS3?^yH;&<}yGdG3h33)g!k=x<#G{Rs3C&^xhf1f26m_I>%IMSmCi0nnE-u1WHOd{Bb^-c`^KK|cuka_l;YoMuBu"
+    b"K9oP%S^i*3d7b5HaOy=+Cai)oBO3uj99<>)Nvpi?^PbG>ucipzh{KAZ_{;eytru9%dE@U0v-Xiic^k@Pl!(>%4k%_NnZ6?*^"
+    b"`2ri``X{Qf?U+fy@{NzFyB%~Ug|wz<)&lB<?GxDc_VB`an6K&N1p0^(aJh<xc4mW`F!MyxsPb-nMF=;^viHd8NX(SKP*r9Sw"
+    b"4}_kEaFvR^tD5f(rJ_Y55qmPvtXq?&oq*zK}2FD}K%47%zD=ei1l@B)h~UyH70jYZKcD7{U&yg!VCLzU()a_9?XIxP3?A`pn"
+    b"Y4wY1Nmo#NNTC{mvr+IPJD`T88%%Y3j#k-BJT-&?7RP|os8XB3$)ETS(Jp)cf#1<)?yOW=j?!I#k9;6peH*H?!218-m3SJ2+"
+    b"%5)(ygnW6n?Da)W-;3SVC<HzMEN&9K=CrEzL8+BBEtovt&DRuu^Z%W<2f7bGgxp6!4gZ=eASQOuj^j1ixg3XcdxYG=9!VEFD"
+    b"N%mcl+%n7@=eaEEdUNDk-j%lf4eh*be@%PDw(m2X`29bOCS1(`000000001@0ssIb9o2E#fk>jLSeUXKiSL<Y1ONbn0ssJb0"
+    b"fm!USJOZgfNw1d2m*@d_@pO~;@W~DA}+OpQ~`n34VM_2DMZs2+lb)4@B6;*8}2*!C;SP%`sVQ;;Fki5FPi4dcjwN{WM<MdhD"
+    b"D^RQj0VP8p8FVh*lG-tJWr)%65!&i55*M!%?Qz+O5TtByE+_I#nudB@<d%xzAr(TEYDj!oga7u<6?8*ZpNaU%7mzQ^eaZpQV"
+    b"?eP_p_7`oxp@iS%Up2QG!K3Nsxg(j=cGEU)lK{1Sh_FYrj1BF*v~dnI4S$T*oJ6J-$u!4FHx`JfS2(GI`@;<YkX*1&q$AVm_"
+    b"BNzx9R!G;7Rp#!$UOfacypuQO#h(iSC!$#2Qx2W4hTn3%2VVV?3DKl%uGl=%UUf2f*U>*5G%>M|Z9>k~daeNM+g)_wG@lkvc"
+    b"U%;2~C42*4$9M2;d>?n=hxh^PB)*65!WH6M_$KTkeuR(VYxpYcCq9J_<CFLVY-4UIP|!_&H@WS22VTPZ>LAS;=iw&Y#`?oh4"
+    b"^h|x2K!Nkmr)a<W)|^s;u=^@yM^{#;!3EXy%Mj0TBzndErx}>vvNF}Tt4-AQY_P9H2GY{&tV_4+2c`+I+Z6qV>a*D@u&DLbA"
+    b"5u};K%qi?!oV|hkuzzRB>?N2xY}py50LjJfWP9q}^>>3FZAsE88|4$BHWXCZ1q0lt;@{G2OP(4o@Q$D6$f!>eAyzhn|eZ(#m"
+    b"m1_Lza(-+A|Of$`~RyNVmSinl7$v=VLZ9hsgY_tAs*>Zais@>M)7GJ;Y5aSrvlpUcqk=LXi6C11D>d}Kof!|WFHQPNA1yBWi"
+    b"e0=MDKbPVp(|7PPZ**%9Jf6a#8U%+gxH~;_u000000Q{9@W&"
+)
+_RECTANGLE_BOSS_NATIVE_WRITE_PROFILE = MappingProxyType(
+    {
+        "application": "SOLIDWORKS 2025",
+        "support_plane_object_id": 2,
+        "sketch_name": "Sketch1",
+        "sketch_geometry": "closed-axis-aligned-four-line-rectangle",
+        "sketch_variable_parameters": frozenset(
+            {"minimum_x_mm", "minimum_y_mm", "maximum_x_mm", "maximum_y_mm"}
+        ),
+        "sketch_constraints": frozenset(),
+        "feature_name": "Boss-Extrude1",
+        "feature_operation": "blind-unreversed-join",
+        "feature_variable_parameters": frozenset({"D1_mm"}),
+        "cache_bounds_mm": (-20.0, -10.0, 20.0, 10.0),
+        "cache_depth_mm": 10.0,
+        "resolved_features_size": 11285,
+        "resolved_features_variable_ranges": (
+            (6119, 16),
+            (6297, 16),
+            (6459, 16),
+            (6621, 16),
+            (10092, 8),
+        ),
+        "resolved_features_fixed_bytes": 11213,
+        "oracle_partition": (
+            3790,
+            "56df5b4e4ccac3158b60ea75dd57959b991660d6d9c7bc05cbff795e56f44439",
+        ),
+        "envelope_streams": MappingProxyType(
+            {
+                "Contents/CMgr": (
+                    1985,
+                    "79d8327f0ec9965500ac044320d9054666d1685cc9b294d766998ba75b654e16",
+                ),
+                "Contents/Config-0": (
+                    25248,
+                    "7a9117f55f6a3b4f790b8438940cc3e54d9b3125daeea7b8492e5f840eb86429",
+                ),
+                "Contents/Config-0-LWDATA": (
+                    1437,
+                    "570d1a2ee4895160fdee5c4731eb0fffe0868dd99798e6868eb3c6e432009c17",
+                ),
+                "Contents/Config-0-ModelHeader": (
+                    2347,
+                    "311de5a2f1e2abe699ffbe87f545525caa8fc7f48303c25ff07ff4d18043d7d3",
+                ),
+                "Contents/Definition": (
+                    3810,
+                    "1de1a4f10c22851eb4b7925b7cc73f8e4534217c544c20cded6f49644bce4e94",
+                ),
+                "Contents/DisplayLists": (
+                    6270,
+                    "0003781d79ee5e4bbcf52b57fc375b6b3644bc87eda2db1956a63d0d3dcde211",
+                ),
+                "Header2": (
+                    2347,
+                    "311de5a2f1e2abe699ffbe87f545525caa8fc7f48303c25ff07ff4d18043d7d3",
+                ),
+            }
+        ),
+    }
+)
 _BLIND_END_SPEC = bytes.fromhex(
     "ffff01000b006d6f456e64537065635f63000001000000000000000000000000000000000000000000"
 )
@@ -523,7 +797,7 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
                 "moBaseBody_c",
             ),
         )
-    authored = _canonical_rectangle_boss_objects(authored, object_ids)
+    authored = _canonical_rectangle_boss_objects(authored, object_ids, document)
     identity = _native_identity(document, model_name)
     system_features = {
         int(feature.attributes["native_object_id"]): feature
@@ -571,10 +845,39 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         document,
         model_name,
         identity,
-        blank_native,
+        rectangle_boss=_is_rectangle_boss_objects(authored),
     )
     parsed = decode_native_model(keywords, resolved)
     capabilities = _proved_write_capabilities(document, authored, parsed, object_ids)
+    freecad_rectangle = _freecad_rectangle_boss_objects(document, authored)
+    mixed_capabilities: frozenset[Capability] = frozenset()
+    partition: bytes | None = None
+    application_usable = False
+    vendor_loadable = False
+    if freecad_rectangle:
+        capabilities = frozenset(
+            (
+                *capabilities,
+                Capability.EDITABLE_SKETCHES,
+                Capability.PARAMETRIC_HISTORY,
+                Capability.BODY_STRUCTURE,
+            )
+        )
+        mixed_capabilities = frozenset({Capability.PARAMETERS})
+        bounds = _write_rectangle_bounds(authored[0])
+        if bounds is None:
+            raise SldprtFormatError("native rectangle record requires one rectangle")
+        partition = transform_solidworks_rectangle_partition_stream(
+            _base_record(_BASE_RECTANGLE_BOSS_PARTITION),
+            minimum_x_mm=bounds[0],
+            minimum_y_mm=bounds[1],
+            maximum_x_mm=bounds[2],
+            maximum_y_mm=bounds[3],
+            depth_mm=authored[1].dimensions[0].value_mm,
+        )
+        vendor_loadable = True
+        application_usable = True
+        capabilities = capabilities | {Capability.BREP}
     lanes = tuple(
         (
             object_ids[f"configuration:{configuration.id}"],
@@ -590,8 +893,12 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         resolved,
         lanes,
         capabilities,
+        mixed_capabilities,
         MappingProxyType(object_ids),
         envelope_streams,
+        partition,
+        application_usable,
+        vendor_loadable,
     )
 
 
@@ -746,29 +1053,73 @@ def _write_objects(
 
 
 def _canonical_rectangle_boss_objects(
-    objects: tuple[_WriteObject, ...], object_ids: dict[str, int]
+    objects: tuple[_WriteObject, ...],
+    object_ids: dict[str, int],
+    document: CadDocument,
 ) -> tuple[_WriteObject, ...]:
     if len(objects) != 2:
         return objects
     sketch, extrusion = objects
     bounds = _write_rectangle_bounds(sketch)
+    source_sketch = next(
+        (item for item in document.sketches if item.id == sketch.source_id), None
+    )
+    source_feature = next(
+        (item for item in document.feature_timeline if item.id == extrusion.source_id),
+        None,
+    )
     if (
-        sketch.object_id != 26
-        or len(sketch.payload) < 4
+        len(sketch.payload) < 4
         or struct.unpack_from("<I", sketch.payload)[0] != 2
         or sketch.class_name != "moProfileFeature_c"
+        or sketch.dimensions
         or extrusion.class_name != "moExtrusion_c"
         or extrusion.payload != _BLIND_END_SPEC
         or bounds is None
-        or len(extrusion.dimensions) != 1
-        or not math.isfinite(extrusion.dimensions[0].value_mm)
-        or extrusion.dimensions[0].value_mm <= 0.0
+        or source_sketch is None
+        or source_sketch.suppressed
+        or source_sketch.constraints
+        or source_sketch.parameter_ids
+        or len(source_sketch.entities) != 4
+        or any(
+            item.construction
+            or item.fixed
+            or not isinstance(item.geometry, LineGeometry)
+            for item in source_sketch.entities
+        )
+        or len(source_sketch.closed_profile_entity_ids) != 1
+        or set(source_sketch.closed_profile_entity_ids[0])
+        != {item.id for item in source_sketch.entities}
+        or source_feature is None
+        or source_feature.suppressed
+        or source_feature.input_feature_ids
+        or source_feature.selection_ids
+        or source_feature.configuration_states
     ):
         return objects
+    freecad_dimension = _freecad_rectangle_boss_dimension(
+        document,
+        source_sketch,
+        source_feature,
+    )
+    if freecad_dimension is None:
+        if (
+            sketch.object_id != 26
+            or sketch.name != "Sketch1"
+            or extrusion.name != "Boss-Extrude1"
+            or len(extrusion.dimensions) != 1
+            or extrusion.dimensions[0].name != "D1"
+            or not math.isfinite(extrusion.dimensions[0].value_mm)
+            or extrusion.dimensions[0].value_mm <= 0.0
+        ):
+            return objects
+        source_dimension = extrusion.dimensions[0]
+    else:
+        source_dimension = freecad_dimension
     dimension = replace(
-        extrusion.dimensions[0],
+        source_dimension,
         name="D1",
-        text=format(extrusion.dimensions[0].value_mm, ".15g"),
+        text=format(source_dimension.value_mm, ".15g"),
     )
     object_ids[f"sketch:{sketch.source_id}"] = 26
     object_ids[f"feature:{extrusion.source_id}"] = 32
@@ -780,6 +1131,180 @@ def _canonical_rectangle_boss_objects(
             name="Boss-Extrude1",
             dimensions=(dimension,),
         ),
+    )
+
+
+def _freecad_rectangle_boss_dimension(
+    document: CadDocument,
+    sketch: Sketch,
+    feature: FeatureStep,
+) -> _WriteDimension | None:
+    if (
+        document.source.format_id.casefold() != "freecad.fcstd"
+        or document.assembly is not None
+        or document.selections
+        or len(document.sketches) != 1
+        or len(
+            tuple(
+                item
+                for item in document.feature_timeline
+                if not _is_native_system_feature(item)
+            )
+        )
+        != 1
+        or len(document.bodies) != 1
+        or document.bodies[0].final_feature_id != feature.id
+        or feature.sketch_id != sketch.id
+        or feature.order != 0
+        or str(feature.kind).casefold() != FeatureKind.EXTRUSION.value
+        or str(feature.operation).casefold()
+        not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
+        or _freecad_type_id(sketch.attributes) != "Sketcher::SketchObject"
+        or _freecad_type_id(feature.attributes) != "PartDesign::Pad"
+        or len(document.configurations) != 1
+        or document.configurations[0].name.casefold() != "default"
+        or not document.configurations[0].active
+        or document.configurations[0].parent_id is not None
+        or document.configurations[0].overrides
+        or document.configurations[0].suppressed_feature_ids
+        or not isinstance(feature.definition, ExtrusionFeature)
+    ):
+        return None
+    definition = feature.definition
+    if (
+        str(definition.end_condition).casefold() != ExtrusionEndCondition.BLIND.value
+        or definition.reversed
+        or definition.symmetric
+        or definition.second_end_condition is not None
+        or definition.up_to_reference
+        or definition.second_up_to_reference
+        or not _parameter_value_matches(
+            definition.second_length, 10.0, ValueKind.LENGTH
+        )
+        or not _parameter_value_matches(definition.offset, 0.0, ValueKind.LENGTH)
+        or not _parameter_value_matches(definition.second_offset, 0.0, ValueKind.LENGTH)
+        or not _parameter_value_matches(definition.draft_angle, 0.0, ValueKind.ANGLE)
+        or not _parameter_value_matches(
+            definition.second_draft_angle, 0.0, ValueKind.ANGLE
+        )
+        or definition.direction is None
+        or not math.isclose(definition.direction.x, 0.0, abs_tol=1e-12)
+        or not math.isclose(definition.direction.y, 0.0, abs_tol=1e-12)
+        or not math.isclose(definition.direction.z, 1.0, abs_tol=1e-12)
+    ):
+        return None
+    dimension = _parameter_dimension(Parameter("", "D1", definition.length))
+    if dimension is None or dimension.value_mm <= 0.0:
+        return None
+    parameters: dict[str, Parameter] = {}
+    for parameter in document.parameters:
+        path = parameter.attributes.get("freecad_path")
+        if (
+            parameter.owner_id != feature.id
+            or not isinstance(path, str)
+            or not path
+            or path in parameters
+            or parameter.expression is not None
+        ):
+            return None
+        parameters[path] = parameter
+    expected = {
+        "AllowMultiFace": (ValueKind.BOOLEAN, True),
+        "AlongSketchNormal": (ValueKind.BOOLEAN, True),
+        "FuzzyTolerance": (ValueKind.NUMBER, 0.0),
+        "Label": (ValueKind.STRING, None),
+        "Label2": (ValueKind.STRING, None),
+        "Length": (ValueKind.LENGTH, dimension.value_mm),
+        "Length2": (ValueKind.LENGTH, 10.0),
+        "Midplane": (ValueKind.BOOLEAN, False),
+        "Offset": (ValueKind.LENGTH, 0.0),
+        "Offset2": (ValueKind.LENGTH, 0.0),
+        "Refine": (ValueKind.BOOLEAN, True),
+        "Reversed": (ValueKind.BOOLEAN, False),
+        "SideType": (ValueKind.INTEGER, 0),
+        "Suppressed": (ValueKind.BOOLEAN, False),
+        "TaperAngle": (ValueKind.ANGLE, 0.0),
+        "TaperAngle2": (ValueKind.ANGLE, 0.0),
+        "Type": (ValueKind.INTEGER, 0),
+        "Type2": (ValueKind.INTEGER, 0),
+        "UseCustomVector": (ValueKind.BOOLEAN, False),
+        "Visibility": (ValueKind.BOOLEAN, True),
+    }
+    if set(parameters) != set(expected) or set(feature.parameter_ids) != {
+        parameter.id for parameter in document.parameters
+    }:
+        return None
+    if any(
+        not _freecad_parameter_matches(parameters[path], kind, value)
+        for path, (kind, value) in expected.items()
+    ):
+        return None
+    return dimension
+
+
+def _freecad_type_id(attributes: Mapping[str, Any]) -> str:
+    value = attributes.get("freecad")
+    return str(value.get("type_id", "")) if isinstance(value, Mapping) else ""
+
+
+def _freecad_parameter_matches(
+    parameter: Parameter,
+    kind: ValueKind,
+    expected: Any,
+) -> bool:
+    value = parameter.value
+    if value.kind is not kind:
+        return False
+    if expected is None:
+        return isinstance(value.value, str)
+    if kind is ValueKind.LENGTH:
+        dimension = _parameter_dimension(parameter)
+        return dimension is not None and math.isclose(
+            dimension.value_mm,
+            float(expected),
+            rel_tol=0.0,
+            abs_tol=1e-10,
+        )
+    if kind in {ValueKind.NUMBER, ValueKind.ANGLE}:
+        return (
+            not isinstance(value.value, bool)
+            and isinstance(value.value, (int, float))
+            and math.isfinite(float(value.value))
+            and math.isclose(
+                float(value.value),
+                float(expected),
+                rel_tol=0.0,
+                abs_tol=1e-10,
+            )
+        )
+    return value.value == expected
+
+
+def _parameter_value_matches(
+    value: Any,
+    expected: float,
+    kind: ValueKind,
+) -> bool:
+    if value is None or value.kind is not kind:
+        return False
+    parameter = _parameter_dimension(Parameter("", "D1", value))
+    if kind is ValueKind.LENGTH:
+        return parameter is not None and math.isclose(
+            parameter.value_mm,
+            expected,
+            rel_tol=0.0,
+            abs_tol=1e-10,
+        )
+    return (
+        not isinstance(value.value, bool)
+        and isinstance(value.value, (int, float))
+        and math.isfinite(float(value.value))
+        and math.isclose(
+            float(value.value),
+            expected,
+            rel_tol=0.0,
+            abs_tol=1e-10,
+        )
     )
 
 
@@ -1479,16 +2004,7 @@ def _xml_text(value: str) -> str:
 
 def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
     authored = objects[len(_BASE_OBJECTS) :]
-    if (
-        len(authored) == 2
-        and authored[0].object_id == 26
-        and authored[0].name == "Sketch1"
-        and authored[0].class_name == "moProfileFeature_c"
-        and authored[1].object_id == 32
-        and authored[1].name == "Boss-Extrude1"
-        and authored[1].class_name == "moExtrusion_c"
-        and len(authored[1].dimensions) == 1
-    ):
+    if _is_rectangle_boss_objects(authored):
         return _base_rectangle_boss_payload(authored[0], authored[1])
     if (
         len(authored) == 1
@@ -1516,6 +2032,48 @@ def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
         for dimension in item.dimensions:
             output.extend(_scalar_record(dimension))
     return bytes(output)
+
+
+def _is_rectangle_boss_objects(authored: tuple[_WriteObject, ...]) -> bool:
+    return (
+        len(authored) == 2
+        and authored[0].object_id == 26
+        and authored[0].name == "Sketch1"
+        and authored[0].class_name == "moProfileFeature_c"
+        and authored[1].object_id == 32
+        and authored[1].name == "Boss-Extrude1"
+        and authored[1].class_name == "moExtrusion_c"
+        and len(authored[1].dimensions) == 1
+    )
+
+
+def _freecad_rectangle_boss_objects(
+    document: CadDocument,
+    authored: tuple[_WriteObject, ...],
+) -> bool:
+    if not _is_rectangle_boss_objects(authored):
+        return False
+    source_sketch = next(
+        (item for item in document.sketches if item.id == authored[0].source_id), None
+    )
+    source_feature = next(
+        (
+            item
+            for item in document.feature_timeline
+            if item.id == authored[1].source_id
+        ),
+        None,
+    )
+    return (
+        source_sketch is not None
+        and source_feature is not None
+        and _freecad_rectangle_boss_dimension(
+            document,
+            source_sketch,
+            source_feature,
+        )
+        is not None
+    )
 
 
 def _base_body_payload() -> bytes:
@@ -1625,7 +2183,8 @@ def _native_envelope_streams(
     document: CadDocument,
     model_name: str,
     identity: _NativeIdentity,
-    blank_native: bool,
+    *,
+    rectangle_boss: bool = False,
 ) -> Mapping[str, bytes]:
     configuration_name = next(
         (
@@ -1653,7 +2212,9 @@ def _native_envelope_streams(
         "_MO_VERSION_18000/Biography": _biography_payload(model_name, identity),
         "_MO_VERSION_18000/History": _version_history_payload(),
     }
-    if blank_native:
+    if rectangle_boss:
+        streams.update(_rectangle_boss_envelope_streams())
+    else:
         model_header = _model_header_payload(identity, configuration_name)
         streams.update(
             {
@@ -1666,6 +2227,23 @@ def _native_envelope_streams(
             }
         )
     return MappingProxyType(streams)
+
+
+def _rectangle_boss_envelope_streams() -> Mapping[str, bytes]:
+    model_header = _base_record(_BASE_RECTANGLE_BOSS_MODEL_HEADER)
+    return MappingProxyType(
+        {
+            "Contents/CMgr": _base_record(_BASE_RECTANGLE_BOSS_CONFIGURATION_MANAGER),
+            "Contents/Config-0": _base_record(_BASE_RECTANGLE_BOSS_CONFIGURATION),
+            "Contents/Config-0-LWDATA": _base_record(
+                _BASE_RECTANGLE_BOSS_LIGHTWEIGHT_DATA
+            ),
+            "Contents/Config-0-ModelHeader": model_header,
+            "Contents/Definition": _base_record(_BASE_RECTANGLE_BOSS_DEFINITION),
+            "Contents/DisplayLists": _base_record(_BASE_RECTANGLE_BOSS_DISPLAY_LISTS),
+            "Header2": model_header,
+        }
+    )
 
 
 def _base_record(chunks: bytes | tuple[bytes, ...]) -> bytes:
@@ -1849,7 +2427,7 @@ def _biography_payload(model_name: str, identity: _NativeIdentity) -> bytes:
     for value in ("*", "*", "C:\\", "*", "*"):
         output.extend(_serialized_string(value))
         output.extend(bytes.fromhex("030000000090a20c05000000"))
-    output.extend(_serialized_string(f"C:\\{model_name}.sldprt"))
+    output.extend(_serialized_string(f"C:\\{model_name}{PART_SUFFIX}"))
     output.extend(bytes.fromhex("030000000090a20c05000000"))
     return bytes(output)
 
@@ -1861,7 +2439,7 @@ def _serialized_string(value: str) -> bytes:
         raise SldprtFormatError(
             "native SOLIDWORKS serialized string exceeds 254 UTF-16 units"
         )
-    return bytes.fromhex("fffeff") + bytes((units,)) + encoded
+    return SERIALIZED_STRING_MARKER + bytes((units,)) + encoded
 
 
 def _stable_u32(document: CadDocument, model_name: str, domain: bytes = b"") -> int:
@@ -2007,7 +2585,15 @@ def _proved_write_capabilities(
     return frozenset(result)
 
 
-def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
+def decode_native_model(
+    keywords: bytes,
+    resolved: bytes,
+    configuration_data: bytes = b"",
+    *,
+    configuration_id: int | None = None,
+    resolved_stream: str = RESOLVED_FEATURES_STREAM,
+    configuration_stream: str = "",
+) -> NativeModel:
     configurations, xml_features = _parse_keywords(keywords)
     names = _parse_names(resolved)
     classes = _parse_classes(resolved)
@@ -2033,9 +2619,9 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
         if not name:
             name = f"{feature.kind or feature.xml_tag} {feature.object_id}"
         owned = scalar_owner.get(feature.object_id, ())
-        dimensions = _semantic_dimensions(
-            feature.kind,
-            tuple(_bind_dimension(item, owned) for item in feature.dimensions),
+        dimensions = tuple(
+            _bind_dimension(item, owned)
+            for item in _semantic_dimensions(feature.kind, tuple(feature.dimensions))
         )
         native_end = ends.get(record.offset) if record is not None else None
         native_features.append(
@@ -2053,9 +2639,32 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
                     if record is not None and native_end is not None
                     else b""
                 ),
+                class_name=(
+                    _record_class_name(classes, record.offset)
+                    if record is not None
+                    else ""
+                ),
+                native_stream=resolved_stream,
             )
         )
-    planes = _decode_planes(resolved, native_features)
+    feature_indexes = {
+        feature.object_id: index for index, feature in enumerate(native_features)
+    }
+    for index, feature in enumerate(native_features):
+        child_id = _integer_property(feature.properties.get("DissectableChildren"))
+        child_scalars = scalar_owner.get(child_id or -1, ())
+        if not child_scalars:
+            continue
+        rebound = tuple(
+            (
+                _bind_dimension(dimension, child_scalars)
+                if dimension.native_offset is None
+                else dimension
+            )
+            for dimension in feature.dimensions
+        )
+        native_features[index] = replace(feature, dimensions=rebound)
+    planes = _decode_planes(resolved, native_features, native_stream=resolved_stream)
     plane_by_id = {plane.object_id: plane for plane in planes}
     principal_plane_frames = _principal_plane_frames(native_features)
     principal_plane_ids = frozenset(principal_plane_frames)
@@ -2071,9 +2680,7 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
     )
     sketches: list[NativeSketch] = []
     operations: list[NativeOperation] = []
-    native_index_by_id = {
-        feature.object_id: index for index, feature in enumerate(native_features)
-    }
+    native_index_by_id = feature_indexes
     latest_sketch: NativeSketch | None = None
     latest_operation: NativeOperation | None = None
     latest_plane_id = next(iter(principal_plane_frames), next(iter(plane_by_id), 0))
@@ -2089,7 +2696,9 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
                 latest_plane_id,
                 plane_by_id,
             )
-            latest_sketch = _decode_sketch(resolved, feature, support)
+            latest_sketch = _decode_sketch(
+                resolved, feature, support, native_stream=resolved_stream
+            )
             native_index = native_index_by_id[feature.object_id]
             native_features[native_index] = replace(
                 native_features[native_index], dimensions=latest_sketch.dimensions
@@ -2137,49 +2746,391 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
                 termination_code=end_spec.termination_code if end_spec else None,
                 selection_offsets=(),
                 selected_local_ids=(),
+                native_stream=resolved_stream,
             )
             operations.append(operation)
             latest_operation = operation
             continue
-        if feature.kind.casefold() == "fillet":
-            selections = _edge_selections(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
+        feature_type = feature.kind.casefold()
+        if feature_type in _REVOLUTION_FEATURE_TYPES:
+            record = record_by_id.get(feature.object_id)
+            if record is None:
+                continue
+            profile_id = latest_sketch.object_id if latest_sketch else None
+            dependencies = tuple(
+                value
+                for value in (
+                    latest_operation.object_id if latest_operation else None,
+                    profile_id,
+                )
+                if value is not None
             )
-            selections = tuple(
-                selection
-                for selection in selections
-                if selection[1] != feature.object_id
-            )
-            producer_ids = tuple(
-                dict.fromkeys(selection[1] for selection in selections)
-            )
-            dependencies = producer_ids or (
-                (latest_operation.object_id,) if latest_operation else ()
-            )
+            family, operation_code, schema = _operation_fields(resolved, record)
+            axis_marker = _revolution_axis_marker(latest_sketch)
             operation = NativeOperation(
                 object_id=feature.object_id,
                 name=feature.name,
-                kind="fillet",
-                profile_id=None,
+                kind=(
+                    "revolve_cut"
+                    if feature_type in {"cut-revolve", "revcut"}
+                    else "revolve_join"
+                ),
+                profile_id=profile_id,
                 dependencies=dependencies,
                 native_offset=feature.native_offset or 0,
                 native_end=feature.native_end or len(resolved),
                 length_mm=None,
-                radius_mm=_operation_dimension(feature.dimensions, "radius"),
+                radius_mm=None,
+                family_code=family,
+                operation_code=operation_code,
+                schema_code=schema,
+                direction_code=None,
+                termination_code=None,
+                selection_offsets=(),
+                selected_local_ids=(),
+                angle_degrees=_operation_dimension(feature.dimensions, "angle"),
+                axis_marker_offset=axis_marker.offset if axis_marker else None,
+                native_stream=resolved_stream,
+            )
+            operations.append(operation)
+            latest_operation = operation
+            continue
+        if feature.class_name in _HOLE_CLASS_NAMES:
+            record = record_by_id.get(feature.object_id)
+            if record is None:
+                continue
+            child = _integer_property(feature.properties.get("DissectableChildren"))
+            family, operation_code, schema = _operation_fields(resolved, record)
+            dependencies = tuple(
+                value
+                for value in (
+                    latest_operation.object_id if latest_operation else None,
+                    child,
+                )
+                if value is not None
+            )
+            operation = NativeOperation(
+                object_id=feature.object_id,
+                name=feature.name,
+                kind="hole",
+                profile_id=child,
+                dependencies=dependencies,
+                native_offset=feature.native_offset or 0,
+                native_end=feature.native_end or len(resolved),
+                length_mm=_operation_dimension(feature.dimensions, "depth"),
+                radius_mm=None,
+                family_code=family,
+                operation_code=operation_code,
+                schema_code=schema,
+                direction_code=None,
+                termination_code=0,
+                selection_offsets=(),
+                selected_local_ids=(),
+                selection_kind="face",
+                native_stream=resolved_stream,
+            )
+            operations.append(operation)
+            latest_operation = operation
+            continue
+        if feature_type == "dome":
+            selections = _operation_selections_after_class(
+                resolved,
+                feature.native_offset or 0,
+                feature.native_end or len(resolved),
+                feature,
+                native_features,
+                "moCompFace_c",
+            )
+            height = _operation_dimension(feature.dimensions, "height")
+            if height is None or not selections:
+                continue
+            producer_ids = tuple(
+                dict.fromkeys(selection[1] for selection in selections)
+            )
+            dependencies = tuple(
+                dict.fromkeys(
+                    (
+                        *((latest_operation.object_id,) if latest_operation else ()),
+                        *producer_ids,
+                    )
+                )
+            )
+            operation = NativeOperation(
+                object_id=feature.object_id,
+                name=feature.name,
+                kind="dome",
+                profile_id=None,
+                dependencies=dependencies,
+                native_offset=feature.native_offset or 0,
+                native_end=feature.native_end or len(resolved),
+                length_mm=height,
+                radius_mm=None,
                 family_code=None,
                 operation_code=None,
                 schema_code=None,
                 direction_code=None,
                 termination_code=None,
+                selection_offsets=tuple(item[0] for item in selections),
+                selected_local_ids=tuple(item[2] for item in selections),
+                selection_kind="face",
+                native_stream=resolved_stream,
+                selection_references=tuple((item[1], item[2]) for item in selections),
+            )
+            operations.append(operation)
+            latest_operation = operation
+            continue
+        if feature_type in _MOVE_BODY_FEATURE_TYPES:
+            selections = _operation_selections_after_class(
+                resolved,
+                feature.native_offset or 0,
+                feature.native_end or len(resolved),
+                feature,
+                native_features,
+                "moCompSolidBody_c",
+            )
+            translation = _native_translation(feature.dimensions)
+            if translation is None or not selections:
+                continue
+            producer_ids = tuple(
+                dict.fromkeys(selection[1] for selection in selections)
+            )
+            dependencies = tuple(
+                dict.fromkeys(
+                    (
+                        *((latest_operation.object_id,) if latest_operation else ()),
+                        *producer_ids,
+                    )
+                )
+            )
+            operation = NativeOperation(
+                object_id=feature.object_id,
+                name=feature.name,
+                kind="move_body",
+                profile_id=None,
+                dependencies=dependencies,
+                native_offset=feature.native_offset or 0,
+                native_end=feature.native_end or len(resolved),
+                length_mm=None,
+                radius_mm=None,
+                family_code=None,
+                operation_code=None,
+                schema_code=None,
+                direction_code=None,
+                termination_code=None,
+                selection_offsets=tuple(item[0] for item in selections),
+                selected_local_ids=tuple(item[2] for item in selections),
+                selection_kind="body",
+                native_stream=resolved_stream,
+                selection_references=tuple((item[1], item[2]) for item in selections),
+                translation_mm=translation,
+            )
+            operations.append(operation)
+            latest_operation = operation
+            continue
+        if feature_type in _COMBINE_FEATURE_TYPES:
+            selections = _operation_selections_after_class(
+                resolved,
+                feature.native_offset or 0,
+                feature.native_end or len(resolved),
+                feature,
+                native_features,
+                "moSolidRef_w",
+            )
+            if len(selections) < 2:
+                continue
+            producer_ids = tuple(
+                dict.fromkeys(selection[1] for selection in selections)
+            )
+            dependencies = tuple(
+                dict.fromkeys(
+                    (
+                        *((latest_operation.object_id,) if latest_operation else ()),
+                        *producer_ids,
+                    )
+                )
+            )
+            operation = NativeOperation(
+                object_id=feature.object_id,
+                name=feature.name,
+                kind="combine_join",
+                profile_id=None,
+                dependencies=dependencies,
+                native_offset=feature.native_offset or 0,
+                native_end=feature.native_end or len(resolved),
+                length_mm=None,
+                radius_mm=None,
+                family_code=None,
+                operation_code=0,
+                schema_code=None,
+                direction_code=None,
+                termination_code=None,
+                selection_offsets=tuple(item[0] for item in selections),
+                selected_local_ids=tuple(item[2] for item in selections),
+                selection_kind="body",
+                mode="join",
+                native_stream=resolved_stream,
+                selection_references=tuple((item[1], item[2]) for item in selections),
+            )
+            operations.append(operation)
+            latest_operation = operation
+            continue
+        if feature_type == "scale":
+            factors = _native_scale_factors(
+                resolved,
+                feature.native_offset or 0,
+                feature.native_end or len(resolved),
+            )
+            if factors is None or latest_operation is None:
+                continue
+            operation = NativeOperation(
+                object_id=feature.object_id,
+                name=feature.name,
+                kind="scale",
+                profile_id=None,
+                dependencies=(latest_operation.object_id,),
+                native_offset=feature.native_offset or 0,
+                native_end=feature.native_end or len(resolved),
+                length_mm=None,
+                radius_mm=None,
+                family_code=None,
+                operation_code=None,
+                schema_code=None,
+                direction_code=None,
+                termination_code=None,
+                selection_offsets=(),
+                selected_local_ids=(),
+                native_stream=resolved_stream,
+                scale_factors=factors,
+            )
+            operations.append(operation)
+            latest_operation = operation
+            continue
+        if feature_type in {"fillet", "chamfer", "shell"}:
+            selections = _operation_selections(
+                resolved,
+                feature.native_offset or 0,
+                feature.native_end or len(resolved),
+                feature,
+                native_features,
+            )
+            producer_ids = tuple(
+                dict.fromkeys(selection[1] for selection in selections)
+            )
+            dependencies = tuple(
+                dict.fromkeys(
+                    (
+                        *((latest_operation.object_id,) if latest_operation else ()),
+                        *producer_ids,
+                    )
+                )
+            )
+            record = record_by_id.get(feature.object_id)
+            fields = (
+                _operation_fields(resolved, record)
+                if record is not None
+                else (None, None, None)
+            )
+            dimension_kind = {
+                "fillet": "radius",
+                "chamfer": "distance",
+                "shell": "thickness",
+            }[feature_type]
+            operation = NativeOperation(
+                object_id=feature.object_id,
+                name=feature.name,
+                kind=feature_type,
+                profile_id=None,
+                dependencies=dependencies,
+                native_offset=feature.native_offset or 0,
+                native_end=feature.native_end or len(resolved),
+                length_mm=(
+                    _operation_dimension(feature.dimensions, dimension_kind)
+                    if feature_type != "fillet"
+                    else None
+                ),
+                radius_mm=(
+                    _operation_dimension(feature.dimensions, dimension_kind)
+                    if feature_type == "fillet"
+                    else None
+                ),
+                family_code=fields[0],
+                operation_code=fields[1],
+                schema_code=fields[2],
+                direction_code=None,
+                termination_code=None,
                 selection_offsets=tuple(selection[0] for selection in selections),
-                selected_local_ids=tuple(
-                    dict.fromkeys(selection[2] for selection in selections)
+                selected_local_ids=tuple(selection[2] for selection in selections),
+                selection_kind="face" if feature_type == "shell" else "edge",
+                mode=(
+                    "equal_distance"
+                    if feature_type == "chamfer" and fields[0] == 1
+                    else None
+                ),
+                native_stream=resolved_stream,
+                selection_references=tuple(
+                    (selection[1], selection[2]) for selection in selections
                 ),
             )
             operations.append(operation)
             latest_operation = operation
+            continue
+        if feature_type in _SURFACE_EXTRUSION_FEATURE_TYPES:
+            record = record_by_id.get(feature.object_id)
+            if record is None:
+                continue
+            profile_id = latest_sketch.object_id if latest_sketch else None
+            family, operation_code, schema = _operation_fields(resolved, record)
+            end_spec = _end_spec(
+                resolved,
+                feature.native_offset or 0,
+                feature.native_end or len(resolved),
+            )
+            lengths = tuple(
+                dimension.value_mm
+                for dimension in feature.dimensions
+                if dimension.kind in {"length", "second_length"}
+            )
+            operation = NativeOperation(
+                object_id=feature.object_id,
+                name=feature.name,
+                kind="surface",
+                profile_id=profile_id,
+                dependencies=(profile_id,) if profile_id is not None else (),
+                native_offset=feature.native_offset or 0,
+                native_end=feature.native_end or len(resolved),
+                length_mm=lengths[0] if lengths else None,
+                radius_mm=None,
+                family_code=family,
+                operation_code=operation_code,
+                schema_code=schema,
+                direction_code=end_spec.direction_code if end_spec else None,
+                termination_code=end_spec.termination_code if end_spec else None,
+                selection_offsets=(),
+                selected_local_ids=(),
+                second_length_mm=lengths[1] if len(lengths) > 1 else None,
+                native_stream=resolved_stream,
+            )
+            operations.append(operation)
+    sketches_by_id = {sketch.object_id: sketch for sketch in sketches}
+    operations = [
+        _resolve_profile_operation(
+            operation,
+            sketches_by_id,
+            resolved,
+            native_features,
+        )
+        for operation in operations
+    ]
+    active_configuration_id = (
+        configuration_id
+        if configuration_id is not None
+        else configurations[0].configuration_id
+    )
+    equations = _parse_native_equations(
+        configuration_data,
+        active_configuration_id,
+        configuration_stream or f"Contents/Config-{active_configuration_id}",
+    )
     diagnostics = []
     unresolved = [
         feature
@@ -2208,6 +3159,8 @@ def decode_native_model(keywords: bytes, resolved: bytes) -> NativeModel:
         classes=classes,
         scalars=scalars,
         diagnostics=tuple(diagnostics),
+        equations=equations,
+        active_configuration_id=active_configuration_id,
     )
 
 
@@ -2293,7 +3246,11 @@ def _parse_dimension(name: str, text: str) -> NativeDimension:
     kind = (
         "diameter"
         if "<MOD-DIAM>" in text
-        else "radius" if text.lstrip().startswith("R") else "length"
+        else (
+            "radius"
+            if text.lstrip().startswith("R")
+            else "angle" if "°" in text or "deg" in text.casefold() else "length"
+        )
     )
     return NativeDimension(name, float(match.group()), kind, text)
 
@@ -2363,6 +3320,62 @@ def _parse_classes(data: bytes) -> tuple[NativeClass, ...]:
             continue
         classes.append(NativeClass(offset, value.decode("ascii")))
     return tuple(classes)
+
+
+def _record_class_name(classes: tuple[NativeClass, ...], record_offset: int) -> str:
+    return next(
+        (
+            item.name
+            for item in classes
+            if item.offset + 6 + len(item.name.encode("ascii")) == record_offset
+        ),
+        "",
+    )
+
+
+def _parse_native_equations(
+    data: bytes, configuration_id: int, native_stream: str
+) -> tuple[NativeEquation, ...]:
+    class_names = {item.name for item in _parse_classes(data)}
+    if not {"moRelMgr_c", "moRelation_c"} <= class_names:
+        return ()
+    equations: list[NativeEquation] = []
+    seen: set[str] = set()
+    for offset in _find_all(data, SERIALIZED_STRING_MARKER):
+        length_offset = offset + len(SERIALIZED_STRING_MARKER)
+        if length_offset >= len(data):
+            continue
+        units = data[length_offset]
+        text_start = length_offset + 1
+        text_end = text_start + units * 2
+        if units < 3 or text_end > len(data):
+            continue
+        try:
+            source = data[text_start:text_end].decode("utf-16le")
+        except UnicodeDecodeError:
+            continue
+        match = _EQUATION.fullmatch(source)
+        if (
+            match is None
+            or source in seen
+            or not all(character.isprintable() for character in source)
+        ):
+            continue
+        seen.add(source)
+        lhs, rhs = match.groups()
+        equations.append(
+            NativeEquation(
+                source=source,
+                lhs=lhs,
+                rhs=rhs,
+                references=tuple(dict.fromkeys(_EQUATION_REFERENCE.findall(rhs))),
+                native_offset=offset,
+                native_length=text_end - offset,
+                configuration_id=configuration_id,
+                native_stream=native_stream,
+            )
+        )
+    return tuple(equations)
 
 
 def _parse_scalars(
@@ -2460,7 +3473,11 @@ def _scalar_owners(
 def _bind_dimension(
     dimension: NativeDimension, scalars: tuple[NativeScalar, ...]
 ) -> NativeDimension:
-    target = dimension.value_mm / 1000.0
+    target = (
+        math.radians(dimension.value_mm)
+        if dimension.kind == "angle"
+        else dimension.value_mm / 1000.0
+    )
     value_matches = [
         scalar
         for scalar in scalars
@@ -2510,10 +3527,36 @@ def _feature_records(
 def _semantic_dimensions(
     feature_kind: str, dimensions: tuple[NativeDimension, ...]
 ) -> tuple[NativeDimension, ...]:
+    feature_type = feature_kind.casefold()
+    if feature_type in _SURFACE_EXTRUSION_FEATURE_TYPES:
+        return tuple(
+            replace(
+                dimension,
+                kind=(
+                    "length"
+                    if dimension.name.casefold() == "d1"
+                    else (
+                        "second_length"
+                        if dimension.name.casefold() == "d2"
+                        else dimension.kind
+                    )
+                ),
+            )
+            for dimension in dimensions
+        )
     semantic = {
         "extrusion": "length",
         "fillet": "radius",
-    }.get(feature_kind.casefold())
+        "cut": "depth",
+        "revolve": "angle",
+        "revolution": "angle",
+        "cut-revolve": "angle",
+        "revcut": "angle",
+        "chamfer": "distance",
+        "shell": "thickness",
+        "dome": "height",
+        "plane": "offset",
+    }.get(feature_type)
     if semantic is None or not dimensions:
         return dimensions
     selected = _primary_dimension(dimensions)
@@ -2539,8 +3582,16 @@ def _primary_dimension(dimensions: tuple[NativeDimension, ...]) -> int:
     )
 
 
-def _decode_planes(data: bytes, features: list[NativeFeature]) -> list[NativePlane]:
+def _decode_planes(
+    data: bytes,
+    features: list[NativeFeature],
+    *,
+    native_stream: str = RESOLVED_FEATURES_STREAM,
+) -> list[NativePlane]:
     principal = _principal_plane_frames(features)
+    plane_ids = frozenset(principal) | frozenset(
+        feature.object_id for feature in features if _is_plane_feature(feature)
+    )
     planes: list[NativePlane] = []
     for feature in features:
         if feature.object_id in principal:
@@ -2556,6 +3607,8 @@ def _decode_planes(data: bytes, features: list[NativeFeature]) -> list[NativePla
                     feature.native_offset,
                     None,
                     True,
+                    (),
+                    native_stream,
                 )
             )
             continue
@@ -2577,6 +3630,9 @@ def _decode_planes(data: bytes, features: list[NativeFeature]) -> list[NativePla
                 v_axis,
                 offset,
                 length,
+                False,
+                _reference_plane_ids(data, start, end, feature.object_id, plane_ids),
+                native_stream,
             )
         )
     return planes
@@ -2738,6 +3794,28 @@ def _support_plane_id(
     return known[-1] if known else fallback
 
 
+def _reference_plane_ids(
+    data: bytes,
+    start: int,
+    end: int,
+    object_id: int,
+    plane_ids: frozenset[int],
+) -> tuple[int, ...]:
+    result: list[int] = []
+    marker = b"\0" * 6 + struct.pack("<I", 1)
+    for offset in _find_all(data, marker, start, end):
+        source_offset = offset + len(marker)
+        if (
+            source_offset + 6 > end
+            or data[source_offset + 4 : source_offset + 6] != b"\0\x05"
+        ):
+            continue
+        source = struct.unpack_from("<I", data, source_offset)[0]
+        if source in plane_ids and source != object_id:
+            result.append(source)
+    return tuple(dict.fromkeys(result))
+
+
 def _component_plane_sources(data: bytes, start: int, end: int) -> list[int]:
     sources: list[int] = []
     for offset in range(start, max(start, end - 67 + 1) + 1):
@@ -2778,7 +3856,11 @@ def _component_plane_sources(data: bytes, start: int, end: int) -> list[int]:
 
 
 def _decode_sketch(
-    data: bytes, feature: NativeFeature, support_plane_id: int
+    data: bytes,
+    feature: NativeFeature,
+    support_plane_id: int,
+    *,
+    native_stream: str = RESOLVED_FEATURES_STREAM,
 ) -> NativeSketch:
     start = feature.native_offset or 0
     end = feature.native_end or len(data)
@@ -2818,6 +3900,7 @@ def _decode_sketch(
         profiles=profiles,
         dimensions=dimensions,
         constraints=constraints,
+        native_stream=native_stream,
     )
 
 
@@ -2976,7 +4059,7 @@ def _linked_rectangle_profiles(
                 marker.prefix != prefix
                 or marker.locus != locus
                 or marker.profile_role != 1
-                or marker.native_kind != 1
+                or marker.native_kind not in {1, 2}
                 or marker.coordinates_mm is not None
                 or marker.endpoint_indices is None
                 for marker in lines
@@ -3004,12 +4087,6 @@ def _linked_rectangle_profiles(
             or header_end >= len(resolved)
             or header_start == header_end
         ):
-            continue
-        diagonal_start = resolved[header_start]
-        diagonal_end = resolved[header_end]
-        if math.isclose(
-            diagonal_start[0], diagonal_end[0], abs_tol=1e-9
-        ) or math.isclose(diagonal_start[1], diagonal_end[1], abs_tol=1e-9):
             continue
         edge_markers: dict[str, NativeMarker] = {}
         valid = True
@@ -3071,10 +4148,24 @@ def _profiles(
     markers: list[NativeMarker], dimensions: tuple[NativeDimension, ...]
 ) -> tuple[tuple[NativeProfile, ...], set[int], tuple[NativeDimension, ...]]:
     linked_rectangles, linked_markers = _linked_rectangle_profiles(markers)
+    structural_rectangles, structural_rectangle_markers = (
+        _structural_rectangle_profiles(markers, linked_markers)
+    )
+    structural_circles, structural_markers, structural_dimensions = (
+        _structural_circle_profiles(
+            markers,
+            dimensions,
+            linked_markers | structural_rectangle_markers,
+        )
+    )
     remaining_markers = [
-        marker for marker in markers if marker.offset not in linked_markers
+        marker
+        for marker in markers
+        if marker.offset
+        not in linked_markers | structural_rectangle_markers | structural_markers
     ]
     circle_profiles, circle_dimensions = _circle_profiles(remaining_markers, dimensions)
+    circle_dimensions.update(structural_dimensions)
     normalized = tuple(
         (
             replace(dimension, kind=circle_dimensions[index])
@@ -3171,11 +4262,21 @@ def _profiles(
         for index in range(0, len(run), 6)
         if len(run[index : index + 4]) == 4
     ]
-    profiles: list[NativeProfile] = [*circle_profiles, *linked_rectangles]
-    used: set[int] = linked_markers | {
-        offset for profile in circle_profiles for offset in profile.marker_offsets
-    }
+    profiles: list[NativeProfile] = [
+        *structural_circles,
+        *circle_profiles,
+        *linked_rectangles,
+        *structural_rectangles,
+    ]
+    used: set[int] = (
+        linked_markers | structural_rectangle_markers | structural_markers
+    ) | {offset for profile in circle_profiles for offset in profile.marker_offsets}
     for index, rectangle in enumerate(selected):
+        if any(
+            profile.kind == "rectangle" and profile.coordinates == rectangle
+            for profile in profiles
+        ):
+            continue
         span = tuple(
             marker.offset
             for marker in (profile_lines[index] if index < len(profile_lines) else ())
@@ -3196,6 +4297,176 @@ def _profiles(
         )
         profiles.append(NativeProfile("rectangle", rectangle, span))
     profiles.sort(key=lambda profile: min(profile.marker_offsets, default=1 << 62))
+    return tuple(profiles), used, normalized
+
+
+def _structural_rectangle_profiles(
+    markers: list[NativeMarker], excluded_offsets: set[int]
+) -> tuple[tuple[NativeProfile, ...], set[int]]:
+    edges = tuple(
+        marker
+        for marker in markers
+        if marker.offset not in excluded_offsets
+        and marker.profile_role == 1
+        and marker.native_kind in {1, 2}
+        and marker.coordinates_mm is None
+        and marker.endpoint_indices is not None
+        and marker.endpoint_indices[0] != marker.endpoint_indices[1]
+        and all(
+            0 <= endpoint < len(markers)
+            and markers[endpoint].coordinates_mm is not None
+            for endpoint in marker.endpoint_indices
+        )
+    )
+    remaining = set(range(len(edges)))
+    profiles: list[NativeProfile] = []
+    used: set[int] = set()
+    while remaining:
+        component = {remaining.pop()}
+        vertices = set(edges[next(iter(component))].endpoint_indices or ())
+        changed = True
+        while changed:
+            changed = False
+            for index in tuple(remaining):
+                endpoints = set(edges[index].endpoint_indices or ())
+                if vertices & endpoints:
+                    remaining.remove(index)
+                    component.add(index)
+                    vertices.update(endpoints)
+                    changed = True
+        if len(component) != 4 or len(vertices) != 4:
+            continue
+        degrees = {vertex: 0 for vertex in vertices}
+        for index in component:
+            for vertex in edges[index].endpoint_indices or ():
+                degrees[vertex] += 1
+        if set(degrees.values()) != {2}:
+            continue
+        coordinates = {vertex: markers[vertex].coordinates_mm for vertex in vertices}
+        if any(value is None for value in coordinates.values()):
+            continue
+        resolved = {
+            vertex: value for vertex, value in coordinates.items() if value is not None
+        }
+        xs = sorted({value[0] for value in resolved.values()})
+        ys = sorted({value[1] for value in resolved.values()})
+        if (
+            len(xs) != 2
+            or len(ys) != 2
+            or set(resolved.values()) != {(x, y) for x in xs for y in ys}
+        ):
+            continue
+        sides: dict[str, NativeMarker] = {}
+        valid = True
+        for index in component:
+            marker = edges[index]
+            start, end = marker.endpoint_indices or (-1, -1)
+            left = resolved[start]
+            right = resolved[end]
+            if math.isclose(left[1], right[1], abs_tol=1e-9):
+                side = "bottom" if math.isclose(left[1], ys[0]) else "top"
+            elif math.isclose(left[0], right[0], abs_tol=1e-9):
+                side = "left" if math.isclose(left[0], xs[0]) else "right"
+            else:
+                valid = False
+                break
+            if side in sides:
+                valid = False
+                break
+            sides[side] = marker
+        if not valid or set(sides) != {"bottom", "right", "top", "left"}:
+            continue
+        line_offsets = tuple(
+            sides[side].offset for side in ("bottom", "right", "top", "left")
+        )
+        used.update(line_offsets)
+        profiles.append(
+            NativeProfile(
+                "rectangle",
+                (xs[0], ys[0], xs[1], ys[1]),
+                line_offsets,
+            )
+        )
+    return tuple(profiles), used
+
+
+def _structural_circle_profiles(
+    markers: list[NativeMarker],
+    dimensions: tuple[NativeDimension, ...],
+    excluded_offsets: set[int],
+) -> tuple[tuple[NativeProfile, ...], set[int], dict[int, str]]:
+    profiles: list[NativeProfile] = []
+    used: set[int] = set()
+    normalized: dict[int, str] = {}
+    geometries: set[tuple[float, float, float]] = set()
+    for closure_index, closure in enumerate(markers):
+        endpoints = closure.endpoint_indices
+        if (
+            closure.offset in excluded_offsets
+            or closure.coordinates_mm is not None
+            or closure.locus != _CIRCLE_LOCUS.hex()
+            or closure.profile_role != 1
+            or closure.native_kind not in {0, 1}
+            or endpoints is None
+            or endpoints[0] != endpoints[1]
+        ):
+            continue
+        rim_index = endpoints[0]
+        center_index = rim_index - 1
+        if (
+            not 0 <= center_index < rim_index < closure_index
+            or closure_index - rim_index > 2
+        ):
+            continue
+        center = markers[center_index]
+        rim = markers[rim_index]
+        if (
+            center.offset in excluded_offsets
+            or rim.offset in excluded_offsets
+            or center.coordinates_mm is None
+            or rim.coordinates_mm is None
+            or rim.locus != _CIRCLE_LOCUS.hex()
+            or center.profile_role != 1
+            or rim.profile_role != 1
+        ):
+            continue
+        radius = math.dist(center.coordinates_mm, rim.coordinates_mm)
+        if not math.isfinite(radius) or radius <= 1e-12:
+            continue
+        geometry = (
+            center.coordinates_mm[0],
+            center.coordinates_mm[1],
+            radius,
+        )
+        if geometry in geometries:
+            continue
+        matches: list[tuple[int, str, float]] = []
+        for index, dimension in enumerate(dimensions):
+            if math.isclose(dimension.value_mm, radius, rel_tol=1e-7, abs_tol=1e-7):
+                matches.append((index, "radius", dimension.value_mm))
+            elif math.isclose(
+                dimension.value_mm, radius * 2.0, rel_tol=1e-7, abs_tol=1e-7
+            ):
+                matches.append((index, "diameter", dimension.value_mm / 2.0))
+        parameter_name = None
+        dimension_kind = None
+        if len(matches) == 1 and matches[0][0] not in normalized:
+            dimension_index, dimension_kind, normalized_radius = matches[0]
+            geometry = (geometry[0], geometry[1], normalized_radius)
+            parameter_name = dimensions[dimension_index].name
+            normalized[dimension_index] = dimension_kind
+        geometries.add(geometry)
+        marker_offsets = (center.offset, rim.offset, closure.offset)
+        used.update(marker_offsets)
+        profiles.append(
+            NativeProfile(
+                "circle",
+                geometry,
+                marker_offsets,
+                parameter_name,
+                dimension_kind,
+            )
+        )
     return tuple(profiles), used, normalized
 
 
@@ -3396,6 +4667,138 @@ def _operation_fields(
     if repeated_id != record.object_id:
         return None, None, None
     return family, operation, schema
+
+
+def _revolution_axis_marker(sketch: NativeSketch | None) -> NativeMarker | None:
+    if sketch is None:
+        return None
+    candidates = tuple(
+        marker
+        for marker in sketch.markers
+        if marker.profile_role == 2
+        and marker.semantic == "line"
+        and marker.endpoint_indices is not None
+        and marker.endpoint_indices[0] != marker.endpoint_indices[1]
+    )
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _operation_selections(
+    data: bytes,
+    start: int,
+    end: int,
+    feature: NativeFeature,
+    features: list[NativeFeature],
+) -> tuple[tuple[int, int, int], ...]:
+    preceding = {
+        item.object_id
+        for item in features
+        if item.object_id > 25
+        and item.native_offset is not None
+        and feature.native_offset is not None
+        and item.native_offset < feature.native_offset
+    }
+    result: list[tuple[int, int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for selection in _edge_selections(data, start, end):
+        identity = selection[1], selection[2]
+        if (
+            selection[1] not in preceding
+            or not 0 < selection[2] < 0x8000
+            or identity in seen
+        ):
+            continue
+        seen.add(identity)
+        result.append(selection)
+    return tuple(result)
+
+
+def _operation_selections_after_class(
+    data: bytes,
+    start: int,
+    end: int,
+    feature: NativeFeature,
+    features: list[NativeFeature],
+    class_name: str,
+) -> tuple[tuple[int, int, int], ...]:
+    declarations = tuple(
+        item
+        for item in _parse_classes(data)
+        if item.name == class_name and start <= item.offset < end
+    )
+    if len(declarations) != 1:
+        return ()
+    declaration = declarations[0]
+    class_end = declaration.offset + 6 + len(class_name.encode("ascii"))
+    return _operation_selections(data, class_end, end, feature, features)
+
+
+def _native_translation(
+    dimensions: tuple[NativeDimension, ...],
+) -> tuple[float, float, float] | None:
+    by_name = {
+        dimension.name.casefold(): dimension
+        for dimension in dimensions
+        if dimension.name.casefold() in {"d1", "d2", "d3"}
+    }
+    if set(by_name) != {"d1", "d2", "d3"} or any(
+        item.native_offset is None for item in by_name.values()
+    ):
+        return None
+    return tuple(by_name[f"d{index}"].value_mm for index in range(1, 4))
+
+
+def _native_scale_factors(
+    data: bytes, start: int, end: int
+) -> tuple[float, float, float] | None:
+    if end - start < 38:
+        return None
+    block = data[end - 38 : end]
+    if (
+        block[:4] != struct.pack("<I", 1)
+        or block[28:36] != b"\0" * 8
+        or struct.unpack_from("<H", block, 36)[0] < 0x8000
+    ):
+        return None
+    factors = struct.unpack_from("<3d", block, 4)
+    if not all(math.isfinite(value) and value > 0.0 for value in factors):
+        return None
+    return factors
+
+
+def _resolve_profile_operation(
+    operation: NativeOperation,
+    sketches: dict[int, NativeSketch],
+    data: bytes,
+    features: list[NativeFeature],
+) -> NativeOperation:
+    if operation.kind != "hole" or operation.profile_id not in sketches:
+        return operation
+    sketch = sketches[operation.profile_id]
+    circles = tuple(profile for profile in sketch.profiles if profile.kind == "circle")
+    feature = next(
+        (item for item in features if item.object_id == operation.object_id), None
+    )
+    selections = (
+        _operation_selections(
+            data,
+            sketch.native_offset,
+            sketch.native_end,
+            feature,
+            features,
+        )
+        if feature is not None
+        else ()
+    )
+    return replace(
+        operation,
+        diameter_mm=(circles[0].coordinates[2] * 2.0 if len(circles) == 1 else None),
+        selection_offsets=tuple(selection[0] for selection in selections),
+        selected_local_ids=tuple(selection[2] for selection in selections),
+        selection_references=tuple(
+            (selection[1], selection[2]) for selection in selections
+        ),
+    )
 
 
 def _end_spec(data: bytes, start: int, end: int) -> NativeEndSpec | None:
