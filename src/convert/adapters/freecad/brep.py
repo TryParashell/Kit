@@ -1228,10 +1228,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
                     f"0  {_number(max(tolerance, face.tolerance))} {surface_indexes[face.surface_id]} 0",
                 ),
                 "0101000",
-                tuple(
-                    (f"loop:{loop_id}", not graph.loops[loop_id].outer)
-                    for loop_id in face.loop_ids
-                ),
+                tuple((f"loop:{loop_id}", False) for loop_id in face.loop_ids),
             )
         )
     for shell in model.shells:
