@@ -795,24 +795,45 @@ def _vertex_geometry(tokens: _Tokens) -> _VertexData:
     return _VertexData(tolerance, point)
 
 
-def _edge_geometry(tokens: _Tokens, curve_count: int) -> _EdgeData:
+def _edge_geometry(
+    tokens: _Tokens,
+    curve_count: int,
+    curve2d_count: int,
+    surface_count: int,
+) -> _EdgeData:
     tolerance = tokens.number()
     same_parameter = tokens.integer(0, 1)
     same_range = tokens.integer(0, 1)
     degenerate = tokens.integer(0, 1)
-    if tolerance < 0.0 or not same_parameter or not same_range or degenerate:
+    if tolerance < 0.0 or degenerate:
         raise _DecodeFailure("unsupported BRep edge state")
     representations: list[tuple[int, float, float]] = []
     while True:
         representation = tokens.integer(0, 7)
         if representation == 0:
             break
-        if representation != 1:
+        if representation == 1:
+            curve = tokens.integer(1, curve_count)
+            if tokens.integer(0, 0) != 0:
+                raise _DecodeFailure("unsupported BRep edge location")
+            representations.append((curve, tokens.number(), tokens.number()))
+        elif representation == 2:
+            tokens.integer(1, curve2d_count)
+            tokens.integer(1, surface_count)
+            if tokens.integer(0, 0) != 0:
+                raise _DecodeFailure("unsupported BRep edge location")
+            tokens.number()
+            tokens.number()
+        elif representation == 3:
+            tokens.integer(1, curve2d_count)
+            _indexed_continuity(tokens, curve2d_count)
+            tokens.integer(1, surface_count)
+            if tokens.integer(0, 0) != 0:
+                raise _DecodeFailure("unsupported BRep edge location")
+            tokens.number()
+            tokens.number()
+        else:
             raise _DecodeFailure("unsupported BRep edge representation")
-        curve = tokens.integer(1, curve_count)
-        if tokens.integer(0, 0) != 0:
-            raise _DecodeFailure("unsupported BRep edge location")
-        representations.append((curve, tokens.number(), tokens.number()))
     if len(representations) != 1:
         raise _DecodeFailure("ambiguous BRep edge geometry")
     curve, first, last = representations[0]
@@ -829,7 +850,11 @@ def _face_geometry(tokens: _Tokens, surface_count: int) -> _FaceData:
 
 
 def _shape_records(
-    tokens: _Tokens, shape_count: int, curve_count: int, surface_count: int
+    tokens: _Tokens,
+    shape_count: int,
+    curve_count: int,
+    curve2d_count: int,
+    surface_count: int,
 ) -> dict[int, _ShapeRecord]:
     records: dict[int, _ShapeRecord] = {}
     for ordinal in range(1, shape_count + 1):
@@ -840,7 +865,12 @@ def _shape_records(
         if kind == b"Ve":
             geometry = _vertex_geometry(tokens)
         elif kind == b"Ed":
-            geometry = _edge_geometry(tokens, curve_count)
+            geometry = _edge_geometry(
+                tokens,
+                curve_count,
+                curve2d_count,
+                surface_count,
+            )
         elif kind == b"Fa":
             geometry = _face_geometry(tokens, surface_count)
         flag_token = tokens.take()
@@ -1135,7 +1165,7 @@ def decode_ascii_brep(
         tokens.expect(b"(c)")
         tokens.expect(b"Matra-Datavision")
         _zero_table(tokens, b"Locations")
-        _zero_table(tokens, b"Curve2ds")
+        curve2d_count = _curves(tokens, b"Curve2ds", 2)
         curve_count = _count(tokens, b"Curves", _MAX_GEOMETRY)
         curves: list[LineCurve] = []
         for index in range(1, curve_count + 1):
@@ -1186,7 +1216,13 @@ def decode_ascii_brep(
         shape_count = _count(tokens, b"TShapes", _MAX_SHAPES)
         if shape_count == 0:
             raise _DecodeFailure("empty BRep topology")
-        records = _shape_records(tokens, shape_count, curve_count, surface_count)
+        records = _shape_records(
+            tokens,
+            shape_count,
+            curve_count,
+            curve2d_count,
+            surface_count,
+        )
         root = _reference(tokens, shape_count)
         if root is None or root.orientation != "+" or tokens.peek() is not None:
             raise _DecodeFailure("unsupported BRep root")
