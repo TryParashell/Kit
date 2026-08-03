@@ -179,6 +179,7 @@ _SOURCE_FORMAT_KEY = "solidworks_source_format_id"
 _ATTESTED_COMPATIBILITIES = frozenset(
     {
         "kit-neutral-only",
+        "native-assembly-with-kit-neutral",
         "native-brep-with-kit-neutral",
         "native-metadata-with-kit-neutral",
         "native-source-with-kit-neutral",
