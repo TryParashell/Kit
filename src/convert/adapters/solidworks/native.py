@@ -4701,9 +4701,10 @@ def _structural_circle_profiles(
             or rim.profile_role != 1
         ):
             continue
-        radius = math.dist(center.coordinates_mm, rim.coordinates_mm)
-        if not math.isfinite(radius) or radius <= 1e-12:
+        radius = _marker_radius_mm(center, rim)
+        if radius is None:
             continue
+        start_angle = _marker_start_angle_degrees(center, rim)
         geometry = (
             center.coordinates_mm[0],
             center.coordinates_mm[1],
