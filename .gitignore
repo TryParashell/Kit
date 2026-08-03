@@ -467,7 +467,7 @@ wp-content/plugins/hello.php
 /readme.html
 /sitemap.xml
 /sitemap.xml.gz
-
+/.rescratch/
 /examples/Random/
 
 ### Drupal ###
@@ -1983,3 +1983,4 @@ hs_err_pid*
 .tmp_*
 
 !.hoplite/settings.json
+.rescratch/freecad.7z
