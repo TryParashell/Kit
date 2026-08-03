@@ -240,6 +240,8 @@ class NativeSketch:
     dimensions: tuple[NativeDimension, ...]
     constraints: tuple[NativeConstraint, ...]
     native_stream: str = RESOLVED_FEATURES_STREAM
+    support_kind: str = PLANE_SUPPORT_KIND
+    support_plane: NativeSketchPlane | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,6 +250,8 @@ class NativeEndSpec:
     termination_code: int
     direction_code: int
     second_direction_code: int
+    mirrored_direction_offset: int | None = None
+    mirrored_direction_code: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,6 +282,9 @@ class NativeOperation:
     selection_references: tuple[tuple[int, int], ...] = ()
     translation_mm: tuple[float, float, float] | None = None
     scale_factors: tuple[float, float, float] | None = None
+    depth_copies: tuple[NativeDepthCopy, ...] = ()
+    mirrored_direction_offset: int | None = None
+    mirrored_direction_code: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,6 +335,7 @@ class NativeModel:
     diagnostics: tuple[str, ...] = field(default_factory=tuple)
     equations: tuple[NativeEquation, ...] = field(default_factory=tuple)
     active_configuration_id: int | None = None
+    bounding_box: NativeBoundingBox | None = None
 
 
 @dataclass(frozen=True, slots=True)
