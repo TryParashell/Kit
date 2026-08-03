@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, replace
 import hashlib
@@ -155,6 +155,7 @@ from .native import (
     NativeOperation,
     NativeProfile,
     NativeSketch,
+    NativeAssemblyEnvelope,
     decode_native_model,
     encode_native_assembly_envelope,
     encode_native_part,
@@ -177,6 +178,18 @@ _SOURCE_BYTES_KEY = "solidworks_source_bytes"
 _SOURCE_SHA256_KEY = "solidworks_source_sha256"
 _SOURCE_SEMANTIC_SHA256_KEY = "solidworks_source_semantic_sha256"
 _SOURCE_FORMAT_KEY = "solidworks_source_format_id"
+_UNSYNTHESISED_ASSEMBLY_STREAMS = (
+    "Contents/CMgr",
+    "Contents/Config-0",
+    "Contents/Config-0-LWDATA",
+    RESOLVED_FEATURES_STREAM,
+    "Contents/Definition",
+    DISPLAY_LISTS_STREAM,
+    "Contents/User Units Table",
+    "SwDocContentMgr/SwDocContentMgrInfo",
+    "docProps/ISolidWorksInformation.xml",
+    KEYWORDS_STREAM,
+)
 _ATTESTED_COMPATIBILITIES = frozenset(
     {
         "kit-neutral-only",
@@ -215,6 +228,7 @@ class _GeneratedStreams:
     application_usable: bool
     vendor_loadable: bool
     mixed_capabilities: frozenset[Capability] = frozenset()
+    unexpressed: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -794,6 +808,18 @@ class SldprtAdapter:
                             "one or more neutral edits are retained in the Kit "
                             "stream because their native SOLIDWORKS records could "
                             "not be reproduced"
+                        ),
+                        severity=Severity.WARNING,
+                    ),
+                )
+            if generated.unexpressed:
+                diagnostics = (
+                    *diagnostics,
+                    Diagnostic(
+                        code="sldasm.unexpressed_native_records",
+                        message=(
+                            "generated SOLIDWORKS assembly does not express "
+                            + ", ".join(generated.unexpressed)
                         ),
                         severity=Severity.WARNING,
                     ),
@@ -1699,6 +1725,7 @@ def _generated_streams(
     part_application_usable = False
     part_vendor_loadable = False
     assembly_envelope_complete = False
+    assembly_notes: tuple[str, ...] = ()
     if portable.assembly is None:
         part = encode_native_part(portable, model_name)
         streams.update(part.envelope_streams)
@@ -1747,6 +1774,7 @@ def _generated_streams(
         streams[COMPONENT_TREE_STREAM] = encoding.component_tree
         streams.update(encoding.mate_streams)
         assembly_envelope_complete = envelope.envelope_complete
+        assembly_notes = _generated_assembly_notes(encoding, envelope, streams)
     if part_partition is not None:
         payload = part_partition
         native_brep = "generated"
@@ -1803,7 +1831,33 @@ def _generated_streams(
         application_usable,
         vendor_loadable,
         mixed_capabilities,
+        assembly_notes,
     )
+
+
+def _generated_assembly_notes(
+    encoding: NativeAssemblyEncoding,
+    envelope: NativeAssemblyEnvelope,
+    streams: Mapping[str, bytes],
+) -> tuple[str, ...]:
+    counts: Counter[str] = Counter()
+    for reasons in encoding.unsupported_mate_reasons.values():
+        counts.update(reasons)
+    for reasons in encoding.generated_mate_losses.values():
+        counts.update(reasons)
+    notes = [f"{reason}:{count}" for reason, count in sorted(counts.items())]
+    if envelope.omitted_object_names:
+        notes.append(
+            f"header_object_name_unencodable:{len(envelope.omitted_object_names)}"
+        )
+    if not encoding.structure_complete:
+        notes.append("component_structure_incomplete:1")
+    notes.extend(
+        f"absent_vendor_stream:{name}"
+        for name in _UNSYNTHESISED_ASSEMBLY_STREAMS
+        if name not in streams
+    )
+    return tuple(notes)
 
 
 def _generated_occurrence_labels(assembly: AssemblyData) -> tuple[str, ...]:
@@ -1969,8 +2023,15 @@ def _generated_assembly_capabilities(
     if (
         encoding.mates_complete
         and assembly.mates
-        and len(native.mate_lists) == 1
-        and native.mate_lists[0].declared_count == len(assembly.mates)
+        and len(native.mate_lists) == len(encoding.mate_streams)
+        and all(item.declared_count == len(item.mates) for item in native.mate_lists)
+        and sum(
+            1
+            for item in native.mate_lists
+            for mate in item.mates
+            if mate.kind != "group"
+        )
+        == len(assembly.mates)
     ):
         result.add(Capability.ASSEMBLY_MATES)
     return frozenset(result)
