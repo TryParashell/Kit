@@ -115,6 +115,7 @@ def test_assembly_capabilities_reflect_the_decoded_document(document) -> None:
             Capability.COMPONENT_DOCUMENTS,
             Capability.CONFIGURATIONS,
             Capability.EDITABLE_SKETCHES,
+            Capability.EXPRESSIONS,
             Capability.EXTERNAL_REFERENCES,
             Capability.NATIVE_PAYLOADS,
             Capability.PARAMETERS,
@@ -616,7 +617,8 @@ def test_custom_component_paths_resolve_without_numeric_suffixes() -> None:
 
 
 def test_mate_list_discovery_uses_structure_when_the_stream_is_renamed() -> None:
-    archive = SldprtArchive.open(CONROD)
+    blob = CONROD.read_bytes()
+    archive = SldprtArchive.from_bytes(blob, CONROD)
     record = next(item for item in archive.records if item.name.endswith("-MatesList"))
     streams = archive.streams
     streams["Relations/AssemblyConstraints"] = streams.pop(record.name)
@@ -625,6 +627,7 @@ def test_mate_list_discovery_uses_structure_when_the_stream_is_renamed() -> None
             streams,
             file_id=archive.file_id,
             format_version=archive.format_version,
+            template=blob,
         )
     )
     native = decode_native_assembly(renamed)

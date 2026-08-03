@@ -1240,9 +1240,9 @@ def test_entire_local_solidworks_corpus_decodes() -> None:
         and not path.name.startswith("~$")
     )
     documents = [read_sldprt(path) for path in parts]
-    assert len(parts) == 54
+    assert len(parts) == 111
     assert all(document.validate() == () for document in documents)
-    assert sum(len(document.brep_payloads) for document in documents) == 313
+    assert sum(len(document.brep_payloads) for document in documents) == 909
     assert all(
         payload.role == PayloadRole.BREP
         for document in documents
