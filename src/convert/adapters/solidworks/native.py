@@ -185,6 +185,32 @@ class NativeProfile:
     marker_offsets: tuple[int, ...]
     parameter_name: str | None = None
     dimension_kind: str | None = None
+    start_angle_degrees: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NativeSketchPlane:
+    offset: int
+    plane_object_id: int
+    axis_code: int
+    u_axis: tuple[float, float, float]
+    v_axis: tuple[float, float, float]
+    normal: tuple[float, float, float]
+    basis_offset: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class NativeDepthCopy:
+    offset: int
+    sign: int
+    value_mm: float
+
+
+@dataclass(frozen=True, slots=True)
+class NativeBoundingBox:
+    offset: int
+    center_mm: tuple[float, float, float]
+    diameter_mm: float
 
 
 @dataclass(frozen=True, slots=True)
