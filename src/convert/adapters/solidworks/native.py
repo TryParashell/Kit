@@ -43,7 +43,15 @@ from .format import (
     dimension_scalar_value_offset,
 )
 from .parasolid import encode_blank_partition_stream
-from .resolved import patch_rectangle_pad
+from .resolved import (
+    DEPTH_COPY_DELTAS,
+    DEPTH_COPY_SIGNS,
+    FROM_END_SPEC_CLASS,
+    FROM_REVERSE_RELATIVE,
+    SKETCH_CHAIN_CLASS,
+    circle_radius_mm,
+    patch_rectangle_pad,
+)
 
 _CURRENT_MARKER = bytes.fromhex("ffff1f0003")
 _LEGACY_MARKER = bytes.fromhex("ffff070001")
@@ -63,6 +71,24 @@ _COMBINE_FEATURE_TYPES = frozenset({"combine", "combinebodies"})
 _HOLE_CLASS_NAMES = frozenset({"moSketchHole", "moHoleWzd_c"})
 _EQUATION = re.compile(r'^"([^"\r\n]+)"\s*=\s*(\S(?:.*\S)?)$')
 _EQUATION_REFERENCE = re.compile(r'"([^"\r\n]+)"')
+_EXTRUSION_CLASS = "moExtrusion_c"
+_BOUNDING_BOX_CLASS = "moBBoxCenterData_c"
+_BOUNDING_BOX_RELATIVE = 28
+_FACE_SUPPORT_CLASS = "moFaceRefPlnData_c"
+_SKETCH_PLANE_ID_RELATIVE = 209
+_SKETCH_PLANE_REFERENCE_PREFIX = bytes.fromhex("50460000")
+_SKETCH_PLANE_REFERENCE_TAG = bytes.fromhex("f65a1a69")
+_SKETCH_PLANE_AXIS_DELTA = 10
+_SKETCH_PLANE_BASIS_FLAG_DELTA = 14
+_SKETCH_PLANE_BASIS_DELTA = 15
+_SKETCH_PLANE_BASIS_BYTES = 72
+_SKETCH_PLANE_AXIS_COMPLEMENT = 5
+_PRINCIPAL_PLANE_OBJECT_IDS = frozenset({2, 3, 4})
+_IDENTITY_BASIS = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+PLANE_SUPPORT_KIND = "plane"
+FACE_SUPPORT_KIND = "face"
+DERIVED_SUPPORT_KIND = "derived"
+_MILLIMETRES = 1000.0
 MARKER_LOCAL_ID_OFFSET_BY_LENGTH = MappingProxyType(
     {
         142: 138,
