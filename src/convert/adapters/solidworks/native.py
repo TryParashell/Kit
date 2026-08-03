@@ -4737,6 +4737,7 @@ def _structural_circle_profiles(
                 marker_offsets,
                 parameter_name,
                 dimension_kind,
+                start_angle,
             )
         )
     return tuple(profiles), used, normalized
