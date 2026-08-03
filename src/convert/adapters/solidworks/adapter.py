@@ -1762,7 +1762,21 @@ def _generated_streams(
         native_capabilities,
         mixed_capabilities,
     )
-    application_usable = part_application_usable and all(
+    if portable.assembly is None:
+        vendor_loadable = part_vendor_loadable
+        native_records_usable = part_application_usable
+    else:
+        vendor_loadable = (
+            assembly_envelope_complete
+            and encoding is not None
+            and encoding.structure_complete
+            and Capability.ASSEMBLIES in native_capabilities
+        )
+        native_records_usable = vendor_loadable and (
+            not portable.assembly.mates
+            or Capability.ASSEMBLY_MATES in native_capabilities
+        )
+    application_usable = native_records_usable and all(
         transfer.mode is TransferMode.NATIVE
         or transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
         for transfer in proof_transfers
@@ -1777,13 +1791,31 @@ def _generated_streams(
             else (
                 "native-metadata-with-kit-neutral"
                 if portable.assembly is None
-                else "kit-neutral-only"
+                else (
+                    "native-assembly-with-kit-neutral"
+                    if vendor_loadable
+                    else "kit-neutral-only"
+                )
             )
         ),
         application_usable,
-        part_vendor_loadable,
+        vendor_loadable,
         mixed_capabilities,
     )
+
+
+def _generated_occurrence_labels(assembly: AssemblyData) -> tuple[str, ...]:
+    labels: list[str] = []
+    for index, instance in enumerate(assembly.instances):
+        reference = _generated_reference_number(instance, index + 1)
+        suffix = f"-{reference}"
+        base_name = (
+            instance.name[: -len(suffix)]
+            if instance.name.endswith(suffix)
+            else instance.name
+        )
+        labels.append(f"{base_name}{suffix}")
+    return tuple(labels)
 
 
 def _preserved_generated_mate_streams(
