@@ -3388,14 +3388,8 @@ def _parse_classes(data: bytes) -> tuple[NativeClass, ...]:
 
 
 def _record_class_name(classes: tuple[NativeClass, ...], record_offset: int) -> str:
-    return next(
-        (
-            item.name
-            for item in classes
-            if item.offset + 6 + len(item.name.encode("ascii")) == record_offset
-        ),
-        "",
-    )
+    owner = _record_class(classes, record_offset)
+    return "" if owner is None else owner.name
 
 
 def _parse_native_equations(
@@ -3857,6 +3851,164 @@ def _support_plane_id(
     sources = _component_plane_sources(data, start, end)
     known = [source for source in sources if source in planes]
     return known[-1] if known else fallback
+
+
+def _sketch_plane_reference(
+    data: bytes,
+    classes: tuple[NativeClass, ...],
+    start: int,
+    end: int,
+) -> NativeSketchPlane | None:
+    for record in classes:
+        if record.name != SKETCH_CHAIN_CLASS or not start <= record.offset < end:
+            continue
+        anchored = _read_sketch_plane_reference(
+            data, record.offset + _SKETCH_PLANE_ID_RELATIVE, end
+        )
+        if anchored is not None:
+            return anchored
+    for offset in _find_all(data, _SKETCH_PLANE_REFERENCE_PREFIX, start, end):
+        scanned = _read_sketch_plane_reference(
+            data, offset + len(_SKETCH_PLANE_REFERENCE_PREFIX), end
+        )
+        if scanned is not None:
+            return scanned
+    return None
+
+
+def _read_sketch_plane_reference(
+    data: bytes, offset: int, end: int
+) -> NativeSketchPlane | None:
+    if offset < 0 or offset + _SKETCH_PLANE_BASIS_DELTA > end:
+        return None
+    plane_object_id = struct.unpack_from("<I", data, offset)[0]
+    if plane_object_id not in _PRINCIPAL_PLANE_OBJECT_IDS:
+        return None
+    if data[offset + 4 : offset + 8] != _SKETCH_PLANE_REFERENCE_TAG:
+        return None
+    if data[offset + 8 : offset + _SKETCH_PLANE_AXIS_DELTA] != b"\0\0":
+        return None
+    axis_code = struct.unpack_from("<I", data, offset + _SKETCH_PLANE_AXIS_DELTA)[0]
+    if axis_code != _SKETCH_PLANE_AXIS_COMPLEMENT - plane_object_id:
+        return None
+    flag = data[offset + _SKETCH_PLANE_BASIS_FLAG_DELTA]
+    basis_offset = offset + _SKETCH_PLANE_BASIS_DELTA
+    if flag == 0:
+        return NativeSketchPlane(
+            offset,
+            plane_object_id,
+            axis_code,
+            _IDENTITY_BASIS[0],
+            _IDENTITY_BASIS[1],
+            _IDENTITY_BASIS[2],
+            None,
+        )
+    if flag != 1 or basis_offset + _SKETCH_PLANE_BASIS_BYTES > end:
+        return None
+    rows = struct.unpack_from("<9d", data, basis_offset)
+    if not all(math.isfinite(value) for value in rows):
+        return None
+    u_axis = (rows[0], rows[3], rows[6])
+    v_axis = (rows[1], rows[4], rows[7])
+    normal = (rows[2], rows[5], rows[8])
+    if not _orthonormal((u_axis, v_axis, normal)):
+        return None
+    return NativeSketchPlane(
+        offset,
+        plane_object_id,
+        axis_code,
+        tuple(_clean(value) for value in u_axis),
+        tuple(_clean(value) for value in v_axis),
+        tuple(_clean(value) for value in normal),
+        basis_offset,
+    )
+
+
+def _sketch_support_kind(
+    classes: tuple[NativeClass, ...],
+    reference: NativeSketchPlane | None,
+    start: int,
+    end: int,
+) -> str:
+    if reference is not None:
+        return PLANE_SUPPORT_KIND
+    if any(
+        record.name == _FACE_SUPPORT_CLASS and start <= record.offset < end
+        for record in classes
+    ):
+        return FACE_SUPPORT_KIND
+    return DERIVED_SUPPORT_KIND
+
+
+def _bounding_box(
+    data: bytes, classes: tuple[NativeClass, ...]
+) -> NativeBoundingBox | None:
+    for record in classes:
+        if record.name != _BOUNDING_BOX_CLASS:
+            continue
+        offset = record.offset + _BOUNDING_BOX_RELATIVE
+        if offset + 32 > len(data):
+            continue
+        values = struct.unpack_from("<4d", data, offset)
+        if not all(math.isfinite(value) for value in values) or values[3] < 0.0:
+            continue
+        return NativeBoundingBox(
+            offset,
+            tuple(_clean(value * _MILLIMETRES) for value in values[:3]),
+            _clean(values[3] * _MILLIMETRES),
+        )
+    return None
+
+
+def _depth_copies(data: bytes, offset: int | None) -> tuple[NativeDepthCopy, ...]:
+    if offset is None:
+        return ()
+    result: list[NativeDepthCopy] = []
+    for delta, sign in zip(DEPTH_COPY_DELTAS, DEPTH_COPY_SIGNS, strict=True):
+        target = offset + delta
+        if target < 0 or target + 8 > len(data):
+            continue
+        value = struct.unpack_from("<d", data, target)[0]
+        if not math.isfinite(value):
+            continue
+        result.append(NativeDepthCopy(target, sign, value * _MILLIMETRES))
+    return tuple(result)
+
+
+def _mirrored_direction(
+    data: bytes, classes: tuple[NativeClass, ...], start: int, end: int
+) -> tuple[int | None, int | None]:
+    for record in classes:
+        if record.name != FROM_END_SPEC_CLASS or not start <= record.offset < end:
+            continue
+        offset = record.offset + FROM_REVERSE_RELATIVE
+        if offset < len(data):
+            return offset, data[offset]
+    return None, None
+
+
+def _record_class(
+    classes: tuple[NativeClass, ...], record_offset: int
+) -> NativeClass | None:
+    return next(
+        (
+            item
+            for item in classes
+            if item.offset + 6 + len(item.name.encode("ascii")) == record_offset
+        ),
+        None,
+    )
+
+
+def _class_record_end(
+    data: bytes, classes: tuple[NativeClass, ...], record_offset: int
+) -> int | None:
+    owner = _record_class(classes, record_offset)
+    if owner is None:
+        return None
+    return next(
+        (item.offset for item in classes if item.offset > owner.offset), len(data)
+    )
 
 
 def _reference_plane_ids(
