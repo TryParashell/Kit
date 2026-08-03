@@ -19,7 +19,13 @@ from convert.adapters.solidworks.adapter import (
     _neutral_mate_kind,
     _neutral_mate_value,
 )
+from convert.adapters.freecad import read_freecad
 from convert.adapters.solidworks.assembly import (
+    MATE_LOSS_ENTITY_FRAME,
+    MATE_LOSS_EXPRESSION,
+    MATE_LOSS_GROUP_MEMBERSHIP,
+    MATE_LOSS_REASONS,
+    MATE_LOSS_VALUE_MISSING,
     MATE_VALUE_SEMANTICS,
     NATIVE_MATE_ALIGNMENTS,
     NATIVE_MATE_ALIGNMENT_BY_CODE,
@@ -41,13 +47,23 @@ from convert.adapters.solidworks.assembly import (
     _mate_kind,
     decode_mate_list,
     decode_native_assembly,
+    encode_native_assembly,
 )
 from interchange import (
+    AssemblyData,
     Capability,
+    ComponentDefinition,
+    ComponentInstance,
     ComponentKind,
+    Configuration,
     MateAlignment,
+    MateConstraint,
+    MateEntity,
     MateEntityKind,
+    MateGroup,
     MateKind,
+    Matrix4,
+    ParameterValue,
     ValueKind,
 )
 

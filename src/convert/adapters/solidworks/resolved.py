@@ -29,17 +29,39 @@ BLIND_END_CONDITION = 0
 MID_PLANE_END_CONDITION = 6
 SUPPORTED_END_CONDITIONS = frozenset({BLIND_END_CONDITION, MID_PLANE_END_CONDITION})
 
+FEATURE_FLAGS_MASK = 0x7FFFFFFF
+
 BOSS_FLAGS = 0x40000140
 CUT_FLAGS = 0x400201CA
 SKETCH_FLAGS = 0x40000000
 PLANE_FLAGS = 0xC0000000
+ROUND_FLAGS = 0x40000001
+SWEEP_FLAGS = 0x40004003
+SWEEP_SINGLE_PROFILE_FLAGS = 0x40004002
+LOFT_FLAGS = 0x40004404
 BOSS_KIND = "boss"
 CUT_KIND = "cut"
-FEATURE_KIND_BY_FLAGS = MappingProxyType({BOSS_FLAGS: BOSS_KIND, CUT_FLAGS: CUT_KIND})
-TREE_NODE_FLAGS = frozenset({BOSS_FLAGS, CUT_FLAGS, SKETCH_FLAGS, PLANE_FLAGS})
+ROUND_KIND = "round"
+SWEEP_KIND = "sweep"
+LOFT_KIND = "loft"
+FEATURE_KIND_BY_FLAGS = MappingProxyType(
+    {
+        BOSS_FLAGS: BOSS_KIND,
+        CUT_FLAGS: CUT_KIND,
+        ROUND_FLAGS: ROUND_KIND,
+        SWEEP_FLAGS: SWEEP_KIND,
+        SWEEP_SINGLE_PROFILE_FLAGS: SWEEP_KIND,
+        LOFT_FLAGS: LOFT_KIND,
+    }
+)
+TREE_NODE_FLAGS = frozenset(FEATURE_KIND_BY_FLAGS) | {SKETCH_FLAGS, PLANE_FLAGS}
 
-SKETCH_POINT_PREFIX = bytes.fromhex("000000000000f03f00000000000000001e00")
-SKETCH_POINT_SUFFIX = bytes.fromhex("00000200")
+SKETCH_COORDINATE_PREFIX = bytes.fromhex("000000000000f03f00000000000000001e00")
+SKETCH_POINT_PREFIX = SKETCH_COORDINATE_PREFIX
+SKETCH_FREE_ROLE = 0
+SKETCH_ON_CURVE_ROLE = 2
+SKETCH_POINT_CLASS = 2
+SKETCH_POINT_SUFFIX = bytes((SKETCH_FREE_ROLE, 0, SKETCH_POINT_CLASS, 0))
 SKETCH_NAME_PREFIX = "Sketch"
 DEPTH_SCALAR_NAME_PREFIX = "D"
 
@@ -52,6 +74,8 @@ LATER_FEATURE_REVERSE_DISTANCE = 721
 LATER_FEATURE_END_CONDITION_DISTANCE = 715
 
 CIRCLE_POINT_ANGLE_DEGREES = 17.0
+CIRCLE_POINT_ANGLE_TOLERANCE_DEGREES = 1.0e-6
+FULL_CIRCLE_DEGREES = 360.0
 
 _NAME_MARKER_CLASS_TOKEN = 0x8004
 _MAX_CLASS_NAME = 64
@@ -59,6 +83,8 @@ _MAX_NAME_UNITS = 128
 _MAX_FEATURE_ID = 4096
 _NAME_TRAILER_BYTES = 12
 _METRES = 1000.0
+_COORDINATE_TRAILER_BYTES = 4
+_MINIMUM_RADIUS_MM = 1.0e-9
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +119,34 @@ class SketchPoint:
 
 
 @dataclass(frozen=True, slots=True)
+class SketchCoordinate:
+    offset: int
+    x_mm: float
+    y_mm: float
+    role: int
+    geometry_class: int
+
+
+@dataclass(frozen=True, slots=True)
+class SketchArc:
+    centre_offset: int
+    point_offset: int
+    centre_x_mm: float
+    centre_y_mm: float
+    radius_mm: float
+    start_angle_degrees: float
+    sweep_angle_degrees: float
+
+    @property
+    def centre_mm(self) -> tuple[float, float]:
+        return self.centre_x_mm, self.centre_y_mm
+
+    @property
+    def full_circle(self) -> bool:
+        return self.sweep_angle_degrees == FULL_CIRCLE_DEGREES
+
+
+@dataclass(frozen=True, slots=True)
 class FeatureLayout:
     ordinal: int
     name: str
@@ -103,6 +157,7 @@ class FeatureLayout:
     sketch_name: str | None
     sketch_id: int | None
     points: tuple[SketchPoint, ...]
+    arcs: tuple[SketchArc, ...]
     depth_offset: int | None
     depth_mm: float | None
     depth_copy_offsets: tuple[int, ...]
@@ -116,12 +171,34 @@ class FeatureLayout:
         return tuple((point.x_mm, point.y_mm) for point in self.points)
 
     @property
+    def radii_mm(self) -> tuple[float, ...]:
+        return tuple(arc.radius_mm for arc in self.arcs)
+
+    @property
     def bounds_mm(self) -> tuple[float, float, float, float] | None:
-        if not self.points:
-            return None
-        xs = tuple(point.x_mm for point in self.points)
-        ys = tuple(point.y_mm for point in self.points)
-        return min(xs), min(ys), max(xs), max(ys)
+        if self.points:
+            xs = tuple(point.x_mm for point in self.points)
+            ys = tuple(point.y_mm for point in self.points)
+            return min(xs), min(ys), max(xs), max(ys)
+        if self.arcs:
+            xs = tuple(
+                value
+                for arc in self.arcs
+                for value in (
+                    arc.centre_x_mm - arc.radius_mm,
+                    arc.centre_x_mm + arc.radius_mm,
+                )
+            )
+            ys = tuple(
+                value
+                for arc in self.arcs
+                for value in (
+                    arc.centre_y_mm - arc.radius_mm,
+                    arc.centre_y_mm + arc.radius_mm,
+                )
+            )
+            return min(xs), min(ys), max(xs), max(ys)
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +208,7 @@ class FeatureEdit:
     reversed: bool | None = None
     end_condition_code: int | None = None
     update_depth_copies: bool = False
+    radii_mm: Sequence[float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +228,14 @@ class RectanglePadLayout:
         xs = tuple(point[0] for point in self.corners_mm)
         ys = tuple(point[1] for point in self.corners_mm)
         return min(xs), min(ys), max(xs), max(ys)
+
+
+def feature_kind(flags: int) -> str | None:
+    return FEATURE_KIND_BY_FLAGS.get(flags & FEATURE_FLAGS_MASK)
+
+
+def is_tree_node_flags(flags: int) -> bool:
+    return flags & FEATURE_FLAGS_MASK in TREE_NODE_FLAGS
 
 
 def class_records(data: bytes | bytearray) -> tuple[ClassRecord, ...]:
@@ -219,56 +305,122 @@ def dimension_scalars(data: bytes | bytearray) -> tuple[DimensionScalar, ...]:
     return _dimension_scalars(blob, name_records(blob))
 
 
-def sketch_points(data: bytes | bytearray) -> tuple[SketchPoint, ...]:
+def sketch_coordinates(data: bytes | bytearray) -> tuple[SketchCoordinate, ...]:
     blob = bytes(data)
-    result: list[SketchPoint] = []
+    result: list[SketchCoordinate] = []
     cursor = 0
     while True:
-        offset = blob.find(SKETCH_POINT_PREFIX, cursor)
+        offset = blob.find(SKETCH_COORDINATE_PREFIX, cursor)
         if offset < 0:
             break
         cursor = offset + 1
-        start = offset + len(SKETCH_POINT_PREFIX)
-        suffix_end = start + 16 + len(SKETCH_POINT_SUFFIX)
-        if suffix_end > len(blob):
+        start = offset + len(SKETCH_COORDINATE_PREFIX)
+        trailer_end = start + 16 + _COORDINATE_TRAILER_BYTES
+        if trailer_end > len(blob):
             continue
-        if blob[start + 16 : suffix_end] != SKETCH_POINT_SUFFIX:
+        trailer = blob[start + 16 : trailer_end]
+        if trailer[1] or trailer[3]:
             continue
         x = _read_double(blob, start)
         y = _read_double(blob, start + 8)
         if x is None or y is None:
             continue
-        result.append(SketchPoint(offset=start, x_mm=x * _METRES, y_mm=y * _METRES))
+        result.append(
+            SketchCoordinate(
+                offset=start,
+                x_mm=x * _METRES,
+                y_mm=y * _METRES,
+                role=trailer[0],
+                geometry_class=trailer[2],
+            )
+        )
     return tuple(result)
+
+
+def sketch_points(data: bytes | bytearray) -> tuple[SketchPoint, ...]:
+    return tuple(
+        SketchPoint(
+            offset=coordinate.offset, x_mm=coordinate.x_mm, y_mm=coordinate.y_mm
+        )
+        for coordinate in sketch_coordinates(data)
+        if coordinate.role == SKETCH_FREE_ROLE
+        and coordinate.geometry_class == SKETCH_POINT_CLASS
+    )
+
+
+def sketch_arcs(data: bytes | bytearray) -> tuple[SketchArc, ...]:
+    coordinates = sketch_coordinates(data)
+    result: list[SketchArc] = []
+    for centre, point in zip(coordinates, coordinates[1:], strict=False):
+        if (
+            point.role != SKETCH_ON_CURVE_ROLE
+            or point.geometry_class != SKETCH_POINT_CLASS
+        ):
+            continue
+        arc = _sketch_arc(centre, point)
+        if arc is not None:
+            result.append(arc)
+    return tuple(result)
+
+
+def patch_sketch_arcs(data: bytes | bytearray, radii_mm: Mapping[int, float]) -> bytes:
+    arcs = sketch_arcs(data)
+    unknown = sorted(set(radii_mm) - set(range(len(arcs))))
+    if unknown:
+        raise SldprtFormatError(
+            f"resolved-features stream has no sketch arc at indices {unknown}"
+        )
+    output = bytearray(data)
+    for index in sorted(radii_mm):
+        _write_arc_radius(output, arcs[index], radii_mm[index])
+    patched = bytes(output)
+    verification = sketch_arcs(patched)
+    if len(verification) != len(arcs):
+        raise SldprtFormatError("patched resolved-features stream cannot be relocated")
+    for index, radius_mm in sorted(radii_mm.items()):
+        _verify_arc(verification[index], arcs[index], radius_mm, index)
+    return patched
 
 
 def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
     blob = bytes(data)
     records = name_records(blob)
     nodes = _tree_nodes(blob, records)
-    features = tuple(node for node in nodes if node.flags in FEATURE_KIND_BY_FLAGS)
-    sketch_points_by_sketch = _sketch_point_groups(blob, nodes)
+    features = tuple(node for node in nodes if feature_kind(node.flags) is not None)
+    profiles = tuple(node for node in nodes if feature_kind(node.flags) is None)
+    points = sketch_points(blob)
+    arcs = sketch_arcs(blob)
     scalars = tuple(
         scalar
         for scalar in _dimension_scalars(blob, records)
         if scalar.name.startswith(DEPTH_SCALAR_NAME_PREFIX)
     )
     result: list[FeatureLayout] = []
-    cursor = 0
     for ordinal, feature in enumerate(features):
+        start = features[ordinal - 1].offset if ordinal else 0
         limit = (
             features[ordinal + 1].offset if ordinal + 1 < len(features) else len(blob)
         )
-        scalar: DimensionScalar | None = None
-        if cursor < len(scalars) and scalars[cursor].value_offset < limit:
-            scalar = scalars[cursor]
-            cursor += 1
-        sketch, points = (
-            sketch_points_by_sketch[ordinal]
-            if ordinal < len(sketch_points_by_sketch)
-            else (None, ())
+        sketch = _last_node_in_range(profiles, start, feature.offset)
+        scalar = next(
+            (
+                candidate
+                for candidate in scalars
+                if feature.offset < candidate.value_offset < limit
+            ),
+            None,
         )
-        result.append(_feature_layout(blob, ordinal, feature, sketch, points, scalar))
+        result.append(
+            _feature_layout(
+                blob,
+                ordinal,
+                feature,
+                sketch,
+                () if sketch is None else _points_in_range(points, sketch, feature),
+                () if sketch is None else _arcs_in_range(arcs, sketch, feature),
+                scalar,
+            )
+        )
     return tuple(result)
 
 
@@ -314,6 +466,9 @@ def patch_features(data: bytes | bytearray, edits: Mapping[int, FeatureEdit]) ->
             for point, (x, y) in zip(feature.points, edit.corners_mm, strict=True):
                 struct.pack_into("<d", output, point.offset, x / _METRES)
                 struct.pack_into("<d", output, point.offset + 8, y / _METRES)
+        if edit.radii_mm is not None:
+            for arc, radius_mm in zip(feature.arcs, edit.radii_mm, strict=True):
+                _write_arc_radius(output, arc, radius_mm)
         if edit.depth_mm is not None:
             struct.pack_into(
                 "<d", output, feature.depth_offset, edit.depth_mm / _METRES
@@ -503,7 +658,7 @@ def _tree_nodes(blob: bytes, records: tuple[NameRecord, ...]) -> tuple[NameRecor
         for record in records
         if blob[record.text_end : record.text_end + 4] == bytes(4)
         and 0 < record.feature_id < _MAX_FEATURE_ID
-        and record.flags in TREE_NODE_FLAGS
+        and is_tree_node_flags(record.flags)
     )
 
 
@@ -531,26 +686,70 @@ def _dimension_scalars(
     return tuple(result)
 
 
-def _sketch_point_groups(
-    blob: bytes, nodes: tuple[NameRecord, ...]
-) -> tuple[tuple[NameRecord, tuple[SketchPoint, ...]], ...]:
-    sketches = tuple(
-        node
-        for node in nodes
-        if node.flags == SKETCH_FLAGS and node.name.startswith(SKETCH_NAME_PREFIX)
+def _sketch_arc(centre: SketchCoordinate, point: SketchCoordinate) -> SketchArc | None:
+    dx = point.x_mm - centre.x_mm
+    dy = point.y_mm - centre.y_mm
+    radius = math.hypot(dx, dy)
+    if radius <= _MINIMUM_RADIUS_MM:
+        return None
+    angle = math.degrees(math.atan2(dy, dx))
+    if abs(angle - CIRCLE_POINT_ANGLE_DEGREES) > CIRCLE_POINT_ANGLE_TOLERANCE_DEGREES:
+        return None
+    return SketchArc(
+        centre_offset=centre.offset,
+        point_offset=point.offset,
+        centre_x_mm=centre.x_mm,
+        centre_y_mm=centre.y_mm,
+        radius_mm=radius,
+        start_angle_degrees=angle,
+        sweep_angle_degrees=FULL_CIRCLE_DEGREES,
     )
-    points = sketch_points(blob)
-    boundaries = tuple(sketch.offset for sketch in sketches[1:]) + (len(blob),)
-    return tuple(
-        (
-            sketch,
-            tuple(
-                point
-                for point in points
-                if sketch.offset < point.offset < boundaries[index]
-            ),
+
+
+def _write_arc_radius(output: bytearray, arc: SketchArc, radius_mm: float) -> None:
+    if not math.isfinite(radius_mm) or radius_mm <= 0.0:
+        raise SldprtFormatError("circular profile requires a positive finite radius")
+    x_mm, y_mm = circle_circumference_point_mm(radius_mm)
+    centre_x = struct.unpack_from("<d", output, arc.centre_offset)[0]
+    centre_y = struct.unpack_from("<d", output, arc.centre_offset + 8)[0]
+    struct.pack_into("<d", output, arc.point_offset, centre_x + x_mm / _METRES)
+    struct.pack_into("<d", output, arc.point_offset + 8, centre_y + y_mm / _METRES)
+
+
+def _verify_arc(
+    after: SketchArc, before: SketchArc, radius_mm: float, index: int
+) -> None:
+    if (
+        after.centre_offset != before.centre_offset
+        or after.point_offset != before.point_offset
+    ):
+        raise SldprtFormatError(
+            f"patched sketch arc {index} does not relocate to the same layout"
         )
-        for index, sketch in enumerate(sketches)
+    if not math.isclose(after.radius_mm, radius_mm, rel_tol=1e-12, abs_tol=1e-9):
+        raise SldprtFormatError(f"patched sketch arc {index} radius does not verify")
+
+
+def _last_node_in_range(
+    nodes: tuple[NameRecord, ...], start: int, limit: int
+) -> NameRecord | None:
+    candidates = tuple(node for node in nodes if start < node.offset < limit)
+    return candidates[-1] if candidates else None
+
+
+def _points_in_range(
+    points: tuple[SketchPoint, ...], sketch: NameRecord, feature: NameRecord
+) -> tuple[SketchPoint, ...]:
+    return tuple(
+        point for point in points if sketch.offset < point.offset < feature.offset
+    )
+
+
+def _arcs_in_range(
+    arcs: tuple[SketchArc, ...], sketch: NameRecord, feature: NameRecord
+) -> tuple[SketchArc, ...]:
+    return tuple(
+        arc for arc in arcs if sketch.offset < arc.centre_offset < feature.offset
     )
 
 
@@ -560,6 +759,7 @@ def _feature_layout(
     feature: NameRecord,
     sketch: NameRecord | None,
     points: tuple[SketchPoint, ...],
+    arcs: tuple[SketchArc, ...],
     scalar: DimensionScalar | None,
 ) -> FeatureLayout:
     depth_offset = None if scalar is None else scalar.value_offset
@@ -580,16 +780,22 @@ def _feature_layout(
         )
         reverse_offset = _flag_offset(blob, depth_offset - reverse_distance)
         end_condition_offset = _flag_offset(blob, depth_offset - end_condition_distance)
+    kind = feature_kind(feature.flags)
+    if kind is None:
+        raise SldprtFormatError(
+            f"tree node {feature.name!r} is not a recognised feature"
+        )
     return FeatureLayout(
         ordinal=ordinal,
         name=feature.name,
-        kind=FEATURE_KIND_BY_FLAGS[feature.flags],
+        kind=kind,
         feature_id=feature.feature_id,
         flags=feature.flags,
         flags_offset=feature.text_end + 4,
         sketch_name=None if sketch is None else sketch.name,
         sketch_id=None if sketch is None else sketch.feature_id,
         points=points,
+        arcs=arcs,
         depth_offset=depth_offset,
         depth_mm=depth_mm,
         depth_copy_offsets=copies,
@@ -621,6 +827,18 @@ def _validate_edit(feature: FeatureLayout, edit: FeatureEdit) -> None:
             math.isfinite(value) for corner in edit.corners_mm for value in corner
         ):
             raise SldprtFormatError("sketch corner values must be finite")
+    if edit.radii_mm is not None:
+        if not feature.arcs:
+            raise SldprtFormatError(
+                f"feature {feature.ordinal} has no locatable sketch arcs"
+            )
+        if len(edit.radii_mm) != len(feature.arcs):
+            raise SldprtFormatError(
+                f"feature {feature.ordinal} has {len(feature.arcs)} sketch arcs "
+                f"and {len(edit.radii_mm)} radii were supplied"
+            )
+        if not all(math.isfinite(radius) and radius > 0.0 for radius in edit.radii_mm):
+            raise SldprtFormatError("sketch radii must be finite and positive")
     if edit.depth_mm is not None:
         if feature.depth_offset is None:
             raise SldprtFormatError(
@@ -665,6 +883,8 @@ def _verify_features(
             or after.depth_offset != before.depth_offset
             or tuple(point.offset for point in after.points)
             != tuple(point.offset for point in before.points)
+            or tuple(arc.centre_offset for arc in after.arcs)
+            != tuple(arc.centre_offset for arc in before.arcs)
         ):
             raise SldprtFormatError(
                 f"patched feature {ordinal} does not relocate to the same layout"
@@ -673,6 +893,11 @@ def _verify_features(
             after.corners_mm, tuple(edit.corners_mm)
         ):
             raise SldprtFormatError(f"patched feature {ordinal} corners do not verify")
+        if edit.radii_mm is not None:
+            for index, (arc, radius_mm) in enumerate(
+                zip(after.arcs, edit.radii_mm, strict=True)
+            ):
+                _verify_arc(arc, before.arcs[index], radius_mm, index)
         if edit.depth_mm is not None:
             if after.depth_mm is None or not math.isclose(
                 after.depth_mm, edit.depth_mm, rel_tol=1e-12, abs_tol=1e-9

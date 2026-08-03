@@ -2,36 +2,55 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+import xml.etree.ElementTree as ElementTree
 
 import pytest
 
 from convert import write_document
 from convert.adapters.solidworks.container import SldprtArchive, SldprtFormatError
-from convert.adapters.solidworks.format import RESOLVED_FEATURES_STREAM
+from convert.adapters.solidworks.format import KEYWORDS_STREAM, RESOLVED_FEATURES_STREAM
 from convert.adapters.solidworks.resolved import (
     BLIND_END_CONDITION,
     BOSS_FLAGS,
     BOSS_KIND,
+    CIRCLE_POINT_ANGLE_DEGREES,
     CUT_FLAGS,
     CUT_KIND,
+    FEATURE_FLAGS_MASK,
     FEATURE_KIND_BY_FLAGS,
     FIRST_FEATURE_END_CONDITION_DISTANCE,
     FIRST_FEATURE_REVERSE_DISTANCE,
+    FULL_CIRCLE_DEGREES,
     LATER_FEATURE_END_CONDITION_DISTANCE,
     LATER_FEATURE_REVERSE_DISTANCE,
+    LOFT_FLAGS,
+    LOFT_KIND,
     MID_PLANE_END_CONDITION,
     PLANE_FLAGS,
+    ROUND_FLAGS,
+    ROUND_KIND,
     SKETCH_FLAGS,
+    SKETCH_ON_CURVE_ROLE,
+    SKETCH_POINT_CLASS,
+    SWEEP_FLAGS,
+    SWEEP_KIND,
+    SWEEP_SINGLE_PROFILE_FLAGS,
+    TREE_NODE_FLAGS,
     FeatureEdit,
     circle_circumference_point_mm,
     circle_radius_mm,
     class_records,
     dimension_scalars,
+    feature_kind,
+    is_tree_node_flags,
     locate_features,
     locate_rectangle_pad,
     name_records,
     patch_features,
+    patch_sketch_arcs,
     rectangle_corners_mm,
+    sketch_arcs,
+    sketch_coordinates,
     sketch_points,
     tree_nodes,
 )
@@ -42,6 +61,40 @@ from tests.convert.test_solidworks_writer import _freecad_rectangle_pad_document
 CORPUS = Path(__file__).resolve().parents[2] / ".rescratch" / "corpus2"
 PARTS = CORPUS / "parts"
 PATCHED = CORPUS / "patched"
+AUTHORED_CORPUS = (
+    Path(__file__).resolve().parents[2]
+    / "examples"
+    / "Single Turbo Dual Overhead Cam V8 - KDP - 2024"
+)
+DIAMETER_PREFIX = "<MOD-DIAM>"
+RADIUS_PREFIX = "R"
+
+BIELA_EXTRUSIONS = (
+    (35, BOSS_KIND, 38.0),
+    (188, BOSS_KIND, 18.0),
+    (204, BOSS_KIND, 30.7),
+    (214, CUT_KIND, 46.7),
+    (228, CUT_KIND, 5.0),
+    (250, CUT_KIND, 9.0),
+)
+BIELA_CHAMFERS = ((231, 2.0), (236, 1.0), (253, 1.0), (256, 2.0))
+TURBO_TUBE_SWEPT_FEATURES = {
+    45: LOFT_KIND,
+    48: LOFT_KIND,
+    64: SWEEP_KIND,
+    189: SWEEP_KIND,
+    210: SWEEP_KIND,
+    234: SWEEP_KIND,
+    240: SWEEP_KIND,
+}
+AUTHORED_KIND_BY_TYPE = {
+    "Sweep": SWEEP_KIND,
+    "Cut-Sweep": SWEEP_KIND,
+    "Loft": LOFT_KIND,
+    "Cut-Loft": LOFT_KIND,
+    "Chamfer": ROUND_KIND,
+    "Fillet": ROUND_KIND,
+}
 
 corpus_parts = pytest.mark.skipif(
     not PARTS.is_dir(),
@@ -118,6 +171,66 @@ def _corpus_stream(name: str) -> bytes:
     return archive.require(RESOLVED_FEATURES_STREAM)
 
 
+def _authored_parts() -> tuple[Path, ...]:
+    return tuple(sorted(AUTHORED_CORPUS.glob("*.SLDPRT")))
+
+
+def _authored_resolved_stream(name: str) -> bytes:
+    archive = SldprtArchive.from_bytes(
+        (AUTHORED_CORPUS / f"{name}.SLDPRT").read_bytes()
+    )
+    return archive.require(RESOLVED_FEATURES_STREAM)
+
+
+def _keywords(blob: bytes) -> ElementTree.Element:
+    text = blob.decode("utf-8", errors="replace")
+    return ElementTree.fromstring(text[text.index("<?xml") :])
+
+
+def _authored_keywords(name: str) -> ElementTree.Element:
+    archive = SldprtArchive.from_bytes(
+        (AUTHORED_CORPUS / f"{name}.SLDPRT").read_bytes()
+    )
+    return _keywords(archive.require(KEYWORDS_STREAM))
+
+
+def _authored_nodes(keywords: ElementTree.Element) -> dict[int, ElementTree.Element]:
+    return {
+        int(element.get("id", "-1")): element
+        for element in keywords
+        if element.get("id", "").isdigit()
+    }
+
+
+def _authored_dimension(element: ElementTree.Element, name: str) -> str | None:
+    for dimension in element:
+        if dimension.tag == "Dimension" and dimension.get("Name") == name:
+            return dimension.text
+    return None
+
+
+def _authored_radii_mm(element: ElementTree.Element) -> tuple[float, ...]:
+    radii: list[float] = []
+    for dimension in element:
+        text = (dimension.text or "").strip()
+        if dimension.tag != "Dimension" or not text:
+            continue
+        if text.startswith(DIAMETER_PREFIX):
+            radii.append(float(text[len(DIAMETER_PREFIX) :]) / 2.0)
+        elif (
+            text.startswith(RADIUS_PREFIX)
+            and text[len(RADIUS_PREFIX) :].replace(".", "", 1).isdigit()
+        ):
+            radii.append(float(text[len(RADIUS_PREFIX) :]))
+    return tuple(radii)
+
+
+def _authored_radii_by_file(keywords: ElementTree.Element) -> tuple[float, ...]:
+    return tuple(
+        radius for element in keywords for radius in _authored_radii_mm(element)
+    )
+
+
 def _patched_stream(name: str) -> bytes:
     archive = SldprtArchive.from_bytes((PATCHED / f"{name}.SLDPRT").read_bytes())
     return archive.require(RESOLVED_FEATURES_STREAM)
@@ -143,9 +256,38 @@ def test_feature_flag_words_have_one_definition_and_map_to_kinds() -> None:
     assert CUT_FLAGS == 0x400201CA
     assert SKETCH_FLAGS == 0x40000000
     assert PLANE_FLAGS == 0xC0000000
-    assert dict(FEATURE_KIND_BY_FLAGS) == {BOSS_FLAGS: BOSS_KIND, CUT_FLAGS: CUT_KIND}
+    assert ROUND_FLAGS == 0x40000001
+    assert SWEEP_FLAGS == 0x40004003
+    assert SWEEP_SINGLE_PROFILE_FLAGS == 0x40004002
+    assert LOFT_FLAGS == 0x40004404
+    assert FEATURE_FLAGS_MASK == 0x7FFFFFFF
+    assert dict(FEATURE_KIND_BY_FLAGS) == {
+        BOSS_FLAGS: BOSS_KIND,
+        CUT_FLAGS: CUT_KIND,
+        ROUND_FLAGS: ROUND_KIND,
+        SWEEP_FLAGS: SWEEP_KIND,
+        SWEEP_SINGLE_PROFILE_FLAGS: SWEEP_KIND,
+        LOFT_FLAGS: LOFT_KIND,
+    }
+    assert TREE_NODE_FLAGS == frozenset(FEATURE_KIND_BY_FLAGS) | {
+        SKETCH_FLAGS,
+        PLANE_FLAGS,
+    }
     with pytest.raises(TypeError):
         FEATURE_KIND_BY_FLAGS[SKETCH_FLAGS] = BOSS_KIND
+
+
+def test_the_high_flag_bit_is_not_part_of_the_feature_kind() -> None:
+    for flags, kind in FEATURE_KIND_BY_FLAGS.items():
+        assert feature_kind(flags) == kind
+        assert feature_kind(flags | 0x80000000) == kind
+        assert is_tree_node_flags(flags)
+        assert is_tree_node_flags(flags | 0x80000000)
+    assert feature_kind(SKETCH_FLAGS) is None
+    assert feature_kind(PLANE_FLAGS) is None
+    assert is_tree_node_flags(SKETCH_FLAGS)
+    assert is_tree_node_flags(PLANE_FLAGS)
+    assert not is_tree_node_flags(0x40001234)
 
 
 def test_flag_byte_anchors_differ_between_the_first_and_later_features() -> None:
@@ -394,3 +536,216 @@ def test_patch_features_reproduces_the_proven_round_trip_streams(
         for ordinal, (width_mm, height_mm, depth_mm) in spec.items()
     }
     assert patch_features(resolved, edits) == _patched_stream(name)
+
+
+def test_the_authored_corpus_is_present_in_the_checkout() -> None:
+    assert AUTHORED_CORPUS.is_dir()
+    assert len(_authored_parts()) >= 57
+
+
+def test_biela_boss_and_cut_features_match_the_keywords_dimensions() -> None:
+    features = locate_features(_authored_resolved_stream("BIELA"))
+    authored = _authored_nodes(_authored_keywords("BIELA"))
+    extrusions = tuple(
+        feature for feature in features if feature.kind in {BOSS_KIND, CUT_KIND}
+    )
+    assert tuple((feature.feature_id, feature.kind) for feature in extrusions) == tuple(
+        (identifier, kind) for identifier, kind, _ in BIELA_EXTRUSIONS
+    )
+    for feature, (identifier, _, depth_mm) in zip(
+        extrusions, BIELA_EXTRUSIONS, strict=True
+    ):
+        element = authored[identifier]
+        assert element.tag == "Extrusion"
+        assert float(_authored_dimension(element, "D1") or "nan") == pytest.approx(
+            depth_mm
+        )
+        assert feature.depth_mm == pytest.approx(depth_mm)
+        assert feature.flags & FEATURE_FLAGS_MASK == (
+            BOSS_FLAGS if feature.kind == BOSS_KIND else CUT_FLAGS
+        )
+        assert feature.flags & 0x80000000
+        assert feature.sketch_id is not None
+        assert authored[feature.sketch_id].tag == "Sketch"
+
+
+def test_biela_chamfers_are_classified_as_round_features() -> None:
+    features = locate_features(_authored_resolved_stream("BIELA"))
+    authored = _authored_nodes(_authored_keywords("BIELA"))
+    rounds = tuple(feature for feature in features if feature.kind == ROUND_KIND)
+    assert tuple(feature.feature_id for feature in rounds) == tuple(
+        identifier for identifier, _ in BIELA_CHAMFERS
+    )
+    for feature, (identifier, distance_mm) in zip(rounds, BIELA_CHAMFERS, strict=True):
+        element = authored[identifier]
+        assert AUTHORED_KIND_BY_TYPE[element.get("Type", "")] == ROUND_KIND
+        assert float(_authored_dimension(element, "D1") or "nan") == pytest.approx(
+            distance_mm
+        )
+        assert feature.depth_mm == pytest.approx(distance_mm)
+
+
+def test_turbo_tube_sweeps_and_lofts_match_the_keywords_types() -> None:
+    features = locate_features(_authored_resolved_stream("Turbo Tube"))
+    authored = _authored_nodes(_authored_keywords("Turbo Tube"))
+    swept = {
+        feature.feature_id: feature
+        for feature in features
+        if feature.kind in {SWEEP_KIND, LOFT_KIND}
+    }
+    assert {
+        identifier: feature.kind for identifier, feature in swept.items()
+    } == TURBO_TUBE_SWEPT_FEATURES
+    for identifier, feature in swept.items():
+        element = authored[identifier]
+        assert AUTHORED_KIND_BY_TYPE[element.get("Type", "")] == feature.kind
+        assert feature.flags & FEATURE_FLAGS_MASK in {
+            SWEEP_FLAGS,
+            SWEEP_SINGLE_PROFILE_FLAGS,
+            LOFT_FLAGS,
+        }
+
+
+def test_biela_circular_profiles_decode_the_authored_diameters() -> None:
+    resolved = _authored_resolved_stream("BIELA")
+    authored = _authored_nodes(_authored_keywords("BIELA"))
+    features = locate_features(resolved)
+    circular = {
+        feature.feature_id: feature.radii_mm for feature in features if feature.arcs
+    }
+    assert circular == {
+        35: (pytest.approx(22.2), pytest.approx(17.8)),
+        214: (pytest.approx(4.5), pytest.approx(4.5)),
+        250: (pytest.approx(1.25),),
+    }
+    for feature in features:
+        if not feature.arcs:
+            continue
+        assert feature.sketch_id is not None
+        expected = _authored_radii_mm(authored[feature.sketch_id])
+        assert expected
+        for arc in feature.arcs:
+            assert any(
+                math.isclose(arc.radius_mm, radius, rel_tol=1e-9, abs_tol=1e-9)
+                for radius in expected
+            )
+            assert arc.start_angle_degrees == pytest.approx(CIRCLE_POINT_ANGLE_DEGREES)
+            assert arc.sweep_angle_degrees == FULL_CIRCLE_DEGREES
+            assert arc.full_circle
+    assert len(sketch_arcs(resolved)) == 5
+
+
+def test_arc_records_are_a_centre_followed_by_a_seventeen_degree_rim_point() -> None:
+    resolved = _authored_resolved_stream("BIELA")
+    coordinates = {
+        coordinate.offset: coordinate for coordinate in sketch_coordinates(resolved)
+    }
+    for arc in sketch_arcs(resolved):
+        centre = coordinates[arc.centre_offset]
+        rim = coordinates[arc.point_offset]
+        assert arc.point_offset > arc.centre_offset
+        assert rim.role == SKETCH_ON_CURVE_ROLE
+        assert rim.geometry_class == SKETCH_POINT_CLASS
+        assert (centre.x_mm, centre.y_mm) == arc.centre_mm
+        assert circle_radius_mm(
+            rim.x_mm - centre.x_mm, rim.y_mm - centre.y_mm
+        ) == pytest.approx(arc.radius_mm)
+        offset_x, offset_y = circle_circumference_point_mm(arc.radius_mm)
+        assert rim.x_mm == pytest.approx(centre.x_mm + offset_x)
+        assert rim.y_mm == pytest.approx(centre.y_mm + offset_y)
+
+
+def test_authored_corpus_circle_radii_agree_with_the_authored_dimensions() -> None:
+    decoded = 0
+    matched = 0
+    files_with_arcs = 0
+    for path in _authored_parts():
+        archive = SldprtArchive.from_bytes(path.read_bytes())
+        streams = archive.streams
+        resolved = streams.get(RESOLVED_FEATURES_STREAM)
+        keywords = streams.get(KEYWORDS_STREAM)
+        if resolved is None or keywords is None:
+            continue
+        expected = _authored_radii_by_file(_keywords(keywords))
+        arcs = sketch_arcs(resolved)
+        files_with_arcs += 1 if arcs else 0
+        for arc in arcs:
+            decoded += 1
+            assert arc.radius_mm > 0.0
+            assert math.isfinite(arc.radius_mm)
+            matched += any(
+                math.isclose(arc.radius_mm, radius, rel_tol=1e-9, abs_tol=1e-9)
+                for radius in expected
+            )
+    assert decoded >= 480
+    assert files_with_arcs >= 49
+    assert matched / decoded >= 0.85
+
+
+def test_patch_sketch_arcs_rewrites_an_authored_corpus_radius() -> None:
+    resolved = _authored_resolved_stream("BIELA")
+    arcs = sketch_arcs(resolved)
+    patched = patch_sketch_arcs(resolved, {0: 25.0, 4: 3.5})
+    assert len(patched) == len(resolved)
+    relocated = sketch_arcs(patched)
+    assert len(relocated) == len(arcs)
+    assert relocated[0].radius_mm == pytest.approx(25.0)
+    assert relocated[4].radius_mm == pytest.approx(3.5)
+    assert relocated[1].radius_mm == pytest.approx(arcs[1].radius_mm)
+    assert relocated[0].centre_mm == arcs[0].centre_mm
+    assert patch_sketch_arcs(resolved, {}) == resolved
+    for radii in ({len(arcs): 5.0}, {0: 0.0}, {0: math.inf}, {0: math.nan}):
+        with pytest.raises(SldprtFormatError):
+            patch_sketch_arcs(resolved, radii)
+
+
+def test_patch_features_rewrites_the_radii_of_a_circular_profile() -> None:
+    resolved = _authored_resolved_stream("BIELA")
+    features = locate_features(resolved)
+    circular = next(feature for feature in features if feature.feature_id == 214)
+    patched = patch_features(
+        resolved, {circular.ordinal: FeatureEdit(radii_mm=(6.0, 6.5), depth_mm=44.0)}
+    )
+    assert len(patched) == len(resolved)
+    relocated = locate_features(patched)[circular.ordinal]
+    assert relocated.feature_id == 214
+    assert relocated.radii_mm == (pytest.approx(6.0), pytest.approx(6.5))
+    assert relocated.depth_mm == pytest.approx(44.0)
+    assert relocated.bounds_mm is not None
+    rejected = (
+        {circular.ordinal: FeatureEdit(radii_mm=(6.0,))},
+        {circular.ordinal: FeatureEdit(radii_mm=(6.0, -1.0))},
+        {circular.ordinal: FeatureEdit(radii_mm=(6.0, math.nan))},
+        {features[5].ordinal: FeatureEdit(radii_mm=(6.0,))},
+    )
+    for edits in rejected:
+        with pytest.raises(SldprtFormatError):
+            patch_features(resolved, edits)
+
+
+@corpus_parts
+@pytest.mark.parametrize(
+    ("name", "radius_mm"), (("CIRCLECUT_r4", 4.0), ("CIRCLECUT_r6", 6.0))
+)
+def test_circular_cut_reports_its_radius_through_locate_features(
+    name: str, radius_mm: float
+) -> None:
+    resolved = _corpus_stream(name)
+    features = locate_features(resolved)
+    assert [feature.kind for feature in features] == [BOSS_KIND, CUT_KIND]
+    circular = features[1]
+    assert circular.points == ()
+    assert len(circular.arcs) == 1
+    arc = circular.arcs[0]
+    assert arc.radius_mm == pytest.approx(radius_mm)
+    assert arc.centre_mm == (pytest.approx(0.0), pytest.approx(0.0))
+    assert circular.bounds_mm == (
+        pytest.approx(-radius_mm),
+        pytest.approx(-radius_mm),
+        pytest.approx(radius_mm),
+        pytest.approx(radius_mm),
+    )
+    patched = patch_features(resolved, {1: FeatureEdit(radii_mm=(radius_mm + 1.5,))})
+    assert locate_features(patched)[1].arcs[0].radius_mm == pytest.approx(
+        radius_mm + 1.5
+    )

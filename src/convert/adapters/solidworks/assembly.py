@@ -19,6 +19,7 @@ from interchange import (
     MateAlignment,
     MateConstraint,
     MateEntity,
+    MateGroup,
     Matrix4,
     ValueKind,
 )
@@ -47,6 +48,31 @@ from .format import (
 _WIDE_TEXT = re.compile(rb"(?:[ -~]\x00){4,}")
 _MATE_ALIGNMENT_OFFSET = 159
 _MATE_ENTITY_COUNT_OFFSET = 164
+_MATE_RECORD_BODY_SIZE = 168
+_MATE_OBJECT_PREFIX = 0x8001
+_MATE_LIST_NATIVE_ID_FLAG = 0x10000
+_MATE_GROUP_END_SUFFIX = "___EndTag___"
+
+MATE_LOSS_EXPRESSION = "expression_resolved_to_value"
+MATE_LOSS_ENTITY_FRAME = "mate_entity_frame"
+MATE_LOSS_ENTITY_RADIUS = "mate_entity_radius"
+MATE_LOSS_VALUE = "mate_value_unrepresentable"
+MATE_LOSS_VALUE_MISSING = "mate_value_missing"
+MATE_LOSS_GROUP_NESTING = "mate_group_nesting"
+MATE_LOSS_GROUP_MEMBERSHIP = "mate_group_membership"
+MATE_LOSS_ORPHAN_ENTITY = "unreferenced_mate_entity"
+MATE_LOSS_REASONS = frozenset(
+    {
+        MATE_LOSS_EXPRESSION,
+        MATE_LOSS_ENTITY_FRAME,
+        MATE_LOSS_ENTITY_RADIUS,
+        MATE_LOSS_VALUE,
+        MATE_LOSS_VALUE_MISSING,
+        MATE_LOSS_GROUP_NESTING,
+        MATE_LOSS_GROUP_MEMBERSHIP,
+        MATE_LOSS_ORPHAN_ENTITY,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -631,6 +657,15 @@ class NativeAssembly:
 
 
 @dataclass(frozen=True, slots=True)
+class NativeMateStreamReport:
+    streams: Mapping[str, bytes]
+    complete: bool
+    encoded_mate_ids: tuple[str, ...]
+    unsupported_mate_ids: tuple[str, ...]
+    losses: Mapping[str, tuple[str, ...]]
+
+
+@dataclass(frozen=True, slots=True)
 class NativeAssemblyEncoding:
     component_tree: bytes
     mate_streams: Mapping[str, bytes]
@@ -639,6 +674,8 @@ class NativeAssemblyEncoding:
     structure_complete: bool
     mates_complete: bool
     unsupported_mate_ids: tuple[str, ...]
+    generated_mate_ids: tuple[str, ...] = ()
+    generated_mate_losses: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 
 
 def encode_native_assembly(
@@ -857,11 +894,11 @@ def encode_native_assembly(
             },
         )
     ET.SubElement(root, "swExtFeatureList", {"swObjCount": "0"})
-    mate_streams, mates_complete, unsupported = _encode_mate_streams(
+    mates = _encode_mate_streams(
         assembly,
+        definitions,
         definition_by_id,
         definition_ids,
-        occurrence_ids,
     )
     component_tree = ET.tostring(
         root,
@@ -878,12 +915,14 @@ def encode_native_assembly(
     )
     return NativeAssemblyEncoding(
         component_tree=component_tree,
-        mate_streams=MappingProxyType(mate_streams),
+        mate_streams=mates.streams,
         definition_ids=MappingProxyType(definition_ids),
         occurrence_ids=MappingProxyType(occurrence_ids),
         structure_complete=structure_complete,
-        mates_complete=mates_complete,
-        unsupported_mate_ids=unsupported,
+        mates_complete=mates.complete,
+        unsupported_mate_ids=mates.unsupported_mate_ids,
+        generated_mate_ids=mates.encoded_mate_ids,
+        generated_mate_losses=mates.losses,
     )
 
 
@@ -1092,60 +1131,301 @@ def _yes_text(value: bool) -> str:
 
 def _encode_mate_streams(
     assembly: AssemblyData,
+    ordered_definitions: Sequence[ComponentDefinition],
     definitions: Mapping[str, ComponentDefinition],
     definition_ids: Mapping[str, int],
-    occurrence_ids: Mapping[str, int],
-) -> tuple[dict[str, bytes], bool, tuple[str, ...]]:
+) -> NativeMateStreamReport:
     if not assembly.mates and not assembly.mate_entities and not assembly.mate_groups:
-        return {}, True, ()
-    unsupported = tuple(mate.id for mate in assembly.mates)
-    if assembly.mate_groups:
-        return {}, False, unsupported
-    if any(
-        mate.owner_definition_id != assembly.root_definition_id
-        for mate in assembly.mates
-    ):
-        return {}, False, unsupported
-    entities = {entity.id: entity for entity in assembly.mate_entities}
-    referenced = {entity_id for mate in assembly.mates for entity_id in mate.entity_ids}
-    if referenced != set(entities):
-        return {}, False, unsupported
-    ordered = tuple(
-        item[1]
-        for item in sorted(
-            enumerate(assembly.mates),
-            key=lambda item: (item[1].order, item[0]),
+        return NativeMateStreamReport(
+            MappingProxyType({}), True, (), (), MappingProxyType({})
         )
-    )
-    records: list[bytes] = []
-    for mate in ordered:
-        record = _encode_mate_record(
-            mate,
+    entities = {entity.id: entity for entity in assembly.mate_entities}
+    losses: dict[str, tuple[str, ...]] = {}
+    referenced = {entity_id for mate in assembly.mates for entity_id in mate.entity_ids}
+    for entity_id in sorted(set(entities) - referenced):
+        losses[entity_id] = (MATE_LOSS_ORPHAN_ENTITY,)
+    lanes = _mate_stream_lanes(assembly, ordered_definitions, definitions)
+    streams: dict[str, bytes] = {}
+    encoded: list[str] = []
+    unsupported: list[str] = []
+    for owner_id, lane in lanes.items():
+        records: list[bytes] = []
+        layout: list[tuple[str, MateConstraint | MateGroup]] = []
+        for item in _mate_owner_plan(assembly, owner_id, losses):
+            if isinstance(item, MateGroup):
+                pair = _encode_group_records(item)
+                if pair is None:
+                    losses[item.id] = _with_reason(
+                        losses.get(item.id, ()), MATE_LOSS_GROUP_MEMBERSHIP
+                    )
+                    continue
+                records.extend(pair)
+                layout.extend((("group_start", item), ("group_end", item)))
+                continue
+            encoded_record = _encode_mate_record(item, entities, assembly, definitions)
+            if encoded_record is None:
+                unsupported.append(item.id)
+                continue
+            record, reasons = encoded_record
+            records.append(record)
+            layout.append(("mate", item))
+            if reasons:
+                losses[item.id] = _merged_reasons(losses.get(item.id, ()), reasons)
+        planned = tuple(item.id for role, item in layout if role == "mate")
+        if not planned or len(records) > 0xFFFF:
+            unsupported.extend(planned)
+            continue
+        stream_name = f"Contents/Config-{lane}-MatesList"
+        native_id = (definition_ids[owner_id] | _MATE_LIST_NATIVE_ID_FLAG) & 0xFFFFFFFF
+        stream = struct.pack("<IH", native_id, len(records)) + b"".join(records)
+        if not _verify_mate_stream(
+            stream,
+            stream_name,
+            definition_ids[owner_id],
+            layout,
             entities,
             assembly,
             definitions,
+            losses,
+        ):
+            unsupported.extend(planned)
+            continue
+        streams[stream_name] = stream
+        encoded.extend(planned)
+    complete = (
+        not unsupported
+        and not losses
+        and len(encoded) == len(assembly.mates)
+        and bool(assembly.mates) == bool(streams)
+    )
+    return NativeMateStreamReport(
+        MappingProxyType(streams),
+        complete,
+        tuple(encoded),
+        tuple(dict.fromkeys(unsupported)),
+        MappingProxyType(dict(sorted(losses.items()))),
+    )
+
+
+def _with_reason(reasons: tuple[str, ...], reason: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((*reasons, reason)))
+
+
+def _merged_reasons(reasons: tuple[str, ...], added: Iterable[str]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((*reasons, *added)))
+
+
+def _mate_stream_lanes(
+    assembly: AssemblyData,
+    ordered_definitions: Sequence[ComponentDefinition],
+    definitions: Mapping[str, ComponentDefinition],
+) -> dict[str, int]:
+    owners = [
+        owner
+        for owner in dict.fromkeys(
+            (
+                assembly.root_definition_id,
+                *(mate.owner_definition_id for mate in assembly.mates),
+                *(group.owner_definition_id for group in assembly.mate_groups),
+            )
         )
-        if record is None:
-            return {}, False, unsupported
-        records.append(record)
-    if len(records) > 0xFFFF:
-        return {}, False, unsupported
-    native_id = (definition_ids[assembly.root_definition_id] | 0x10000) & 0xFFFFFFFF
-    stream = struct.pack("<IH", native_id, len(records)) + b"".join(records)
+        if owner in definitions
+    ]
+    order = {
+        definition.id: index for index, definition in enumerate(ordered_definitions)
+    }
+    remaining = sorted(
+        (owner for owner in owners if owner != assembly.root_definition_id),
+        key=lambda value: (order.get(value, len(order)), value),
+    )
+    result = {assembly.root_definition_id: 0}
+    for lane, owner in enumerate(remaining, start=1):
+        result[owner] = lane
+    return result
+
+
+def _mate_owner_plan(
+    assembly: AssemblyData,
+    owner_id: str,
+    losses: dict[str, tuple[str, ...]],
+) -> tuple[MateConstraint | MateGroup, ...]:
+    mates = {
+        mate.id: mate for mate in assembly.mates if mate.owner_definition_id == owner_id
+    }
+    ordered_mates = tuple(
+        item[1]
+        for item in sorted(
+            enumerate(mates.values()),
+            key=lambda item: (item[1].order, item[0]),
+        )
+    )
+    groups = tuple(
+        item[1]
+        for item in sorted(
+            enumerate(
+                group
+                for group in assembly.mate_groups
+                if group.owner_definition_id == owner_id
+            ),
+            key=lambda item: (item[1].order, item[0]),
+        )
+    )
+    assigned: dict[str, list[str]] = {}
+    claimed: set[str] = set()
+    for group in groups:
+        if group.parent_group_id:
+            losses[group.id] = _with_reason(
+                losses.get(group.id, ()), MATE_LOSS_GROUP_NESTING
+            )
+        members: list[str] = []
+        for mate_id in group.mate_ids:
+            if mate_id not in mates or mate_id in claimed:
+                losses[group.id] = _with_reason(
+                    losses.get(group.id, ()), MATE_LOSS_GROUP_MEMBERSHIP
+                )
+                continue
+            claimed.add(mate_id)
+            members.append(mate_id)
+        assigned[group.id] = members
+    plan: list[MateConstraint | MateGroup] = [
+        mate for mate in ordered_mates if mate.id not in claimed
+    ]
+    for group in groups:
+        plan.append(group)
+        plan.extend(mates[mate_id] for mate_id in assigned[group.id])
+    return tuple(plan)
+
+
+def _verify_mate_stream(
+    stream: bytes,
+    stream_name: str,
+    owner_native_id: int,
+    layout: Sequence[tuple[str, MateConstraint | MateGroup]],
+    entities: Mapping[str, MateEntity],
+    assembly: AssemblyData,
+    definitions: Mapping[str, ComponentDefinition],
+    losses: dict[str, tuple[str, ...]],
+) -> bool:
     try:
-        decoded = decode_mate_list(
-            stream,
-            "Contents/Config-0-MatesList",
-            definition_ids[assembly.root_definition_id],
-        )
+        decoded = decode_mate_list(stream, stream_name, owner_native_id)
     except SldprtFormatError:
-        return {}, False, unsupported
-    if len(decoded.mates) != len(ordered):
-        return {}, False, unsupported
-    for source, target in zip(ordered, decoded.mates):
-        if not _encoded_mate_matches(source, target, entities, assembly, definitions):
-            return {}, False, unsupported
-    return {"Contents/Config-0-MatesList": stream}, True, ()
+        return False
+    if len(decoded.mates) != len(layout):
+        return False
+    for (role, source), target in zip(layout, decoded.mates):
+        if role == "mate":
+            if not isinstance(source, MateConstraint) or not _encoded_mate_matches(
+                source, target, entities, assembly, definitions
+            ):
+                return False
+            continue
+        expected_name = (
+            source.name
+            if role == "group_start"
+            else f"{source.name}{_MATE_GROUP_END_SUFFIX}"
+        )
+        if target.kind != "group" or target.name != expected_name:
+            return False
+    expected = _expected_group_members(layout)
+    actual = _decoded_group_members(decoded)
+    for order, group in expected.items():
+        if actual.get(order, ()) != group[1]:
+            losses[group[0].id] = _with_reason(
+                losses.get(group[0].id, ()), MATE_LOSS_GROUP_MEMBERSHIP
+            )
+    return True
+
+
+def _expected_group_members(
+    layout: Sequence[tuple[str, MateConstraint | MateGroup]],
+) -> dict[int, tuple[MateGroup, tuple[int, ...]]]:
+    result: dict[int, tuple[MateGroup, tuple[int, ...]]] = {}
+    starts = [index for index, (role, _) in enumerate(layout) if role == "group_start"]
+    for position, index in enumerate(starts):
+        group = layout[index][1]
+        if not isinstance(group, MateGroup):
+            continue
+        limit = starts[position + 1] if position + 1 < len(starts) else len(layout)
+        result[index] = (
+            group,
+            tuple(range(index + 2, limit)),
+        )
+    return result
+
+
+def _decoded_group_members(decoded: NativeMateList) -> dict[int, tuple[int, ...]]:
+    records = decoded.mates
+    markers = tuple(record for record in records if record.kind == "group")
+    result: dict[int, tuple[int, ...]] = {}
+    for pair_index in range(0, len(markers) - 1, 2):
+        marker = markers[pair_index]
+        end = markers[pair_index + 1]
+        limit = (
+            markers[pair_index + 2].order
+            if pair_index + 2 < len(markers)
+            else len(records)
+        )
+        members: list[int] = []
+        for candidate in records:
+            if (
+                candidate.order <= end.order
+                or candidate.order >= limit
+                or candidate.kind == "group"
+            ):
+                continue
+            members.append(candidate.order)
+            if candidate.kind == "lock_to_sketch":
+                break
+        result[marker.order] = tuple(members)
+    return result
+
+
+def _encode_group_records(group: MateGroup) -> tuple[bytes, bytes] | None:
+    class_name = _native_group_class(group)
+    start = _encode_record_body(group.name, class_name, 0)
+    end = _encode_record_body(f"{group.name}{_MATE_GROUP_END_SUFFIX}", class_name, 0)
+    if start is None or end is None:
+        return None
+    return start, end
+
+
+def _native_group_class(group: MateGroup) -> str:
+    candidates = tuple(
+        record
+        for record in NATIVE_MATE_TYPE_RECORDS
+        if record.kind == "group" and record.class_names
+    )
+    requested = group.attributes.get("native_class_name")
+    if isinstance(requested, str):
+        for record in candidates:
+            if requested in record.class_names:
+                return requested
+    lowered = group.name.casefold()
+    for record in candidates:
+        if any(lowered.startswith(prefix) for prefix in record.name_prefixes):
+            return record.class_names[0]
+    return candidates[0].class_names[0]
+
+
+def _encode_record_body(name: str, class_name: str, entity_count: int) -> bytes | None:
+    serialized_name = _serialized_string(name)
+    if serialized_name is None:
+        return None
+    try:
+        encoded_class = class_name.encode("ascii")
+    except UnicodeEncodeError:
+        return None
+    record = bytearray(
+        CLASS_MARKER
+        + struct.pack("<H", len(encoded_class))
+        + encoded_class
+        + struct.pack("<H", _MATE_OBJECT_PREFIX)
+        + serialized_name
+    )
+    body = bytearray(_MATE_RECORD_BODY_SIZE)
+    struct.pack_into("<I", body, _MATE_ENTITY_COUNT_OFFSET, entity_count)
+    record.extend(body)
+    return bytes(record)
 
 
 def _encode_mate_record(
@@ -1153,38 +1433,40 @@ def _encode_mate_record(
     entities: Mapping[str, MateEntity],
     assembly: AssemblyData,
     definitions: Mapping[str, ComponentDefinition],
-) -> bytes | None:
-    if mate.suppressed or not mate.driving or mate.parameter_ids:
+) -> tuple[bytes, tuple[str, ...]] | None:
+    if mate.suppressed or not mate.driving:
         return None
     native_kind, class_name = _native_mate_class(mate)
     if not class_name:
         return None
-    serialized_name = _serialized_string(mate.name)
-    if serialized_name is None:
-        return None
+    reasons: list[str] = [MATE_LOSS_EXPRESSION] if mate.parameter_ids else []
     entity_values: list[str] = []
     for entity_id in mate.entity_ids:
         entity = entities.get(entity_id)
         if entity is None or entity.owner_definition_id != mate.owner_definition_id:
             return None
-        values = _mate_entity_strings(entity, assembly, definitions)
-        if values is None:
+        described = _mate_entity_strings(entity, assembly, definitions)
+        if described is None:
             return None
+        values, entity_reasons = described
         entity_values.extend(values)
+        reasons.extend(entity_reasons)
     alignment_code = _mate_alignment_code(mate.alignment)
     if alignment_code is None:
         return None
-    dimensions = _mate_dimension_values(mate, native_kind)
-    if dimensions is None:
+    dimensions, value_reasons = _mate_dimension_values(mate, native_kind)
+    reasons.extend(value_reasons)
+    record = bytearray(
+        _encode_record_body(mate.name, class_name, len(mate.entity_ids)) or b""
+    )
+    if not record:
         return None
-    encoded_class = class_name.encode("ascii")
-    prefix = CLASS_MARKER + struct.pack("<H", len(encoded_class)) + encoded_class
-    object_prefix = struct.pack("<H", 0x8001)
-    record = bytearray(prefix + object_prefix + serialized_name)
-    body = bytearray(168)
-    struct.pack_into("<H", body, 159, alignment_code)
-    struct.pack_into("<I", body, 164, len(mate.entity_ids))
-    record.extend(body)
+    struct.pack_into(
+        "<H",
+        record,
+        len(record) - _MATE_RECORD_BODY_SIZE + _MATE_ALIGNMENT_OFFSET,
+        alignment_code,
+    )
     for value in entity_values:
         serialized = _serialized_string(value)
         if serialized is None:
@@ -1197,7 +1479,7 @@ def _encode_mate_record(
         record.extend(serialized)
         record.extend(DIMENSION_SCALAR_HEADERS[0])
         record.extend(struct.pack("<d", value))
-    return bytes(record)
+    return bytes(record), tuple(dict.fromkeys(reasons))
 
 
 def _native_mate_class(mate: MateConstraint) -> tuple[str, str]:
@@ -1226,9 +1508,14 @@ def _mate_entity_strings(
     entity: MateEntity,
     assembly: AssemblyData,
     definitions: Mapping[str, ComponentDefinition],
-) -> tuple[str, ...] | None:
-    if entity.selection_id or entity.frame is not None or entity.radius is not None:
+) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+    if entity.selection_id:
         return None
+    reasons: list[str] = []
+    if entity.frame is not None and not _is_identity_matrix(entity.frame):
+        reasons.append(MATE_LOSS_ENTITY_FRAME)
+    if entity.radius is not None:
+        reasons.append(MATE_LOSS_ENTITY_RADIUS)
     persistent = entity.attributes.get("persistent_references")
     if isinstance(persistent, tuple) and all(
         isinstance(value, str) for value in persistent
@@ -1244,6 +1531,7 @@ def _mate_entity_strings(
         entity.instance_path,
         assembly,
         definitions,
+        entity.owner_definition_id,
     )
     if component_path is None:
         return None
@@ -1267,19 +1555,24 @@ def _mate_entity_strings(
     source_path = entity.attributes.get("source_path")
     if isinstance(source_path, str) and source_path:
         values.append(source_path)
-    return tuple(values)
+    return tuple(values), tuple(dict.fromkeys(reasons))
+
+
+def _is_identity_matrix(matrix: Matrix4) -> bool:
+    return matrix.values == Matrix4().values
 
 
 def _native_component_path(
     path: Sequence[str],
     assembly: AssemblyData,
     definitions: Mapping[str, ComponentDefinition],
+    owner_definition_id: str = "",
 ) -> str | None:
     if not path:
         return ""
     instances = {instance.id: instance for instance in assembly.instances}
     result: list[str] = []
-    owner_id = assembly.root_definition_id
+    owner_id = owner_definition_id or assembly.root_definition_id
     for index, instance_id in enumerate(path):
         instance = instances.get(instance_id)
         owner = definitions.get(owner_id)
@@ -1307,6 +1600,17 @@ def _mate_alignment_code(value: MateAlignment | str) -> int | None:
 
 def _mate_dimension_values(
     mate: MateConstraint, native_kind: str
+) -> tuple[tuple[tuple[str, float], ...], tuple[str, ...]]:
+    if MATE_VALUE_SEMANTICS.get(native_kind) is not None and mate.value is None:
+        return (), (MATE_LOSS_VALUE_MISSING,)
+    resolved = _resolved_mate_dimensions(mate, native_kind)
+    if resolved is None:
+        return (), (MATE_LOSS_VALUE,)
+    return resolved, ()
+
+
+def _resolved_mate_dimensions(
+    mate: MateConstraint, native_kind: str
 ) -> tuple[tuple[str, float], ...] | None:
     semantic = MATE_VALUE_SEMANTICS.get(native_kind)
     if semantic is None:
@@ -1331,7 +1635,7 @@ def _mate_dimension_values(
         if isinstance(dimensions, tuple)
         else ()
     )
-    first_name = names[0] if names and names[0] else f"D1@{mate.name}"
+    first_name = names[0] if names and names[0] else "D1"
     if semantic == "length" and value.kind is ValueKind.LENGTH:
         factor = {"": 1.0, "mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4}.get(
             value.unit.casefold()
@@ -1352,7 +1656,7 @@ def _mate_dimension_values(
                 denominator = float(candidate["value"])
         if not math.isfinite(denominator) or denominator == 0.0:
             return None
-        second_name = names[1] if len(names) > 1 and names[1] else f"D2@{mate.name}"
+        second_name = names[1] if len(names) > 1 and names[1] else "D2"
         return ((first_name, number * denominator), (second_name, denominator))
     return None
 
@@ -1377,11 +1681,14 @@ def _encoded_mate_matches(
         return False
     expected_entities: list[tuple[str, str]] = []
     for entity_id in source.entity_ids:
-        entity = entities[entity_id]
+        entity = entities.get(entity_id)
+        if entity is None:
+            return False
         component_path = _native_component_path(
             entity.instance_path,
             assembly,
             definitions,
+            entity.owner_definition_id,
         )
         expected_entities.append((component_path or "", entity.source_entity_id))
     actual_entities = [
@@ -1396,8 +1703,8 @@ def _encoded_mate_matches(
     expected_alignment = _mate_alignment_code(source.alignment)
     if len(source.entity_ids) == 2 and target.alignment_code != expected_alignment:
         return False
-    dimensions = _mate_dimension_values(source, native_kind)
-    if dimensions is None or len(dimensions) != len(target.dimensions):
+    dimensions, _ = _mate_dimension_values(source, native_kind)
+    if len(dimensions) != len(target.dimensions):
         return False
     return all(
         expected_name == actual.name

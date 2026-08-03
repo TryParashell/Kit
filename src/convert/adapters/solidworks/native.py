@@ -35,6 +35,7 @@ from .format import (
     CANONICAL_PLANE_FEATURE_TYPE,
     CLASS_MARKER,
     DIMENSION_SCALAR_HEADERS,
+    DISPLAY_LISTS_STREAM,
     KIT_RESOLVED_STREAM,
     PART_SUFFIX,
     PLANE_FEATURE_TYPES,
@@ -83,11 +84,24 @@ _SKETCH_PLANE_BASIS_FLAG_DELTA = 14
 _SKETCH_PLANE_BASIS_DELTA = 15
 _SKETCH_PLANE_BASIS_BYTES = 72
 _SKETCH_PLANE_AXIS_COMPLEMENT = 5
+_SKETCH_PLANE_SCAN_BYTES = 320
 _PRINCIPAL_PLANE_OBJECT_IDS = frozenset({2, 3, 4})
 _IDENTITY_BASIS = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+_IDENTITY_ORIGIN = (0.0, 0.0, 0.0)
+_DERIVED_PLANE_CLASSES = (
+    "moRefPlaneMidPlaneGeom_c",
+    "moConstraintMidPlaneRefplaneData_c",
+    "moLinePtRefPlnData_c",
+    "moFaceRefPlnData_c",
+    "moFixedRefPlnData_c",
+    "moDefaultRefPlnData_c",
+)
 PLANE_SUPPORT_KIND = "plane"
 FACE_SUPPORT_KIND = "face"
 DERIVED_SUPPORT_KIND = "derived"
+REFERENCE_SUPPORT_SOURCE = "plane-reference"
+STREAM_ORDER_SUPPORT_SOURCE = "stream-order"
+UNRESOLVED_SUPPORT_SOURCE = "unresolved"
 _MILLIMETRES = 1000.0
 MARKER_LOCAL_ID_OFFSET_BY_LENGTH = MappingProxyType(
     {
@@ -798,7 +812,7 @@ _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE = MappingProxyType(
                     3810,
                     "1de1a4f10c22851eb4b7925b7cc73f8e4534217c544c20cded6f49644bce4e94",
                 ),
-                "Contents/DisplayLists": (
+                DISPLAY_LISTS_STREAM: (
                     6270,
                     "0003781d79ee5e4bbcf52b57fc375b6b3644bc87eda2db1956a63d0d3dcde211",
                 ),
@@ -2306,7 +2320,7 @@ def _rectangle_boss_envelope_streams() -> Mapping[str, bytes]:
             ),
             "Contents/Config-0-ModelHeader": model_header,
             "Contents/Definition": _base_record(_BASE_RECTANGLE_BOSS_DEFINITION),
-            "Contents/DisplayLists": _base_record(_BASE_RECTANGLE_BOSS_DISPLAY_LISTS),
+            DISPLAY_LISTS_STREAM: _base_record(_BASE_RECTANGLE_BOSS_DISPLAY_LISTS),
             "Header2": model_header,
         }
     )

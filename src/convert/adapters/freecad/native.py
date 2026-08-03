@@ -2667,6 +2667,8 @@ def _parse_assembly(
         ):
             reference = _xlink_data(obj, property_name)
             references.append(reference)
+            placement = _placement_element(obj, f"Placement{reference_index}")
+            frame = None if placement is None else Matrix4(_placement_matrix(placement))
             for sub_index, subelement in enumerate(reference["subelements"]):
                 component_name, separator, source_entity_id = str(subelement).partition(
                     "."
@@ -2689,11 +2691,7 @@ def _parse_assembly(
                         ),
                         _mate_entity_kind(source_entity_id),
                         source_entity_id=source_entity_id,
-                        frame=Matrix4(
-                            _placement_matrix(
-                                _placement_element(obj, f"Placement{reference_index}")
-                            )
-                        ),
+                        frame=frame,
                         provenance=Provenance(FORMAT_ID, f"{obj.name}.{property_name}"),
                         attributes={
                             "freecad_reference": reference,
@@ -2732,12 +2730,8 @@ def _parse_assembly(
             )
         )
     groups: tuple[MateGroup, ...] = ()
-    if mates:
-        group_id = (
-            f"freecad:mate-group:{joint_group.name}"
-            if joint_group is not None
-            else "freecad:mate-group:joints"
-        )
+    if mates and joint_group is not None:
+        group_id = f"freecad:mate-group:{joint_group.name}"
         ordered_mate_ids = tuple(
             mate_ids_by_name[name]
             for name in joint_names
@@ -2747,24 +2741,11 @@ def _parse_assembly(
         groups = (
             MateGroup(
                 group_id,
-                (
-                    _string(joint_group, "Label", joint_group.name)
-                    if joint_group is not None
-                    else "Joints"
-                ),
+                _string(joint_group, "Label", joint_group.name),
                 root_definition_id,
                 ordered_mate_ids,
-                provenance=Provenance(
-                    FORMAT_ID,
-                    joint_group.name if joint_group is not None else "Joints",
-                ),
-                attributes={
-                    "freecad": (
-                        _native_object_data(joint_group)
-                        if joint_group is not None
-                        else {}
-                    )
-                },
+                provenance=Provenance(FORMAT_ID, joint_group.name),
+                attributes={"freecad": _native_object_data(joint_group)},
             ),
         )
     return AssemblyData(

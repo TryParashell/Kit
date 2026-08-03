@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import PureWindowsPath
+import re
 from types import MappingProxyType
+from typing import Iterable
 
 from convert.adapters.base import AdapterInfo
 from interchange import Capability
@@ -9,6 +11,9 @@ from interchange import Capability
 
 PART_FORMAT_ID = "solidworks.sldprt"
 ASSEMBLY_FORMAT_ID = "solidworks.sldasm"
+DRAWING_FORMAT_ID = "solidworks.slddrw"
+DRAWING_SUFFIX = ".slddrw"
+DRAWING_FORMAT_NAME = "SOLIDWORKS drawing"
 FORMAT_ID_BY_SUFFIX = MappingProxyType(
     {
         ".sldprt": PART_FORMAT_ID,
@@ -52,6 +57,13 @@ CONTENT_TYPES_STREAM = "[Content_Types].xml"
 RELATIONSHIPS_STREAM = "_rels/.rels"
 MATES_STREAM_NAME = "MatesList"
 MATES_STREAM_SUFFIX = f"-{MATES_STREAM_NAME}"
+_RESOLVED_LANE_PREFIX, _RESOLVED_LANE_SUFFIX = RESOLVED_FEATURES_STREAM.split("0", 1)
+RESOLVED_FEATURES_LANE = re.compile(
+    rf"^{re.escape(_RESOLVED_LANE_PREFIX)}(\d+){re.escape(_RESOLVED_LANE_SUFFIX)}$"
+)
+DRAWING_STREAM_TOKENS = frozenset(
+    {"drsheet", "drview", "drawingsheet", "drawingview", "sheetformat"}
+)
 
 CLASS_MARKER = bytes.fromhex("ffff0100")
 SERIALIZED_STRING_MARKER = bytes.fromhex("fffeff")
@@ -86,6 +98,38 @@ def dimension_scalar_value_offset(
 
 def is_cad_path(value: str) -> bool:
     return PureWindowsPath(value).suffix.casefold() in FORMAT_ID_BY_SUFFIX
+
+
+def is_drawing_path(value: str) -> bool:
+    return PureWindowsPath(value).suffix.casefold() == DRAWING_SUFFIX
+
+
+def part_lane_names(names: Iterable[str]) -> tuple[str, ...]:
+    return tuple(name for name in names if RESOLVED_FEATURES_LANE.fullmatch(name))
+
+
+def drawing_stream_names(names: Iterable[str]) -> tuple[str, ...]:
+    return tuple(
+        name
+        for name in names
+        if any(token in name.casefold() for token in DRAWING_STREAM_TOKENS)
+    )
+
+
+def unsupported_document_reason(names: Iterable[str]) -> str:
+    values = tuple(names)
+    if part_lane_names(values) or COMPONENT_TREE_STREAM in values:
+        return ""
+    if drawing_stream_names(values):
+        return (
+            f"{DRAWING_FORMAT_NAME} content ({DRAWING_FORMAT_ID}) is not supported; "
+            "SOLIDWORKS reading requires a part or assembly container"
+        )
+    return (
+        "SOLIDWORKS container carries neither a part lane "
+        f"({RESOLVED_FEATURES_STREAM}) nor an assembly lane "
+        f"({COMPONENT_TREE_STREAM})"
+    )
 
 
 def is_component_path(value: str) -> bool:
