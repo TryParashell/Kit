@@ -8,7 +8,7 @@ import math
 import re
 import struct
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 import xml.etree.ElementTree as ET
 import zlib
 
@@ -32,6 +32,7 @@ from interchange import (
 
 from .container import SldprtFormatError
 from .format import (
+    ASSEMBLY_SUFFIX,
     CANONICAL_PLANE_FEATURE_TYPE,
     CLASS_MARKER,
     DIMENSION_SCALAR_HEADERS,
@@ -369,6 +370,26 @@ class NativePartStreams:
     partition: bytes | None
     application_usable: bool
     vendor_loadable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class NativeModelHeader:
+    user_name: str
+    reference_name: str
+    configuration_name: str
+    document_path: str
+    objects: tuple[tuple[int, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class NativeAssemblyEnvelope:
+    streams: Mapping[str, bytes]
+    configuration_name: str
+    reference_name: str
+    document_path: str
+    header_objects: tuple[tuple[int, str], ...]
+    omitted_object_names: tuple[str, ...]
+    envelope_complete: bool
 
 
 @dataclass(slots=True)
@@ -860,6 +881,67 @@ _HEADER_OBJECTS = (
     (23, "Favorites", False),
     (24, "History", False),
     (25, "Selection Sets", False),
+)
+_ASSEMBLY_HEADER_OBJECTS = (
+    (2, "Annotations", False),
+    (3, "Front Plane", True),
+    (4, "Top Plane", True),
+    (5, "Right Plane", True),
+    (6, "Origin", True),
+    (7, "Lights, Cameras and Scene", False),
+    (8, "Design Binder", False),
+    (9, "Comments", False),
+    (10, "Live Section Planes", False),
+    (11, "Mates", False),
+    (12, "Ambient", False),
+    (13, "Directional1", False),
+    (14, "Directional2", False),
+    (15, "Directional3", False),
+    (16, "Equations", False),
+    (17, "Notes", False),
+    (18, "Notes1___EndTag___", False),
+    (19, "Markups", False),
+    (20, "Sensors", False),
+    (21, "Favorites", False),
+    (22, "History", False),
+    (23, "Selection Sets", False),
+)
+_ASSEMBLY_CONFIGURATION_FLAGS = -2147221376
+_ASSEMBLY_REFERENCE_NAME = "Assem1"
+_ASSEMBLY_VERSION_PREFIX = "_MO_VERSION_13000"
+_ASSEMBLY_PROPERTY_CONTAINER_CLASS = "moAssyFilePropContainer_c"
+_ASSEMBLY_ATTACHMENT_STREAM = "Contents/Config-0-Attachment"
+_ASSEMBLY_VISUAL_DATA_STREAM = f"{_ASSEMBLY_VERSION_PREFIX}/AssyVisualData"
+_ASSEMBLY_TABLES_STREAM = "swXmlContents/Tables"
+_ASSEMBLY_VIEW_ORIENTATION_STREAM = "Contents/View Orientation Data"
+_ASSEMBLY_OPEN_TIME_STREAM = "docProps/OpenTime.xml"
+_ASSEMBLY_CUTLIST_STREAM = "docProps/Config-0-Cutlist-Properties.xml"
+_ASSEMBLY_CONFIG_PROPERTIES_STREAM = "docProps/Config-0-Properties.xml"
+_VIEW_ORIENTATION_PAYLOAD = (
+    b'<?xml version="1.0" encoding="UTF-8"?>\n<VIEWS/>\n'
+)
+_OPEN_TIME_PAYLOAD = (
+    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+    b'<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006'
+    b'/SolidworksOpenTime" xmlns:vt="http://schemas.openxmlformats.org/office'
+    b'Document/2006/docPropsVTypes"><count xmlns="">0</count>'
+    b'<TotalFileOpenTime xmlns="">-1</TotalFileOpenTime>'
+    b'<LWcount xmlns="">0</LWcount>'
+    b'<LWTotalFileOpenTime xmlns="">-1</LWTotalFileOpenTime></Properties>\r\n'
+)
+_CONFIG_PROPERTIES_PAYLOAD = (
+    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+    b'<ConfigProperties xmlns="http://www.solidworks.com/config-properties" '
+    b'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docProps'
+    b'VTypes"><propertySection xmlns="" name="DocumentSummaryInformation" '
+    b'fmtid="{D5CDD502-2E9C-101B-9397-08002B2CF9AE}">'
+    b'<propertyNameDictionaryElement name="" pid="0">'
+    b"</propertyNameDictionaryElement></propertySection>"
+    b'<propertySection xmlns="" name="UserDefinedProperties" '
+    b'fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}">'
+    b'<property name="" pid="1"><vt:i2>65001</vt:i2></property>'
+    b'<propertyNameDictionaryElement name="" pid="0">'
+    b"</propertyNameDictionaryElement></propertySection></ConfigProperties>\r\n"
 )
 
 
@@ -2328,6 +2410,208 @@ def _rectangle_boss_envelope_streams() -> Mapping[str, bytes]:
     )
 
 
+def encode_native_assembly_envelope(
+    document: CadDocument,
+    model_name: str,
+    occurrence_names: Sequence[str],
+    mate_names: Sequence[str],
+) -> NativeAssemblyEnvelope:
+    configuration_name = next(
+        (
+            configuration.name
+            for configuration in document.configurations
+            if configuration.active
+        ),
+        document.configurations[0].name if document.configurations else "Default",
+    )
+    listed: list[tuple[int, str, bool]] = list(_ASSEMBLY_HEADER_OBJECTS)
+    omitted: list[str] = []
+    next_object_id = _ASSEMBLY_HEADER_OBJECTS[-1][0] + 1
+    for name in (*occurrence_names, *mate_names):
+        if _serializable_name(name):
+            listed.append((next_object_id, name, False))
+            next_object_id += 1
+        else:
+            omitted.append(name)
+    identity = _native_assembly_identity(document, model_name, len(listed))
+    document_path = f"C:\\{model_name}{ASSEMBLY_SUFFIX}"
+    model_header = _header_payload(
+        identity, configuration_name, tuple(listed), document_path
+    )
+    zero = struct.pack("<I", 0)
+    streams = {
+        "Contents/CMgrHdr2": _configuration_header_payload(
+            configuration_name, identity
+        ),
+        "Contents/CnfgObjs": zero + _serialized_string("") + _serialized_string(""),
+        "Contents/Config-0-ModelHeader": model_header,
+        _ASSEMBLY_ATTACHMENT_STREAM: struct.pack("<H", 0),
+        "Contents/CusProps": _custom_properties_payload(
+            _ASSEMBLY_PROPERTY_CONTAINER_CLASS
+        ),
+        "Contents/OleItems": zero,
+        _ASSEMBLY_VIEW_ORIENTATION_STREAM: _VIEW_ORIENTATION_PAYLOAD,
+        "Contents/eModelLic": zero,
+        "Header2": model_header,
+        "ModelStamps": struct.pack(
+            "<III",
+            identity.creation_stamp,
+            identity.last_modified_stamp,
+            identity.baseline_stamp,
+        ),
+        _ASSEMBLY_VISUAL_DATA_STREAM: zero,
+        f"{_ASSEMBLY_VERSION_PREFIX}/Biography": _biography_payload(
+            model_name,
+            identity,
+            "C:\\Kit\\Assembly.ASMDOT",
+            ASSEMBLY_SUFFIX,
+        ),
+        f"{_ASSEMBLY_VERSION_PREFIX}/History": _version_history_payload(),
+        _ASSEMBLY_TABLES_STREAM: b"",
+        _ASSEMBLY_CUTLIST_STREAM: (
+            f'<Configuration id="0" Name="{_xml_attribute(configuration_name)}"/>\r\n'
+        ).encode("utf-8"),
+        _ASSEMBLY_CONFIG_PROPERTIES_STREAM: _CONFIG_PROPERTIES_PAYLOAD,
+        _ASSEMBLY_OPEN_TIME_STREAM: _OPEN_TIME_PAYLOAD,
+    }
+    header_objects = tuple((object_id, name) for object_id, name, _ in listed)
+    decoded = decode_native_model_header(model_header)
+    return NativeAssemblyEnvelope(
+        MappingProxyType(streams),
+        configuration_name,
+        identity.reference_name,
+        document_path,
+        header_objects,
+        tuple(omitted),
+        not omitted
+        and decoded.user_name == "Kit"
+        and decoded.reference_name == identity.reference_name
+        and decoded.configuration_name == configuration_name
+        and decoded.document_path == document_path
+        and decoded.objects == header_objects,
+    )
+
+
+def decode_native_model_header(data: bytes) -> NativeModelHeader:
+    class_name, offset = _read_class(data, 0)
+    if class_name != "moHeader_c":
+        raise SldprtFormatError("native SOLIDWORKS header class is not moHeader_c")
+    offset = _expect_bytes(
+        data,
+        offset,
+        bytes.fromhex("01000000ffff00000f00")
+        + b"su_CStringArray"
+        + struct.pack("<H", 1),
+    )
+    user_name, offset = _read_serialized_string(data, offset)
+    offset = _expect_bytes(data, offset, bytes.fromhex("03800100"))
+    _, offset = _read_serialized_string(data, offset)
+    class_name, offset = _read_class(data, offset)
+    if class_name != "suObList":
+        raise SldprtFormatError("native SOLIDWORKS header log list is missing")
+    (log_count,) = struct.unpack_from("<H", data, offset)
+    offset += 2
+    class_name, offset = _read_class(data, offset)
+    if class_name != "moLogs_c":
+        raise SldprtFormatError("native SOLIDWORKS header log record is missing")
+    offset = _expect_bytes(data, offset, struct.pack("<H", 1))
+    class_name, offset = _read_class(data, offset)
+    if class_name != "moStamp_c":
+        raise SldprtFormatError("native SOLIDWORKS header stamp record is missing")
+    offset += 10
+    _, offset = _read_serialized_string(data, offset)
+    offset += 4
+    reference_name, offset = _read_serialized_string(data, offset)
+    objects: list[tuple[int, str]] = []
+    for _ in range(log_count - 1):
+        offset = _expect_bytes(data, offset, bytes.fromhex("0880"))
+        (action_count,) = struct.unpack_from("<H", data, offset)
+        offset += 2
+        for _ in range(action_count):
+            offset = _expect_bytes(data, offset, bytes.fromhex("0a80"))
+            offset += 10
+            _, offset = _read_serialized_string(data, offset)
+        (object_id,) = struct.unpack_from("<I", data, offset)
+        offset += 4
+        object_name, offset = _read_serialized_string(data, offset)
+        objects.append((object_id, object_name))
+    offset += 14
+    class_name, offset = _read_class(data, offset)
+    if class_name != "moExtObject_c":
+        raise SldprtFormatError("native SOLIDWORKS header reference block is missing")
+    class_name, offset = _read_class(data, offset)
+    if class_name != "moCStringHandle_c":
+        raise SldprtFormatError("native SOLIDWORKS header path handle is missing")
+    document_path, offset = _read_serialized_string(data, offset)
+    offset = _expect_bytes(data, offset, bytes.fromhex("4180"))
+    _, offset = _read_serialized_string(data, offset)
+    offset = _expect_bytes(data, offset, bytes.fromhex("020000"))
+    offset += 4
+    for _ in range(3):
+        _, offset = _read_serialized_string(data, offset)
+    offset = _expect_bytes(data, offset, bytes.fromhex("0008"))
+    offset += 16
+    configuration_name, offset = _read_serialized_string(data, offset)
+    return NativeModelHeader(
+        user_name,
+        reference_name,
+        configuration_name,
+        document_path,
+        tuple(objects),
+    )
+
+
+def _read_class(data: bytes, offset: int) -> tuple[str, int]:
+    marker = len(CLASS_MARKER)
+    if data[offset : offset + marker] != CLASS_MARKER:
+        raise SldprtFormatError("native SOLIDWORKS class declaration is missing")
+    start = offset + marker
+    if start + 2 > len(data):
+        raise SldprtFormatError("native SOLIDWORKS class declaration is truncated")
+    (length,) = struct.unpack_from("<H", data, start)
+    end = start + 2 + length
+    if end > len(data):
+        raise SldprtFormatError("native SOLIDWORKS class declaration is truncated")
+    return data[start + 2 : end].decode("ascii"), end
+
+
+def _read_serialized_string(data: bytes, offset: int) -> tuple[str, int]:
+    marker = len(SERIALIZED_STRING_MARKER)
+    if data[offset : offset + marker] != SERIALIZED_STRING_MARKER:
+        raise SldprtFormatError("native SOLIDWORKS serialized string is missing")
+    start = offset + marker
+    if start >= len(data):
+        raise SldprtFormatError("native SOLIDWORKS serialized string is truncated")
+    end = start + 1 + data[start] * 2
+    if end > len(data):
+        raise SldprtFormatError("native SOLIDWORKS serialized string is truncated")
+    return data[start + 1 : end].decode("utf-16le"), end
+
+
+def _expect_bytes(data: bytes, offset: int, literal: bytes) -> int:
+    if data[offset : offset + len(literal)] != literal:
+        raise SldprtFormatError("native SOLIDWORKS header layout is unexpected")
+    return offset + len(literal)
+
+
+def _serializable_name(value: str) -> bool:
+    return 1 <= len(value.encode("utf-16le")) // 2 <= 0xFE
+
+
+def _native_assembly_identity(
+    document: CadDocument, model_name: str, object_count: int
+) -> _NativeIdentity:
+    creation_stamp = _stable_u32(document, model_name, b"assembly")
+    return _NativeIdentity(
+        creation_stamp,
+        101 + object_count * 4,
+        101,
+        (creation_stamp + object_count * 7 + 5) & 0x7FFFFFFF,
+        _ASSEMBLY_CONFIGURATION_FLAGS,
+        _ASSEMBLY_REFERENCE_NAME,
+    )
+
+
 def _base_record(chunks: bytes | tuple[bytes, ...]) -> bytes:
     encoded = chunks if isinstance(chunks, bytes) else b"".join(chunks)
     return zlib.decompress(base64.b85decode(encoded))
@@ -2336,6 +2620,18 @@ def _base_record(chunks: bytes | tuple[bytes, ...]) -> bytes:
 def _model_header_payload(
     identity: _NativeIdentity,
     configuration_name: str,
+    user_name: str = "Kit",
+) -> bytes:
+    return _header_payload(
+        identity, configuration_name, _HEADER_OBJECTS, "", user_name
+    )
+
+
+def _header_payload(
+    identity: _NativeIdentity,
+    configuration_name: str,
+    objects: Sequence[tuple[int, str, bool]],
+    document_path: str,
     user_name: str = "Kit",
 ) -> bytes:
     legacy_stamp = bytes.fromhex("f65a1a69")
@@ -2349,15 +2645,15 @@ def _model_header_payload(
     output.extend(bytes.fromhex("03800100"))
     output.extend(_serialized_string(""))
     output.extend(_class_declaration("suObList"))
-    output.extend(struct.pack("<H", 24))
+    output.extend(struct.pack("<H", len(objects) + 1))
     output.extend(_class_declaration("moLogs_c"))
     output.extend(struct.pack("<H", 1))
     output.extend(_class_declaration("moStamp_c"))
     output.extend(b"\0" * 6 + legacy_stamp)
     output.extend(_serialized_string("Created"))
     output.extend(struct.pack("<I", 0))
-    output.extend(_serialized_string("Part1"))
-    for object_id, name, modified in _HEADER_OBJECTS:
+    output.extend(_serialized_string(identity.reference_name))
+    for object_id, name, modified in objects:
         actions = ("Created", "Modified") if modified else ("Created",)
         output.extend(bytes.fromhex("0880") + struct.pack("<H", len(actions)))
         stamp = (
@@ -2374,12 +2670,12 @@ def _model_header_payload(
         output.extend(_serialized_string(name))
     output.extend(
         legacy_stamp
-        + struct.pack("<IH", 26, 0)
+        + struct.pack("<IH", max(item[0] for item in objects) + 1, 0)
         + struct.pack("<I", identity.last_modified_stamp)
     )
     output.extend(_class_declaration("moExtObject_c"))
     output.extend(_class_declaration("moCStringHandle_c"))
-    output.extend(_serialized_string(""))
+    output.extend(_serialized_string(document_path))
     output.extend(bytes.fromhex("4180"))
     output.extend(_serialized_string(identity.reference_name))
     output.extend(bytes.fromhex("020000"))
@@ -2433,7 +2729,9 @@ def _configuration_header_payload(
     )
 
 
-def _custom_properties_payload() -> bytes:
+def _custom_properties_payload(
+    container_class: str = "moFilePropContainer_c",
+) -> bytes:
     return b"".join(
         (
             _class_declaration("moCusPropMgr_c"),
@@ -2441,7 +2739,7 @@ def _custom_properties_payload() -> bytes:
             _class_declaration(""),
             struct.pack("<II", 1, 0),
             _class_declaration("moCusPropContainer_c"),
-            _class_declaration("moFilePropContainer_c"),
+            _class_declaration(container_class),
             b"\0" * 13,
         )
     )
@@ -2464,7 +2762,12 @@ def _version_history_payload() -> bytes:
     )
 
 
-def _biography_payload(model_name: str, identity: _NativeIdentity) -> bytes:
+def _biography_payload(
+    model_name: str,
+    identity: _NativeIdentity,
+    template_path: str = "C:\\Kit\\Part.PRTDOT",
+    document_suffix: str = PART_SUFFIX,
+) -> bytes:
     filetime = 116444736000000000 + identity.creation_stamp * 10_000_000
     first_paths = (
         "C:\\Windows\\System32\\",
@@ -2472,7 +2775,7 @@ def _biography_payload(model_name: str, identity: _NativeIdentity) -> bytes:
         "C:\\Program Files\\SOLIDWORKS\\",
         "C:\\Temp\\",
         "C:\\Temp\\",
-        "C:\\Kit\\Part.PRTDOT",
+        template_path,
     )
     second_paths = (
         "C:\\Windows\\System32\\",
@@ -2480,7 +2783,7 @@ def _biography_payload(model_name: str, identity: _NativeIdentity) -> bytes:
         "C:\\",
         "C:\\Temp\\",
         "C:\\Temp\\",
-        "C:\\Kit\\Part.PRTDOT",
+        template_path,
     )
     output = bytearray(
         _class_declaration("moBiography_c")
@@ -2509,7 +2812,7 @@ def _biography_payload(model_name: str, identity: _NativeIdentity) -> bytes:
     for value in ("*", "*", "C:\\", "*", "*"):
         output.extend(_serialized_string(value))
         output.extend(bytes.fromhex("030000000090a20c05000000"))
-    output.extend(_serialized_string(f"C:\\{model_name}{PART_SUFFIX}"))
+    output.extend(_serialized_string(f"C:\\{model_name}{document_suffix}"))
     output.extend(bytes.fromhex("030000000090a20c05000000"))
     return bytes(output)
 
