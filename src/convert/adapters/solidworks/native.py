@@ -165,6 +165,7 @@ class NativeMarker:
     construction: bool
     semantic: str
     data: bytes = b""
+    coordinates_metres: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
