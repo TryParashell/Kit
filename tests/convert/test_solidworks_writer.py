@@ -54,6 +54,7 @@ from convert.adapters.solidworks.native import (
     _BASE_RESOLVED_FEATURES,
     _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE,
     _base_record,
+    encode_native_part,
 )
 from convert.adapters.solidworks.parasolid import encode_blank_partition_stream
 from convert.adapters.solidworks.resolved import (
@@ -971,6 +972,119 @@ def test_source_less_native_rectangle_boss_profile_preserves_custom_names() -> N
     assert native.sketches[0].name == "CustomSketch"
     assert native.operations[0].name == "CustomBoss"
     assert "Contents/DisplayLists" not in archive.streams
+
+
+def _non_native_rectangle_boss_document() -> CadDocument:
+    source = document()
+    points = (
+        Vector2(-20.0, -10.0),
+        Vector2(20.0, -10.0),
+        Vector2(20.0, 10.0),
+        Vector2(-20.0, 10.0),
+    )
+    entities = tuple(
+        SketchEntity(
+            f"edge:{index}",
+            GeometryKind.LINE,
+            LineGeometry(points[index], points[(index + 1) % len(points)]),
+        )
+        for index in range(len(points))
+    )
+    sketch = Sketch(
+        source.sketches[0].id,
+        "CustomSketch",
+        source.sketches[0].support_plane_id,
+        entities,
+        closed_profile_entity_ids=(tuple(item.id for item in entities),),
+    )
+    feature = replace(
+        source.feature_timeline[0],
+        name="CustomBoss",
+        operation=BooleanOperation.JOIN,
+        definition=ExtrusionFeature(ParameterValue(10.0, ValueKind.LENGTH, "mm")),
+    )
+    return replace(
+        source,
+        sketches=(sketch,),
+        feature_timeline=(feature,),
+        configurations=(
+            Configuration("config:default", "Default", True),
+            Configuration("config:machined", "Machined"),
+        ),
+    )
+
+
+def test_non_native_document_writes_only_loadable_resolved_feature_lanes() -> None:
+    source = _non_native_rectangle_boss_document()
+    output = BytesIO()
+    result = write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    donor = _base_record(_BASE_RESOLVED_FEATURES)
+    lanes = sorted(
+        name
+        for name in archive.streams
+        if name.startswith("Contents/Config-") and name.endswith("-ResolvedFeatures")
+    )
+    assert lanes == [
+        RESOLVED_FEATURES_STREAM,
+        "Contents/Config-1-ResolvedFeatures",
+    ]
+    assert [archive.require(name) for name in lanes] == [donor, donor]
+    assert len(donor) == 5556
+    records = archive.require(KIT_RESOLVED_STREAM)
+    assert records != donor
+    assert (
+        records
+        == encode_native_part(
+            _document_without_source(source), "memory"
+        ).kit_resolved_features
+    )
+    assert result.application_usable is False
+    assert result.vendor_loadable is False
+    assert result.metadata["compatibility"] == "native-metadata-with-kit-neutral"
+    assert result.metadata["native_content"] == "native-metadata"
+
+
+def test_non_native_kit_resolved_stream_preserves_decoded_records() -> None:
+    source = _non_native_rectangle_boss_document()
+    output = BytesIO()
+    write_sldprt(source, output)
+    archive = SldprtArchive.from_bytes(output.getvalue())
+    keywords = archive.require(KEYWORDS_STREAM)
+    native = decode_native_model(
+        keywords,
+        archive.require(KIT_RESOLVED_STREAM),
+        resolved_stream=KIT_RESOLVED_STREAM,
+    )
+    assert [item.name for item in native.sketches] == ["CustomSketch"]
+    assert native.sketches[0].object_id == 26
+    assert native.sketches[0].support_plane_id == 2
+    assert [(item.kind, item.coordinates) for item in native.sketches[0].profiles] == [
+        ("rectangle", (-20.0, -10.0, 20.0, 10.0))
+    ]
+    assert [(item.name, item.object_id) for item in native.operations] == [
+        ("CustomBoss", 27)
+    ]
+    assert native.operations[0].length_mm == pytest.approx(10.0)
+    assert native.operations[0].profile_id == 26
+    assert [(item.object_id, item.name) for item in native.planes] == [
+        (2, "Front Plane"),
+        (3, "Top Plane"),
+        (4, "Right Plane"),
+    ]
+    assert {item.native_stream for item in native.planes} == {KIT_RESOLVED_STREAM}
+    assert {item.native_stream for item in native.sketches} == {KIT_RESOLVED_STREAM}
+    assert {item.native_stream for item in native.operations} == {KIT_RESOLVED_STREAM}
+    loadable = decode_native_model(keywords, _base_record(_BASE_RESOLVED_FEATURES))
+    assert loadable.sketches == ()
+    assert loadable.operations == ()
+    restored = read_sldprt(output.getvalue())
+    assert [item.name for item in restored.sketches] == ["CustomSketch"]
+    assert [item.name for item in restored.feature_timeline] == ["CustomBoss"]
+    assert restored.sketches[0].entities == source.sketches[0].entities
+    assert restored.feature_timeline[0].definition == (
+        source.feature_timeline[0].definition
+    )
 
 
 def test_neutral_brep_writes_native_parasolid_partition() -> None:
