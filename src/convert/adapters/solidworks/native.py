@@ -4079,6 +4079,8 @@ def _decode_sketch(
     support_plane_id: int,
     *,
     native_stream: str = RESOLVED_FEATURES_STREAM,
+    support_kind: str = PLANE_SUPPORT_KIND,
+    support_plane: NativeSketchPlane | None = None,
 ) -> NativeSketch:
     start = feature.native_offset or 0
     end = feature.native_end or len(data)
@@ -4120,6 +4122,8 @@ def _decode_sketch(
         dimensions=dimensions,
         constraints=constraints,
         native_stream=native_stream,
+        support_kind=support_kind,
+        support_plane=support_plane,
     )
 
 
