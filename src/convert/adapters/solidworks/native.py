@@ -2755,15 +2755,29 @@ def decode_native_model(
             latest_plane_id = feature.object_id
             continue
         if feature.kind.casefold() == "sketch":
+            sketch_start = feature.native_offset or 0
+            sketch_end = feature.native_end or len(resolved)
+            reference = _sketch_plane_reference(
+                resolved, classes, sketch_start, sketch_end
+            )
             support = _support_plane_id(
                 resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
+                sketch_start,
+                sketch_end,
                 latest_plane_id,
                 plane_by_id,
             )
+            if reference is not None and reference.plane_object_id in plane_by_id:
+                support = reference.plane_object_id
             latest_sketch = _decode_sketch(
-                resolved, feature, support, native_stream=resolved_stream
+                resolved,
+                feature,
+                support,
+                native_stream=resolved_stream,
+                support_kind=_sketch_support_kind(
+                    classes, reference, sketch_start, sketch_end
+                ),
+                support_plane=reference,
             )
             native_index = native_index_by_id[feature.object_id]
             native_features[native_index] = replace(
@@ -2786,11 +2800,9 @@ def decode_native_model(
                 if value is not None
             )
             family, operation_code, schema = _operation_fields(resolved, record)
-            end_spec = _end_spec(
-                resolved,
-                feature.native_offset or 0,
-                feature.native_end or len(resolved),
-            )
+            operation_start = feature.native_offset or 0
+            operation_end = feature.native_end or len(resolved)
+            end_spec = _end_spec(resolved, operation_start, operation_end, classes)
             operation = NativeOperation(
                 object_id=feature.object_id,
                 name=feature.name,
@@ -2801,8 +2813,9 @@ def decode_native_model(
                 ),
                 profile_id=profile_id,
                 dependencies=dependencies,
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
+                native_offset=operation_start,
+                native_end=_class_record_end(resolved, classes, operation_start)
+                or operation_end,
                 length_mm=_operation_dimension(feature.dimensions, "length"),
                 radius_mm=None,
                 family_code=family,
@@ -2813,6 +2826,16 @@ def decode_native_model(
                 selection_offsets=(),
                 selected_local_ids=(),
                 native_stream=resolved_stream,
+                depth_copies=_depth_copies(
+                    resolved,
+                    _operation_dimension_offset(feature.dimensions, "length"),
+                ),
+                mirrored_direction_offset=(
+                    end_spec.mirrored_direction_offset if end_spec else None
+                ),
+                mirrored_direction_code=(
+                    end_spec.mirrored_direction_code if end_spec else None
+                ),
             )
             operations.append(operation)
             latest_operation = operation
@@ -3150,6 +3173,7 @@ def decode_native_model(
                 resolved,
                 feature.native_offset or 0,
                 feature.native_end or len(resolved),
+                classes,
             )
             lengths = tuple(
                 dimension.value_mm
@@ -3227,6 +3251,7 @@ def decode_native_model(
         diagnostics=tuple(diagnostics),
         equations=equations,
         active_configuration_id=active_configuration_id,
+        bounding_box=_bounding_box(resolved, classes),
     )
 
 
@@ -4757,7 +4782,7 @@ def _circle_profiles(
         int,
         dict[
             tuple[float, float, float],
-            list[tuple[NativeMarker, NativeMarker, str]],
+            list[tuple[NativeMarker, NativeMarker, str, float | None]],
         ],
     ] = {}
     for center in centers:
@@ -4773,9 +4798,10 @@ def _circle_profiles(
         )
         if following is None:
             continue
-        radius = math.dist(center.coordinates_mm, following.coordinates_mm)
-        if not math.isfinite(radius) or radius <= 1e-12:
+        radius = _marker_radius_mm(center, following)
+        if radius is None:
             continue
+        start_angle = _marker_start_angle_degrees(center, following)
         for index, dimension in enumerate(dimensions):
             semantic = None
             normalized_radius = radius
@@ -4795,7 +4821,7 @@ def _circle_profiles(
                 normalized_radius,
             )
             candidates.setdefault(index, {}).setdefault(geometry, []).append(
-                (center, following, semantic)
+                (center, following, semantic, start_angle)
             )
     result: list[NativeProfile] = []
     geometries: set[tuple[float, float, float]] = set()
@@ -4807,7 +4833,7 @@ def _circle_profiles(
         geometry, records = next(iter(matches.items()))
         if geometry in geometries:
             continue
-        semantics = {semantic for _, _, semantic in records}
+        semantics = {semantic for _, _, semantic, _ in records}
         if len(semantics) != 1:
             continue
         geometries.add(geometry)
@@ -4820,13 +4846,14 @@ def _circle_profiles(
                     sorted(
                         {
                             offset
-                            for center, following, _ in records
+                            for center, following, _, _ in records
                             for offset in (center.offset, following.offset)
                         }
                     )
                 ),
                 dimension.name,
                 normalized[index],
+                records[0][3],
             )
         )
     result.sort(key=lambda profile: min(profile.marker_offsets))
@@ -5074,7 +5101,13 @@ def _resolve_profile_operation(
     )
 
 
-def _end_spec(data: bytes, start: int, end: int) -> NativeEndSpec | None:
+def _end_spec(
+    data: bytes,
+    start: int,
+    end: int,
+    classes: tuple[NativeClass, ...] = (),
+) -> NativeEndSpec | None:
+    mirrored_offset, mirrored_code = _mirrored_direction(data, classes, start, end)
     for offset in range(start, max(start, end - 26 + 1) + 1):
         prefix = data[offset : offset + 2]
         if prefix != b"_c" and not (
@@ -5096,7 +5129,14 @@ def _end_spec(data: bytes, start: int, end: int) -> NativeEndSpec | None:
         second = struct.unpack_from("<I", data, offset + 22)[0]
         if termination > 64 or second > 1:
             continue
-        return NativeEndSpec(offset, termination, direction, second)
+        return NativeEndSpec(
+            offset,
+            termination,
+            direction,
+            second,
+            mirrored_offset,
+            mirrored_code,
+        )
     return None
 
 
@@ -5119,6 +5159,19 @@ def _operation_dimension(
 ) -> float | None:
     return next(
         (dimension.value_mm for dimension in dimensions if dimension.kind == semantic),
+        None,
+    )
+
+
+def _operation_dimension_offset(
+    dimensions: tuple[NativeDimension, ...], semantic: str
+) -> int | None:
+    return next(
+        (
+            dimension.native_offset
+            for dimension in dimensions
+            if dimension.kind == semantic and dimension.native_offset is not None
+        ),
         None,
     )
 
