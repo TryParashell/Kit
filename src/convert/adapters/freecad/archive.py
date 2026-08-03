@@ -631,7 +631,7 @@ def _xlink_property(
     return result
 
 
-def _python_proxy_property() -> ET.Element:
+def _python_proxy_property(module: str, class_name: str) -> ET.Element:
     result = _property("Proxy", "App::PropertyPythonObject")
     ET.SubElement(
         result,
@@ -639,7 +639,8 @@ def _python_proxy_property() -> ET.Element:
         {
             "value": "bnVsbA==",
             "encoded": "yes",
-            "json": "yes",
+            "module": module,
+            "class": class_name,
         },
     )
     return result
@@ -3426,7 +3427,7 @@ def _grounded_joint(
         ET.SubElement(label2, "String", {"value": ""})
         joint.properties.append(label2)
     if not any(item.get("name") == "Proxy" for item in joint.properties):
-        joint.properties.append(_python_proxy_property())
+        joint.properties.append(_python_proxy_property("JointObject", "GroundedJoint"))
     if not any(item.get("name") == "Visibility" for item in joint.properties):
         visibility = _property("Visibility", "App::PropertyBool", status="648")
         ET.SubElement(visibility, "Bool", {"value": "true"})
@@ -4449,7 +4450,7 @@ def _add_assembly(
                     "EnableAngleMax", "AngleMax" in parameter_values, dynamic=True
                 ),
                 *connector_properties,
-                _python_proxy_property(),
+                _python_proxy_property("JointObject", "Joint"),
                 _bool_property("Visibility", False),
             ]
 
@@ -6027,6 +6028,9 @@ def _document_xml(
         ]
     )
     bodies_group.dependencies.extend([*body_objects, *document_breps])
+    sole_body_shape = (
+        next(iter(body_shape_targets.values())) if len(body_shape_targets) == 1 else ""
+    )
     external_target = (
         document_breps[0]
         if document_breps
@@ -6035,6 +6039,7 @@ def _document_xml(
             if document_meshes
             else assembly_root
             or current_name
+            or sole_body_shape
             or (bodies_group.name if body_objects else "")
             or (feature_objects[-1] if feature_objects else "")
             or bodies_group.name
