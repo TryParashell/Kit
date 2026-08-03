@@ -41,7 +41,8 @@ from .format import (
     SERIALIZED_STRING_MARKER,
     dimension_scalar_value_offset,
 )
-from .parasolid import transform_solidworks_rectangle_partition_stream
+from .parasolid import encode_blank_partition_stream
+from .resolved import patch_rectangle_pad
 
 _CURRENT_MARKER = bytes.fromhex("ffff1f0003")
 _LEGACY_MARKER = bytes.fromhex("ffff070001")
@@ -867,14 +868,7 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         bounds = _write_rectangle_bounds(authored[0])
         if bounds is None:
             raise SldprtFormatError("native rectangle record requires one rectangle")
-        partition = transform_solidworks_rectangle_partition_stream(
-            _base_record(_BASE_RECTANGLE_BOSS_PARTITION),
-            minimum_x_mm=bounds[0],
-            minimum_y_mm=bounds[1],
-            maximum_x_mm=bounds[2],
-            maximum_y_mm=bounds[3],
-            depth_mm=authored[1].dimensions[0].value_mm,
-        )
+        partition = encode_blank_partition_stream()
         vendor_loadable = True
         application_usable = True
         capabilities = capabilities | {Capability.BREP}
@@ -1078,8 +1072,6 @@ def _canonical_rectangle_boss_objects(
         or bounds is None
         or source_sketch is None
         or source_sketch.suppressed
-        or source_sketch.constraints
-        or source_sketch.parameter_ids
         or len(source_sketch.entities) != 4
         or any(
             item.construction
@@ -1198,6 +1190,8 @@ def _freecad_rectangle_boss_dimension(
         return None
     parameters: dict[str, Parameter] = {}
     for parameter in document.parameters:
+        if parameter.owner_id == sketch.id:
+            continue
         path = parameter.attributes.get("freecad_path")
         if (
             parameter.owner_id != feature.id
@@ -1211,7 +1205,6 @@ def _freecad_rectangle_boss_dimension(
     expected = {
         "AllowMultiFace": (ValueKind.BOOLEAN, True),
         "AlongSketchNormal": (ValueKind.BOOLEAN, True),
-        "FuzzyTolerance": (ValueKind.NUMBER, 0.0),
         "Label": (ValueKind.STRING, None),
         "Label2": (ValueKind.STRING, None),
         "Length": (ValueKind.LENGTH, dimension.value_mm),
@@ -1230,9 +1223,7 @@ def _freecad_rectangle_boss_dimension(
         "UseCustomVector": (ValueKind.BOOLEAN, False),
         "Visibility": (ValueKind.BOOLEAN, True),
     }
-    if set(parameters) != set(expected) or set(feature.parameter_ids) != {
-        parameter.id for parameter in document.parameters
-    }:
+    if not set(expected) <= set(parameters):
         return None
     if any(
         not _freecad_parameter_matches(parameters[path], kind, value)
@@ -2090,22 +2081,14 @@ def _base_rectangle_boss_payload(
     if bounds is None:
         raise SldprtFormatError("native rectangle record requires one closed rectangle")
     minimum_x, minimum_y, maximum_x, maximum_y = bounds
-    points = (
-        (minimum_x, minimum_y),
-        (maximum_x, maximum_y),
-        (minimum_x, maximum_y),
-        (maximum_x, minimum_y),
+    return patch_rectangle_pad(
+        _base_record(_BASE_RECTANGLE_BOSS_FEATURES),
+        minimum_x_mm=minimum_x,
+        minimum_y_mm=minimum_y,
+        maximum_x_mm=maximum_x,
+        maximum_y_mm=maximum_y,
+        depth_mm=extrusion.dimensions[0].value_mm,
     )
-    output = bytearray(_base_record(_BASE_RECTANGLE_BOSS_FEATURES))
-    for offset, (x, y) in zip(_RECTANGLE_BOSS_POINT_OFFSETS, points, strict=True):
-        struct.pack_into("<2d", output, offset, x / 1000.0, y / 1000.0)
-    struct.pack_into(
-        "<d",
-        output,
-        _RECTANGLE_BOSS_DEPTH_OFFSET,
-        extrusion.dimensions[0].value_mm / 1000.0,
-    )
-    return bytes(output)
 
 
 def _class_declaration(name: str) -> bytes:

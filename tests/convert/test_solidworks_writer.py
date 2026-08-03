@@ -50,6 +50,11 @@ from convert.adapters.solidworks.format import (
     RESOLVED_FEATURES_STREAM,
 )
 from convert.adapters.solidworks.native import _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE
+from convert.adapters.solidworks.parasolid import encode_blank_partition_stream
+from convert.adapters.solidworks.resolved import (
+    BLIND_END_CONDITION,
+    locate_rectangle_pad,
+)
 from convert.parasolid import _parasolid_header, _scan_partition_records
 from interchange import (
     BooleanOperation,
@@ -803,11 +808,13 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     assert result.near_lossless is True
     assert result.requirements == ()
     assert len(resolved) == 11285
-    assert len(partition) == 3791
-    assert (
-        hashlib.sha256(partition).hexdigest()
-        == "7e8daf279693883c58ecd9b15c26ee9f18ade2844c2d7731993ed328565563a3"
-    )
+    assert partition == encode_blank_partition_stream()
+    layout = locate_rectangle_pad(resolved)
+    assert layout is not None
+    assert layout.bounds_mm == (-30.0, -15.0, 30.0, 15.0)
+    assert layout.depth_mm == pytest.approx(12.0)
+    assert layout.reversed is False
+    assert layout.end_condition_code == BLIND_END_CONDITION
     assert native.sketches[0].object_id == 26
     assert native.sketches[0].profiles[0].coordinates == (
         -30.0,

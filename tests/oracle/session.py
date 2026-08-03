@@ -89,9 +89,9 @@ class PartInspection:
 def _decode_flags(value: int, table: dict[int, str]) -> tuple[str, ...]:
     if value <= 0:
         return ()
-    return tuple(
-        label for bit, label in sorted(table.items()) if value & bit
-    ) or (f"unknown-{value}",)
+    return tuple(label for bit, label in sorted(table.items()) if value & bit) or (
+        f"unknown-{value}",
+    )
 
 
 def _is_dispatch(value: object) -> bool:
@@ -185,12 +185,12 @@ class SolidWorksSession:
         self.close()
 
     def _byref_long(self) -> object:
-        return self._variant(
-            self._pythoncom.VT_BYREF | self._pythoncom.VT_I4, 0
-        )
+        return self._variant(self._pythoncom.VT_BYREF | self._pythoncom.VT_I4, 0)
 
     @contextmanager
-    def _document(self, path: Path, doc_type: int) -> Iterator[tuple[object, tuple[str, ...], tuple[str, ...]]]:
+    def _document(
+        self, path: Path, doc_type: int
+    ) -> Iterator[tuple[object, tuple[str, ...], tuple[str, ...]]]:
         errors = self._byref_long()
         warnings = self._byref_long()
         model = self._app.OpenDoc6(
