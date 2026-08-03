@@ -61,17 +61,50 @@ MATE_LOSS_VALUE_MISSING = "mate_value_missing"
 MATE_LOSS_GROUP_NESTING = "mate_group_nesting"
 MATE_LOSS_GROUP_MEMBERSHIP = "mate_group_membership"
 MATE_LOSS_ORPHAN_ENTITY = "unreferenced_mate_entity"
-MATE_LOSS_REASONS = frozenset(
+MATE_LOSS_SUPPRESSED = "mate_suppressed_state"
+MATE_LOSS_NOT_DRIVING = "mate_not_driving"
+MATE_LOSS_KIND = "mate_kind_has_no_native_class"
+MATE_LOSS_ALIGNMENT = "mate_alignment_has_no_native_code"
+MATE_LOSS_ENTITY_MISSING = "mate_entity_missing"
+MATE_LOSS_ENTITY_SELECTION = "mate_entity_carries_selection_id"
+MATE_LOSS_ENTITY_REFERENCE = "mate_entity_reference_is_not_a_persistent_token"
+MATE_LOSS_ENTITY_COMPONENT_PATH = "mate_entity_component_path_unresolved"
+MATE_LOSS_NAME = "mate_name_exceeds_native_string_limit"
+MATE_LOSS_RECORD_VERIFICATION = "mate_record_failed_redecode"
+MATE_LOSS_LANE_CAPACITY = "mate_lane_record_capacity"
+MATE_BLOCKING_LOSS_REASONS = frozenset(
+    {
+        MATE_LOSS_VALUE,
+        MATE_LOSS_VALUE_MISSING,
+    }
+)
+MATE_ADVISORY_LOSS_REASONS = frozenset(
     {
         MATE_LOSS_EXPRESSION,
         MATE_LOSS_ENTITY_FRAME,
         MATE_LOSS_ENTITY_RADIUS,
-        MATE_LOSS_VALUE,
-        MATE_LOSS_VALUE_MISSING,
         MATE_LOSS_GROUP_NESTING,
         MATE_LOSS_GROUP_MEMBERSHIP,
         MATE_LOSS_ORPHAN_ENTITY,
     }
+)
+MATE_REJECTION_REASONS = frozenset(
+    {
+        MATE_LOSS_SUPPRESSED,
+        MATE_LOSS_NOT_DRIVING,
+        MATE_LOSS_KIND,
+        MATE_LOSS_ALIGNMENT,
+        MATE_LOSS_ENTITY_MISSING,
+        MATE_LOSS_ENTITY_SELECTION,
+        MATE_LOSS_ENTITY_REFERENCE,
+        MATE_LOSS_ENTITY_COMPONENT_PATH,
+        MATE_LOSS_NAME,
+        MATE_LOSS_RECORD_VERIFICATION,
+        MATE_LOSS_LANE_CAPACITY,
+    }
+)
+MATE_LOSS_REASONS = (
+    MATE_BLOCKING_LOSS_REASONS | MATE_ADVISORY_LOSS_REASONS | MATE_REJECTION_REASONS
 )
 
 
@@ -663,6 +696,7 @@ class NativeMateStreamReport:
     encoded_mate_ids: tuple[str, ...]
     unsupported_mate_ids: tuple[str, ...]
     losses: Mapping[str, tuple[str, ...]]
+    unsupported_reasons: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 
 
 @dataclass(frozen=True, slots=True)
@@ -676,6 +710,7 @@ class NativeAssemblyEncoding:
     unsupported_mate_ids: tuple[str, ...]
     generated_mate_ids: tuple[str, ...] = ()
     generated_mate_losses: Mapping[str, tuple[str, ...]] = MappingProxyType({})
+    unsupported_mate_reasons: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 
 
 def encode_native_assembly(
@@ -923,6 +958,7 @@ def encode_native_assembly(
         unsupported_mate_ids=mates.unsupported_mate_ids,
         generated_mate_ids=mates.encoded_mate_ids,
         generated_mate_losses=mates.losses,
+        unsupported_mate_reasons=mates.unsupported_reasons,
     )
 
 
@@ -1141,6 +1177,7 @@ def _encode_mate_streams(
         )
     entities = {entity.id: entity for entity in assembly.mate_entities}
     losses: dict[str, tuple[str, ...]] = {}
+    rejections: dict[str, tuple[str, ...]] = {}
     referenced = {entity_id for mate in assembly.mates for entity_id in mate.entity_ids}
     for entity_id in sorted(set(entities) - referenced):
         losses[entity_id] = (MATE_LOSS_ORPHAN_ENTITY,)
@@ -1162,11 +1199,13 @@ def _encode_mate_streams(
                 records.extend(pair)
                 layout.extend((("group_start", item), ("group_end", item)))
                 continue
-            encoded_record = _encode_mate_record(item, entities, assembly, definitions)
-            if encoded_record is None:
+            record, reasons = _encode_mate_record(
+                item, entities, assembly, definitions
+            )
+            if record is None:
                 unsupported.append(item.id)
+                rejections[item.id] = reasons
                 continue
-            record, reasons = encoded_record
             records.append(record)
             layout.append(("mate", item))
             if reasons:
@@ -1174,6 +1213,8 @@ def _encode_mate_streams(
         planned = tuple(item.id for role, item in layout if role == "mate")
         if not planned or len(records) > 0xFFFF:
             unsupported.extend(planned)
+            for mate_id in planned:
+                rejections[mate_id] = (MATE_LOSS_LANE_CAPACITY,)
             continue
         stream_name = f"Contents/Config-{lane}-MatesList"
         native_id = (definition_ids[owner_id] | _MATE_LIST_NATIVE_ID_FLAG) & 0xFFFFFFFF
@@ -1189,12 +1230,19 @@ def _encode_mate_streams(
             losses,
         ):
             unsupported.extend(planned)
+            for mate_id in planned:
+                rejections[mate_id] = (MATE_LOSS_RECORD_VERIFICATION,)
             continue
         streams[stream_name] = stream
         encoded.extend(planned)
+    blocking = any(
+        reason in MATE_BLOCKING_LOSS_REASONS
+        for reasons in losses.values()
+        for reason in reasons
+    )
     complete = (
         not unsupported
-        and not losses
+        and not blocking
         and len(encoded) == len(assembly.mates)
         and bool(assembly.mates) == bool(streams)
     )
@@ -1204,6 +1252,7 @@ def _encode_mate_streams(
         tuple(encoded),
         tuple(dict.fromkeys(unsupported)),
         MappingProxyType(dict(sorted(losses.items()))),
+        MappingProxyType(dict(sorted(rejections.items()))),
     )
 
 
@@ -1433,34 +1482,35 @@ def _encode_mate_record(
     entities: Mapping[str, MateEntity],
     assembly: AssemblyData,
     definitions: Mapping[str, ComponentDefinition],
-) -> tuple[bytes, tuple[str, ...]] | None:
-    if mate.suppressed or not mate.driving:
-        return None
+) -> tuple[bytes | None, tuple[str, ...]]:
+    if mate.suppressed:
+        return None, (MATE_LOSS_SUPPRESSED,)
+    if not mate.driving:
+        return None, (MATE_LOSS_NOT_DRIVING,)
     native_kind, class_name = _native_mate_class(mate)
     if not class_name:
-        return None
+        return None, (MATE_LOSS_KIND,)
     reasons: list[str] = [MATE_LOSS_EXPRESSION] if mate.parameter_ids else []
     entity_values: list[str] = []
     for entity_id in mate.entity_ids:
         entity = entities.get(entity_id)
         if entity is None or entity.owner_definition_id != mate.owner_definition_id:
-            return None
-        described = _mate_entity_strings(entity, assembly, definitions)
-        if described is None:
-            return None
-        values, entity_reasons = described
+            return None, (MATE_LOSS_ENTITY_MISSING,)
+        values, entity_reasons = _mate_entity_strings(entity, assembly, definitions)
+        if values is None:
+            return None, entity_reasons
         entity_values.extend(values)
         reasons.extend(entity_reasons)
     alignment_code = _mate_alignment_code(mate.alignment)
     if alignment_code is None:
-        return None
+        return None, (MATE_LOSS_ALIGNMENT,)
     dimensions, value_reasons = _mate_dimension_values(mate, native_kind)
     reasons.extend(value_reasons)
     record = bytearray(
         _encode_record_body(mate.name, class_name, len(mate.entity_ids)) or b""
     )
     if not record:
-        return None
+        return None, (MATE_LOSS_NAME,)
     struct.pack_into(
         "<H",
         record,
@@ -1470,12 +1520,12 @@ def _encode_mate_record(
     for value in entity_values:
         serialized = _serialized_string(value)
         if serialized is None:
-            return None
+            return None, (MATE_LOSS_ENTITY_REFERENCE,)
         record.extend(serialized)
     for name, value in dimensions:
         serialized = _serialized_string(name)
         if serialized is None:
-            return None
+            return None, (MATE_LOSS_NAME,)
         record.extend(serialized)
         record.extend(DIMENSION_SCALAR_HEADERS[0])
         record.extend(struct.pack("<d", value))
