@@ -156,6 +156,7 @@ from .native import (
     NativeProfile,
     NativeSketch,
     decode_native_model,
+    encode_native_assembly_envelope,
     encode_native_part,
 )
 from .parasolid import (
