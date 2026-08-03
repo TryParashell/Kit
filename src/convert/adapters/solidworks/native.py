@@ -4195,6 +4195,7 @@ def _parse_markers(data: bytes, start: int, end: int) -> tuple[NativeMarker, ...
                 construction=profile_role == 2,
                 semantic=semantic,
                 data=bytes(data[offset:next_offset]),
+                coordinates_metres=coordinates_metres,
             )
         )
     return tuple(markers)
