@@ -28,7 +28,10 @@ Repository = "https://github.com/TryParashell/Kit"
 Issues = "https://github.com/TryParashell/Kit/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3"]
+dev = [
+    "pytest>=8.3",
+    "pywin32==311",
+]
 
 [project.entry-points."kit"]
 convert = "convert:convert"

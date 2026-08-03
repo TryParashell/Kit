@@ -1,0 +1,28 @@
+=== trailing bytes after the end-of-directory record ===
+  len(file) - (eocd_offset + 22): {360: 2, 384: 1, 430: 1, 220: 1, 500: 2, 576: 1, 336: 4, 450: 2, 660: 1, 504: 1, 385: 2, 588: 1, 598: 1, 517: 1, 456: 1, 559: 1, 312: 1, 528: 1, 490: 1, 301: 1, 392: 1, 605: 1, 495: 1, 550: 2, 627: 1, 484: 2, 344: 1, 387: 1, 616: 2, 448: 2, 376: 1, 300: 1, 516: 2, 399: 1, 357: 2, 612: 1, 477: 1, 506: 1, 756: 1, 368: 1, 676: 1, 424: 1, 260: 1, 480: 1, 530: 1}
+  example.SLDPRT last 48 bytes: ee 5c e1 9a 57 31 23 be c9 87 63 7b 00 00 00 00 2c 00 2c 00 6d 00 00 00 e9 07 00 00 00 00 5a b5 6f d5 13 78 9f 15 28 fe fc 6b 14 a7 f8 d8 eb 09
+  eocd at 150341, file size 150723
+  bytes from eocd: 7a 00 47 20 00 00 00 00 2c 00 2c 00 6f 0f 00 00 ce 3b 02 00 00 00 a2 9a a4 21 8c 99 b7 f9 0e 2d e9 df 00 00 00 00 2c 00 2c 00 6d 00 00 00 8c 0a 00 00 00 00 2e 9b 77 e9 38 4c 3b 57 f7 2b 81 1b 2b 4f 17 38 da a3 ab 1c 21 39 e8 a3 0d 2d 26 00 00 00 00 2c 00 2c 00 6d 00 00 00 8c 0a 00 00 00 00 de c1 26 3d d1 7c 74 0e 6c c1 a4 c4 bd b6 51 63 cb 3d 5e 46 9b a0 00 00 00 00 2c 00 2c 00 6d 00 00 00 27 06 00 00 00 00 f4 85 17 bf 1d b0 e1 c1 39 38 f6 be cb 23 90 1a 7d 04 4b 11 2b 86 92 84 19 0c 51 97 37 f4 18 00 00 00 00 2c 00 2c 00 6d 00 00 00 ab 09 00 00 00 00 0a c7 c5 5d 49 1a de 1a 3c 03 15 d9 11 8d 9f 0e e9 30 aa bd aa 62 00 00 00 00 2c 00 2c 00 6d 00 00 00 46 05 00 00 00 00 ed a2 35 5b 7c cc 72 aa b3 f6 c8 73 3c f3 49 cc e1 36 29 66 9e 75 70 fb 56 01 b8 99 59 a3 00 00 00 00 2c 00 2c 00 6d 00 00 00 e9 07 00 00 00 00 14 0a bb 9e e5 86 61 88 1a bf 72 69 84 a3 a5 73 bd 30 31 36 e7 44 cc 87 d1 36 00 00 00 00 2c 00 2c 00 6d 00 00 00 08 07 00 00 00 00 2d 03 c0 7c 62 90 d7 3e 43 b6 4c 6b 55 f5 6d ab ee 5c e1 9a 57 31 23 be c9 87 63 7b 00 00 00 00 2c 00 2c 00 6d 00 00 00 e9 07 00 00 00 00 5a b5 6f d5 13 78 9f 15 28 fe fc 6b 14 a7 f8 d8 eb 09
+
+=== central directory walk, first file, first 4 entries ===
+  eocd fields disk=0 dd=0 de=44 te=44 dsize=3951 doff=146382 clen=0
+  central dir starts at file offset 146390
+    [0] sig=a576970f vmb=0 vneed=20 flags=0x0006 method=8 crc=0xd0d0773b cs=1268 us=12288 nl=30 el=0 cl=0 disk=0 iattr=0x0000 eattr=0x00000000 local_off=460
+        name='Contents/3DExperienceExchange2'  points to file offset 468, sig there=a1909b1f
+    [1] sig=a576970f vmb=0 vneed=20 flags=0x0006 method=8 crc=0x3248f4c9 cs=295 us=12288 nl=42 el=0 cl=0 disk=0 iattr=0x0000 eattr=0x00000000 local_off=1880
+        name='Contents/3DExperienceExchange_ConfigHeader'  points to file offset 1888, sig there=a1909b1f
+    [2] sig=a576970f vmb=0 vneed=20 flags=0x0006 method=8 crc=0xe74ae0e1 cs=1477 us=3887 nl=13 el=0 cl=0 disk=0 iattr=0x0000 eattr=0x00000000 local_off=2339
+        name='Contents/CMgr'  points to file offset 2347, sig there=a1909b1f
+    [3] sig=a576970f vmb=0 vneed=20 flags=0x0006 method=8 crc=0x57083159 cs=89 us=137 nl=17 el=0 cl=0 disk=0 iattr=0x0000 eattr=0x00000000 local_off=3951
+        name='Contents/CMgrHdr2'  points to file offset 3959, sig there=a1909b1f
+  cursor after 4 entries: 146676
+
+=== full verification across all files ===
+  fully ZIP-navigable files: 0/58
+  problems: {'central_walk_does_not_end_at_eocd': 58}
+
+=== live vs front-region descriptor comparison (example.SLDPRT) ===
+  live Contents/Config-0-Partition            csize= 23942 usize= 23968
+  live Contents/Config-0-ResolvedFeatures     csize= 14964 usize= 99146
+  live PreviewPNG                             csize= 37011 usize= 40163
+  live swXmlContents/Features                 csize=   399 usize=   774

@@ -1,0 +1,4 @@
+F..s                                                                     [100%]
+=========================== short test summary info ===========================
+FAILED tests/convert/test_random_assembly.py::test_random_assembly_public_sdk_recovers_complete_neutral_graph
+1 failed, 2 passed, 1 skipped in 371.84s (0:06:11)

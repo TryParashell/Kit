@@ -1,0 +1,63 @@
+=== A. ZIP structural equivalence ===
+  files satisfying all ZIP structure checks: 0/58
+    C:\Users\odin\Documents\Parashell\Kit\examples\.SLDPRT\example.SLDPRT: {'eocd_at_eof_minus_22': False, 'comment_len_zero': True, 'entries_match_streams': True, 'central_offset_consistent': True, 'local_vfm_constant': True}
+    C:\Users\odin\Documents\Parashell\Kit\examples\Random\Addons\Alternator.SLDPRT: {'eocd_at_eof_minus_22': False, 'comment_len_zero': True, 'entries_match_streams': True, 'central_offset_consistent': True, 'local_vfm_constant': True}
+    C:\Users\odin\Documents\Parashell\Kit\examples\Random\Addons\Alternator_belt.SLDPRT: {'eocd_at_eof_minus_22': False, 'comment_len_zero': True, 'entries_match_streams': True, 'central_offset_consistent': True, 'local_vfm_constant': True}
+    C:\Users\odin\Documents\Parashell\Kit\examples\Random\Addons\Alternator_pulley.SLDPRT: {'eocd_at_eof_minus_22': False, 'comment_len_zero': True, 'entries_match_streams': True, 'central_offset_consistent': True, 'local_vfm_constant': True}
+    C:\Users\odin\Documents\Parashell\Kit\examples\Random\Addons\Belt_tensioner.SLDPRT: {'eocd_at_eof_minus_22': False, 'comment_len_zero': True, 'entries_match_streams': True, 'central_offset_consistent': True, 'local_vfm_constant': True}
+
+=== B. central-directory local_offset -> does it point at the signature? ===
+  files where every central local_offset lands on a local signature: 0/58
+  min local_offset (i.e. prepended-junk length) range: 255..855
+
+=== C. what is the 4-byte field after 14 00 06 00 08 00 ? (ZIP modtime+moddate) ===
+  0xfdf4bfdf x958   time=0xbfdf date=0xfdf4 -> 2106-15-20 23:62:62  dos_valid=False
+  0xfff4bfdf x787   time=0xbfdf date=0xfff4 -> 2107-15-20 23:62:62  dos_valid=False
+  0xfde2bfdf x273   time=0xbfdf date=0xfde2 -> 2106-15-02 23:62:62  dos_valid=False
+  0xfdf43fdf x180   time=0x3fdf date=0xfdf4 -> 2106-15-20 07:62:62  dos_valid=False
+  0x1cae5281 x84    time=0x5281 date=0x1cae -> 1994-05-14 10:20:02  dos_valid=True
+  0xfdf5bfdf x47    time=0xbfdf date=0xfdf5 -> 2106-15-21 23:62:62  dos_valid=False
+  0xfdfd3fdf x45    time=0x3fdf date=0xfdfd -> 2106-15-29 07:62:62  dos_valid=False
+  0xfffd3fdf x43    time=0x3fdf date=0xfffd -> 2107-15-29 07:62:62  dos_valid=False
+  0x87b64000 x36    time=0x4000 date=0x87b6 -> 2047-13-22 08:00:00  dos_valid=False
+  0xfdec3fdf x34    time=0x3fdf date=0xfdec -> 2106-15-12 07:62:62  dos_valid=False
+  0xfdefbfdf x34    time=0xbfdf date=0xfdef -> 2106-15-15 23:62:62  dos_valid=False
+  0x53b64000 x28    time=0x4000 date=0x53b6 -> 2021-13-22 08:00:00  dos_valid=False
+
+=== D. signature keys K = sig XOR zip magic: pairwise relations ===
+  fid   -> K1b  : mod2^32-affine=NO                             gf2-affine=NO
+  fid   -> K1l  : mod2^32-affine=NO                             gf2-affine=NO
+  K1b   -> K2b  : mod2^32-affine=NO                             gf2-affine=NO
+  K2b   -> K3b  : mod2^32-affine=NO                             gf2-affine=NO
+  K1l   -> K2l  : mod2^32-affine=NO                             gf2-affine=NO
+  K2l   -> K3l  : mod2^32-affine=NO                             gf2-affine=NO
+  K1b   -> K3b  : mod2^32-affine=NO                             gf2-affine=NO
+  fid   -> K2b  : mod2^32-affine=NO                             gf2-affine=NO
+  fid   -> K3b  : mod2^32-affine=NO                             gf2-affine=NO
+
+=== E. ratio / product invariants among sig and fid ===
+  Lb: distinct fid*sig=57 fid+sig=57 fid^sig=57
+  Cb: distinct fid*sig=57 fid+sig=57 fid^sig=57
+  Eb: distinct fid*sig=57 fid+sig=57 fid^sig=57
+  Ll: distinct fid*sig=57 fid+sig=57 fid^sig=57
+  Cl: distinct fid*sig=57 fid+sig=57 fid^sig=57
+  El: distinct fid*sig=57 fid+sig=57 fid^sig=57
+
+=== F. per-bit balance (constant bits would reveal construction) ===
+  fid: ones-per-bit min=21 max=35 of 57; constant bits=[]
+  Lb: ones-per-bit min=19 max=35 of 57; constant bits=[]
+  Cb: ones-per-bit min=19 max=36 of 57; constant bits=[]
+  Eb: ones-per-bit min=23 max=37 of 57; constant bits=[]
+
+=== G. duplicate files / determinism evidence ===
+  identical content d1bbca099ccac133: ['C:\\Users\\odin\\Documents\\Parashell\\Kit\\examples\\.SLDPRT\\example.SLDPRT', 'C:\\Users\\odin\\Documents\\Parashell\\sandbox\\sampleFiles\\example.SLDPRT']
+  distinct file contents: 57 / 58
+
+=== H. front region: inflatable one, and stale-record check ===
+  Water_pump.SLDPRT: front region inflates to 12 bytes; head=b'"lBg\xe0RPPPPPP'
+  example.SLDPRT front-region pseudo-records: 5
+    at 19: 'Contents/Config-0-Partition' crc=0x000007e8 csize=506 usize=1012 also_a_live_stream=True
+    at 111: 'swXmlContents/Features' crc=0x000007e8 csize=506 usize=1012 also_a_live_stream=True
+    at 198: 'PreviewPNG' crc=0x00000450 csize=276 usize=552 also_a_live_stream=True
+    at 291: 'Contents/Config-0-Partition' crc=0x00000508 csize=322 usize=644 also_a_live_stream=True
+    at 385: 'Contents/Config-0-ResolvedFeatures' crc=0x00000678 csize=414 usize=828 also_a_live_stream=True

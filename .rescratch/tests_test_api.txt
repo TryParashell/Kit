@@ -1,0 +1,4 @@
+.....................F...                                                [100%]
+=========================== short test summary info ===========================
+FAILED tests/convert/test_api.py::test_readme_describes_default_reversible_swaps_and_strict_mode
+1 failed, 24 passed in 15.92s

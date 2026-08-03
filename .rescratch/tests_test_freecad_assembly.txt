@@ -1,0 +1,4 @@
+F..................ss                                                    [100%]
+=========================== short test summary info ===========================
+FAILED tests/convert/test_freecad_assembly.py::test_fcstd_assembly_has_component_links_placements_and_mates
+1 failed, 18 passed, 2 skipped in 3.29s

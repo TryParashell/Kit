@@ -1,0 +1,4 @@
+.....F..........                                                         [100%]
+=========================== short test summary info ===========================
+FAILED tests/convert/test_solidworks.py::test_protocol_literals_have_one_source_definition
+1 failed, 15 passed in 2.24s

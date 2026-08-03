@@ -1,0 +1,19 @@
+=== central-dir walk: (cursor_after_walk - eocd_offset) ===
+  {-943: 3, -560: 1, -1060: 1, -1080: 1, -692: 1, -944: 1, -1072: 1, -741: 1, -1109: 1, -1161: 1, -807: 1, -465: 2, -1014: 1, -524: 1, -981: 1, -1026: 1, -1058: 1, -676: 1, -920: 1, -826: 1, -812: 1, -512: 1, -490: 1, -1086: 1, -790: 1, -526: 1, -483: 1, -1094: 1, -485: 1, -939: 1, -1093: 1, -945: 1, -451: 1, -914: 1, -608: 1, -1091: 1, -1050: 1, -959: 1, -487: 1, -1182: 1, -444: 1, -459: 1, -593: 1, -734: 1, -1008: 1, -425: 1, -568: 1, -520: 1, -894: 1, -816: 1, -498: 1, -922: 1, -948: 1, -391: 1, -821: 1}
+
+  example.SLDPRT: walked 3008 bytes, eocd says dsize=3951, diff=-943
+  central names == live stream names: True
+  first/last central name: 'Contents/3DExperienceExchange2' .. 'swXmlContents/KeyWords'
+
+=== does dsize count the 4-byte signatures? ===
+  example.SLDPRT                   walked=  3008 dsize=  3951 diff=  -943 entries=44 walked-4*te=2832
+  Alternator.SLDPRT                walked=  3217 dsize=  3777 diff=  -560 entries=47 walked-4*te=3029
+  Alternator_belt.SLDPRT           walked=  3217 dsize=  4277 diff= -1060 entries=47 walked-4*te=3029
+  Alternator_pulley.SLDPRT         walked=  3217 dsize=  4297 diff= -1080 entries=47 walked-4*te=3029
+  Belt_tensioner.SLDPRT            walked=  3076 dsize=  3768 diff=  -692 entries=45 walked-4*te=2896
+  Belt_tensioner_pulley.SLDPRT     walked=  3076 dsize=  4020 diff=  -944 entries=45 walked-4*te=2896
+  Idle_pulley.SLDPRT               walked=  3217 dsize=  4289 diff= -1072 entries=47 walked-4*te=3029
+  Power_steering_pump.SLDPRT       walked=  3076 dsize=  3817 diff=  -741 entries=45 walked-4*te=2896
+
+=== corrected walk: treat entry size as 42+nl (sig counted separately) ===
+  files where all central local_offsets resolve to real local records and central sig is unique: 58/58

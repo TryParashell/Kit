@@ -1,0 +1,15 @@
+file_id=0x715be98f streams=44
+signatures: a1909b1f a576970f 7a004720
+a_faithful: bytes=148224 kit_reread_streams=44
+b_foreign_signatures: bytes=148224 kit_reread_streams=44
+c_arbitrary: bytes=148224 kit_reread_streams=44
+d_real_zip_magics: bytes=148224 kit_reread_streams=44
+e_uniform_type_id: bytes=148224 kit_reread_streams=44
+f_zero_type_id: bytes=148224 kit_reread_streams=44
+example: opened=True errors=() warnings=() rebuilt=True bodies=1 features=32 volume=881814.3482038013
+a_faithful: opened=True errors=() warnings=() rebuilt=True bodies=1 features=32 volume=881814.3482038013
+b_foreign_signatures: CRASHED com_error (-2147023170, 'The remote procedure call failed.', None, None)
+c_arbitrary: CRASHED com_error (-2147023170, 'The remote procedure call failed.', None, None)
+d_real_zip_magics: CRASHED com_error (-2147023170, 'The remote procedure call failed.', None, None)
+e_uniform_type_id: opened=True errors=() warnings=() rebuilt=True bodies=1 features=32 volume=881814.3482038013
+f_zero_type_id: opened=True errors=() warnings=() rebuilt=True bodies=1 features=32 volume=881814.3482038013

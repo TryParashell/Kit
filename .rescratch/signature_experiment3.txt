@@ -1,0 +1,19 @@
+sample file_id=0x715be98f
+donor  file_id=0xec6e2386
+g_newid_same_signatures: bytes=148224
+h_donor_pair: bytes=148224
+i_newid_donor_signatures: bytes=148224
+j_local_only_changed: bytes=148224
+k_end_only_changed: bytes=148224
+l_version3: bytes=148224
+g_newid_same_signatures: CRASHED com_error (-2147023170, 'The remote procedure call failed.', None, None)
+h_donor_pair: opened=True errors=() rebuilt=True bodies=1 features=32 volume=881814.3482038013
+i_newid_donor_signatures: CRASHED com_error (-2147023170, 'The remote procedure call failed.', None, None)
+j_local_only_changed: CRASHED com_error (-2147023170, 'The remote procedure call failed.', None, None)
+k_end_only_changed: CRASHED com_error (-2147023170, 'The remote procedure call failed.', None, None)
+l_version3: opened=True errors=() rebuilt=True bodies=1 features=32 volume=881814.3482038013
+=== save-as identity test ===
+resave CRASHED com_error (-2147352571, 'Type mismatch.', None, 4)
+example.SLDPRT: file_id=0x715be98f signatures=a1909b1f a576970f 7a004720
+resaved_first.SLDPRT: missing
+resaved_second.SLDPRT: missing

@@ -1,0 +1,173 @@
+=== deliverable 3: stream name -> type_id ===
+stream name                                    files  type_id(s) with counts
+Contents/3DExperienceExchange2                    58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/3DExperienceExchange_ConfigHeader         2  0x1cae5281x2
+Contents/CMgr                                     58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/CMgrHdr2                                 58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/CnfgObjs                                 58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/Config-0                                 58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/Config-0-Attachment                       3  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf5bfdfx1
+Contents/Config-0-GhostPartition                  56  0x1cae5281x2  0xfde2bfdfx7  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/Config-0-LWDATA                          58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/Config-0-MatesList                        3  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf5bfdfx1
+Contents/Config-0-ModelHeader                     58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/Config-0-Partition                       55  0x1cae5281x2  0xfde2bfdfx7  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/Config-0-ResolvedFeatures                58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/CusProps                                 58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/Definition                               58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/DisplayLists                             58  0x1cae5281x2  0x2db64000x1  0x3bb64000x1  0x87b64000x4  0xfde2bfdfx3  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/MBLinkData                               53  0xfde2bfdfx7  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/ModelBasedViews                           1  0xfdf5bfdfx1
+Contents/OleItems                                 58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/PMISemanticDataDB                         2  0x1cae5281x2
+Contents/Printing                                  1  0xfdf4bfdfx1
+Contents/User Units Table                         56  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/View Orientation Data                    56  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Contents/eModelLic                                58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+Header2                                           58  0x1cee522cx2  0x55d931ffx1  0x57d6b1ffx1  0x5df6b1ffx1  0x5f53b1dfx1  0x5fdd31dfx1  0x73fb31dfx1  0x755431dfx1  0x756631dfx1  0x7569b1dfx1  0x75f231dfx1  0x7748b1dfx1  0x777531ffx1  0x777fb1dfx1  0x77d531ffx1  0x77f731dfx1  0x7d5231dfx1  0x7d5d31dfx1  0x7dc2b1dfx2  0x7f6f31ffx1  0x7fe3b1dfx1  0x7febb1dfx1  0xbf5b31dfx1  0xbf61b1dfx1  0xc9d9b1dfx1  0xd57431ffx1  0xd5c3b1ffx1  0xd5edb1dfx1  0xd74f31dfx1  0xd76431dfx1  0xd77f31dfx1  0xd7d631ffx1  0xddc2b1ffx1  0xddd0b1ffx1  0xdde0b1dfx1  0xdf47b1dfx1  0xdf5731ffx1  0xdfc031ffx1  0xdfe0b1dfx1  0xdff931dfx1  0xdff9b1ffx1  0xef5231dfx1  0xf5c031ffx1  0xf77231ffx1  0xf7c031ffx1  0xfd47b1dfx1  0xfd55b1dfx1  0xfd5cb1dfx1  0xfd61b1dfx1  0xfdc331ffx1  0xfdf131dfx1  0xfdf231dfx1  0xff4131dfx1  0xff7bb1dfx1  0xffe5b1ffx1  0xffeeb1dfx1
+ModelBasedImages/3DViewMetaData                    1  0xfdf5bfdfx1
+ModelBasedImages/ModelBasedImage0                  1  0xfdf5bfdfx1
+ModelStamps                                       58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+OleItemInformation/OLE_Item_Data                   2  0x1cae5281x2
+Preview                                           58  0x1cee522cx2  0x2db64000x1  0x3bb64000x1  0x53b64000x1  0x5551b1dfx1  0x5561b1ffx1  0x575931ffx1  0x5f6c31ffx1  0x5fd331dfx1  0x7349b1dfx1  0x7565b1dfx1  0x756a31dfx1  0x757131dfx1  0x75f431dfx1  0x75f6b1ffx1  0x77d7b1dfx1  0x77db31dfx1  0x77e2b1dfx1  0x77f431ffx1  0x7dc631dfx1  0x7dd5b1dfx1  0x7ddbb1dfx1  0x7f6a31dfx1  0x7f6eb1dfx1  0x7fc5b1dfx1  0x7fcdb1ffx1  0x87b64000x4  0xbff7b1dfx1  0xd74931dfx1  0xd75831dfx1  0xd75db1ffx1  0xd77131dfx1  0xd7cc31dfx1  0xddcf31ffx1  0xddd431ffx1  0xdf5b31dfx1  0xdf5e31ffx1  0xdf69b1ffx1  0xdf6db1ffx1  0xdfcb31ffx1  0xdfff31dfx1  0xf55f31dfx1  0xf56031ffx1  0xf7c931ffx1  0xfd4931dfx1  0xfd58b1ffx1  0xfd6fb1dfx1  0xfd7e31dfx1  0xfdc931dfx1  0xfdcdb1ffx1  0xffc6b1dfx1  0xffd5b1ffx1  0xffd9b1dfx1  0xfff3b1dfx1
+PreviewPNG                                        58  0x1cae5281x2  0x2db64000x1  0x3bb64000x1  0x53b64000x1  0x87b64000x4  0xfde2bfdfx3  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx17  0xfffd3fdfx1
+SWIFT/Config0-Schema1                              3  0x1cae5281x2  0xfff4bfdfx1
+SwDocContentMgr/SwDocContentMgrInfo               58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+ThirdPty/Animator                                 58  0x1cae5281x2  0x2db64000x1  0x3bb64000x1  0x87b64000x4  0xfde2bfdfx3  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+ThirdPty/CMMotionLoadMapU                         58  0x1cae5281x2  0x2db64000x1  0x3bb64000x1  0x87b64000x4  0xfde2bfdfx3  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+ThirdPty/CM_MOTION_LOAD_1                         58  0x1cae5281x2  0x2db64000x1  0x3bb64000x1  0x87b64000x4  0xfde2bfdfx3  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+ThirdPty/GSSLCAMWorksPDM                          35  0x1cae5281x2  0x53b64000x13  0x87b64000x2  0xfdf43fdfx4  0xfdf4bfdfx6  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx6
+ThirdPty/GSSLMachineWorks                         35  0x1cae5281x2  0x53b64000x13  0x87b64000x2  0xfdf43fdfx4  0xfdf4bfdfx6  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx6
+ThirdPty/SWA_Schedules                            58  0x1cae5281x2  0x2db64000x1  0x3bb64000x1  0x87b64000x4  0xfde2bfdfx3  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+ThirdPtyStore/ThirdPtySTGStore                     1  0xfff4bfdfx1
+ThirdPtyStore/VisualStates                        58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+[Content_Types].xml                               58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+_DL_VERSION_13000/DLUpdateStamp                   56  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+_DL_VERSION_18000/DLUpdateStamp                    2  0x1cae5281x2
+_MO_VERSION_13000/AssyVisualData                  56  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+_MO_VERSION_13000/Biography                       56  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+_MO_VERSION_13000/History                         56  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+_MO_VERSION_18000/Biography                        2  0x1cae5281x2
+_MO_VERSION_18000/History                          2  0x1cae5281x2
+_rels/.rels                                       58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+docProps/Config-0-Cutlist-Properties.xml          56  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+docProps/Config-0-Properties.xml                  58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+docProps/ISolidWorksInformation.xml               58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+docProps/OpenTime.xml                             58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+docProps/app.xml                                  58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+docProps/core.xml                                 58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+docProps/custom.xml                               58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+swXmlContents/COMPINSTANCETREE                     3  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf5bfdfx1
+swXmlContents/Features                            55  0x1cae5281x2  0xfde2bfdfx7  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+swXmlContents/KeyWords                            58  0x1cae5281x2  0xfde2bfdfx7  0xfdec3fdfx1  0xfdefbfdfx1  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+swXmlContents/MATERIALTREE                        52  0xfde2bfdfx7  0xfdf43fdfx4  0xfdf4bfdfx21  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+swXmlContents/Tables                              56  0x2db64000x1  0x3bb64000x1  0x87b64000x4  0xfde2bfdfx3  0xfdf43fdfx4  0xfdf4bfdfx22  0xfdf5bfdfx1  0xfdfd3fdfx1  0xfff4bfdfx18  0xfffd3fdfx1
+
+distinct type_id values overall: {'0x1cae5281': 84, '0x1cee522c': 4, '0x2db64000': 8, '0x3bb64000': 8, '0x53b64000': 28, '0x5551b1df': 1, '0x5561b1ff': 1, '0x55d931ff': 1, '0x575931ff': 1, '0x57d6b1ff': 1, '0x5df6b1ff': 1, '0x5f53b1df': 1, '0x5f6c31ff': 1, '0x5fd331df': 1, '0x5fdd31df': 1, '0x7349b1df': 1, '0x73fb31df': 1, '0x755431df': 1, '0x7565b1df': 1, '0x756631df': 1, '0x7569b1df': 1, '0x756a31df': 1, '0x757131df': 1, '0x75f231df': 1, '0x75f431df': 1, '0x75f6b1ff': 1, '0x7748b1df': 1, '0x777531ff': 1, '0x777fb1df': 1, '0x77d531ff': 1, '0x77d7b1df': 1, '0x77db31df': 1, '0x77e2b1df': 1, '0x77f431ff': 1, '0x77f731df': 1, '0x7d5231df': 1, '0x7d5d31df': 1, '0x7dc2b1df': 2, '0x7dc631df': 1, '0x7dd5b1df': 1, '0x7ddbb1df': 1, '0x7f6a31df': 1, '0x7f6eb1df': 1, '0x7f6f31ff': 1, '0x7fc5b1df': 1, '0x7fcdb1ff': 1, '0x7fe3b1df': 1, '0x7febb1df': 1, '0x87b64000': 36, '0xbf5b31df': 1, '0xbf61b1df': 1, '0xbff7b1df': 1, '0xc9d9b1df': 1, '0xd57431ff': 1, '0xd5c3b1ff': 1, '0xd5edb1df': 1, '0xd74931df': 1, '0xd74f31df': 1, '0xd75831df': 1, '0xd75db1ff': 1, '0xd76431df': 1, '0xd77131df': 1, '0xd77f31df': 1, '0xd7cc31df': 1, '0xd7d631ff': 1, '0xddc2b1ff': 1, '0xddcf31ff': 1, '0xddd0b1ff': 1, '0xddd431ff': 1, '0xdde0b1df': 1, '0xdf47b1df': 1, '0xdf5731ff': 1, '0xdf5b31df': 1, '0xdf5e31ff': 1, '0xdf69b1ff': 1, '0xdf6db1ff': 1, '0xdfc031ff': 1, '0xdfcb31ff': 1, '0xdfe0b1df': 1, '0xdff931df': 1, '0xdff9b1ff': 1, '0xdfff31df': 1, '0xef5231df': 1, '0xf55f31df': 1, '0xf56031ff': 1, '0xf5c031ff': 1, '0xf77231ff': 1, '0xf7c031ff': 1, '0xf7c931ff': 1, '0xfd47b1df': 1, '0xfd4931df': 1, '0xfd55b1df': 1, '0xfd58b1ff': 1, '0xfd5cb1df': 1, '0xfd61b1df': 1, '0xfd6fb1df': 1, '0xfd7e31df': 1, '0xfdc331ff': 1, '0xfdc931df': 1, '0xfdcdb1ff': 1, '0xfde2bfdf': 273, '0xfdec3fdf': 34, '0xfdefbfdf': 34, '0xfdf131df': 1, '0xfdf231df': 1, '0xfdf43fdf': 180, '0xfdf4bfdf': 958, '0xfdf5bfdf': 47, '0xfdfd3fdf': 45, '0xff4131df': 1, '0xff7bb1df': 1, '0xffc6b1df': 1, '0xffd5b1ff': 1, '0xffd9b1df': 1, '0xffe5b1ff': 1, '0xffeeb1df': 1, '0xfff3b1df': 1, '0xfff4bfdf': 787, '0xfffd3fdf': 43}
+stream names with >1 type_id: 51
+  Contents/3DExperienceExchange2: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/CMgr: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/CMgrHdr2: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/CnfgObjs: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/Config-0: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/Config-0-GhostPartition: ['0x1cae5281', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/Config-0-LWDATA: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/Config-0-ModelHeader: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/Config-0-Partition: ['0x1cae5281', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/Config-0-ResolvedFeatures: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/CusProps: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/Definition: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/DisplayLists: ['0x1cae5281', '0x2db64000', '0x3bb64000', '0x87b64000', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/OleItems: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/eModelLic: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Header2: ['0x1cee522c', '0x55d931ff', '0x57d6b1ff', '0x5df6b1ff', '0x5f53b1df', '0x5fdd31df', '0x73fb31df', '0x755431df', '0x756631df', '0x7569b1df', '0x75f231df', '0x7748b1df', '0x777531ff', '0x777fb1df', '0x77d531ff', '0x77f731df', '0x7d5231df', '0x7d5d31df', '0x7dc2b1df', '0x7f6f31ff', '0x7fe3b1df', '0x7febb1df', '0xbf5b31df', '0xbf61b1df', '0xc9d9b1df', '0xd57431ff', '0xd5c3b1ff', '0xd5edb1df', '0xd74f31df', '0xd76431df', '0xd77f31df', '0xd7d631ff', '0xddc2b1ff', '0xddd0b1ff', '0xdde0b1df', '0xdf47b1df', '0xdf5731ff', '0xdfc031ff', '0xdfe0b1df', '0xdff931df', '0xdff9b1ff', '0xef5231df', '0xf5c031ff', '0xf77231ff', '0xf7c031ff', '0xfd47b1df', '0xfd55b1df', '0xfd5cb1df', '0xfd61b1df', '0xfdc331ff', '0xfdf131df', '0xfdf231df', '0xff4131df', '0xff7bb1df', '0xffe5b1ff', '0xffeeb1df']
+  ModelStamps: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Preview: ['0x1cee522c', '0x2db64000', '0x3bb64000', '0x53b64000', '0x5551b1df', '0x5561b1ff', '0x575931ff', '0x5f6c31ff', '0x5fd331df', '0x7349b1df', '0x7565b1df', '0x756a31df', '0x757131df', '0x75f431df', '0x75f6b1ff', '0x77d7b1df', '0x77db31df', '0x77e2b1df', '0x77f431ff', '0x7dc631df', '0x7dd5b1df', '0x7ddbb1df', '0x7f6a31df', '0x7f6eb1df', '0x7fc5b1df', '0x7fcdb1ff', '0x87b64000', '0xbff7b1df', '0xd74931df', '0xd75831df', '0xd75db1ff', '0xd77131df', '0xd7cc31df', '0xddcf31ff', '0xddd431ff', '0xdf5b31df', '0xdf5e31ff', '0xdf69b1ff', '0xdf6db1ff', '0xdfcb31ff', '0xdfff31df', '0xf55f31df', '0xf56031ff', '0xf7c931ff', '0xfd4931df', '0xfd58b1ff', '0xfd6fb1df', '0xfd7e31df', '0xfdc931df', '0xfdcdb1ff', '0xffc6b1df', '0xffd5b1ff', '0xffd9b1df', '0xfff3b1df']
+  PreviewPNG: ['0x1cae5281', '0x2db64000', '0x3bb64000', '0x53b64000', '0x87b64000', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  SWIFT/Config0-Schema1: ['0x1cae5281', '0xfff4bfdf']
+  SwDocContentMgr/SwDocContentMgrInfo: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  ThirdPty/Animator: ['0x1cae5281', '0x2db64000', '0x3bb64000', '0x87b64000', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  ThirdPty/CMMotionLoadMapU: ['0x1cae5281', '0x2db64000', '0x3bb64000', '0x87b64000', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  ThirdPty/CM_MOTION_LOAD_1: ['0x1cae5281', '0x2db64000', '0x3bb64000', '0x87b64000', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  ThirdPty/GSSLCAMWorksPDM: ['0x1cae5281', '0x53b64000', '0x87b64000', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf']
+  ThirdPty/GSSLMachineWorks: ['0x1cae5281', '0x53b64000', '0x87b64000', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf']
+  ThirdPty/SWA_Schedules: ['0x1cae5281', '0x2db64000', '0x3bb64000', '0x87b64000', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  ThirdPtyStore/VisualStates: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  [Content_Types].xml: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  _rels/.rels: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  docProps/Config-0-Properties.xml: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  docProps/ISolidWorksInformation.xml: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  docProps/OpenTime.xml: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  docProps/app.xml: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  docProps/core.xml: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  docProps/custom.xml: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  swXmlContents/Features: ['0x1cae5281', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  swXmlContents/KeyWords: ['0x1cae5281', '0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/MBLinkData: ['0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/User Units Table: ['0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/View Orientation Data: ['0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  _DL_VERSION_13000/DLUpdateStamp: ['0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  _MO_VERSION_13000/AssyVisualData: ['0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  _MO_VERSION_13000/Biography: ['0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  _MO_VERSION_13000/History: ['0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  docProps/Config-0-Cutlist-Properties.xml: ['0xfde2bfdf', '0xfdec3fdf', '0xfdefbfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  swXmlContents/MATERIALTREE: ['0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  swXmlContents/Tables: ['0x2db64000', '0x3bb64000', '0x87b64000', '0xfde2bfdf', '0xfdf43fdf', '0xfdf4bfdf', '0xfdf5bfdf', '0xfdfd3fdf', '0xfff4bfdf', '0xfffd3fdf']
+  Contents/Config-0-Attachment: ['0xfdec3fdf', '0xfdefbfdf', '0xfdf5bfdf']
+  Contents/Config-0-MatesList: ['0xfdec3fdf', '0xfdefbfdf', '0xfdf5bfdf']
+  swXmlContents/COMPINSTANCETREE: ['0xfdec3fdf', '0xfdefbfdf', '0xfdf5bfdf']
+
+=== deliverable 4: stream-name sets ===
+distinct stream-name sets: 8
+union of all stream names: 62
+
+  group 0: 32 files, 47 streams
+    e.g. Kit\examples\Random\Addons\Alternator.SLDPRT
+
+  group 1: 18 files, 45 streams
+    e.g. Kit\examples\Random\Addons\Belt_tensioner.SLDPRT
+    vs group0  extra: []
+    vs group0  missing: ['ThirdPty/GSSLCAMWorksPDM', 'ThirdPty/GSSLMachineWorks']
+
+  group 2: 2 files, 44 streams
+    e.g. Kit\examples\.SLDPRT\example.SLDPRT
+    vs group0  extra: ['Contents/3DExperienceExchange_ConfigHeader', 'Contents/PMISemanticDataDB', 'OleItemInformation/OLE_Item_Data', 'SWIFT/Config0-Schema1', '_DL_VERSION_18000/DLUpdateStamp', '_MO_VERSION_18000/Biography', '_MO_VERSION_18000/History']
+    vs group0  missing: ['Contents/MBLinkData', 'Contents/User Units Table', 'Contents/View Orientation Data', '_DL_VERSION_13000/DLUpdateStamp', '_MO_VERSION_13000/AssyVisualData', '_MO_VERSION_13000/Biography', '_MO_VERSION_13000/History', 'docProps/Config-0-Cutlist-Properties.xml', 'swXmlContents/MATERIALTREE', 'swXmlContents/Tables']
+
+  group 3: 2 files, 43 streams
+    e.g. Kit\examples\Random\Pistons\Conrod.SLDASM
+    vs group0  extra: ['Contents/Config-0-Attachment', 'Contents/Config-0-MatesList', 'swXmlContents/COMPINSTANCETREE']
+    vs group0  missing: ['Contents/Config-0-GhostPartition', 'Contents/Config-0-Partition', 'Contents/MBLinkData', 'ThirdPty/GSSLCAMWorksPDM', 'ThirdPty/GSSLMachineWorks', 'swXmlContents/Features', 'swXmlContents/MATERIALTREE']
+
+  group 4: 1 files, 46 streams
+    e.g. Kit\examples\Random\Crank\Crankshaft_bearing_cap.SLDPRT
+    vs group0  extra: ['Contents/Printing']
+    vs group0  missing: ['ThirdPty/GSSLCAMWorksPDM', 'ThirdPty/GSSLMachineWorks']
+
+  group 5: 1 files, 47 streams
+    e.g. Kit\examples\Random\Cylinder_heads\Camshaft.SLDPRT
+    vs group0  extra: ['SWIFT/Config0-Schema1', 'ThirdPtyStore/ThirdPtySTGStore']
+    vs group0  missing: ['ThirdPty/GSSLCAMWorksPDM', 'ThirdPty/GSSLMachineWorks']
+
+  group 6: 1 files, 44 streams
+    e.g. Kit\examples\Random\Cylinder_heads\Spark_plug.SLDPRT
+    vs group0  extra: []
+    vs group0  missing: ['ThirdPty/GSSLCAMWorksPDM', 'ThirdPty/GSSLMachineWorks', 'swXmlContents/MATERIALTREE']
+
+  group 7: 1 files, 49 streams
+    e.g. Kit\examples\Random\V8_engine.SLDASM
+    vs group0  extra: ['Contents/Config-0-Attachment', 'Contents/Config-0-MatesList', 'Contents/ModelBasedViews', 'ModelBasedImages/3DViewMetaData', 'ModelBasedImages/ModelBasedImage0', 'swXmlContents/COMPINSTANCETREE']
+    vs group0  missing: ['Contents/Config-0-Partition', 'Contents/MBLinkData', 'swXmlContents/Features', 'swXmlContents/MATERIALTREE']
+
+=== _MO_VERSION_* streams per file ===
+  _MO_VERSION_13000/AssyVisualData|_MO_VERSION_13000/Biography|_MO_VERSION_13000/History  -> 56 files
+      Kit\examples\Random\Addons\Alternator.SLDPRT
+      Kit\examples\Random\Addons\Alternator_belt.SLDPRT
+      Kit\examples\Random\Addons\Alternator_pulley.SLDPRT
+  _MO_VERSION_18000/Biography|_MO_VERSION_18000/History  -> 2 files
+      Kit\examples\.SLDPRT\example.SLDPRT
+      sandbox\sampleFiles\example.SLDPRT
+
+=== deliverable 5: format_version distribution ===
+Counter({4: 58})
+file_id vs format_version:  Counter({4: 58})
