@@ -1199,9 +1199,7 @@ def _encode_mate_streams(
                 records.extend(pair)
                 layout.extend((("group_start", item), ("group_end", item)))
                 continue
-            record, reasons = _encode_mate_record(
-                item, entities, assembly, definitions
-            )
+            record, reasons = _encode_mate_record(item, entities, assembly, definitions)
             if record is None:
                 unsupported.append(item.id)
                 rejections[item.id] = reasons
@@ -1558,9 +1556,9 @@ def _mate_entity_strings(
     entity: MateEntity,
     assembly: AssemblyData,
     definitions: Mapping[str, ComponentDefinition],
-) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+) -> tuple[tuple[str, ...] | None, tuple[str, ...]]:
     if entity.selection_id:
-        return None
+        return None, (MATE_LOSS_ENTITY_SELECTION,)
     reasons: list[str] = []
     if entity.frame is not None and not _is_identity_matrix(entity.frame):
         reasons.append(MATE_LOSS_ENTITY_FRAME)
@@ -1574,9 +1572,9 @@ def _mate_entity_strings(
     elif entity.source_entity_id:
         references = (entity.source_entity_id,)
     else:
-        return None
+        return None, (MATE_LOSS_ENTITY_REFERENCE,)
     if not references or references[-1] != entity.source_entity_id:
-        return None
+        return None, (MATE_LOSS_ENTITY_REFERENCE,)
     component_path = _native_component_path(
         entity.instance_path,
         assembly,
@@ -1584,7 +1582,7 @@ def _mate_entity_strings(
         entity.owner_definition_id,
     )
     if component_path is None:
-        return None
+        return None, (MATE_LOSS_ENTITY_COMPONENT_PATH,)
     values: list[str] = []
     if component_path:
         if all(value.casefold().startswith("mo") for value in references):
@@ -1594,13 +1592,13 @@ def _mate_entity_strings(
             values.append(component_path)
             values.extend(references)
         else:
-            return None
+            return None, (MATE_LOSS_ENTITY_REFERENCE,)
     else:
         if not all(
             value.casefold().startswith("mo") or ("^" in value and "@" in value)
             for value in references
         ):
-            return None
+            return None, (MATE_LOSS_ENTITY_REFERENCE,)
         values.extend(references)
     source_path = entity.attributes.get("source_path")
     if isinstance(source_path, str) and source_path:

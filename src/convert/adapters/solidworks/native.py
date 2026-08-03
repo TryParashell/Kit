@@ -917,9 +917,7 @@ _ASSEMBLY_VIEW_ORIENTATION_STREAM = "Contents/View Orientation Data"
 _ASSEMBLY_OPEN_TIME_STREAM = "docProps/OpenTime.xml"
 _ASSEMBLY_CUTLIST_STREAM = "docProps/Config-0-Cutlist-Properties.xml"
 _ASSEMBLY_CONFIG_PROPERTIES_STREAM = "docProps/Config-0-Properties.xml"
-_VIEW_ORIENTATION_PAYLOAD = (
-    b'<?xml version="1.0" encoding="UTF-8"?>\n<VIEWS/>\n'
-)
+_VIEW_ORIENTATION_PAYLOAD = b'<?xml version="1.0" encoding="UTF-8"?>\n<VIEWS/>\n'
 _OPEN_TIME_PAYLOAD = (
     b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
     b'<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006'
@@ -2622,9 +2620,7 @@ def _model_header_payload(
     configuration_name: str,
     user_name: str = "Kit",
 ) -> bytes:
-    return _header_payload(
-        identity, configuration_name, _HEADER_OBJECTS, "", user_name
-    )
+    return _header_payload(identity, configuration_name, _HEADER_OBJECTS, "", user_name)
 
 
 def _header_payload(
