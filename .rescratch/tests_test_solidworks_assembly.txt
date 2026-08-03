@@ -1,5 +1,0 @@
-.F.................................F...                                  [100%]
-=========================== short test summary info ===========================
-FAILED tests/convert/test_solidworks_assembly.py::test_assembly_capabilities_reflect_the_decoded_document
-FAILED tests/convert/test_solidworks_assembly.py::test_mate_list_discovery_uses_structure_when_the_stream_is_renamed
-2 failed, 37 passed in 45.17s

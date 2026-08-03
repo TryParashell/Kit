@@ -1,4 +1,0 @@
-.......F.........................ss                                      [100%]
-=========================== short test summary info ===========================
-FAILED tests/convert/test_freecad_brep.py::test_supplied_solidworks_breps_pass_only_the_proven_native_gate
-1 failed, 32 passed, 2 skipped in 37.06s

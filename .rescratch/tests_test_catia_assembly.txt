@@ -1,4 +1,0 @@
-.....................s...F                                               [100%]
-=========================== short test summary info ===========================
-FAILED tests/convert/test_catia_assembly.py::test_catproduct_to_embedded_fcstd_structural_roundtrip
-1 failed, 24 passed, 1 skipped in 48.86s
