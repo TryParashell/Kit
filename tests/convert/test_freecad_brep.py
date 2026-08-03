@@ -239,11 +239,18 @@ def test_periodic_cylinder_band_serializes_with_exact_seam_topology() -> None:
 def test_supplied_solidworks_breps_pass_only_the_proven_native_gate() -> None:
     expected = {
         "Random/Addons/Belt_tensioner_pulley.SLDPRT",
-        "Random/Cylinder_heads/Cam_roller.SLDPRT",
+        "Random/Cylinder_heads/Cylinder_head.SLDPRT",
+        "Random/Cylinder_heads/Exhaust_manifold.SLDPRT",
+        "Random/Cylinder_heads/Exhaust_manifold_2.SLDPRT",
         "Random/Cylinder_heads/Timing_belt_roller.SLDPRT",
         "Random/Cylinder_heads/Timing_belt_roller_2.SLDPRT",
+        "Random/Pistons/Piston.SLDPRT",
         "Random/Pistons/Piston_ring.SLDPRT",
         "Random/Pistons/Piston_shaft.SLDPRT",
+        "Single Turbo Dual Overhead Cam V8 - KDP - 2024/10MM x 20MM x 13MM head 316 Stainless Steel Socket Head Screw.SLDPRT",
+        "Single Turbo Dual Overhead Cam V8 - KDP - 2024/8MM x 15mm - 12 point screw.SLDPRT",
+        "Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUIETA DE ENTRADA DE GASES.SLDPRT",
+        "Single Turbo Dual Overhead Cam V8 - KDP - 2024/SEGUIDOR DE LEVA.SLDPRT",
     }
     accepted: set[str] = set()
     for source in sorted((ROOT / "examples").rglob("*.SLDPRT")):
