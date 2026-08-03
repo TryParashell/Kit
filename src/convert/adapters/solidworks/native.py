@@ -4154,7 +4154,15 @@ def _parse_markers(data: bytes, start: int, end: int) -> tuple[NativeMarker, ...
         )
         if state is not None and not math.isfinite(state):
             state = None
-        coordinates = _marker_coordinates(data, offset, end)
+        coordinates_metres = _marker_coordinates_metres(data, offset, end)
+        coordinates = (
+            None
+            if coordinates_metres is None
+            else (
+                _clean(round(coordinates_metres[0] * _MILLIMETRES, 12)),
+                _clean(round(coordinates_metres[1] * _MILLIMETRES, 12)),
+            )
+        )
         endpoints = None
         if coordinates is None:
             pair_offset = offset + 64
