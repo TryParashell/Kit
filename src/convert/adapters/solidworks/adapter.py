@@ -5294,6 +5294,8 @@ def _sketch(sketch: NativeSketch, parameter_ids: set[str]) -> Sketch:
                 "native_marker_count": len(sketch.markers),
                 "native_profile_count": len(sketch.profiles),
                 "support_plane_native_id": sketch.support_plane_id,
+                "support_plane_source": sketch.support_source,
+                "unframed_support_plane_native_id": sketch.unframed_support_plane_id,
             }
         ),
     )

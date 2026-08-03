@@ -257,6 +257,8 @@ class NativeSketch:
     native_stream: str = RESOLVED_FEATURES_STREAM
     support_kind: str = PLANE_SUPPORT_KIND
     support_plane: NativeSketchPlane | None = None
+    support_source: str = REFERENCE_SUPPORT_SOURCE
+    unframed_support_plane_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2758,15 +2760,28 @@ def decode_native_model(
         ),
         key=lambda feature: feature.native_offset or 0,
     )
+    unframed_planes = tuple(
+        feature
+        for feature in native_features
+        if _is_plane_feature(feature)
+        and feature.native_offset is not None
+        and feature.object_id not in plane_by_id
+    )
+    unframed_plane_ids = frozenset(feature.object_id for feature in unframed_planes)
     sketches: list[NativeSketch] = []
     operations: list[NativeOperation] = []
     native_index_by_id = feature_indexes
     latest_sketch: NativeSketch | None = None
     latest_operation: NativeOperation | None = None
     latest_plane_id = next(iter(principal_plane_frames), next(iter(plane_by_id), 0))
+    latest_unframed_plane_id: int | None = None
     for feature in author:
         if _is_plane_feature(feature):
-            latest_plane_id = feature.object_id
+            if feature.object_id in plane_by_id:
+                latest_plane_id = feature.object_id
+                latest_unframed_plane_id = None
+            else:
+                latest_unframed_plane_id = feature.object_id
             continue
         if feature.kind.casefold() == "sketch":
             sketch_start = feature.native_offset or 0
@@ -2774,15 +2789,16 @@ def decode_native_model(
             reference = _sketch_plane_reference(
                 resolved, classes, sketch_start, sketch_end
             )
-            support = _support_plane_id(
+            support, support_source, unframed_support = _support_plane_reference(
                 resolved,
                 sketch_start,
                 sketch_end,
+                reference,
                 latest_plane_id,
+                latest_unframed_plane_id,
                 plane_by_id,
+                unframed_plane_ids,
             )
-            if reference is not None and reference.plane_object_id in plane_by_id:
-                support = reference.plane_object_id
             latest_sketch = _decode_sketch(
                 resolved,
                 feature,
@@ -2792,6 +2808,8 @@ def decode_native_model(
                     classes, reference, sketch_start, sketch_end
                 ),
                 support_plane=reference,
+                support_source=support_source,
+                unframed_support_plane_id=unframed_support,
             )
             native_index = native_index_by_id[feature.object_id]
             native_features[native_index] = replace(
@@ -3247,6 +3265,25 @@ def decode_native_model(
         diagnostics.append(
             "native name records unavailable for "
             + ", ".join(f"{feature.object_id}:{feature.name}" for feature in unresolved)
+        )
+    if unframed_planes:
+        diagnostics.append(
+            "reference plane frames unavailable for "
+            + ", ".join(
+                f"{feature.object_id}:{feature.name}" for feature in unframed_planes
+            )
+        )
+    dependent_sketches = tuple(
+        sketch for sketch in sketches if sketch.unframed_support_plane_id is not None
+    )
+    if dependent_sketches:
+        diagnostics.append(
+            "sketch supports fall back to decoded planes for "
+            + ", ".join(
+                f"{sketch.object_id}:{sketch.name}"
+                f"->{sketch.unframed_support_plane_id}:{sketch.support_plane_id}"
+                for sketch in dependent_sketches
+            )
         )
     return NativeModel(
         configurations=configurations,
@@ -3881,16 +3918,28 @@ def _minimal_frame(data: bytes, start: int, end: int) -> (
     return None
 
 
-def _support_plane_id(
+def _support_plane_reference(
     data: bytes,
     start: int,
     end: int,
-    fallback: int,
+    reference: NativeSketchPlane | None,
+    framed_fallback: int,
+    unframed_fallback: int | None,
     planes: dict[int, NativePlane],
-) -> int:
+    unframed_plane_ids: frozenset[int],
+) -> tuple[int, str, int | None]:
+    if reference is not None and reference.plane_object_id in planes:
+        return reference.plane_object_id, REFERENCE_SUPPORT_SOURCE, None
     sources = _component_plane_sources(data, start, end)
-    known = [source for source in sources if source in planes]
-    return known[-1] if known else fallback
+    framed = [source for source in sources if source in planes]
+    if framed:
+        return framed[-1], REFERENCE_SUPPORT_SOURCE, None
+    unframed = [source for source in sources if source in unframed_plane_ids]
+    if unframed:
+        return framed_fallback, UNRESOLVED_SUPPORT_SOURCE, unframed[-1]
+    if unframed_fallback is not None:
+        return framed_fallback, UNRESOLVED_SUPPORT_SOURCE, unframed_fallback
+    return framed_fallback, STREAM_ORDER_SUPPORT_SOURCE, None
 
 
 def _sketch_plane_reference(
@@ -4120,6 +4169,8 @@ def _decode_sketch(
     native_stream: str = RESOLVED_FEATURES_STREAM,
     support_kind: str = PLANE_SUPPORT_KIND,
     support_plane: NativeSketchPlane | None = None,
+    support_source: str = REFERENCE_SUPPORT_SOURCE,
+    unframed_support_plane_id: int | None = None,
 ) -> NativeSketch:
     start = feature.native_offset or 0
     end = feature.native_end or len(data)
@@ -4163,6 +4214,8 @@ def _decode_sketch(
         native_stream=native_stream,
         support_kind=support_kind,
         support_plane=support_plane,
+        support_source=support_source,
+        unframed_support_plane_id=unframed_support_plane_id,
     )
 
 
