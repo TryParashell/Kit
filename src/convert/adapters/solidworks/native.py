@@ -4104,6 +4104,7 @@ def _decode_sketch(
             ),
             semantic=marker.semantic,
             data=marker.data,
+            coordinates_metres=marker.coordinates_metres,
         )
         for marker in markers
     )
