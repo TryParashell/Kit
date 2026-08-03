@@ -1696,6 +1696,7 @@ def _generated_streams(
     part_partition: bytes | None = None
     part_application_usable = False
     part_vendor_loadable = False
+    assembly_envelope_complete = False
     if portable.assembly is None:
         part = encode_native_part(portable, model_name)
         streams.update(part.envelope_streams)
@@ -1733,8 +1734,17 @@ def _generated_streams(
                 mates_complete=True,
                 unsupported_mate_ids=(),
             )
+        envelope = encode_native_assembly_envelope(
+            portable,
+            model_name
+            or portable.assembly.definition(portable.assembly.root_definition_id).name,
+            _generated_occurrence_labels(portable.assembly),
+            tuple(mate.name for mate in portable.assembly.mates),
+        )
+        streams.update(envelope.streams)
         streams[COMPONENT_TREE_STREAM] = encoding.component_tree
         streams.update(encoding.mate_streams)
+        assembly_envelope_complete = envelope.envelope_complete
     if part_partition is not None:
         payload = part_partition
         native_brep = "generated"
