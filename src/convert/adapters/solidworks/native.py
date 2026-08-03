@@ -4192,7 +4192,7 @@ def _parse_markers(data: bytes, start: int, end: int) -> tuple[NativeMarker, ...
     return tuple(markers)
 
 
-def _marker_coordinates(
+def _marker_coordinates_metres(
     data: bytes, offset: int, end: int
 ) -> tuple[float, float] | None:
     for relative in (56, 64):
@@ -4208,8 +4208,47 @@ def _marker_coordinates(
             and abs(x) <= 1000.0
             and abs(y) <= 1000.0
         ):
-            return _clean(round(x * 1000.0, 12)), _clean(round(y * 1000.0, 12))
+            return x, y
     return None
+
+
+def _marker_coordinates(
+    data: bytes, offset: int, end: int
+) -> tuple[float, float] | None:
+    metres = _marker_coordinates_metres(data, offset, end)
+    if metres is None:
+        return None
+    return (
+        _clean(round(metres[0] * _MILLIMETRES, 12)),
+        _clean(round(metres[1] * _MILLIMETRES, 12)),
+    )
+
+
+def _marker_radius_mm(center: NativeMarker, rim: NativeMarker) -> float | None:
+    if center.coordinates_metres is None or rim.coordinates_metres is None:
+        return None
+    radius = (
+        circle_radius_mm(
+            rim.coordinates_metres[0] - center.coordinates_metres[0],
+            rim.coordinates_metres[1] - center.coordinates_metres[1],
+        )
+        * _MILLIMETRES
+    )
+    return radius if math.isfinite(radius) and radius > 1e-12 else None
+
+
+def _marker_start_angle_degrees(
+    center: NativeMarker, rim: NativeMarker
+) -> float | None:
+    if center.coordinates_metres is None or rim.coordinates_metres is None:
+        return None
+    angle = math.degrees(
+        math.atan2(
+            rim.coordinates_metres[1] - center.coordinates_metres[1],
+            rim.coordinates_metres[0] - center.coordinates_metres[0],
+        )
+    )
+    return angle if math.isfinite(angle) else None
 
 
 def _marker_local_id(data: bytes, offset: int, length: int) -> int | None:
