@@ -35,6 +35,7 @@ from .format import (
     CANONICAL_PLANE_FEATURE_TYPE,
     CLASS_MARKER,
     DIMENSION_SCALAR_HEADERS,
+    KIT_RESOLVED_STREAM,
     PART_SUFFIX,
     PLANE_FEATURE_TYPES,
     RESOLVED_FEATURES_STREAM,
@@ -282,6 +283,7 @@ class NativePartStreams:
     keywords: bytes
     features: bytes
     resolved_features: bytes
+    kit_resolved_features: bytes | None
     configuration_lanes: tuple[tuple[int, bytes], ...]
     native_capabilities: frozenset[Capability]
     mixed_capabilities: frozenset[Capability]
@@ -837,18 +839,29 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         identity,
     )
     features = _features_payload(document, model_name, object_ids, identity)
-    resolved = (
-        _base_record(_BASE_RESOLVED_FEATURES)
-        if blank_native
-        else _resolved_payload(objects)
-    )
+    if blank_native or _is_donor_resolved_objects(authored):
+        resolved = (
+            _base_record(_BASE_RESOLVED_FEATURES)
+            if blank_native
+            else _resolved_payload(objects)
+        )
+        kit_resolved: bytes | None = None
+    else:
+        resolved = _base_record(_BASE_RESOLVED_FEATURES)
+        kit_resolved = _resolved_payload(objects)
     envelope_streams = _native_envelope_streams(
         document,
         model_name,
         identity,
         rectangle_boss=_is_rectangle_boss_objects(authored),
     )
-    parsed = decode_native_model(keywords, resolved)
+    parsed = (
+        decode_native_model(keywords, resolved)
+        if kit_resolved is None
+        else decode_native_model(
+            keywords, kit_resolved, resolved_stream=KIT_RESOLVED_STREAM
+        )
+    )
     capabilities = _proved_write_capabilities(document, authored, parsed, object_ids)
     freecad_rectangle = _freecad_rectangle_boss_objects(document, authored)
     mixed_capabilities: frozenset[Capability] = frozenset()
@@ -885,6 +898,7 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         keywords,
         features,
         resolved,
+        kit_resolved,
         lanes,
         capabilities,
         mixed_capabilities,
@@ -1997,14 +2011,7 @@ def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
     authored = objects[len(_BASE_OBJECTS) :]
     if _is_rectangle_boss_objects(authored):
         return _base_rectangle_boss_payload(authored[0], authored[1])
-    if (
-        len(authored) == 1
-        and authored[0].object_id == 26
-        and authored[0].name == "Imported1"
-        and authored[0].class_name == "moBaseBody_c"
-        and not authored[0].dimensions
-        and not authored[0].payload
-    ):
+    if _is_base_body_objects(authored):
         return _base_body_payload()
     output = bytearray(struct.pack("<IH", len(objects), max(0, len(objects) - 1)))
     for item in objects:
@@ -2023,6 +2030,21 @@ def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
         for dimension in item.dimensions:
             output.extend(_scalar_record(dimension))
     return bytes(output)
+
+
+def _is_base_body_objects(authored: tuple[_WriteObject, ...]) -> bool:
+    return (
+        len(authored) == 1
+        and authored[0].object_id == 26
+        and authored[0].name == "Imported1"
+        and authored[0].class_name == "moBaseBody_c"
+        and not authored[0].dimensions
+        and not authored[0].payload
+    )
+
+
+def _is_donor_resolved_objects(authored: tuple[_WriteObject, ...]) -> bool:
+    return _is_rectangle_boss_objects(authored) or _is_base_body_objects(authored)
 
 
 def _is_rectangle_boss_objects(authored: tuple[_WriteObject, ...]) -> bool:

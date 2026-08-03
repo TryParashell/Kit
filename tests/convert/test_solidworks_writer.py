@@ -45,11 +45,16 @@ from convert.adapters.solidworks.format import (
     KEYWORDS_STREAM,
     KIT_DOCUMENT_STREAM,
     KIT_NATIVE_STREAM,
+    KIT_RESOLVED_STREAM,
     PARTITION_STREAM,
     RELATIONSHIPS_STREAM,
     RESOLVED_FEATURES_STREAM,
 )
-from convert.adapters.solidworks.native import _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE
+from convert.adapters.solidworks.native import (
+    _BASE_RESOLVED_FEATURES,
+    _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE,
+    _base_record,
+)
 from convert.adapters.solidworks.parasolid import encode_blank_partition_stream
 from convert.adapters.solidworks.resolved import (
     BLIND_END_CONDITION,
@@ -416,11 +421,16 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     assert archive.format_version == 4
     assert archive.require("Kit/Interchange")
     keywords = archive.require(KEYWORDS_STREAM)
-    resolved_features = archive.require(RESOLVED_FEATURES_STREAM)
+    resolved_features = archive.require(KIT_RESOLVED_STREAM)
     features = archive.require(FEATURES_STREAM)
+    assert archive.require(RESOLVED_FEATURES_STREAM) == _base_record(
+        _BASE_RESOLVED_FEATURES
+    )
     assert keywords.startswith(b"\x86<?xml")
     assert features.startswith(b"<?xml")
-    native = decode_native_model(keywords, resolved_features)
+    native = decode_native_model(
+        keywords, resolved_features, resolved_stream=KIT_RESOLVED_STREAM
+    )
     assert native.diagnostics == ()
     assert [(item.name, item.configuration_id) for item in native.configurations] == [
         ("Default", 0)
@@ -645,7 +655,9 @@ def test_source_less_native_dimension_scalar_roundtrips() -> None:
     result = write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
     native = decode_native_model(
-        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
+        archive.require(KEYWORDS_STREAM),
+        archive.require(KIT_RESOLVED_STREAM),
+        resolved_stream=KIT_RESOLVED_STREAM,
     )
     operation = next(item for item in native.operations if item.name == feature.name)
     dimension = next(
@@ -725,7 +737,9 @@ def test_source_less_native_rectangle_markers_roundtrip() -> None:
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
     native = decode_native_model(
-        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
+        archive.require(KEYWORDS_STREAM),
+        archive.require(KIT_RESOLVED_STREAM),
+        resolved_stream=KIT_RESOLVED_STREAM,
     )
     decoded = next(item for item in native.sketches if item.name == sketch.name)
     assert len(decoded.markers) == 8
@@ -950,7 +964,9 @@ def test_source_less_native_rectangle_boss_profile_preserves_custom_names() -> N
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
     native = decode_native_model(
-        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
+        archive.require(KEYWORDS_STREAM),
+        archive.require(KIT_RESOLVED_STREAM),
+        resolved_stream=KIT_RESOLVED_STREAM,
     )
     assert native.sketches[0].name == "CustomSketch"
     assert native.operations[0].name == "CustomBoss"

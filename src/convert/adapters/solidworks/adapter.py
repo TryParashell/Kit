@@ -135,6 +135,7 @@ from .format import (
     KEYWORDS_STREAM,
     KIT_DOCUMENT_STREAM,
     KIT_NATIVE_STREAM,
+    KIT_RESOLVED_STREAM,
     MATES_STREAM_NAME,
     MATES_STREAM_SUFFIX,
     PARTITION_STREAM,
@@ -1706,6 +1707,8 @@ def _generated_streams(
                 for index, lane in part.configuration_lanes
             }
         )
+        if part.kit_resolved_features is not None:
+            streams[KIT_RESOLVED_STREAM] = part.kit_resolved_features
         part_capabilities = part.native_capabilities
         mixed_capabilities = part.mixed_capabilities
         part_partition = part.partition
@@ -2067,11 +2070,14 @@ def _patch_native_template(
             False,
             False,
         )
+    resolved_stream = _resolved_features_stream(streams, RESOLVED_FEATURES_STREAM)
     original_model = decode_native_model(
-        streams[KEYWORDS_STREAM], streams[RESOLVED_FEATURES_STREAM]
+        streams[KEYWORDS_STREAM],
+        streams[resolved_stream],
+        resolved_stream=resolved_stream,
     )
     keywords = _keywords_root(streams[KEYWORDS_STREAM])
-    resolved = bytearray(streams[RESOLVED_FEATURES_STREAM])
+    resolved = bytearray(streams[resolved_stream])
     keywords_changed = _patch_feature_names(
         document, original_model, keywords[1], resolved
     )
@@ -2083,9 +2089,11 @@ def _patch_native_template(
     _patch_sketch_geometry(document, original_model, resolved)
     if keywords_changed:
         streams[KEYWORDS_STREAM] = _keywords_bytes(*keywords)
-    streams[RESOLVED_FEATURES_STREAM] = bytes(resolved)
+    streams[resolved_stream] = bytes(resolved)
     patched_model = decode_native_model(
-        streams[KEYWORDS_STREAM], streams[RESOLVED_FEATURES_STREAM]
+        streams[KEYWORDS_STREAM],
+        streams[resolved_stream],
+        resolved_stream=resolved_stream,
     )
     patched_parameters = _parameters(patched_model)
     patched_planes = _planes(
@@ -3525,8 +3533,13 @@ def _assembly_document(
     settings: ReadOptions,
 ) -> CadDocument:
     native = decode_native_assembly(archive, include_tessellation=True)
+    resolved_stream = _resolved_features_stream(
+        archive.streams, RESOLVED_FEATURES_STREAM
+    )
     model = decode_native_model(
-        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
+        archive.require(KEYWORDS_STREAM),
+        archive.require(resolved_stream),
+        resolved_stream=resolved_stream,
     )
     configurations = _configurations(model, settings.configuration)
     parameters = _parameters(model)
@@ -4758,6 +4771,10 @@ def _source_bytes(source: Source) -> tuple[bytes, str]:
     return bytes(value), str(name)
 
 
+def _resolved_features_stream(streams: Mapping[str, bytes], lane: str) -> str:
+    return KIT_RESOLVED_STREAM if KIT_RESOLVED_STREAM in streams else lane
+
+
 def _native_part_model(archive: SldprtArchive, requested: str | None) -> NativeModel:
     keywords = archive.require(KEYWORDS_STREAM)
     lanes = {
@@ -4768,11 +4785,12 @@ def _native_part_model(archive: SldprtArchive, requested: str | None) -> NativeM
     if not lanes:
         raise SldprtFormatError("required native resolved-feature stream is missing")
     initial_id = 0 if 0 in lanes else min(lanes)
+    initial_stream = _resolved_features_stream(archive.streams, lanes[initial_id])
     initial = decode_native_model(
         keywords,
-        archive.require(lanes[initial_id]),
+        archive.require(initial_stream),
         configuration_id=initial_id,
-        resolved_stream=lanes[initial_id],
+        resolved_stream=initial_stream,
     )
     selected_id = initial_id
     if requested is not None:
@@ -4795,7 +4813,7 @@ def _native_part_model(archive: SldprtArchive, requested: str | None) -> NativeM
             f"native data for configuration {selected_id} is unavailable; "
             f"available lanes are {sorted(lanes)}"
         )
-    resolved_stream = lanes[selected_id]
+    resolved_stream = _resolved_features_stream(archive.streams, lanes[selected_id])
     configuration_stream = f"Contents/Config-{selected_id}"
     return decode_native_model(
         keywords,
