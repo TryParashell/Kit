@@ -84,6 +84,8 @@ REVOLUTION_AXIS_REFERENCE = "reference-axis"
 REVOLUTION_STAMP_LOW = 1_000_000_000
 REVOLUTION_STAMP_HIGH = 2_000_000_000
 ANGLE_COPY_DELTAS = (0, 513, 537)
+FULL_REVOLUTION_RADIANS = 2.0 * math.pi
+_ANGLE_TOLERANCE_RADIANS = 1.0e-9
 REVOLVE_CUT_NAME_STEMS = ("cut-revolve", "cortar-revolucion", "cortar-revolución")
 REVOLVE_NAME_STEMS = ("revolve", "revolucion", "revolución")
 _RADIANS_TO_DEGREES = 180.0 / math.pi
@@ -260,6 +262,7 @@ class FeatureEdit:
     update_depth_copies: bool = False
     radii_mm: Sequence[float] | None = None
     arc_centres_mm: Sequence[tuple[float, float]] | None = None
+    angle_radians: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -530,7 +533,16 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
         revolution = revolutions.get(feature.offset)
         if revolution is not None:
             result.append(
-                _revolution_layout(blob, ordinal, feature, sketch, scalar, revolution)
+                _revolution_layout(
+                    blob,
+                    ordinal,
+                    feature,
+                    sketch,
+                    scalar,
+                    revolution,
+                    () if sketch is None else _points_in_range(points, sketch, feature),
+                    () if sketch is None else _arcs_in_range(arcs, sketch, feature),
+                )
             )
             continue
         result.append(
@@ -599,6 +611,8 @@ def patch_features(data: bytes | bytearray, edits: Mapping[int, FeatureEdit]) ->
         if edit.radii_mm is not None:
             for arc, radius_mm in zip(feature.arcs, edit.radii_mm, strict=True):
                 _write_arc_radius(output, arc, radius_mm)
+        if edit.angle_radians is not None:
+            struct.pack_into("<d", output, feature.angle_offset, edit.angle_radians)
         if edit.depth_mm is not None:
             struct.pack_into(
                 "<d", output, feature.depth_offset, edit.depth_mm / _METRES
@@ -925,6 +939,8 @@ def _revolution_layout(
     sketch: NameRecord | None,
     scalar: DimensionScalar | None,
     revolution: tuple[str, int, tuple[str, int, int] | None],
+    points: tuple[SketchPoint, ...],
+    arcs: tuple[SketchArc, ...],
 ) -> FeatureLayout:
     kind, token, axis = revolution
     angle_offset = None if scalar is None else scalar.value_offset
@@ -937,8 +953,8 @@ def _revolution_layout(
         flags_offset=feature.text_end + 4,
         sketch_name=None if sketch is None else sketch.name,
         sketch_id=None if sketch is None else sketch.feature_id,
-        points=(),
-        arcs=(),
+        points=points,
+        arcs=arcs,
         depth_offset=None,
         depth_mm=None,
         depth_copy_offsets=(),
@@ -1028,11 +1044,45 @@ def _flag_offset(blob: bytes, offset: int) -> int | None:
     return offset if 0 <= offset < len(blob) else None
 
 
+def _validate_revolution_edit(feature: FeatureLayout, edit: FeatureEdit) -> None:
+    if edit.depth_mm is not None or edit.update_depth_copies:
+        raise SldprtFormatError(
+            f"feature {feature.ordinal} is a {feature.kind} and carries an angle, "
+            f"not a depth"
+        )
+    if edit.reversed is not None:
+        raise SldprtFormatError(
+            f"feature {feature.ordinal} is a {feature.kind} and its direction flag "
+            f"is not located, so a direction cannot be written"
+        )
+    if edit.end_condition_code is not None:
+        raise SldprtFormatError(
+            f"feature {feature.ordinal} is a {feature.kind} and its end "
+            f"specification is a constant, so an end condition cannot be written"
+        )
+    if edit.angle_radians is None:
+        return
+    if feature.angle_offset is None:
+        raise SldprtFormatError(
+            f"feature {feature.ordinal} has no dimension scalar to hold an angle"
+        )
+    if (
+        not math.isfinite(edit.angle_radians)
+        or edit.angle_radians <= 0.0
+        or edit.angle_radians > FULL_REVOLUTION_RADIANS + _ANGLE_TOLERANCE_RADIANS
+    ):
+        raise SldprtFormatError(
+            "revolution angle must be finite and inside (0, 2*pi] radians"
+        )
+
+
 def _validate_edit(feature: FeatureLayout, edit: FeatureEdit) -> None:
     if feature.is_revolution:
+        _validate_revolution_edit(feature, edit)
+    elif edit.angle_radians is not None:
         raise SldprtFormatError(
-            f"feature {feature.ordinal} is a {feature.kind} and its end specification "
-            f"is not decoded, so it cannot be patched"
+            f"feature {feature.ordinal} is a {feature.kind} and carries a depth, "
+            f"not a revolution angle"
         )
     if edit.reversed is not None and feature.reverse_offset is None:
         raise SldprtFormatError(
@@ -1124,6 +1174,7 @@ def _verify_features(
             after.feature_id != before.feature_id
             or after.kind != before.kind
             or after.depth_offset != before.depth_offset
+            or after.angle_offset != before.angle_offset
             or tuple(point.offset for point in after.points)
             != tuple(point.offset for point in before.points)
             or tuple(arc.centre_offset for arc in after.arcs)
@@ -1147,6 +1198,13 @@ def _verify_features(
             raise SldprtFormatError(
                 f"patched feature {ordinal} arc centres do not verify"
             )
+        if edit.angle_radians is not None and (
+            after.angle_radians is None
+            or not math.isclose(
+                after.angle_radians, edit.angle_radians, rel_tol=1e-12, abs_tol=1e-12
+            )
+        ):
+            raise SldprtFormatError(f"patched feature {ordinal} angle does not verify")
         if edit.depth_mm is not None:
             if after.depth_mm is None or not math.isclose(
                 after.depth_mm, edit.depth_mm, rel_tol=1e-12, abs_tol=1e-9

@@ -12,15 +12,20 @@ from .resolved import FeatureEdit, locate_features, patch_features
 
 BOSS_OPERATION = "boss"
 CUT_OPERATION = "cut"
+REVOLVE_BOSS_OPERATION = "revolve-boss"
+REVOLVE_CUT_OPERATION = "revolve-cut"
 
 BLIND_END = "blind"
 THROUGH_ALL_END = "through-all"
 MID_PLANE_END = "mid-plane"
+FULL_REVOLUTION_END = "full-revolution"
 
 FRONT_SUPPORT = "front"
 TOP_SUPPORT = "top"
 RIGHT_SUPPORT = "right"
 FACE_SUPPORT = "face"
+SKETCH_AXIS_SUPPORT = "sketch-axis"
+REFERENCE_AXIS_SUPPORT = "reference-axis"
 
 RECTANGLE_PROFILE = "rectangle"
 CIRCLE_PROFILE = "circle"
@@ -29,6 +34,12 @@ POLYLINE_PROFILE_PREFIX = "polyline-"
 
 SUPPORTED_END_CONDITIONS = frozenset({BLIND_END, THROUGH_ALL_END, MID_PLANE_END})
 DEPTHLESS_END_CONDITIONS = frozenset({THROUGH_ALL_END})
+REVOLVE_OPERATIONS = frozenset({REVOLVE_BOSS_OPERATION, REVOLVE_CUT_OPERATION})
+REVOLVE_SUPPORTS = frozenset({SKETCH_AXIS_SUPPORT, REFERENCE_AXIS_SUPPORT})
+REVOLVE_END_CONDITIONS = frozenset({FULL_REVOLUTION_END})
+FULL_REVOLUTION_DEGREES = 360.0
+MAXIMUM_REVOLUTION_DEGREES = FULL_REVOLUTION_DEGREES
+_DEGREE_TOLERANCE = 1.0e-9
 DONOR_END_CONDITIONS = MappingProxyType(
     {
         BLIND_END: BLIND_END,
@@ -79,6 +90,11 @@ class TargetFeature:
     arc_centres_mm: tuple[tuple[float, float], ...] = ()
     depth_mm: float | None = None
     reversed: bool | None = None
+    angle_degrees: float | None = None
+
+    @property
+    def revolve(self) -> bool:
+        return self.operation in REVOLVE_OPERATIONS
 
     @property
     def topology(self) -> DonorFeature:
@@ -2674,6 +2690,9 @@ def donor_edits(
                 f"{donor.arc_counts[ordinal]} sketch arcs and "
                 f"{len(target.arc_centres_mm)} centres were supplied"
             )
+        if target.revolve:
+            edits[ordinal] = _revolve_edit(donor, ordinal, target)
+            continue
         depth_required = target.end_condition not in DEPTHLESS_END_CONDITIONS
         if depth_required != donor.depth_present[ordinal]:
             raise SldprtFormatError(
@@ -2701,6 +2720,47 @@ def donor_edits(
             end_condition_code=END_CONDITION_CODES.get(target.end_condition),
         )
     return edits
+
+
+def _revolve_edit(
+    donor: Donor, ordinal: int, target: TargetFeature
+) -> FeatureEdit:
+    if target.end_condition not in REVOLVE_END_CONDITIONS:
+        raise SldprtFormatError(
+            f"donor {donor.donor_id} feature {ordinal} cannot hold the "
+            f"{target.end_condition} revolution end condition"
+        )
+    if target.support not in REVOLVE_SUPPORTS:
+        raise SldprtFormatError(
+            f"donor {donor.donor_id} feature {ordinal} cannot revolve about a "
+            f"{target.support} axis"
+        )
+    if donor.depth_present[ordinal] or target.depth_mm is not None:
+        raise SldprtFormatError(
+            f"donor {donor.donor_id} feature {ordinal} is a revolution and carries "
+            f"an angle, not a depth"
+        )
+    if target.reversed is not None:
+        raise SldprtFormatError(
+            f"donor {donor.donor_id} feature {ordinal} is a revolution whose "
+            f"direction flag is not located, so a direction cannot be written"
+        )
+    angle = target.angle_degrees
+    if (
+        angle is None
+        or not math.isfinite(angle)
+        or angle <= 0.0
+        or angle > MAXIMUM_REVOLUTION_DEGREES + _DEGREE_TOLERANCE
+    ):
+        raise SldprtFormatError(
+            f"feature {ordinal} requires a revolution angle inside (0, 360] degrees"
+        )
+    return FeatureEdit(
+        corners_mm=tuple(target.points_mm) or None,
+        radii_mm=tuple(target.radii_mm) or None,
+        arc_centres_mm=tuple(target.arc_centres_mm) or None,
+        angle_radians=math.radians(angle),
+    )
 
 
 def patch_donor(donor: Donor, targets: Sequence[TargetFeature]) -> bytes:

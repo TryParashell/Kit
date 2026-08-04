@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import math
 from types import MappingProxyType
@@ -48,6 +49,7 @@ _SYSTEM_OBJECT_IDS = frozenset(range(1, 26))
 _VALUE_TOLERANCE = 1.0e-10
 
 FREECAD_FORMAT_ID = "freecad.fcstd"
+FREECAD_ATTRIBUTE = "freecad"
 VERIFIABLE_SOURCE_FORMATS = frozenset({FREECAD_FORMAT_ID})
 LENGTH_FACTORS_MM = MappingProxyType(
     {
@@ -125,6 +127,19 @@ class _Support:
 
 
 @dataclass(frozen=True, slots=True)
+class _SolidBody:
+    id: str
+    name: str
+    chain: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class _BodyPartition:
+    model: tuple[_SolidBody, ...]
+    ancillary: tuple[_SolidBody, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class DonorDecline:
     reasons: tuple[str, ...]
     candidate: bool = True
@@ -188,6 +203,29 @@ def match_document(document: CadDocument) -> DonorMatch | DonorDecline:
         reasons.append(
             f"the document holds {len(document.configurations)} configurations"
         )
+    partition = _body_partition(document, timeline, tuple(solid), chains)
+    if len(partition.model) > 1:
+        reasons.append(
+            f"the document builds {len(partition.model)} separate solid bodies"
+        )
+    elif not partition.model and partition.ancillary:
+        reasons.append(
+            f"every one of the {len(partition.ancillary)} solid bodies the document "
+            f"builds feeds a non-model feature, so none of them is the part"
+        )
+    elif partition.ancillary:
+        primary = partition.model[0]
+        for body in partition.ancillary:
+            unexpressed.extend(
+                f"{step.name} ({step.kind}) building body {body.name}"
+                for step in solid
+                if step.id in body.chain
+            )
+        solid = [step for step in solid if step.id in primary.chain]
+        if not solid:
+            reasons.append(
+                f"body {primary.name} holds no solid-model feature of its own"
+            )
     targets: list[TargetFeature] = []
     sketch_ids: list[str] = []
     feature_ids: list[str] = []
@@ -202,9 +240,6 @@ def match_document(document: CadDocument) -> DonorMatch | DonorDecline:
         targets.append(target)
         sketch_ids.append(str(step.sketch_id))
         feature_ids.append(step.id)
-    bodies = _solid_body_count(document, timeline, chains)
-    if bodies > 1:
-        reasons.append(f"the document builds {bodies} separate solid bodies")
     if reasons:
         return DonorDecline(tuple(reasons))
     donor = select_donor(targets)
@@ -250,33 +285,84 @@ def _body_feature_chains(
     by_id = {step.id: step for step in timeline}
     result: set[str] = set()
     for body in document.bodies:
-        pending = [body.final_feature_id] if body.final_feature_id else []
-        while pending:
-            current = pending.pop()
-            if current not in by_id or current in result:
-                continue
-            result.add(current)
-            pending.extend(by_id[current].input_feature_ids)
+        result.update(_feature_chain(by_id, body.final_feature_id))
     return frozenset(result)
 
 
-def _solid_body_count(
-    document: CadDocument, timeline: tuple[FeatureStep, ...], chains: frozenset[str]
-) -> int:
+def _feature_chain(by_id: dict[str, FeatureStep], root: str) -> frozenset[str]:
+    pending = [root] if root else []
+    seen: set[str] = set()
+    while pending:
+        current = pending.pop()
+        if current not in by_id or current in seen:
+            continue
+        seen.add(current)
+        pending.extend(by_id[current].input_feature_ids)
+    return frozenset(seen)
+
+
+def _body_partition(
+    document: CadDocument,
+    timeline: tuple[FeatureStep, ...],
+    solid: tuple[FeatureStep, ...],
+    chains: frozenset[str],
+) -> _BodyPartition:
     by_id = {step.id: step for step in timeline}
-    count = 0
+    solid_ids = frozenset(step.id for step in solid)
+    candidates: list[_SolidBody] = []
     for body in document.bodies:
-        pending = [body.final_feature_id] if body.final_feature_id else []
-        seen: set[str] = set()
-        while pending:
-            current = pending.pop()
-            if current not in by_id or current in seen:
-                continue
-            seen.add(current)
-            pending.extend(by_id[current].input_feature_ids)
-        if any(not _is_non_solid(by_id[item], False, bool(chains)) for item in seen):
-            count += 1
-    return count
+        chain = _feature_chain(by_id, body.final_feature_id)
+        if chain & solid_ids:
+            candidates.append(_SolidBody(body.id, body.name, chain))
+    if len(candidates) < 2:
+        return _BodyPartition(tuple(candidates), ())
+    consumed = _consumed_body_names(document, timeline, chains)
+    model: list[_SolidBody] = []
+    ancillary: list[_SolidBody] = []
+    for item in candidates:
+        if _body_source_name(document, item.id) in consumed:
+            ancillary.append(item)
+        else:
+            model.append(item)
+    return _BodyPartition(tuple(model), tuple(ancillary))
+
+
+def _consumed_body_names(
+    document: CadDocument, timeline: tuple[FeatureStep, ...], chains: frozenset[str]
+) -> frozenset[str]:
+    names = {
+        name
+        for body in document.bodies
+        if (name := _body_source_name(document, body.id)) is not None
+    }
+    result: set[str] = set()
+    for step in timeline:
+        if not _is_non_solid(step, step.id in chains, bool(chains)):
+            continue
+        result.update(name for name in _source_dependencies(step) if name in names)
+    return frozenset(result)
+
+
+def _body_source_name(document: CadDocument, body_id: str) -> str | None:
+    for body in document.bodies:
+        if body.id != body_id:
+            continue
+        source = body.attributes.get(FREECAD_ATTRIBUTE)
+        if not isinstance(source, Mapping):
+            return None
+        name = source.get("name")
+        return name if isinstance(name, str) and name else None
+    return None
+
+
+def _source_dependencies(step: FeatureStep) -> tuple[str, ...]:
+    source = step.attributes.get(FREECAD_ATTRIBUTE)
+    if not isinstance(source, Mapping):
+        return ()
+    dependencies = source.get("dependencies")
+    if not isinstance(dependencies, Sequence) or isinstance(dependencies, (str, bytes)):
+        return ()
+    return tuple(item for item in dependencies if isinstance(item, str) and item)
 
 
 def _is_non_solid(step: FeatureStep, chained: bool, chains_known: bool) -> bool:
