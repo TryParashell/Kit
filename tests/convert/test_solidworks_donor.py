@@ -320,19 +320,49 @@ def test_every_donor_container_hosts_a_tree_of_its_own_feature_count() -> None:
 
 def test_donor_containers_grow_with_the_hosted_feature_count() -> None:
     family = tuple(
-        donor_by_id(f"boss{count}_front_rect_blind") for count in range(1, 5)
+        donor_by_id(f"boss{count}_front_rect_blind") for count in range(1, 9)
     )
-    assert tuple(len(donor.features) for donor in family) == (1, 2, 3, 4)
-    for name in ("Contents/CMgr", "Header2", "Contents/Config-0"):
+    assert tuple(len(donor.features) for donor in family) == (1, 2, 3, 4, 5, 6, 7, 8)
+    for name in ("Contents/CMgr", "Header2"):
         sizes = tuple(len(donor.container[name]) for donor in family)
-        assert sizes == tuple(sorted(sizes)) and len(set(sizes)) == 4, name
+        steps = {right - left for left, right in zip(sizes, sizes[1:])}
+        assert len(steps) == 1 and steps.pop() > 0, name
+    growth = tuple(len(donor.container["Contents/Config-0"]) for donor in family)
+    assert growth == tuple(sorted(growth)) and len(set(growth)) == 8
+
+
+def test_the_boss_stack_donors_carry_the_measured_feature_identifiers() -> None:
+    for count in range(1, 9):
+        donor = donor_by_id(f"boss{count}_front_rect_blind")
+        assert donor.sketch_ids[0] == 26
+        assert donor.feature_ids[0] == 32
+        assert donor.sketch_names == tuple(
+            f"Sketch{index + 1}" for index in range(count)
+        )
+        assert donor.feature_names == tuple(
+            f"Boss-Extrude{index + 1}" for index in range(count)
+        )
+        for ordinal in range(1, count):
+            assert donor.sketch_ids[ordinal] == donor.feature_ids[ordinal - 1] + 1
+        for ordinal in range(2, count):
+            assert donor.sketch_ids[ordinal] - donor.sketch_ids[ordinal - 1] in (7, 8)
+            assert donor.feature_ids[ordinal] - donor.feature_ids[ordinal - 1] == 7
+
+
+def test_the_measured_boss_stack_reaches_six_features() -> None:
+    measured = tuple(
+        count
+        for count in range(1, 9)
+        if donor_by_id(f"boss{count}_front_rect_blind").measured
+    )
+    assert measured == (1, 2, 3, 4, 5, 6)
 
 
 def test_donor_match_declines_an_unmeasured_donor() -> None:
     planes = (FRONT_PLANE,)
     sketches: list[Sketch] = []
     timeline: list[FeatureStep] = []
-    for index in range(4):
+    for index in range(7):
         sketch = _sketch(
             f"sketch:boss{index}",
             FRONT_PLANE.id,
@@ -361,7 +391,7 @@ def test_donor_match_declines_an_unmeasured_donor() -> None:
     )
     assert isinstance(outcome, DonorDecline)
     assert outcome.reasons == (
-        "donor boss4_front_rect_blind has not been measured in SOLIDWORKS and "
+        "donor boss7_front_rect_blind has not been measured in SOLIDWORKS and "
         "cannot back native geometry records",
     )
 
