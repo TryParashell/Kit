@@ -40,6 +40,7 @@ REVOLVE_END_CONDITIONS = frozenset({FULL_REVOLUTION_END})
 FULL_REVOLUTION_DEGREES = 360.0
 MAXIMUM_REVOLUTION_DEGREES = FULL_REVOLUTION_DEGREES
 _DEGREE_TOLERANCE = 1.0e-9
+_AXIS_TOLERANCE = 1.0e-9
 DONOR_END_CONDITIONS = MappingProxyType(
     {
         BLIND_END: BLIND_END,
@@ -91,6 +92,7 @@ class TargetFeature:
     depth_mm: float | None = None
     reversed: bool | None = None
     angle_degrees: float | None = None
+    axis_direction: tuple[float, float] | None = None
 
     @property
     def revolve(self) -> bool:
@@ -117,6 +119,7 @@ class Donor:
     stream_bytes: int
     encoded: tuple[str, ...]
     measured: bool = False
+    axis_directions: tuple[tuple[float, float] | None, ...] = ()
 
     @property
     def key(self) -> tuple[tuple[str, str, str, str], ...]:
@@ -1508,6 +1511,139 @@ _DONOR_BOSS_CUT_CUT_CUT_THROUGH = Donor(
     ),
 )
 
+_DONOR_REVOLVE_FULL = Donor(
+    donor_id="revolve_full",
+    features=(
+        DonorFeature("revolve-boss", "rectangle", "sketch-axis", "full-revolution"),
+    ),
+    feature_ids=(31,),
+    sketch_ids=(26,),
+    feature_names=("Revolve1",),
+    sketch_names=("Sketch1",),
+    point_counts=(4,),
+    arc_counts=(0,),
+    depth_present=(False,),
+    axis_directions=((0.0, 1.0),),
+    stream_bytes=12135,
+    encoded=(
+        "c-rk+S%@4(7_RP_-Xn)O)LcS#MbroJAs~1lnPe}snoY);h~R@ur>ADN-",
+        "I?x5PtTh5q7m`I7*O;@5fe`g#1P^E5p*Jo$BTmCn}UiEPh4LVF*^QL-PKdwQ$5==*>MN7hM~KwyQ",
+        "=>0zv}<1s)P`_5Y_7vT8~QRs97pu!>&x2#T>S#wWL%3yFM_AOjLp&Mh3D`1$kx1fOiAmAW^~Liu6",
+        "R|{+hE}S<^cF6Lqg3<kW(#6#tIA-*fvHlJwTu&t-",
+        "J{0R>6icMQaYI%itCjRPPCCy<Kf0EmTj0D(Ce8<zvdQ<r@yJvO-ePy+@JMe^XR130_%ifvl+0W|%",
+        ")07V6G5Iplfl1;sZM5Y)vau~2`PujRNrrPSX=6|@u9mXA;G+E=SVwrqjweYldl_R6rr5-AxZwT-",
+        "$aD8F(fxG4$F(n6`t_(W_*B4<}0(1ia&Eg`~Y~3`n*bWH!f-DHE2!9O(t%IlyG>k|cZ-",
+        "bkAO?jE>uBFh7ifIKkH%r|}g=%gC#)jU4K>%C;0LDx$=nGemQP-iP0+q%H+!-",
+        "hbb(RmMzc;)h4~4jqF>I@Paa7%}8`$>HtlSCI8z2fBoFmh*hESv?B(6mht=(hVxU$p2>VzE>u(F5",
+        "t$2-_{y(Qd797^c=2BF)~H2sZJVeSKF6ucS+VSR5wI2159{tdf7{O{=8ugNb3GchR(so<6A;>E--",
+        "RIR+K;Sn=8ANF`vu%tW)Km(eIeVHH-",
+        "J)li1ddt30C<3{V;4_PQt_j_$ETAa@np_03!QMqS;bWULW~WqZwptFl^(l~<g=Rs1We(BBz30|f1",
+        "BUSfMld)WM+bm%kq=zETrxSC|1rXwlNfhOwXvnE#Q=;=QxpQGF|G=#HjHlc-",
+        "1{&<D$`Ix2lFComqXiqkSmu9<Shf=i9mW}5U{HNYzF7kMb*G;)|vo-Ce1~LQ5s;XaPO0NMqVy3-",
+        "~1Bg3!{q^vo2m)|I*v<ZoJ}&+KMNRJ$UQn{i$YJc`rPM^J=wdQ|=lpByXqiu084lkEB$XH1Fy$^&",
+        "GJ9Ttv()<jJ${96q=Y6rn6sgT()85PlA-",
+        "!E;W#QkG(hJwiPeYO&jewI=+0ep<6KLj(Ak2nUk<?`jS!%t{&G+tZw81z{995g$6|r!n34H^gUd0",
+        "-w3p(hItgw#>X<#QyRG)vCU|blxq{l#uC?vRu0K%Iw)lT_RuxP^FNa#kMvh1@eY^eJD7P`#K4!pL",
+        "<7!PSR9RDDj~dto*wb$Csc;0WLJXUguNoa+Jh^l|tIo4SSbr<cc_=9m<5%maszhI+NP`hn34+@*-",
+        ">{V@pxAw_({CCoaDd!5)u3EcxoO)?0yVgkD`)3nN|rcE=Xor6taMLR9Y$uSYD<YZ4p_&9grX*$G)",
+        "Y)4=g>^F!Y)ix_BuCzlxHQe`NgoSk_z%0Q1h{h{@=AyMa~Y0xMm-",
+        "0)Vv?&+s!sgZu&@VZjits7Wm0PUHp+zmQYgwE4WXLL!vlE-jrgc&P<8RG}-",
+        "al@Y0{3T54BcT>7Vft>io=r@{d&8WEz(UqtdHxoncouSkV*;-",
+        "*`B0k=Kdsl<KRll_JR?g1sPh|9wOO3ItsEx>AWNWWh`Du|er-cL5I^h15-",
+        "lrz9nK5MB~i5b@2}W4aQwd14X=MR_s)@fYD9rgJF?H?(@ug@y7nkkmW0A*-",
+        "XA_`%{<O1Ot};$ISQ4IDeUV84?PMK9EHh_DeUhC4+T>0gok}z3=rX*W#75TK9#Fl#mJH{<aIlY!2",
+        "u<@??iw-Zr^g0vzEBNrNz0M06s{ezLnMvw~fA)roNL=w%=yo3cL*Wortp9Hv8@q^xb|@TF0?UAdU",
+        "^sj<K61;x$W#n#rAwrgS!1QZVTW8xBS?<wOL@^_bQkj;Dzt5Dzfmd4hj0`d<|z1IRcM3dSxOT+mH",
+        "pTFU@4gWg%}2ZLUFu>gy0_pb5B8=X;g7%oZ0k?>@y_@wuRKq}1iXaF8HurO8OrF_cip#+8Xm=A<G",
+        "jcw%&o-",
+        ">P8n~KFfVv~W?WR7kR&B0wGJsE0BPbBnaU{JkV3Ce2^%n1_|SL!!#PZ%}WBY76W_KDNjA{$|&Gp1",
+        "R=mK$QayT~i)Q5_AFz*>`dGN7;90QmjyJ$d=7lc)BvEAo$%Oju?qJ4*s}vXeNO%iuBzT*>P`@;c+",
+        "j?{ur@puKnhU0Cx%da@Hfnzb$6D6p`daA$$;T&L+CmW{3@Vt<|-",
+        "(IDpO{e`h`KRFISwkxY3IlJi#cGQDt(GQ@kKRLhnbuPogwMyh-",
+        "(05LlM|TQ&BpN4NmlTdIM~=<1MUq^PjF<;Uv0*b|wsJ@xAGvPx%g(XTs@}KWT>7ohq2wK9=~je@?",
+        "@n-",
+        "Dis&3kcWE+r#_8&@qSK*_jWKGbql}GDiyI7Wr1Oic!*ZTy+{k6iSZgi0doMb1)7SSrlw#MWy(7I+",
+        "E~@i8jY74kT4Q>tIdSwI4)P;ak$yR7pnEHVzyX5tqn6*)0xQ&lCsEYEGta4s!kBIsIre^Bqdsbti",
+        "<H$J@A@77`HiE$e{ga;yS8r0Z1E!Esof<y&>!ZFm);&xlsUOeKA^%yOchw-mJn%eTD8;?w*CEed5",
+        "oKx`ICYOZMu4F-=CLm-T}9lhzL1%?AOnx_NP<V`Kfa2dRCh2rO0hKr`>HhZ}3`Zuo~Bn-",
+        "%M|w4WkmAuToJ%hlgCOwEKOW<VuDqLGIAxWOQY+!RW?8g?gQ70P$vPIhW7s+1Xb9gfg%6K^0!85j",
+        "p?0^P8{YQ+NFtDTXtM|6c0I9W10ox<b%3oMQFnH7(MKb~ZcwaX9X=F*Vbu#A(ls6s6G7nLIP#@N>",
+        "uu`~$4)z!m",
+    ),
+)
+
+_DONOR_BOSS_REVCUT = Donor(
+    donor_id="boss_revcut",
+    features=(
+        DonorFeature("boss", "rectangle", "front", "blind"),
+        DonorFeature("revolve-cut", "rectangle", "sketch-axis", "full-revolution"),
+    ),
+    feature_ids=(32, 39),
+    sketch_ids=(26, 33),
+    feature_names=("Boss-Extrude1", "Cut-Revolve1"),
+    sketch_names=("Sketch1", "Sketch2"),
+    point_counts=(4, 4),
+    arc_counts=(0, 0),
+    depth_present=(True, False),
+    axis_directions=(None, (1.0, 0.0)),
+    stream_bytes=17713,
+    encoded=(
+        "c-rk-Z)_Y#6`%cgb{xBjL(?WkN}QsS4^@x?m4H(D9Q*7hP$!2k2q}E9Hhbgq#_Qe7-",
+        "kynDQEjBsekw(@Ae9fOqM~i2QdJ15Dk@wfBnsjKs0i^TMIk~;r3jIJ0Rf@M%<j(a?B2}X?)lC>iO",
+        "lJ==h>Z^_ujns=Dqh@TL6H)pxG3_9<XN3T5D_2bZYaKQHJ)CCcDj#n!~fe0&D04fe9Q?13{Y}4t}",
+        "6#0IR`dM{z#-{osuQWM~t8rDo6oa2xSaO85)kKl#<Gf^hl9A4Txm6ABQh=Li$?>bhm?4vaCeV;-",
+        "nr9Wi199WenZHtyXHHeUF|`@$#RD?SskL9-$R?2IFJj_WnYvNvMf3>`;Y)DRz-",
+        "pN)`{eS^h`?D23f#RF8G6AoM}sE)d%g%3{q%lM1qA-jB4tm5bEHeAvka7B>1H4}~X3}$=+U0>OM{",
+        "@ewZP03?!UzVNRo@EcA>#JM8>|u1hgqFqIdJo#x5;UOZ=$2W6PE4imDk1eW&{sohts})Yk)&`R?Q",
+        "!-GnyC^)-R-",
+        "ev)+{@2rzOv6);v3n*tln~*uV_jg%~JUTHN!G6+B0&gNnBsGw7EI%Bar{Ss5CPGk|6VJIw-gRNa_",
+        "W&*~<00&aF5L)4pSD;#tb5FLv)MQGtf1Vn33S`Mrov!Ocg#5Y(u>CHzUC*y;)x!-",
+        "X;Lia?39tBI@XU^Nq(?}SVpog%qXRug!E@p1@9rF9TTcdLy%I`Dc4%}|#<5!}Kd$C`r+smp3XRPu",
+        "@(&N>UB`u>3&=AeozAUsMdQ6)}2Ft!cBHsEK=Fc+patn8(CB%(^xG8fu+cCJDJreSE!dzWY?bUiU",
+        "?$#I3p4ng(?O&DRXz$>;^)bZ5+<7w|3eSP_h;o(>+`V0U^2YK_jyJ~<{etR1TUU)38~YYK7N8f=t",
+        "4P%*!NY-jpF}KGy--3&=7rU+45mURcWxJxUmE^^#biJRW_A=Yy9k$yhH64`YRw}CEidz$1VzNAih",
+        "hSAz9ViIGuQvl^M(8-r0h%A-",
+        "aauZKJfJS8kfE6Q~6d}X)j!W%WB<lJn5Pw0m;&6*Uoz&ASs_DEw~0ky^Tb8n-",
+        "eoLW%9CrhVM9y6rsvg1L=+$kiUIduQ%dqaLLWO%R<U+=cvc6M(S~Fty#|#PBy1CI~TnGeud*e<o{",
+        "pIiE9k8()D~c&1qE-LXpdP(A}KIQ1c}<rAPh-",
+        "`^<gFXP&b4if$HdYgsp7Sd8(sDtF2|cPm~>NOVcrE?s(c^#)g$Ff+rTRw=DQM_UnMc|)^#Fusrw6",
+        "t2WzBD}QhrGm^IKiEc;AGMQs51J5@Ld)&(kZNC|I2No`ik5CV$5pdzK+ZT&N~kRsg&0gGWc((T%P",
+        ";U@vEsD_9_<+{yX2;omlU7z#ixW&J$486#whgaODzmf`HwRbx=%}*^8~Bjzk(SdL$7gg%rwuT63R",
+        "|+?My?C|7aNcPINHP3QaCH$X;bAuYE@S7SBL`>dJ|F+CkRjcxc=xId1p>c>M0yANk8;&o}(*lMPb",
+        "J8ATTGsBS{v0EAHauDBwlh}jHR>?OtdfZ{x!_lhe~6v|ywDD^|80fiz(q0}{nazA9)@F^5FDMKY;",
+        "<|(LD+Jy*0%ZcCNF!JXXI!gfWw2+uv=4oi=xy6>bC7y0&oLdZq7tJm5v?Al&5@YV{O>TeGDzT$B?",
+        "o8SYlM};)bi<OX$=$6cr9A$z{FGo>WlN9$krW|7$&*@uzjy)OBCP0^xulhlVB-",
+        "FX?FsmjV1*+D@7WcuH@l+hXgS%tB?cxThot8cOcF8rCopeePONg-9iX^`%($G~WKwp#;Mnz=w--K",
+        "`gp0s6^f?0Nzy%bV*r4u#Nk<9(GCkQ6o(SL<vDNi{1t`CLx5^Aq{7wG?^%n$@oP@wY2u@UlHZFwE",
+        "u2@zL+J2SE4?T8zFD7UZg_uhkSt19bxxVqs=kNdViJzP%S6`5KV?ml_JQBkQC(4VkiVIixUJg&Wx",
+        "TH}6KXvvT)EvJH!(g)|$JWh?AMc=UB$^LA*sACiupRI@y!k)E_$)Tf;LFe?6j5R<5Mvc}V4#7?Mo",
+        "?{93o!COZ(D1nRcFq0V)Xyjy%7$<%5>9>_eqRCk<lk`)5&XYIw@c0%$QtB=B%EEN{LG)2$Tm0@-",
+        "s8mg;{7iL~+{rzQUP5Ol_>cl5dSFt_COGRi^)1ag|Lco<yCIUY4p*qh92o1s*(zt)igUs)o9OE{<",
+        "wyu%NHC)?Pz{1z{M)l9>yJ`<GE8*M=GSb=zkeu?i34ucY@)9)fOzA71pYiK*+^Q9mzB#BER4Rr6>",
+        "5_OloN`Kvdk$hG}Qa^PY|7^JvJe~3ft{aMHu7Af-tD5|z<7|`&_1TlpcC`9y8XjYsR{OlTZLcmHa",
+        "P?<RW>J0!<QUyNFqAZyn`d6pH>Cb1asIcJcDE#YD9Xy^vI#hO^7)PH)kq+_*xR$?t>BILH&Q>>BP",
+        "EAVt$wu1#cFCiNP970-",
+        "Lz##^hvle<9N~n`CfRT740ltZDd{IK($TL&(l!&ffLjf`%l|!g{aSj?KL3u80UPUlU+7M`@+@7!+",
+        "(kaM{>5Ewg83}9#&8`<dSp$_GHYqZZ=%|}37{hxpYIAHGwKKjVDY|k5nngH_VV1VhaQxYe(>jRYi",
+        "aS*p+h^=fyvc=Med(<4m`^*Ee`d#wD{J6Z{Ga!TR&*fvc2NQEowUohyh*sUeG1*%Z9D^2v(;NP^+",
+        "Nq0|ohh>Jeq*s268EUnl7RuCfPr2oAw0wvQj){6Ve+N$s1I5NHKCml*Tz@0v~WWd#HN9OP{R4@a3",
+        "%wN+UDN;S>f1ULaMq6Ap?-",
+        "sCt6rU4D0wcXle%XJAcb*!hQQnc^C;I#&=z`d#iD?KrVfWrL0pE&on^V~{MsirGFO4k(TdP!j;PG",
+        "N7V{X;#KA%B;<kzp>ZBQu?`6gn3%q;fP{ExlKDdMPHJs3t9Ta*C;H(z%wJw9=zmx&#y^2GEOIx&m",
+        "Y-",
+        "2B7p{?i^$8>`lp50tej{+@<ac?qYYVDc!9WIS{e^z#UwnyvZRsO|?ApQc~AT@jwggY=#4;vvr`wX",
+        "iCuH_pT36NK6o#-",
+        "gXwk(;lGslPkxN2&Err1igI&i%X0p@}3dz{o3`}I{BZF(OFPO@z@cth*Fw$?~V2K5R$-",
+        "Y&0z*4F&^9CHCAHdmn6QO-",
+        "%Mij^h=+5mJdlhL_rfmz^)YD4FLcgZ<F`)sYn|F#@kq3Zd0Pt4tSMzRz*EoeFvQCy8zNx>iN}n0^",
+        "dvq@;XC7IDbZ>i8xULy?^}vcASuZZj(7U0GsEuc*PG74W<-5{c<CnoPIc|6>|x6!f#W89|}wfY-F",
+        "N`m3@33NL2M0!xi|&A1@c3xY*Z!u)LB;I0?5#R|%)z{Otbqd~5ZgLzRvEYaeoYVXa5#T>7NmLyG3",
+        "v8$mh8%u3x*?LkL!esc%O>0Egn+d?EKcX5jmn-PFi)rccBxG3)RW&mjR9Vwjt&!PR(=;wVbLP$pM",
+        "pZmo|+J06LCv?DQIwVKYea@mZ)+4ruTpB#cg@^Sdm+aKCKHn|mlGe2NkPFd(B;-",
+        "Q+@v~zW?|>`)09QcD@zhE@)#Y1Hpo;nA-w8nWe-=Y^D*",
+    ),
+)
+
 _CONTAINER_DICTIONARY_STREAMS = (
     DonorContainerStream(
         names=("Contents/CMgr",),
@@ -2606,6 +2742,99 @@ _DONOR_CONTAINERS = MappingProxyType(
                 ),
             ),
         ),
+        "revolve_full": (
+            DonorContainerStream(
+                names=("Contents/CMgr",),
+                stream_bytes=1957,
+                encoded=(
+                    "`#(4<X<aw(?h#c<vy4{Kqm?v$G80-QEss=5^F>DLY3=-CZNSKqlJ-JkPsX#%)Q6gydlm#_KJw^$V",
+                    "mG~(&18CJj{Tk+Qo5goTI?Us`r&L~w!zM^+~(2jQ@iaRLHR!%oDDDAY}syZ3<CDM_w5D&Y3tESn*",
+                    "Nov{0Ob2%|U)zM2AXR9$HCnt}E-IO(hKg",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Config-0-ModelHeader", "Header2"),
+                stream_bytes=2305,
+                encoded=(
+                    "`#;(g8f^-",
+                    "VHibr;LZeL~8a0I$k<k=dMAfFyA~Ksoi^yyWEux?)w1~{6&?2fdg%;y&3N0bKDYOKux$@AGCkV(Z",
+                    "1D7FX@CJ|qRT@C%pc-",
+                    "ruMgwRGMGc@uI2%Aqh-d)8z?>rr8;UX}+FNWnQMPY>l|76PrT0U{_rv%n=UYfFYnVy(1`q%",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Config-0",),
+                stream_bytes=25244,
+                encoded=(
+                    "?cF;_!$26oafRY2SRAwt6&$33QbBB?B~iKvF0S2G3^*$YLIyWQa4J5aPR<<)MH1RoU0qy_BJMhLQ",
+                    "}ZfGl+c!wMEoDL*9)X+zI)_I%Kbk2v?p?%5LoXqwI>puyVlqf*b}1diB#v#4fX`~gfA-",
+                    "C6W9~j6MxE{s3k9sMA;K=vY)k|$ocxsPP4ivyJaVDIon%q`L>!Lzfw=JCnB~dRAKf++IfBZ$H7;c",
+                    "O52~!+_fi0rmbz0W<Khf(+4Lx*c8|lzn-uuuqjwA5u2j>+Go8}YzlfTHU%~A9ow)euqo*8*c75#0",
+                    "5%0S1!Ds?MOe*aQ(#ljd$B2gib}8_V^jFQ3!4I)!p*TMuqm)9qK+LlMens5ygp!4gvSb-BK~a}o1",
+                    "(w=8+;NG{V&F*V0~R|3Tz5mD>g+uqsI6f-",
+                    "(z4?&>J`gHU+H}n*y66usb$IuK~uU2#Fvz1vUi{3q%Z?0-FMx0-",
+                    "FMx!j3dH1vZ7X12zRV1vUjX1vUjX1vUjXMO*@iO@U2;P2oEuYzk}&G3SF#flYx;flVQDK4Y%Msv4",
+                    "_@*c9ETe_&G#m&<cA*YAbwU}AmqbxhxSQ8pek8U1oiF;<SBrON)$LPgn@^@r5#Tk=4DI%}7*i#2I",
+                    "^w`iQ-X_DcT+e@YS`(nM3v*zov)-+ep)g}tq6a(?FDLw%",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Definition",),
+                stream_bytes=3666,
+                encoded=(
+                    "3m~qCOGGRmXV$FH=Uadg-",
+                    "ye3W`u&~v)_$~SI@&WG?U|1DOh<dBqdn8np6O`MbhKwW+A|&PnbM$VO0Bl~XpeG$dz7q0vPTI3",
+                ),
+            ),
+        ),
+        "boss_revcut": (
+            DonorContainerStream(
+                names=("Contents/CMgr",),
+                stream_bytes=2059,
+                encoded=(
+                    "`#(4<=_7mry(6lUW*M!dM=NRiWG1vqS{*2s2gI2`-1WC-qVieuJsLrVCvEqC+YK{mD)Y8g{pau4a",
+                    "f(ciT(&I7zG44XpG`_N_R;=vItJ|1>`cR2FK`rYu#<apN16T1X1iUV4_x2KxYj%*6a+-",
+                    "A`6{dz=q>whK3Yj*ucVofqCX8yPa2UGI1|a0HY18{2p)*!Y)Au(sbgtG;BHbNyO$o-",
+                    "J`<7;Xj%R9p;Z4CAipi8arF=KnmV-lZ(pp}4{HjXK3>p=Ey)Q|+!O!+",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Config-0-ModelHeader", "Header2"),
+                stream_bytes=2469,
+                encoded=(
+                    "`%lfLkj!XPXtXIb+7udX3XL{}5PFxA(G*%r)uzx=GMhq6$!rQOrJyOal+32kQmQnCmg8*-",
+                    "EhoDvw4BVQ5VG4=;C0&y9Bxy@;x^RWu@bAf>d@Tb40KBg&}BhD(K2v3R|apSX@K?Tk=#i0Mrov3f",
+                    "NI&L7>%@*BsbDBk=RRdHqut&Y@|8ZpsTGBS?B(+YKna|m~Mg6CH7G9{ZMfzU9#Ub>atyB*>tKm(f",
+                    "|",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Config-0",),
+                stream_bytes=25592,
+                encoded=(
+                    "?cL2Q1YsP&@%2);D8*G?4(lLs&=O`{+_uPi6v_=L7bQ^+b8!)E@^*FF11T?YK&`7H%E7_@32us$F",
+                    "l%P)KFio$mdE%`?LOP=%<Sy%d7hcsXSUzxDMNdr$qqs6Sy6i;KW@|-",
+                    "djfmnyX}d$33~#2A|Wc+6W9~j6MxE{&~HTOYxYEYtGwScv2VL<r!%+Go160^=6ti9h;;N{Y15NyO",
+                    "4$=5c6k4fJrT7tFAaOF^ls_d6T@cdH6Ka;ICz=rD_>t5r7;fHtfyvL7|T?6J~l1n?HbqfCEnP)3Z",
+                    "pEI`>h~fJYim7USxg3yuiF53nS)5>a|ZERm=-",
+                    "|Ean9@9)E1ZyuiGmzhho}R|~+rz`WqtfO+9m^OzTy7xZ4ti}#`;_hZb9#BE_-",
+                    "U|v`y<^|>j=EZNv4)Y@YT9wZam>15m!n{zwO=DhU)_&zX5x>93m>1;j#k|10ptWLNs2Memzv_Ml<",
+                    "^{ch&%nH(wPIdiUP!BBUZfjf%nOGIVqRcg5HTrYm=~BAm=~BAm=~{+#=OA1h^>Hmfq8*>fq8*>fq",
+                    "9{hc@e<8a1P*S=0yPWB9#`1d6Be4Cgz1u$h;7)GcSbe%nRW{^Fp}Hyb!K5FNBND3*ln(LSSCRUmP",
+                    "fEUNmlYEjXJOZ%IOfdM@Tg!YG*)>7nGaV`}^S;n`8oY79=Z5CdbIKkR-",
+                    "4b?Ht@#_oraq;}LESqZhzJ<cyypZkt$x*Ja0BKJquTPt}78=;G+R#dvw7Y>j4^~io;w`#^e&^cIJ",
+                    "U$Ck*_Rd}wj&Ez_x6$f?vpwzb?&NwWXUo?kjH#@pc&cT+F8tub{qU&aemny",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Definition",),
+                stream_bytes=3666,
+                encoded=(
+                    "3m~qCOGGRmXV$FH=Uadg-`loMynN10e6(je+A|&PnU3~MM|-",
+                    "BDJ=4*i>1fY%v}ZcnGac=j(xPWdt+x7Tk8*%}l&nLtM+pD",
+                ),
+            ),
+        ),
     }
 )
 
@@ -2630,6 +2859,8 @@ DONOR_LIBRARY: tuple[Donor, ...] = (
     _DONOR_POLY12_CUT_THROUGH,
     _DONOR_BOSS_CUT_CUT_BLIND,
     _DONOR_BOSS_CUT_CUT_CUT_THROUGH,
+    _DONOR_REVOLVE_FULL,
+    _DONOR_BOSS_REVCUT,
 )
 
 DONORS_BY_KEY = MappingProxyType(
@@ -2722,9 +2953,13 @@ def donor_edits(
     return edits
 
 
-def _revolve_edit(
-    donor: Donor, ordinal: int, target: TargetFeature
-) -> FeatureEdit:
+def _parallel(left: tuple[float, float], right: tuple[float, float]) -> bool:
+    return abs(left[0] * right[1] - left[1] * right[0]) <= _AXIS_TOLERANCE and (
+        abs(left[0] * right[0] + left[1] * right[1]) > _AXIS_TOLERANCE
+    )
+
+
+def _revolve_edit(donor: Donor, ordinal: int, target: TargetFeature) -> FeatureEdit:
     if target.end_condition not in REVOLVE_END_CONDITIONS:
         raise SldprtFormatError(
             f"donor {donor.donor_id} feature {ordinal} cannot hold the "
@@ -2744,6 +2979,19 @@ def _revolve_edit(
         raise SldprtFormatError(
             f"donor {donor.donor_id} feature {ordinal} is a revolution whose "
             f"direction flag is not located, so a direction cannot be written"
+        )
+    inherited = (
+        donor.axis_directions[ordinal] if ordinal < len(donor.axis_directions) else None
+    )
+    if inherited is None:
+        raise SldprtFormatError(
+            f"donor {donor.donor_id} feature {ordinal} records no revolution axis "
+            f"direction to inherit"
+        )
+    if target.axis_direction is None or not _parallel(target.axis_direction, inherited):
+        raise SldprtFormatError(
+            f"donor {donor.donor_id} feature {ordinal} revolves about the "
+            f"{inherited} sketch axis and cannot be repointed"
         )
     angle = target.angle_degrees
     if (

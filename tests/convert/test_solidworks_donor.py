@@ -3,15 +3,23 @@ from __future__ import annotations
 from dataclasses import replace
 from io import BytesIO
 
+import pytest
+
 from convert.adapters.solidworks import read_sldprt, write_sldprt
 from convert.adapters.solidworks.adapter import _document_without_source
-from convert.adapters.solidworks.container import SldprtArchive
+from convert.adapters.solidworks.container import SldprtArchive, SldprtFormatError
 from convert.adapters.solidworks.donor_library import (
     BOSS_OPERATION,
     CUT_OPERATION,
     DONOR_LIBRARY,
+    FULL_REVOLUTION_END,
     RECTANGLE_PROFILE,
+    REVOLVE_BOSS_OPERATION,
+    REVOLVE_CUT_OPERATION,
     RIGHT_SUPPORT,
+    SKETCH_AXIS_SUPPORT,
+    SUPPORTED_END_CONDITIONS,
+    DEPTHLESS_END_CONDITIONS,
     TargetFeature,
     donor_by_id,
     patch_donor,
@@ -22,6 +30,7 @@ from convert.adapters.solidworks.donor_match import (
     DonorMatch,
     _reverse_flag,
     _support,
+    _target_feature,
     match_document,
 )
 from convert.adapters.solidworks.format import (
@@ -31,7 +40,7 @@ from convert.adapters.solidworks.format import (
     PARTITION_STREAM,
     RESOLVED_FEATURES_STREAM,
 )
-from convert.adapters.solidworks.resolved import locate_features
+from convert.adapters.solidworks.resolved import locate_features, rectangle_corners_mm
 from interchange import (
     Body,
     BooleanOperation,
@@ -44,7 +53,9 @@ from interchange import (
     GeometryKind,
     LineGeometry,
     NativeFeatureDefinition,
+    Parameter,
     ParameterValue,
+    RevolutionFeature,
     Sketch,
     SketchEntity,
     SupportPlane,
@@ -52,6 +63,7 @@ from interchange import (
     ValueKind,
     Vector2,
     Vector3,
+    frozen_mapping,
 )
 
 from tests.interchange.test_document import document
@@ -371,17 +383,98 @@ def test_donor_match_records_non_solid_timeline_entries_without_declining() -> N
     assert outcome.unexpressed == ("Endmill005 (native)", "Clone (native)")
 
 
-def test_donor_match_declines_and_names_the_blocking_revolution() -> None:
-    entities = _rectangle_entities("profile", 0.0, 0.0, 10.0, 40.0)
-    sketch = _sketch("sketch:profile", FRONT_PLANE.id, entities)
-    revolution = FeatureStep(
-        "feature:revolution",
-        "Revolution",
+def _revolution(
+    identifier: str,
+    order: int,
+    sketch_id: str,
+    *,
+    angle_degrees: float = 360.0,
+    axis_entity_id: str = "V_Axis",
+    operation: BooleanOperation | None = None,
+    inputs: tuple[str, ...] = (),
+) -> FeatureStep:
+    return FeatureStep(
+        identifier,
+        identifier,
         FeatureKind.REVOLUTION,
-        0,
-        sketch_id=sketch.id,
-        definition=NativeFeatureDefinition("freecad.fcstd", "PartDesign::Revolution"),
+        order,
+        sketch_id=sketch_id,
+        operation=operation,
+        input_feature_ids=inputs,
+        definition=RevolutionFeature(
+            ParameterValue(angle_degrees, ValueKind.ANGLE, "deg"),
+            axis_entity_id,
+        ),
     )
+
+
+def _revolved_boss_document() -> CadDocument:
+    sketch = _sketch(
+        "sketch:revolve",
+        FRONT_PLANE.id,
+        _rectangle_entities("revolve", 9.0, -8.0, 21.0, 8.0),
+    )
+    revolution = _revolution("feature:revolve", 0, sketch.id)
+    return _document(
+        (FRONT_PLANE,),
+        (sketch,),
+        (revolution,),
+        (Body("body:1", "Body", revolution.id),),
+    )
+
+
+def test_donor_match_selects_the_revolve_boss_donor_and_reports_it_unmeasured() -> None:
+    outcome = match_document(_revolved_boss_document())
+    assert isinstance(outcome, DonorDecline)
+    assert outcome.reasons == (
+        "donor revolve_full has not been measured in SOLIDWORKS and cannot back "
+        "native geometry records",
+    )
+
+
+def test_revolve_target_carries_the_angle_the_axis_and_the_profile() -> None:
+    source = _revolved_boss_document()
+    sketches = {item.id: item for item in source.sketches}
+    planes = {item.id: item for item in source.support_planes}
+    target, reasons = _target_feature(
+        source.feature_timeline[0],
+        sketches,
+        planes,
+        {},
+        first=True,
+        taken=(),
+    )
+    assert reasons == ()
+    assert target is not None
+    assert target.operation == REVOLVE_BOSS_OPERATION
+    assert target.profile == RECTANGLE_PROFILE
+    assert target.support == SKETCH_AXIS_SUPPORT
+    assert target.end_condition == FULL_REVOLUTION_END
+    assert target.angle_degrees == 360.0
+    assert target.axis_direction == (0.0, 1.0)
+    assert target.depth_mm is None
+    assert target.reversed is None
+    assert target.points_mm == ((9.0, -8.0), (21.0, 8.0), (9.0, 8.0), (21.0, -8.0))
+
+
+def test_donor_match_declines_a_partial_revolution() -> None:
+    source = _revolved_boss_document()
+    revolution = _revolution("feature:revolve", 0, "sketch:revolve", angle_degrees=90.0)
+    outcome = match_document(replace(source, feature_timeline=(revolution,)))
+    assert isinstance(outcome, DonorDecline)
+    assert outcome.reasons == (
+        "feature:revolve: only a 360 degree revolution has a donor and this one "
+        "sweeps 90 degrees",
+    )
+
+
+def test_donor_match_declines_a_revolution_whose_profile_crosses_the_axis() -> None:
+    sketch = _sketch(
+        "sketch:revolve",
+        FRONT_PLANE.id,
+        _rectangle_entities("revolve", -9.0, -8.0, 21.0, 8.0),
+    )
+    revolution = _revolution("feature:revolve", 0, sketch.id)
     outcome = match_document(
         _document(
             (FRONT_PLANE,),
@@ -391,7 +484,75 @@ def test_donor_match_declines_and_names_the_blocking_revolution() -> None:
         )
     )
     assert isinstance(outcome, DonorDecline)
-    assert outcome.reasons == ("Revolution: revolution features have no donor",)
+    assert outcome.reasons == (
+        "feature:revolve: the profile crosses the revolution axis",
+    )
+
+
+def test_donor_match_declines_a_revolution_with_an_unresolvable_axis() -> None:
+    source = _revolved_boss_document()
+    revolution = FeatureStep(
+        "feature:revolve",
+        "Revolution",
+        FeatureKind.REVOLUTION,
+        0,
+        sketch_id="sketch:revolve",
+        definition=NativeFeatureDefinition("freecad.fcstd", "PartDesign::Revolution"),
+    )
+    outcome = match_document(replace(source, feature_timeline=(revolution,)))
+    assert isinstance(outcome, DonorDecline)
+    assert outcome.reasons == (
+        "Revolution: the revolution angle is not a readable angle",
+        "Revolution: the revolution axis is not a sketch axis through the "
+        "sketch origin",
+    )
+
+
+def test_donor_match_reads_a_freecad_revolution_angle_and_reference_axis() -> None:
+    source = _revolved_boss_document()
+    revolution = replace(
+        source.feature_timeline[0],
+        definition=NativeFeatureDefinition("freecad.fcstd", "PartDesign::Revolution"),
+        attributes=frozen_mapping(
+            {
+                "freecad": {
+                    "name": "Revolution",
+                    "properties": {
+                        "ReferenceAxis": {
+                            "attributes": {"name": "ReferenceAxis"},
+                            "children": [
+                                {
+                                    "attributes": {"value": "Sketch004"},
+                                    "children": [
+                                        {"attributes": {"value": "V_Axis"}},
+                                    ],
+                                }
+                            ],
+                        }
+                    },
+                }
+            }
+        ),
+    )
+    angle = Parameter(
+        "parameter:revolve:angle",
+        "Angle",
+        ParameterValue(360.0, ValueKind.ANGLE, "deg"),
+        owner_id=revolution.id,
+        attributes=frozen_mapping({"freecad_path": "Angle"}),
+    )
+    outcome = match_document(
+        replace(
+            source,
+            feature_timeline=(revolution,),
+            parameters=(angle,),
+        )
+    )
+    assert isinstance(outcome, DonorDecline)
+    assert outcome.reasons == (
+        "donor revolve_full has not been measured in SOLIDWORKS and cannot back "
+        "native geometry records",
+    )
 
 
 def test_donor_match_declines_a_document_with_two_solid_bodies() -> None:
@@ -417,6 +578,88 @@ def test_donor_match_declines_a_document_with_two_solid_bodies() -> None:
     )
     assert isinstance(outcome, DonorDecline)
     assert outcome.reasons == ("the document builds 2 separate solid bodies",)
+
+
+def _two_body_document(consumer_dependency: str) -> CadDocument:
+    part_sketch = _sketch(
+        "sketch:part", FRONT_PLANE.id, _rectangle_entities("part", -20, -10, 20, 10)
+    )
+    tool_sketch = _sketch(
+        "sketch:tool", FRONT_PLANE.id, _rectangle_entities("tool", 9, -8, 21, 8)
+    )
+    part = _extrusion(
+        "feature:part", 0, part_sketch.id, 10.0, operation=BooleanOperation.CREATE
+    )
+    tool = _revolution(
+        "feature:tool", 1, tool_sketch.id, operation=BooleanOperation.CREATE
+    )
+    consumer = FeatureStep(
+        "feature:toolbit",
+        "Endmill005",
+        FeatureKind.NATIVE,
+        2,
+        definition=NativeFeatureDefinition("freecad.fcstd", "Part::FeaturePython"),
+        attributes=frozen_mapping(
+            {"freecad": {"name": "Endmill", "dependencies": [consumer_dependency]}}
+        ),
+    )
+    return _document(
+        (FRONT_PLANE,),
+        (part_sketch, tool_sketch),
+        (part, tool, consumer),
+        (
+            Body(
+                "body:1",
+                "Body",
+                part.id,
+                attributes=frozen_mapping({"freecad": {"name": "Body"}}),
+            ),
+            Body(
+                "body:2",
+                "Endmill006",
+                tool.id,
+                attributes=frozen_mapping({"freecad": {"name": "Body001"}}),
+            ),
+        ),
+    )
+
+
+def test_donor_match_translates_the_body_a_non_model_feature_does_not_consume() -> None:
+    outcome = match_document(_two_body_document("Body001"))
+    assert isinstance(outcome, DonorMatch)
+    assert outcome.donor.donor_id == "boss1_front_rect_blind"
+    assert outcome.feature_ids == ("feature:part",)
+    assert outcome.unexpressed == (
+        "Endmill005 (native)",
+        "feature:tool (revolution) building body Endmill006",
+    )
+
+
+def test_donor_match_declines_when_no_body_feeds_a_non_model_feature() -> None:
+    outcome = match_document(_two_body_document("Sketch004"))
+    assert isinstance(outcome, DonorDecline)
+    assert outcome.reasons == ("the document builds 2 separate solid bodies",)
+
+
+def test_donor_match_declines_when_every_body_feeds_a_non_model_feature() -> None:
+    source = _two_body_document("Body001")
+    consumer = replace(
+        source.feature_timeline[2],
+        attributes=frozen_mapping(
+            {"freecad": {"name": "Endmill", "dependencies": ["Body", "Body001"]}}
+        ),
+    )
+    outcome = match_document(
+        replace(
+            source,
+            feature_timeline=(*source.feature_timeline[:2], consumer),
+        )
+    )
+    assert isinstance(outcome, DonorDecline)
+    assert outcome.reasons == (
+        "every one of the 2 solid bodies the document builds feeds a non-model "
+        "feature, so none of them is the part",
+    )
 
 
 def test_donor_match_projects_a_freecad_right_plane_into_solidworks_axes() -> None:
@@ -556,7 +799,10 @@ def test_donor_write_reports_the_decline_reason_in_the_diagnostics() -> None:
         item for item in result.diagnostics if item.code == "sldprt.donor_declined"
     ]
     assert len(declines) == 1
-    assert "Revolution: revolution features have no donor" in declines[0].message
+    assert (
+        "Revolution: the revolution angle is not a readable angle"
+        in declines[0].message
+    )
     assert result.vendor_loadable is False
     assert result.application_usable is False
     assert KIT_RESOLVED_STREAM in archive.streams
@@ -619,3 +865,110 @@ def test_donor_write_round_trips_a_boss_and_cut_through_the_kit_stream() -> None
     assert replayed.sketches == source.sketches
     assert replayed.feature_timeline == source.feature_timeline
     assert replayed.bodies == source.bodies
+
+
+def _revolve_boss_target(**overrides: object) -> TargetFeature:
+    return replace(
+        TargetFeature(
+            operation=REVOLVE_BOSS_OPERATION,
+            profile=RECTANGLE_PROFILE,
+            support=SKETCH_AXIS_SUPPORT,
+            end_condition=FULL_REVOLUTION_END,
+            points_mm=rectangle_corners_mm(9.0, -8.0, 21.0, 8.0),
+            angle_degrees=360.0,
+            axis_direction=(0.0, 1.0),
+        ),
+        **overrides,
+    )
+
+
+def test_full_revolution_end_condition_stays_out_of_the_extrude_gates() -> None:
+    assert FULL_REVOLUTION_END not in SUPPORTED_END_CONDITIONS
+    assert FULL_REVOLUTION_END not in DEPTHLESS_END_CONDITIONS
+
+
+def test_revolve_donors_ship_unmeasured() -> None:
+    for donor_id in ("revolve_full", "boss_revcut"):
+        assert donor_by_id(donor_id).measured is False
+
+
+def test_patch_donor_writes_the_revolution_profile_and_angle() -> None:
+    stream = patch_donor(
+        donor_by_id("revolve_full"), (_revolve_boss_target(angle_degrees=270.0),)
+    )
+    features = locate_features(stream)
+    assert len(features) == 1
+    assert features[0].kind == "revolve"
+    assert features[0].corners_mm == (
+        (9.0, -8.0),
+        (21.0, 8.0),
+        (9.0, 8.0),
+        (21.0, -8.0),
+    )
+    assert features[0].angle_degrees == 270.0
+    assert features[0].depth_mm is None
+
+
+def test_patch_donor_leaves_the_derived_angle_copies_stale() -> None:
+    donor = donor_by_id("revolve_full")
+    before = locate_features(donor.stream)[0]
+    stale = tuple(
+        donor.stream[offset : offset + 8] for offset in before.angle_copy_offsets[1:]
+    )
+    stream = patch_donor(donor, (_revolve_boss_target(angle_degrees=90.0),))
+    after = locate_features(stream)[0]
+    assert after.angle_copy_offsets == before.angle_copy_offsets
+    assert (
+        tuple(stream[offset : offset + 8] for offset in after.angle_copy_offsets[1:])
+        == stale
+    )
+
+
+def test_patch_donor_writes_a_revolved_cut_after_a_boss() -> None:
+    boss = TargetFeature(
+        operation=BOSS_OPERATION,
+        profile=RECTANGLE_PROFILE,
+        support="front",
+        end_condition="blind",
+        points_mm=rectangle_corners_mm(-23.0, -12.0, 23.0, 12.0),
+        depth_mm=12.0,
+        reversed=False,
+    )
+    cut = TargetFeature(
+        operation=REVOLVE_CUT_OPERATION,
+        profile=RECTANGLE_PROFILE,
+        support=SKETCH_AXIS_SUPPORT,
+        end_condition=FULL_REVOLUTION_END,
+        points_mm=rectangle_corners_mm(-28.0, 0.0, 28.0, 4.0),
+        angle_degrees=360.0,
+        axis_direction=(1.0, 0.0),
+    )
+    stream = patch_donor(donor_by_id("boss_revcut"), (boss, cut))
+    features = locate_features(stream)
+    assert [item.kind for item in features] == ["boss", "revolve-cut"]
+    assert features[0].depth_mm == 12.0
+    assert features[1].angle_degrees == 360.0
+    assert features[1].corners_mm == (
+        (-28.0, 0.0),
+        (28.0, 4.0),
+        (-28.0, 4.0),
+        (28.0, 0.0),
+    )
+
+
+def test_patch_donor_rejects_a_revolution_edit_the_stream_cannot_hold() -> None:
+    donor = donor_by_id("revolve_full")
+    rejected = (
+        _revolve_boss_target(axis_direction=(1.0, 0.0)),
+        _revolve_boss_target(axis_direction=None),
+        _revolve_boss_target(angle_degrees=None),
+        _revolve_boss_target(angle_degrees=0.0),
+        _revolve_boss_target(angle_degrees=400.0),
+        _revolve_boss_target(depth_mm=5.0),
+        _revolve_boss_target(reversed=True),
+        _revolve_boss_target(end_condition="blind"),
+        _revolve_boss_target(support="front"),
+    )
+    for target in rejected:
+        with pytest.raises(SldprtFormatError):
+            patch_donor(donor, (target,))

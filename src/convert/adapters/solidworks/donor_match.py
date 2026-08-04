@@ -16,6 +16,7 @@ from interchange import (
     LineGeometry,
     Parameter,
     ParameterValue,
+    RevolutionFeature,
     Sketch,
     SketchEntity,
     SupportPlane,
@@ -27,13 +28,18 @@ from .donor_library import (
     BLIND_END,
     CIRCLE_PROFILE,
     CUT_OPERATION,
+    FULL_REVOLUTION_DEGREES,
+    FULL_REVOLUTION_END,
     GENERATED_CONTAINER_FEATURE_LIMIT,
     Donor,
     FRONT_SUPPORT,
     MID_PLANE_END,
     RECTANGLE_PROFILE,
     RECTANGLE_WITH_CIRCLE_PROFILE,
+    REVOLVE_BOSS_OPERATION,
+    REVOLVE_CUT_OPERATION,
     RIGHT_SUPPORT,
+    SKETCH_AXIS_SUPPORT,
     TOP_SUPPORT,
     TargetFeature,
     donor_key,
@@ -87,6 +93,10 @@ FREECAD_ANGLE_PROPERTIES = (
 )
 FREECAD_BLIND_TYPE_CODE = 0
 FREECAD_SYMMETRIC_SIDE_TYPE = 2
+FREECAD_ANGLE_PROPERTY = "Angle"
+FREECAD_REFERENCE_AXIS_PROPERTY = "ReferenceAxis"
+SKETCH_AXIS_DIRECTIONS = MappingProxyType({"H_Axis": (1.0, 0.0), "V_Axis": (0.0, 1.0)})
+_ANGLE_TOLERANCE_DEGREES = 1.0e-9
 
 BOSS_OPERATIONS = frozenset({BooleanOperation.CREATE, BooleanOperation.JOIN})
 CUT_OPERATIONS = frozenset({BooleanOperation.CUT})
@@ -231,7 +241,12 @@ def match_document(document: CadDocument) -> DonorMatch | DonorDecline:
     feature_ids: list[str] = []
     for index, step in enumerate(solid):
         target, step_reasons = _target_feature(
-            step, sketches, planes, first=index == 0, taken=tuple(sketch_ids)
+            step,
+            sketches,
+            planes,
+            _freecad_properties(document, step),
+            first=index == 0,
+            taken=tuple(sketch_ids),
         )
         reasons.extend(step_reasons)
         reasons.extend(_source_disagreements(document, step))
@@ -497,15 +512,19 @@ def _target_feature(
     step: FeatureStep,
     sketches: dict[str, Sketch],
     planes: dict[str, SupportPlane],
+    properties: dict[str, Parameter],
     *,
     first: bool,
     taken: tuple[str, ...],
 ) -> tuple[TargetFeature | None, tuple[str, ...]]:
     label = step.name or step.id
     definition = step.definition
-    if str(step.kind).casefold() != FeatureKind.EXTRUSION.value:
+    kind = str(step.kind).casefold()
+    if kind not in {FeatureKind.EXTRUSION.value, FeatureKind.REVOLUTION.value}:
         return None, (f"{label}: {step.kind} features have no donor",)
-    if not isinstance(definition, ExtrusionFeature):
+    if kind == FeatureKind.EXTRUSION.value and not isinstance(
+        definition, ExtrusionFeature
+    ):
         return None, (f"{label}: the extrusion carries no extrusion definition",)
     if step.suppressed:
         return None, (f"{label}: the feature is suppressed",)
@@ -513,12 +532,16 @@ def _target_feature(
         return None, (f"{label}: the feature varies by configuration",)
     sketch = sketches.get(step.sketch_id or "")
     if sketch is None:
-        return None, (f"{label}: the extrusion has no resolvable sketch",)
+        return None, (f"{label}: the {kind} has no resolvable sketch",)
     if sketch.id in taken:
         return None, (f"{label}: sketch {sketch.name} drives more than one feature",)
     plane = planes.get(sketch.support_plane_id)
     if plane is None:
         return None, (f"{label}: sketch {sketch.name} has no support plane",)
+    if kind == FeatureKind.REVOLUTION.value:
+        return _revolution_target(
+            step, sketch, plane, properties, label=label, first=first
+        )
     reasons: list[str] = []
     support = _support(plane)
     if support is None:
@@ -587,6 +610,169 @@ def _target_feature(
         ),
         (),
     )
+
+
+def _revolution_target(
+    step: FeatureStep,
+    sketch: Sketch,
+    plane: SupportPlane,
+    properties: dict[str, Parameter],
+    *,
+    label: str,
+    first: bool,
+) -> tuple[TargetFeature | None, tuple[str, ...]]:
+    reasons: list[str] = []
+    support = _support(plane)
+    if support is None or support.name != FRONT_SUPPORT:
+        reasons.append(
+            f"{label}: a revolution donor only holds a sketch on the front plane"
+        )
+    operation = _revolution_operation(step, first=first)
+    if operation is None:
+        reasons.append(
+            f"{label}: the {step.operation or 'unspecified'} revolution operation "
+            f"cannot be expressed{' in first position' if first else ''}"
+        )
+    angle_degrees = _revolution_angle(step, properties)
+    if angle_degrees is None:
+        reasons.append(f"{label}: the revolution angle is not a readable angle")
+    elif abs(angle_degrees - FULL_REVOLUTION_DEGREES) > _ANGLE_TOLERANCE_DEGREES:
+        reasons.append(
+            f"{label}: only a {FULL_REVOLUTION_DEGREES:g} degree revolution has a "
+            f"donor and this one sweeps {angle_degrees:g} degrees"
+        )
+    profile: _Profile | None = None
+    if support is not None:
+        profile, profile_reasons = _profile(sketch, support)
+        reasons.extend(
+            f"{label}: sketch {sketch.name} {item}" for item in profile_reasons
+        )
+        if profile is not None and profile.name != RECTANGLE_PROFILE:
+            reasons.append(
+                f"{label}: a revolution donor only holds a rectangular profile and "
+                f"sketch {sketch.name} holds a {profile.name} profile"
+            )
+            profile = None
+    axis: tuple[float, float] | None = None
+    if support is not None:
+        axis = _revolution_axis(step, sketch, support)
+        if axis is None:
+            reasons.append(
+                f"{label}: the revolution axis is not a sketch axis through the "
+                f"sketch origin"
+            )
+        elif profile is not None and not _profile_clears_axis(profile, axis):
+            reasons.append(f"{label}: the profile crosses the revolution axis")
+    if reasons or profile is None or operation is None or axis is None:
+        return None, tuple(reasons)
+    return (
+        TargetFeature(
+            operation=operation,
+            profile=profile.name,
+            support=SKETCH_AXIS_SUPPORT,
+            end_condition=FULL_REVOLUTION_END,
+            points_mm=profile.points_mm,
+            angle_degrees=FULL_REVOLUTION_DEGREES,
+            axis_direction=axis,
+        ),
+        (),
+    )
+
+
+def _revolution_operation(step: FeatureStep, *, first: bool) -> str | None:
+    operation = step.operation
+    if operation is None:
+        return REVOLVE_BOSS_OPERATION if first else None
+    if operation in BOSS_OPERATIONS:
+        return REVOLVE_BOSS_OPERATION
+    if operation in CUT_OPERATIONS:
+        return None if first else REVOLVE_CUT_OPERATION
+    return None
+
+
+def _revolution_angle(
+    step: FeatureStep, properties: dict[str, Parameter]
+) -> float | None:
+    definition = step.definition
+    if isinstance(definition, RevolutionFeature):
+        return _scalar(definition.angle, ANGLE_FACTORS_DEGREES, ValueKind.ANGLE)
+    parameter = properties.get(FREECAD_ANGLE_PROPERTY)
+    if parameter is None:
+        return None
+    return _scalar(parameter.value, ANGLE_FACTORS_DEGREES, ValueKind.ANGLE)
+
+
+def _revolution_axis(
+    step: FeatureStep, sketch: Sketch, support: _Support
+) -> tuple[float, float] | None:
+    reference = _revolution_axis_reference(step)
+    if reference in SKETCH_AXIS_DIRECTIONS:
+        u, v = SKETCH_AXIS_DIRECTIONS[reference]
+        origin = support.project(0.0, 0.0)
+        direction = support.project(u, v)
+        return _unit((direction[0] - origin[0], direction[1] - origin[1]))
+    entity = next((item for item in sketch.entities if item.id == reference), None)
+    if entity is None or not isinstance(entity.geometry, LineGeometry):
+        return None
+    start = support.project(entity.geometry.start.x, entity.geometry.start.y)
+    end = support.project(entity.geometry.end.x, entity.geometry.end.y)
+    direction = _unit((end[0] - start[0], end[1] - start[1]))
+    if direction is None:
+        return None
+    if abs(start[0] * direction[1] - start[1] * direction[0]) > _TOLERANCE_MM:
+        return None
+    return direction
+
+
+def _revolution_axis_reference(step: FeatureStep) -> str:
+    definition = step.definition
+    if isinstance(definition, RevolutionFeature):
+        return definition.axis_entity_id
+    source = step.attributes.get(FREECAD_ATTRIBUTE)
+    if not isinstance(source, Mapping):
+        return ""
+    properties = source.get("properties")
+    if not isinstance(properties, Mapping):
+        return ""
+    axis = properties.get(FREECAD_REFERENCE_AXIS_PROPERTY)
+    return _freecad_sub_value(axis)
+
+
+def _freecad_sub_value(node: object) -> str:
+    if not isinstance(node, Mapping):
+        return ""
+    attributes = node.get("attributes")
+    if isinstance(attributes, Mapping):
+        value = attributes.get("value")
+        if isinstance(value, str) and value in SKETCH_AXIS_DIRECTIONS:
+            return value
+    children = node.get("children")
+    if isinstance(children, Sequence) and not isinstance(children, (str, bytes)):
+        for child in children:
+            found = _freecad_sub_value(child)
+            if found:
+                return found
+    return ""
+
+
+def _unit(vector: tuple[float, float]) -> tuple[float, float] | None:
+    length = math.hypot(vector[0], vector[1])
+    if not math.isfinite(length) or length <= _AXIS_TOLERANCE:
+        return None
+    return vector[0] / length, vector[1] / length
+
+
+def _profile_clears_axis(profile: _Profile, axis: tuple[float, float]) -> bool:
+    sides = {
+        _side(point, axis)
+        for point in profile.points_mm
+        if abs(point[0] * axis[1] - point[1] * axis[0]) > _TOLERANCE_MM
+    }
+    return len(sides) <= 1
+
+
+def _side(point: tuple[float, float], axis: tuple[float, float]) -> int:
+    return 1 if point[0] * axis[1] - point[1] * axis[0] > 0.0 else -1
 
 
 def _operation(step: FeatureStep, *, first: bool) -> str | None:

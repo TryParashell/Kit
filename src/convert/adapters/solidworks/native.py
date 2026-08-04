@@ -48,6 +48,7 @@ from .donor_library import patch_donor
 from .donor_match import DonorDecline, DonorMatch, match_document
 from .parasolid import encode_blank_partition_stream
 from .resolved import (
+    ANGLE_COPY_DELTAS,
     DEPTH_COPY_DELTAS,
     DEPTH_COPY_SIGNS,
     FROM_END_SPEC_CLASS,
@@ -58,6 +59,8 @@ from .resolved import (
     locate_features,
     patch_rectangle_pad,
 )
+
+_RADIANS_TO_DEGREES = 180.0 / math.pi
 
 _CURRENT_MARKER = bytes.fromhex("ffff1f0003")
 _LEGACY_MARKER = bytes.fromhex("ffff070001")
@@ -313,6 +316,8 @@ class NativeOperation:
     axis_source_id: int | None = None
     axis_source_offset: int | None = None
     end_spec_offset: int | None = None
+    angle_offset: int | None = None
+    angle_copies: tuple[NativeDepthCopy, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -3364,6 +3369,8 @@ def decode_native_model(
             elif layout is not None:
                 axis_sketch = None
             axis_marker = _revolution_axis_marker(axis_sketch)
+            revolution_start = feature.native_offset or 0
+            angle_offset = _operation_dimension_offset(feature.dimensions, "angle")
             operation = NativeOperation(
                 object_id=feature.object_id,
                 name=feature.name,
@@ -3374,8 +3381,10 @@ def decode_native_model(
                 ),
                 profile_id=profile_id,
                 dependencies=dependencies,
-                native_offset=feature.native_offset or 0,
-                native_end=feature.native_end or len(resolved),
+                native_offset=revolution_start,
+                native_end=_class_record_end(resolved, classes, revolution_start)
+                or feature.native_end
+                or len(resolved),
                 length_mm=None,
                 radius_mm=None,
                 family_code=family,
@@ -3392,6 +3401,8 @@ def decode_native_model(
                 axis_source_id=None if layout is None else layout.axis_feature_id,
                 axis_source_offset=None if layout is None else layout.axis_offset,
                 end_spec_offset=None if layout is None else layout.end_spec_offset,
+                angle_offset=angle_offset,
+                angle_copies=_angle_copies(resolved, angle_offset),
             )
             operations.append(operation)
             latest_operation = operation
@@ -4541,6 +4552,21 @@ def _depth_copies(data: bytes, offset: int | None) -> tuple[NativeDepthCopy, ...
         if not math.isfinite(value):
             continue
         result.append(NativeDepthCopy(target, sign, value * _MILLIMETRES))
+    return tuple(result)
+
+
+def _angle_copies(data: bytes, offset: int | None) -> tuple[NativeDepthCopy, ...]:
+    if offset is None:
+        return ()
+    result: list[NativeDepthCopy] = []
+    for delta in ANGLE_COPY_DELTAS:
+        target = offset + delta
+        if target < 0 or target + 8 > len(data):
+            continue
+        value = struct.unpack_from("<d", data, target)[0]
+        if not math.isfinite(value):
+            continue
+        result.append(NativeDepthCopy(target, 1, value * _RADIANS_TO_DEGREES))
     return tuple(result)
 
 
