@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 import base64
@@ -83,7 +91,6 @@ from .protocol import (
     MATE_WRITE_KINDS,
     XML_TRUE_VALUES,
 )
-
 
 _NATIVE_DOCUMENT_ID = "freecad:native-document"
 _NATIVE_DOCUMENT_BINDING_ID = "freecad:native-document-binding"

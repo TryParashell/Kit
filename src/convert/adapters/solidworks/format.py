@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 from pathlib import PureWindowsPath
@@ -7,7 +15,6 @@ from typing import Iterable
 
 from convert.adapters.base import AdapterInfo
 from interchange import Capability
-
 
 PART_FORMAT_ID = "solidworks.sldprt"
 ASSEMBLY_FORMAT_ID = "solidworks.sldasm"

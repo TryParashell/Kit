@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 import base64
@@ -7,7 +15,6 @@ from enum import Enum
 import json
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, get_origin, get_type_hints
-
 
 _TYPE_REGISTRY: dict[str, type] = {}
 _MIGRATION_REGISTRY: dict[type, Callable[[Mapping[str, Any]], Mapping[str, Any]]] = {}

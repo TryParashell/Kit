@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 import struct
@@ -5,7 +13,6 @@ import struct
 import pytest
 
 from convert.adapters.solidworks import SldprtArchive, build_sldprt
-
 
 _MARKER = bytes.fromhex("140006000800")
 _LOCAL_SIGNATURE = bytes.fromhex("a1909b1f")
