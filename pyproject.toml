@@ -7,7 +7,7 @@
 # to you under it immediately and permanently.
 
 [build-system]
-requires = ["hatchling>=1.31.0"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -37,7 +37,7 @@ Issues = "https://github.com/TryParashell/Kit/issues"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3",
+    "pytest==9.1.1",
     "pywin32==312",
 ]
 
