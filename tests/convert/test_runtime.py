@@ -266,13 +266,36 @@ def test_runtime_has_no_cad_or_process_dependencies() -> None:
                 )
 
 
+def _comments_after_the_license_header(source: bytes) -> tuple[str, ...]:
+    header = True
+    found: list[str] = []
+    for token in tokenize.tokenize(io.BytesIO(source).readline):
+        if token.type in (tokenize.ENCODING, tokenize.NL, tokenize.NEWLINE):
+            continue
+        if token.type == tokenize.COMMENT:
+            if not header:
+                found.append(token.string)
+            continue
+        header = False
+    return tuple(found)
+
+
 def test_source_contains_no_code_comments_or_stubs() -> None:
     for path in SOURCE.rglob("*.py"):
         source = path.read_bytes()
-        tokens = tokenize.tokenize(io.BytesIO(source).readline)
-        assert all(token.type != tokenize.COMMENT for token in tokens), path
+        assert _comments_after_the_license_header(source) == (), path
         tree = ast.parse(source, filename=str(path))
         assert not any(isinstance(node, ast.Pass) for node in ast.walk(tree)), path
+
+
+def test_every_source_file_opens_with_the_licence_header() -> None:
+    expected = (
+        "# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0",
+        "# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin",
+    )
+    for path in SOURCE.rglob("*.py"):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert tuple(lines[: len(expected)]) == expected, path
 
 
 def test_source_layout_uses_only_interchange_and_convert() -> None:
