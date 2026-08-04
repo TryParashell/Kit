@@ -229,6 +229,7 @@ class _GeneratedStreams:
     vendor_loadable: bool
     mixed_capabilities: frozenset[Capability] = frozenset()
     unexpressed: tuple[str, ...] = ()
+    donor_notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -820,6 +821,27 @@ class SldprtAdapter:
                         message=(
                             "generated SOLIDWORKS assembly does not express "
                             + ", ".join(generated.unexpressed)
+                        ),
+                        severity=Severity.WARNING,
+                    ),
+                )
+            if generated.donor_notes:
+                diagnostics = (
+                    *diagnostics,
+                    Diagnostic(
+                        code=(
+                            "sldprt.donor_partial"
+                            if generated.vendor_loadable
+                            else "sldprt.donor_declined"
+                        ),
+                        message=(
+                            (
+                                "native SOLIDWORKS feature records omit "
+                                if generated.vendor_loadable
+                                else "native SOLIDWORKS feature records were not "
+                                "written because "
+                            )
+                            + "; ".join(generated.donor_notes)
                         ),
                         severity=Severity.WARNING,
                     ),
@@ -1724,6 +1746,7 @@ def _generated_streams(
     part_partition: bytes | None = None
     part_application_usable = False
     part_vendor_loadable = False
+    part_donor_notes: tuple[str, ...] = ()
     assembly_envelope_complete = False
     assembly_notes: tuple[str, ...] = ()
     if portable.assembly is None:
@@ -1744,6 +1767,7 @@ def _generated_streams(
         part_partition = part.partition
         part_application_usable = part.application_usable
         part_vendor_loadable = part.vendor_loadable
+        part_donor_notes = part.donor_notes
     else:
         encoding = encode_native_assembly(
             portable.assembly,
@@ -1832,6 +1856,7 @@ def _generated_streams(
         vendor_loadable,
         mixed_capabilities,
         assembly_notes,
+        part_donor_notes,
     )
 
 
@@ -6145,6 +6170,14 @@ def _operation_attributes(operation: NativeOperation) -> dict[str, Any]:
         result["second_length_mm"] = operation.second_length_mm
     if operation.axis_marker_offset is not None:
         result["axis_marker_offset"] = operation.axis_marker_offset
+    if operation.axis_source_kind is not None:
+        result["axis_source_kind"] = operation.axis_source_kind
+    if operation.axis_source_id is not None:
+        result["axis_source_id"] = operation.axis_source_id
+    if operation.axis_source_offset is not None:
+        result["axis_source_offset"] = operation.axis_source_offset
+    if operation.end_spec_offset is not None:
+        result["end_spec_offset"] = operation.end_spec_offset
     if operation.translation_mm is not None:
         result["translation_mm"] = operation.translation_mm
     if operation.scale_factors is not None:
@@ -6210,6 +6243,25 @@ def _feature_definition(
             axis_entity_id=_marker_id(
                 operation.profile_id,
                 operation.axis_marker_offset,
+            ),
+            reversed=operation.kind == "revolve_cut",
+        )
+    if (
+        operation is not None
+        and operation.kind in {"revolve_join", "revolve_cut"}
+        and operation.angle_degrees is not None
+        and operation.axis_source_kind is not None
+        and operation.axis_source_id is not None
+    ):
+        return RevolutionFeature(
+            angle=ParameterValue(
+                operation.angle_degrees,
+                ValueKind.ANGLE,
+                "deg",
+            ),
+            axis_entity_id=_axis_source_id(
+                operation.axis_source_kind,
+                operation.axis_source_id,
             ),
             reversed=operation.kind == "revolve_cut",
         )
@@ -6586,6 +6638,10 @@ def _profile_id(native_id: int, profile_index: int) -> str:
 
 def _profile_edge_id(native_id: int, profile_index: int, edge_index: int) -> str:
     return f"sldprt:sketch:{native_id}:profile:{profile_index}:edge:{edge_index}"
+
+
+def _axis_source_id(kind: str, native_id: int) -> str:
+    return f"sldprt:{kind}:{native_id}"
 
 
 def _marker_id(native_id: int, offset: int) -> str:

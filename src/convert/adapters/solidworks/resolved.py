@@ -18,6 +18,10 @@ LENGTH_PARAMETER_CLASS = "moLengthParameter_c"
 END_SPEC_CLASS = "moEndSpec_c"
 FROM_END_SPEC_CLASS = "moFromEndSpec_c"
 SKETCH_CHAIN_CLASS = "moSketchChain_c"
+REVOLUTION_CLASS = "moRevolution_c"
+REVOLUTION_CUT_CLASS = "moRevCut_c"
+REVOLUTION_END_SPEC_CLASS = "moRevEndSpec_c"
+ANGLE_PARAMETER_CLASS = "moAngleParameter_c"
 
 DEPTH_RELATIVE = 57
 REVERSE_RELATIVE = 27
@@ -44,6 +48,9 @@ CUT_KIND = "cut"
 ROUND_KIND = "round"
 SWEEP_KIND = "sweep"
 LOFT_KIND = "loft"
+REVOLVE_KIND = "revolve"
+REVOLVE_CUT_KIND = "revolve-cut"
+REVOLVE_KINDS = frozenset({REVOLVE_KIND, REVOLVE_CUT_KIND})
 FEATURE_KIND_BY_FLAGS = MappingProxyType(
     {
         BOSS_FLAGS: BOSS_KIND,
@@ -55,6 +62,31 @@ FEATURE_KIND_BY_FLAGS = MappingProxyType(
     }
 )
 TREE_NODE_FLAGS = frozenset(FEATURE_KIND_BY_FLAGS) | {SKETCH_FLAGS, PLANE_FLAGS}
+
+REVOLUTION_END_SPEC_DATA = (
+    struct.pack("<I", 1)
+    + bytes(24)
+    + struct.pack("<d", 0.01)
+    + struct.pack("<d", 0.01)
+    + bytes(8)
+)
+REVOLUTION_END_SPEC_HEADER = (
+    CLASS_MARKER
+    + struct.pack("<H", len(REVOLUTION_END_SPEC_CLASS))
+    + REVOLUTION_END_SPEC_CLASS.encode("ascii")
+)
+REVOLUTION_END_SPEC_CLASS_BYTES = len(REVOLUTION_END_SPEC_HEADER)
+REVOLUTION_CLASS_REFERENCE_BYTES = 2
+REVOLUTION_AXIS_SKETCH_RELATIVE = -145
+REVOLUTION_AXIS_REFERENCE_RELATIVE = -131
+REVOLUTION_AXIS_SKETCH = "sketch"
+REVOLUTION_AXIS_REFERENCE = "reference-axis"
+REVOLUTION_STAMP_LOW = 1_000_000_000
+REVOLUTION_STAMP_HIGH = 2_000_000_000
+ANGLE_COPY_DELTAS = (0, 513, 537)
+REVOLVE_CUT_NAME_STEMS = ("cut-revolve", "cortar-revolucion", "cortar-revolución")
+REVOLVE_NAME_STEMS = ("revolve", "revolucion", "revolución")
+_RADIANS_TO_DEGREES = 180.0 / math.pi
 
 SKETCH_COORDINATE_PREFIX = bytes.fromhex("000000000000f03f00000000000000001e00")
 SKETCH_POINT_PREFIX = SKETCH_COORDINATE_PREFIX
@@ -165,6 +197,24 @@ class FeatureLayout:
     end_condition_offset: int | None
     reversed: bool | None
     end_condition_code: int | None
+    from_reverse_offset: int | None = None
+    angle_offset: int | None = None
+    angle_radians: float | None = None
+    angle_copy_offsets: tuple[int, ...] = ()
+    end_spec_offset: int | None = None
+    axis_kind: str | None = None
+    axis_offset: int | None = None
+    axis_feature_id: int | None = None
+
+    @property
+    def is_revolution(self) -> bool:
+        return self.kind in REVOLVE_KINDS
+
+    @property
+    def angle_degrees(self) -> float | None:
+        if self.angle_radians is None:
+            return None
+        return self.angle_radians * _RADIANS_TO_DEGREES
 
     @property
     def corners_mm(self) -> tuple[tuple[float, float], ...]:
@@ -209,6 +259,7 @@ class FeatureEdit:
     end_condition_code: int | None = None
     update_depth_copies: bool = False
     radii_mm: Sequence[float] | None = None
+    arc_centres_mm: Sequence[tuple[float, float]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,6 +283,55 @@ class RectanglePadLayout:
 
 def feature_kind(flags: int) -> str | None:
     return FEATURE_KIND_BY_FLAGS.get(flags & FEATURE_FLAGS_MASK)
+
+
+def revolution_end_spec_objects(data: bytes | bytearray) -> tuple[int, ...]:
+    blob = bytes(data)
+    result: list[int] = []
+    cursor = 0
+    while True:
+        found = blob.find(REVOLUTION_END_SPEC_DATA, cursor)
+        if found < 0:
+            break
+        cursor = found + 1
+        header = found - REVOLUTION_END_SPEC_CLASS_BYTES
+        if header >= 0 and blob[header:found] == REVOLUTION_END_SPEC_HEADER:
+            result.append(header)
+            continue
+        result.append(found - REVOLUTION_CLASS_REFERENCE_BYTES)
+    return tuple(result)
+
+
+def revolution_axis_source(
+    data: bytes | bytearray, token: int, feature_ids: frozenset[int]
+) -> tuple[str, int, int] | None:
+    blob = bytes(data)
+    for kind, relative in (
+        (REVOLUTION_AXIS_SKETCH, REVOLUTION_AXIS_SKETCH_RELATIVE),
+        (REVOLUTION_AXIS_REFERENCE, REVOLUTION_AXIS_REFERENCE_RELATIVE),
+    ):
+        offset = token + relative
+        if offset < 0 or offset + 8 > len(blob):
+            continue
+        identifier = struct.unpack_from("<I", blob, offset)[0]
+        stamp = struct.unpack_from("<I", blob, offset + 4)[0]
+        if identifier not in feature_ids:
+            continue
+        if not REVOLUTION_STAMP_LOW <= stamp <= REVOLUTION_STAMP_HIGH:
+            continue
+        return kind, offset, identifier
+    return None
+
+
+def revolution_kind_by_name(name: str, boss: bool, cut: bool) -> str:
+    folded = name.casefold()
+    if cut and any(folded.startswith(stem) for stem in REVOLVE_CUT_NAME_STEMS):
+        return REVOLVE_CUT_KIND
+    if boss and any(folded.startswith(stem) for stem in REVOLVE_NAME_STEMS):
+        return REVOLVE_KIND
+    if cut and not boss:
+        return REVOLVE_CUT_KIND
+    return REVOLVE_KIND
 
 
 def is_tree_node_flags(flags: int) -> bool:
@@ -386,8 +486,24 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
     blob = bytes(data)
     records = name_records(blob)
     nodes = _tree_nodes(blob, records)
-    features = tuple(node for node in nodes if feature_kind(node.flags) is not None)
-    profiles = tuple(node for node in nodes if feature_kind(node.flags) is None)
+    classes = class_records(blob)
+    revolutions = _revolution_nodes(blob, nodes, classes)
+    features = tuple(
+        node
+        for node in nodes
+        if feature_kind(node.flags) is not None or node.offset in revolutions
+    )
+    profiles = tuple(
+        node
+        for node in nodes
+        if feature_kind(node.flags) is None and node.offset not in revolutions
+    )
+    from_end_spec = first_class_offset(classes, FROM_END_SPEC_CLASS)
+    from_reverse = (
+        None if from_end_spec is None else from_end_spec + FROM_REVERSE_RELATIVE
+    )
+    if from_reverse is not None and from_reverse >= len(blob):
+        from_reverse = None
     points = sketch_points(blob)
     arcs = sketch_arcs(blob)
     scalars = tuple(
@@ -396,6 +512,7 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
         if scalar.name.startswith(DEPTH_SCALAR_NAME_PREFIX)
     )
     result: list[FeatureLayout] = []
+    extrusions = 0
     for ordinal, feature in enumerate(features):
         start = features[ordinal - 1].offset if ordinal else 0
         limit = (
@@ -410,17 +527,26 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
             ),
             None,
         )
+        revolution = revolutions.get(feature.offset)
+        if revolution is not None:
+            result.append(
+                _revolution_layout(blob, ordinal, feature, sketch, scalar, revolution)
+            )
+            continue
         result.append(
             _feature_layout(
                 blob,
                 ordinal,
+                extrusions,
                 feature,
                 sketch,
                 () if sketch is None else _points_in_range(points, sketch, feature),
                 () if sketch is None else _arcs_in_range(arcs, sketch, feature),
                 scalar,
+                from_reverse if extrusions == 0 else None,
             )
         )
+        extrusions += 1
     return tuple(result)
 
 
@@ -466,6 +592,10 @@ def patch_features(data: bytes | bytearray, edits: Mapping[int, FeatureEdit]) ->
             for point, (x, y) in zip(feature.points, edit.corners_mm, strict=True):
                 struct.pack_into("<d", output, point.offset, x / _METRES)
                 struct.pack_into("<d", output, point.offset + 8, y / _METRES)
+        if edit.arc_centres_mm is not None:
+            for arc, (x, y) in zip(feature.arcs, edit.arc_centres_mm, strict=True):
+                struct.pack_into("<d", output, arc.centre_offset, x / _METRES)
+                struct.pack_into("<d", output, arc.centre_offset + 8, y / _METRES)
         if edit.radii_mm is not None:
             for arc, radius_mm in zip(feature.arcs, edit.radii_mm, strict=True):
                 _write_arc_radius(output, arc, radius_mm)
@@ -484,6 +614,8 @@ def patch_features(data: bytes | bytearray, edits: Mapping[int, FeatureEdit]) ->
                         )
         if edit.reversed is not None:
             output[feature.reverse_offset] = 1 if edit.reversed else 0
+            if feature.from_reverse_offset is not None:
+                output[feature.from_reverse_offset] = 1 if edit.reversed else 0
         if edit.end_condition_code is not None:
             output[feature.end_condition_offset] = edit.end_condition_code
     patched = bytes(output)
@@ -753,14 +885,97 @@ def _arcs_in_range(
     )
 
 
+def _revolution_nodes(
+    blob: bytes,
+    nodes: tuple[NameRecord, ...],
+    classes: tuple[ClassRecord, ...],
+) -> dict[int, tuple[str, int, tuple[str, int, int] | None]]:
+    names = {record.name for record in classes}
+    boss = REVOLUTION_CLASS in names
+    cut = REVOLUTION_CUT_CLASS in names
+    if not boss and not cut:
+        return {}
+    tokens = revolution_end_spec_objects(blob)
+    if not tokens:
+        return {}
+    feature_ids = frozenset(node.feature_id for node in nodes)
+    candidates = tuple(
+        node
+        for node in nodes
+        if feature_kind(node.flags) is None
+        and node.flags & FEATURE_FLAGS_MASK == SKETCH_FLAGS
+    )
+    result: dict[int, tuple[str, int, tuple[str, int, int] | None]] = {}
+    for token in sorted(tokens):
+        node = _last_node_in_range(candidates, -1, token)
+        if node is None or node.offset in result:
+            continue
+        result[node.offset] = (
+            revolution_kind_by_name(node.name, boss, cut),
+            token,
+            revolution_axis_source(blob, token, feature_ids),
+        )
+    return result
+
+
+def _revolution_layout(
+    blob: bytes,
+    ordinal: int,
+    feature: NameRecord,
+    sketch: NameRecord | None,
+    scalar: DimensionScalar | None,
+    revolution: tuple[str, int, tuple[str, int, int] | None],
+) -> FeatureLayout:
+    kind, token, axis = revolution
+    angle_offset = None if scalar is None else scalar.value_offset
+    return FeatureLayout(
+        ordinal=ordinal,
+        name=feature.name,
+        kind=kind,
+        feature_id=feature.feature_id,
+        flags=feature.flags,
+        flags_offset=feature.text_end + 4,
+        sketch_name=None if sketch is None else sketch.name,
+        sketch_id=None if sketch is None else sketch.feature_id,
+        points=(),
+        arcs=(),
+        depth_offset=None,
+        depth_mm=None,
+        depth_copy_offsets=(),
+        reverse_offset=None,
+        end_condition_offset=None,
+        reversed=None,
+        end_condition_code=None,
+        angle_offset=angle_offset,
+        angle_radians=(
+            None if angle_offset is None else _read_double(blob, angle_offset)
+        ),
+        angle_copy_offsets=(
+            ()
+            if angle_offset is None
+            else tuple(
+                angle_offset + delta
+                for delta in ANGLE_COPY_DELTAS
+                if angle_offset + delta + 8 <= len(blob)
+            )
+        ),
+        end_spec_offset=token,
+        axis_kind=None if axis is None else axis[0],
+        axis_offset=None if axis is None else axis[1],
+        axis_feature_id=None if axis is None else axis[2],
+    )
+
+
 def _feature_layout(
     blob: bytes,
     ordinal: int,
+    extrusion_ordinal: int,
     feature: NameRecord,
     sketch: NameRecord | None,
     points: tuple[SketchPoint, ...],
     arcs: tuple[SketchArc, ...],
     scalar: DimensionScalar | None,
+    from_reverse_offset: int | None,
 ) -> FeatureLayout:
     depth_offset = None if scalar is None else scalar.value_offset
     depth_mm = None if scalar is None else scalar.value_mm
@@ -775,7 +990,7 @@ def _feature_layout(
         )
         reverse_distance, end_condition_distance = (
             (FIRST_FEATURE_REVERSE_DISTANCE, FIRST_FEATURE_END_CONDITION_DISTANCE)
-            if ordinal == 0
+            if extrusion_ordinal == 0
             else (LATER_FEATURE_REVERSE_DISTANCE, LATER_FEATURE_END_CONDITION_DISTANCE)
         )
         reverse_offset = _flag_offset(blob, depth_offset - reverse_distance)
@@ -805,6 +1020,7 @@ def _feature_layout(
         end_condition_code=(
             None if end_condition_offset is None else blob[end_condition_offset]
         ),
+        from_reverse_offset=from_reverse_offset,
     )
 
 
@@ -813,6 +1029,19 @@ def _flag_offset(blob: bytes, offset: int) -> int | None:
 
 
 def _validate_edit(feature: FeatureLayout, edit: FeatureEdit) -> None:
+    if feature.is_revolution:
+        raise SldprtFormatError(
+            f"feature {feature.ordinal} is a {feature.kind} and its end specification "
+            f"is not decoded, so it cannot be patched"
+        )
+    if edit.reversed is not None and feature.reverse_offset is None:
+        raise SldprtFormatError(
+            f"feature {feature.ordinal} has no locatable direction flag"
+        )
+    if edit.end_condition_code is not None and feature.end_condition_offset is None:
+        raise SldprtFormatError(
+            f"feature {feature.ordinal} has no locatable end condition"
+        )
     if edit.corners_mm is not None:
         if len(edit.corners_mm) != len(feature.points):
             raise SldprtFormatError(
@@ -839,6 +1068,20 @@ def _validate_edit(feature: FeatureLayout, edit: FeatureEdit) -> None:
             )
         if not all(math.isfinite(radius) and radius > 0.0 for radius in edit.radii_mm):
             raise SldprtFormatError("sketch radii must be finite and positive")
+    if edit.arc_centres_mm is not None:
+        if edit.radii_mm is None:
+            raise SldprtFormatError(
+                "sketch arc centres can only be moved together with their radii"
+            )
+        if len(edit.arc_centres_mm) != len(feature.arcs):
+            raise SldprtFormatError(
+                f"feature {feature.ordinal} has {len(feature.arcs)} sketch arcs "
+                f"and {len(edit.arc_centres_mm)} centres were supplied"
+            )
+        if not all(
+            math.isfinite(value) for centre in edit.arc_centres_mm for value in centre
+        ):
+            raise SldprtFormatError("sketch arc centre values must be finite")
     if edit.depth_mm is not None:
         if feature.depth_offset is None:
             raise SldprtFormatError(
@@ -898,6 +1141,12 @@ def _verify_features(
                 zip(after.arcs, edit.radii_mm, strict=True)
             ):
                 _verify_arc(arc, before.arcs[index], radius_mm, index)
+        if edit.arc_centres_mm is not None and not _matches(
+            tuple(arc.centre_mm for arc in after.arcs), tuple(edit.arc_centres_mm)
+        ):
+            raise SldprtFormatError(
+                f"patched feature {ordinal} arc centres do not verify"
+            )
         if edit.depth_mm is not None:
             if after.depth_mm is None or not math.isclose(
                 after.depth_mm, edit.depth_mm, rel_tol=1e-12, abs_tol=1e-9
@@ -911,10 +1160,16 @@ def _verify_features(
                 raise SldprtFormatError(
                     f"patched feature {ordinal} depth copies do not verify"
                 )
-        if edit.reversed is not None and after.reversed is not bool(edit.reversed):
-            raise SldprtFormatError(
-                f"patched feature {ordinal} direction does not verify"
-            )
+        if edit.reversed is not None:
+            if after.reversed is not bool(edit.reversed):
+                raise SldprtFormatError(
+                    f"patched feature {ordinal} direction does not verify"
+                )
+            mirror = after.from_reverse_offset
+            if mirror is not None and bool(patched[mirror]) is not bool(edit.reversed):
+                raise SldprtFormatError(
+                    f"patched feature {ordinal} mirrored direction does not verify"
+                )
         if (
             edit.end_condition_code is not None
             and after.end_condition_code != edit.end_condition_code

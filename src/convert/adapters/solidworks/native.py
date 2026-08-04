@@ -44,14 +44,18 @@ from .format import (
     SERIALIZED_STRING_MARKER,
     dimension_scalar_value_offset,
 )
+from .donor_library import patch_donor
+from .donor_match import DonorDecline, DonorMatch, match_document
 from .parasolid import encode_blank_partition_stream
 from .resolved import (
     DEPTH_COPY_DELTAS,
     DEPTH_COPY_SIGNS,
     FROM_END_SPEC_CLASS,
     FROM_REVERSE_RELATIVE,
+    REVOLUTION_AXIS_SKETCH,
     SKETCH_CHAIN_CLASS,
     circle_radius_mm,
+    locate_features,
     patch_rectangle_pad,
 )
 
@@ -87,6 +91,8 @@ _SKETCH_PLANE_BASIS_BYTES = 72
 _SKETCH_PLANE_AXIS_COMPLEMENT = 5
 _SKETCH_PLANE_SCAN_BYTES = 320
 _PRINCIPAL_PLANE_OBJECT_IDS = frozenset({2, 3, 4})
+_REFERENCE_PLANE_CLASS = "moRefPlane_c"
+_DONOR_DIMENSION_NAME = "D1"
 _IDENTITY_BASIS = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _IDENTITY_ORIGIN = (0.0, 0.0, 0.0)
 _DERIVED_PLANE_CLASSES = (
@@ -303,6 +309,10 @@ class NativeOperation:
     depth_copies: tuple[NativeDepthCopy, ...] = ()
     mirrored_direction_offset: int | None = None
     mirrored_direction_code: int | None = None
+    axis_source_kind: str | None = None
+    axis_source_id: int | None = None
+    axis_source_offset: int | None = None
+    end_spec_offset: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -370,6 +380,7 @@ class NativePartStreams:
     partition: bytes | None
     application_usable: bool
     vendor_loadable: bool
+    donor_notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -958,6 +969,13 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
             ),
         )
     authored = _canonical_rectangle_boss_objects(authored, object_ids, document)
+    donor_stream: bytes | None = None
+    donor_notes: tuple[str, ...] = ()
+    donor_container: Mapping[str, bytes] = {}
+    if not _is_rectangle_boss_objects(authored):
+        authored, donor_stream, donor_notes, donor_container = _donor_objects(
+            document, authored, object_ids
+        )
     identity = _native_identity(document, model_name)
     system_features = {
         int(feature.attributes["native_object_id"]): feature
@@ -996,13 +1014,16 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         identity,
     )
     features = _features_payload(document, model_name, object_ids, identity)
-    if blank_native or _is_donor_resolved_objects(authored):
+    if donor_stream is not None:
+        resolved = donor_stream
+        kit_resolved: bytes | None = None
+    elif blank_native or _is_donor_resolved_objects(authored):
         resolved = (
             _base_record(_BASE_RESOLVED_FEATURES)
             if blank_native
             else _resolved_payload(objects)
         )
-        kit_resolved: bytes | None = None
+        kit_resolved = None
     else:
         resolved = _base_record(_BASE_RESOLVED_FEATURES)
         kit_resolved = _resolved_payload(objects)
@@ -1010,7 +1031,8 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         document,
         model_name,
         identity,
-        rectangle_boss=_is_rectangle_boss_objects(authored),
+        rectangle_boss=donor_stream is not None or _is_rectangle_boss_objects(authored),
+        donor_container=donor_container,
     )
     parsed = (
         decode_native_model(keywords, resolved)
@@ -1025,7 +1047,21 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
     partition: bytes | None = None
     application_usable = False
     vendor_loadable = False
-    if freecad_rectangle:
+    if donor_stream is not None:
+        capabilities = frozenset(
+            (
+                *capabilities,
+                Capability.BREP,
+                Capability.BODY_STRUCTURE,
+                Capability.EDITABLE_SKETCHES,
+                Capability.PARAMETRIC_HISTORY,
+            )
+        )
+        mixed_capabilities = frozenset({Capability.PARAMETERS})
+        partition = encode_blank_partition_stream()
+        vendor_loadable = True
+        application_usable = True
+    elif freecad_rectangle:
         capabilities = frozenset(
             (
                 *capabilities,
@@ -1064,6 +1100,7 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         partition,
         application_usable,
         vendor_loadable,
+        donor_notes,
     )
 
 
@@ -1215,6 +1252,126 @@ def _write_objects(
         if sketch.id not in emitted_sketches:
             result.append(_write_sketch(sketch, parameters, object_ids))
     return tuple(result)
+
+
+def _donor_objects(
+    document: CadDocument,
+    objects: tuple[_WriteObject, ...],
+    object_ids: dict[str, int],
+) -> tuple[
+    tuple[_WriteObject, ...], bytes | None, tuple[str, ...], Mapping[str, bytes]
+]:
+    outcome = match_document(document)
+    if isinstance(outcome, DonorDecline):
+        return objects, None, outcome.reasons if outcome.candidate else (), {}
+    assignments = dict(outcome.object_ids)
+    if len(set(assignments.values())) != len(assignments):
+        return objects, None, ("the donor object identifiers collide",), {}
+    names = dict(
+        zip(
+            (f"sketch:{item}" for item in outcome.sketch_ids),
+            outcome.donor.sketch_names,
+            strict=True,
+        )
+    )
+    names.update(
+        zip(
+            (f"feature:{item}" for item in outcome.feature_ids),
+            outcome.donor.feature_names,
+            strict=True,
+        )
+    )
+    try:
+        stream = patch_donor(outcome.donor, outcome.targets)
+    except SldprtFormatError as error:
+        return objects, None, (f"the donor stream rejected the edits: {error}",), {}
+    if len(locate_features(stream)) != len(outcome.donor.features):
+        return (
+            objects,
+            None,
+            ("the patched donor stream no longer locates every feature",),
+            {},
+        )
+    object_ids.update(assignments)
+    properties = _donor_keyword_properties(outcome, assignments)
+    dimensions = _donor_keyword_dimensions(outcome)
+    renamed = tuple(
+        replace(
+            item,
+            object_id=assignments[key],
+            name=names[key],
+            properties=properties[key],
+            dimensions=dimensions[key],
+        )
+        for item in objects
+        if (key := _donor_object_key(item)) in assignments
+    )
+    dropped = tuple(
+        item.name
+        for item in objects
+        if _donor_object_key(item) not in assignments
+        and not _donor_system_plane(item, outcome)
+    )
+    notes = tuple(
+        f"unexpressed timeline entry {item}" for item in outcome.unexpressed
+    ) + tuple(f"dropped record {item}" for item in dropped)
+    return renamed, stream, notes, outcome.donor.container
+
+
+def _donor_system_plane(item: _WriteObject, match: DonorMatch) -> bool:
+    return (
+        item.class_name == _REFERENCE_PLANE_CLASS
+        and item.source_id in match.principal_plane_ids
+    )
+
+
+def _donor_keyword_dimensions(
+    match: DonorMatch,
+) -> dict[str, tuple[_WriteDimension, ...]]:
+    result: dict[str, tuple[_WriteDimension, ...]] = {}
+    for ordinal, target in enumerate(match.targets):
+        result[f"sketch:{match.sketch_ids[ordinal]}"] = ()
+        depth_mm = target.depth_mm if match.donor.depth_present[ordinal] else None
+        result[f"feature:{match.feature_ids[ordinal]}"] = (
+            ()
+            if depth_mm is None
+            else (
+                _WriteDimension(
+                    _DONOR_DIMENSION_NAME,
+                    depth_mm,
+                    format(depth_mm, ".15g"),
+                    ParameterRole.DRIVING,
+                ),
+            )
+        )
+    return result
+
+
+def _donor_keyword_properties(
+    match: DonorMatch, assignments: Mapping[str, int]
+) -> dict[str, tuple[tuple[str, str], ...]]:
+    result: dict[str, tuple[tuple[str, str], ...]] = {}
+    for ordinal, sketch_id in enumerate(match.sketch_ids):
+        result[f"sketch:{sketch_id}"] = (("Dissectable", "true"),)
+        feature_key = f"feature:{match.feature_ids[ordinal]}"
+        result[feature_key] = (
+            ()
+            if ordinal == 0
+            else (
+                ("Dissectable", "true"),
+                ("DissectableChildren", str(assignments[f"sketch:{sketch_id}"])),
+                ("DissectableRoot", "true"),
+            )
+        )
+    return result
+
+
+def _donor_object_key(item: _WriteObject) -> str:
+    return (
+        f"sketch:{item.source_id}"
+        if item.xml_tag == "Sketch"
+        else f"feature:{item.source_id}"
+    )
 
 
 def _canonical_rectangle_boss_objects(
@@ -2347,6 +2504,7 @@ def _native_envelope_streams(
     identity: _NativeIdentity,
     *,
     rectangle_boss: bool = False,
+    donor_container: Mapping[str, bytes] = MappingProxyType({}),
 ) -> Mapping[str, bytes]:
     configuration_name = next(
         (
@@ -2388,6 +2546,7 @@ def _native_envelope_streams(
                 "Header2": model_header,
             }
         )
+    streams.update(donor_container)
     return MappingProxyType(streams)
 
 
@@ -3069,6 +3228,11 @@ def decode_native_model(
     unframed_plane_ids = frozenset(feature.object_id for feature in unframed_planes)
     sketches: list[NativeSketch] = []
     operations: list[NativeOperation] = []
+    revolutions = {
+        layout.feature_id: layout
+        for layout in locate_features(resolved)
+        if layout.is_revolution
+    }
     native_index_by_id = feature_indexes
     latest_sketch: NativeSketch | None = None
     latest_operation: NativeOperation | None = None
@@ -3186,7 +3350,20 @@ def decode_native_model(
                 if value is not None
             )
             family, operation_code, schema = _operation_fields(resolved, record)
-            axis_marker = _revolution_axis_marker(latest_sketch)
+            layout = revolutions.get(feature.object_id)
+            axis_sketch = latest_sketch
+            if layout is not None and layout.axis_kind == REVOLUTION_AXIS_SKETCH:
+                axis_sketch = next(
+                    (
+                        item
+                        for item in sketches
+                        if item.object_id == layout.axis_feature_id
+                    ),
+                    None,
+                )
+            elif layout is not None:
+                axis_sketch = None
+            axis_marker = _revolution_axis_marker(axis_sketch)
             operation = NativeOperation(
                 object_id=feature.object_id,
                 name=feature.name,
@@ -3211,6 +3388,10 @@ def decode_native_model(
                 angle_degrees=_operation_dimension(feature.dimensions, "angle"),
                 axis_marker_offset=axis_marker.offset if axis_marker else None,
                 native_stream=resolved_stream,
+                axis_source_kind=None if layout is None else layout.axis_kind,
+                axis_source_id=None if layout is None else layout.axis_feature_id,
+                axis_source_offset=None if layout is None else layout.axis_offset,
+                end_spec_offset=None if layout is None else layout.end_spec_offset,
             )
             operations.append(operation)
             latest_operation = operation
