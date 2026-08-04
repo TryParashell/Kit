@@ -172,7 +172,13 @@ def _corpus_stream(name: str) -> bytes:
 
 
 def _authored_parts() -> tuple[Path, ...]:
-    return tuple(sorted(AUTHORED_CORPUS.glob("*.SLDPRT")))
+    return tuple(
+        sorted(
+            path
+            for path in AUTHORED_CORPUS.glob("*.SLDPRT")
+            if not path.name.startswith("~$")
+        )
+    )
 
 
 def _authored_resolved_stream(name: str) -> bytes:

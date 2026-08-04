@@ -254,7 +254,7 @@ def test_supplied_solidworks_breps_pass_only_the_proven_native_gate() -> None:
     }
     accepted: set[str] = set()
     for source in sorted((ROOT / "examples").rglob("*.SLDPRT")):
-        if not source.is_file():
+        if not source.is_file() or source.name.startswith("~$"):
             continue
         document = open_document(source)
         if document.brep is None:
