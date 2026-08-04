@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -123,7 +131,6 @@ from .protocol import (
     SUPPORT_PLANE_TYPE_IDS,
     XML_TRUE_VALUES,
 )
-
 
 _MAX_EXTERNAL_DEPTH = 16
 _MIN_OBJECT_GRAPH_SCHEMA_VERSION = 2

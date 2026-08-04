@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 from collections import Counter
@@ -12,7 +20,6 @@ import pytest
 
 from convert import open_document, write_document
 from interchange import CadDocument, ComponentKind, Matrix4, PayloadRole
-
 
 RANDOM = Path(__file__).parents[2] / "examples" / "Random" / "V8_engine.SLDASM"
 ORACLE = Path(os.environ.get("KIT_FREECAD_ORACLE", ""))

@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -31,7 +39,6 @@ from .format import (
     PRODUCT_DOCUMENT_TYPE,
     SUFFIX_BY_DOCUMENT_TYPE,
 )
-
 
 _FORMAT_ID = INFO.format_id
 _PART_SUFFIX = SUFFIX_BY_DOCUMENT_TYPE[PART_DOCUMENT_TYPE]

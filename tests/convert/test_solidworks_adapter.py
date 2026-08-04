@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -55,12 +63,9 @@ from interchange import (
     PayloadRole,
 )
 
-
 SAMPLE = Path(__file__).resolve().parents[2] / "examples" / ".SLDPRT" / "example.SLDPRT"
 CORPUS = Path(__file__).resolve().parents[2] / "examples" / "Random"
-OFFICIAL_FEATURE_TYPES_2026 = frozenset(
-    value.casefold()
-    for value in """
+OFFICIAL_FEATURE_TYPES_2026 = frozenset(value.casefold() for value in """
 AsmExploder
 CompExplodeStep
 ExplodeLineProfileFeature
@@ -307,9 +312,7 @@ WeldMemberFeat
 WeldmentFeature
 WeldmentTableFeat
 Round fillet corner
-""".splitlines()
-    if value
-)
+""".splitlines() if value)
 
 
 def _resolved_name_record(
@@ -630,9 +633,7 @@ def test_operation_dimensions_use_record_order_and_feature_semantics() -> None:
   <Feature id="20" Name="Congé localisé" Type="Fillet">
     <Dimension Name="Rayon">0.75</Dimension>
   </Feature>
-</Keywords>""".encode(
-            "utf-8"
-        ),
+</Keywords>""".encode("utf-8"),
         extrusion + fillet,
     )
     operations = {operation.object_id: operation for operation in model.operations}
