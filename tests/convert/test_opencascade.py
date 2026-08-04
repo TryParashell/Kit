@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 import hashlib
@@ -7,7 +15,6 @@ from convert.adapters.freecad.brep import triangle_mesh_brep
 from convert.adapters.freecad.native import _decoded_document_brep, read_native_fcstd
 from convert.opencascade import decode_ascii_brep, is_structurally_valid_ascii_brep
 from interchange import Body, BrepPayload, PayloadRole
-
 
 EXAMPLES = Path(__file__).parents[2] / "examples" / "Random" / "V8_engine"
 
