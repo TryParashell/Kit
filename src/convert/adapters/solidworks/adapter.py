@@ -200,6 +200,13 @@ _UNSYNTHESISED_ASSEMBLY_STREAMS = (
     "docProps/ISolidWorksInformation.xml",
     KEYWORDS_STREAM,
 )
+_ASSEMBLY_READER_REQUIRED_STREAMS = (
+    "Contents/CMgr",
+    "Contents/Config-0",
+    RESOLVED_FEATURES_STREAM,
+    "Contents/Definition",
+)
+_VENDOR_REJECTED_ASSEMBLY_RECORDS = ("Contents/Config-0-ModelHeader",)
 _ATTESTED_COMPATIBILITIES = frozenset(
     {
         "kit-neutral-only",
@@ -240,6 +247,7 @@ class _GeneratedStreams:
     mixed_capabilities: frozenset[Capability] = frozenset()
     unexpressed: tuple[str, ...] = ()
     donor_notes: tuple[str, ...] = ()
+    reader_gaps: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -831,6 +839,19 @@ class SldprtAdapter:
                         message=(
                             "generated SOLIDWORKS assembly does not express "
                             + ", ".join(generated.unexpressed)
+                        ),
+                        severity=Severity.WARNING,
+                    ),
+                )
+            if generated.reader_gaps:
+                diagnostics = (
+                    *diagnostics,
+                    Diagnostic(
+                        code="sldasm.vendor_reader_rejects",
+                        message=(
+                            "generated SOLIDWORKS assembly is not loadable by "
+                            "SOLIDWORKS: the vendor reader requires "
+                            + ", ".join(generated.reader_gaps)
                         ),
                         severity=Severity.WARNING,
                     ),
@@ -1826,16 +1847,18 @@ def _generated_streams(
         native_capabilities,
         mixed_capabilities,
     )
+    native_assembly_records = (
+        portable.assembly is not None
+        and assembly_envelope_complete
+        and encoding is not None
+        and encoding.structure_complete
+        and Capability.ASSEMBLIES in native_capabilities
+    )
     if portable.assembly is None:
         vendor_loadable = part_vendor_loadable
         native_records_usable = part_application_usable
     else:
-        vendor_loadable = (
-            assembly_envelope_complete
-            and encoding is not None
-            and encoding.structure_complete
-            and Capability.ASSEMBLIES in native_capabilities
-        )
+        vendor_loadable = native_assembly_records and not _assembly_reader_gaps(streams)
         native_records_usable = vendor_loadable and (
             not portable.assembly.mates
             or Capability.ASSEMBLY_MATES in native_capabilities
@@ -1857,7 +1880,7 @@ def _generated_streams(
                 if portable.assembly is None
                 else (
                     "native-assembly-with-kit-neutral"
-                    if vendor_loadable
+                    if native_assembly_records
                     else "kit-neutral-only"
                 )
             )
@@ -1867,7 +1890,26 @@ def _generated_streams(
         mixed_capabilities,
         assembly_notes,
         part_donor_notes,
+        (
+            _assembly_reader_gaps(streams)
+            if portable.assembly is not None and native_assembly_records
+            else ()
+        ),
     )
+
+
+def _assembly_reader_gaps(streams: Mapping[str, bytes]) -> tuple[str, ...]:
+    gaps = [
+        f"absent_vendor_stream:{name}"
+        for name in _UNSYNTHESISED_ASSEMBLY_STREAMS
+        if name not in streams
+    ]
+    gaps.extend(
+        f"vendor_rejected_record:{name}"
+        for name in _VENDOR_REJECTED_ASSEMBLY_RECORDS
+        if name in streams
+    )
+    return tuple(gaps)
 
 
 def _generated_assembly_notes(
