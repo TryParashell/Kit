@@ -52,7 +52,7 @@ from .format import (
     is_component_path,
 )
 
-_WIDE_TEXT = re.compile(rb"(?:[ -~]\x00){4,}")
+_WIDE_TEXT = re.compile(rb"(?:[ -~\xa1-\xff]\x00){4,}")
 _MATE_ALIGNMENT_OFFSET = 159
 _MATE_ENTITY_COUNT_OFFSET = 164
 _MATE_RECORD_BODY_SIZE = 168
