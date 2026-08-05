@@ -42,6 +42,7 @@ from convert.adapters.solidworks import (
     write_sldprt,
 )
 from convert.adapters.solidworks.adapter import (
+    _ASSEMBLY_DONOR_CARRIED_STREAMS,
     _document_without_source,
     _native_stream_sha256,
     _semantic_sha256,
@@ -1948,7 +1949,16 @@ def test_portable_assembly_patches_transform_mate_and_linked_part(tmp_path) -> N
     )
     output = tmp_path / "edited.SLDASM"
     result = write_document(edited, output)
-    assert result.near_lossless is True
+    assert result.near_lossless is False
+    assert result.vendor_loadable is False
+    assert result.application_usable is False
+    rejection = next(
+        item.message
+        for item in result.diagnostics
+        if item.code == "sldasm.vendor_reader_rejects"
+    )
+    assert f"donor_instance_diverged:{instance.id}" in rejection
+    assert f"donor_mate_diverged:{mate.id}" in rejection
     assert result.requirements == ()
     assert result.metadata["referenced_files_written"] == len(assembly.documents)
     restored = read_sldprt(output)
@@ -1957,3 +1967,72 @@ def test_portable_assembly_patches_transform_mate_and_linked_part(tmp_path) -> N
     assert restored.assembly.documents[0].document.parameters[
         0
     ].value.value == pytest.approx(target_value)
+
+
+def test_portable_assembly_carries_the_load_critical_donor_streams(tmp_path) -> None:
+    source = read_sldprt(ASSEMBLY)
+    output = tmp_path / "carried.SLDASM"
+    result = write_document(source, output)
+    assert result.vendor_loadable is True
+    assert result.application_usable is True
+    assert result.metadata["compatibility"] == "native-template"
+    assert not [
+        item
+        for item in result.diagnostics
+        if item.code == "sldasm.vendor_reader_rejects"
+    ]
+    donor = SldprtArchive.open(ASSEMBLY).streams
+    written = SldprtArchive.open(output).streams
+    for name in _ASSEMBLY_DONOR_CARRIED_STREAMS:
+        assert written[name] == donor[name]
+
+
+def test_portable_assembly_declines_when_a_component_is_removed(tmp_path) -> None:
+    source = read_sldprt(ASSEMBLY)
+    assembly = source.assembly
+    removed = assembly.instances[-1]
+    entities = tuple(
+        entity
+        for entity in assembly.mate_entities
+        if removed.id not in entity.instance_path
+    )
+    entity_ids = {entity.id for entity in entities}
+    mates = tuple(mate for mate in assembly.mates if set(mate.entity_ids) <= entity_ids)
+    mate_ids = {mate.id for mate in mates}
+    edited = replace(
+        source,
+        assembly=replace(
+            assembly,
+            instances=assembly.instances[:-1],
+            mate_entities=entities,
+            mates=mates,
+            mate_groups=tuple(
+                replace(
+                    group,
+                    mate_ids=tuple(item for item in group.mate_ids if item in mate_ids),
+                )
+                for group in assembly.mate_groups
+            ),
+        ),
+    )
+    output = tmp_path / "shrunk.SLDASM"
+    result = registry.write(
+        edited,
+        output,
+        options=WriteOptions(
+            validate=False,
+            values={"portable": True, "allow_carrier": True},
+        ),
+    )
+    assert result.vendor_loadable is False
+    assert result.application_usable is False
+    rejection = next(
+        item.message
+        for item in result.diagnostics
+        if item.code == "sldasm.vendor_reader_rejects"
+    )
+    assert f"donor_instance_diverged:{removed.id}" in rejection
+    donor = SldprtArchive.open(ASSEMBLY).streams
+    written = SldprtArchive.open(output).streams
+    for name in _ASSEMBLY_DONOR_CARRIED_STREAMS:
+        assert written[name] == donor[name]
