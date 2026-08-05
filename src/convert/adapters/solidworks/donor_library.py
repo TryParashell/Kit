@@ -39,6 +39,9 @@ RECTANGLE_PROFILE = "rectangle"
 CIRCLE_PROFILE = "circle"
 RECTANGLE_WITH_CIRCLE_PROFILE = "rectangle+circle"
 POLYLINE_PROFILE_PREFIX = "polyline-"
+ARC_PROFILE_INFIX = "-arc-"
+COUNTERCLOCKWISE_SUFFIX = "-ccw"
+CLOCKWISE_SUFFIX = "-cw"
 
 SUPPORTED_END_CONDITIONS = frozenset({BLIND_END, THROUGH_ALL_END, MID_PLANE_END})
 DEPTHLESS_END_CONDITIONS = frozenset({THROUGH_ALL_END})
@@ -97,6 +100,7 @@ class TargetFeature:
     points_mm: tuple[tuple[float, float], ...] = ()
     radii_mm: tuple[float, ...] = ()
     arc_centres_mm: tuple[tuple[float, float], ...] = ()
+    swept_arc_centres_mm: tuple[tuple[float, float], ...] = ()
     depth_mm: float | None = None
     reversed: bool | None = None
     angle_degrees: float | None = None
@@ -128,6 +132,8 @@ class Donor:
     encoded: tuple[str, ...]
     measured: bool = False
     axis_directions: tuple[tuple[float, float] | None, ...] = ()
+    swept_arc_counts: tuple[int, ...] = ()
+    inherited_directions: tuple[bool | None, ...] = ()
 
     @property
     def key(self) -> tuple[tuple[str, str, str, str], ...]:
@@ -3504,8 +3510,197 @@ _DONOR_CONTAINERS = MappingProxyType(
                 ),
             ),
         ),
+        "arcboss_cut_cut_cut_through": (
+            DonorContainerStream(
+                names=("Contents/CMgr",),
+                stream_bytes=2299,
+                encoded=(
+                    "`#<<9>1>s|jEAJ}Hjh@)qm}e%B~69Qw9^SCGoe+|W<aqL2KoR-",
+                    "5`%K2RMIR+(VqsTVU4B?Bz4SCemWGVK`}8EJPXN{IwO*6Aa<uAxhw<jTF!<vuxbso1_vWtEkcY5O",
+                    "@BIAe>zx=KANqJa8*oj{pd0oVEq|jF*7t<VXj8jnT|DVn32K}7Ot>xrbqLI1u34>(b54en>7NM&6",
+                    "*dLMKo>JfV>KdC{V#<nl!&%1Ij+g_pePK%4XLRZ&!e_H<&lHVasB|6gPbU",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Config-0-ModelHeader", "Header2"),
+                stream_bytes=2745,
+                encoded=(
+                    "`%lfLkiuwFXtXIb+7udX3XL{}5PDx!7LnW(!mfwhrVw`12seeW>m%G0!mf|FrVw_$gquRx^%2(;L",
+                    "YVRft0{z=I@t9QZt5WC?YCIXfaPtdEJof|#Nsy8)Q{a<4QT3j2D+t$CN9&&;xc0*T&9oLWkx72dx",
+                    "zI$?{K)x0E^2^P+W%HTr<2bGX|Fu=3xCLBsW|`FdMGWB#qQ?1v!hfhHEYo8)P2##v#aD^oHx}gqr",
+                    "l0*Awk;O1Hia+|g%0YbFS+wC}pdDr(EM-",
+                    "Ck=3gbxwlX|Ea6f9R{mn*B8*>)an!O@TLDolZS$KJT=H>J3)_",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Config-0",),
+                stream_bytes=25202,
+                encoded=(
+                    "?cF^~!$26oaTgcIf|H9w2X*NtIB1|Bpj&+w2dB2;SLje^K`5dK9sC9&xGOG7x4JmH2)cH5R?}Q!a",
+                    "<$hcM0#HTfg=Q(yY#u2gygv2C-",
+                    "wyPg!x}%PfT3uV=o#gu_v%65>dgPz@EUK_*eGC<NejiaWR`cF+6P6JHrd_WzC<gbLItQU3=Zv<<;",
+                    "GlTW{+!I1cYGn+NCpkBys$<|rDy=;5LK^wxeZ-",
+                    "&ti(97W+>9D8CvvL_nqO=4PmqM`QNDvixJ_}&I;=9Itp--GS6rsrE%=a*E<E8kk!A63dL-_Y(@Uz",
+                    "%)i==oxBBqm*9aQyX#!GXcSs*o5Qv)4ZBx?*t9V=*|W@%Y$=!GXa+f5+g+s|8?iU~n)tU~rgf9)k",
+                    "megWik5@mo~%evHA9%nO49gCpEyaA0s?aLhY)7#!(qRlh%AaF}C-!C`-!#^A`-",
+                    "e)TUA^S@#Y4%QLI;K1OZwPJAC88yaVd&|J!pf^wk1_!Mbg9C#@I~{`~ZGbU23=zcOz~CTaTEs9oF",
+                    "gP$cFgP$cf=FX<U~r61z~I2(z~I2(z~I2(u*cx2U~rfNIL+XwU~tUR0x>woev!rC5Q_{Ban9fn=L",
+                    "`;U(BKfq3=VP9;1Gum4sqDv5Dbp^!-0hchrj0RY2m$XHaLEYu3~W5V{lYk+E;|s21opI7C@Z%0s",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Definition",),
+                stream_bytes=3810,
+                encoded=(
+                    "3m~$GOKfanSNCB*@%lWnc0{G*<=a0szIet(af|&0j^7$@)MxC!*TBj!P4lPyXb*R^hdbKC9qr+c_",
+                    "HajgxT8JX(H`z-4|lYOJKDpgVh?vO3m0<tV$ihtk$Z@HSVnueqdi=rdbj`",
+                ),
+            ),
+        ),
+        "arcboss_cut_cut_cut_through": (
+            DonorContainerStream(
+                names=("Contents/CMgr",),
+                stream_bytes=2299,
+                encoded=(
+                    "`#<<9={%LYj3rDQ-lLWDXeB*bNmC&+wQ8bdCbUZ03@BE@Kp((JVo;8hN}2^J`qQ8^tkIN#q>dTNP",
+                    "lw_(C?=+YXCb*#XGC%h#O^dCmu0|R%h`|yR;_{7;9!KSMTjw>=}!miPY0{fN3)d?u8Ik+A6+H`tU",
+                    "m)RW`<@f%+<&`)3JsPGg3Ih!W9<I^k}}YAjNY!S~{R*vqk{3Su?S&h^EaNkXJzw1uB@T&&K;{K-",
+                    "pL3oc7g+vR9Pe^HqSdl~)A&V#{K}6gPbU",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Config-0-ModelHeader", "Header2"),
+                stream_bytes=2745,
+                encoded=(
+                    "`%lfLkiuwFXtXIb+7udX3XL{}5PB!p6_MN&!mfwhrVw`12seeW>m%G0!mf|FrVw_$gquRx^%2(;L",
+                    "YOiMt0{z=I#aRgBiz(M&fD0{faUFJ5Lt}8t%${KsHuM%R&zC=soxpsmJ$Lkn?{z)G_knMm<X5Y<8",
+                    "_%42`-",
+                    "zC!(|3oTxNpevgugOHN)#NV{j>94%S~na>F$Qv*8L&(nt+gkh4f@xaK0ULFQp^9D>Y6Z@9irs7Y^",
+                    "mJ<<NAbnEND9ewt*W`e*<`>uPeqPASy?X_k=_z>}(_L?#MhrVj8*<T~F&i!H46nMkc>D0sK^G-",
+                    "Xc-f#r~",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Config-0",),
+                stream_bytes=25202,
+                encoded=(
+                    "?cFU;!$26oaSVoFQJ4zEz~Bgo(PVaEZaiiJ#fIS%Oe`4+v4vz}Ux5S<jsyn=jUho#qk*p1(%#r@Z",
+                    "My8Z{hM5xChJ}I+)JDGa=$O^3G4~;zs8=Jy41&UJWyg!U{9o?f<1vffj#lB><MppcyhUu&z=~awV",
+                    "PL?8~<%Pn5@(D!?JGu>-Y7o^2WWtHw=%X`^#>l|MXe9du)%RF^C@?DlZ@1*UE!c_QXXT-qo=uPGf",
+                    "tbrQRfFwI^C?f1uLDjDw%;S<RdZ_Q89wqt5Jno9g_1m5R#uJnD}s6_syfcX(^l4GukD435;KD-",
+                    "4cBZx|dH9IOh7!7+dBv#u)!2R#;pgBnkcZ5SLF9Q1b#j-",
+                    "pxs1_uTQV*>_<spc^_FgWPF7#x2^MeoNL9O=9;I50S(Jq8B`2L{KoV~4?!y;k-60|tjVRu~-",
+                    "iw`mNHeC=2N60!U%#^7KbVGIro4q7V)hn-Pl{I$0X3=Vn&Wngg7S}`~<IJDC-II;#9gToL(3=Rwq",
+                    "BBn(Qg9C#Dg9C#DgCmSI1_uVm_yi0N3=Rwq3=Rwq3=Vq?jv5AsIe@bajv5BXJS`A|W8xQi3=Xl#;",
+                    "1K5w4sp)l5C;toam?TlCk+m9*x(R{4GzKJNIo1`XmA8;&U%f_s@dT9ExL}uVUNL4?`U5UG8-",
+                    "Jp%UJ<&;u`",
+                ),
+            ),
+            DonorContainerStream(
+                names=("Contents/Definition",),
+                stream_bytes=3810,
+                encoded=(
+                    "3m~$GOKfanSNCB*@%lWnc0{G*<=a0szIet(af|&0j^7$@)MxC!*TBj!P4lPyXb*R^hdbKC9qr+c_",
+                    "HajgxT8JX(H`z-4|lYOJKDpgVh?vO3m0<tV$ihtk$Z@HSVnueqdi=rdbj`",
+                ),
+            ),
+        ),
     }
 )
+
+_DONOR_ARCBOSS_CUT_CUT_CUT_THROUGH = Donor(
+    donor_id="arcboss_cut_cut_cut_through",
+    features=(
+        DonorFeature("boss", "polyline-3-arc-1-ccw", "front", "blind"),
+        DonorFeature("cut", "rectangle", "front", "blind"),
+        DonorFeature("cut", "circle", "front", "blind"),
+        DonorFeature("cut", "polyline-12", "top", "through-all"),
+    ),
+    feature_ids=(32, 40, 47, 54),
+    sketch_ids=(26, 33, 41, 48),
+    feature_names=("Boss-Extrude1", "Cut-Extrude1", "Cut-Extrude2", "Cut-Extrude3"),
+    sketch_names=("Sketch1", "Sketch2", "Sketch3", "Sketch4"),
+    point_counts=(4, 4, 0, 12),
+    arc_counts=(0, 0, 1, 0),
+    swept_arc_counts=(1, 0, 0, 0),
+    inherited_directions=(None, None, None, False),
+    depth_present=(True, True, True, False),
+    stream_bytes=26894,
+    measured=True,
+    encoded=(
+        "c-rk<eUKbQ74Mmy-P_yUe4QbLgbD{pnLwFOic%qLa$n{Qmz=jrsX*1a*_+#&+}_M(cP{3Lr1r`ft",
+        "E@snL;NVKhz2DogQNrz5M4xt7)n$MC4R(^SX3-",
+        "iX!t`ZD9qVCJ3ZSo+dVroJNuE!&DCV~dS+g~*Zumv*T47nG7bQ^3QSLPpbd;EoyyplD66?1B{L*u",
+        "2U9|R`r>rB6DVK|{)j*ZD#!u-SQpkmz-IvM5UmaUJ*Ce#pId@oorY&%T0a2D7tC)3jZf(QrceBp<",
+        "DNP92Ob>V69gRb92TM{xl_qXs%R3TwFe}@PAEtgNKgoo5aY^5h#|lK6!*uovo@B*AVuMHappmBHb",
+        "^;D$xfQ2Y1sg!$U!-fJd=hb3mYZLtF5ysl7uxGt|Vj-lWMOjj&&u~<Y3Bpa9y#RV&~|UIYm_*N6$",
+        "}W#lh4~c^)`ErY#5U86@~3c>T(r?Dok#os-",
+        "@9nsnO^uMgJ0+iM%s?NWF>Q2%b1HKyAYjp=q}W4gTsUcUyrMN4)8T(Su<Bc@bIkrSe7GFP(`(DY>",
+        "BnSv%uf<{Y*s{pl;-",
+        "sGz0GF~MkJXaG<&M8^54NhndF{jz!k{An`%bOqpW<vqGl$6=4&+5{gpajy|Y;?d+G8lqwSwobT=J",
+        "4;ND99mpiE2{HbSAe+vZ(6PMAt*^WjGZobn{rpN|VBsNx}oHwVM=G%&pIg$sW}_!NE-",
+        "$Ju+07*Qm+;?oViw`%qqEw5`PGDln-",
+        "1bZe8j1rA19Z^0t8HJ1nnP0NkEgFk<#K05c7aEcOBqT@o`e8swW1+ohh+2LeL>`;a#trl+ruB2f&",
+        "0V&8cT3-sB5Xq!Xk>*-",
+        "oz!FQp56P!wq@gnDVhJcs21+x;kgT<NCF?b0>y=0QlG)LTakE+PgL9Szqj3Jl35l*~KC?ax%Fw+-",
+        "Hg9vf!4Akd%?8eG)SMg}KF_e`Xt&mvRK={6%$USj*r$mgYP+>0RJC?+n{M9Qp-",
+        "AIeC?Ub+h16~c+-?XNZIqB3!~dWOsk4EEjX_}t#Nqx-QWmk-",
+        ">VX0(+OE1C^g}U|@Uy|<b9|$OIs0#xEo2{@!!~D!@Z*(t-Fo`5!egPMSKm4G{dhUAq!sQGhm#W-",
+        "RU2IyZ!X;&q-",
+        "ke8@YCF9Ufi?&iMW0(JY6{P?d~TJ#r3N`sPDlcL?<}^>CdM3o_`>Ia`ETSfBdO0#aUzWc+rQqZh?",
+        "w0PE~`zj2htI^Yef3(KGj`1+yAFnRh$OoWp5nsK<qZ<M*subK~7#e*Qm8kH+;YOKUKNZ+-",
+        "(EN8${vi4JH1{0PH<2$!$s-~$_wv-cp?c_!{obIKJ2bChR1n6FM_2zpjcsbFvLf$a@TbCAtk2yN!",
+        "(tdy4I{;V=AWkdsL)3hqIS@XMTZA*xCDcC4oIy`!gsY^(hFvz77qoSG`v2NY3F?UqFEx@f`@e}G=",
+        "V9)q9HrjZRfr|KbaHdfxyFE|az!n+7v0yIUuSl}GAt?`KM8<nyt3_?mP;fdi&gE%cpGEK%4J+!KW",
+        "AW}{WpB+p9j}0y;=z5Kp&oN}EV&eV)dUMeB>#KoBB{uW6MuqK?;V|@NYQH)98;HPO9Jjr5O$V=hJ",
+        "Te2`YvkJ4&{}{U)ac6pg+$C?H45`$~jw<OTe#}{_5nrC-",
+        "=v9YoWmYIEHd!a0T2U$)a@upnFkxZ+$jZzBb&gW8N15mg)AK6yW82iL00MoM#RLwcxN&<d7pc<UM",
+        "mJ_{m}1%wdVE-{rl}a?lqJW7`u^#NodAIQ-",
+        "}IMc|a1fC&Y&<%p}y5inRUg(JKZopwN*GhAwkcEE`?I-t!%DjYS8;tYNAV|>gW<boC~2-",
+        ";kcr&oV&^<;=8q-",
+        "P;r0={m3H|W6kR`$Cbksd+G+G70GIg*rQ=%lp4#3Bhshan4VLA=;Bhs9!=;o4u!H<25kCfvBSB0)",
+        "pxcB$EkoTSJ&_ku9f9Q^qp=mxu>C(nWjE%&ktrz_UAmw9szykzP<P4bQWH@ZHxq-buc@#ohcPV~|",
+        "Id2!O$62FO{G)|nZ);O)wFJ=*L+&Q8sIWb!VWq92iqZ*Br2qUt=6z(EaGI`+MU+ll((cT|!!PnwI",
+        "&PM|&51}^^>fSpvAdVxP2i*%Hk^_S&V!$_V+b*WmViU?5btcrTB&Ulp0BnXsb6(5x^lNyp3dbH!{",
+        "sSnTi58T8QZxw$U?_Elp#2HB<5tU_zzKd*3s4b6PgWUAjH=zTYU2M~{-",
+        "4GxNSXeXH@5{SZ9JuoV+MDB&pR9CHy9MHJqe87op2doatU<hL2++Khq9|vlvS)ah&qNw{$$zUcAP",
+        "l#x!-",
+        "mirvPlHb<=;EYQLm>u<CspR%fV}iE%MS)U;3@M604p%8h4|lklP@<&@YZjg>={#)1V#s6iXEJP6l",
+        "r0}4$W66Cn;GX)bMLix>VeXXu5U!aADwLW;q@NcP|wW&f!n`e;uzBhk#@a-3l-",
+        "HxyJZ(@gw457Xwg!+RGn*Y9#@>)rm7lHm{HkrwY8Esc>QfQ7yAl@O$X>|lWJ0_||euwWOHm+o)3P",
+        "wDiMiMWkaaJDs)7uF;t^f#Hw$~CsR}UL6Goil#l=gy__eft<(m@sjug9P5jqx{qVPBQ#W9iUGvEa",
+        "1bZd-*yc^-J-",
+        "jE6rT5K5S9DXlg=jprE|!?{FgiraBbAz2wpt{L+RK!HC8{<r?@>&_+n@N=AtR8r;poHyl)({u$%S",
+        "F))SADd$n%)5c+jDCpG!+o}k@=ho3R{@Szkr%MW=X3PPjBw!q3|zNWD?6FI>wDeDCjJt#+QAd~aw",
+        "KlGVbHFvAf!Z#-",
+        "2Fh}4zxYr$424=pOLu8Ylp_yMjp{&qP@PtM7~08x=+}vLu~<qL!rS?n`I2+Rv?Sywi%!{+AMn+!=",
+        "NP^almEJ9^9hEr8a3G7r<FL041<A)HQ7vz?n<hJOl6(e4rhm&~|?a_DQawDamCvCN{4Lme)9EuUU",
+        "H&y!94vn0UhgV32_1>H`2q907n_sq$Ha_6EeX248K317o&NbW6Y<30Cy+XZSWwMFuW2+;AA4QA=F",
+        "Xf+`d{yK%*3Czyb71|2Uv!SU;sQt-",
+        "n0rg<K%6<+x2w_dWr3vVNELr#}9VB9s(Ic03zs5K>0v?48W>2Z!MFc@ILU^KYP3XK5<G{ynvFd7>",
+        "Q!`Nzj*=Ta$3>=zrK<`0;1)DA`!KQ0^DbOSSf{ryVUTi`vZC@o-",
+        "xqHfdFJN<zx4B0*WA>=#JJdn2<A^n_cAR!hu?Nojo={N=EqgZQ2Hz|mE4iWzUdhq1&FZni;1u260",
+        "MIfu16j^MmQEqd)~Px|lTmFc&6=u&GGf06KVDZEW!xKQwG(tM6_jyrq3KXYeH05$+v|@q;(4~BjJ",
+        "O>=J9laZPpk!==wu(!9C%`z$<$r^{r>L$HwMA|%lYNx(=_mKjbW#jRgh?`R^Z{iZ=bXQ4|$)VxuP",
+        "w4m@uGj>!bXHGEec>zZt*#SbV|4Uv7w>JP=2wz+6M-",
+        "t>%{lwonvs2fJ_<*o8Crs#T2=Pi)reSED32geY#9LjPLl$qCfJ5u9Fr@WP5IJ4|7<fhnw@U<xVI#",
+        "3;2gMu#W<W`il*YG4b+mb3{|SUqLT!LWYT6FzVX71XBIhu0;>@WBWueuJ70A4GLk9&WMQIj^AX$=",
+        "!e?UU$=OcG^yM^|Vp!pvY*y=O~R{P#?YH)X}q}>}F&+#%TMCCn!3epfK=+=nS4PgD1@33HDV>M-",
+        "Y=Y(mHu~d~M{lL&wVS0&6=#r}^*%o!J6?dtL>e@S!J;@BG<AU-",
+        "Y?Z=}5t8d;ReQJkRv1r6V(VLJjc*;PCxR8Be&`uv055NVKC?A^fgopW4L66JkE^;4z-",
+        "S{#ISI!No{AhfVywKQo7WoA7&o@9x?DtoqfjTR8NmTq;-#4t*^-",
+        "3;Dv~dq>`SrEgo_!Xa6@5%kPqOD#CmXE{i481l?v*iQ~EMR6g5!xqmRw$_3}eU@7Y4#S=~jQF`yE",
+        "F6Xj4qH8Q7_9||`Yg8+97a5I7^{KT!yHDc^m;LS)Y^5Cql<4IyQIz4w1ARc_~}mprBFsY$nrrhX$",
+        "v4&Mmxmv9xiDIAr&j_7M9(2Njn6oSZRk@7TYE57D&ZPyOm{YUD6IiDpuMNmX&l#yA@Kg(vGt1n@i",
+        "deNX1G!#<EN<X-5I@p+GoB0c0#8C0Tn5yjA*g-YR{0Z@mS)^(J`hE$FSckhk7iy!96L)?2H$-",
+        "Xh+5i@GT6o`oPo{j6VM_aYZr)0jyj)-IH_vtsQQSP?KQs-sOtrOa(ivn>(bc87J}6Vhi)(0xD7Rm",
+        "U!=EN{Tb^75dbf1|LPZ1EZ+TYL*8Tl|PgA#*gSskl+Ozp4uK-",
+        "M<;!#LgCf#K;;KTSi#f;xr)ss)ldb;;?PDn3mbI%MRLQ6{{^qXXQ=lxsrfBTGnjyC%H<+>W?nA%Q",
+        "oZxRUitSRfk*Oi`nE-1C-|@z<s6p@+D3rh<KDBT0sJL^W-",
+        "%nd`8a*pJ8N#XZxBFF86*lhtaP#!|3SvKlEHG{{",
+    ),
+)
+
 
 DONOR_LIBRARY: tuple[Donor, ...] = (
     _DONOR_BOSS1_FRONT_RECT_BLIND,
@@ -3534,12 +3729,20 @@ DONOR_LIBRARY: tuple[Donor, ...] = (
     _DONOR_BOSS_CUT_CUT_CUT_THROUGH,
     _DONOR_REVOLVE_FULL,
     _DONOR_BOSS_REVCUT,
+    _DONOR_ARCBOSS_CUT_CUT_CUT_THROUGH,
 )
 
 DONORS_BY_KEY = MappingProxyType(
     {donor.key: donor for donor in reversed(DONOR_LIBRARY)}
 )
 DONORS_BY_ID = MappingProxyType({donor.donor_id: donor for donor in DONOR_LIBRARY})
+
+
+def arc_profile(line_count: int, arc_count: int, *, counterclockwise: bool) -> str:
+    suffix = COUNTERCLOCKWISE_SUFFIX if counterclockwise else CLOCKWISE_SUFFIX
+    return (
+        f"{POLYLINE_PROFILE_PREFIX}{line_count}{ARC_PROFILE_INFIX}{arc_count}{suffix}"
+    )
 
 
 def polyline_profile(segment_count: int) -> str:
@@ -3594,6 +3797,17 @@ def donor_edits(
                 f"{donor.arc_counts[ordinal]} sketch arcs and "
                 f"{len(target.arc_centres_mm)} centres were supplied"
             )
+        swept = (
+            donor.swept_arc_counts[ordinal]
+            if ordinal < len(donor.swept_arc_counts)
+            else 0
+        )
+        if len(target.swept_arc_centres_mm) != swept:
+            raise SldprtFormatError(
+                f"donor {donor.donor_id} feature {ordinal} holds {swept} swept "
+                f"sketch arcs and {len(target.swept_arc_centres_mm)} centres were "
+                f"supplied"
+            )
         if target.revolve:
             edits[ordinal] = _revolve_edit(donor, ordinal, target)
             continue
@@ -3619,11 +3833,35 @@ def donor_edits(
             corners_mm=tuple(target.points_mm) or None,
             radii_mm=tuple(target.radii_mm) or None,
             arc_centres_mm=tuple(target.arc_centres_mm) or None,
+            swept_arc_centres_mm=tuple(target.swept_arc_centres_mm) or None,
             depth_mm=target.depth_mm if depth_required else None,
-            reversed=target.reversed,
+            reversed=_writable_direction(donor, ordinal, target, depth_required),
             end_condition_code=END_CONDITION_CODES.get(target.end_condition),
         )
     return edits
+
+
+def _writable_direction(
+    donor: Donor, ordinal: int, target: TargetFeature, depth_required: bool
+) -> bool | None:
+    if depth_required or target.reversed is None:
+        return target.reversed
+    inherited = (
+        donor.inherited_directions[ordinal]
+        if ordinal < len(donor.inherited_directions)
+        else None
+    )
+    if inherited is None:
+        raise SldprtFormatError(
+            f"donor {donor.donor_id} feature {ordinal} carries no depth scalar, so "
+            f"its direction flag is not located and no direction can be written"
+        )
+    if bool(inherited) is not bool(target.reversed):
+        raise SldprtFormatError(
+            f"donor {donor.donor_id} feature {ordinal} was authored with the "
+            f"opposite through-all direction and its direction flag is not located"
+        )
+    return None
 
 
 def _parallel(left: tuple[float, float], right: tuple[float, float]) -> bool:

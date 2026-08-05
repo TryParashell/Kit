@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import replace
 from io import BytesIO
 
+import math
+
 import pytest
 
 from convert.adapters.solidworks import read_sldprt, write_sldprt
@@ -731,7 +733,38 @@ def test_donor_match_projects_a_freecad_right_plane_into_solidworks_axes() -> No
     assert outcome.targets[0].reversed is False
 
 
-def test_donor_match_declines_a_profile_with_arc_segments() -> None:
+def _arc_profile_entities(
+    prefix: str,
+    minimum_x: float,
+    minimum_y: float,
+    maximum_x: float,
+    maximum_y: float,
+) -> tuple[SketchEntity, ...]:
+    corners = (
+        Vector2(maximum_x, maximum_y),
+        Vector2(minimum_x, maximum_y),
+        Vector2(minimum_x, minimum_y),
+        Vector2(maximum_x, minimum_y),
+    )
+    lines = tuple(
+        SketchEntity(
+            f"{prefix}:edge:{index}",
+            GeometryKind.LINE,
+            LineGeometry(corners[index], corners[index + 1]),
+        )
+        for index in range(3)
+    )
+    centre = Vector2(maximum_x, 0.5 * (minimum_y + maximum_y))
+    radius = 0.5 * (maximum_y - minimum_y)
+    arc = SketchEntity(
+        f"{prefix}:arc",
+        GeometryKind.ARC,
+        ArcGeometry(centre, radius, -0.5 * math.pi, 0.5 * math.pi),
+    )
+    return (*lines, arc)
+
+
+def test_donor_match_declines_an_arc_profile_that_does_not_close() -> None:
     lines = _rectangle_entities("boss", -20.0, -10.0, 20.0, 10.0)[:3]
     arc = SketchEntity(
         "boss:arc",
@@ -753,7 +786,73 @@ def test_donor_match_declines_a_profile_with_arc_segments() -> None:
     )
     assert isinstance(outcome, DonorDecline)
     assert outcome.reasons == (
-        "feature:boss: sketch sketch:boss uses unsupported geometry ArcGeometry",
+        "feature:boss: sketch sketch:boss holds an arc profile that does not close "
+        "on itself",
+    )
+
+
+def test_donor_match_names_a_closed_arc_profile() -> None:
+    entities = _arc_profile_entities("boss", -20.0, -10.0, 20.0, 10.0)
+    sketch = _sketch("sketch:boss", FRONT_PLANE.id, entities)
+    feature = _extrusion(
+        "feature:boss", 0, sketch.id, 10.0, operation=BooleanOperation.CREATE
+    )
+    outcome = match_document(
+        _document(
+            (FRONT_PLANE,),
+            (sketch,),
+            (feature,),
+            (Body("body:1", "Body", feature.id),),
+        )
+    )
+    assert isinstance(outcome, DonorDecline)
+    assert outcome.reasons == (
+        "no donor holds the feature sequence " "boss+polyline-3-arc-1-ccw+front+blind",
+    )
+
+
+def test_donor_match_declines_two_arcs_in_one_profile() -> None:
+    corners = (
+        Vector2(20.0, 10.0),
+        Vector2(-20.0, 10.0),
+        Vector2(-20.0, -10.0),
+        Vector2(20.0, -10.0),
+    )
+    lines = tuple(
+        SketchEntity(
+            f"boss:edge:{index}",
+            GeometryKind.LINE,
+            LineGeometry(corners[index], corners[index + 1]),
+        )
+        for index in range(2)
+    )
+    first = SketchEntity(
+        "boss:arc:0",
+        GeometryKind.ARC,
+        ArcGeometry(Vector2(-20.0, 0.0), 10.0, 0.5 * math.pi, 1.5 * math.pi),
+    )
+    second = SketchEntity(
+        "boss:arc:1",
+        GeometryKind.ARC,
+        ArcGeometry(Vector2(20.0, 0.0), 10.0, -0.5 * math.pi, 0.5 * math.pi),
+    )
+    entities = (lines[0], first, lines[1], second)
+    sketch = _sketch("sketch:boss", FRONT_PLANE.id, entities)
+    feature = _extrusion(
+        "feature:boss", 0, sketch.id, 10.0, operation=BooleanOperation.CREATE
+    )
+    outcome = match_document(
+        _document(
+            (FRONT_PLANE,),
+            (sketch,),
+            (feature,),
+            (Body("body:1", "Body", feature.id),),
+        )
+    )
+    assert isinstance(outcome, DonorDecline)
+    assert outcome.reasons == (
+        "feature:boss: sketch sketch:boss holds 2 arcs and only a profile with "
+        "exactly one arc has a donor",
     )
 
 
@@ -1010,3 +1109,179 @@ def test_patch_donor_rejects_a_revolution_edit_the_stream_cannot_hold() -> None:
     for target in rejected:
         with pytest.raises(SldprtFormatError):
             patch_donor(donor, (target,))
+
+
+def test_arc_donor_stream_carries_one_swept_arc() -> None:
+    donor = donor_by_id("arcboss_cut_cut_cut_through")
+    assert donor.measured
+    assert donor.swept_arc_counts == (1, 0, 0, 0)
+    assert donor.point_counts == (4, 4, 0, 12)
+    assert donor.arc_counts == (0, 0, 1, 0)
+    assert donor.inherited_directions == (None, None, None, False)
+    located = locate_features(donor.stream)
+    assert len(located) == 4
+    arcs = located[0].swept_arcs
+    assert len(arcs) == 1
+    assert arcs[0].consistent
+    assert arcs[0].radius_mm == pytest.approx(35.0, abs=1.0e-6)
+    assert arcs[0].centre_mm == pytest.approx((55.0, 15.0), abs=1.0e-4)
+    assert not located[1].swept_arcs
+    assert not located[2].swept_arcs
+    assert not located[3].swept_arcs
+
+
+def test_patch_donor_moves_a_swept_arc_centre() -> None:
+    donor = donor_by_id("arcboss_cut_cut_cut_through")
+    vertices = (
+        (18.0, 24.0),
+        (-60.0, 24.0),
+        (-60.0, -16.0),
+        (58.0, -16.0),
+    )
+    centre = (58.0, 24.0)
+    targets = (
+        TargetFeature(
+            operation=BOSS_OPERATION,
+            profile="polyline-3-arc-1-ccw",
+            support="front",
+            end_condition="blind",
+            points_mm=vertices,
+            swept_arc_centres_mm=(centre,),
+            depth_mm=120.0,
+            reversed=True,
+        ),
+        TargetFeature(
+            operation=CUT_OPERATION,
+            profile=RECTANGLE_PROFILE,
+            support="front",
+            end_condition="blind",
+            points_mm=rectangle_corners_mm(-40.0, -8.0, 50.0, 8.0),
+            depth_mm=12.0,
+            reversed=False,
+        ),
+        TargetFeature(
+            operation=CUT_OPERATION,
+            profile="circle",
+            support="front",
+            end_condition="blind",
+            radii_mm=(20.0,),
+            arc_centres_mm=((40.0, 10.0),),
+            depth_mm=40.0,
+            reversed=False,
+        ),
+        TargetFeature(
+            operation=CUT_OPERATION,
+            profile="polyline-12",
+            support="top",
+            end_condition="through-all",
+            points_mm=tuple(
+                (x * 1.1, y * 1.1)
+                for x, y in locate_features(donor.stream)[3].corners_mm
+            ),
+            reversed=False,
+        ),
+    )
+    patched = patch_donor(donor, targets)
+    located = locate_features(patched)
+    for got, want in zip(located[0].corners_mm, vertices, strict=True):
+        assert got == pytest.approx(want)
+    arcs = located[0].swept_arcs
+    assert len(arcs) == 1
+    assert arcs[0].centre_mm == pytest.approx(centre)
+    assert arcs[0].consistent
+    assert arcs[0].radius_mm == pytest.approx(40.0, abs=1.0e-9)
+    assert located[0].depth_mm == pytest.approx(120.0)
+    assert located[0].reversed is True
+    assert located[2].arcs[0].radius_mm == pytest.approx(20.0)
+
+
+def test_patch_donor_rejects_an_inconsistent_swept_arc_centre() -> None:
+    donor = donor_by_id("arcboss_cut_cut_cut_through")
+    located = locate_features(donor.stream)
+    targets = (
+        TargetFeature(
+            operation=BOSS_OPERATION,
+            profile="polyline-3-arc-1-ccw",
+            support="front",
+            end_condition="blind",
+            points_mm=located[0].corners_mm,
+            swept_arc_centres_mm=((0.0, 0.0),),
+            depth_mm=100.0,
+            reversed=False,
+        ),
+        TargetFeature(
+            operation=CUT_OPERATION,
+            profile=RECTANGLE_PROFILE,
+            support="front",
+            end_condition="blind",
+            points_mm=located[1].corners_mm,
+            depth_mm=15.0,
+            reversed=True,
+        ),
+        TargetFeature(
+            operation=CUT_OPERATION,
+            profile="circle",
+            support="front",
+            end_condition="blind",
+            radii_mm=(25.0,),
+            arc_centres_mm=(located[2].arcs[0].centre_mm,),
+            depth_mm=50.0,
+            reversed=True,
+        ),
+        TargetFeature(
+            operation=CUT_OPERATION,
+            profile="polyline-12",
+            support="top",
+            end_condition="through-all",
+            points_mm=located[3].corners_mm,
+            reversed=False,
+        ),
+    )
+    with pytest.raises(SldprtFormatError):
+        patch_donor(donor, targets)
+
+
+def test_patch_donor_rejects_an_unwritable_through_all_direction() -> None:
+    donor = donor_by_id("arcboss_cut_cut_cut_through")
+    located = locate_features(donor.stream)
+    targets = (
+        TargetFeature(
+            operation=BOSS_OPERATION,
+            profile="polyline-3-arc-1-ccw",
+            support="front",
+            end_condition="blind",
+            points_mm=located[0].corners_mm,
+            swept_arc_centres_mm=(located[0].swept_arcs[0].centre_mm,),
+            depth_mm=100.0,
+            reversed=False,
+        ),
+        TargetFeature(
+            operation=CUT_OPERATION,
+            profile=RECTANGLE_PROFILE,
+            support="front",
+            end_condition="blind",
+            points_mm=located[1].corners_mm,
+            depth_mm=15.0,
+            reversed=True,
+        ),
+        TargetFeature(
+            operation=CUT_OPERATION,
+            profile="circle",
+            support="front",
+            end_condition="blind",
+            radii_mm=(25.0,),
+            arc_centres_mm=(located[2].arcs[0].centre_mm,),
+            depth_mm=50.0,
+            reversed=True,
+        ),
+        TargetFeature(
+            operation=CUT_OPERATION,
+            profile="polyline-12",
+            support="top",
+            end_condition="through-all",
+            points_mm=located[3].corners_mm,
+            reversed=True,
+        ),
+    )
+    with pytest.raises(SldprtFormatError):
+        patch_donor(donor, targets)

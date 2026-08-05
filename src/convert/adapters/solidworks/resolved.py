@@ -119,6 +119,9 @@ CIRCLE_POINT_ANGLE_DEGREES = 17.0
 CIRCLE_POINT_ANGLE_TOLERANCE_DEGREES = 1.0e-6
 FULL_CIRCLE_DEGREES = 360.0
 
+SKETCH_ARC_CENTRE_CLASS = 1
+_ARC_RADIUS_TOLERANCE_MM = 1.0e-6
+
 _NAME_MARKER_CLASS_TOKEN = 0x8004
 _MAX_CLASS_NAME = 64
 _MAX_NAME_UNITS = 128
@@ -189,6 +192,78 @@ class SketchArc:
 
 
 @dataclass(frozen=True, slots=True)
+class SweptArc:
+    centre_offset: int
+    start_offset: int
+    end_offset: int
+    centre_x_mm: float
+    centre_y_mm: float
+    start_x_mm: float
+    start_y_mm: float
+    end_x_mm: float
+    end_y_mm: float
+
+    @property
+    def centre_mm(self) -> tuple[float, float]:
+        return self.centre_x_mm, self.centre_y_mm
+
+    @property
+    def start_mm(self) -> tuple[float, float]:
+        return self.start_x_mm, self.start_y_mm
+
+    @property
+    def end_mm(self) -> tuple[float, float]:
+        return self.end_x_mm, self.end_y_mm
+
+    @property
+    def radius_mm(self) -> float:
+        return math.hypot(
+            self.start_x_mm - self.centre_x_mm, self.start_y_mm - self.centre_y_mm
+        )
+
+    @property
+    def end_radius_mm(self) -> float:
+        return math.hypot(
+            self.end_x_mm - self.centre_x_mm, self.end_y_mm - self.centre_y_mm
+        )
+
+    @property
+    def consistent(self) -> bool:
+        radius = self.radius_mm
+        if radius <= _MINIMUM_RADIUS_MM:
+            return False
+        return abs(self.end_radius_mm - radius) <= max(
+            _ARC_RADIUS_TOLERANCE_MM, radius * 1.0e-9
+        )
+
+    @property
+    def start_angle_degrees(self) -> float:
+        return math.degrees(
+            math.atan2(
+                self.start_y_mm - self.centre_y_mm, self.start_x_mm - self.centre_x_mm
+            )
+        )
+
+    @property
+    def end_angle_degrees(self) -> float:
+        return math.degrees(
+            math.atan2(
+                self.end_y_mm - self.centre_y_mm, self.end_x_mm - self.centre_x_mm
+            )
+        )
+
+    def sweep_angle_degrees(self, counterclockwise: bool) -> float:
+        span = self.end_angle_degrees - self.start_angle_degrees
+        if not counterclockwise:
+            span = -span
+        while span <= 0.0:
+            span += FULL_CIRCLE_DEGREES
+        while span > FULL_CIRCLE_DEGREES:
+            span -= FULL_CIRCLE_DEGREES
+        return span
+
+
+@dataclass(frozen=True, slots=True)
 class FeatureLayout:
     ordinal: int
     name: str
@@ -215,6 +290,7 @@ class FeatureLayout:
     axis_kind: str | None = None
     axis_offset: int | None = None
     axis_feature_id: int | None = None
+    swept_arcs: tuple[SweptArc, ...] = ()
 
     @property
     def is_revolution(self) -> bool:
@@ -271,6 +347,7 @@ class FeatureEdit:
     radii_mm: Sequence[float] | None = None
     arc_centres_mm: Sequence[tuple[float, float]] | None = None
     angle_radians: float | None = None
+    swept_arc_centres_mm: Sequence[tuple[float, float]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -474,6 +551,48 @@ def sketch_arcs(data: bytes | bytearray) -> tuple[SketchArc, ...]:
     return tuple(result)
 
 
+def swept_arcs(data: bytes | bytearray) -> tuple[SweptArc, ...]:
+    coordinates = sketch_coordinates(data)
+    circle_centres = {arc.centre_offset for arc in sketch_arcs(data)}
+    result: list[SweptArc] = []
+    for index, centre in enumerate(coordinates):
+        if (
+            centre.role != SKETCH_FREE_ROLE
+            or centre.geometry_class != SKETCH_ARC_CENTRE_CLASS
+            or centre.offset in circle_centres
+        ):
+            continue
+        run: list[SketchCoordinate] = []
+        cursor = index - 1
+        while cursor >= 0:
+            candidate = coordinates[cursor]
+            if (
+                candidate.role != SKETCH_FREE_ROLE
+                or candidate.geometry_class != SKETCH_POINT_CLASS
+            ):
+                break
+            run.append(candidate)
+            cursor -= 1
+        if len(run) < 2:
+            continue
+        start = run[0]
+        end = run[-1]
+        arc = SweptArc(
+            centre_offset=centre.offset,
+            start_offset=start.offset,
+            end_offset=end.offset,
+            centre_x_mm=centre.x_mm,
+            centre_y_mm=centre.y_mm,
+            start_x_mm=start.x_mm,
+            start_y_mm=start.y_mm,
+            end_x_mm=end.x_mm,
+            end_y_mm=end.y_mm,
+        )
+        if arc.consistent:
+            result.append(arc)
+    return tuple(result)
+
+
 def patch_sketch_arcs(data: bytes | bytearray, radii_mm: Mapping[int, float]) -> bytes:
     arcs = sketch_arcs(data)
     unknown = sorted(set(radii_mm) - set(range(len(arcs))))
@@ -517,6 +636,7 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
         from_reverse = None
     points = sketch_points(blob)
     arcs = sketch_arcs(blob)
+    swept = swept_arcs(blob)
     scalars = tuple(
         scalar
         for scalar in _dimension_scalars(blob, records)
@@ -550,6 +670,11 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
                     revolution,
                     () if sketch is None else _points_in_range(points, sketch, feature),
                     () if sketch is None else _arcs_in_range(arcs, sketch, feature),
+                    swept_arcs=(
+                        ()
+                        if sketch is None
+                        else _swept_in_range(swept, sketch, feature)
+                    ),
                 )
             )
             continue
@@ -564,6 +689,9 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
                 () if sketch is None else _arcs_in_range(arcs, sketch, feature),
                 scalar,
                 from_reverse if extrusions == 0 else None,
+                swept_arcs=(
+                    () if sketch is None else _swept_in_range(swept, sketch, feature)
+                ),
             )
         )
         extrusions += 1
@@ -619,6 +747,14 @@ def patch_features(data: bytes | bytearray, edits: Mapping[int, FeatureEdit]) ->
         if edit.radii_mm is not None:
             for arc, radius_mm in zip(feature.arcs, edit.radii_mm, strict=True):
                 _write_arc_radius(output, arc, radius_mm)
+        if edit.swept_arc_centres_mm is not None:
+            for arc, centre in zip(
+                feature.swept_arcs, edit.swept_arc_centres_mm, strict=True
+            ):
+                struct.pack_into("<d", output, arc.centre_offset, centre[0] / _METRES)
+                struct.pack_into(
+                    "<d", output, arc.centre_offset + 8, centre[1] / _METRES
+                )
         if edit.angle_radians is not None:
             struct.pack_into("<d", output, feature.angle_offset, edit.angle_radians)
         if edit.depth_mm is not None:
@@ -907,6 +1043,18 @@ def _arcs_in_range(
     )
 
 
+def _swept_in_range(
+    arcs: tuple[SweptArc, ...], sketch: NameRecord, feature: NameRecord
+) -> tuple[SweptArc, ...]:
+    return tuple(
+        arc
+        for arc in arcs
+        if sketch.offset < arc.centre_offset < feature.offset
+        and sketch.offset < arc.start_offset < feature.offset
+        and sketch.offset < arc.end_offset < feature.offset
+    )
+
+
 def _revolution_nodes(
     blob: bytes,
     nodes: tuple[NameRecord, ...],
@@ -949,6 +1097,8 @@ def _revolution_layout(
     revolution: tuple[str, int, tuple[str, int, int] | None],
     points: tuple[SketchPoint, ...],
     arcs: tuple[SketchArc, ...],
+    *,
+    swept_arcs: tuple[SweptArc, ...] = (),
 ) -> FeatureLayout:
     kind, token, axis = revolution
     angle_offset = None if scalar is None else scalar.value_offset
@@ -963,6 +1113,7 @@ def _revolution_layout(
         sketch_id=None if sketch is None else sketch.feature_id,
         points=points,
         arcs=arcs,
+        swept_arcs=swept_arcs,
         depth_offset=None,
         depth_mm=None,
         depth_copy_offsets=(),
@@ -1000,6 +1151,8 @@ def _feature_layout(
     arcs: tuple[SketchArc, ...],
     scalar: DimensionScalar | None,
     from_reverse_offset: int | None,
+    *,
+    swept_arcs: tuple[SweptArc, ...] = (),
 ) -> FeatureLayout:
     depth_offset = None if scalar is None else scalar.value_offset
     depth_mm = None if scalar is None else scalar.value_mm
@@ -1045,6 +1198,7 @@ def _feature_layout(
             None if end_condition_offset is None else blob[end_condition_offset]
         ),
         from_reverse_offset=from_reverse_offset,
+        swept_arcs=swept_arcs,
     )
 
 
@@ -1140,6 +1294,28 @@ def _validate_edit(feature: FeatureLayout, edit: FeatureEdit) -> None:
             math.isfinite(value) for centre in edit.arc_centres_mm for value in centre
         ):
             raise SldprtFormatError("sketch arc centre values must be finite")
+    if edit.swept_arc_centres_mm is not None:
+        if not feature.swept_arcs:
+            raise SldprtFormatError(
+                f"feature {feature.ordinal} has no locatable swept sketch arcs"
+            )
+        if len(edit.swept_arc_centres_mm) != len(feature.swept_arcs):
+            raise SldprtFormatError(
+                f"feature {feature.ordinal} has {len(feature.swept_arcs)} swept "
+                f"sketch arcs and {len(edit.swept_arc_centres_mm)} centres were "
+                f"supplied"
+            )
+        if not all(
+            math.isfinite(value)
+            for centre in edit.swept_arc_centres_mm
+            for value in centre
+        ):
+            raise SldprtFormatError("swept sketch arc centre values must be finite")
+        if edit.corners_mm is None:
+            raise SldprtFormatError(
+                "swept sketch arc centres can only be moved together with the "
+                "profile vertices that carry their endpoints"
+            )
     if edit.depth_mm is not None:
         if feature.depth_offset is None:
             raise SldprtFormatError(
@@ -1187,10 +1363,26 @@ def _verify_features(
             != tuple(point.offset for point in before.points)
             or tuple(arc.centre_offset for arc in after.arcs)
             != tuple(arc.centre_offset for arc in before.arcs)
+            or tuple(arc.centre_offset for arc in after.swept_arcs)
+            != tuple(arc.centre_offset for arc in before.swept_arcs)
         ):
             raise SldprtFormatError(
                 f"patched feature {ordinal} does not relocate to the same layout"
             )
+        if edit.swept_arc_centres_mm is not None:
+            if not _matches(
+                tuple(arc.centre_mm for arc in after.swept_arcs),
+                tuple(edit.swept_arc_centres_mm),
+            ):
+                raise SldprtFormatError(
+                    f"patched feature {ordinal} swept arc centres do not verify"
+                )
+            for index, arc in enumerate(after.swept_arcs):
+                if not arc.consistent:
+                    raise SldprtFormatError(
+                        f"patched feature {ordinal} swept arc {index} endpoints are "
+                        f"not equidistant from its centre"
+                    )
         if edit.corners_mm is not None and not _matches(
             after.corners_mm, tuple(edit.corners_mm)
         ):

@@ -14,6 +14,7 @@ import math
 from types import MappingProxyType
 
 from interchange import (
+    ArcGeometry,
     BooleanOperation,
     CadDocument,
     CircleGeometry,
@@ -35,6 +36,7 @@ from .donor_library import (
     BOSS_OPERATION,
     BLIND_END,
     CIRCLE_PROFILE,
+    arc_profile,
     CUT_OPERATION,
     FULL_REVOLUTION_DEGREES,
     FULL_REVOLUTION_END,
@@ -129,6 +131,7 @@ class _Profile:
     points_mm: tuple[tuple[float, float], ...]
     radii_mm: tuple[float, ...]
     arc_centres_mm: tuple[tuple[float, float], ...]
+    swept_arc_centres_mm: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +144,12 @@ class _Support:
         return (
             u * self.rows[0][0] + v * self.rows[0][1],
             u * self.rows[1][0] + v * self.rows[1][1],
+        )
+
+    @property
+    def preserves_orientation(self) -> bool:
+        return (
+            self.rows[0][0] * self.rows[1][1] - self.rows[0][1] * self.rows[1][0] > 0.0
         )
 
 
@@ -613,6 +622,7 @@ def _target_feature(
             points_mm=profile.points_mm,
             radii_mm=profile.radii_mm,
             arc_centres_mm=profile.arc_centres_mm,
+            swept_arc_centres_mm=profile.swept_arc_centres_mm,
             depth_mm=depth_mm,
             reversed=None if end_condition == MID_PLANE_END else reverse,
         ),
@@ -889,7 +899,9 @@ def _profile(
         {
             type(item.geometry).__name__
             for item in entities
-            if not isinstance(item.geometry, (LineGeometry, CircleGeometry))
+            if not isinstance(
+                item.geometry, (LineGeometry, CircleGeometry, ArcGeometry)
+            )
         }
     )
     if unsupported:
@@ -911,6 +923,10 @@ def _profile(
     if stray:
         return None, (f"leaves {len(stray)} entities outside any closed profile",)
     loops = tuple(tuple(by_id[identifier] for identifier in group) for group in groups)
+    if any(
+        any(isinstance(item.geometry, ArcGeometry) for item in loop) for loop in loops
+    ):
+        return _arc_profile(loops, support)
     circles = tuple(
         loop[0]
         for loop in loops
@@ -951,27 +967,178 @@ def _profile(
     return _Profile(polyline_profile(len(vertices)), vertices, (), ()), ()
 
 
+def _arc_profile(
+    loops: tuple[tuple[SketchEntity, ...], ...], support: _Support
+) -> tuple[_Profile | None, tuple[str, ...]]:
+    if len(loops) != 1:
+        return None, (
+            f"holds {len(loops)} closed profiles and only a single closed profile "
+            f"carrying an arc has a donor",
+        )
+    loop = loops[0]
+    arcs = tuple(item for item in loop if isinstance(item.geometry, ArcGeometry))
+    lines = tuple(item for item in loop if isinstance(item.geometry, LineGeometry))
+    if len(arcs) + len(lines) != len(loop):
+        return None, ("mixes a full circle into a profile that carries an arc",)
+    if len(arcs) != 1:
+        return None, (
+            f"holds {len(arcs)} arcs and only a profile with exactly one arc has a "
+            f"donor",
+        )
+    if not lines:
+        return None, ("holds an arc with no straight segment to close it",)
+    chain = _oriented_chain(loop, support)
+    if chain is None:
+        return None, ("holds an arc profile that does not close on itself",)
+    chain = _arc_last(chain)
+    if chain is None:
+        return None, ("holds an arc that cannot be ordered last in its profile",)
+    if not _arc_forward(chain[-1], support):
+        reversed_chain = _arc_last(_reverse_chain(chain))
+        if reversed_chain is None:
+            return None, ("holds an arc that cannot be ordered last in its profile",)
+        chain = reversed_chain
+    if not _arc_forward(chain[-1], support):
+        return None, ("holds an arc whose sweep direction cannot be normalised",)
+    arc = chain[-1][0]
+    geometry = arc.geometry
+    if not math.isfinite(geometry.radius) or geometry.radius <= 0.0:
+        return None, ("holds an arc without a positive radius",)
+    points = tuple(start for _, start, _ in chain)
+    if any(not all(math.isfinite(value) for value in point) for point in points):
+        return None, ("holds an arc profile with a non-finite vertex",)
+    centre = support.project(geometry.center.x, geometry.center.y)
+    name = arc_profile(
+        len(lines), len(arcs), counterclockwise=support.preserves_orientation
+    )
+    return _Profile(name, points, (), (), (centre,)), ()
+
+
+def _entity_ends(
+    item: SketchEntity, support: _Support
+) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    geometry = item.geometry
+    if isinstance(geometry, LineGeometry):
+        return (
+            support.project(geometry.start.x, geometry.start.y),
+            support.project(geometry.end.x, geometry.end.y),
+        )
+    if isinstance(geometry, ArcGeometry):
+        return (
+            _arc_point(geometry, geometry.start_angle, support),
+            _arc_point(geometry, geometry.end_angle, support),
+        )
+    return None
+
+
+def _arc_point(
+    geometry: ArcGeometry, angle: float, support: _Support
+) -> tuple[float, float]:
+    return support.project(
+        geometry.center.x + geometry.radius * math.cos(angle),
+        geometry.center.y + geometry.radius * math.sin(angle),
+    )
+
+
+def _oriented_chain(
+    loop: tuple[SketchEntity, ...], support: _Support
+) -> tuple[tuple[SketchEntity, tuple[float, float], tuple[float, float]], ...] | None:
+    ends: dict[str, tuple[tuple[float, float], tuple[float, float]]] = {}
+    for item in loop:
+        pair = _entity_ends(item, support)
+        if pair is None:
+            return None
+        ends[item.id] = pair
+    remaining = list(loop)
+    head = remaining.pop(0)
+    origin, tail = ends[head.id]
+    chain = [(head, origin, tail)]
+    while remaining:
+        found = None
+        for index, item in enumerate(remaining):
+            first, last = ends[item.id]
+            if _same_point(first, tail):
+                found = (index, item, first, last)
+                break
+            if _same_point(last, tail):
+                found = (index, item, last, first)
+                break
+        if found is None:
+            return None
+        index, item, first, last = found
+        remaining.pop(index)
+        chain.append((item, first, last))
+        tail = last
+    if not _same_point(tail, origin):
+        return None
+    return tuple(chain)
+
+
+def _reverse_chain(
+    chain: tuple[tuple[SketchEntity, tuple[float, float], tuple[float, float]], ...],
+) -> tuple[tuple[SketchEntity, tuple[float, float], tuple[float, float]], ...]:
+    return tuple((item, last, first) for item, first, last in reversed(chain))
+
+
+def _arc_last(
+    chain: tuple[tuple[SketchEntity, tuple[float, float], tuple[float, float]], ...],
+) -> tuple[tuple[SketchEntity, tuple[float, float], tuple[float, float]], ...] | None:
+    index = next(
+        (
+            position
+            for position, (item, _, _) in enumerate(chain)
+            if isinstance(item.geometry, ArcGeometry)
+        ),
+        None,
+    )
+    if index is None:
+        return None
+    return (*chain[index + 1 :], *chain[: index + 1])
+
+
+def _arc_forward(
+    entry: tuple[SketchEntity, tuple[float, float], tuple[float, float]],
+    support: _Support,
+) -> bool:
+    item, start, _ = entry
+    geometry = item.geometry
+    if not isinstance(geometry, ArcGeometry):
+        return False
+    return _same_point(start, _arc_point(geometry, geometry.start_angle, support))
+
+
 def _derived_loops(
     entities: tuple[SketchEntity, ...], support: _Support
 ) -> tuple[tuple[str, ...], ...]:
     circles = tuple(
         (item.id,) for item in entities if isinstance(item.geometry, CircleGeometry)
     )
-    lines = tuple(item for item in entities if isinstance(item.geometry, LineGeometry))
-    if not lines:
+    segments = tuple(
+        item
+        for item in entities
+        if isinstance(item.geometry, (LineGeometry, ArcGeometry))
+    )
+    if not segments:
         return circles
-    remaining = list(lines)
+    minimum = (
+        3 if all(isinstance(item.geometry, LineGeometry) for item in segments) else 2
+    )
+    remaining = list(segments)
     loops: list[tuple[str, ...]] = []
     while remaining:
         head = remaining.pop(0)
+        ends = _entity_ends(head, support)
+        if ends is None:
+            return ()
+        start, tail = ends
         chain = [head]
-        start = support.project(head.geometry.start.x, head.geometry.start.y)
-        tail = support.project(head.geometry.end.x, head.geometry.end.y)
         while not _same_point(tail, start):
             following = None
             for index, item in enumerate(remaining):
-                first = support.project(item.geometry.start.x, item.geometry.start.y)
-                last = support.project(item.geometry.end.x, item.geometry.end.y)
+                pair = _entity_ends(item, support)
+                if pair is None:
+                    return ()
+                first, last = pair
                 if _same_point(first, tail):
                     following = (index, item, last)
                     break
@@ -983,7 +1150,7 @@ def _derived_loops(
             index, item, tail = following
             remaining.pop(index)
             chain.append(item)
-        if len(chain) < 3:
+        if len(chain) < minimum:
             return ()
         loops.append(tuple(item.id for item in chain))
     return (*loops, *circles)
