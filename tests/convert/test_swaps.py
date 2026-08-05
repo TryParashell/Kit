@@ -361,7 +361,9 @@ def test_every_valid_format_swap_runs_both_directions(
     assert _document_signature(restored) == original_signature
     _assert_target(restored, destination_suffix, destination, is_assembly)
     _assert_truthful_vendor_result(result, destination_suffix, is_assembly)
-    reverse = tmp_path / f"{name}_reversed{source_suffix}"
+    reverse_directory = tmp_path / f"{name}_reverse"
+    reverse_directory.mkdir()
+    reverse = reverse_directory / f"{name}_reversed{source_suffix}"
     reverse_result = _convert_with_application_gate(destination, reverse)
     reversed_document = open_document(reverse)
     assert reverse_result.source_format == FORMAT_BY_SUFFIX[destination_suffix]
