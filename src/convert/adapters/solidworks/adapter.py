@@ -1909,6 +1909,7 @@ def _generated_streams(
 def _assembly_reader_gaps(
     streams: Mapping[str, bytes],
     donor: Mapping[str, bytes] | None = None,
+    rewritable: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     gaps = [
         f"absent_vendor_stream:{name}"
@@ -1929,8 +1930,8 @@ def _assembly_reader_gaps(
     )
     gaps.extend(
         f"donor_stream_rewritten:{name}"
-        for name in _ASSEMBLY_DONOR_CARRIED_STREAMS
-        if name in donor and streams.get(name) != donor[name]
+        for name in sorted(donor)
+        if name not in rewritable and streams.get(name) != donor[name]
     )
     return tuple(gaps)
 
@@ -2383,14 +2384,25 @@ def _patch_native_template(
             usable,
             usable,
         )
-    reader_gaps = _assembly_reader_gaps(streams, original_streams) + divergences
-    loadable = usable and not reader_gaps
+    rewritable = {
+        KIT_DOCUMENT_STREAM,
+        KIT_NATIVE_STREAM,
+        KIT_RESOLVED_STREAM,
+        COMPONENT_TREE_STREAM,
+    }
+    if Capability.BREP in native:
+        rewritable.add(PARTITION_STREAM)
+    reader_gaps = (
+        _assembly_reader_gaps(streams, original_streams, frozenset(rewritable))
+        + divergences
+    )
+    loadable = not reader_gaps
     return _GeneratedStreams(
         streams,
         native_brep,
         frozenset(native),
-        "native-template" if loadable else "native-source-with-kit-neutral",
-        loadable,
+        "native-template" if usable and loadable else "native-source-with-kit-neutral",
+        usable and loadable,
         loadable,
         reader_gaps=reader_gaps,
     )
