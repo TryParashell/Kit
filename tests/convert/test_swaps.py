@@ -20,6 +20,7 @@ import struct
 import pytest
 
 from convert import CarrierReason, convert, open_document, registry
+from convert.adapters.solidworks import SldprtFormatError
 from interchange import AssemblyData, CadDocument, Capability, source_payload_indexes
 
 ROOT = Path(__file__).parents[2]
@@ -92,13 +93,21 @@ MATRIX_CASES = tuple(
     for name, source_suffix, source, is_assembly in MATRIX_SOURCES
     for destination_suffix in (ASSEMBLY_SUFFIXES if is_assembly else PART_SUFFIXES)
 )
-SUPPORTED_FILES = tuple(
+CORPUS_FILES = tuple(
     sorted(
         path
         for path in EXAMPLES.rglob("*")
         if path.is_file()
         and path.suffix.casefold() in {value.casefold() for value in SUPPORTED_SUFFIXES}
     )
+)
+MISSING_REFERENCE_FILES = {
+    EXAMPLES
+    / "Single Turbo Dual Overhead Cam V8 - KDP - 2024"
+    / "ENSAMBLAJE DE MOTOR V8.SLDASM": "ENSAMBLAJE TURBO.SLDASM",
+}
+SUPPORTED_FILES = tuple(
+    path for path in CORPUS_FILES if path not in MISSING_REFERENCE_FILES
 )
 
 
@@ -325,11 +334,13 @@ def test_swap_formats_match_readme_and_document_kinds() -> None:
     assert readme_suffixes == set(FORMAT_BY_SUFFIX)
     assert set(PART_SUFFIXES) | set(ASSEMBLY_SUFFIXES) == readme_suffixes
     assert set(PART_SUFFIXES) & set(ASSEMBLY_SUFFIXES) == {".FCStd"}
-    assert len(SUPPORTED_FILES) == 218
-    counts = Counter(_suffix(path) for path in SUPPORTED_FILES)
+    assert len(CORPUS_FILES) == 218
+    assert len(SUPPORTED_FILES) == 217
+    counts = Counter(_suffix(path) for path in CORPUS_FILES)
     assert counts == EXPECTED_SUFFIX_COUNTS
     assert len(FCSTD_ASSEMBLIES) == 3
     assert FCSTD_ASSEMBLIES <= set(SUPPORTED_FILES)
+    assert set(MISSING_REFERENCE_FILES) <= set(CORPUS_FILES)
 
 
 @pytest.mark.parametrize(
@@ -373,6 +384,21 @@ def test_every_valid_format_swap_runs_both_directions(
     assert _document_signature(reversed_document) == original_signature
     _assert_target(reversed_document, source_suffix, reverse, is_assembly)
     _assert_truthful_vendor_result(reverse_result, source_suffix, is_assembly)
+
+
+@pytest.mark.parametrize(
+    "source",
+    tuple(MISSING_REFERENCE_FILES),
+    ids=lambda path: str(path.relative_to(EXAMPLES)),
+)
+def test_assemblies_missing_a_referenced_file_are_refused_by_name(source: Path) -> None:
+    missing = MISSING_REFERENCE_FILES[source]
+    assert not tuple(EXAMPLES.rglob(missing))
+    with pytest.raises(SldprtFormatError) as captured:
+        open_document(source)
+    message = str(captured.value)
+    assert message.startswith("nested assembly mate source is unavailable: ")
+    assert message.endswith(missing)
 
 
 @pytest.mark.parametrize(

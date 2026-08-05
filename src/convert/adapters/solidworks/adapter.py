@@ -3860,14 +3860,11 @@ def _assembly_document(
     timeline = _timeline(model, selections)
     meshes, mesh_ids = _assembly_meshes(native)
     index = _component_file_index(label, settings)
+    resolve_components = settings.values.get("resolve_components", True) is not False
     documents, document_ids, resolved_paths, document_diagnostics = _assembly_documents(
         adapter,
         native,
-        (
-            {}
-            if settings.values.get("resolve_components", True) is False
-            else index
-        ),
+        index if resolve_components else {},
         settings,
     )
     definitions = _assembly_definitions(
@@ -3907,7 +3904,7 @@ def _assembly_document(
         and definition.object_id not in document_ids
         and definition.object_id not in mesh_ids
     )
-    if unresolved and settings.strict:
+    if unresolved and settings.strict and resolve_components:
         names = ", ".join(definition.name for definition in unresolved)
         raise SldprtFormatError(
             f"assembly component sources and tessellation are unavailable: {names}"
@@ -4751,6 +4748,8 @@ def _mate_instance_path(
                 f"{occurrence.name}-{occurrence.reference_number}".strip().casefold(),
             }
         )
+        if not candidates:
+            return ()
         if len(candidates) != 1:
             raise SldprtFormatError(
                 f"mate component path segment {raw_segment!r} has {len(candidates)} hierarchy mappings"
