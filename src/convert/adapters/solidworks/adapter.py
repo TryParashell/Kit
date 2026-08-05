@@ -3861,7 +3861,14 @@ def _assembly_document(
     meshes, mesh_ids = _assembly_meshes(native)
     index = _component_file_index(label, settings)
     documents, document_ids, resolved_paths, document_diagnostics = _assembly_documents(
-        adapter, native, index, settings
+        adapter,
+        native,
+        (
+            {}
+            if settings.values.get("resolve_components", True) is False
+            else index
+        ),
+        settings,
     )
     definitions = _assembly_definitions(
         native,
@@ -4037,8 +4044,6 @@ def _assembly_document(
 def _component_file_index(
     label: str, settings: ReadOptions
 ) -> dict[str, tuple[Path, ...]]:
-    if settings.values.get("resolve_components", True) is False:
-        return {}
     requested_root = settings.values.get("component_search_root")
     if requested_root:
         root = Path(str(requested_root)).expanduser().resolve()
