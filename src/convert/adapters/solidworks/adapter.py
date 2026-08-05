@@ -211,6 +211,14 @@ _ASSEMBLY_DONOR_CARRIED_STREAMS = (
     "Contents/Config-0-ModelHeader",
     "Header2",
 )
+_ASSEMBLY_REWRITABLE_DONOR_STREAMS = frozenset(
+    {
+        KIT_DOCUMENT_STREAM,
+        KIT_NATIVE_STREAM,
+        KIT_RESOLVED_STREAM,
+        COMPONENT_TREE_STREAM,
+    }
+)
 _VENDOR_REJECTED_ASSEMBLY_RECORDS = ("Contents/Config-0-ModelHeader",)
 _ATTESTED_COMPATIBILITIES = frozenset(
     {
@@ -2384,16 +2392,10 @@ def _patch_native_template(
             usable,
             usable,
         )
-    rewritable = {
-        KIT_DOCUMENT_STREAM,
-        KIT_NATIVE_STREAM,
-        KIT_RESOLVED_STREAM,
-        COMPONENT_TREE_STREAM,
-    }
-    if Capability.BREP in native:
-        rewritable.add(PARTITION_STREAM)
     reader_gaps = (
-        _assembly_reader_gaps(streams, original_streams, frozenset(rewritable))
+        _assembly_reader_gaps(
+            streams, original_streams, _ASSEMBLY_REWRITABLE_DONOR_STREAMS
+        )
         + divergences
     )
     loadable = not reader_gaps
