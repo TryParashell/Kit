@@ -1,0 +1,934 @@
+[
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\BASELINE_40x20x10.SLDPRT",
+    "returncode": 0,
+    "seconds": 10.03502980000485,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@BASELINE_40x20x10.Part",
+            10.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 8000.000000000001,
+    "surface_mm2": 2800.0,
+    "centre_mm": [
+      0.0,
+      0.0,
+      5.0
+    ],
+    "status": "measured",
+    "attempts": 1,
+    "history": [
+      "measured"
+    ],
+    "role": "control-before"
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\orig_boss_cut.SLDPRT",
+    "returncode": 0,
+    "seconds": 9.835710500003188,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@orig_boss_cut.Part",
+            12.0
+          ]
+        ]
+      },
+      {
+        "name": "Sketch2",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Cut-Extrude1",
+        "type": "ICE",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Cut-Extrude1@orig_boss_cut.Part",
+            5.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 13582.000000000002,
+    "surface_mm2": 4370.0,
+    "centre_mm": [
+      9.74443366282465e-16,
+      7.019646399857307e-16,
+      6.198424385215727
+    ],
+    "status": "measured",
+    "attempts": 1,
+    "history": [
+      "measured"
+    ],
+    "role": "candidate"
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\hostcut_donorgeom.SLDPRT",
+    "returncode": 0,
+    "seconds": 9.98403220000182,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@hostcut_donorgeom.Part",
+            12.0
+          ]
+        ]
+      },
+      {
+        "name": "Sketch2",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Cut-Extrude1",
+        "type": "ICE",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Cut-Extrude1@hostcut_donorgeom.Part",
+            5.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 13582.0,
+    "surface_mm2": 4370.0,
+    "centre_mm": [
+      1.073410270670528e-15,
+      4.735794760132781e-16,
+      6.198424385215727
+    ],
+    "status": "measured",
+    "attempts": 1,
+    "history": [
+      "measured"
+    ],
+    "role": "candidate"
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\hostcut_geomonly.SLDPRT",
+    "returncode": 0,
+    "seconds": 9.914057500005583,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@hostcut_geomonly.Part",
+            15.0
+          ]
+        ]
+      },
+      {
+        "name": "Sketch2",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Cut-Extrude1",
+        "type": "ICE",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Cut-Extrude1@hostcut_geomonly.Part",
+            6.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 34080.00000000001,
+    "surface_mm2": 8232.0,
+    "centre_mm": [
+      3.640759738349593e-17,
+      7.446567251504368e-16,
+      7.753521126760564
+    ],
+    "status": "measured",
+    "attempts": 1,
+    "history": [
+      "measured"
+    ],
+    "role": "candidate"
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\hostcut_full.SLDPRT",
+    "returncode": 0,
+    "seconds": 9.92091839999921,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": false,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@hostcut_full.Part",
+            15.0
+          ]
+        ]
+      },
+      {
+        "name": "Sketch2",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Cut-Extrude1",
+        "type": "ICE",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Cut-Extrude1@hostcut_full.Part",
+            6.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 36000.0,
+    "surface_mm2": 7800.0,
+    "centre_mm": [
+      -2.0587606356875339e-16,
+      7.352716556026911e-16,
+      7.499999999999999
+    ],
+    "status": "measured",
+    "attempts": 1,
+    "history": [
+      "measured"
+    ],
+    "role": "candidate"
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\BASELINE_40x20x10.SLDPRT",
+    "returncode": 0,
+    "seconds": 9.812814500000968,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@BASELINE_40x20x10.Part",
+            10.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 8000.000000000001,
+    "surface_mm2": 2800.0,
+    "centre_mm": [
+      0.0,
+      0.0,
+      5.0
+    ],
+    "status": "measured",
+    "attempts": 1,
+    "history": [
+      "measured"
+    ],
+    "role": "control-after"
+  }
+]

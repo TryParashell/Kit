@@ -1,0 +1,4682 @@
+{
+ "baseline": {
+  "part": "BASELINE_40x20x10.SLDPRT",
+  "handles": [
+   {
+    "node": 159,
+    "class": "sgLineHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 160,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 163,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 164,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 167,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 168,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 171,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 172,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 186,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 190,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 194,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 198,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 203,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 204,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 205,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 206,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 140,
+    "class": "sgPointHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   }
+  ]
+ },
+ "circle": {
+  "part": "CIRCLE_r10.SLDPRT",
+  "handles": [
+   {
+    "node": 163,
+    "class": "sgArcHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 194,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 140,
+    "class": "sgPointHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 170,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 184,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 185,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   }
+  ]
+ },
+ "planetop": {
+  "part": "PLANE_TOP.SLDPRT",
+  "handles": [
+   {
+    "node": 159,
+    "class": "sgLineHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 160,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 163,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 164,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 167,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 168,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 171,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 172,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 186,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 190,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 194,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 198,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 203,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 204,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 205,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 206,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 140,
+    "class": "sgPointHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   }
+  ]
+ },
+ "twopad": {
+  "part": "TWOPAD_d5.SLDPRT",
+  "handles": [
+   {
+    "node": 169,
+    "class": "sgLineHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 170,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 173,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 174,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 177,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 178,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 181,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 182,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 196,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 200,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 204,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 208,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 213,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 214,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 215,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 216,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 340,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 341,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 344,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 345,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 348,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 349,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 352,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 353,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 367,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 371,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 375,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 379,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 3,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 383,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 384,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 393,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 394,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 395,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 396,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 150,
+    "class": "sgPointHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   }
+  ]
+ },
+ "padplane": {
+  "part": "PADPLANE_rev_d5.SLDPRT",
+  "handles": [
+   {
+    "node": 169,
+    "class": "sgLineHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 170,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 173,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 174,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 177,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 178,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 181,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 182,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 196,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 200,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 204,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 208,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 213,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 214,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 215,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 216,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 340,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 341,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 344,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 345,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 348,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 349,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 352,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 353,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 367,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 371,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 375,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 379,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 3,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 383,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 384,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 393,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 394,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 395,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 396,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 150,
+    "class": "sgPointHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   }
+  ]
+ },
+ "cutbase": {
+  "part": "CUTBASE_cd5.SLDPRT",
+  "handles": [
+   {
+    "node": 169,
+    "class": "sgLineHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 170,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 173,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 174,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 177,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 178,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 181,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 182,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 196,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 200,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 204,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 208,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 213,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 214,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 215,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 216,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 340,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 341,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 344,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 345,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 348,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 349,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 352,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 353,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 367,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 371,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 375,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 379,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 3,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 383,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 384,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 393,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 394,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 395,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 396,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 150,
+    "class": "sgPointHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   }
+  ]
+ },
+ "three": {
+  "part": "THREEFEATURE_pad_cut_pad.SLDPRT",
+  "handles": [
+   {
+    "node": 179,
+    "class": "sgLineHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 180,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 183,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 184,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 187,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 188,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 191,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 192,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 206,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 210,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 214,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 218,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 223,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 224,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 225,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 226,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 350,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 351,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 354,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 355,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 358,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 359,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 362,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 363,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 377,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 381,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 385,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 389,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 3,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 393,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 394,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 403,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 404,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 405,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 406,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 555,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 556,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 559,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 560,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 563,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 564,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 567,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 568,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 10,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 582,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 586,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 590,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 594,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 3,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 598,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 599,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 608,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 609,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 610,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 611,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 160,
+    "class": "sgPointHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   }
+  ]
+ },
+ "vendor_ring": {
+  "part": "Piston Ring KF.SLDPRT",
+  "handles": [
+   {
+    "node": 204,
+    "class": "sgEntHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 46,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 14,
+     "escaped": true,
+     "EntIndex": -2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 212,
+    "class": "sgEntHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 46,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 14,
+     "escaped": true,
+     "EntIndex": -2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 220,
+    "class": "sgEntHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 46,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 14,
+     "escaped": true,
+     "EntIndex": -2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 228,
+    "class": "sgEntHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 60,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 14,
+     "escaped": true,
+     "EntIndex": -2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 439,
+    "class": "sgLineHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 443,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 484,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 485,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 488,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 489,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 492,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 493,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 496,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 497,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 607,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 608,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 18,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 616,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 617,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 18,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 625,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 626,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 18,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 634,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 635,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 18,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 643,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 644,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 18,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 649,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 653,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 657,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 661,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 665,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 7,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 687,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 773,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 774,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 775,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 776,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 780,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 173,
+    "class": "sgArcHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 191,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 203,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 211,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 219,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 227,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 306,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 309,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 669,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 678,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 696,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 705,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 150,
+    "class": "sgPointHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 180,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 232,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 233,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 598,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 599,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 18,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 7,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 670,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 679,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 688,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 697,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 706,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 6,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   }
+  ]
+ },
+ "vendor_cojinete": {
+  "part": "COJINETE INFERIOR.SLDPRT",
+  "handles": [
+   {
+    "node": 222,
+    "class": "sgEntHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 46,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 14,
+     "escaped": true,
+     "EntIndex": -2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 230,
+    "class": "sgEntHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 46,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 14,
+     "escaped": true,
+     "EntIndex": -2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 238,
+    "class": "sgEntHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 46,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 14,
+     "escaped": true,
+     "EntIndex": -2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 246,
+    "class": "sgEntHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 58,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 14,
+     "escaped": true,
+     "EntIndex": -2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 159,
+    "class": "sgLineHandle",
+    "kind": "definition",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 160,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 185,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 190,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 194,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 201,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 250,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 254,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 258,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 262,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 13,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 347,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 356,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 437,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 3,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 439,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 48,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 443,
+    "class": "sgLineHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 186,
+    "class": "sgArcHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 97,
+    "extra_runs": 2,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 189,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 193,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 202,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 101,
+    "extra_runs": 8,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 221,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 229,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 237,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 245,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 276,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 294,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 312,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 330,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 430,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 433,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 436,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 438,
+    "class": "sgArcHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 1,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 140,
+    "class": "sgPointHandle",
+    "kind": "definition",
+    "ok": false,
+    "first_run_bytes": 24,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 170,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 16,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 266,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 2,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 267,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 275,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 284,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 5,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 285,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 293,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 6,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 302,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 6,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 303,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 311,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 320,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 321,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 329,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 8,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 338,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": true,
+    "first_run_bytes": 10,
+    "extra_runs": 0,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 8,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 339,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 0,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 348,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 8,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   },
+   {
+    "node": 357,
+    "class": "sgPointHandle",
+    "kind": "classref",
+    "ok": false,
+    "first_run_bytes": 14,
+    "extra_runs": 1,
+    "decoded": {
+     "bytes": 10,
+     "escaped": false,
+     "EntIndex": 4,
+     "RefId": -1,
+     "DimOnCM": 0
+    }
+   }
+  ]
+ }
+}

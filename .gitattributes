@@ -1,0 +1,2 @@
+re/binaries/*.dll filter=lfs diff=lfs merge=lfs -text
+re/binaries/*.exe filter=lfs diff=lfs merge=lfs -text

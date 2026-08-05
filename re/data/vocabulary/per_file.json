@@ -1,0 +1,632 @@
+{
+  "10MM x 20MM x 13MM head 316 Stainless Steel Socket Head Screw.SLDPRT": {
+    "file_id": "0x544E44E6",
+    "format_version": 4,
+    "streams": 44,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-579-ResolvedFeatures"
+    ],
+    "classes": 52
+  },
+  "6MM x 12MM -  Steel 12-Point Screw.SLDPRT": {
+    "file_id": "0xFF84FEA1",
+    "format_version": 4,
+    "streams": 45,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-962-ResolvedFeatures"
+    ],
+    "classes": 46
+  },
+  "8MM x 15mm - 12 point screw.SLDPRT": {
+    "file_id": "0xF7584966",
+    "format_version": 4,
+    "streams": 45,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-970-ResolvedFeatures"
+    ],
+    "classes": 46
+  },
+  "ABRAZADERA DE CUBIERTA DE TURBINA.SLDPRT": {
+    "file_id": "0xC0F6876C",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 49
+  },
+  "ARBOL DE LEVAS DE ADMISIO\u0301N_DERECHO.SLDPRT": {
+    "file_id": "0x0AA7C9A4",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 64
+  },
+  "ARBOL DE LEVAS DE ADMISIO\u0301N_IZQUIERDO.SLDPRT": {
+    "file_id": "0x014B3A3B",
+    "format_version": 4,
+    "streams": 47,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 69
+  },
+  "ARBOL DE LEVAS DE ESCAPE_DERECHO.SLDPRT": {
+    "file_id": "0x52E5C688",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 69
+  },
+  "ARBOL DE LEVAS DE ESCAPE_IZQUIERDO.SLDPRT": {
+    "file_id": "0x96D6BF38",
+    "format_version": 4,
+    "streams": 47,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 65
+  },
+  "BANDA DE DISTRIBUCIO\u0301N.SLDPRT": {
+    "file_id": "0x578BAF34",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 40
+  },
+  "BIELA.SLDPRT": {
+    "file_id": "0xD58E38ED",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 67
+  },
+  "BLOQUE V8.SLDPRT": {
+    "file_id": "0x2656AD29",
+    "format_version": 4,
+    "streams": 48,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 80
+  },
+  "BULO\u0301N.SLDPRT": {
+    "file_id": "0x02D7E839",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 55
+  },
+  "CARRERA DE EMPUJE.SLDPRT": {
+    "file_id": "0x67F2C326",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 67
+  },
+  "CARTER.SLDPRT": {
+    "file_id": "0x4E39F18E",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 71
+  },
+  "CIGUEN\u0303AL.SLDPRT": {
+    "file_id": "0xACA03D28",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 54
+  },
+  "COJINETE INFERIOR.SLDPRT": {
+    "file_id": "0xCFEF2203",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 40
+  },
+  "COJINETE SUPERIOR.SLDPRT": {
+    "file_id": "0x3BCB32EB",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 49
+  },
+  "COJINETE.SLDPRT": {
+    "file_id": "0x6D591592",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 49
+  },
+  "CUBIERTA DE SOPORTE DE ARBOL DE LEVAS.SLDPRT": {
+    "file_id": "0xD8FE7977",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 53
+  },
+  "CUBIERTA DE TURBINA 1.SLDPRT": {
+    "file_id": "0x6E90CC61",
+    "format_version": 4,
+    "streams": 45,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 76
+  },
+  "CUBIERTA.SLDPRT": {
+    "file_id": "0xAC2907A0",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 77
+  },
+  "CUIETA DE ENTRADA DE GASES.SLDPRT": {
+    "file_id": "0xEB2AC715",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 83
+  },
+  "CULATA_DERECHO.SLDPRT": {
+    "file_id": "0xDB31305E",
+    "format_version": 4,
+    "streams": 48,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 83
+  },
+  "CULATA_IZQUIERDO.SLDPRT": {
+    "file_id": "0x78770ACE",
+    "format_version": 4,
+    "streams": 47,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 70
+  },
+  "Cylinder Head Assy 1.SLDASM": {
+    "file_id": "0xB186AD72",
+    "format_version": 4,
+    "streams": 44,
+    "suffix": ".SLDASM",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 23
+  },
+  "EJE DE CONTROL DE VA\u0301LVULAS.SLDPRT": {
+    "file_id": "0x42617220",
+    "format_version": 4,
+    "streams": 45,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 56
+  },
+  "Engine Assy KF EDIT 2.SLDASM": {
+    "file_id": "0xBBDC4AB8",
+    "format_version": 4,
+    "streams": 44,
+    "suffix": ".SLDASM",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 45
+  },
+  "ENGRANE ARBOL DE LEVAS.SLDPRT": {
+    "file_id": "0x873ED123",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 57
+  },
+  "ENGRANE CIGUEN\u0303AL.SLDPRT": {
+    "file_id": "0x59BC7EA8",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 63
+  },
+  "ENSAMBLAJE DE MOTOR V8.SLDASM": {
+    "file_id": "0x281713F6",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDASM",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 49
+  },
+  "ENSAMBLAJE DE SEGURO DE ARBOL DE LEVAS.SLDASM": {
+    "file_id": "0xD82B6D2C",
+    "format_version": 4,
+    "streams": 45,
+    "suffix": ".SLDASM",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 22
+  },
+  "ENSAMBLE 3_IZQUIERDO.SLDASM": {
+    "file_id": "0x13CC9782",
+    "format_version": 4,
+    "streams": 45,
+    "suffix": ".SLDASM",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 37
+  },
+  "Left Side Exhaust Tube.SLDPRT": {
+    "file_id": "0x0ECBC37F",
+    "format_version": 4,
+    "streams": 47,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 87
+  },
+  "MULTIPLE DE ADMISIO\u0301N.SLDPRT": {
+    "file_id": "0x538FC29F",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 79
+  },
+  "MULTIPLE DE ESCAPE.SLDPRT": {
+    "file_id": "0x92F71AED",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 60
+  },
+  "PERNO HEXAGONAL HUECO_PARA SOPORTE DE RODAMIENTO DE BANDA.SLDPRT": {
+    "file_id": "0xCBDEB33E",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 50
+  },
+  "PINZA DE COMPRESOR.SLDPRT": {
+    "file_id": "0x527666AF",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 44
+  },
+  "Piston Ring KF.SLDPRT": {
+    "file_id": "0xFD40A41D",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 49
+  },
+  "PISTO\u0301N.SLDPRT": {
+    "file_id": "0xD9CC9F54",
+    "format_version": 4,
+    "streams": 47,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 71
+  },
+  "PLATO DEL COMPRESOR.SLDPRT": {
+    "file_id": "0x28411A57",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 65
+  },
+  "RESORTE DE VA\u0301LVULA.SLDPRT": {
+    "file_id": "0x8273C784",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 74
+  },
+  "Right Side Exhaust Tube.SLDPRT": {
+    "file_id": "0xE187EFDB",
+    "format_version": 4,
+    "streams": 47,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 82
+  },
+  "RODAMIENTO DE BANDA.SLDPRT": {
+    "file_id": "0x4ACD9F45",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 67
+  },
+  "RUEDA DE TURBINA.SLDPRT": {
+    "file_id": "0xAD81E741",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 72
+  },
+  "SEGUIDOR DE LEVA.SLDPRT": {
+    "file_id": "0x2CF1D1D8",
+    "format_version": 4,
+    "streams": 45,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 43
+  },
+  "SEGUIDOR DE VA\u0301VULA.SLDPRT": {
+    "file_id": "0x939366A7",
+    "format_version": 4,
+    "streams": 45,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 57
+  },
+  "SEGURO DE CIGU\u0308EN\u0303AL DE 18mm.SLDPRT": {
+    "file_id": "0xD7C1F6AE",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 59
+  },
+  "SEGURO DE CIGU\u0308EN\u0303AL DE 36mm.SLDPRT": {
+    "file_id": "0x4C8B16CB",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 49
+  },
+  "SEGURO DE CIGU\u0308EN\u0303AL DE 38mm.SLDPRT": {
+    "file_id": "0x939366A7",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 49
+  },
+  "SELLO DEL COMPRESOR.SLDPRT": {
+    "file_id": "0x5A15651E",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 77
+  },
+  "SOMBRERETE DE BIELA.SLDPRT": {
+    "file_id": "0xAF33AF52",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 56
+  },
+  "SOPORTE DE ARBOL DE LEVAS.SLDPRT": {
+    "file_id": "0xAC3B9D76",
+    "format_version": 4,
+    "streams": 45,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 66
+  },
+  "SOPORTE DE RODAMIENTO PARA LA BANDA.SLDPRT": {
+    "file_id": "0x00DDDD49",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 62
+  },
+  "SOPORTE DE SEGUIDOR DE VA\u0301LVULA.SLDPRT": {
+    "file_id": "0x3267D595",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 49
+  },
+  "SOPORTE EXTERNO DE ARBOL DE LEVAS.SLDPRT": {
+    "file_id": "0x676AEFE1",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 56
+  },
+  "TAPA DE CULATA DERECHO.SLDPRT": {
+    "file_id": "0x3DB3AED8",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 68
+  },
+  "TAPA DE CULATA IZQUIERDO.SLDPRT": {
+    "file_id": "0x3DB3AED8",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 68
+  },
+  "TAPA RECTANGULAR DE LA CUBIERTA DE LA TURBINA.SLDPRT": {
+    "file_id": "0xB14FF4B5",
+    "format_version": 4,
+    "streams": 43,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 91
+  },
+  "TORNILLO CABEZA HEXAGONAL_RODAMIENTO.SLDPRT": {
+    "file_id": "0x47D3993C",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 55
+  },
+  "TURBINA.SLDPRT": {
+    "file_id": "0xE28BCF7B",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 66
+  },
+  "Turbo Assy KF.SLDASM": {
+    "file_id": "0xA1FE69D4",
+    "format_version": 4,
+    "streams": 44,
+    "suffix": ".SLDASM",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 23
+  },
+  "Turbo Tube.SLDPRT": {
+    "file_id": "0x1BAFFE1C",
+    "format_version": 4,
+    "streams": 47,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 76
+  },
+  "VA\u0301LVULA.SLDPRT": {
+    "file_id": "0x63D49643",
+    "format_version": 4,
+    "streams": 46,
+    "suffix": ".SLDPRT",
+    "lanes": [
+      "Contents/Config-0-ResolvedFeatures"
+    ],
+    "classes": 51
+  }
+}

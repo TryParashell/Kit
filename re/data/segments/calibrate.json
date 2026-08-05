@@ -1,0 +1,20 @@
+{
+  "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_calibrate.log",
+  "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\cdb_calibrate.txt",
+  "dumps": 319,
+  "archives": 9,
+  "layout": {
+    "cur": 56,
+    "max": 64,
+    "start": 72,
+    "map": 80,
+    "votes": 1,
+    "candidates": 1,
+    "anchored_candidates": 0,
+    "anchor_span": 11075
+  },
+  "checks": {
+    "map_non_decreasing": 307,
+    "map_decreases": 3
+  }
+}

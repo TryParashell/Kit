@@ -1,0 +1,58 @@
+{
+  "mode": "items",
+  "parts": [
+    {
+      "label": "baseline",
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\BASELINE_40x20x10.SLDPRT",
+      "target": 2
+    },
+    {
+      "label": "padplane",
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\PADPLANE_rev_d5.SLDPRT",
+      "target": 4
+    },
+    {
+      "label": "three",
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\THREEFEATURE_pad_cut_pad.SLDPRT",
+      "target": 6
+    },
+    {
+      "label": "circle",
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\CIRCLE_r10.SLDPRT",
+      "target": 2
+    },
+    {
+      "label": "twopad",
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\TWOPAD_d5.SLDPRT",
+      "target": 4
+    }
+  ],
+  "shared": {
+    "anchor": [
+      [
+        -1,
+        44,
+        2
+      ]
+    ],
+    "tail": [],
+    "class": [
+      [
+        [
+          "",
+          "null"
+        ],
+        37,
+        2
+      ],
+      [
+        [
+          "",
+          "null"
+        ],
+        44,
+        2
+      ]
+    ]
+  }
+}

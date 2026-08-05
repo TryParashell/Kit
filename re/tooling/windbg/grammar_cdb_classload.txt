@@ -1,0 +1,9 @@
+.symopt+0x4000
+.sympath srv*c:\symbols*https://msdl.microsoft.com/download/symbols
+.reload /f mfc140u.dll
+x mfc140u!CArchive::*
+x mfc140u!CRuntimeClass::*
+dt mfc140u!CArchive
+bp mfc140u!CRuntimeClass::Load ".printf \"RCL ar=%p\\n\", @rcx; gc"
+bl
+g

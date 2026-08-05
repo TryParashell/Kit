@@ -1,0 +1,100 @@
+{
+  "stream": "Contents/CMgr",
+  "parts": [
+    {
+      "label": "boss1",
+      "nodes": 28,
+      "base": 3
+    },
+    {
+      "label": "boss2",
+      "nodes": 29,
+      "base": 3
+    },
+    {
+      "label": "boss3",
+      "nodes": 30,
+      "base": 3
+    }
+  ],
+  "steps": [
+    {
+      "from": "boss1",
+      "to": "boss2",
+      "insertions": [
+        {
+          "low": 10,
+          "high": 11,
+          "size": 1,
+          "nodes": [
+            "10:null:-:148"
+          ]
+        },
+        {
+          "low": 13,
+          "high": 14,
+          "size": 1,
+          "nodes": [
+            "13:classref:moLinkedAtomIdNode_c:56"
+          ]
+        },
+        {
+          "low": 21,
+          "high": 22,
+          "size": 1,
+          "nodes": [
+            "21:null:-:52"
+          ]
+        },
+        {
+          "low": 27,
+          "high": 28,
+          "size": 1,
+          "nodes": [
+            "27:definition:suObList:50"
+          ]
+        }
+      ],
+      "inserted_nodes": 4
+    },
+    {
+      "from": "boss2",
+      "to": "boss3",
+      "insertions": [
+        {
+          "low": 10,
+          "high": 11,
+          "size": 1,
+          "nodes": [
+            "10:null:-:156"
+          ]
+        },
+        {
+          "low": 13,
+          "high": 14,
+          "size": 1,
+          "nodes": [
+            "13:classref:moLinkedAtomIdNode_c:32"
+          ]
+        },
+        {
+          "low": 22,
+          "high": 23,
+          "size": 1,
+          "nodes": [
+            "22:null:-:60"
+          ]
+        },
+        {
+          "low": 28,
+          "high": 29,
+          "size": 1,
+          "nodes": [
+            "28:definition:suObList:62"
+          ]
+        }
+      ],
+      "inserted_nodes": 4
+    }
+  ]
+}

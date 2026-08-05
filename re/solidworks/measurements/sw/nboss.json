@@ -1,0 +1,62 @@
+[
+  {
+    "count": 1,
+    "expected_volume_mm3": 1476.0,
+    "donor": "boss1_front_rect_blind",
+    "written": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\nboss1.SLDPRT",
+    "bytes": 21377,
+    "application_usable": true,
+    "vendor_loadable": true,
+    "diagnostics": []
+  },
+  {
+    "count": 2,
+    "expected_volume_mm3": 4066.0,
+    "donor": "boss2_front_rect_blind",
+    "written": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\nboss2.SLDPRT",
+    "bytes": 22880,
+    "application_usable": true,
+    "vendor_loadable": true,
+    "diagnostics": []
+  },
+  {
+    "count": 3,
+    "expected_volume_mm3": 11954.0,
+    "donor": "boss3_front_rect_blind",
+    "written": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\nboss3.SLDPRT",
+    "bytes": 24162,
+    "application_usable": true,
+    "vendor_loadable": true,
+    "diagnostics": []
+  },
+  {
+    "count": 4,
+    "expected_volume_mm3": 33896.0,
+    "donor": "boss4_front_rect_blind",
+    "written": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\nboss4.SLDPRT",
+    "bytes": 25385,
+    "application_usable": true,
+    "vendor_loadable": true,
+    "diagnostics": []
+  },
+  {
+    "count": 5,
+    "expected_volume_mm3": 57546.0,
+    "donor": "boss5_front_rect_blind",
+    "written": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\nboss5.SLDPRT",
+    "bytes": 26570,
+    "application_usable": true,
+    "vendor_loadable": true,
+    "diagnostics": []
+  },
+  {
+    "count": 6,
+    "expected_volume_mm3": 80610.0,
+    "donor": "boss6_front_rect_blind",
+    "written": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\sw\\sldprt\\nboss6.SLDPRT",
+    "bytes": 27761,
+    "application_usable": true,
+    "vendor_loadable": true,
+    "diagnostics": []
+  }
+]

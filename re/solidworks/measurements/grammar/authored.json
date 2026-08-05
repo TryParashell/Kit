@@ -1,0 +1,397 @@
+[
+  {
+    "case": "A1_one_boss_front",
+    "shape": [
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ]
+    ],
+    "predicted_mm3": 18000.0,
+    "predicted_centre_mm": [
+      0.0,
+      0.0,
+      6.0
+    ],
+    "feature_count": 1,
+    "skeleton": "BASELINE_40x20x10.SLDPRT",
+    "resolved_bytes": 11075,
+    "keywords_bytes": 1661,
+    "features_xml_bytes": 768,
+    "container_bytes": 44377,
+    "writes": [
+      "moCompFeature_c ids=[26, 32] stamp=1785844324 (inherited)",
+      "tree[0] 'Boss-Extrude1' flags=0x40000140 at 8091, id=32 at 8095, sketch id=26 at 5888",
+      "sketch[0] rectangle ((-25.0, -15.0), (25.0, 15.0), (-25.0, 15.0), (25.0, -15.0)) at [6119, 6297, 6459, 6621]",
+      "extrude[0] depth=12.0 at 9882 copies=[0], reverse=0 at 9058, end=0 at 9064",
+      "sketch plane id=2 axis=3 at 7958/7968",
+      "moBBoxCenterData_c left stale (derived body bounding cache)",
+      "moDefaultRefPlnData_c left stale (derived display extents, span=50.0)"
+    ],
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\authored\\A1_one_boss_front.SLDPRT",
+    "stream_names": [
+      [
+        "Sketch1",
+        "Boss-Extrude1"
+      ]
+    ]
+  },
+  {
+    "case": "A2_two_bosses_front",
+    "shape": [
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ],
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ]
+    ],
+    "predicted_mm3": 21200.0,
+    "predicted_centre_mm": null,
+    "feature_count": 2,
+    "skeleton": "PADPLANE_rev_d5.SLDPRT",
+    "resolved_bytes": 16581,
+    "keywords_bytes": 1865,
+    "features_xml_bytes": 772,
+    "container_bytes": 45199,
+    "writes": [
+      "moCompFeature_c ids=[26, 32, 33, 40] stamp=1785844324 (inherited)",
+      "tree[0] 'Boss-Extrude1' flags=0x40000140 at 8329, id=32 at 8333, sketch id=26 at 6126",
+      "tree[1] 'Boss-Extrude2' flags=0x40000140 at 13586, id=40 at 13590, sketch id=33 at 11337",
+      "sketch[0] rectangle ((-25.0, -15.0), (25.0, 15.0), (-25.0, 15.0), (25.0, -15.0)) at [6357, 6535, 6697, 6859]",
+      "sketch[1] rectangle ((-10.0, -10.0), (10.0, 10.0), (-10.0, 10.0), (10.0, -10.0)) at [11568, 11730, 11892, 12054]",
+      "extrude[0] depth=12.0 at 10118 copies=[0], reverse=0 at 9294, end=0 at 9300",
+      "extrude[1] depth=8.0 at 15429 copies=[0], reverse=1 at 14708, end=0 at 14714",
+      "sketch plane id=2 axis=3 at 8196/8206",
+      "moBBoxCenterData_c left stale (derived body bounding cache)",
+      "moDefaultRefPlnData_c left stale (derived display extents, span=50.0)"
+    ],
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\authored\\A2_two_bosses_front.SLDPRT",
+    "stream_names": [
+      [
+        "Sketch1",
+        "Boss-Extrude1"
+      ],
+      [
+        "Sketch2",
+        "Boss-Extrude2"
+      ]
+    ]
+  },
+  {
+    "case": "A3_boss_then_cut",
+    "shape": [
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ],
+      [
+        "cut",
+        "rectangle",
+        "plane",
+        true
+      ]
+    ],
+    "predicted_mm3": 14800.0,
+    "predicted_centre_mm": null,
+    "feature_count": 2,
+    "skeleton": "CUTBASE_cd5.SLDPRT",
+    "resolved_bytes": 16579,
+    "keywords_bytes": 1864,
+    "features_xml_bytes": 766,
+    "container_bytes": 46093,
+    "writes": [
+      "moCompFeature_c ids=[26, 32, 33, 40] stamp=1785844324 (inherited)",
+      "tree[0] 'Boss-Extrude1' flags=0x40000140 at 8329, id=32 at 8333, sketch id=26 at 6126",
+      "tree[1] 'Cut-Extrude1' flags=0x400201ca at 13584, id=40 at 13588, sketch id=33 at 11337",
+      "sketch[0] rectangle ((-25.0, -15.0), (25.0, 15.0), (-25.0, 15.0), (25.0, -15.0)) at [6357, 6535, 6697, 6859]",
+      "sketch[1] rectangle ((-10.0, -10.0), (10.0, 10.0), (-10.0, 10.0), (10.0, -10.0)) at [11568, 11730, 11892, 12054]",
+      "extrude[0] depth=12.0 at 10118 copies=[0], reverse=0 at 9294, end=0 at 9300",
+      "extrude[1] depth=8.0 at 15427 copies=[0], reverse=1 at 14706, end=0 at 14712",
+      "sketch plane id=2 axis=3 at 8196/8206",
+      "moBBoxCenterData_c left stale (derived body bounding cache)",
+      "moDefaultRefPlnData_c left stale (derived display extents, span=50.0)"
+    ],
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\authored\\A3_boss_then_cut.SLDPRT",
+    "stream_names": [
+      [
+        "Sketch1",
+        "Boss-Extrude1"
+      ],
+      [
+        "Sketch2",
+        "Cut-Extrude1"
+      ]
+    ]
+  },
+  {
+    "case": "A4_one_circle_boss",
+    "shape": [
+      [
+        "boss",
+        "circle",
+        "plane",
+        true
+      ]
+    ],
+    "predicted_mm3": 7068.583470577034,
+    "predicted_centre_mm": [
+      0.0,
+      0.0,
+      5.0
+    ],
+    "feature_count": 1,
+    "skeleton": "CIRCLE_r10.SLDPRT",
+    "resolved_bytes": 10556,
+    "keywords_bytes": 1661,
+    "features_xml_bytes": 770,
+    "container_bytes": 54484,
+    "writes": [
+      "moCompFeature_c ids=[26, 32] stamp=1785844324 (inherited)",
+      "tree[0] 'Boss-Extrude1' flags=0x40000140 at 7692, id=32 at 7696, sketch id=26 at 5888",
+      "sketch[0] circle r=15.0 centre@6119 point@6261",
+      "extrude[0] depth=10.0 at 9363 copies=[0], reverse=0 at 8539, end=0 at 8545",
+      "sketch plane id=2 axis=3 at 7559/7569",
+      "moBBoxCenterData_c left stale (derived body bounding cache)",
+      "moDefaultRefPlnData_c left stale (derived display extents, span=30.0)"
+    ],
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\authored\\A4_one_circle_boss.SLDPRT",
+    "stream_names": [
+      [
+        "Sketch1",
+        "Boss-Extrude1"
+      ]
+    ]
+  },
+  {
+    "case": "A5_three_features",
+    "shape": [
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ],
+      [
+        "cut",
+        "rectangle",
+        "plane",
+        true
+      ],
+      [
+        "boss",
+        "rectangle",
+        "face",
+        true
+      ]
+    ],
+    "predicted_mm3": 19611.0,
+    "predicted_centre_mm": null,
+    "feature_count": 3,
+    "skeleton": "THREEFEATURE_pad_cut_pad.SLDPRT",
+    "resolved_bytes": 24805,
+    "keywords_bytes": 2068,
+    "features_xml_bytes": 768,
+    "container_bytes": 52080,
+    "writes": [
+      "moCompFeature_c ids=[26, 32, 33, 40, 41, 47] stamp=1785844324 (inherited)",
+      "tree[0] 'Boss-Extrude1' flags=0x40000140 at 8567, id=32 at 8571, sketch id=26 at 6364",
+      "tree[1] 'Cut-Extrude1' flags=0x400201ca at 13824, id=40 at 13828, sketch id=33 at 11577",
+      "tree[2] 'Boss-Extrude2' flags=0x40000140 at 21890, id=47 at 21894, sketch id=41 at 16845",
+      "sketch[0] rectangle ((-27.5, -14.0), (27.5, 14.0), (-27.5, 14.0), (27.5, -14.0)) at [6595, 6773, 6935, 7097]",
+      "sketch[1] rectangle ((-5.5, -5.5), (5.5, 5.5), (-5.5, 5.5), (5.5, -5.5)) at [11808, 11970, 12132, 12294]",
+      "sketch[2] rectangle ((-3.5, -3.5), (3.5, 3.5), (-3.5, 3.5), (3.5, -3.5)) at [17076, 17238, 17400, 17562]",
+      "extrude[0] depth=13.0 at 10358 copies=[0], reverse=0 at 9534, end=0 at 9540",
+      "extrude[1] depth=5.0 at 15667 copies=[0], reverse=1 at 14946, end=0 at 14952",
+      "extrude[2] depth=4.0 at 23653 copies=[0], reverse=0 at 22932, end=0 at 22938",
+      "sketch plane id=2 axis=3 at 8434/8444",
+      "moBBoxCenterData_c left stale (derived body bounding cache)",
+      "moDefaultRefPlnData_c left stale (derived display extents, span=55.0)"
+    ],
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\authored\\A5_three_features.SLDPRT",
+    "stream_names": [
+      [
+        "Sketch1",
+        "Boss-Extrude1"
+      ],
+      [
+        "Sketch2",
+        "Cut-Extrude1"
+      ],
+      [
+        "Sketch3",
+        "Boss-Extrude2"
+      ]
+    ]
+  },
+  {
+    "case": "A6_boss_through_cut",
+    "shape": [
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ],
+      [
+        "cut",
+        "rectangle",
+        "plane",
+        false
+      ]
+    ],
+    "predicted_mm3": 8181.0,
+    "predicted_centre_mm": null,
+    "feature_count": 2,
+    "skeleton": "CUTTHROUGH_s10.SLDPRT",
+    "resolved_bytes": 14800,
+    "keywords_bytes": 1818,
+    "features_xml_bytes": 772,
+    "container_bytes": 48643,
+    "writes": [
+      "moCompFeature_c ids=[26, 32, 33, 40] stamp=1785844324 (inherited)",
+      "tree[0] 'Boss-Extrude1' flags=0x40000140 at 8329, id=32 at 8333, sketch id=26 at 6126",
+      "tree[1] 'Cut-Extrude1' flags=0x400201ca at 13584, id=40 at 13588, sketch id=33 at 11337",
+      "sketch[0] rectangle ((-22.5, -11.0), (22.5, 11.0), (-22.5, 11.0), (22.5, -11.0)) at [6357, 6535, 6697, 6859]",
+      "sketch[1] rectangle ((-4.5, -4.5), (4.5, 4.5), (-4.5, 4.5), (4.5, -4.5)) at [11568, 11730, 11892, 12054]",
+      "extrude[0] depth=9.0 at 10118 copies=[0], reverse=0 at 9294, end=0 at 9300",
+      "extrude[1] ThroughAll, no scalar in skeleton",
+      "sketch plane id=2 axis=3 at 8196/8206",
+      "moBBoxCenterData_c left stale (derived body bounding cache)",
+      "moDefaultRefPlnData_c left stale (derived display extents, span=45.0)"
+    ],
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\authored\\A6_boss_through_cut.SLDPRT",
+    "stream_names": [
+      [
+        "Sketch1",
+        "Boss-Extrude1"
+      ],
+      [
+        "Sketch2",
+        "Cut-Extrude1"
+      ]
+    ]
+  },
+  {
+    "case": "A7_boss_top_plane",
+    "shape": [
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ]
+    ],
+    "predicted_mm3": 8000.0,
+    "predicted_centre_mm": [
+      0.0,
+      5.0,
+      0.0
+    ],
+    "feature_count": 1,
+    "skeleton": "BASELINE_40x20x10.SLDPRT",
+    "resolved_bytes": 11075,
+    "keywords_bytes": 1661,
+    "features_xml_bytes": 768,
+    "container_bytes": 44365,
+    "writes": [
+      "moCompFeature_c ids=[26, 32] stamp=1785844324 (inherited)",
+      "tree[0] 'Boss-Extrude1' flags=0x40000140 at 8091, id=32 at 8095, sketch id=26 at 5888",
+      "sketch[0] rectangle ((-20.0, -10.0), (20.0, 10.0), (-20.0, 10.0), (20.0, -10.0)) at [6119, 6297, 6459, 6621]",
+      "extrude[0] depth=10.0 at 9882 copies=[0], reverse=0 at 9058, end=0 at 9064",
+      "sketch plane id=3 axis=2 at 7958/7968",
+      "moBBoxCenterData_c left stale (derived body bounding cache)",
+      "moDefaultRefPlnData_c left stale (derived display extents, span=40.0)"
+    ],
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\authored\\A7_boss_top_plane.SLDPRT",
+    "stream_names": [
+      [
+        "Sketch1",
+        "Boss-Extrude1"
+      ]
+    ]
+  },
+  {
+    "case": "A8_boss_mid_plane",
+    "shape": [
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ]
+    ],
+    "predicted_mm3": 8000.0,
+    "predicted_centre_mm": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "feature_count": 1,
+    "skeleton": "BASELINE_40x20x10.SLDPRT",
+    "resolved_bytes": 11075,
+    "keywords_bytes": 1661,
+    "features_xml_bytes": 768,
+    "container_bytes": 44363,
+    "writes": [
+      "moCompFeature_c ids=[26, 32] stamp=1785844324 (inherited)",
+      "tree[0] 'Boss-Extrude1' flags=0x40000140 at 8091, id=32 at 8095, sketch id=26 at 5888",
+      "sketch[0] rectangle ((-20.0, -10.0), (20.0, 10.0), (-20.0, 10.0), (20.0, -10.0)) at [6119, 6297, 6459, 6621]",
+      "extrude[0] depth=10.0 at 9882 copies=[0], reverse=0 at 9058, end=6 at 9064",
+      "sketch plane id=2 axis=3 at 7958/7968",
+      "moBBoxCenterData_c left stale (derived body bounding cache)",
+      "moDefaultRefPlnData_c left stale (derived display extents, span=40.0)"
+    ],
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\authored\\A8_boss_mid_plane.SLDPRT",
+    "stream_names": [
+      [
+        "Sketch1",
+        "Boss-Extrude1"
+      ]
+    ]
+  },
+  {
+    "case": "A9_four_bosses_front",
+    "shape": [
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ],
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ],
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ],
+      [
+        "boss",
+        "rectangle",
+        "plane",
+        true
+      ]
+    ],
+    "predicted_mm3": 21708.0,
+    "predicted_centre_mm": null,
+    "feature_count": 4,
+    "error": "SerializeError(\"no skeleton matches shape (('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'plane', True)); available: (('boss', 'rectangle', 'plane', True),); (('boss', 'circle', 'plane', True),); (('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'plane', True)); (('boss', 'rectangle', 'plane', True), ('cut', 'rectangle', 'plane', True)); (('boss', 'rectangle', 'plane', True), ('cut', 'rectangle', 'plane', False)); (('boss', 'rectangle', 'plane', True), ('cut', 'circle', 'plane', True)); (('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'face', True)); (('boss', 'rectangle', 'plane', True), ('cut', 'rectangle', 'plane', True), ('boss', 'rectangle', 'face', True))\")",
+    "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\author_parts.py\", line 147, in main\n    emission, size = serialize.build_part(\n                     ~~~~~~~~~~~~~~~~~~~~^\n        part, AUTHORED / f\"{label}.SLDPRT\", skeletons\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\serialize.py\", line 631, in build_part\n    skeleton = select_skeleton(part, catalogue)\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\serialize.py\", line 247, in select_skeleton\n    raise SerializeError(f\"no skeleton matches shape {wanted}; available: {available}\")\nserialize.SerializeError: no skeleton matches shape (('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'plane', True)); available: (('boss', 'rectangle', 'plane', True),); (('boss', 'circle', 'plane', True),); (('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'plane', True)); (('boss', 'rectangle', 'plane', True), ('cut', 'rectangle', 'plane', True)); (('boss', 'rectangle', 'plane', True), ('cut', 'rectangle', 'plane', False)); (('boss', 'rectangle', 'plane', True), ('cut', 'circle', 'plane', True)); (('boss', 'rectangle', 'plane', True), ('boss', 'rectangle', 'face', True)); (('boss', 'rectangle', 'plane', True), ('cut', 'rectangle', 'plane', True), ('boss', 'rectangle', 'face', True))\n"
+  }
+]

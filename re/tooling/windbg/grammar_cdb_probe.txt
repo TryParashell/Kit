@@ -1,0 +1,7 @@
+.sympath srv*c:\symbols*https://msdl.microsoft.com/download/symbols
+.reload
+bu mfc140u!CArchive::ReadObject ".echo RO;gc"
+bu mfc140u!CArchive::ReadClass ".echo RC;gc"
+bu mfc140u!CRuntimeClass::Load ".echo RCL;gc"
+bl
+g

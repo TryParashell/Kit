@@ -1,0 +1,521 @@
+[
+  {
+    "label": "boss1",
+    "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\donors\\parts\\boss1_front_rect_blind.SLDPRT",
+    "spans": [
+      11073,
+      1957,
+      2315,
+      25212,
+      1593
+    ],
+    "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\cdb_multi_boss1.txt",
+    "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_multi_boss1.log",
+    "status": "traced",
+    "streams": [
+      {
+        "stream": "Contents/Config-0-ResolvedFeatures",
+        "status": "traced",
+        "stream_length": 11073,
+        "buffers": 1,
+        "objects": 321,
+        "definitions": 41,
+        "base_map_index": 109,
+        "tiles": true,
+        "header_bytes": 6,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 31,
+        "external_objectrefs": 6
+      },
+      {
+        "stream": "Contents/CMgr",
+        "status": "traced",
+        "stream_length": 1957,
+        "buffers": 1,
+        "objects": 28,
+        "definitions": 7,
+        "base_map_index": 3,
+        "tiles": true,
+        "header_bytes": 26,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 0,
+        "external_objectrefs": 0
+      },
+      {
+        "stream": "Contents/Config-0-ModelHeader",
+        "status": "traced",
+        "stream_length": 2315,
+        "buffers": 1,
+        "objects": 67,
+        "definitions": 6,
+        "base_map_index": 3,
+        "tiles": true,
+        "header_bytes": 20,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 0,
+        "external_objectrefs": 0
+      },
+      {
+        "stream": "Contents/Config-0",
+        "status": "traced",
+        "stream_length": 25212,
+        "buffers": 1,
+        "objects": 123,
+        "definitions": 39,
+        "base_map_index": 4,
+        "tiles": true,
+        "header_bytes": 26,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 0,
+        "external_objectrefs": 1
+      },
+      {
+        "stream": "ThirdPtyStore/VisualStates",
+        "status": "traced",
+        "stream_length": 1593,
+        "buffers": 2,
+        "objects": 33,
+        "definitions": 7,
+        "base_map_index": 0,
+        "tiles": true,
+        "header_bytes": 8,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 32,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2,
+            3
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": false,
+        "model_error": "class reference 5 at 1006 is unresolved"
+      }
+    ]
+  },
+  {
+    "label": "boss2",
+    "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\donors\\parts\\boss2_front_rect_blind.SLDPRT",
+    "spans": [
+      16174,
+      2019,
+      2471,
+      25316,
+      1704
+    ],
+    "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\cdb_multi_boss2.txt",
+    "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_multi_boss2.log",
+    "status": "traced",
+    "streams": [
+      {
+        "stream": "Contents/Config-0-ResolvedFeatures",
+        "status": "traced",
+        "stream_length": 16174,
+        "buffers": 1,
+        "objects": 500,
+        "definitions": 44,
+        "base_map_index": 110,
+        "tiles": true,
+        "header_bytes": 6,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 41,
+        "external_objectrefs": 10
+      },
+      {
+        "stream": "Contents/CMgr",
+        "status": "traced",
+        "stream_length": 2019,
+        "buffers": 1,
+        "objects": 29,
+        "definitions": 7,
+        "base_map_index": 3,
+        "tiles": true,
+        "header_bytes": 26,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 0,
+        "external_objectrefs": 0
+      },
+      {
+        "stream": "Contents/Config-0-ModelHeader",
+        "status": "traced",
+        "stream_length": 2471,
+        "buffers": 1,
+        "objects": 72,
+        "definitions": 6,
+        "base_map_index": 3,
+        "tiles": true,
+        "header_bytes": 20,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 0,
+        "external_objectrefs": 0
+      },
+      {
+        "stream": "Contents/Config-0",
+        "status": "traced",
+        "stream_length": 25316,
+        "buffers": 1,
+        "objects": 126,
+        "definitions": 39,
+        "base_map_index": 4,
+        "tiles": true,
+        "header_bytes": 26,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 0,
+        "external_objectrefs": 1
+      },
+      {
+        "stream": "ThirdPtyStore/VisualStates",
+        "status": "traced",
+        "stream_length": 1704,
+        "buffers": 2,
+        "objects": 38,
+        "definitions": 7,
+        "base_map_index": 0,
+        "tiles": true,
+        "header_bytes": 8,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 37,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2,
+            3
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": false,
+        "model_error": "class reference 5 at 1006 is unresolved"
+      }
+    ]
+  },
+  {
+    "label": "boss3",
+    "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\donors\\parts\\boss3_front_rect_blind.SLDPRT",
+    "spans": [
+      21205,
+      2081,
+      2627,
+      25420,
+      1815
+    ],
+    "script": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\cdb_multi_boss3.txt",
+    "log": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\trace\\out\\cdb_multi_boss3.log",
+    "status": "traced",
+    "streams": [
+      {
+        "stream": "Contents/Config-0-ResolvedFeatures",
+        "status": "traced",
+        "stream_length": 21205,
+        "buffers": 1,
+        "objects": 679,
+        "definitions": 44,
+        "base_map_index": 111,
+        "tiles": true,
+        "header_bytes": 6,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 51,
+        "external_objectrefs": 14
+      },
+      {
+        "stream": "Contents/CMgr",
+        "status": "traced",
+        "stream_length": 2081,
+        "buffers": 1,
+        "objects": 30,
+        "definitions": 7,
+        "base_map_index": 3,
+        "tiles": true,
+        "header_bytes": 26,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 0,
+        "external_objectrefs": 0
+      },
+      {
+        "stream": "Contents/Config-0-ModelHeader",
+        "status": "traced",
+        "stream_length": 2627,
+        "buffers": 1,
+        "objects": 77,
+        "definitions": 6,
+        "base_map_index": 3,
+        "tiles": true,
+        "header_bytes": 20,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 0,
+        "external_objectrefs": 0
+      },
+      {
+        "stream": "Contents/Config-0",
+        "status": "traced",
+        "stream_length": 25420,
+        "buffers": 1,
+        "objects": 129,
+        "definitions": 39,
+        "base_map_index": 4,
+        "tiles": true,
+        "header_bytes": 26,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 0,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": true,
+        "external_classrefs": 0,
+        "external_objectrefs": 1
+      },
+      {
+        "stream": "ThirdPtyStore/VisualStates",
+        "status": "traced",
+        "stream_length": 1815,
+        "buffers": 2,
+        "objects": 43,
+        "definitions": 7,
+        "base_map_index": 0,
+        "tiles": true,
+        "header_bytes": 8,
+        "trailing_bytes": 0,
+        "gaps": [],
+        "overlaps": [],
+        "counter_mismatches": 42,
+        "increment_rule": {
+          "classref": [
+            1
+          ],
+          "definition": [
+            2,
+            3
+          ],
+          "null": [
+            0
+          ],
+          "objectref": [
+            0
+          ]
+        },
+        "reemit_identical": false,
+        "model_error": "class reference 5 at 1006 is unresolved"
+      }
+    ]
+  }
+]
