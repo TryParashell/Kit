@@ -169,7 +169,34 @@ def test_random_assembly_public_sdk_recovers_complete_neutral_graph(
         sum(len(item.document.parameters) for item in assembly.documents),
         sum(len(item.document.brep_payloads) for item in assembly.documents),
     )
-    assert linked_counts == (391, 2147, 1692, 303)
+    assert linked_counts == (391, 2147, 1695, 303)
+    global_variables = {
+        (Path(str(item.document.source.path)).name, parameter.name): parameter
+        for item in assembly.documents
+        for parameter in item.document.parameters
+        if parameter.id.startswith("sldprt:parameter:equation:")
+    }
+    assert {key[1] for key in global_variables} == {"d", "r1", "r2"}
+    assert {key[0] for key in global_variables} == {"Camshaft.SLDPRT"}
+    assert {
+        name: global_variables[("Camshaft.SLDPRT", name)].value.value
+        for name in ("d", "r1", "r2")
+    } == {"d": 8.0, "r1": 18.0, "r2": 10.0}
+    assert all(
+        parameter.value.kind is ValueKind.NUMBER
+        for parameter in global_variables.values()
+    )
+    driven = [
+        parameter
+        for item in assembly.documents
+        for parameter in item.document.parameters
+        if parameter.expression is not None
+        and any(
+            reference in {item.id for item in global_variables.values()}
+            for reference in parameter.expression.references
+        )
+    ]
+    assert len(driven) == 22
     assert Counter(
         payload.role
         for item in assembly.documents
