@@ -272,10 +272,14 @@ def _assert_truthful_vendor_result(
     assert referenced_files_written >= 0
     if referenced_files_written:
         assert is_assembly
-        assert result.application_usable is True
-        assert result.vendor_loadable is True
-    if not result.vendor_loadable:
-        assert referenced_files_written == 0
+        path = result.output.path
+        assert path is not None
+        siblings = tuple(
+            item for item in path.parent.iterdir() if item.is_file() and item != path
+        )
+        assert len(siblings) == referenced_files_written
+        assert all(item.stat().st_size > 0 for item in siblings)
+        assert metadata["native_self_contained"] is result.application_usable
     if metadata["compatibility"] == "native-exact":
         assert metadata["vendor_loadable"] is True
         assert metadata["native_geometry"] is True
@@ -344,7 +348,9 @@ def test_every_valid_format_swap_runs_both_directions(
     original = _matrix_document(source)
     assert (original.assembly is not None) == is_assembly
     original_signature = _document_signature(original)
-    destination = tmp_path / f"{name}_swapped{destination_suffix}"
+    forward_directory = tmp_path / f"{name}_forward"
+    forward_directory.mkdir()
+    destination = forward_directory / f"{name}_swapped{destination_suffix}"
     result = _convert_with_application_gate(source, destination)
     restored = open_document(destination)
     assert result.source_format == FORMAT_BY_SUFFIX[source_suffix]
