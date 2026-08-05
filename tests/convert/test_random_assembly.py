@@ -19,7 +19,13 @@ import zipfile
 import pytest
 
 from convert import open_document, write_document
-from interchange import CadDocument, ComponentKind, Matrix4, PayloadRole
+from interchange import (
+    CadDocument,
+    ComponentKind,
+    Matrix4,
+    PayloadRole,
+    ValueKind,
+)
 
 RANDOM = Path(__file__).parents[2] / "examples" / "Random" / "V8_engine.SLDASM"
 ORACLE = Path(os.environ.get("KIT_FREECAD_ORACLE", ""))
