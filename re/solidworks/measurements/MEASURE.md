@@ -157,3 +157,93 @@ of those streams are in fact fine, so neither was ever the thing at risk.
 absent, and the writer emits `sldasm.vendor_reader_rejects` naming each gap. The compatibility label
 still reads `native-assembly-with-kit-neutral`, because the native records are genuinely there — they
 are just not yet loadable.
+
+## Donor-carried `.SLDASM` writes, measured in SOLIDWORKS 2025 (rev 33.5.0)
+
+Follow-up to the section above. Numbers live in `.rescratch/sw/out/measure_asmdonor_*.json`, one
+fresh SOLIDWORKS process per file, `corpus/parts/BASELINE_40x20x10.SLDPRT` measured before and after
+every batch (`8000.000000000001` mm³, 1 body, zero load errors — healthy in all four batches).
+
+### The write path already carries the donor; nobody had opened the result
+
+The crash measured earlier was the **source-less** assembly path (`.rescratch/gen_sldasm2.py` strips
+`solidworks_source_*` from the document metadata before writing). When a `.SLDASM` is read and
+written back, `_source_template` returns the vendor bytes and `_generated_streams` hands them to
+`_patch_native_template`, which starts from the complete vendor stream set. All six recipe streams —
+`Contents/CMgr`, `Contents/Config-0`, `Contents/Config-0-ResolvedFeatures`, `Contents/Definition`,
+`Contents/Config-0-ModelHeader`, `Header2` — come through byte-identical, and Kit's rejected
+synthesised model header is never written.
+
+`write_document(read_sldprt("examples/Random/Pistons/Piston.SLDASM"), out)` produces a 45-stream file
+that differs from the vendor original in exactly three streams: `Kit/Interchange`, `Kit/Native`,
+`swXmlContents/COMPINSTANCETREE`.
+
+| file | opened | load errors | load warnings | components | states | mates | rebuilt | bodies | volume mm³ | centre mm |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Kit-written `Piston.SLDASM` (b1) | yes | none | none | 4 | 4 fully-resolved | 6 | true | 4 | `94147.19377093749` | `(0.0003789180878327792, 32.304601496316025, -0.000206795236149518)` |
+| Kit-written `Piston.SLDASM` (b3) | yes | none | none | 4 | 4 fully-resolved | 6 | true | 4 | `94147.19377093748` | `(0.00037891808783261424, 32.30460149631602, -0.00020679523614970235)` |
+| vendor `Piston.SLDASM` (b3) | yes | none | none | 4 | 4 fully-resolved | 6 | true | 4 | `94147.19377093746` | `(0.00037891808783228843, 32.304601496316025, -0.00020679523614969687)` |
+
+Volume and centre of mass agree with the vendor original to ~1e-16 relative. Six mates, not the zero
+the synthesised `Contents/Config-0-MatesList` yields — the donor mate records come through intact.
+
+### SOLIDWORKS ignores `COMPINSTANCETREE` placement
+
+This is the correctness hazard, and it was shipping. `_patch_assembly_instances` rewrites component
+placement **only** in `swXmlContents/COMPINSTANCETREE`; the load-critical binary streams are carried
+verbatim. Kit's own reader reads placement back out of `COMPINSTANCETREE`, so every decode-based
+proxy agreed and the writer reported `vendor_loadable = True`, `native-template`.
+
+Shifting `Piston_shaft-1` (5089.380098815458 mm³ of 94147.19377093749 mm³) by +50 mm in Y should move
+the assembly centre of mass in Y by 2.703 mm, to ≈35.008.
+
+| file | opened | components | states | mates | bodies | volume mm³ | centre mm |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| shaft moved +50 mm Y | yes | 4 | 4 fully-resolved | 6 | 4 | `94147.19377093749` | `(0.000378918087832499, 32.304601496316025, -0.00020679523614945986)` |
+| one instance removed | yes | 4 | 4 fully-resolved | 6 | 4 | `94147.19377093746` | `(0.00037891808783270574, 32.304601496316025, -0.00020679523614959046)` |
+| source-less generated | **no** — crash during `OpenDoc6` | — | — | — | — | — | — |
+
+The moved file's centre of mass is the donor's, unchanged, to the last digit. The reader takes
+placement from `Contents/Config-0-ResolvedFeatures` and never consults the patched XML. The
+three-instance document likewise still shows four components. So a verbatim donor carry ships the
+**donor's** assembly, and any document that diverges from the donor must be declined — patching
+`COMPINSTANCETREE` is not a way to express an edit to the vendor reader.
+
+### The gate that now applies
+
+`vendor_loadable` on the donor assembly path requires all of:
+
+- the four load-critical streams present, and every donor stream byte-identical in the output except
+  `Kit/Interchange`, `Kit/Native`, `Kit/ResolvedFeatures` and `swXmlContents/COMPINSTANCETREE`;
+- the document's root definition, definition list, instance list and per-instance values (transform,
+  configuration, suppression, visibility, BOM flags, order) equal to those decoded from the
+  **unpatched** donor;
+- no mate record rewritten in a donor stream.
+
+Anything else emits `sldasm.vendor_reader_rejects` naming the gap, and reports
+`vendor_loadable = False` with compatibility `native-source-with-kit-neutral`. Measured outcomes:
+`donor_instance_diverged:sldasm:instance:11` for the moved shaft,
+`donor_instance_order_diverged, donor_instance_diverged:sldasm:instance:11` for the removed instance,
+and the four `absent_vendor_stream:` entries plus
+`vendor_rejected_record:Contents/Config-0-ModelHeader` for the source-less case.
+
+### `V8_engine.SLDASM`
+
+`examples/Random/V8_engine.SLDASM` writes a 52-stream donor-carried file with 53 sibling parts. It
+declines for two independent reasons: 14 components are Toolbox parts with no reachable source, so
+the bundle is incomplete and the write downgrades to a carrier; and the output **adds**
+`Contents/Config-0-Partition`, a stream the vendor assembly does not have, which the gate reports as
+`donor_stream_added:Contents/Config-0-Partition`.
+
+Measured anyway, since a declined file that opens is worth knowing about:
+
+| file | opened | load errors | load warnings | components | states | mates | rebuilt | bodies | volume mm³ | centre mm |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| vendor `V8_engine.SLDASM` | yes | none | `read-only` | 358 | 358 fully-resolved | 619 | true | 391 | `30996938.730483357` | `(20.270257724271392, 171.02270374521262, 3.648910118394005)` |
+| Kit-written `V8_engine.SLDASM` | yes | none | `read-only`, `drawing-sheet-in-viewonly` | 358 | 358 fully-resolved | 619 | true | 391 | `30996938.730483353` | `(20.270257724271357, 171.02270374521115, 3.648910118404377)` |
+
+It opens, and matches the vendor to ~1e-16 relative — the added partition stream did no harm here,
+and this machine's SOLIDWORKS resolved the Toolbox components from its own library. Neither fact is
+a licence to claim `vendor_loadable`: the shipped bundle is not self-contained, so the file only
+resolves on a machine that already has the Toolbox parts. The added-partition allowance is left
+gated on purpose; relaxing it needs measurements on more than one file.
