@@ -9,7 +9,7 @@ to you under it immediately and permanently.
 -->
 
 <p align="center">
-  <img alt="nda" src="https://github.com/TryParashell/Kit/blob/00c5d0b1f2dcab1a84348d39f900f9e952a7bac8/files/nda.png">
+  <img alt="banner" src="https://github.com/TryParashell/Kit/blob/00c5d0b1f2dcab1a84348d39f900f9e952a7bac8/files/nda.png">
 </p>
 
 # Kit
