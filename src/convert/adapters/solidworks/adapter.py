@@ -1936,11 +1936,15 @@ def _assembly_reader_gaps(
         for name in _ASSEMBLY_DONOR_CARRIED_STREAMS
         if name not in donor
     )
-    gaps.extend(
-        f"donor_stream_rewritten:{name}"
-        for name in sorted(donor)
-        if name not in rewritable and streams.get(name) != donor[name]
-    )
+    for name in sorted(set(streams) | set(donor)):
+        if name in rewritable:
+            continue
+        if name not in donor:
+            gaps.append(f"donor_stream_added:{name}")
+        elif name not in streams:
+            gaps.append(f"donor_stream_removed:{name}")
+        elif streams[name] != donor[name]:
+            gaps.append(f"donor_stream_rewritten:{name}")
     return tuple(gaps)
 
 
