@@ -860,8 +860,8 @@ class SldprtAdapter:
                     Diagnostic(
                         code="sldasm.vendor_reader_rejects",
                         message=(
-                            "generated SOLIDWORKS assembly is not loadable by "
-                            "SOLIDWORKS: the vendor reader requires "
+                            "SOLIDWORKS assembly is not reported loadable because "
+                            "the vendor reader contract is unsatisfied: "
                             + ", ".join(generated.reader_gaps)
                         ),
                         severity=Severity.WARNING,
@@ -1828,7 +1828,6 @@ def _generated_streams(
                 mate_streams=preserved_mates,
                 mates_complete=True,
                 unsupported_mate_ids=(),
-
                 generated_mate_ids=(),
             )
         envelope = encode_native_assembly_envelope(
@@ -1903,11 +1902,7 @@ def _generated_streams(
         mixed_capabilities,
         assembly_notes,
         part_donor_notes,
-        (
-            _assembly_reader_gaps(streams)
-            if portable.assembly is not None
-            else ()
-        ),
+        (_assembly_reader_gaps(streams) if portable.assembly is not None else ()),
     )
 
 
