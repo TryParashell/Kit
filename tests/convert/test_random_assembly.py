@@ -192,15 +192,13 @@ def test_random_assembly_public_sdk_recovers_complete_neutral_graph(
         parameter.value.kind is ValueKind.NUMBER
         for parameter in global_variables.values()
     )
+    global_variable_ids = {item.id for item in global_variables.values()}
     driven = [
         parameter
         for item in assembly.documents
         for parameter in item.document.parameters
         if parameter.expression is not None
-        and any(
-            reference in {item.id for item in global_variables.values()}
-            for reference in parameter.expression.references
-        )
+        and global_variable_ids & set(parameter.expression.parameter_ids)
     ]
     assert len(driven) == 22
     assert Counter(
