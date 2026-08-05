@@ -164,9 +164,11 @@ from .native import (
     NativeProfile,
     NativeSketch,
     NativeAssemblyEnvelope,
+    DIRECTION_AXIS_ROLE,
     decode_native_model,
     encode_native_assembly_envelope,
     encode_native_part,
+    operation_axis_subelement,
 )
 from .parasolid import (
     ParasolidPayload,
@@ -5944,6 +5946,54 @@ def _selections(model: NativeModel) -> tuple[Selection, ...]:
                     ),
                 )
             )
+    return (*result, *_direction_axis_selections(model))
+
+
+def _direction_axis_selections(model: NativeModel) -> tuple[Selection, ...]:
+    sketch_by_id = {sketch.object_id: sketch for sketch in model.sketches}
+    result: list[Selection] = []
+    for operation in model.operations:
+        if operation.profile_id is None:
+            continue
+        sketch = sketch_by_id.get(operation.profile_id)
+        subelement = operation_axis_subelement(operation, sketch)
+        if sketch is None or subelement is None:
+            continue
+        result.append(
+            Selection(
+                id=(
+                    f"sldprt:selection:{operation.object_id}:axis:"
+                    f"{sketch.object_id}:{subelement}"
+                ),
+                name=f"{operation.name} direction {subelement}",
+                path=(
+                    SelectionPathElement(
+                        entity_kind="native",
+                        entity_id=sketch.name,
+                        subelement=subelement,
+                    ),
+                ),
+                query=frozen_mapping(
+                    {
+                        "native_owner_id": operation.object_id,
+                        "native_target_id": sketch.object_id,
+                        "topology_role": DIRECTION_AXIS_ROLE,
+                    }
+                ),
+                provenance=Provenance(
+                    adapter=_FORMAT_ID,
+                    native_id=f"{operation.object_id}:axis:{subelement}",
+                    spans=(
+                        ProvenanceSpan(
+                            operation.native_stream,
+                            operation.native_offset,
+                            operation.native_end - operation.native_offset,
+                            "direction-axis",
+                        ),
+                    ),
+                ),
+            )
+        )
     return tuple(result)
 
 

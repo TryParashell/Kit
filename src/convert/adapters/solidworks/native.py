@@ -110,6 +110,12 @@ _DONOR_DIMENSION_NAME = "D1"
 _EQUATION_IDENTIFIER = re.compile(r"[^0-9A-Za-z]+")
 _EQUATION_REFERENCE_SOURCE = re.compile(r"^[A-Za-z_<][0-9A-Za-z_<>.:\- ]*$")
 _EQUATION_RESERVED_PREFIX = "KitReserved"
+_EXTRUSION_OPERATION_KINDS = frozenset({"join", "cut"})
+_REVOLUTION_OPERATION_KINDS = frozenset({"revolve_join", "revolve_cut"})
+NORMAL_AXIS_SUBELEMENT = "N_Axis"
+VERTICAL_AXIS_SUBELEMENT = "V_Axis"
+HORIZONTAL_AXIS_SUBELEMENT = "H_Axis"
+DIRECTION_AXIS_ROLE = "direction_axis"
 _IDENTITY_BASIS = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _IDENTITY_ORIGIN = (0.0, 0.0, 0.0)
 _DERIVED_PLANE_CLASSES = (
@@ -3359,6 +3365,11 @@ def _proved_write_capabilities(
         for object_id, frame in expected_planes.items()
     ):
         result.add(Capability.SUPPORT_PLANES)
+    expected_axes = _document_axis_bindings(document, object_ids)
+    if expected_axes is not None:
+        actual_axes = native_axis_bindings(parsed)
+        if expected_axes and expected_axes <= actual_axes:
+            result.add(Capability.SELECTIONS)
     expected_equations = expression_equation_texts(document)
     if expected_equations is not None:
         actual_equations = tuple(equation.source for equation in parsed.equations)
@@ -3374,6 +3385,46 @@ def _frame_vector(
     vector: tuple[float, float, float],
 ) -> tuple[float, float, float]:
     return (_clean(vector[0]), _clean(vector[1]), _clean(vector[2]))
+
+
+def native_axis_bindings(model: NativeModel) -> frozenset[tuple[int, int, str]]:
+    sketches = {sketch.object_id: sketch for sketch in model.sketches}
+    result: set[tuple[int, int, str]] = set()
+    for operation in model.operations:
+        if operation.profile_id is None:
+            continue
+        sketch = sketches.get(operation.profile_id)
+        subelement = operation_axis_subelement(operation, sketch)
+        if subelement is None or sketch is None:
+            continue
+        result.add((operation.object_id, sketch.object_id, subelement))
+    return frozenset(result)
+
+
+def _document_axis_bindings(
+    document: CadDocument, object_ids: Mapping[str, int]
+) -> frozenset[tuple[int, int, str]] | None:
+    features = {feature.name: feature for feature in document.feature_timeline}
+    sketches = {sketch.name: sketch for sketch in document.sketches}
+    result: set[tuple[int, int, str]] = set()
+    for selection in document.selections:
+        owner = str(selection.attributes.get("freecad_object", ""))
+        role = str(selection.attributes.get("freecad_property", ""))
+        if role != "ReferenceAxis" or len(selection.path) != 1:
+            return None
+        element = selection.path[0]
+        feature = features.get(owner)
+        sketch = sketches.get(str(element.entity_id))
+        if feature is None or sketch is None or not element.subelement:
+            return None
+        feature_key = f"feature:{feature.id}"
+        sketch_key = f"sketch:{sketch.id}"
+        if feature_key not in object_ids or sketch_key not in object_ids:
+            return None
+        result.add(
+            (object_ids[feature_key], object_ids[sketch_key], element.subelement)
+        )
+    return frozenset(result)
 
 
 def decode_native_model(
@@ -5800,6 +5851,62 @@ def _revolution_axis_marker(sketch: NativeSketch | None) -> NativeMarker | None:
         and marker.endpoint_indices[0] != marker.endpoint_indices[1]
     )
     return candidates[0] if len(candidates) == 1 else None
+
+
+def revolution_axis_direction(
+    operation: NativeOperation, sketch: NativeSketch | None
+) -> tuple[float, float] | None:
+    if sketch is None:
+        return None
+    if operation.axis_marker_offset is None:
+        axis = (
+            _revolution_axis_marker(sketch)
+            if operation.axis_source_kind is None
+            else None
+        )
+    else:
+        axis = next(
+            (
+                marker
+                for marker in sketch.markers
+                if marker.offset == operation.axis_marker_offset
+            ),
+            None,
+        )
+    if axis is None or axis.endpoint_indices is None:
+        return None
+    if any(
+        not 0 <= endpoint < len(sketch.markers) for endpoint in axis.endpoint_indices
+    ):
+        return None
+    start = sketch.markers[axis.endpoint_indices[0]].coordinates_mm
+    end = sketch.markers[axis.endpoint_indices[1]].coordinates_mm
+    if start is None or end is None:
+        return None
+    delta = (end[0] - start[0], end[1] - start[1])
+    length = math.hypot(delta[0], delta[1])
+    if length <= 0.0:
+        return None
+    return (_clean(delta[0] / length), _clean(delta[1] / length))
+
+
+def operation_axis_subelement(
+    operation: NativeOperation, sketch: NativeSketch | None
+) -> str | None:
+    if sketch is None or operation.profile_id != sketch.object_id:
+        return None
+    if operation.kind in _EXTRUSION_OPERATION_KINDS:
+        return NORMAL_AXIS_SUBELEMENT
+    if operation.kind not in _REVOLUTION_OPERATION_KINDS:
+        return None
+    direction = revolution_axis_direction(operation, sketch)
+    if direction is None:
+        return None
+    if direction[0] == 0.0 and direction[1] != 0.0:
+        return VERTICAL_AXIS_SUBELEMENT
+    if direction[1] == 0.0 and direction[0] != 0.0:
+        return HORIZONTAL_AXIS_SUBELEMENT
+    return None
 
 
 def _operation_selections(
