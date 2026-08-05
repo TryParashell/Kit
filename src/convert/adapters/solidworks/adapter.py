@@ -1817,6 +1817,8 @@ def _generated_streams(
                 mate_streams=preserved_mates,
                 mates_complete=True,
                 unsupported_mate_ids=(),
+
+                generated_mate_ids=(),
             )
         envelope = encode_native_assembly_envelope(
             portable,
@@ -1929,6 +1931,10 @@ def _generated_assembly_notes(
         )
     if not encoding.structure_complete:
         notes.append("component_structure_incomplete:1")
+    if encoding.generated_mate_ids:
+        notes.append(
+            f"vendor_unread_synthesised_mate:{len(encoding.generated_mate_ids)}"
+        )
     notes.extend(
         f"absent_vendor_stream:{name}"
         for name in _UNSYNTHESISED_ASSEMBLY_STREAMS
@@ -2099,6 +2105,7 @@ def _generated_assembly_capabilities(
             result.add(Capability.EXTERNAL_REFERENCES)
     if (
         encoding.mates_complete
+        and not encoding.generated_mate_ids
         and assembly.mates
         and len(native.mate_lists) == len(encoding.mate_streams)
         and all(item.declared_count == len(item.mates) for item in native.mate_lists)
@@ -5203,6 +5210,9 @@ def _native_equation_value(
     )
     if literal is not None:
         return ParameterValue(float(literal.group(1)), ValueKind.LENGTH, "mm")
+    number = re.fullmatch(r"\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*", rhs)
+    if number is not None:
+        return ParameterValue(float(number.group(1)), ValueKind.NUMBER, "")
     quotient = re.fullmatch(
         r'\s*"([^"\r\n]+)"\s*/\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*',
         rhs,
@@ -5212,14 +5222,14 @@ def _native_equation_value(
     source = values.get(quotient.group(1))
     if (
         source is None
-        or source.kind != ValueKind.LENGTH
+        or source.kind not in {ValueKind.LENGTH, ValueKind.NUMBER}
         or not isinstance(source.value, (int, float))
     ):
         return None
     divisor = float(quotient.group(2))
     if not math.isfinite(divisor) or divisor == 0.0:
         return None
-    return ParameterValue(float(source.value) / divisor, ValueKind.LENGTH, source.unit)
+    return ParameterValue(float(source.value) / divisor, source.kind, source.unit)
 
 
 def _planes(model: NativeModel, parameter_ids: set[str]) -> tuple[SupportPlane, ...]:

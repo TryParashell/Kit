@@ -64,3 +64,96 @@ blocker.
 
 Measured and shipping today: `boss1_front_rect_blind`, `boss_cut`, `boss_cut_cut`,
 `boss_cut_cut_cut`, `circle_boss`, `boss_top_plane`, `boss_right_plane`.
+
+## Generated `.SLDASM` loadability, measured in SOLIDWORKS 2025 (rev 33.5.0)
+
+First time a Kit-generated assembly has been handed to the vendor application. The writer reported
+`vendor_loadable = True`; the measurement says otherwise. Every number below is in a JSON file under
+`.rescratch/sw/out/measure_sldasm_*.json`, one fresh SOLIDWORKS process per file, with
+`corpus/parts/BASELINE_40x20x10.SLDPRT` measured before and after every batch (`8000.000000000001`
+mm³, 1 body, zero load errors — healthy in all six batches).
+
+### Reference: the vendor original
+
+`examples/Random/Pistons/Piston.SLDASM` — opened, no load errors or warnings, 4 components all
+`fully-resolved`, 6 mates, rebuild true, 4 bodies, volume `94147.19377093748` mm³, centre of mass
+`(0.000379, 32.304601, -0.000207)` mm. The three Kit-emitted sibling parts are byte-preserved vendor
+`.SLDPRT` files and each opens cleanly: `88776.64112962573`, `140.58627124813898`,
+`5089.380098815458` mm³ — summing with the doubled ring to the assembly volume exactly.
+
+### The generated assembly does not open
+
+`Piston.SLDASM` and `Conrod.SLDASM` written through the generated assembly path both kill the
+SOLIDWORKS process during `OpenDoc6`: `com_error(-2147023170, 'The remote procedure call failed.')`,
+reproduced across two batches. No load-error bits are returned because the reader never gets far
+enough to set them.
+
+### Which records the vendor reader actually rejects
+
+Stream-level bisection against the vendor file, one measurement per variant.
+
+Container writer is exonerated: rebuilding the vendor stream set through `container.build_sldprt`
+with the vendor file as template opens and measures identically to the original.
+
+Removing one vendor stream at a time from the vendor file:
+
+| removed stream | result |
+| --- | --- |
+| `Contents/CMgr` | crash |
+| `Contents/Config-0` | crash |
+| `Contents/Config-0-ResolvedFeatures` | opens, but 0 components, 0 mates, 0 bodies, no mass |
+| `Contents/Definition` | crash |
+| `Contents/Config-0-LWDATA` | opens, unchanged |
+| `Contents/DisplayLists` | opens, unchanged |
+| `Contents/User Units Table` | opens, unchanged |
+| `SwDocContentMgr/SwDocContentMgrInfo` | opens, unchanged |
+| `docProps/ISolidWorksInformation.xml` | opens, unchanged |
+| `swXmlContents/KeyWords` | opens, unchanged |
+
+So of the ten streams `sldasm.unexpressed_native_records` enumerates, four are load-critical and six
+are cosmetic.
+
+Substituting one Kit-generated record at a time into the vendor file:
+
+| swapped stream | result |
+| --- | --- |
+| `Contents/Config-0-ModelHeader` | crash |
+| `Header2` | opens, unchanged |
+| `Contents/CMgrHdr2` | opens, unchanged |
+| `Contents/CnfgObjs` (empty, 12 bytes) | opens, unchanged |
+| `Contents/Config-0-MatesList` | opens, **0 mates** |
+| `swXmlContents/COMPINSTANCETREE` | opens, unchanged |
+
+`Header2` and `Contents/Config-0-ModelHeader` carry identical bytes in both files, yet only the
+`Config-0-ModelHeader` substitution is fatal: the reader consumes the configuration copy and treats
+`Header2` as a stamp.
+
+### How far the generated file can be pushed
+
+Generated streams plus the four load-critical vendor streams plus the vendor
+`Contents/Config-0-ModelHeader`/`Header2` **opens**: 4 components `fully-resolved`, 4 bodies, volume
+`94147.19377093748` mm³, centre of mass `(0.000379, 32.304601, -0.000207)` mm — bit-for-bit the
+vendor figures. Adding the six cosmetic streams changes nothing. Keeping the generated model header
+and supplying only the four streams crashes again.
+
+That fixes the boundary exactly: Kit's generated `COMPINSTANCETREE`, `CMgrHdr2`, `CnfgObjs` and
+container are all acceptable to the vendor reader. What is missing is (a) the four streams Kit never
+synthesises, (b) a vendor-acceptable `Contents/Config-0-ModelHeader`, and (c) mate records the reader
+consumes — in every variant that opens, Kit's `Contents/Config-0-MatesList` yields 0 mates against
+the vendor's 6, so `Capability.ASSEMBLY_MATES` is claimed but not delivered.
+
+### Why the decode-based proxies passed a file that crashes
+
+`envelope_complete` round-trips the generated header through `decode_native_model_header`, but that
+decoder cannot read the real vendor assembly header at all — it raises
+`native SOLIDWORKS header layout is unexpected` on
+`examples/Random/Pistons/Piston.SLDASM`'s `Contents/Config-0-ModelHeader`. The check therefore only
+proves Kit round-trips its own dialect. `structure_complete` and the `COMPINSTANCETREE` re-parse
+behind `Capability.ASSEMBLIES` are equally self-referential; the substitution table above shows both
+of those streams are in fact fine, so neither was ever the thing at risk.
+
+`vendor_loadable` on the generated assembly path is now gated on
+`_ASSEMBLY_READER_REQUIRED_STREAMS` being present and `_VENDOR_REJECTED_ASSEMBLY_RECORDS` being
+absent, and the writer emits `sldasm.vendor_reader_rejects` naming each gap. The compatibility label
+still reads `native-assembly-with-kit-neutral`, because the native records are genuinely there — they
+are just not yet loadable.

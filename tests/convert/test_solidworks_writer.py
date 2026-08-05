@@ -1681,7 +1681,7 @@ def test_source_less_assembly_emits_redecodable_native_component_graph() -> None
     assert transfers[Capability.ASSEMBLIES] == "native"
     assert transfers[Capability.ASSEMBLY_MATES] == "carrier"
     assert result.application_usable is False
-    assert result.vendor_loadable is True
+    assert result.vendor_loadable is False
     assert native.name == "Engine"
     assert tuple(item.name for item in native.definitions) == (
         "Engine",

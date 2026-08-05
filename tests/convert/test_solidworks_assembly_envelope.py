@@ -13,7 +13,9 @@ from io import BytesIO
 import struct
 
 from convert.adapters.solidworks.adapter import (
+    _ASSEMBLY_READER_REQUIRED_STREAMS,
     _UNSYNTHESISED_ASSEMBLY_STREAMS,
+    _VENDOR_REJECTED_ASSEMBLY_RECORDS,
     _generated_streams,
     _native_attestation,
     _replay_compatibility,
@@ -195,10 +197,10 @@ def test_part_header_objects_are_unchanged_by_the_assembly_refactor() -> None:
     assert header.document_path == ""
 
 
-def test_generated_assembly_is_vendor_loadable_without_claiming_usability() -> None:
+def test_generated_assembly_withholds_vendor_loadable_and_names_reader_gaps() -> None:
     output = BytesIO()
     result = write_sldprt(assembly_document(), output)
-    assert result.vendor_loadable is True
+    assert result.vendor_loadable is False
     assert result.application_usable is False
     assert result.metadata["compatibility"] == "native-assembly-with-kit-neutral"
     assert result.metadata["native_assembly"] is True
@@ -210,6 +212,15 @@ def test_generated_assembly_is_vendor_loadable_without_claiming_usability() -> N
     )
     for name in _UNSYNTHESISED_ASSEMBLY_STREAMS:
         assert f"absent_vendor_stream:{name}" in message
+    rejection = next(
+        item.message
+        for item in result.diagnostics
+        if item.code == "sldasm.vendor_reader_rejects"
+    )
+    for name in _ASSEMBLY_READER_REQUIRED_STREAMS:
+        assert f"absent_vendor_stream:{name}" in rejection
+    for name in _VENDOR_REJECTED_ASSEMBLY_RECORDS:
+        assert f"vendor_rejected_record:{name}" in rejection
 
 
 def test_generated_assembly_attestation_replays_its_own_compatibility() -> None:
@@ -219,7 +230,7 @@ def test_generated_assembly_attestation_replays_its_own_compatibility() -> None:
     attestation = _native_attestation(data)
     assert attestation is not None
     assert attestation["compatibility"] == "native-assembly-with-kit-neutral"
-    assert attestation["vendor_loadable"] is True
+    assert attestation["vendor_loadable"] is False
     assert attestation["application_usable"] is False
     assert _replay_compatibility(data) == "native-assembly-with-kit-neutral"
 
@@ -294,7 +305,8 @@ def test_advisory_mate_losses_do_not_void_the_native_mate_records() -> None:
     assert encoding.unsupported_mate_ids == ()
     generated = _generated_streams(framed)
     assert Capability.ASSEMBLY_MATES in generated.native_capabilities
-    assert generated.vendor_loadable is True
+    assert generated.compatibility == "native-assembly-with-kit-neutral"
+    assert "component_structure_incomplete:1" not in generated.unexpressed
 
 
 def test_blocking_mate_value_loss_voids_the_native_mate_records() -> None:
