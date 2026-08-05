@@ -3138,6 +3138,7 @@ def _patch_native_assembly(
         native = decode_native_assembly(archive, include_tessellation=True)
     except SldprtFormatError:
         return _AssemblyTemplatePatch(frozenset(), ("donor_component_tree_unreadable",))
+    donor_divergences = _diverged_donor_records(document.assembly, native)
     rewritten_instances = _patch_assembly_instances(document.assembly, native, streams)
     if rewritten_instances:
         try:
@@ -3235,11 +3236,11 @@ def _patch_native_assembly(
     native_meshes, _ = _assembly_meshes(native)
     if _mesh_values(document.meshes) == _mesh_values(native_meshes):
         result.add(Capability.TESSELLATION)
-    divergences = tuple(
-        f"donor_instance_diverged:{item}" for item in rewritten_instances
-    ) + tuple(f"donor_mate_diverged:{item}" for item in rewritten_mates)
-    if Capability.ASSEMBLIES not in result:
-        divergences = (*divergences, "donor_structure_diverged")
+    divergences = donor_divergences + tuple(
+        f"donor_mate_diverged:{item}" for item in rewritten_mates
+    )
+    if Capability.ASSEMBLIES not in result and not divergences:
+        divergences = ("donor_structure_diverged",)
     return _AssemblyTemplatePatch(frozenset(result), divergences)
 
 
@@ -3487,48 +3488,98 @@ def _native_mate_alignment_offset(
     return offset if offset + 2 <= end else None
 
 
+def _definition_structure_values(definition: ComponentDefinition) -> tuple[Any, ...]:
+    return (
+        definition.id,
+        definition.name,
+        definition.kind,
+        definition.configuration_name,
+    )
+
+
+def _instance_structure_values(instance: ComponentInstance) -> tuple[Any, ...]:
+    return (
+        instance.id,
+        instance.name,
+        instance.definition_id,
+        instance.owner_definition_id,
+        tuple(_round_number(value) for value in instance.transform.values),
+        instance.order,
+        instance.reference_number,
+        instance.configuration_name,
+        instance.configuration_id,
+        instance.suppressed,
+        instance.hidden,
+        instance.fixed,
+        instance.flexible,
+        instance.exclude_from_bom,
+    )
+
+
 def _assembly_structure_values(assembly: AssemblyData) -> tuple[Any, ...]:
     return (
         assembly.root_definition_id,
         tuple(
-            (
-                definition.id,
-                definition.name,
-                definition.kind,
-                definition.configuration_name,
-            )
+            _definition_structure_values(definition)
             for definition in assembly.definitions
         ),
-        tuple(
-            (
-                instance.id,
-                instance.name,
-                instance.definition_id,
-                instance.owner_definition_id,
-                tuple(_round_number(value) for value in instance.transform.values),
-                instance.order,
-                instance.reference_number,
-                instance.configuration_name,
-                instance.configuration_id,
-                instance.suppressed,
-                instance.hidden,
-                instance.fixed,
-                instance.flexible,
-                instance.exclude_from_bom,
-            )
-            for instance in assembly.instances
-        ),
+        tuple(_instance_structure_values(instance) for instance in assembly.instances),
+    )
+
+
+def _native_assembly_data(native: NativeAssembly) -> AssemblyData:
+    return AssemblyData(
+        _assembly_definition_id(native.root_definition_id),
+        _assembly_definitions(native, {}, {}, {}, {}, "<memory>"),
+        _assembly_instances(native),
     )
 
 
 def _native_assembly_structure_values(native: NativeAssembly) -> tuple[Any, ...]:
-    return _assembly_structure_values(
-        AssemblyData(
-            _assembly_definition_id(native.root_definition_id),
-            _assembly_definitions(native, {}, {}, {}, {}, "<memory>"),
-            _assembly_instances(native),
+    return _assembly_structure_values(_native_assembly_data(native))
+
+
+def _diverged_keys(
+    donor: Mapping[str, Any], desired: Mapping[str, Any]
+) -> tuple[str, ...]:
+    return tuple(sorted(set(donor) ^ set(desired))) + tuple(
+        key for key in sorted(set(donor) & set(desired)) if donor[key] != desired[key]
+    )
+
+
+def _diverged_donor_records(
+    assembly: AssemblyData, native: NativeAssembly
+) -> tuple[str, ...]:
+    donor = _native_assembly_data(native)
+    names: list[str] = []
+    if assembly.root_definition_id != donor.root_definition_id:
+        names.append("donor_root_definition_diverged")
+    if tuple(item.id for item in donor.definitions) != tuple(
+        item.id for item in assembly.definitions
+    ):
+        names.append("donor_definition_order_diverged")
+    if tuple(item.id for item in donor.instances) != tuple(
+        item.id for item in assembly.instances
+    ):
+        names.append("donor_instance_order_diverged")
+    names.extend(
+        f"donor_definition_diverged:{key}"
+        for key in _diverged_keys(
+            {item.id: _definition_structure_values(item) for item in donor.definitions},
+            {
+                item.id: _definition_structure_values(item)
+                for item in assembly.definitions
+            },
         )
     )
+    names.extend(
+        f"donor_instance_diverged:{key}"
+        for key in _diverged_keys(
+            {item.id: _instance_structure_values(item) for item in donor.instances},
+            {item.id: _instance_structure_values(item) for item in assembly.instances},
+        )
+    )
+    return tuple(names)
 
 
 def _mate_values(
