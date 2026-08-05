@@ -1901,7 +1901,7 @@ def _generated_streams(
 def _assembly_reader_gaps(streams: Mapping[str, bytes]) -> tuple[str, ...]:
     gaps = [
         f"absent_vendor_stream:{name}"
-        for name in _UNSYNTHESISED_ASSEMBLY_STREAMS
+        for name in _ASSEMBLY_READER_REQUIRED_STREAMS
         if name not in streams
     ]
     gaps.extend(
