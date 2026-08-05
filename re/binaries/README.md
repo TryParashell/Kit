@@ -1,14 +1,31 @@
 # The four SOLIDWORKS binaries every finding in `re/solidworks/` was derived from
 
-## The binaries in this directory are deliberately untracked
+## The binaries in this directory are tracked — read this first
 
-`re/binaries/.gitignore` ignores `*.dll` and `*.exe`. These are Dassault Systemes' copyrighted
-binaries; committing them to a repository is redistribution of vendor code. `fetch.ps1` reproduces
-them byte for byte from a licensed local install and verifies them against `manifest.json`.
-Un-ignoring them means redistributing vendor code.
+The four `.dll` files here are **committed to the repository**, deliberately, so that an agent or
+machine with no SOLIDWORKS install can run Ghidra against the exact bytes every finding came from.
+That is a real convenience and it has a real cost:
+
+- They are **unmodified proprietary Dassault Systèmes binaries** taken from a licensed local
+  install. Committing them is redistribution of vendor code, and the SOLIDWORKS licence agreement
+  governs whether that is permitted — including to other people inside Parashell. This repository is
+  marked internal-use-only (`LICENSE`, PolyForm Strict; `README.md`, "Internal use only"), which
+  limits but does not by itself resolve the question.
+- They add **~52.6 MB** to the repository, against ~6.9 MB for everything else in `re/`.
+
+**If you would rather not carry them,** nothing in `re/` depends on their presence except re-running
+the decompilation. Delete them, add `*.dll` to a `.gitignore` in this directory, and use `fetch.ps1`
+to reproduce them byte for byte from a local install:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File re\binaries\fetch.ps1
+```
+
+`manifest.json` records the byte size, SHA-256 and PE file version of each, so a fetched copy is
+verifiable against the one these findings were derived from.
 
 Everything else here — the manifest, the fetch script, the offsets in `re/solidworks/`, the
-extracted tables in `re/data/` — is our own work and is tracked.
+extracted tables in `re/data/` — is our own work.
 
 ## Getting the binaries
 

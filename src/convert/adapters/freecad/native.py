@@ -134,6 +134,9 @@ from .protocol import (
 
 _MAX_EXTERNAL_DEPTH = 16
 _MIN_OBJECT_GRAPH_SCHEMA_VERSION = 2
+_GROOVE_TYPE_ID = "PartDesign::Groove"
+_SUBTRACTIVE_TYPE_IDS = frozenset({POCKET_TYPE_ID, _GROOVE_TYPE_ID})
+_SUBTRACTIVE_CAPABLE_KINDS = frozenset({FeatureKind.EXTRUSION, FeatureKind.REVOLUTION})
 
 
 class NativeFreeCADError(ValueError):
@@ -2905,13 +2908,14 @@ def read_native_fcstd(
             except ValueError:
                 operation = declared_operation
         definition: FeatureDefinition | None = None
-        if kind == FeatureKind.EXTRUSION:
-            if obj.type_id == POCKET_TYPE_ID:
+        if kind in _SUBTRACTIVE_CAPABLE_KINDS:
+            if obj.type_id in _SUBTRACTIVE_TYPE_IDS:
                 operation = BooleanOperation.CUT
             elif dependencies:
                 operation = BooleanOperation.JOIN
             else:
                 operation = BooleanOperation.CREATE
+        if kind == FeatureKind.EXTRUSION:
             definition = (
                 _part_extrusion_definition(obj)
                 if obj.type_id == "Part::Extrusion"

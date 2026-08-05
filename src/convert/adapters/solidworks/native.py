@@ -33,6 +33,7 @@ from interchange import (
     LineGeometry,
     Parameter,
     ParameterRole,
+    ParameterValue,
     Sketch,
     SupportPlane,
     ValueKind,
@@ -43,6 +44,7 @@ from .format import (
     ASSEMBLY_SUFFIX,
     CANONICAL_PLANE_FEATURE_TYPE,
     CLASS_MARKER,
+    CONFIGURATION_STREAM,
     DIMENSION_SCALAR_HEADERS,
     DISPLAY_LISTS_STREAM,
     KIT_RESOLVED_STREAM,
@@ -52,7 +54,7 @@ from .format import (
     SERIALIZED_STRING_MARKER,
     dimension_scalar_value_offset,
 )
-from .donor_library import patch_donor
+from .donor_library import Donor, patch_donor
 from .donor_match import DonorDecline, DonorMatch, match_document
 from .parasolid import encode_blank_partition_stream
 from .resolved import (
@@ -103,7 +105,11 @@ _SKETCH_PLANE_AXIS_COMPLEMENT = 5
 _SKETCH_PLANE_SCAN_BYTES = 320
 _PRINCIPAL_PLANE_OBJECT_IDS = frozenset({2, 3, 4})
 _REFERENCE_PLANE_CLASS = "moRefPlane_c"
+_PLANE_FRAME_BYTES = 121
 _DONOR_DIMENSION_NAME = "D1"
+_EQUATION_IDENTIFIER = re.compile(r"[^0-9A-Za-z]+")
+_EQUATION_REFERENCE_SOURCE = re.compile(r"^[A-Za-z_<][0-9A-Za-z_<>.:\- ]*$")
+_EQUATION_RESERVED_PREFIX = "KitReserved"
 _IDENTITY_BASIS = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _IDENTITY_ORIGIN = (0.0, 0.0, 0.0)
 _DERIVED_PLANE_CLASSES = (
@@ -1047,11 +1053,15 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         rectangle_boss=donor_stream is not None or _is_rectangle_boss_objects(authored),
         donor_container=donor_container,
     )
+    configuration_data = envelope_streams.get(CONFIGURATION_STREAM, b"")
     parsed = (
-        decode_native_model(keywords, resolved)
+        decode_native_model(keywords, resolved, configuration_data)
         if kit_resolved is None
         else decode_native_model(
-            keywords, kit_resolved, resolved_stream=KIT_RESOLVED_STREAM
+            keywords,
+            kit_resolved,
+            configuration_data,
+            resolved_stream=KIT_RESOLVED_STREAM,
         )
     )
     capabilities = _proved_write_capabilities(document, authored, parsed, object_ids)
@@ -1202,6 +1212,7 @@ def _principal_plane_ids(planes: tuple[SupportPlane, ...]) -> dict[str, int]:
         ),
     )
     result: dict[str, int] = {}
+    claimed: set[int] = set()
     for plane in planes:
         transform = plane.transform
         values = (
@@ -1211,12 +1222,15 @@ def _principal_plane_ids(planes: tuple[SupportPlane, ...]) -> dict[str, int]:
             (transform.z_axis.x, transform.z_axis.y, transform.z_axis.z),
         )
         for object_id, *frame in frames:
+            if object_id in claimed:
+                continue
             if all(
                 math.isclose(left, right, rel_tol=0.0, abs_tol=1e-9)
                 for left_vector, right_vector in zip(values, frame, strict=True)
                 for left, right in zip(left_vector, right_vector, strict=True)
             ):
                 result[plane.id] = object_id
+                claimed.add(object_id)
                 break
     return result
 
@@ -1306,6 +1320,18 @@ def _donor_objects(
             {},
         )
     object_ids.update(assignments)
+    plane_objects, plane_frames = _donor_plane_records(
+        document, outcome.donor, object_ids
+    )
+    _repair_plane_object_ids(object_ids)
+    if plane_frames:
+        stream = _patch_donor_plane_frames(stream, plane_frames)
+    container = dict(outcome.donor.container)
+    equation_texts = _donor_equation_texts(document, outcome.donor)
+    if equation_texts and CONFIGURATION_STREAM in container:
+        container[CONFIGURATION_STREAM] = _patch_donor_equations(
+            container[CONFIGURATION_STREAM], outcome.donor, equation_texts
+        )
     properties = _donor_keyword_properties(outcome, assignments)
     dimensions = _donor_keyword_dimensions(outcome)
     renamed = tuple(
@@ -1319,16 +1345,207 @@ def _donor_objects(
         for item in objects
         if (key := _donor_object_key(item)) in assignments
     )
+    expressed_planes = frozenset(item.source_id for item in plane_objects)
     dropped = tuple(
         item.name
         for item in objects
         if _donor_object_key(item) not in assignments
         and not _donor_system_plane(item, outcome)
+        and item.source_id not in expressed_planes
     )
     notes = tuple(
         f"unexpressed timeline entry {item}" for item in outcome.unexpressed
     ) + tuple(f"dropped record {item}" for item in dropped)
-    return renamed, stream, notes, outcome.donor.container
+    return (
+        (*renamed, *plane_objects),
+        stream,
+        notes,
+        MappingProxyType(container),
+    )
+
+
+def _equation_identifier(value: str) -> str:
+    cleaned = _EQUATION_IDENTIFIER.sub("_", value).strip("_")
+    return f"Kit_{cleaned}" if cleaned else ""
+
+
+def _equation_literal(value: ParameterValue) -> str | None:
+    if not isinstance(value.value, (int, float)) or isinstance(value.value, bool):
+        return None
+    if not math.isfinite(float(value.value)):
+        return None
+    rendered = format(float(value.value), ".15g")
+    if value.kind is ValueKind.LENGTH:
+        return f"{rendered}mm"
+    if value.kind is ValueKind.NUMBER:
+        return rendered
+    return None
+
+
+def _expression_parameters(document: CadDocument) -> tuple[Parameter, ...]:
+    return tuple(
+        parameter
+        for parameter in document.parameters
+        if parameter.expression is not None
+    )
+
+
+def expression_equation_texts(document: CadDocument) -> tuple[str, ...] | None:
+    parameters = _expression_parameters(document)
+    if not parameters:
+        return ()
+    names: dict[str, str] = {}
+    used: set[str] = set()
+
+    def identifier(key: str, source: str) -> str | None:
+        if key in names:
+            return names[key]
+        base = _equation_identifier(source)
+        if not base:
+            return None
+        candidate = base
+        suffix = 2
+        while candidate in used:
+            candidate = f"{base}_{suffix}"
+            suffix += 1
+        used.add(candidate)
+        names[key] = candidate
+        return candidate
+
+    references: list[tuple[str, str]] = []
+    values: dict[str, str] = {}
+    bindings: list[tuple[str, str]] = []
+    for parameter in parameters:
+        expression = parameter.expression
+        if expression is None:
+            return None
+        source = expression.source.strip()
+        if not _EQUATION_REFERENCE_SOURCE.fullmatch(source):
+            return None
+        literal = _equation_literal(parameter.value)
+        if literal is None:
+            return None
+        reference = identifier(f"reference:{source}", source)
+        driven = identifier(f"parameter:{parameter.id}", parameter.name)
+        if reference is None or driven is None or reference == driven:
+            return None
+        if reference in values:
+            if values[reference] != literal:
+                return None
+        else:
+            values[reference] = literal
+            references.append((reference, literal))
+        bindings.append((driven, reference))
+    texts = [f'"{name}"= {literal}' for name, literal in references]
+    texts.extend(f'"{driven}"= "{reference}"' for driven, reference in bindings)
+    if len(set(texts)) != len(texts):
+        return None
+    return tuple(texts)
+
+
+def _reserved_equation_text(ordinal: int) -> str:
+    return f'"{_EQUATION_RESERVED_PREFIX}{ordinal:02d}"= 0'
+
+
+def _donor_equation_texts(
+    document: CadDocument, donor: Donor
+) -> tuple[str, ...] | None:
+    texts = expression_equation_texts(document)
+    if texts is None or len(texts) > len(donor.spare_equations):
+        return None
+    reserved = tuple(
+        _reserved_equation_text(ordinal)
+        for ordinal in range(1, len(donor.spare_equations) - len(texts) + 1)
+    )
+    return (*texts, *reserved)
+
+
+def _patch_donor_equations(
+    configuration: bytes, donor: Donor, texts: tuple[str, ...]
+) -> bytes:
+    output = configuration
+    for original, replacement in zip(donor.spare_equations, texts, strict=True):
+        marker = _serialized_string(original)
+        if output.count(marker) != 1:
+            raise SldprtFormatError(
+                f"donor equation {original!r} does not appear exactly once in "
+                f"the configuration stream"
+            )
+        output = output.replace(marker, _serialized_string(replacement), 1)
+    return output
+
+
+def _patch_donor_plane_frames(
+    stream: bytes, frames: tuple[tuple[int, bytes], ...]
+) -> bytes:
+    output = bytearray(stream)
+    for offset, block in frames:
+        if offset < 0 or offset + _PLANE_FRAME_BYTES > len(output):
+            raise SldprtFormatError(
+                "donor reference plane frame lies outside the resolved stream"
+            )
+        output[offset : offset + _PLANE_FRAME_BYTES] = block
+    return bytes(output)
+
+
+def _donor_plane_records(
+    document: CadDocument, donor: Donor, object_ids: dict[str, int]
+) -> tuple[tuple[_WriteObject, ...], tuple[tuple[int, bytes], ...]]:
+    principal = _principal_plane_ids(document.support_planes)
+    spare = tuple(
+        plane for plane in document.support_planes if plane.id not in principal
+    )
+    if not spare or len(spare) > len(donor.spare_plane_ids):
+        return (), ()
+    objects: list[_WriteObject] = []
+    frames: list[tuple[int, bytes]] = []
+    for plane, object_id, name, offset in zip(
+        spare,
+        donor.spare_plane_ids,
+        donor.spare_plane_names,
+        donor.spare_plane_frames,
+        strict=False,
+    ):
+        block = _plane_frame_block(plane)
+        if block is None:
+            return (), ()
+        object_ids[f"plane:{plane.id}"] = object_id
+        objects.append(
+            _WriteObject(
+                plane.id,
+                object_id,
+                name,
+                "Feature",
+                "Plane",
+                _REFERENCE_PLANE_CLASS,
+            )
+        )
+        frames.append((offset, block))
+    return tuple(objects), tuple(frames)
+
+
+def _repair_plane_object_ids(object_ids: dict[str, int]) -> None:
+    reserved = frozenset(range(1, 26))
+    taken = {
+        value
+        for key, value in object_ids.items()
+        if not key.startswith(("plane:", "configuration:"))
+    }
+    next_id = 26
+    for key in tuple(object_ids):
+        if not key.startswith("plane:"):
+            continue
+        value = object_ids[key]
+        if value in {2, 3, 4} and value not in taken:
+            taken.add(value)
+            continue
+        if value not in taken and value not in reserved:
+            taken.add(value)
+            continue
+        while next_id in taken or next_id in reserved:
+            next_id += 1
+        object_ids[key] = next_id
+        taken.add(next_id)
 
 
 def _donor_system_plane(item: _WriteObject, match: DonorMatch) -> bool:
@@ -1885,7 +2102,7 @@ def _definition_dimension(feature: FeatureStep) -> _WriteDimension | None:
     return replace(dimension, text=prefix + dimension.text)
 
 
-def _plane_payload(plane: SupportPlane) -> bytes:
+def _plane_frame_block(plane: SupportPlane) -> bytes | None:
     transform = plane.transform
     origin = (transform.origin.x, transform.origin.y, transform.origin.z)
     x_axis = (transform.x_axis.x, transform.x_axis.y, transform.x_axis.z)
@@ -1895,15 +2112,22 @@ def _plane_payload(plane: SupportPlane) -> bytes:
     if not _orthonormal(vectors) or not all(
         math.isfinite(value) for vector in (origin, *vectors) for value in vector
     ):
-        return b""
-    frame = bytearray(121)
-    struct.pack_into("<3d", frame, 0, *(value / 1000.0 for value in origin))
+        return None
+    frame = bytearray(_PLANE_FRAME_BYTES)
+    struct.pack_into("<3d", frame, 0, *(value / _MILLIMETRES for value in origin))
     struct.pack_into("<3d", frame, 24, *z_axis)
     frame[48] = 1
     rows = tuple(zip(x_axis, y_axis, z_axis, strict=True))
     for index, row in enumerate(rows):
         struct.pack_into("<3d", frame, 49 + index * 24, *row)
-    return _class_declaration("moFixedRefPlnData_c") + bytes(frame)
+    return bytes(frame)
+
+
+def _plane_payload(plane: SupportPlane) -> bytes:
+    frame = _plane_frame_block(plane)
+    if frame is None:
+        return b""
+    return _class_declaration("moFixedRefPlnData_c") + frame
 
 
 def _orthonormal(vectors: tuple[tuple[float, float, float], ...]) -> bool:
@@ -3087,55 +3311,69 @@ def _proved_write_capabilities(
         and expected_parameters == actual_parameters
     ):
         result.add(Capability.PARAMETERS)
-    expected_planes = tuple(
-        (
-            object_ids[f"plane:{plane.id}"],
+    expected_planes = {
+        object_ids[f"plane:{plane.id}"]: (
             plane.name,
-            (
-                plane.transform.origin.x,
-                plane.transform.origin.y,
-                plane.transform.origin.z,
+            _frame_vector(
+                (
+                    plane.transform.origin.x,
+                    plane.transform.origin.y,
+                    plane.transform.origin.z,
+                )
             ),
-            (
-                plane.transform.x_axis.x,
-                plane.transform.x_axis.y,
-                plane.transform.x_axis.z,
+            _frame_vector(
+                (
+                    plane.transform.x_axis.x,
+                    plane.transform.x_axis.y,
+                    plane.transform.x_axis.z,
+                )
             ),
-            (
-                plane.transform.y_axis.x,
-                plane.transform.y_axis.y,
-                plane.transform.y_axis.z,
+            _frame_vector(
+                (
+                    plane.transform.y_axis.x,
+                    plane.transform.y_axis.y,
+                    plane.transform.y_axis.z,
+                )
             ),
-            (
-                plane.transform.z_axis.x,
-                plane.transform.z_axis.y,
-                plane.transform.z_axis.z,
+            _frame_vector(
+                (
+                    plane.transform.z_axis.x,
+                    plane.transform.z_axis.y,
+                    plane.transform.z_axis.z,
+                )
             ),
         )
         for plane in document.support_planes
-    )
-    actual_planes = tuple(
-        (
-            plane.object_id,
-            next(
-                source.name
-                for source in document.support_planes
-                if object_ids[f"plane:{source.id}"] == plane.object_id
-            ),
-            plane.origin_mm,
-            plane.u_axis,
-            plane.v_axis,
-            plane.normal,
+    }
+    actual_planes = {
+        plane.object_id: (
+            _frame_vector(plane.origin_mm),
+            _frame_vector(plane.u_axis),
+            _frame_vector(plane.v_axis),
+            _frame_vector(plane.normal),
         )
         for plane in parsed.planes
-        if any(
-            object_ids[f"plane:{source.id}"] == plane.object_id
-            for source in document.support_planes
-        )
-    )
-    if expected_planes == actual_planes:
+    }
+    if len(expected_planes) == len(document.support_planes) and all(
+        object_id in actual_planes and actual_planes[object_id] == frame[1:]
+        for object_id, frame in expected_planes.items()
+    ):
         result.add(Capability.SUPPORT_PLANES)
+    expected_equations = expression_equation_texts(document)
+    if expected_equations is not None:
+        actual_equations = tuple(equation.source for equation in parsed.equations)
+        if actual_equations[: len(expected_equations)] == expected_equations and all(
+            source.startswith(f'"{_EQUATION_RESERVED_PREFIX}')
+            for source in actual_equations[len(expected_equations) :]
+        ):
+            result.add(Capability.EXPRESSIONS)
     return frozenset(result)
+
+
+def _frame_vector(
+    vector: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return (_clean(vector[0]), _clean(vector[1]), _clean(vector[2]))
 
 
 def decode_native_model(

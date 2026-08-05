@@ -11,9 +11,15 @@ distilled from.
 
 | part | size |
 |---|---|
-| `re/` as tracked (no binaries) | **~6.9 MB** |
-| the four untracked vendor DLLs in `re/binaries/` | **~52.6 MB** |
-| `re/` on disk, both | **~59.5 MB** |
+| `re/` excluding binaries | **~6.9 MB** |
+| the four vendor DLLs in `re/binaries/` | **~52.6 MB** |
+| `re/` total, all tracked | **~59.5 MB** |
+
+The DLLs are **tracked**, deliberately, so that a cloud agent with no SOLIDWORKS install can run
+Ghidra against them. Read `binaries/README.md` for the licensing position before this repository is
+shared with anyone outside Parashell — they are unmodified proprietary Dassault Systèmes binaries
+from a licensed local install, and `binaries/fetch.ps1` reproduces them from that install if you
+would rather not carry them.
 
 The bulk of the tracked bytes is machine-readable evidence: `re/data/` (~4.6 MB, dominated by the
 static container census and the traced object segmentations) and `re/solidworks/measurements/`
@@ -23,7 +29,7 @@ static container census and the traced object segmentations) and `re/solidworks/
 
 | directory | what is in it |
 |---|---|
-| `binaries/` | the four SOLIDWORKS DLLs every finding was derived from, plus `manifest.json`, `fetch.ps1` and a `.gitignore` that keeps them **untracked**. Read `binaries/README.md` before touching them. |
+| `binaries/` | the four SOLIDWORKS DLLs every finding was derived from, plus `manifest.json` (SHA-256 and version of each) and `fetch.ps1` (re-copies them from a local install). Tracked. Read `binaries/README.md` first. |
 | `solidworks/` | the findings. Layered: `container/` (file framing + the signature table), `archive/` (the `su_CArchive` grammar, the reader's identity, object segmentation), `records/` (per-class field layouts), `features/` (extrude, revolve, sketch, arc, bodies), `corpus/` (what corpora exist and what each proves), `measurements/` (every volume measurement, with controls). |
 | `tooling/` | how the work was done and how to redo it: `ghidra/` (headless decompilation), `windbg/` (the cdb runtime trace), `harness/` (the COM measurement loop). |
 | `data/` | the extracted tables and traced artefacts the findings cite: the 1000-entry signature table, the 2607-class `Serialize` map, the object segmentations, the class vocabulary. |

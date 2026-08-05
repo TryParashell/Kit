@@ -2641,6 +2641,41 @@ def test_current_pad_and_pocket_end_condition_registries(
     assert definition.second_draft_angle.value == 6.0
 
 
+def test_a_revolution_carries_a_boolean_operation() -> None:
+    revolution = (
+        "Revolution",
+        "PartDesign::Revolution",
+        (),
+        (
+            _native_property(
+                "Label", "App::PropertyString", "String", {"value": "Revolution"}
+            ),
+            _native_property(
+                "Angle", "App::PropertyAngle", "Float", {"value": "360.0"}
+            ),
+        ),
+    )
+    groove = (
+        "Groove",
+        "PartDesign::Groove",
+        ("Revolution",),
+        (
+            _native_property(
+                "Label", "App::PropertyString", "String", {"value": "Groove"}
+            ),
+            _native_property(
+                "Angle", "App::PropertyAngle", "Float", {"value": "360.0"}
+            ),
+        ),
+    )
+    document = FreeCADAdapter().read(_native_archive((revolution, groove), {}))
+    steps = {item.name: item for item in document.feature_timeline}
+    assert steps["Revolution"].kind == FeatureKind.REVOLUTION
+    assert steps["Revolution"].operation == BooleanOperation.CREATE
+    assert steps["Groove"].kind == FeatureKind.REVOLUTION
+    assert steps["Groove"].operation == BooleanOperation.CUT
+
+
 def test_native_feature_definition_preserves_and_applies_unmapped_feature_data() -> (
     None
 ):

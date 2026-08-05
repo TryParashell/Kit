@@ -48,8 +48,8 @@ from .donor_library import (
     RECTANGLE_WITH_CIRCLE_PROFILE,
     REVOLVE_BOSS_OPERATION,
     REVOLVE_CUT_OPERATION,
+    REVOLVE_SUPPORT_BY_PLANE,
     RIGHT_SUPPORT,
-    SKETCH_AXIS_SUPPORT,
     TOP_SUPPORT,
     TargetFeature,
     donor_key,
@@ -105,6 +105,9 @@ FREECAD_BLIND_TYPE_CODE = 0
 FREECAD_SYMMETRIC_SIDE_TYPE = 2
 FREECAD_ANGLE_PROPERTY = "Angle"
 FREECAD_REFERENCE_AXIS_PROPERTY = "ReferenceAxis"
+FREECAD_MIDPLANE_PROPERTY = "Midplane"
+FREECAD_TYPE_PROPERTY = "Type"
+FREECAD_ANGLE_TYPE_CODE = 0
 SKETCH_AXIS_DIRECTIONS = MappingProxyType({"H_Axis": (1.0, 0.0), "V_Axis": (0.0, 1.0)})
 _ANGLE_TOLERANCE_DEGREES = 1.0e-9
 
@@ -158,12 +161,6 @@ class _SolidBody:
     id: str
     name: str
     chain: frozenset[str]
-
-
-@dataclass(frozen=True, slots=True)
-class _BodyPartition:
-    model: tuple[_SolidBody, ...]
-    ancillary: tuple[_SolidBody, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,48 +227,29 @@ def match_document(document: CadDocument) -> DonorMatch | DonorDecline:
         reasons.append(
             f"the document holds {len(document.configurations)} configurations"
         )
-    partition = _body_partition(document, timeline, tuple(solid), chains)
-    if len(partition.model) > 1:
-        reasons.append(
-            f"the document builds {len(partition.model)} separate solid bodies"
-        )
-    elif not partition.model and partition.ancillary:
-        reasons.append(
-            f"every one of the {len(partition.ancillary)} solid bodies the document "
-            f"builds feeds a non-model feature, so none of them is the part"
-        )
-    elif partition.ancillary:
-        primary = partition.model[0]
-        for body in partition.ancillary:
-            unexpressed.extend(
-                f"{step.name} ({step.kind}) building body {body.name}"
-                for step in solid
-                if step.id in body.chain
-            )
-        solid = [step for step in solid if step.id in primary.chain]
-        if not solid:
-            reasons.append(
-                f"body {primary.name} holds no solid-model feature of its own"
-            )
+    bodies = _model_bodies(document, timeline, tuple(solid))
+    groups, group_reasons = _body_groups(bodies, tuple(solid))
+    reasons.extend(group_reasons)
     targets: list[TargetFeature] = []
     sketch_ids: list[str] = []
     feature_ids: list[str] = []
-    for index, step in enumerate(solid):
-        target, step_reasons = _target_feature(
-            step,
-            sketches,
-            planes,
-            _freecad_properties(document, step),
-            first=index == 0,
-            taken=tuple(sketch_ids),
-        )
-        reasons.extend(step_reasons)
-        reasons.extend(_source_disagreements(document, step))
-        if target is None:
-            continue
-        targets.append(target)
-        sketch_ids.append(str(step.sketch_id))
-        feature_ids.append(step.id)
+    for group in groups:
+        for index, step in enumerate(group):
+            target, step_reasons = _target_feature(
+                step,
+                sketches,
+                planes,
+                _freecad_properties(document, step),
+                first=index == 0,
+                taken=tuple(sketch_ids),
+            )
+            reasons.extend(step_reasons)
+            reasons.extend(_source_disagreements(document, step))
+            if target is None:
+                continue
+            targets.append(target)
+            sketch_ids.append(str(step.sketch_id))
+            feature_ids.append(step.id)
     if reasons:
         return DonorDecline(tuple(reasons))
     donor = select_donor(targets)
@@ -333,68 +311,60 @@ def _feature_chain(by_id: dict[str, FeatureStep], root: str) -> frozenset[str]:
     return frozenset(seen)
 
 
-def _body_partition(
+def _model_bodies(
     document: CadDocument,
     timeline: tuple[FeatureStep, ...],
     solid: tuple[FeatureStep, ...],
-    chains: frozenset[str],
-) -> _BodyPartition:
+) -> tuple[_SolidBody, ...]:
     by_id = {step.id: step for step in timeline}
     solid_ids = frozenset(step.id for step in solid)
-    candidates: list[_SolidBody] = []
+    result: list[_SolidBody] = []
     for body in document.bodies:
         chain = _feature_chain(by_id, body.final_feature_id)
         if chain & solid_ids:
-            candidates.append(_SolidBody(body.id, body.name, chain))
-    if len(candidates) < 2:
-        return _BodyPartition(tuple(candidates), ())
-    consumed = _consumed_body_names(document, timeline, chains)
-    model: list[_SolidBody] = []
-    ancillary: list[_SolidBody] = []
-    for item in candidates:
-        if _body_source_name(document, item.id) in consumed:
-            ancillary.append(item)
-        else:
-            model.append(item)
-    return _BodyPartition(tuple(model), tuple(ancillary))
+            result.append(_SolidBody(body.id, body.name, chain))
+    return tuple(result)
 
 
-def _consumed_body_names(
-    document: CadDocument, timeline: tuple[FeatureStep, ...], chains: frozenset[str]
-) -> frozenset[str]:
-    names = {
-        name
-        for body in document.bodies
-        if (name := _body_source_name(document, body.id)) is not None
-    }
-    result: set[str] = set()
-    for step in timeline:
-        if not _is_non_solid(step, step.id in chains, bool(chains)):
+def _body_groups(
+    model: tuple[_SolidBody, ...], solid: tuple[FeatureStep, ...]
+) -> tuple[tuple[tuple[FeatureStep, ...], ...], tuple[str, ...]]:
+    if len(model) < 2:
+        primary = model[0] if model else None
+        if primary is None:
+            return (solid,), ()
+        group = tuple(step for step in solid if step.id in primary.chain)
+        if not group:
+            return (), (f"body {primary.name} holds no solid-model feature of its own",)
+        return (group,), ()
+    reasons: list[str] = []
+    groups: list[tuple[FeatureStep, ...]] = []
+    claimed: dict[str, str] = {}
+    for body in model:
+        group = tuple(step for step in solid if step.id in body.chain)
+        if not group:
+            reasons.append(f"body {body.name} holds no solid-model feature of its own")
             continue
-        result.update(name for name in _source_dependencies(step) if name in names)
-    return frozenset(result)
-
-
-def _body_source_name(document: CadDocument, body_id: str) -> str | None:
-    for body in document.bodies:
-        if body.id != body_id:
+        shared = tuple(step for step in group if step.id in claimed)
+        if shared:
+            reasons.append(
+                f"body {body.name} shares "
+                + ", ".join(step.name or step.id for step in shared)
+                + f" with body {claimed[shared[0].id]}, so the "
+                f"{len(model)} bodies are not built independently"
+            )
             continue
-        source = body.attributes.get(FREECAD_ATTRIBUTE)
-        if not isinstance(source, Mapping):
-            return None
-        name = source.get("name")
-        return name if isinstance(name, str) and name else None
-    return None
-
-
-def _source_dependencies(step: FeatureStep) -> tuple[str, ...]:
-    source = step.attributes.get(FREECAD_ATTRIBUTE)
-    if not isinstance(source, Mapping):
-        return ()
-    dependencies = source.get("dependencies")
-    if not isinstance(dependencies, Sequence) or isinstance(dependencies, (str, bytes)):
-        return ()
-    return tuple(item for item in dependencies if isinstance(item, str) and item)
+        for step in group:
+            claimed[step.id] = body.name
+        groups.append(group)
+    stray = tuple(step for step in solid if step.id not in claimed)
+    if stray and not reasons:
+        reasons.append(
+            "the document builds "
+            + ", ".join(step.name or step.id for step in stray)
+            + " outside every solid body it declares"
+        )
+    return tuple(groups), tuple(reasons)
 
 
 def _is_non_solid(step: FeatureStep, chained: bool, chains_known: bool) -> bool:
@@ -641,9 +611,12 @@ def _revolution_target(
 ) -> tuple[TargetFeature | None, tuple[str, ...]]:
     reasons: list[str] = []
     support = _support(plane)
-    if support is None or support.name != FRONT_SUPPORT:
+    revolve_support = (
+        None if support is None else REVOLVE_SUPPORT_BY_PLANE.get(support.name)
+    )
+    if revolve_support is None:
         reasons.append(
-            f"{label}: a revolution donor only holds a sketch on the front plane"
+            f"{label}: sketch {sketch.name} is not placed on a principal plane"
         )
     operation = _revolution_operation(step, first=first)
     if operation is None:
@@ -659,18 +632,13 @@ def _revolution_target(
             f"{label}: only a {FULL_REVOLUTION_DEGREES:g} degree revolution has a "
             f"donor and this one sweeps {angle_degrees:g} degrees"
         )
+    reasons.extend(f"{label}: {item}" for item in _revolution_extras(step, properties))
     profile: _Profile | None = None
     if support is not None:
         profile, profile_reasons = _profile(sketch, support)
         reasons.extend(
             f"{label}: sketch {sketch.name} {item}" for item in profile_reasons
         )
-        if profile is not None and profile.name != RECTANGLE_PROFILE:
-            reasons.append(
-                f"{label}: a revolution donor only holds a rectangular profile and "
-                f"sketch {sketch.name} holds a {profile.name} profile"
-            )
-            profile = None
     axis: tuple[float, float] | None = None
     if support is not None:
         axis = _revolution_axis(step, sketch, support)
@@ -681,20 +649,52 @@ def _revolution_target(
             )
         elif profile is not None and not _profile_clears_axis(profile, axis):
             reasons.append(f"{label}: the profile crosses the revolution axis")
-    if reasons or profile is None or operation is None or axis is None:
+    if (
+        reasons
+        or profile is None
+        or operation is None
+        or axis is None
+        or revolve_support is None
+    ):
         return None, tuple(reasons)
     return (
         TargetFeature(
             operation=operation,
             profile=profile.name,
-            support=SKETCH_AXIS_SUPPORT,
+            support=revolve_support,
             end_condition=FULL_REVOLUTION_END,
             points_mm=profile.points_mm,
+            radii_mm=profile.radii_mm,
+            arc_centres_mm=profile.arc_centres_mm,
+            swept_arc_centres_mm=profile.swept_arc_centres_mm,
             angle_degrees=FULL_REVOLUTION_DEGREES,
             axis_direction=axis,
         ),
         (),
     )
+
+
+def _revolution_extras(
+    step: FeatureStep, properties: dict[str, Parameter]
+) -> tuple[str, ...]:
+    definition = step.definition
+    result: list[str] = []
+    midplane = properties.get(FREECAD_MIDPLANE_PROPERTY)
+    symmetric = midplane is not None and _boolean(midplane) is True
+    if isinstance(definition, RevolutionFeature) and definition.symmetric:
+        symmetric = True
+    if symmetric:
+        result.append(
+            "a mid-plane revolution carries a two-direction end specification "
+            "whose records are not located"
+        )
+    type_code = _integer(properties.get(FREECAD_TYPE_PROPERTY))
+    if type_code is not None and type_code != FREECAD_ANGLE_TYPE_CODE:
+        result.append(
+            "only a revolution driven by a swept angle has a donor and this one "
+            "revolves up to a reference"
+        )
+    return tuple(result)
 
 
 def _revolution_operation(step: FeatureStep, *, first: bool) -> str | None:
