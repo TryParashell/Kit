@@ -3422,7 +3422,8 @@ def _patch_assembly_mates(
                         native_mate.dimensions[index].value_offset,
                         native_value,
                     )
-                changed = True
+                if mate_id not in rewritten:
+                    rewritten.append(mate_id)
         if target.alignment != source.alignment:
             alignment_code = next(
                 (
@@ -3436,10 +3437,11 @@ def _patch_assembly_mates(
             offset = _native_mate_alignment_offset(buffer, native_mate)
             if alignment_code is not None and offset is not None:
                 struct.pack_into("<H", buffer, offset, alignment_code)
-                changed = True
+                if mate_id not in rewritten:
+                    rewritten.append(mate_id)
     for stream, buffer in buffers.items():
         streams[stream] = bytes(buffer)
-    return changed
+    return tuple(rewritten)
 
 
 def _native_mate_values(
