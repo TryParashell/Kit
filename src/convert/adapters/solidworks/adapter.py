@@ -3712,6 +3712,7 @@ def _parasolid_payload(document: CadDocument) -> tuple[bytes | None, str]:
             not document.feature_timeline
             and not document.sketches
             and not document.bodies
+            and not document.meshes
         ):
             return encode_blank_partition_stream(), "generated"
         return encode_blank_partition_stream(), "none"

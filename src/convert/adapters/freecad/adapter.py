@@ -1193,6 +1193,13 @@ def _capability_transfers(
             parts[Capability.BREP].extend(raw_breps)
             if any(not value for value in raw_breps):
                 carrier_reasons[Capability.BREP].add(CarrierReason.SOURCE_OPAQUE)
+        rebuilt_shape_features = (
+            native_shape_feature_count(manifest)
+            if item.source.format_id.casefold() != INFO.format_id.casefold()
+            else 0
+        )
+        if rebuilt_shape_features and not all(parts[Capability.BREP]):
+            parts[Capability.BREP].extend(True for _ in range(rebuilt_shape_features))
         parts[Capability.TESSELLATION].extend(True for _ in item.meshes)
         parts[Capability.TESSELLATION].extend(
             False

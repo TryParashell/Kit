@@ -36,8 +36,8 @@ PART_SUFFIXES = (".SLDPRT", ".FCStd", ".CATPart")
 ASSEMBLY_SUFFIXES = (".SLDASM", ".FCStd", ".CATProduct")
 SUPPORTED_SUFFIXES = frozenset(FORMAT_BY_SUFFIX)
 EXPECTED_SUFFIX_COUNTS = {
-    ".SLDPRT": 54,
-    ".SLDASM": 3,
+    ".SLDPRT": 111,
+    ".SLDASM": 9,
     ".FCStd": 68,
     ".CATPart": 27,
     ".CATProduct": 3,
@@ -321,7 +321,7 @@ def test_swap_formats_match_readme_and_document_kinds() -> None:
     assert readme_suffixes == set(FORMAT_BY_SUFFIX)
     assert set(PART_SUFFIXES) | set(ASSEMBLY_SUFFIXES) == readme_suffixes
     assert set(PART_SUFFIXES) & set(ASSEMBLY_SUFFIXES) == {".FCStd"}
-    assert len(SUPPORTED_FILES) == 155
+    assert len(SUPPORTED_FILES) == 218
     counts = Counter(_suffix(path) for path in SUPPORTED_FILES)
     assert counts == EXPECTED_SUFFIX_COUNTS
     assert len(FCSTD_ASSEMBLIES) == 3
