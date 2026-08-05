@@ -206,6 +206,11 @@ _ASSEMBLY_READER_REQUIRED_STREAMS = (
     RESOLVED_FEATURES_STREAM,
     "Contents/Definition",
 )
+_ASSEMBLY_DONOR_CARRIED_STREAMS = (
+    *_ASSEMBLY_READER_REQUIRED_STREAMS,
+    "Contents/Config-0-ModelHeader",
+    "Header2",
+)
 _VENDOR_REJECTED_ASSEMBLY_RECORDS = ("Contents/Config-0-ModelHeader",)
 _ATTESTED_COMPATIBILITIES = frozenset(
     {
@@ -248,6 +253,12 @@ class _GeneratedStreams:
     unexpressed: tuple[str, ...] = ()
     donor_notes: tuple[str, ...] = ()
     reader_gaps: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class _AssemblyTemplatePatch:
+    capabilities: frozenset[Capability]
+    divergences: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -1894,22 +1905,37 @@ def _generated_streams(
         part_donor_notes,
         (
             _assembly_reader_gaps(streams)
-            if portable.assembly is not None and native_assembly_records
+            if portable.assembly is not None
             else ()
         ),
     )
 
 
-def _assembly_reader_gaps(streams: Mapping[str, bytes]) -> tuple[str, ...]:
+def _assembly_reader_gaps(
+    streams: Mapping[str, bytes],
+    donor: Mapping[str, bytes] | None = None,
+) -> tuple[str, ...]:
     gaps = [
         f"absent_vendor_stream:{name}"
         for name in _ASSEMBLY_READER_REQUIRED_STREAMS
         if name not in streams
     ]
+    if donor is None:
+        gaps.extend(
+            f"vendor_rejected_record:{name}"
+            for name in _VENDOR_REJECTED_ASSEMBLY_RECORDS
+            if name in streams
+        )
+        return tuple(gaps)
     gaps.extend(
-        f"vendor_rejected_record:{name}"
-        for name in _VENDOR_REJECTED_ASSEMBLY_RECORDS
-        if name in streams
+        f"donor_stream_absent:{name}"
+        for name in _ASSEMBLY_DONOR_CARRIED_STREAMS
+        if name not in donor
+    )
+    gaps.extend(
+        f"donor_stream_rewritten:{name}"
+        for name in _ASSEMBLY_DONOR_CARRIED_STREAMS
+        if name in donor and streams.get(name) != donor[name]
     )
     return tuple(gaps)
 
@@ -2343,21 +2369,35 @@ def _patch_native_template(
         native.add(Capability.NATIVE_PAYLOADS)
     if document.assembly is None and document.meshes == ():
         native.add(Capability.TESSELLATION)
+    divergences: tuple[str, ...] = ()
     if document.assembly is not None:
-        assembly_native = _patch_native_assembly(document, streams, bundle_names)
-        native.update(assembly_native)
-        if Capability.COMPONENT_DOCUMENTS in assembly_native and brep_native:
+        patch = _patch_native_assembly(document, streams, bundle_names)
+        native.update(patch.capabilities)
+        divergences = patch.divergences
+        if Capability.COMPONENT_DOCUMENTS in patch.capabilities and brep_native:
             native.add(Capability.NATIVE_PAYLOADS)
     required = _required_capabilities(document)
     blockers = required - native - _TARGET_UNSUPPORTED_CAPABILITIES
     usable = not blockers
+    if document.assembly is None:
+        return _GeneratedStreams(
+            streams,
+            native_brep,
+            frozenset(native),
+            "native-template" if usable else "native-source-with-kit-neutral",
+            usable,
+            usable,
+        )
+    reader_gaps = _assembly_reader_gaps(streams, original_streams) + divergences
+    loadable = usable and not reader_gaps
     return _GeneratedStreams(
         streams,
         native_brep,
         frozenset(native),
-        "native-template" if usable else "native-source-with-kit-neutral",
-        usable,
-        usable,
+        "native-template" if loadable else "native-source-with-kit-neutral",
+        loadable,
+        loadable,
+        reader_gaps=reader_gaps,
     )
 
 
@@ -3071,9 +3111,9 @@ def _patch_native_assembly(
     document: CadDocument,
     streams: dict[str, bytes],
     bundle_names: Mapping[str, str],
-) -> frozenset[Capability]:
+) -> _AssemblyTemplatePatch:
     if document.assembly is None or COMPONENT_TREE_STREAM not in streams:
-        return frozenset()
+        return _AssemblyTemplatePatch(frozenset(), ("donor_component_tree_absent",))
     if bundle_names:
         prefix, root, trailing = _keywords_root(streams[COMPONENT_TREE_STREAM])
         path_by_file_id = {
@@ -3102,19 +3142,27 @@ def _patch_native_assembly(
         archive = SldprtArchive.from_bytes(build_sldprt(streams))
         native = decode_native_assembly(archive, include_tessellation=True)
     except SldprtFormatError:
-        return frozenset()
-    if _patch_assembly_instances(document.assembly, native, streams):
+        return _AssemblyTemplatePatch(frozenset(), ("donor_component_tree_unreadable",))
+    rewritten_instances = _patch_assembly_instances(document.assembly, native, streams)
+    if rewritten_instances:
         try:
             archive = SldprtArchive.from_bytes(build_sldprt(streams))
             native = decode_native_assembly(archive, include_tessellation=True)
         except SldprtFormatError:
-            return frozenset()
-    if _patch_assembly_mates(document.assembly, native, streams, document.source.path):
+            return _AssemblyTemplatePatch(
+                frozenset(), ("donor_component_tree_unreadable",)
+            )
+    rewritten_mates = _patch_assembly_mates(
+        document.assembly, native, streams, document.source.path
+    )
+    if rewritten_mates:
         try:
             archive = SldprtArchive.from_bytes(build_sldprt(streams))
             native = decode_native_assembly(archive, include_tessellation=True)
         except SldprtFormatError:
-            return frozenset()
+            return _AssemblyTemplatePatch(
+                frozenset(), ("donor_component_tree_unreadable",)
+            )
     result: set[Capability] = set()
     if _assembly_structure_values(
         document.assembly
@@ -3192,18 +3240,23 @@ def _patch_native_assembly(
     native_meshes, _ = _assembly_meshes(native)
     if _mesh_values(document.meshes) == _mesh_values(native_meshes):
         result.add(Capability.TESSELLATION)
-    return frozenset(result)
+    divergences = tuple(
+        f"donor_instance_diverged:{item}" for item in rewritten_instances
+    ) + tuple(f"donor_mate_diverged:{item}" for item in rewritten_mates)
+    if Capability.ASSEMBLIES not in result:
+        divergences = (*divergences, "donor_structure_diverged")
+    return _AssemblyTemplatePatch(frozenset(result), divergences)
 
 
 def _patch_assembly_instances(
     assembly: AssemblyData,
     native: NativeAssembly,
     streams: dict[str, bytes],
-) -> bool:
+) -> tuple[str, ...]:
     original = {instance.id: instance for instance in _assembly_instances(native)}
     desired = {instance.id: instance for instance in assembly.instances}
     if not set(original) <= set(desired):
-        return False
+        return ()
     prefix, root, trailing = _keywords_root(streams[COMPONENT_TREE_STREAM])
     elements: dict[int, ET.Element] = {}
     for element in root.iter():
@@ -3213,7 +3266,7 @@ def _patch_assembly_instances(
             elements[int(element.attrib.get("id", ""))] = element
         except ValueError:
             continue
-    changed = False
+    rewritten: list[str] = []
     for instance_id, target in desired.items():
         source = original[instance_id]
         native_id = _native_id(instance_id, "sldasm:instance:")
@@ -3226,7 +3279,7 @@ def _patch_assembly_instances(
             or target.fixed != source.fixed
         ):
             continue
-        values = {
+        instance_values = {
             "swModelRef": str(
                 _native_id(target.definition_id, "sldasm:definition:")
                 or element.attrib.get("swModelRef", "")
@@ -3250,14 +3303,15 @@ def _patch_assembly_instances(
             if target.name.endswith(suffix)
             else source.name[: -len(f"-{source.reference_number}")]
         )
-        values["swName"] = target_name
-        for key, value in values.items():
+        instance_values["swName"] = target_name
+        for key, value in instance_values.items():
             if element.attrib.get(key) != value:
                 element.attrib[key] = value
-                changed = True
-    if changed:
+                if instance_id not in rewritten:
+                    rewritten.append(instance_id)
+    if rewritten:
         streams[COMPONENT_TREE_STREAM] = _keywords_bytes(prefix, root, trailing)
-    return changed
+    return tuple(rewritten)
 
 
 def _native_assembly_matrix(matrix: Matrix4) -> tuple[float, ...]:
@@ -3301,7 +3355,7 @@ def _patch_assembly_mates(
     native: NativeAssembly,
     streams: dict[str, bytes],
     source_path: str,
-) -> bool:
+) -> tuple[str, ...]:
     definition_map = {
         definition.object_id: definition.object_id for definition in native.definitions
     }
@@ -3323,9 +3377,9 @@ def _patch_assembly_mates(
     original = {mate.id: mate for mate in original_mates}
     desired = {mate.id: mate for mate in assembly.mates}
     if set(original) != set(desired):
-        return False
+        return ()
     buffers: dict[str, bytearray] = {}
-    changed = False
+    rewritten: list[str] = []
     for mate_id, target in desired.items():
         source = original[mate_id]
         if (
