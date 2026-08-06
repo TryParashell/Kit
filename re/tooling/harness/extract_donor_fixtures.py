@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
 import hashlib
 import json
 from pathlib import Path
@@ -8,17 +7,22 @@ import sys
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-for candidate in (ROOT, ROOT / "src"):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
-
-from convert.adapters.solidworks.donor_library import DONOR_LIBRARY, Donor
 
 FIXTURE_ROOT = ROOT / "tests" / "fixtures" / "solidworks" / "donors"
 MANIFEST_NAME = "manifest.json"
 META_NAME = "meta.json"
 RESOLVED_NAME = "resolved.bin"
 CONTAINER_DIRECTORY = "container"
+PER_FEATURE_KEYS = (
+    "features",
+    "feature_ids",
+    "sketch_ids",
+    "feature_names",
+    "sketch_names",
+    "point_counts",
+    "arc_counts",
+    "depth_present",
+)
 
 
 def sanitised_stream_name(name: str) -> str:
@@ -33,125 +37,158 @@ def digest(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def donor_metadata(donor: Donor, container: Mapping[str, bytes]) -> dict[str, object]:
-    return {
-        "donor_id": donor.donor_id,
-        "features": [list(feature.key) for feature in donor.features],
-        "feature_ids": list(donor.feature_ids),
-        "sketch_ids": list(donor.sketch_ids),
-        "feature_names": list(donor.feature_names),
-        "sketch_names": list(donor.sketch_names),
-        "point_counts": list(donor.point_counts),
-        "arc_counts": list(donor.arc_counts),
-        "depth_present": list(donor.depth_present),
-        "stream_bytes": donor.stream_bytes,
-        "measured": donor.measured,
-        "axis_directions": [
-            None if direction is None else list(direction)
-            for direction in donor.axis_directions
-        ],
-        "swept_arc_counts": list(donor.swept_arc_counts),
-        "inherited_directions": list(donor.inherited_directions),
-        "spare_plane_ids": list(donor.spare_plane_ids),
-        "spare_plane_names": list(donor.spare_plane_names),
-        "spare_plane_frames": list(donor.spare_plane_frames),
-        "spare_equations": list(donor.spare_equations),
-        "container_streams": [
-            {"name": name, "file": container_file_name(name)}
-            for name in sorted(container)
-        ],
-    }
+def read_json(path: Path) -> object:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def write_bytes(path: Path, payload: bytes) -> int:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(payload)
-    return len(payload)
+def verify_record(
+    path: Path, record: dict[str, object], expected_file: str
+) -> tuple[int, list[str]]:
+    failures: list[str] = []
+    if record.get("file") != expected_file:
+        failures.append(f"{path}: manifest names {record.get('file')!r}")
+    if not path.is_file():
+        failures.append(f"{path}: missing")
+        return 0, failures
+    payload = path.read_bytes()
+    if record.get("length") != len(payload):
+        failures.append(
+            f"{path}: manifest length {record.get('length')} but {len(payload)} on disk"
+        )
+    actual = digest(payload)
+    if record.get("sha256") != actual:
+        failures.append(f"{path}: manifest sha256 {record.get('sha256')} but {actual}")
+    return len(payload), failures
 
 
-def write_json(path: Path, payload: object) -> int:
-    encoded = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    return write_bytes(path, encoded)
+def verify_metadata(
+    directory: Path, donor_id: str, container: dict[str, object]
+) -> tuple[int, list[str]]:
+    path = directory / META_NAME
+    failures: list[str] = []
+    if not path.is_file():
+        return 0, [f"{path}: missing"]
+    encoded = path.read_bytes()
+    meta = read_json(path)
+    if not isinstance(meta, dict):
+        return len(encoded), [f"{path}: not an object"]
+    if meta.get("donor_id") != donor_id:
+        failures.append(f"{path}: describes {meta.get('donor_id')!r}")
+    features = meta.get("features")
+    if not isinstance(features, list) or not features:
+        failures.append(f"{path}: lists no features")
+    else:
+        for key in PER_FEATURE_KEYS:
+            value = meta.get(key)
+            if not isinstance(value, list) or len(value) != len(features):
+                failures.append(f"{path}: {key} does not hold one entry per feature")
+    streams = meta.get("container_streams")
+    if not isinstance(streams, list):
+        failures.append(f"{path}: lists no container streams")
+    else:
+        named = {item["name"]: item["file"] for item in streams}
+        if sorted(named) != sorted(container):
+            failures.append(f"{path}: container stream names differ from the manifest")
+        for name, file_name in named.items():
+            if file_name != container_file_name(name):
+                failures.append(f"{path}: stream {name} names {file_name!r}")
+    return len(encoded), failures
 
 
-def prune(fixture_root: Path, keep: Iterable[Path]) -> list[Path]:
-    retained = set(keep)
-    removed: list[Path] = []
-    for path in sorted(fixture_root.rglob("*")):
-        if path.is_file() and path not in retained:
-            path.unlink()
-            removed.append(path)
-    for path in sorted(fixture_root.rglob("*"), reverse=True):
-        if path.is_dir() and not any(path.iterdir()):
-            path.rmdir()
-    return removed
-
-
-def extract(fixture_root: Path) -> dict[str, object]:
-    written: set[Path] = set()
-    donors: dict[str, object] = {}
+def verify(fixture_root: Path) -> dict[str, object]:
+    manifest_path = fixture_root / MANIFEST_NAME
+    if not manifest_path.is_file():
+        return {
+            "fixture_root": str(fixture_root),
+            "donor_count": 0,
+            "failures": [f"{manifest_path}: missing"],
+        }
+    manifest = read_json(manifest_path)
+    if not isinstance(manifest, dict):
+        return {
+            "fixture_root": str(fixture_root),
+            "donor_count": 0,
+            "failures": [f"{manifest_path}: not an object"],
+        }
+    donors = manifest.get("donors")
+    if not isinstance(donors, dict):
+        return {
+            "fixture_root": str(fixture_root),
+            "donor_count": 0,
+            "failures": [f"{manifest_path}: carries no donor index"],
+        }
+    failures: list[str] = []
     resolved_bytes = 0
     container_bytes = 0
-    metadata_bytes = 0
-    for donor in DONOR_LIBRARY:
-        if donor.donor_id in donors:
-            raise ValueError(f"donor {donor.donor_id} appears twice in DONOR_LIBRARY")
-        directory = fixture_root / donor.donor_id
-        resolved = donor.stream
-        resolved_path = directory / RESOLVED_NAME
-        resolved_bytes += write_bytes(resolved_path, resolved)
-        written.add(resolved_path)
-        container = donor.container
-        container_index: dict[str, object] = {}
+    metadata_bytes = len(manifest_path.read_bytes())
+    files = 1
+    for donor_id in sorted(donors):
+        record = donors[donor_id]
+        directory = fixture_root / donor_id
+        if not directory.is_dir():
+            failures.append(f"{directory}: missing")
+            continue
+        length, problems = verify_record(
+            directory / RESOLVED_NAME, record["resolved"], RESOLVED_NAME
+        )
+        resolved_bytes += length
+        failures.extend(problems)
+        files += 1
+        container = record["container"]
         for name in sorted(container):
-            blob = container[name]
-            stream_path = directory / CONTAINER_DIRECTORY / container_file_name(name)
-            container_bytes += write_bytes(stream_path, blob)
-            written.add(stream_path)
-            container_index[name] = {
-                "file": f"{CONTAINER_DIRECTORY}/{container_file_name(name)}",
-                "sha256": digest(blob),
-                "length": len(blob),
-            }
-        meta_path = directory / META_NAME
-        metadata_bytes += write_json(meta_path, donor_metadata(donor, container))
-        written.add(meta_path)
-        donors[donor.donor_id] = {
-            "resolved": {
-                "file": RESOLVED_NAME,
-                "sha256": digest(resolved),
-                "length": len(resolved),
-            },
-            "container": container_index,
-        }
-    manifest_path = fixture_root / MANIFEST_NAME
-    manifest = {
-        "donor_count": len(donors),
-        "resolved_bytes": resolved_bytes,
-        "container_bytes": container_bytes,
-        "donors": donors,
-    }
-    manifest_bytes = write_json(manifest_path, manifest)
-    written.add(manifest_path)
-    removed = prune(fixture_root, written)
+            expected = f"{CONTAINER_DIRECTORY}/{container_file_name(name)}"
+            length, problems = verify_record(
+                directory / CONTAINER_DIRECTORY / container_file_name(name),
+                container[name],
+                expected,
+            )
+            container_bytes += length
+            failures.extend(problems)
+            files += 1
+        length, problems = verify_metadata(directory, donor_id, container)
+        metadata_bytes += length
+        failures.extend(problems)
+        files += 1
+    declared_resolved = manifest.get("resolved_bytes")
+    if declared_resolved != resolved_bytes:
+        failures.append(
+            f"{manifest_path}: declares {declared_resolved} resolved bytes but "
+            f"{resolved_bytes} are on disk"
+        )
+    declared_container = manifest.get("container_bytes")
+    if declared_container != container_bytes:
+        failures.append(
+            f"{manifest_path}: declares {declared_container} container bytes but "
+            f"{container_bytes} are on disk"
+        )
+    declared_count = manifest.get("donor_count")
+    if declared_count != len(donors):
+        failures.append(
+            f"{manifest_path}: declares {declared_count} donors but indexes "
+            f"{len(donors)}"
+        )
+    on_disk = sorted(path.name for path in fixture_root.iterdir() if path.is_dir())
+    if on_disk != sorted(donors):
+        failures.append(
+            f"{fixture_root}: directories on disk differ from the manifest index"
+        )
     return {
-        "directories": len(DONOR_LIBRARY),
-        "files": len(written),
+        "fixture_root": str(fixture_root),
+        "donor_count": len(donors),
+        "directories": len(on_disk),
+        "files": files,
         "resolved_bytes": resolved_bytes,
         "container_bytes": container_bytes,
-        "metadata_bytes": metadata_bytes + manifest_bytes,
-        "total_bytes": resolved_bytes
-        + container_bytes
-        + metadata_bytes
-        + manifest_bytes,
-        "removed": [str(path.relative_to(fixture_root)) for path in removed],
+        "metadata_bytes": metadata_bytes,
+        "total_bytes": resolved_bytes + container_bytes + metadata_bytes,
+        "failures": failures,
     }
 
 
 def main() -> int:
-    summary = extract(FIXTURE_ROOT)
+    summary = verify(FIXTURE_ROOT)
     sys.stdout.write(json.dumps(summary, indent=2, sort_keys=True) + "\n")
-    return 0
+    return 1 if summary["failures"] else 0
 
 
 if __name__ == "__main__":
