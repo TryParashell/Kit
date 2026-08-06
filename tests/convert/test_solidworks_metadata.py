@@ -10,21 +10,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import pytest
-
-from convert.adapters.solidworks.container import SldprtFormatError
-from convert.adapters.solidworks.donor_library import donor_by_id
-from convert.adapters.solidworks.format import CONFIGURATION_STREAM
 from convert.adapters.solidworks.native import (
     HORIZONTAL_AXIS_SUBELEMENT,
     NORMAL_AXIS_SUBELEMENT,
     VERTICAL_AXIS_SUBELEMENT,
-    _donor_equation_texts,
     _matrix_frame,
-    _patch_donor_equations,
-    _patch_donor_plane_frames,
     _plane_frame_block,
-    _serialized_string,
+    _plane_payload,
     NativeMarker,
     NativeModel,
     NativeOperation,
@@ -46,8 +38,6 @@ from interchange import (
     ValueKind,
     Vector3,
 )
-
-METADATA_DONOR_ID = "arcboss_cut_cut_cut_through_rev_meta"
 
 
 def _document(parameters: tuple[Parameter, ...]) -> CadDocument:
@@ -152,28 +142,6 @@ def test_documents_without_expressions_need_no_equations() -> None:
     assert expression_equation_texts(_document(())) == ()
 
 
-def test_metadata_donor_carries_spare_planes_and_equations() -> None:
-    donor = donor_by_id(METADATA_DONOR_ID)
-    assert len(donor.spare_plane_ids) == 4
-    assert len(donor.spare_plane_ids) == len(donor.spare_plane_names)
-    assert len(donor.spare_plane_ids) == len(donor.spare_plane_frames)
-    assert len(donor.spare_equations) == 24
-    assert len(set(donor.spare_equations)) == len(donor.spare_equations)
-    configuration = donor.container[CONFIGURATION_STREAM]
-    for text in donor.spare_equations:
-        assert configuration.count(_serialized_string(text)) == 1
-
-
-def test_metadata_donor_spare_plane_frames_decode_where_declared() -> None:
-    donor = donor_by_id(METADATA_DONOR_ID)
-    stream = donor.stream
-    for offset in donor.spare_plane_frames:
-        frame = _matrix_frame(stream, offset, offset + 121)
-        assert frame is not None
-        assert frame[0] == offset
-        assert frame[1] == 121
-
-
 def test_plane_frame_block_is_recovered_by_the_decoder() -> None:
     plane = _plane(
         "XZ_Plane",
@@ -207,9 +175,7 @@ def test_plane_frame_block_rejects_a_non_orthonormal_frame() -> None:
     assert _plane_frame_block(plane) is None
 
 
-def test_plane_frames_are_patched_in_place_without_moving_the_stream() -> None:
-    donor = donor_by_id(METADATA_DONOR_ID)
-    stream = donor.stream
+def test_authored_plane_payload_carries_a_decodable_reference_frame() -> None:
     plane = _plane(
         "XY_Plane001",
         (
@@ -218,79 +184,28 @@ def test_plane_frames_are_patched_in_place_without_moving_the_stream() -> None:
             Vector3(0.0, 0.0, 1.0),
         ),
     )
-    block = _plane_frame_block(plane)
-    assert block is not None
-    offset = donor.spare_plane_frames[0]
-    patched = _patch_donor_plane_frames(stream, ((offset, block),))
-    assert len(patched) == len(stream)
-    assert patched[:offset] == stream[:offset]
-    assert patched[offset + 121 :] == stream[offset + 121 :]
-    frame = _matrix_frame(patched, offset, offset + 121)
+    payload = _plane_payload(plane)
+    assert payload.endswith(_plane_frame_block(plane))
+    offset = len(payload) - 121
+    frame = _matrix_frame(payload, offset, len(payload))
     assert frame is not None
+    assert frame[0] == offset
+    assert frame[1] == 121
+    assert frame[3] == (0.0, 0.0, 1.0)
     assert frame[4] == (1.0, 0.0, 0.0)
     assert frame[5] == (0.0, 1.0, 0.0)
 
 
-def test_plane_frame_patch_rejects_an_offset_past_the_stream() -> None:
-    donor = donor_by_id(METADATA_DONOR_ID)
-    stream = donor.stream
-    with pytest.raises(SldprtFormatError, match="outside the resolved stream"):
-        _patch_donor_plane_frames(stream, ((len(stream) - 4, b"\0" * 121),))
-
-
-def test_equation_patch_replaces_only_the_named_relation_text() -> None:
-    donor = donor_by_id(METADATA_DONOR_ID)
-    configuration = donor.container[CONFIGURATION_STREAM]
-    texts = tuple(
-        f'"KitPatched{index:02d}"= {index}'
-        for index in range(1, len(donor.spare_equations) + 1)
-    )
-    patched = _patch_donor_equations(configuration, donor, texts)
-    for original, replacement in zip(donor.spare_equations, texts, strict=True):
-        assert _serialized_string(original) not in patched
-        assert patched.count(_serialized_string(replacement)) == 1
-
-
-def test_equation_patch_rejects_a_relation_text_that_is_absent() -> None:
-    donor = donor_by_id(METADATA_DONOR_ID)
-    absent = replace(donor, spare_equations=('"KitMissing"= 1',))
-    with pytest.raises(SldprtFormatError, match="does not appear exactly once"):
-        _patch_donor_equations(
-            donor.container[CONFIGURATION_STREAM], absent, ('"KitOther"= 2',)
-        )
-
-
-def test_donor_equation_texts_pad_the_unused_spares_with_reserved_names() -> None:
-    donor = donor_by_id(METADATA_DONOR_ID)
-    document = _document(
+def test_authored_plane_payload_is_empty_for_a_non_orthonormal_frame() -> None:
+    plane = _plane(
+        "Skewed001",
         (
-            _parameter(
-                "Sketch004.9",
-                ParameterValue(5.0, ValueKind.LENGTH, "mm"),
-                "<<Attributes002>>.Diameter",
-            ),
-        )
+            Vector3(1.0, 0.0, 0.0),
+            Vector3(1.0, 1.0, 0.0),
+            Vector3(0.0, 0.0, 1.0),
+        ),
     )
-    texts = _donor_equation_texts(document, donor)
-    assert texts is not None
-    assert len(texts) == len(donor.spare_equations)
-    assert texts[:2] == expression_equation_texts(document)
-    assert all(text.startswith('"KitReserved') for text in texts[2:])
-
-
-def test_donor_equation_texts_decline_when_the_spares_run_out() -> None:
-    donor = donor_by_id(METADATA_DONOR_ID)
-    narrow = replace(donor, spare_equations=donor.spare_equations[:1])
-    document = _document(
-        (
-            _parameter(
-                "Sketch004.9",
-                ParameterValue(5.0, ValueKind.LENGTH, "mm"),
-                "<<Attributes002>>.Diameter",
-            ),
-        )
-    )
-    assert _donor_equation_texts(document, narrow) is None
+    assert _plane_payload(plane) == b""
 
 
 def _marker(
