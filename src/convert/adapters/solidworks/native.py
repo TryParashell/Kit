@@ -505,6 +505,8 @@ _NAME_PREFIX = struct.pack("<H", _NAME_TOKEN) + b"\xff\xfe\xff"
 _SCALAR_HEADER = DIMENSION_SCALAR_HEADERS[0]
 _SOLIDWORKS_XML_NAMESPACE = "http://www.solidworks.com/sw2003/schema"
 _SOLIDWORKS_CONFIGURATION_FLAGS = -2143288960
+_CREATION_STAMP_LOW = 1577836800
+_CREATION_STAMP_HIGH = 1893456000
 _BASE_CONFIGURATION_MANAGER = (
     b"c-qBOJ4*vW5dJm~R1gc%!bU`}wGazQ;RPdt_()LDCJ@fc84oVGuy<+Yz+a)Dg|(%9dON{Zun_FTUyyV59=V4XjVL"
     b"<D?#|Ba&V2LOa~y^#G>wwcI@TH;E?b(>+G+5bf`Ez+kzkyjgE*;)Jt`X^zx*;AToU)Qj!%Hyjo-@mIibIve`G!Wy"
@@ -2479,7 +2481,7 @@ def _native_identity(document: CadDocument, model_name: str) -> _NativeIdentity:
             _SOLIDWORKS_CONFIGURATION_FLAGS,
             "Part1",
         )
-    creation_stamp = _stable_u32(document, model_name)
+    creation_stamp = _stable_creation_stamp(document, model_name)
     last_modified_stamp = 101 + authored * 4 + len(document.sketches) * 2
     return _NativeIdentity(
         creation_stamp,
@@ -2749,7 +2751,7 @@ def _serializable_name(value: str) -> bool:
 def _native_assembly_identity(
     document: CadDocument, model_name: str, object_count: int
 ) -> _NativeIdentity:
-    creation_stamp = _stable_u32(document, model_name, b"assembly")
+    creation_stamp = _stable_creation_stamp(document, model_name, b"assembly")
     return _NativeIdentity(
         creation_stamp,
         101 + object_count * 4,
@@ -2984,6 +2986,13 @@ def _stable_u32(document: CadDocument, model_name: str, domain: bytes = b"") -> 
     digest = hashlib.sha256(source).digest()
     value = int.from_bytes(digest[:4], "little") & 0x7FFFFFFF
     return value or 1
+
+
+def _stable_creation_stamp(
+    document: CadDocument, model_name: str, domain: bytes = b""
+) -> int:
+    span = _CREATION_STAMP_HIGH - _CREATION_STAMP_LOW
+    return _CREATION_STAMP_LOW + _stable_u32(document, model_name, domain) % span
 
 
 def _proved_write_capabilities(
