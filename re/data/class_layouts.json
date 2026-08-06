@@ -1,6 +1,6 @@
 {
  "version": 1,
- "source": "re/data/segments",
+ "source": "re/data/segments + re/data/class_layouts_decompiled.json",
  "traces": [
   "baseline",
   "circle",
@@ -69,11 +69,13 @@
   "sgSketch@7",
   "sgSketch@9"
  ],
+ "run_derivation": "solve_runs.Solver seeded with the exact record end of every traced object, taken from the contiguous preorder subtree of the recorded segmentation; a run is constant only when every traced instance agrees",
+ "repeat_count_contract": "a trailing ... entry in child_slots means the child count is not constant across the traced instances; repeat_count is null because no field holding the count has been recovered, and the static segmenter refuses such a class rather than guessing",
  "class_count": 73,
  "confirmed_classes": 38,
  "partial_classes": 35,
- "opaque_runs": 61,
- "decompiled_classes": 0,
+ "opaque_runs": 47,
+ "decompiled_classes": 15,
  "classes": {
   "ParallelPlaneDistanceDim_c": {
    "confidence": "partial",
@@ -257,13 +259,8 @@
     "2": 0,
     "3": 0
    },
-   "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 0x9, 1x4, 4x2"
-    }
-   ]
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 0x9, 1x4, 4x2"
   },
   "external#83": {
    "confidence": "partial",
@@ -301,13 +298,8 @@
     "2": 0,
     "3": 0
    },
-   "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 0x14, 1x9, 2x3, 4x7"
-    }
-   ]
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 0x14, 1x9, 2x3, 4x7"
   },
   "external#84": {
    "confidence": "partial",
@@ -341,13 +333,8 @@
     "2": 0,
     "3": 0
    },
-   "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 0x5, 1x3, 4x3"
-    }
-   ]
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 0x5, 1x3, 4x3"
   },
   "external#85": {
    "confidence": "partial",
@@ -389,13 +376,8 @@
     "2": 0,
     "3": 0
    },
-   "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 0x2, 1x2, 2x1, 3x1, 4x1"
-    }
-   ]
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 0x2, 1x2, 2x1, 3x1, 4x1"
   },
   "moArcBackedUpData_c": {
    "confidence": "confirmed",
@@ -536,22 +518,51 @@
    }
   },
   "moCompFeature_c": {
-   "confidence": "confirmed",
-   "source": "re/data/segments",
+   "confidence": "partial",
+   "serialize": "sldmodu.dll 0x4bc222f0 moCompFeature_c::Serialize",
    "child_slots": [
     "*"
    ],
-   "instances": 30,
-   "child_counts": [
-    [
-     1,
-     30
-    ]
-   ],
    "runs": {
-    "lead": 0,
-    "0": 0
-   }
+    "lead": 0
+   },
+   "variable_runs": [
+    {
+     "slot": "0",
+     "rule": "opaque",
+     "note": "only slot. The child is a classref external#43 read by moCompRef_c::Serialize and its body end has no witness in any trace. What is measured: the traced scope of every one of the 30 instances is exactly 93 bytes from the end of its own tag, and consecutive instances are 119 bytes apart, so the per-entry stride is 2 (classref tag) + 93 (scope) + 24 (inter-entry bytes). moCompFeature_c::Serialize itself contributes at most two i32 flags and then FUN_4bbb16e0, which for ver >= 0x4a5 reads only i32 tree-node id and su_CTime, 8 bytes, matching the id at end-8 and the time_t at end-4."
+    }
+   ],
+   "fields": [
+    {
+     "run": "0",
+     "offset": -12,
+     "width": 4,
+     "type": "u32",
+     "name": "VersionStamp",
+     "role": "constant",
+     "confidence": "partial"
+    },
+    {
+     "run": "0",
+     "offset": -8,
+     "width": 4,
+     "type": "u32",
+     "name": "TreeNodeId",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "0",
+     "offset": -4,
+     "width": 4,
+     "type": "u32",
+     "name": "CreationTime",
+     "role": "derived",
+     "confidence": "confirmed"
+    }
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "moCompRefPlane_c": {
    "confidence": "partial",
@@ -627,41 +638,81 @@
     "2": 0,
     "3": 0
    },
-   "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 3x3, 4x1"
-    }
-   ]
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 3x3, 4x1"
   },
   "moDefaultRefPlnData_c": {
    "confidence": "partial",
-   "source": "re/data/segments",
+   "serialize": "sldmodu.dll 0x4c2d1cf0, which calls su_CObject::Serialize and then tail-jumps through virtual slot 0x150",
    "child_slots": [
     "*",
     "*",
     "*"
    ],
-   "instances": 27,
-   "child_counts": [
-    [
-     3,
-     27
-    ]
-   ],
    "runs": {
     "0": 47,
-    "1": 0,
-    "2": 2
+    "1": 0
    },
    "variable_runs": [
     {
      "slot": "lead",
+     "rule": "conditional",
+     "at": 48,
+     "width": 72,
+     "predicate": "HasBasis",
+     "predicate_at": 0,
+     "predicate_width": 1,
+     "values": [
+      1
+     ],
+     "tail": 65,
+     "note": "48 bytes are two f64[3] vectors, the plane origin and its normal. The u8 at +48 is 1 when a 9-double row-major orthonormal basis follows and 0 when it is omitted. Measured lead is 114 for the first moDefaultRefPlnData_c of every one of the 9 traced parts, whose normal is +Z (Front, the identity basis), and 186 for the second and third, whose normals are +Y and +X. The 66-byte tail is four f64 then a u8 then four f64."
+    },
+    {
+     "slot": "2",
      "rule": "opaque",
-     "note": "observed run lengths 114x9, 186x18"
+     "note": "last slot; bounded to at most 2 bytes by every traced instance but with no witness that pins it."
     }
-   ]
+   ],
+   "fields": [
+    {
+     "run": "lead",
+     "offset": 0,
+     "width": 24,
+     "type": "f64[3]",
+     "name": "Origin",
+     "role": "constant",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "lead",
+     "offset": 24,
+     "width": 24,
+     "type": "f64[3]",
+     "name": "Normal",
+     "role": "constant",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "lead",
+     "offset": 48,
+     "width": 1,
+     "type": "u8",
+     "name": "HasBasis",
+     "role": "constant",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "lead",
+     "offset": 49,
+     "width": 72,
+     "type": "f64[9]",
+     "name": "Basis",
+     "role": "derived",
+     "confidence": "confirmed"
+    }
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "moDetailCabinet_c": {
    "confidence": "confirmed",
@@ -689,7 +740,7 @@
   },
   "moDisplayDistanceDim_c": {
    "confidence": "partial",
-   "source": "re/data/segments",
+   "serialize": "sldmodu.dll 0x4c86acd0 moDisplayDistanceDim_c::Serialize",
    "child_slots": [
     "*",
     "*",
@@ -702,20 +753,13 @@
     "*",
     "*",
     "*",
-    "moFavoriteHandle_c",
+    "*",
     "*",
     "*",
     "*",
     "*",
     "*",
     "*"
-   ],
-   "instances": 14,
-   "child_counts": [
-    [
-     18,
-     14
-    ]
    ],
    "runs": {
     "lead": 2,
@@ -725,12 +769,10 @@
     "3": 48,
     "4": 83,
     "5": 378,
-    "6": 0,
     "7": 0,
     "8": 44,
     "9": 0,
     "10": 40,
-    "11": 0,
     "12": 0,
     "13": 0,
     "14": 4,
@@ -739,11 +781,23 @@
    },
    "variable_runs": [
     {
+     "slot": "6",
+     "rule": "opaque",
+     "note": "the preceding child's body end has no witness; the run itself is not known to vary."
+    },
+    {
+     "slot": "11",
+     "rule": "opaque",
+     "note": "the preceding child's body end has no witness; the run itself is not known to vary."
+    },
+    {
      "slot": "17",
      "rule": "opaque",
-     "note": "observed run lengths 0x3, 4x10, 170x1"
+     "note": "last slot. solve_runs.py reports this key as variable, but every one of the 16 other runs is constant across all 14 traced instances and the observed body-length spread (1457, 1739, 1766, 1784, 1838) is fully accounted for by the varying spans of the object children in slots 6 and 11. There is no evidence that this run varies; it simply has no witness."
     }
-   ]
+   ],
+   "fields": [],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "moDisplayRadialDim_c": {
    "confidence": "partial",
@@ -973,43 +1027,69 @@
   },
   "moExtrusion_c": {
    "confidence": "partial",
-   "source": "re/data/segments",
+   "serialize": "sldmodu.dll 0x4bb8eba0 moExtrusion_c::Serialize",
    "child_slots": [
-    "external#4",
     "*",
     "*",
     "*",
     "*",
     "*",
     "*",
+    "suObArray",
     "*",
     "moEndSpec_c"
    ],
-   "instances": 9,
-   "child_counts": [
-    [
-     9,
-     9
-    ]
-   ],
    "runs": {
     "lead": 0,
-    "0": 0,
     "1": 49,
     "2": 30,
     "3": 52,
     "4": 4,
-    "6": 0,
-    "7": 8,
-    "8": 0
+    "7": 8
    },
    "variable_runs": [
     {
+     "slot": "0",
+     "rule": "opaque",
+     "note": "the preceding child is a classref external#4 whose body end has no witness."
+    },
+    {
      "slot": "5",
      "rule": "opaque",
-     "note": "observed run lengths 587x1, 705x3, 707x3, 1063x1, 1161x1"
+     "note": "measured 587, 705 (x3), 707 (x3), 1063 and 1161 bytes across the 9 traced extrusions. This is the moModelFeature_c / moFeature_c portion of the base chain that precedes the surface-id suObArray in slot 6. moBodyFeature_c::Serialize is 0x4bb8aa10 and its own unnamed base is FUN_4bb886c0; neither is reconciled against these runs."
+    },
+    {
+     "slot": "6",
+     "rule": "opaque",
+     "note": "the preceding child is the surface-id suObArray, a classref external#102..104; its body end has no witness."
+    },
+    {
+     "slot": "8",
+     "rule": "opaque",
+     "note": "last slot. Documented in re/solidworks/records/SERIALIZE.md section 2 as 4 (moFromEndSpec_c type) + 16 or 20 (moEndSpec_c tail) + 12 (f64@0x7d0 and i32@0x7a8) + 0 or 4 driver trailer, but the split is inside the moEndSpec_c child, not in this run."
     }
-   ]
+   ],
+   "fields": [
+    {
+     "run": "8",
+     "offset": -12,
+     "width": 8,
+     "type": "f64",
+     "name": "field@0x7d0",
+     "role": "constant",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "8",
+     "offset": -4,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x7a8",
+     "role": "constant",
+     "confidence": "confirmed"
+    }
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "moFR_c": {
    "confidence": "partial",
@@ -1100,37 +1180,36 @@
   },
   "moFeatureDimHandle_c": {
    "confidence": "partial",
-   "source": "re/data/segments",
+   "serialize": "sldmodu.dll 0x4c86e240 moModDimHandle_c::Serialize",
    "child_slots": [
     "*",
     "*",
     "*",
     "*",
     "*",
-    "ParallelPlaneDistanceDim_c"
-   ],
-   "instances": 12,
-   "child_counts": [
-    [
-     6,
-     12
-    ]
+    "Dimension_c"
    ],
    "runs": {
     "lead": 0,
     "1": 0,
     "2": 0,
     "3": 0,
-    "4": 15,
-    "5": 0
+    "4": 15
    },
    "variable_runs": [
     {
      "slot": "0",
      "rule": "opaque",
-     "note": "observed run lengths 78x2, 82x10"
+     "note": "measured 82 bytes in 10 of 12 traced instances and 78 in the two instances of the older vendor parts, so the 4-byte difference is a version gate inside the base FUN_4c864440, which is not reconciled. moModDimHandle_c::Serialize itself contributes only the final Dimension_c object read in slot 5."
+    },
+    {
+     "slot": "5",
+     "rule": "opaque",
+     "note": "last slot; the child is a ParallelPlaneDistanceDim_c whose body end has no witness."
     }
-   ]
+   ],
+   "fields": [],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "moFromEndSpec_c": {
    "confidence": "partial",
@@ -1256,19 +1335,13 @@
     "8": 0,
     "9": 0
    },
-   "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 6x4, 8x4, 10x1"
-    }
-   ]
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 6x4, 8x4, 10x1"
   },
   "moICE_c": {
    "confidence": "partial",
-   "source": "re/data/segments",
+   "serialize": "sldmodu.dll 0x4bb8eba0 moExtrusion_c::Serialize",
    "child_slots": [
-    "external#4",
     "*",
     "*",
     "*",
@@ -1276,35 +1349,43 @@
     "*",
     "*",
     "*",
+    "suObArray",
     "*",
     "moEndSpec_c"
    ],
-   "instances": 4,
-   "child_counts": [
-    [
-     10,
-     4
-    ]
-   ],
    "runs": {
     "lead": 0,
-    "0": 0,
     "1": 49,
     "2": 30,
     "3": 52,
     "4": 6,
     "5": 0,
-    "7": 0,
-    "8": 8,
-    "9": 0
+    "8": 8
    },
    "variable_runs": [
     {
+     "slot": "0",
+     "rule": "opaque",
+     "note": "the preceding child is a classref external#4 whose body end has no witness."
+    },
+    {
      "slot": "6",
      "rule": "opaque",
-     "note": "observed run lengths 873x3, 1131x1"
+     "note": "measured 873 bytes in 3 of 4 traced instances and 1131 in vendor_ring. Same base-chain payload as moExtrusion_c slot 5; moICE_c does not override Serialize, slot 5 of both vftables is 0x4bb8eba0."
+    },
+    {
+     "slot": "7",
+     "rule": "opaque",
+     "note": "the preceding child is the surface-id suObArray, a classref external#103..104."
+    },
+    {
+     "slot": "9",
+     "rule": "opaque",
+     "note": "last slot."
     }
-   ]
+   ],
+   "fields": [],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "moInkMarkupFolder_c": {
    "confidence": "confirmed",
@@ -1524,13 +1605,8 @@
     "8": 14,
     "9": 8
    },
-   "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 6x2, 10x13"
-    }
-   ]
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 6x2, 10x13"
   },
   "moRefPlane_c": {
    "confidence": "confirmed",
@@ -1670,79 +1746,144 @@
   },
   "moSketchChain_c": {
    "confidence": "partial",
-   "source": "re/data/segments",
+   "serialize": "sldmodu.dll 0x4c2d3af0 moSketchChain_c::Serialize",
    "child_slots": [
-    "*",
-    "*"
-   ],
-   "instances": 16,
-   "child_counts": [
-    [
-     2,
-     16
-    ]
+    "contourTrimData_c",
+    "contourTrimData_c"
    ],
    "runs": {
-    "0": 0
+    "0": 0,
+    "1": 12
    },
    "variable_runs": [
     {
      "slot": "lead",
+     "rule": "count",
+     "at": 0,
+     "count_width": 2,
+     "stride": 4,
+     "note": "sub-record slot 5 of the member at this+0x08: u16 count then count u32 sketch-entity indices"
+    },
+    {
+     "slot": "lead",
+     "rule": "count",
+     "at": 0,
+     "count_width": 2,
+     "stride": 4,
+     "note": "sub-record slot 5 of the member at this+0x60: u16 count then count u32; count is 1 in all 16 traced instances"
+    },
+    {
+     "slot": "lead",
+     "rule": "string",
+     "at": 24,
+     "tail": 10,
+     "note": "the 24 bytes of at are u32@0x28, i32@0x38, i32@0x50, i32@0x54, u32@0x58, u32@0x5c. The string is operator>>(CString) at this+0x80, empty (ff fe ff 00) in all 16 instances. The 10-byte tail is u16 handle-presence flags, u32@0xd0 and the u32 length of the su_CMapPtrToPtr pair array, which is 0 in all 16 instances."
+    }
+   ],
+   "fields": [
+    {
+     "run": "lead",
+     "offset": 0,
+     "width": 2,
+     "type": "u16",
+     "name": "BoundaryEntCount",
+     "role": "derived",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "lead",
+     "offset": 2,
+     "width": 4,
+     "type": "u32",
+     "name": "BoundaryEntIndex",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "1",
+     "offset": 0,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x90",
+     "role": "uninitialised",
+     "confidence": "partial"
+    },
+    {
+     "run": "1",
+     "offset": 4,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0xa0",
+     "role": "uninitialised",
+     "confidence": "partial"
+    },
+    {
+     "run": "1",
+     "offset": 8,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0xa4",
+     "role": "uninitialised",
+     "confidence": "partial"
+    }
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
+  },
+  "moSketchExtRef_w": {
+   "confidence": "partial",
+   "serialize": "sldmodu.dll 0x4c2d40f0 moSketchExtRef_w::Serialize",
+   "child_slots": [
+    "*",
+    "*",
+    "moBackedUpData_c"
+   ],
+   "runs": {
+    "lead": 0
+   },
+   "variable_runs": [
+    {
+     "slot": "0",
      "rule": "opaque",
-     "note": "observed run lengths 50x3, 62x13"
+     "note": "read by the base FUN_4c2d2290; the preceding child is a moCompSketchEntHandle_c or moCompEdge_c whose body end has no witness in the traces."
     },
     {
      "slot": "1",
      "rule": "opaque",
-     "note": "observed run lengths 12x1, 33x13, 5960x1, 6053x1"
-    }
-   ]
-  },
-  "moSketchExtRef_w": {
-   "confidence": "partial",
-   "source": "re/data/segments",
-   "child_slots": [
-    "*",
-    "*",
-    "*"
-   ],
-   "instances": 5,
-   "child_counts": [
-    [
-     3,
-     5
-    ]
-   ],
-   "runs": {
-    "lead": 0,
-    "0": 0,
-    "2": 0
-   },
-   "variable_runs": [
+     "note": "measured 54 bytes in 4 of 5 traced instances and 58 in circle node 166. moSketchExtRef_w::Serialize itself contributes only the u16 at this+0xa8 here, so the other 52 or 56 bytes come from the base FUN_4c2d2290, which is not reconciled."
+    },
     {
-     "slot": "1",
+     "slot": "2",
      "rule": "opaque",
-     "note": "observed run lengths 54x4, 58x1"
+     "note": "last slot; no witness in any trace."
     }
-   ]
+   ],
+   "fields": [
+    {
+     "run": "1",
+     "offset": 0,
+     "width": 2,
+     "type": "u16",
+     "name": "field@0xa8",
+     "role": "authored",
+     "confidence": "partial"
+    }
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "moSketchRegion_c": {
-   "confidence": "confirmed",
-   "source": "re/data/segments",
+   "confidence": "partial",
+   "serialize": "sldmodu.dll 0x4b9d81e0 moSketchRegion_c::Serialize",
    "child_slots": [
-    "*"
-   ],
-   "instances": 18,
-   "child_counts": [
-    [
-     1,
-     18
-    ]
+    "suObList"
    ],
    "runs": {
     "lead": 0,
     "0": 0
-   }
+   },
+   "variable_runs": [],
+   "fields": [],
+   "note": "moSketchRegion_c::Serialize reads su_CObject::Serialize (0 bytes) and then, for ver > 0x2398, exactly one suObList through operator>>(su_CArchive&, suObList**), the BoundaryEnts list. Both of its own runs are therefore 0 and the body length equals the child's span. The child is a classref into a class map inherited from an earlier stream, so the traces name it external#82..85; its own layout is u16 count then count sgEntHandle objects at 12 bytes each, which is outside this file's key space.",
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "moSolidBodyFolder_c": {
    "confidence": "confirmed",
@@ -1821,68 +1962,43 @@
    }
   },
   "sgArcHandle": {
-   "confidence": "partial",
-   "source": "re/data/segments",
-   "child_slots": [
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "..."
-   ],
-   "instances": 30,
-   "child_counts": [
-    [
-     0,
-     24
-    ],
-    [
-     1,
-     4
-    ],
-    [
-     2,
-     1
-    ],
-    [
-     8,
-     1
-    ]
-   ],
+   "confidence": "confirmed",
+   "serialize": "sldmodu.dll 0x4c5c91a0 sgEntHandle::Serialize",
+   "child_slots": [],
    "runs": {
-    "2": 8,
-    "3": 80,
-    "4": 8,
-    "5": 80,
-    "6": 8,
-    "7": 5637
+    "leaf": 10
    },
-   "variable_runs": [
+   "variable_runs": [],
+   "fields": [
     {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 0x24, 1x4, 2x1, 8x1"
+     "run": "leaf",
+     "offset": 0,
+     "width": 2,
+     "type": "u16",
+     "name": "EntIndex",
+     "role": "authored",
+     "confidence": "confirmed"
     },
     {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "observed run lengths 14x4, 97x1, 101x1"
+     "run": "leaf",
+     "offset": 2,
+     "width": 4,
+     "type": "i32",
+     "name": "RefId",
+     "role": "authored",
+     "confidence": "confirmed"
     },
     {
-     "slot": "0",
-     "rule": "opaque",
-     "note": "observed run lengths 8x2, 26x4"
-    },
-    {
-     "slot": "1",
-     "rule": "opaque",
-     "note": "observed run lengths 39x1, 80x1"
+     "run": "leaf",
+     "offset": 6,
+     "width": 4,
+     "type": "i32",
+     "name": "DimOnCM",
+     "role": "derived",
+     "confidence": "confirmed"
     }
-   ]
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "sgCircleDim": {
    "confidence": "partial",
@@ -1929,12 +2045,9 @@
     "8": 0,
     "10": 0
    },
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 5x6, 10x1, 11x1",
    "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 5x6, 10x1, 11x1"
-    },
     {
      "slot": "9",
      "rule": "opaque",
@@ -1944,41 +2057,64 @@
   },
   "sgEntHandle": {
    "confidence": "partial",
-   "source": "re/data/segments",
-   "child_slots": [
-    "*",
-    "*",
-    "*",
-    "..."
-   ],
-   "instances": 8,
-   "child_counts": [
-    [
-     0,
-     6
-    ],
-    [
-     3,
-     2
-    ]
-   ],
-   "runs": {
-    "0": 0,
-    "1": 16,
-    "2": 16
-   },
+   "serialize": "sldmodu.dll 0x4c5c91a0 sgEntHandle::Serialize",
+   "child_slots": [],
+   "runs": {},
    "variable_runs": [
     {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 0x6, 3x2"
+     "slot": "leaf",
+     "rule": "conditional",
+     "at": 0,
+     "width": 4,
+     "predicate": "EntIndex",
+     "predicate_at": 0,
+     "predicate_width": 2,
+     "values": [
+      30591
+     ],
+     "tail": 8,
+     "note": "u16 EntIndex; the sentinel 0x777f escapes to a following i32 EntIndex. Then i32 RefId and i32 DimOnCM. All 8 traced sgEntHandle instances take the escape, so the record is 14 bytes; no instance ends exactly on the next traced object offset (minimum gap 46), so the total is bounded, not pinned."
+    }
+   ],
+   "fields": [
+    {
+     "run": "leaf",
+     "offset": 0,
+     "width": 2,
+     "type": "u16",
+     "name": "EntIndex",
+     "role": "authored",
+     "confidence": "confirmed"
     },
     {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "observed run lengths 58x1, 60x1"
+     "run": "leaf",
+     "offset": 2,
+     "width": 4,
+     "type": "i32",
+     "name": "EntIndex_escaped",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "leaf",
+     "offset": 6,
+     "width": 4,
+     "type": "i32",
+     "name": "RefId",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "leaf",
+     "offset": 10,
+     "width": 4,
+     "type": "i32",
+     "name": "DimOnCM",
+     "role": "authored",
+     "confidence": "confirmed"
     }
-   ]
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "sgExtEnt_c": {
    "confidence": "partial",
@@ -2012,275 +2148,117 @@
   },
   "sgLLDist": {
    "confidence": "partial",
-   "source": "re/data/segments",
+   "serialize": "sldmodu.dll 0x4c5e0090 sgLLDist::Serialize",
    "child_slots": [
     "moLengthParameter_c",
     "*",
     "*",
-    "sgLineHandle",
-    "sgLineHandle",
-    "*",
-    "sgLineHandle",
-    "sgLineHandle",
-    "sgLineHandle",
-    "sgLineHandle",
-    "sgLineHandle",
-    "external#83",
-    "..."
-   ],
-   "instances": 5,
-   "child_counts": [
-    [
-     6,
-     4
-    ],
-    [
-     12,
-     1
-    ]
+    "sgEntHandle",
+    "sgEntHandle",
+    "sg3DPlaneHandle"
    ],
    "runs": {
     "lead": 4,
-    "0": 0,
     "1": 16,
     "2": 14,
     "3": 0,
-    "4": 0,
-    "6": 0,
-    "7": 0,
-    "8": 0,
-    "9": 0,
-    "10": 0,
-    "11": 0
+    "4": 8,
+    "5": 24
    },
    "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 6x4, 12x1"
-    },
-    {
-     "slot": "5",
-     "rule": "opaque",
-     "note": "observed run lengths 24x4, 72x1"
-    }
-   ]
-  },
-  "sgLineHandle": {
-   "confidence": "partial",
-   "source": "re/data/segments",
-   "child_slots": [
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "sgPointHandle",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "sgPointHandle",
-    "*",
-    "*",
-    "*",
-    "sgPointHandle",
-    "sgArcHandle",
-    "*",
-    "*",
-    "*",
-    "sgPointHandle",
-    "sgPointHandle",
-    "*",
-    "*",
-    "*",
-    "sgPointHandle",
-    "sgArcHandle",
-    "*",
-    "*",
-    "*",
-    "sgPointHandle",
-    "sgPointHandle",
-    "*",
-    "*",
-    "*",
-    "sgLineHandle",
-    "sgPointHandle",
-    "*",
-    "*",
-    "*",
-    "sgLineHandle",
-    "sgPointHandle",
-    "*",
-    "*",
-    "*",
-    "..."
-   ],
-   "instances": 232,
-   "child_counts": [
-    [
-     0,
-     129
-    ],
-    [
-     1,
-     5
-    ],
-    [
-     2,
-     40
-    ],
-    [
-     3,
-     40
-    ],
-    [
-     8,
-     5
-    ],
-    [
-     10,
-     11
-    ],
-    [
-     28,
-     1
-    ],
-    [
-     58,
-     1
-    ]
-   ],
-   "runs": {
-    "10": 0,
-    "11": 0,
-    "12": 44,
-    "13": 0,
-    "14": 0,
-    "15": 0,
-    "16": 0,
-    "17": 44,
-    "18": 0,
-    "19": 0,
-    "20": 0,
-    "21": 0,
-    "22": 44,
-    "23": 0,
-    "24": 0,
-    "25": 0,
-    "26": 0,
-    "28": 0,
-    "29": 0,
-    "30": 0,
-    "31": 0,
-    "32": 44,
-    "33": 0,
-    "34": 0,
-    "35": 0,
-    "36": 0,
-    "37": 44,
-    "38": 0,
-    "39": 0,
-    "40": 0,
-    "41": 0,
-    "42": 44,
-    "43": 0,
-    "44": 0,
-    "45": 0,
-    "46": 0,
-    "47": 44,
-    "48": 0,
-    "49": 0,
-    "50": 0,
-    "51": 0,
-    "52": 44,
-    "53": 0,
-    "54": 0,
-    "55": 0,
-    "56": 0,
-    "57": 14
-   },
-   "variable_runs": [
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 0x129, 1x5, 2x40, 3x40, 8x5, 10x11, 28x1, 58x1"
-    },
-    {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "observed run lengths 14x45, 16x7, 97x40, 101x11"
-    },
     {
      "slot": "0",
      "rule": "opaque",
-     "note": "observed run lengths 0x47, 8x51, 26x5"
-    },
-    {
-     "slot": "1",
-     "rule": "opaque",
-     "note": "observed run lengths 16x47, 39x40, 80x11"
-    },
-    {
-     "slot": "2",
-     "rule": "opaque",
-     "note": "observed run lengths 8x11, 16x9, 17x38"
-    },
-    {
-     "slot": "3",
-     "rule": "opaque",
-     "note": "observed run lengths 0x7, 80x11"
-    },
-    {
-     "slot": "4",
-     "rule": "opaque",
-     "note": "observed run lengths 0x7, 8x11"
-    },
-    {
-     "slot": "5",
-     "rule": "opaque",
-     "note": "observed run lengths 0x7, 80x11"
-    },
-    {
-     "slot": "6",
-     "rule": "opaque",
-     "note": "observed run lengths 0x7, 8x11"
-    },
-    {
-     "slot": "7",
-     "rule": "opaque",
-     "note": "observed run lengths 14x5, 44x2, 80x11"
-    },
-    {
-     "slot": "8",
-     "rule": "opaque",
-     "note": "observed run lengths 0x2, 8x11"
-    },
-    {
-     "slot": "9",
-     "rule": "opaque",
-     "note": "observed run lengths 0x2, 497x6, 604x5"
-    },
-    {
-     "slot": "27",
-     "rule": "opaque",
-     "note": "observed run lengths 14x1, 44x1"
+     "note": "run between the moLengthParameter_c dimension object and the next base-class object read. Not variable across the corpus, merely unmeasured: moLengthParameter_c's own body end is not derivable from the traces, so this endpoint has no witness. Closing it needs moParameter_c::Serialize, the base called from moLengthParameter_c::Serialize at sldmodu.dll 0x4c1d9b70 (FUN_4c1dbf20)."
     }
-   ]
+   ],
+   "fields": [
+    {
+     "run": "4",
+     "offset": 0,
+     "width": 2,
+     "type": "u16",
+     "name": "ArcDimType0",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "4",
+     "offset": 2,
+     "width": 2,
+     "type": "u16",
+     "name": "ArcDimType1",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "4",
+     "offset": 4,
+     "width": 2,
+     "type": "u16",
+     "name": "Quadrant",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "4",
+     "offset": 6,
+     "width": 2,
+     "type": "u16",
+     "name": "Chamfer",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "5",
+     "offset": 0,
+     "width": 24,
+     "type": "f64[3]",
+     "name": "Direction",
+     "role": "derived",
+     "confidence": "confirmed"
+    }
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
+  },
+  "sgLineHandle": {
+   "confidence": "confirmed",
+   "serialize": "sldmodu.dll 0x4c5c91a0 sgEntHandle::Serialize",
+   "child_slots": [],
+   "runs": {
+    "leaf": 10
+   },
+   "variable_runs": [],
+   "fields": [
+    {
+     "run": "leaf",
+     "offset": 0,
+     "width": 2,
+     "type": "u16",
+     "name": "EntIndex",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "leaf",
+     "offset": 2,
+     "width": 4,
+     "type": "i32",
+     "name": "RefId",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "leaf",
+     "offset": 6,
+     "width": 4,
+     "type": "i32",
+     "name": "DimOnCM",
+     "role": "derived",
+     "confidence": "confirmed"
+    }
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "sgPntPntDist": {
    "confidence": "confirmed",
@@ -2311,158 +2289,69 @@
    }
   },
   "sgPointHandle": {
-   "confidence": "partial",
-   "source": "re/data/segments",
-   "child_slots": [
-    "*",
-    "..."
-   ],
-   "instances": 39,
-   "child_counts": [
-    [
-     0,
-     25
-    ],
-    [
-     1,
-     14
-    ]
-   ],
+   "confidence": "confirmed",
+   "serialize": "sldmodu.dll 0x4c5c91a0 sgEntHandle::Serialize",
+   "child_slots": [],
    "runs": {
-    "lead": 14,
-    "0": 26
+    "leaf": 10
    },
-   "variable_runs": [
+   "variable_runs": [],
+   "fields": [
     {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 0x25, 1x14"
+     "run": "leaf",
+     "offset": 0,
+     "width": 2,
+     "type": "u16",
+     "name": "EntIndex",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "leaf",
+     "offset": 2,
+     "width": 4,
+     "type": "i32",
+     "name": "RefId",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "leaf",
+     "offset": 6,
+     "width": 4,
+     "type": "i32",
+     "name": "DimOnCM",
+     "role": "derived",
+     "confidence": "confirmed"
     }
-   ]
+   ],
+   "source": "re/data/class_layouts_decompiled.json"
   },
   "sgSketch": {
    "confidence": "partial",
-   "source": "re/data/segments",
+   "serialize": "sldmodu.dll 0x4c5d28c0 sgSketch::Serialize",
    "child_slots": [
     "*",
     "*",
-    "sgLineHandle",
-    "sgLineHandle",
     "*",
-    "sgLineHandle",
-    "sgLineHandle",
-    "sgLineHandle",
-    "*",
-    "*",
-    "*",
-    "*",
-    "*",
-    "sgLineHandle",
-    "*",
-    "sgLineHandle",
-    "sgLineHandle",
-    "sgLineHandle",
-    "sgLineHandle",
-    "*",
-    "external#85",
-    "moSketchChain_c",
-    "*",
-    "*",
-    "external#83",
-    "moSketchChain_c",
     "..."
    ],
-   "instances": 24,
-   "child_counts": [
-    [
-     5,
-     9
-    ],
-    [
-     10,
-     1
-    ],
-    [
-     12,
-     11
-    ],
-    [
-     13,
-     1
-    ],
-    [
-     22,
-     1
-    ],
-    [
-     26,
-     1
-    ]
-   ],
+   "repeat_count": "unresolved",
    "runs": {
     "lead": 49,
     "0": 8,
     "1": 39,
-    "2": 0,
-    "4": 0,
-    "6": 0,
-    "8": 0,
-    "10": 0,
-    "12": 0,
-    "13": 0,
-    "14": 0,
-    "15": 0,
-    "16": 0,
-    "18": 0,
-    "19": 0,
-    "20": 0,
-    "22": 0,
-    "23": 6622,
-    "24": 0,
-    "25": 0
+    "2": 0
    },
    "variable_runs": [
     {
-     "slot": "lead",
-     "rule": "opaque",
-     "note": "child count varies across instances: 5x9, 10x1, 12x11, 13x1, 22x1, 26x1"
-    },
-    {
      "slot": "3",
      "rule": "opaque",
-     "note": "observed run lengths 0x12, 138x3, 359x2, 360x7"
-    },
-    {
-     "slot": "5",
-     "rule": "opaque",
-     "note": "observed run lengths 0x11, 138x1, 404x1, 453x1, 461x1"
-    },
-    {
-     "slot": "7",
-     "rule": "opaque",
-     "note": "observed run lengths 0x11, 138x3, 507x1"
-    },
-    {
-     "slot": "9",
-     "rule": "opaque",
-     "note": "observed run lengths 0x12, 138x1, 524x1, 4372x1"
-    },
-    {
-     "slot": "11",
-     "rule": "opaque",
-     "note": "observed run lengths 0x13, 138x1"
-    },
-    {
-     "slot": "17",
-     "rule": "opaque",
-     "note": "observed run lengths 0x1, 138x1"
-    },
-    {
-     "slot": "21",
-     "rule": "opaque",
-     "note": "observed run lengths 0x1, 138x1"
+     "note": "start of the sketch-entity list. Measured across the 24 traced instances the list is a repeating pair: a handle object, run 0, a second handle object, run 138. The 138-byte payload is the per-entity geometry record. The number of pairs is not carried in the 49-byte lead, so the terminator or count is elsewhere in sgSketch::Serialize at 0x4c5d28c0 (182 KB of decompiled C, the largest Serialize in the corpus, not yet reconciled)."
     }
-   ]
+   ],
+   "fields": [],
+   "source": "re/data/class_layouts_decompiled.json"
   }
  }
 }
