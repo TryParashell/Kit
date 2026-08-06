@@ -195,20 +195,13 @@ def build_classes(
                 }
             )
             statistics["opaque_runs"] += 1
+        repeat_note = ""
         if varying:
             tally = ", ".join(
                 f"{count}x{times}" for count, times in sorted(observed.items())
             )
-            variable.insert(
-                0,
-                {
-                    "slot": LEAD_RUN,
-                    "rule": "opaque",
-                    "note": f"child count varies across instances: {tally}",
-                },
-            )
-            statistics["opaque_runs"] += 1
-        confidence = "confirmed" if not variable else "partial"
+            repeat_note = f"child count varies across instances: {tally}"
+        confidence = "confirmed" if not variable and not varying else "partial"
         statistics[confidence] += 1
         entry: Dict[str, object] = {
             "confidence": confidence,
@@ -218,6 +211,9 @@ def build_classes(
             "child_counts": [[count, times] for count, times in sorted(observed.items())],
             "runs": {key: runs[key] for key in needed if key in runs},
         }
+        if varying:
+            entry["repeat_count"] = None
+            entry["repeat_note"] = repeat_note
         if variable:
             entry["variable_runs"] = variable
         classes[name] = entry
@@ -261,6 +257,17 @@ def generate(segments_dir: Path, decompiled: Path, labels: str) -> dict:
         "traces": [str(trace["label"]) for trace in traces],
         "run_keys": len(solver.runs),
         "conflicting_run_keys": sorted(solver.variable),
+        "run_derivation": (
+            "solve_runs.Solver seeded with the exact record end of every traced "
+            "object, taken from the contiguous preorder subtree of the recorded "
+            "segmentation; a run is constant only when every traced instance agrees"
+        ),
+        "repeat_count_contract": (
+            "a trailing ... entry in child_slots means the child count is not "
+            "constant across the traced instances; repeat_count is null because no "
+            "field holding the count has been recovered, and the static segmenter "
+            "refuses such a class rather than guessing"
+        ),
         "class_count": len(classes),
         "confirmed_classes": statistics["confirmed"],
         "partial_classes": statistics["partial"],

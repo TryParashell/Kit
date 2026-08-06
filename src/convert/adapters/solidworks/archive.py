@@ -335,7 +335,7 @@ class Model:
         return bytes(out)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class StaticSegment:
     index: int
     offset: int
@@ -357,9 +357,14 @@ class VariableRun:
     slot: str
     rule: str
     at: int
+    tail: int
     stride: int
+    count_width: int
     width: int
-    suffix: int
+    predicate: str
+    predicate_at: int
+    predicate_width: int
+    values: tuple[int, ...]
     note: str
 
 
@@ -368,13 +373,15 @@ class ClassLayout:
     name: str
     child_slots: tuple[str, ...]
     runs: Mapping[str, int]
-    variable_runs: Mapping[str, VariableRun]
+    variable_runs: Mapping[str, tuple[VariableRun, ...]]
     confidence: str
     source: str
+    repeat_note: str = ""
+    repeat_rule: str = ""
 
     @property
     def repeats(self) -> bool:
-        return REPEATED_SLOT in self.child_slots
+        return REPEATED_SLOT in self.child_slots or bool(self.repeat_rule)
 
     def run_keys(self) -> tuple[str, ...]:
         if not self.child_slots:
@@ -447,28 +454,40 @@ def _class_layout(name: str, entry: Mapping[str, object]) -> ClassLayout:
     raw_variable = entry.get("variable_runs", ())
     if isinstance(raw_variable, str) or not isinstance(raw_variable, Sequence):
         raise ArchiveError(f"layout entry for {name!r} has a malformed variable_runs")
-    variable: dict[str, VariableRun] = {}
+    variable: dict[str, list[VariableRun]] = {}
     for item in raw_variable:
         if not isinstance(item, Mapping):
             raise ArchiveError(f"variable run of {name!r} is not a mapping")
         slot = str(item.get("slot", ""))
-        rule = str(item.get("rule", OPAQUE_RULE))
-        variable[slot] = VariableRun(
-            slot=slot,
-            rule=rule,
-            at=int(item.get("at", 0) or 0),
-            stride=int(item.get("stride", 0) or 0),
-            width=int(item.get("width", 0) or 0),
-            suffix=int(item.get("suffix", 0) or 0),
-            note=str(item.get("note", "")),
+        raw_values = item.get("values", ())
+        if isinstance(raw_values, str) or not isinstance(raw_values, Sequence):
+            raise ArchiveError(f"variable run {name}@{slot} has malformed values")
+        variable.setdefault(slot, []).append(
+            VariableRun(
+                slot=slot,
+                rule=str(item.get("rule", OPAQUE_RULE)),
+                at=int(item.get("at", 0) or 0),
+                tail=int(item.get("tail", 0) or 0),
+                stride=int(item.get("stride", 0) or 0),
+                count_width=int(item.get("count_width", 0) or 0),
+                width=int(item.get("width", 0) or 0),
+                predicate=str(item.get("predicate", "")),
+                predicate_at=int(item.get("predicate_at", 0) or 0),
+                predicate_width=int(item.get("predicate_width", 0) or 0),
+                values=tuple(int(value) for value in raw_values),
+                note=str(item.get("note", "")),
+            )
         )
+    repeat = entry.get("repeat_count")
     return ClassLayout(
         name=name,
         child_slots=slots,
         runs=runs,
-        variable_runs=variable,
+        variable_runs={key: tuple(value) for key, value in variable.items()},
         confidence=str(entry.get("confidence", "partial")),
         source=str(entry.get("source", "")),
+        repeat_note=str(entry.get("repeat_note", "")),
+        repeat_rule="" if repeat is None else str(repeat),
     )
 
 
@@ -480,6 +499,80 @@ class _Frame:
     slot: int
 
 
+def _scalar(blob: bytes, offset: int, width: int) -> int:
+    if width not in (1, 2, 4, 8):
+        raise ArchiveError(f"unsupported scalar width {width}")
+    if offset < 0 or offset + width > len(blob):
+        raise ArchiveError(
+            f"{width} byte field at offset {offset} runs past the end of the stream"
+        )
+    return int.from_bytes(blob[offset : offset + width], "little")
+
+
+def _element_length(
+    blob: bytes,
+    cursor: int,
+    layout: ClassLayout,
+    key: str,
+    offset: int,
+    base: int,
+    element: VariableRun,
+) -> int:
+    if element.rule == STRING_RULE:
+        try:
+            _, consumed = read_string(blob, cursor + element.at)
+        except ArchiveError as error:
+            raise SegmentationError(
+                layout.name, key, offset, str(error), base=base
+            ) from error
+        return element.at + consumed + element.tail
+    if element.rule == COUNT_RULE:
+        if element.count_width <= 0 or element.stride < 0:
+            raise SegmentationError(
+                layout.name,
+                key,
+                offset,
+                "count rule is missing a count width or stride",
+                base=base,
+            )
+        try:
+            count = _scalar(blob, cursor + element.at, element.count_width)
+        except ArchiveError as error:
+            raise SegmentationError(
+                layout.name, key, offset, str(error), base=base
+            ) from error
+        return element.at + element.count_width + element.stride * count + element.tail
+    if element.rule == CONDITIONAL_RULE:
+        if element.predicate_width <= 0 or not element.values:
+            raise SegmentationError(
+                layout.name,
+                key,
+                offset,
+                "conditional rule is missing a predicate width or value set",
+                base=base,
+            )
+        try:
+            value = _scalar(
+                blob,
+                cursor + element.predicate_at,
+                element.predicate_width,
+            )
+        except ArchiveError as error:
+            raise SegmentationError(
+                layout.name, key, offset, str(error), base=base
+            ) from error
+        present = element.width if value in element.values else 0
+        return element.at + present + element.tail
+    raise SegmentationError(
+        layout.name,
+        key,
+        offset,
+        f"run rule {element.rule!r} cannot be resolved statically"
+        + (f" ({element.note})" if element.note else ""),
+        base=base,
+    )
+
+
 def _run_length(
     blob: bytes,
     cursor: int,
@@ -488,25 +581,10 @@ def _run_length(
     offset: int,
     base: int,
 ) -> int:
-    variable = layout.variable_runs.get(key)
-    if variable is not None and key not in layout.runs:
-        if variable.rule == STRING_RULE:
-            try:
-                _, consumed = read_string(blob, cursor + variable.at)
-            except ArchiveError as error:
-                raise SegmentationError(
-                    layout.name, key, offset, str(error), base=base
-                ) from error
-            return variable.at + consumed + variable.suffix
-        raise SegmentationError(
-            layout.name,
-            key,
-            offset,
-            f"run rule {variable.rule!r} cannot be resolved statically"
-            + (f" ({variable.note})" if variable.note else ""),
-            base=base,
-        )
-    if key not in layout.runs:
+    if key in layout.runs:
+        return layout.runs[key]
+    elements = layout.variable_runs.get(key)
+    if not elements:
         raise SegmentationError(
             layout.name,
             key,
@@ -514,7 +592,12 @@ def _run_length(
             "no constant run length and no rule recorded in the layout table",
             base=base,
         )
-    return layout.runs[key]
+    length = 0
+    for element in elements:
+        length += _element_length(
+            blob, cursor + length, layout, key, offset, base, element
+        )
+    return length
 
 
 def _advance(
@@ -640,12 +723,7 @@ def _segment_walk(
                     LEAD_RUN,
                     offset,
                     "child count is not constant and no repeat rule is recorded"
-                    + (
-                        f" ({layout.variable_runs[LEAD_RUN].note})"
-                        if LEAD_RUN in layout.variable_runs
-                        and layout.variable_runs[LEAD_RUN].note
-                        else ""
-                    ),
+                    + (f" ({layout.repeat_note})" if layout.repeat_note else ""),
                     base=base,
                 )
             if layout.child_slots:
@@ -700,6 +778,7 @@ def _segment_walk(
                 frame.slot += 1
                 break
             frames.pop()
+        segments[node].end = cursor
         if not frames and cursor > len(blob):
             raise SegmentationError(
                 "<stream>",
@@ -962,6 +1041,6 @@ def verify(
 def class_names(segments: Iterable[StaticSegment]) -> tuple[str, ...]:
     seen: dict[str, None] = {}
     for item in segments:
-        if item.kind == DEFINITION_KIND:
+        if item.kind in (DEFINITION_KIND, CLASS_REFERENCE_KIND):
             seen[item.class_name] = None
     return tuple(seen)
