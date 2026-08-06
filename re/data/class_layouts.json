@@ -1,4 +1,15 @@
 {
+ "streams_read_for_string_rules": [
+  "baseline",
+  "circle",
+  "cutbase",
+  "padplane",
+  "planetop",
+  "three",
+  "twopad",
+  "vendor_cojinete",
+  "vendor_ring"
+ ],
  "version": 1,
  "source": "re/data/segments + re/data/class_layouts_decompiled.json",
  "traces": [
@@ -72,9 +83,9 @@
  "run_derivation": "solve_runs.Solver seeded with the exact record end of every traced object, taken from the contiguous preorder subtree of the recorded segmentation; a run is constant only when every traced instance agrees",
  "repeat_count_contract": "a trailing ... entry in child_slots means the child count is not constant across the traced instances; repeat_count is null because no field holding the count has been recovered, and the static segmenter refuses such a class rather than guessing",
  "class_count": 73,
- "confirmed_classes": 38,
- "partial_classes": 35,
- "opaque_runs": 47,
+ "confirmed_classes": 40,
+ "partial_classes": 33,
+ "opaque_runs": 46,
  "decompiled_classes": 15,
  "classes": {
   "ParallelPlaneDistanceDim_c": {
@@ -166,7 +177,7 @@
    }
   },
   "external#4": {
-   "confidence": "partial",
+   "confidence": "confirmed",
    "source": "re/data/segments",
    "child_slots": [],
    "instances": 216,
@@ -180,8 +191,10 @@
    "variable_runs": [
     {
      "slot": "leaf",
-     "rule": "opaque",
-     "note": "observed run lengths 28x26, 38x9, 40x12, 42x40, 44x10, 46x26, 48x1, 50x26, 52x11, 54x19, 56x16, 62x1, 64x9, 76x10"
+     "rule": "string",
+     "at": 0,
+     "tail": 20,
+     "note": "every traced instance opens with an ff fe ff string and closes with 20 constant bytes"
     }
    ]
   },
@@ -467,7 +480,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 44
@@ -530,7 +543,7 @@
     {
      "slot": "0",
      "rule": "opaque",
-     "note": "only slot. The child is a classref external#43 read by moCompRef_c::Serialize and its body end has no witness in any trace. What is measured: the traced scope of every one of the 30 instances is exactly 93 bytes from the end of its own tag, and consecutive instances are 119 bytes apart, so the per-entry stride is 2 (classref tag) + 93 (scope) + 24 (inter-entry bytes). moCompFeature_c::Serialize itself contributes at most two i32 flags and then FUN_4bbb16e0, which for ver >= 0x4a5 reads only i32 tree-node id and su_CTime, 8 bytes, matching the id at end-8 and the time_t at end-4."
+     "note": "only slot. The child is a classref external#43 read by moCompRef_c::Serialize and its body end has no witness in any trace, so the split of the entry between the child and this run is undetermined. What is measured across all 30 instances: the traced scope from the end of the instances own tag is 93 bytes in the seven authored 18000-era parts and 89 in the two 13000/14000-era vendor parts, and consecutive instances are 119 bytes apart in the former and 115 in the latter, so the per-entry stride is 2 (classref tag) + scope + 24 (inter-entry bytes) and the array length is 93 + 119*(n-1) or 89 + 115*(n-1) by generation. moCompFeature_c::Serialize itself contributes at most two i32 flags, both gated on moArchiveHelper_c::hasCondition bits set by the caller rather than by the stream, and then FUN_4bbb16e0, which for ver >= 0x4a5 reads only i32 tree-node id and su_CTime, 8 bytes, matching the id at end-8 and the time_t at end-4."
     }
    ],
    "fields": [
@@ -671,7 +684,7 @@
     {
      "slot": "2",
      "rule": "opaque",
-     "note": "last slot; bounded to at most 2 bytes by every traced instance but with no witness that pins it."
+     "note": "last slot; every one of the 27 traced instances leaves exactly 2 bytes between the end of its last child and its traced scope_end, so 2 is the only value that tiles, but the traced scope_end of a non-top-level object is an upper bound rather than a witness and those 2 bytes may belong to the parent moRefPlane_c. Settling it needs the indirect callee at virtual slot 0x150 reached from 0x4c2d1cf0."
     }
    ],
    "fields": [
@@ -732,7 +745,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 473,
     "2": 30,
     "3": 68
@@ -881,7 +894,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 44
@@ -999,7 +1012,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 44
@@ -1157,7 +1170,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 52
@@ -1292,18 +1305,13 @@
    }
   },
   "moHistoryFolder_c": {
-   "confidence": "partial",
+   "confidence": "confirmed",
    "source": "re/data/segments",
    "child_slots": [
     "external#4",
     "*",
     "*",
     "*",
-    "moHistoryFeatItemData_c",
-    "moHistoryFeatItemData_c",
-    "moHistoryFeatItemData_c",
-    "moHistoryFeatItemData_c",
-    "moHistoryFeatItemData_c",
     "moHistoryFeatItemData_c",
     "..."
    ],
@@ -1324,19 +1332,18 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 46,
-    "4": 0,
-    "5": 0,
-    "6": 0,
-    "7": 0,
-    "8": 0,
-    "9": 0
+    "4": 0
    },
-   "repeat_count": null,
-   "repeat_note": "child count varies across instances: 6x4, 8x4, 10x1"
+   "repeat_count": {
+    "run": "3",
+    "at": 44,
+    "width": 2
+   },
+   "repeat_note": "child count varies across instances: 6x4, 8x4, 10x1; the count sits in run 3 at offset 44 as a 2 byte value and the repeated slot holds moHistoryFeatItemData_c"
   },
   "moICE_c": {
    "confidence": "partial",
@@ -1405,7 +1412,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 44
@@ -1449,7 +1456,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 52
@@ -1474,7 +1481,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 44
@@ -1511,7 +1518,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 44,
@@ -1594,7 +1601,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 44,
@@ -1630,7 +1637,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 54,
@@ -1658,7 +1665,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 50
@@ -1682,7 +1689,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 44
@@ -1905,7 +1912,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 52,
@@ -1933,7 +1940,7 @@
    ],
    "runs": {
     "lead": 0,
-    "0": 0,
+    "0": 4,
     "1": 47,
     "2": 30,
     "3": 52,
@@ -2336,7 +2343,7 @@
     "*",
     "..."
    ],
-   "repeat_count": "unresolved",
+   "repeat_count": "EntityCount",
    "runs": {
     "lead": 49,
     "0": 8,
@@ -2347,10 +2354,20 @@
     {
      "slot": "3",
      "rule": "opaque",
-     "note": "start of the sketch-entity list. Measured across the 24 traced instances the list is a repeating pair: a handle object, run 0, a second handle object, run 138. The 138-byte payload is the per-entity geometry record. The number of pairs is not carried in the 49-byte lead, so the terminator or count is elsewhere in sgSketch::Serialize at 0x4c5d28c0 (182 KB of decompiled C, the largest Serialize in the corpus, not yet reconciled)."
+     "note": "start of the sketch-entity list. The u16 at lead+0 is the entity count: it equals the number of traced child pairs in 24 of 24 instances (1 for the origin sketches, 3 for the circle sketch, 4 for the rectangle sketches). Each entity is a handle object, run 0, a second handle object, then a payload run. The payload is 138 bytes for a line but 360, 461, 507, 968, 1075, 6016 and 6622 bytes were also measured, so the stride is not fixed and the run length is still not computable. Closing it needs sgSketch::Serialize at 0x4c5d28c0, 182 KB of decompiled C, the largest Serialize in the corpus."
     }
    ],
-   "fields": [],
+   "fields": [
+    {
+     "run": "lead",
+     "offset": 0,
+     "width": 2,
+     "type": "u16",
+     "name": "EntityCount",
+     "role": "derived",
+     "confidence": "confirmed"
+    }
+   ],
    "source": "re/data/class_layouts_decompiled.json"
   }
  }

@@ -268,7 +268,7 @@
     "*",
     "..."
    ],
-   "repeat_count": "unresolved",
+   "repeat_count": "EntityCount",
    "runs": {
     "lead": 49,
     "0": 8,
@@ -279,10 +279,20 @@
     {
      "slot": "3",
      "rule": "opaque",
-     "note": "start of the sketch-entity list. Measured across the 24 traced instances the list is a repeating pair: a handle object, run 0, a second handle object, run 138. The 138-byte payload is the per-entity geometry record. The number of pairs is not carried in the 49-byte lead, so the terminator or count is elsewhere in sgSketch::Serialize at 0x4c5d28c0 (182 KB of decompiled C, the largest Serialize in the corpus, not yet reconciled)."
+     "note": "start of the sketch-entity list. The u16 at lead+0 is the entity count: it equals the number of traced child pairs in 24 of 24 instances (1 for the origin sketches, 3 for the circle sketch, 4 for the rectangle sketches). Each entity is a handle object, run 0, a second handle object, then a payload run. The payload is 138 bytes for a line but 360, 461, 507, 968, 1075, 6016 and 6622 bytes were also measured, so the stride is not fixed and the run length is still not computable. Closing it needs sgSketch::Serialize at 0x4c5d28c0, 182 KB of decompiled C, the largest Serialize in the corpus."
     }
    ],
-   "fields": []
+   "fields": [
+    {
+     "run": "lead",
+     "offset": 0,
+     "width": 2,
+     "type": "u16",
+     "name": "EntityCount",
+     "role": "derived",
+     "confidence": "confirmed"
+    }
+   ]
   },
   "moSketchChain_c": {
    "confidence": "partial",
@@ -657,7 +667,7 @@
     {
      "slot": "2",
      "rule": "opaque",
-     "note": "last slot; bounded to at most 2 bytes by every traced instance but with no witness that pins it."
+     "note": "last slot; every one of the 27 traced instances leaves exactly 2 bytes between the end of its last child and its traced scope_end, so 2 is the only value that tiles, but the traced scope_end of a non-top-level object is an upper bound rather than a witness and those 2 bytes may belong to the parent moRefPlane_c. Settling it needs the indirect callee at virtual slot 0x150 reached from 0x4c2d1cf0."
     }
    ],
    "fields": [
@@ -712,7 +722,7 @@
     {
      "slot": "0",
      "rule": "opaque",
-     "note": "only slot. The child is a classref external#43 read by moCompRef_c::Serialize and its body end has no witness in any trace. What is measured: the traced scope of every one of the 30 instances is exactly 93 bytes from the end of its own tag, and consecutive instances are 119 bytes apart, so the per-entry stride is 2 (classref tag) + 93 (scope) + 24 (inter-entry bytes). moCompFeature_c::Serialize itself contributes at most two i32 flags and then FUN_4bbb16e0, which for ver >= 0x4a5 reads only i32 tree-node id and su_CTime, 8 bytes, matching the id at end-8 and the time_t at end-4."
+     "note": "only slot. The child is a classref external#43 read by moCompRef_c::Serialize and its body end has no witness in any trace, so the split of the entry between the child and this run is undetermined. What is measured across all 30 instances: the traced scope from the end of the instances own tag is 93 bytes in the seven authored 18000-era parts and 89 in the two 13000/14000-era vendor parts, and consecutive instances are 119 bytes apart in the former and 115 in the latter, so the per-entry stride is 2 (classref tag) + scope + 24 (inter-entry bytes) and the array length is 93 + 119*(n-1) or 89 + 115*(n-1) by generation. moCompFeature_c::Serialize itself contributes at most two i32 flags, both gated on moArchiveHelper_c::hasCondition bits set by the caller rather than by the stream, and then FUN_4bbb16e0, which for ver >= 0x4a5 reads only i32 tree-node id and su_CTime, 8 bytes, matching the id at end-8 and the time_t at end-4."
     }
    ],
    "fields": [

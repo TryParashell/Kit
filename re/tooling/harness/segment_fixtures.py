@@ -157,9 +157,7 @@ def run(fixtures: Path, layouts_path: Path, segments_dir: Path) -> dict:
         "layout_source": layouts.source,
         "class_count": len(layouts.classes),
         "confirmed_classes": sum(
-            1
-            for entry in layouts.classes.values()
-            if entry.confidence == "confirmed"
+            1 for entry in layouts.classes.values() if entry.confidence == "confirmed"
         ),
         "donor_count": len(rows),
         "segmented_count": sum(1 for row in rows if row["segmented"]),
