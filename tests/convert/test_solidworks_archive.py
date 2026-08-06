@@ -630,6 +630,27 @@ def test_fixture_verification_count_does_not_regress() -> None:
     assert identical >= FIXTURES_VERIFYING_BYTE_IDENTICALLY
 
 
+def test_resolved_external_classes_carry_measured_runs() -> None:
+    layouts = _layouts()
+    resolved = {
+        name: entry
+        for name, entry in layouts.classes.items()
+        if entry.source == "re/data/external_classes.json"
+    }
+    assert resolved
+    for name, entry in resolved.items():
+        assert not entry.repeats, name
+        for key in entry.run_keys():
+            elements = entry.variable_runs.get(key, ())
+            assert key in entry.runs or elements, (name, key)
+            for element in elements:
+                assert element.rule != "opaque", (name, key)
+    aliases = {name for name in resolved if name.startswith("external#")}
+    assert aliases
+    for alias in aliases:
+        assert layouts.classes[alias].child_slots == resolved[alias].child_slots
+
+
 def test_fixture_segmentation_failures_name_the_blocking_class() -> None:
     layouts = _layouts()
     for name, blob in _donor_streams():

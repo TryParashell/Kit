@@ -16,7 +16,11 @@ import solve_runs
 ROOT = HERE.parents[2]
 DEFAULT_SEGMENTS = ROOT / "re" / "data" / "segments"
 DEFAULT_DECOMPILED = ROOT / "re" / "data" / "class_layouts_decompiled.json"
+DEFAULT_EXTERNAL = ROOT / "re" / "data" / "external_classes.json"
 DEFAULT_OUT = ROOT / "re" / "data" / "class_layouts.json"
+EXTERNAL_SOURCE = "re/data/external_classes.json"
+EXTERNAL_PREFIX = "external#"
+PINNED_EXTERNAL_SLOTS = ("component", "object_list", "pmark_record")
 NO_BODY_KINDS = solve_runs.NO_BODY_KINDS
 LEAD_RUN = "lead"
 LEAF_RUN = "leaf"
@@ -487,6 +491,78 @@ def merge_decompiled(
     return merged, len(incoming)
 
 
+def _external_layout(slot: str, record: Mapping[str, object]) -> dict:
+    name = str(record["class_name"])
+    bodies = [int(value) for value in record["own_body_lengths"]]
+    if len(bodies) != 1:
+        raise ValueError(
+            f"external slot {slot} has {len(bodies)} own body lengths; "
+            "a pinned slot must have exactly one"
+        )
+    body = bodies[0]
+    entry: Dict[str, object] = {
+        "confidence": str(record["confidence"]),
+        "source": EXTERNAL_SOURCE,
+        "external_class": name,
+        "instances": sum(
+            int(value) for value in record["occurrences_per_trace"].values()
+        ),
+        "note": (
+            f"resolved to {name}; own body is {body} bytes by "
+            f"{record['decompiled_serialize']}. The traced spans "
+            f"{record['traced_span_lengths']} are longer because bytes an ancestor "
+            "reads after this object returns are absorbed into its row, so they "
+            "belong to the ancestor run and not to this class."
+        ),
+    }
+    if slot == "component":
+        entry["child_slots"] = [POLYMORPHIC_SLOT]
+        entry["runs"] = {LEAD_RUN: body, "0": 0}
+        return entry
+    if slot == "pmark_record":
+        entry["child_slots"] = []
+        entry["runs"] = {LEAF_RUN: body}
+        return entry
+    if slot == "object_list":
+        entry["child_slots"] = [POLYMORPHIC_SLOT, REPEATED_SLOT]
+        entry["runs"] = {LEAD_RUN: body, "0": 0}
+        entry["repeat_count"] = {"run": LEAD_RUN, "at": 0, "width": 2}
+        entry["repeat_note"] = (
+            "u16 element count in the lead run followed by that many nested objects"
+        )
+        return entry
+    raise ValueError(f"external slot {slot} has no pinned layout rule")
+
+
+def merge_external(
+    classes: Dict[str, dict], path: Path
+) -> Tuple[Dict[str, dict], int, Dict[str, List[str]]]:
+    if not path.is_file():
+        return classes, 0, {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    slots = payload.get("slots")
+    if not isinstance(slots, dict):
+        raise ValueError(f"{path} has no slots mapping")
+    merged = dict(classes)
+    bindings: Dict[str, List[str]] = {}
+    pinned = 0
+    for slot in PINNED_EXTERNAL_SLOTS:
+        record = slots.get(slot)
+        if not isinstance(record, dict):
+            raise ValueError(f"{path} has no {slot} slot")
+        entry = _external_layout(slot, record)
+        indices = sorted(
+            {int(value) for value in record["class_index_per_trace"].values()}
+        )
+        aliases = [f"{EXTERNAL_PREFIX}{index}" for index in indices]
+        bindings[str(record["class_name"])] = aliases
+        for alias in aliases:
+            merged[alias] = dict(entry)
+            pinned += 1
+        merged[str(record["class_name"])] = dict(entry)
+    return merged, pinned, bindings
+
+
 def traced_streams(traces: Sequence[Mapping[str, object]]) -> Dict[str, bytes]:
     sys.path.insert(0, str(ROOT / "src"))
     from convert.adapters.solidworks.container import SldprtArchive
@@ -506,7 +582,7 @@ def traced_streams(traces: Sequence[Mapping[str, object]]) -> Dict[str, bytes]:
     return streams
 
 
-def generate(segments_dir: Path, decompiled: Path, labels: str) -> dict:
+def generate(segments_dir: Path, decompiled: Path, external: Path, labels: str) -> dict:
     traces = solve_runs.load_traces(str(segments_dir), labels)
     if not traces:
         raise ValueError(f"no segmentations found under {segments_dir}")
@@ -515,13 +591,16 @@ def generate(segments_dir: Path, decompiled: Path, labels: str) -> dict:
     streams = traced_streams(traces)
     classes, statistics = build_classes(solver, streams)
     classes, decompiled_count = merge_decompiled(classes, decompiled)
+    classes, external_count, external_bindings = merge_external(classes, external)
     return {
+        "external_classes": external_count,
+        "external_bindings": external_bindings,
         "streams_read_for_string_rules": sorted(streams),
         "version": 1,
-        "source": (
-            f"{SOLVED_SOURCE} + {DECOMPILED_SOURCE}"
-            if decompiled_count
-            else SOLVED_SOURCE
+        "source": " + ".join(
+            [SOLVED_SOURCE]
+            + ([DECOMPILED_SOURCE] if decompiled_count else [])
+            + ([EXTERNAL_SOURCE] if external_count else [])
         ),
         "traces": [str(trace["label"]) for trace in traces],
         "run_keys": len(solver.runs),
@@ -550,11 +629,15 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--segments", default=str(DEFAULT_SEGMENTS))
     parser.add_argument("--decompiled", default=str(DEFAULT_DECOMPILED))
+    parser.add_argument("--external", default=str(DEFAULT_EXTERNAL))
     parser.add_argument("--labels", default="")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     arguments = parser.parse_args()
     payload = generate(
-        Path(arguments.segments), Path(arguments.decompiled), arguments.labels
+        Path(arguments.segments),
+        Path(arguments.decompiled),
+        Path(arguments.external),
+        arguments.labels,
     )
     destination = Path(arguments.out)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -562,13 +645,14 @@ def main() -> int:
         json.dump(payload, handle, indent=1)
         handle.write("\n")
     print(
-        "classes=%d confirmed=%d partial=%d opaque_runs=%d decompiled=%d"
+        "classes=%d confirmed=%d partial=%d opaque_runs=%d decompiled=%d external=%d"
         % (
             payload["class_count"],
             payload["confirmed_classes"],
             payload["partial_classes"],
             payload["opaque_runs"],
             payload["decompiled_classes"],
+            payload["external_classes"],
         )
     )
     return 0
