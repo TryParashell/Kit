@@ -29,19 +29,33 @@ def children_of(segments: Sequence[dict]) -> List[List[int]]:
 
 
 class Solver:
-    def __init__(self, traces: Sequence[dict], key_mode: str) -> None:
+    def __init__(self, traces: Sequence[dict]) -> None:
         self.traces = list(traces)
-        self.key_mode = key_mode
-        self.end: Dict[Tuple[str, int], Optional[int]] = {}
-        self.runs: Dict[str, int] = {}
-        self.run_evidence: Dict[str, List[dict]] = collections.defaultdict(list)
-        self.conflicts: List[dict] = []
-        self.variable: set = set()
-        self.trees: Dict[str, List[List[int]]] = {}
+        self.segments: Dict[str, List[dict]] = {}
+        self.kids: Dict[str, List[List[int]]] = {}
         for trace in self.traces:
             label = trace["label"]
-            segments = trace["segments"]
-            self.trees[label] = children_of(segments)
+            self.segments[label] = trace["segments"]
+            self.kids[label] = children_of(trace["segments"])
+        self.variable: set = set()
+        self.conflicts: List[dict] = []
+        self.runs: Dict[str, int] = {}
+        self.end: Dict[Tuple[str, int], Optional[int]] = {}
+        self.witness: Dict[str, List[str]] = collections.defaultdict(list)
+
+    def key(self, label: str, node: int, slot: int) -> str:
+        name = self.segments[label][node]["class_name"]
+        if slot == -2:
+            return name + "@leaf"
+        if slot == -1:
+            return name + "@lead"
+        return "%s@%d" % (name, slot)
+
+    def seed(self) -> None:
+        self.runs = {}
+        self.witness = collections.defaultdict(list)
+        self.end = {}
+        for label, segments in self.segments.items():
             for i, seg in enumerate(segments):
                 if seg["kind"] in NO_BODY_KINDS:
                     self.end[(label, i)] = seg["offset"] + seg["header"]
@@ -50,182 +64,176 @@ class Solver:
                 else:
                     self.end[(label, i)] = None
 
-    def run_key(self, label: str, parent: int, slot: int) -> str:
-        segments = self.trace(label)["segments"]
-        name = segments[parent]["class_name"]
-        if self.key_mode == "count":
-            total = len(self.trees[label][parent])
-            return "%s#%d@%d" % (name, total, slot)
-        return "%s@%d" % (name, slot)
-
-    def trace(self, label: str) -> dict:
-        for trace in self.traces:
-            if trace["label"] == label:
-                return trace
-        raise KeyError(label)
-
-    def record_run(self, key: str, value: int, evidence: dict) -> bool:
+    def set_run(self, key: str, value: int, label: str, node: int) -> bool:
         if key in self.variable:
             return False
-        previous = self.runs.get(key)
-        if previous is None:
-            self.runs[key] = value
-            self.run_evidence[key].append(evidence)
-            return True
-        if previous != value:
+        if value < 0:
             self.conflicts.append(
-                {"key": key, "existing": previous, "observed": value, **evidence}
+                {
+                    "key": key,
+                    "reason": "negative",
+                    "observed": value,
+                    "label": label,
+                    "node": node,
+                }
             )
             self.variable.add(key)
             self.runs.pop(key, None)
             return False
-        self.run_evidence[key].append(evidence)
+        previous = self.runs.get(key)
+        if previous is None:
+            self.runs[key] = value
+            self.witness[key].append("%s:%d" % (label, node))
+            return True
+        if previous != value:
+            self.conflicts.append(
+                {
+                    "key": key,
+                    "reason": "mismatch",
+                    "existing": previous,
+                    "observed": value,
+                    "label": label,
+                    "node": node,
+                }
+            )
+            self.variable.add(key)
+            self.runs.pop(key, None)
+            return False
+        self.witness[key].append("%s:%d" % (label, node))
         return False
 
-    def slot_limit(self, label: str, parent: int, slot: int) -> int:
-        segments = self.trace(label)["segments"]
-        kids = self.trees[label][parent]
-        if slot + 1 < len(kids):
-            return segments[kids[slot + 1]]["offset"]
-        return segments[parent]["scope_end"]
+    def set_end(self, label: str, node: int, value: int) -> bool:
+        seg = self.segments[label][node]
+        low = seg["offset"] + seg["header"]
+        high = seg["scope_end"]
+        if value < low or value > high:
+            self.conflicts.append(
+                {
+                    "key": seg["class_name"] + "@end",
+                    "reason": "out_of_range",
+                    "observed": value,
+                    "low": low,
+                    "high": high,
+                    "label": label,
+                    "node": node,
+                }
+            )
+            return False
+        current = self.end[(label, node)]
+        if current is None:
+            self.end[(label, node)] = value
+            return True
+        return False
 
     def pass_once(self) -> int:
         progress = 0
-        for trace in self.traces:
-            label = trace["label"]
-            segments = trace["segments"]
-            kids_all = self.trees[label]
-            for parent, kids in enumerate(kids_all):
+        for label, segments in self.segments.items():
+            kids_all = self.kids[label]
+            for node, seg in enumerate(segments):
+                if seg["kind"] in NO_BODY_KINDS:
+                    continue
+                kids = kids_all[node]
+                head = seg["offset"] + seg["header"]
                 if not kids:
+                    key = self.key(label, node, -2)
+                    known = self.end[(label, node)]
+                    if known is not None:
+                        if self.set_run(key, known - head, label, node):
+                            progress += 1
+                    elif key in self.runs:
+                        if self.set_end(label, node, head + self.runs[key]):
+                            progress += 1
                     continue
-                if segments[parent]["kind"] in NO_BODY_KINDS:
-                    continue
-                head = segments[parent]["offset"] + segments[parent]["header"]
-                key0 = self.run_key(label, parent, -1)
-                if self.record_run(
-                    key0,
+                if self.set_run(
+                    self.key(label, node, -1),
                     segments[kids[0]]["offset"] - head,
-                    {"label": label, "node": parent, "slot": "lead"},
+                    label,
+                    node,
                 ):
                     progress += 1
                 for slot, child in enumerate(kids):
-                    limit = self.slot_limit(label, parent, slot)
-                    key = self.run_key(label, parent, slot)
+                    key = self.key(label, node, slot)
+                    if slot + 1 < len(kids):
+                        bound = segments[kids[slot + 1]]["offset"]
+                    else:
+                        bound = self.end[(label, node)]
                     child_end = self.end[(label, child)]
-                    is_last = slot + 1 == len(kids)
-                    if child_end is not None:
-                        if is_last and self.end[(label, parent)] is None:
-                            continue
-                        bound = (
-                            self.end[(label, parent)]
-                            if is_last
-                            else limit
-                        )
-                        if bound is None:
-                            continue
-                        if self.record_run(
-                            key,
-                            bound - child_end,
-                            {"label": label, "node": parent, "slot": slot},
-                        ):
+                    if bound is None and child_end is None:
+                        continue
+                    if bound is not None and child_end is not None:
+                        if self.set_run(key, bound - child_end, label, node):
                             progress += 1
-                    elif key in self.runs:
-                        if is_last:
-                            parent_end = self.end[(label, parent)]
-                            if parent_end is None:
-                                continue
-                            value = parent_end - self.runs[key]
-                        else:
-                            value = limit - self.runs[key]
-                        self.end[(label, child)] = value
-                        progress += 1
-                last = kids[-1]
-                if (
-                    self.end[(label, parent)] is None
-                    and self.end[(label, last)] is not None
-                ):
-                    key = self.run_key(label, parent, len(kids) - 1)
-                    if key in self.runs:
-                        self.end[(label, parent)] = (
-                            self.end[(label, last)] + self.runs[key]
-                        )
-                        progress += 1
+                    elif bound is not None and key in self.runs:
+                        if self.set_end(label, child, bound - self.runs[key]):
+                            progress += 1
+                    elif child_end is not None and key in self.runs:
+                        if self.set_end(label, node, child_end + self.runs[key]):
+                            progress += 1
         return progress
 
-    def reset_derived(self) -> None:
-        for trace in self.traces:
-            label = trace["label"]
-            for i, seg in enumerate(trace["segments"]):
-                if seg["kind"] in NO_BODY_KINDS:
-                    self.end[(label, i)] = seg["offset"] + seg["header"]
-                elif seg["depth"] == 0:
-                    self.end[(label, i)] = seg["scope_end"]
-                else:
-                    self.end[(label, i)] = None
-
-    def solve(self, rounds: int = 200) -> None:
-        for _ in range(rounds):
-            if self.pass_once() == 0:
-                break
-        before = -1
-        while len(self.variable) != before:
+    def solve(self, rounds: int = 400) -> None:
+        attempts = 0
+        while attempts < 40:
+            attempts += 1
             before = len(self.variable)
-            self.runs = {k: v for k, v in self.runs.items() if k not in self.variable}
-            self.run_evidence.clear()
-            self.reset_derived()
-            self.runs = {}
+            self.seed()
             for _ in range(rounds):
                 if self.pass_once() == 0:
                     break
+            if len(self.variable) == before:
+                break
 
     def bodies(self) -> Dict[str, List[dict]]:
         result: Dict[str, List[dict]] = collections.defaultdict(list)
-        for trace in self.traces:
-            label = trace["label"]
-            segments = trace["segments"]
+        for label, segments in self.segments.items():
             for i, seg in enumerate(segments):
                 if seg["kind"] in NO_BODY_KINDS:
                     continue
                 end = self.end[(label, i)]
-                body = None
-                if end is not None:
-                    body = end - seg["offset"] - seg["header"]
                 result[seg["class_name"]].append(
                     {
                         "label": label,
                         "node": i,
                         "kind": seg["kind"],
                         "depth": seg["depth"],
-                        "children": len(self.trees[label][i]),
+                        "children": len(self.kids[label][i]),
                         "span": seg["scope_end"] - seg["offset"] - seg["header"],
-                        "body": body,
+                        "body": None if end is None else end - seg["offset"] - seg["header"],
                     }
                 )
         return result
 
 
-def summarise(bodies: Dict[str, List[dict]], runs: Dict[str, int]) -> dict:
+def summarise(bodies: Dict[str, List[dict]], solver: Solver) -> dict:
     summary: Dict[str, dict] = {}
     for name, rows in sorted(bodies.items()):
         resolved = [r["body"] for r in rows if r["body"] is not None]
         counter = collections.Counter(resolved)
-        scalars = collections.Counter()
-        for row in rows:
-            if row["body"] is None:
-                continue
-        own = {}
-        for key, value in runs.items():
-            head = key.rsplit("@", 1)[0]
-            if head.split("#")[0] == name:
-                own[key] = value
+        own = {
+            key: value
+            for key, value in solver.runs.items()
+            if key.rsplit("@", 1)[0] == name
+        }
+        variable = sorted(k for k in solver.variable if k.rsplit("@", 1)[0] == name)
+        child_counts = sorted(collections.Counter(r["children"] for r in rows).items())
+        scalar_total = None
+        if len(child_counts) == 1 and not variable:
+            slots = child_counts[0][0]
+            if slots == 0:
+                if name + "@leaf" in own:
+                    scalar_total = own[name + "@leaf"]
+            else:
+                needed = [name + "@lead"] + ["%s@%d" % (name, j) for j in range(slots)]
+                if all(k in own for k in needed):
+                    scalar_total = sum(own[k] for k in needed)
         summary[name] = {
             "instances": len(rows),
             "resolved": len(resolved),
-            "distinct_body_lengths": len(counter),
             "body_lengths": sorted(counter.items()),
-            "child_counts": sorted(collections.Counter(r["children"] for r in rows).items()),
+            "child_counts": child_counts,
             "runs": dict(sorted(own.items())),
-            "own_scalar_total": sum(own.values()) if own else None,
+            "variable_runs": variable,
+            "own_scalar_total": scalar_total,
         }
     return summary
 
@@ -234,20 +242,19 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--segments", default="re/data/segments")
     parser.add_argument("--labels", default="")
-    parser.add_argument("--key-mode", default="slot", choices=("slot", "count"))
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
     traces = load_traces(args.segments, args.labels)
-    solver = Solver(traces, args.key_mode)
+    solver = Solver(traces)
     solver.solve()
     bodies = solver.bodies()
     payload = {
         "traces": [t["label"] for t in traces],
-        "key_mode": args.key_mode,
-        "run_keys": len(solver.runs),
+        "run_keys": dict(sorted(solver.runs.items())),
+        "variable_runs": sorted(solver.variable),
         "conflicts": solver.conflicts,
-        "runs": dict(sorted(solver.runs.items())),
-        "classes": summarise(bodies, solver.runs),
+        "witnesses": {k: len(v) for k, v in sorted(solver.witness.items())},
+        "classes": summarise(bodies, solver),
     }
     with open(args.out, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=1)
@@ -255,8 +262,8 @@ def main() -> int:
     total = sum(len(v) for v in bodies.values())
     resolved = sum(1 for v in bodies.values() for r in v if r["body"] is not None)
     print(
-        "objects=%d resolved=%d runkeys=%d conflicts=%d"
-        % (total, resolved, len(solver.runs), len(solver.conflicts))
+        "objects=%d resolved=%d runkeys=%d variable=%d conflicts=%d"
+        % (total, resolved, len(solver.runs), len(solver.variable), len(solver.conflicts))
     )
     return 0
 

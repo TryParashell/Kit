@@ -1,0 +1,2674 @@
+{
+ "moCommentsFolder_c": {
+  "getItemCount": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 880,
+   "address": "4b3484a0",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moCompEdge_c": {
+  "getEndPts": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "undefined4",
+   "stride": 0,
+   "offset": 108,
+   "address": "4b8657d0",
+   "source": "para417_accessors.c"
+  },
+  "getExactEdge": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 120,
+   "address": "4b865990",
+   "source": "para417_accessors.c"
+  },
+  "getOrigArcEdgeFromSectionedEdge": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 88,
+   "address": "4b865a40",
+   "source": "para417_accessors.c"
+  },
+  "getProfileFeature": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 88,
+   "address": "4b8864f0",
+   "source": "para417_accessors.c"
+  },
+  "getRefFromAlias": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4b8880c0",
+   "source": "para417_accessors.c"
+  },
+  "getTempEdgeTag": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 452,
+   "address": "4b328330",
+   "source": "para417_accessors.c"
+  },
+  "isAttachedToSectionedHoleOrSlot": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "uint",
+   "stride": 0,
+   "offset": 392,
+   "address": "4b868330",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moCompFeature_c": {
+  "UpdateFeatureIdBasedonViewerIDString": {
+   "kind": "set",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 240,
+   "address": "4b8a07f0",
+   "source": "sldmodu.c"
+  },
+  "changeFeatureReferences": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moDofData_c",
+   "stride": 0,
+   "offset": 240,
+   "address": "4b878100",
+   "source": "sldmodu.c"
+  },
+  "convertToFRData": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moFRData_c",
+   "stride": 0,
+   "offset": 240,
+   "address": "4b8a0bd0",
+   "source": "sldmodu.c"
+  },
+  "iResetFeature": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moFRData_c",
+   "stride": 0,
+   "offset": 240,
+   "address": "4b8a2b80",
+   "source": "sldmodu.c"
+  }
+ },
+ "moCompRefPlane_c": {
+  "getRefPlane": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moRefCone_c",
+   "stride": 0,
+   "offset": 248,
+   "address": "4b323a80",
+   "source": "para417_serialize.c"
+  }
+ },
+ "moCompSketchEntHandle_c": {
+  "getCurrentGhostData": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moComponent_c",
+   "stride": 0,
+   "offset": 88,
+   "address": "4b880bd0",
+   "source": "para417_accessors.c"
+  },
+  "getDefaultGhostPartition": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moComponent_c",
+   "stride": 0,
+   "offset": 88,
+   "address": "4b881480",
+   "source": "para417_accessors.c"
+  },
+  "getEntHandle": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "sgEntHandle",
+   "stride": 0,
+   "offset": 248,
+   "address": "4b882760",
+   "source": "para417_accessors.c"
+  },
+  "getLineEndPoints": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 88,
+   "address": "4b885590",
+   "source": "para417_accessors.c"
+  },
+  "getSketchToModelXform": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 248,
+   "address": "4b888e90",
+   "source": "para417_accessors.c"
+  },
+  "getSplineEndPoints": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 88,
+   "address": "4b888ef0",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moCompVertex_c": {
+  "getRefVertex": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moVertexRef_c",
+   "stride": 0,
+   "offset": 232,
+   "address": "4b3275c0",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moConstraintCoincPlaneRefplaneData_c": {
+  "getPlaneRef": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "undefined8",
+   "stride": 0,
+   "offset": 136,
+   "address": "4b96c2e0",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moDetailCabinet_c": {
+  "getAnnViewFeat": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "undefined8",
+   "stride": 0,
+   "offset": 912,
+   "address": "4bab42e0",
+   "source": "para417_accessors.c"
+  },
+  "getDummyView": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "undefined8",
+   "stride": 0,
+   "offset": 912,
+   "address": "4bab9e60",
+   "source": "para417_accessors.c"
+  },
+  "getFolder": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4baba280",
+   "source": "para417_accessors.c"
+  },
+  "getNode": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "undefined8",
+   "stride": 0,
+   "offset": 1008,
+   "address": "4baba820",
+   "source": "para417_accessors.c"
+  },
+  "getNumFolders": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4baba870",
+   "source": "para417_accessors.c"
+  },
+  "getRefDimArray": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moContourChooser_c",
+   "stride": 0,
+   "offset": 896,
+   "address": "4b3233f0",
+   "source": "sldmodu.c"
+  }
+ },
+ "moDisplayDistanceDim_c": {
+  "getDDMask": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "uint",
+   "stride": 0,
+   "offset": 4076,
+   "address": "4b3240e0",
+   "source": "para417_accessors.c"
+  },
+  "getShowExtnLines": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "uint",
+   "stride": 0,
+   "offset": 4076,
+   "address": "4c8df9a0",
+   "source": "para417_accessors.c"
+  },
+  "getVirtualPt": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "undefined4",
+   "stride": 0,
+   "offset": 4056,
+   "address": "4b3292e0",
+   "source": "para417_accessors.c"
+  },
+  "isCoveringIncluded": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "uint",
+   "stride": 0,
+   "offset": 4076,
+   "address": "4c8e1890",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moEdgeRef_c": {
+  "getEndSurfId": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 16,
+   "address": "4b7de1c0",
+   "source": "para417_accessors.c"
+  },
+  "getLeftSurfId": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "uoTempAssemblySHDData_c",
+   "stride": 0,
+   "offset": 16,
+   "address": "4b323950",
+   "source": "task2.c"
+  },
+  "getRightSurfId": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 16,
+   "address": "4b7de6b0",
+   "source": "para417_accessors.c"
+  },
+  "getStartSurfId": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 16,
+   "address": "4b7de6c0",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moEndSpec_c": {
+  "copyDimNameAndValues": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 8,
+   "address": "4bb56450",
+   "source": "sldmodu.c"
+  },
+  "deleteNotUsedDims": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 8,
+   "address": "4bb58630",
+   "source": "sldmodu.c"
+  },
+  "getAngle": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moDisplayDim_c",
+   "stride": 8,
+   "offset": 200,
+   "address": "4bb5cf50",
+   "source": "sldmodu.c"
+  },
+  "getCapEnd": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 4,
+   "offset": 328,
+   "address": "4b346ef0",
+   "source": "sldmodu.c"
+  },
+  "getCreateSolidFrmCappedMidPlaneSurfExt": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 344,
+   "address": "4b347130",
+   "source": "sldmodu.c"
+  },
+  "getDelInitFace": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 336,
+   "address": "4b341020",
+   "source": "sldmodu.c"
+  },
+  "getDirSpec": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moDirectionSpec_c",
+   "stride": 0,
+   "offset": 312,
+   "address": "4b347350",
+   "source": "sldmodu.c"
+  },
+  "getDirection": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 140,
+   "address": "4b347360",
+   "source": "sldmodu_accessors3.c"
+  },
+  "getDistance": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moDisplayDim_c",
+   "stride": 8,
+   "offset": 24,
+   "address": "4bb5d590",
+   "source": "sldmodu.c"
+  },
+  "getDraftCheck": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 4,
+   "offset": 184,
+   "address": "4b3473a0",
+   "source": "sldmodu.c"
+  },
+  "getDraftDirection": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 4,
+   "offset": 192,
+   "address": "4b3473b0",
+   "source": "sldmodu.c"
+  },
+  "getFlip": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 136,
+   "address": "4b3479f0",
+   "source": "sldmodu_accessors3.c"
+  },
+  "getFromEndSpec": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moFromEndSpec_c",
+   "stride": 0,
+   "offset": 320,
+   "address": "4b325d70",
+   "source": "sldmodu.c"
+  },
+  "getIBodyRef": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moRefWrapper_c",
+   "stride": 8,
+   "offset": 120,
+   "address": "4b348390",
+   "source": "sldmodu.c"
+  },
+  "getIPointRef": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moPointRef_w",
+   "stride": 8,
+   "offset": 104,
+   "address": "4b3483c0",
+   "source": "sldmodu.c"
+  },
+  "getKeepPieceIndex": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 152,
+   "address": "4b326e80",
+   "source": "sldmodu_accessors3.c"
+  },
+  "getKnitRes": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 340,
+   "address": "4b3484c0",
+   "source": "sldmodu_accessors3.c"
+  },
+  "getMerge": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moDimAttachTextAlign_e",
+   "stride": 0,
+   "offset": 296,
+   "address": "4b3233a0",
+   "source": "sldmodu_accessors3.c"
+  },
+  "getNormalCut": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 300,
+   "address": "4b350960",
+   "source": "sldmodu_accessors3.c"
+  },
+  "getSingleEnd": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "EncodingType",
+   "stride": 0,
+   "offset": 8,
+   "address": "4b3223b0",
+   "source": "sldmodu_accessors3.c"
+  },
+  "getTranslateSurface": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 4,
+   "offset": 176,
+   "address": "4b349090",
+   "source": "sldmodu.c"
+  },
+  "getType": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "gcEndSpecType_e",
+   "stride": 4,
+   "offset": 12,
+   "address": "4b3490a0",
+   "source": "sldmodu.c"
+  }
+ },
+ "moEqnFolder_c": {
+  "getGlobalVarList": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moContourChooser_c",
+   "stride": 0,
+   "offset": 896,
+   "address": "4b3233f0",
+   "source": "sldmodu.c"
+  },
+  "getHasFeatureSuppressionEqns": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 888,
+   "address": "4befd990",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moExtrusion_c": {
+  "checkSketch": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4bb55530",
+   "source": "sldmodu.c"
+  },
+  "cutFlipRectangle": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "uint",
+   "stride": 0,
+   "offset": 40,
+   "address": "4bb57b90",
+   "source": "sldmodu.c"
+  },
+  "getPreviewBodiesTemp": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moEndSpec_c",
+   "stride": 0,
+   "offset": 1968,
+   "address": "4bb60af0",
+   "source": "sldmodu.c"
+  },
+  "iSubstituteWireList": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1968,
+   "address": "4bb68680",
+   "source": "sldmodu.c"
+  }
+ },
+ "moFR_c": {
+  "getXModel": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moExtObject_c",
+   "stride": 0,
+   "offset": 8,
+   "address": "4bbb23f0",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moFaceRef_c": {
+  "getBaseSurfaceId": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "uoTempAssemblySHDData_c",
+   "stride": 0,
+   "offset": 16,
+   "address": "4b323950",
+   "source": "task2.c"
+  },
+  "getBaseSurfaceIdC": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moEntityId_c",
+   "stride": 0,
+   "offset": 16,
+   "address": "4bc8ed40",
+   "source": "para417_accessors.c"
+  },
+  "getBaseSurfaceIdW": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moEntityId_c",
+   "stride": 0,
+   "offset": 16,
+   "address": "4bc8ed40",
+   "source": "para417_accessors.c"
+  },
+  "getFeatsInclOrig": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moEntityId_c",
+   "stride": 0,
+   "offset": 16,
+   "address": "4bc8fb80",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moFromEndSpec_c": {
+  "destroyRefWrap": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4bb58760",
+   "source": "sldmodu.c"
+  },
+  "getOffset": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "double",
+   "stride": 0,
+   "offset": 24,
+   "address": "4bb60380",
+   "source": "sldmodu.c"
+  }
+ },
+ "moLineRef_w": {
+  "getClosestMatchingFace": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moTessMesh_c",
+   "stride": 0,
+   "offset": 80,
+   "address": "4b5a9380",
+   "source": "para417_accessors.c"
+  },
+  "getClosestMatchingFaceForRotate": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moTessMesh_c",
+   "stride": 0,
+   "offset": 80,
+   "address": "4b5aa9a0",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moProfileFeature_c": {
+  "addOrRetrieveChooser": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moContourChooser_c",
+   "stride": 0,
+   "offset": 896,
+   "address": "4c133160",
+   "source": "sldmodu.c"
+  },
+  "addSketchBlockPosRefWrapper": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c1331c0",
+   "source": "sldmodu.c"
+  },
+  "canBeReferenceSketch": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c134cd0",
+   "source": "sldmodu.c"
+  },
+  "chooserNeedsSavings": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 896,
+   "address": "4c134f40",
+   "source": "sldmodu.c"
+  },
+  "clashAllLinesToBBox": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c134f80",
+   "source": "sldmodu.c"
+  },
+  "clearAllSketchBlocks": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c9487a0",
+   "source": "sldmodu.c"
+  },
+  "clearInvalidChildBlocks": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c948920",
+   "source": "sldmodu.c"
+  },
+  "closestPointAndEwire": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c135cf0",
+   "source": "sldmodu.c"
+  },
+  "copyRefPlaneToSketchXform": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c138f20",
+   "source": "sldmodu.c"
+  },
+  "findContourFromId": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 992,
+   "address": "4c13a6f0",
+   "source": "sldmodu.c"
+  },
+  "findContourIdsHavingSomeMatch": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13b270",
+   "source": "sldmodu.c"
+  },
+  "findLoopFromId": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moContourChooser_c",
+   "stride": 0,
+   "offset": 896,
+   "address": "4c13b360",
+   "source": "sldmodu.c"
+  },
+  "fixExtfRefs": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13bc50",
+   "source": "sldmodu.c"
+  },
+  "getAllContoursBySegmentId": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moContourChooser_c",
+   "stride": 0,
+   "offset": 896,
+   "address": "4c13be70",
+   "source": "sldmodu.c"
+  },
+  "getBlankStatus": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13c370",
+   "source": "sldmodu.c"
+  },
+  "getBodyTimeStampData": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13c390",
+   "source": "sldmodu.c"
+  },
+  "getCRefPlane": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13c600",
+   "source": "sldmodu.c"
+  },
+  "getChooser": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moContourChooser_c",
+   "stride": 0,
+   "offset": 896,
+   "address": "4b3233f0",
+   "source": "sldmodu.c"
+  },
+  "getCompRefPlane": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13c600",
+   "source": "sldmodu.c"
+  },
+  "getContourBodyArray": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "undefined8",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13c6b0",
+   "source": "sldmodu.c"
+  },
+  "getDerivedTimeStamp": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13c940",
+   "source": "sldmodu.c"
+  },
+  "getDistFromVertexToSketch": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c13d310",
+   "source": "sldmodu.c"
+  },
+  "getFaceEdgeRefs": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4b324d60",
+   "source": "sldmodu.c"
+  },
+  "getInitialBlankStatus": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13e370",
+   "source": "sldmodu.c"
+  },
+  "getLockSceneGraphUpdate": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1032,
+   "address": "4b431ac0",
+   "source": "sldmodu.c"
+  },
+  "getNeedsAnchor": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13e500",
+   "source": "sldmodu.c"
+  },
+  "getNewSkToOldSkNeeded": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c13e510",
+   "source": "sldmodu.c"
+  },
+  "getOrCreateContourBody": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13ebd0",
+   "source": "sldmodu.c"
+  },
+  "getOrientation": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c13ed00",
+   "source": "sldmodu.c"
+  },
+  "getPartition": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13ee50",
+   "source": "sldmodu.c"
+  },
+  "getProfileDerivedFrom": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13f270",
+   "source": "sldmodu.c"
+  },
+  "getRefDerivedFrom": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13f450",
+   "source": "sldmodu.c"
+  },
+  "getRefPlane": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 104,
+   "address": "4c13f470",
+   "source": "sldmodu.c"
+  },
+  "getRefPlaneToSketchXform": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13f490",
+   "source": "sldmodu.c"
+  },
+  "getRefPlnData": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13f530",
+   "source": "sldmodu.c"
+  },
+  "getSgOffsetModelRefs": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c13f710",
+   "source": "sldmodu.c"
+  },
+  "getShowSketchArcCenters": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1052,
+   "address": "4b327eb0",
+   "source": "sldmodu.c"
+  },
+  "getSketch": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 104,
+   "address": "4c13f7b0",
+   "source": "sldmodu.c"
+  },
+  "getSketchBeingEdited": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c13f7d0",
+   "source": "sldmodu.c"
+  },
+  "hasBeenDerivedFrom": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c140ce0",
+   "source": "sldmodu.c"
+  },
+  "hasCRefPlane": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4b3299d0",
+   "source": "sldmodu.c"
+  },
+  "hasDimDrivenByEqn": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c140f40",
+   "source": "sldmodu.c"
+  },
+  "is3DBoundingBox": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c143b10",
+   "source": "sldmodu.c"
+  },
+  "is3DBoundingBoxFeature": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c143b80",
+   "source": "sldmodu.c"
+  },
+  "isAvailableForRegionSelect": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 864,
+   "address": "4c143ca0",
+   "source": "sldmodu.c"
+  },
+  "isBaseFaceUnusable": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c144020",
+   "source": "sldmodu.c"
+  },
+  "isChooserSuperfluous": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moContourChooser_c",
+   "stride": 0,
+   "offset": 896,
+   "address": "4c1441d0",
+   "source": "sldmodu.c"
+  },
+  "isCrossBreakSketch": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c1444b0",
+   "source": "sldmodu.c"
+  },
+  "isDerived": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 968,
+   "address": "4c144550",
+   "source": "para417_serialize.c"
+  },
+  "moProfileFeature_c": {
+   "kind": "set",
+   "width": 8,
+   "ctype": "moContourChooser_c",
+   "stride": 0,
+   "offset": 896,
+   "address": "4c1314b0",
+   "source": "sldmodu.c"
+  }
+ },
+ "moRefPlane_c": {
+  "UpdateBorders": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32c800",
+   "source": "sldmodu.c"
+  },
+  "addDeltaToBorder": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32c990",
+   "source": "sldmodu.c"
+  },
+  "clone": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32d060",
+   "source": "sldmodu.c"
+  },
+  "getAlignedEdge": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32e610",
+   "source": "sldmodu.c"
+  },
+  "getAlignedEnd": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32e630",
+   "source": "sldmodu.c"
+  },
+  "getEWire": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32e880",
+   "source": "sldmodu.c"
+  },
+  "getFiniteSheetBody": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moRefPlnData_c",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32e8a0",
+   "source": "sldmodu.c"
+  },
+  "getFourCorners": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moRefPlnData_c",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32e8c0",
+   "source": "sldmodu.c"
+  },
+  "getManipulatorPointForPattern": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moRefPlnData_c",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32eae0",
+   "source": "sldmodu.c"
+  },
+  "getNormal": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moRefPlnData_c",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32ec40",
+   "source": "sldmodu.c"
+  },
+  "getOrientation": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moRefPlnData_c",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32ec60",
+   "source": "sldmodu.c"
+  },
+  "getPlane": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32ed90",
+   "source": "sldmodu.c"
+  },
+  "getPoint": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moRefPlnData_c",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32ee90",
+   "source": "sldmodu.c"
+  },
+  "getSheetBody": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32eef0",
+   "source": "sldmodu.c"
+  },
+  "getXform": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32f020",
+   "source": "sldmodu.c"
+  },
+  "isALineIn2D": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32f070",
+   "source": "sldmodu.c"
+  },
+  "isAbsolute": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "CObject",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32f090",
+   "source": "sldmodu.c"
+  },
+  "isConstructed": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "CObject",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32f110",
+   "source": "sldmodu.c"
+  },
+  "moRefPlane_c": {
+   "kind": "set",
+   "width": 8,
+   "ctype": "moRefPlnData_c",
+   "stride": 0,
+   "offset": 1776,
+   "address": "4c32c500",
+   "source": "sldmodu.c"
+  }
+ },
+ "moRevCut_c": {
+  "moRevCut_c": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "undefined",
+   "stride": 0,
+   "offset": 136,
+   "address": "4c3e1420",
+   "source": "sldmodu.c"
+  }
+ },
+ "moRevEndSpec_c": {
+  "getISurfRef": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moRefWrapper_c",
+   "stride": 8,
+   "offset": 280,
+   "address": "4c3eed30",
+   "source": "sldmodu.c"
+  },
+  "getOffsetReverse": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 4,
+   "offset": 320,
+   "address": "4b4239e0",
+   "source": "sldmodu.c"
+  },
+  "getRevolveAngle": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "double",
+   "stride": 8,
+   "offset": 336,
+   "address": "4b423af0",
+   "source": "sldmodu.c"
+  },
+  "getSurfOffsetDist": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 8,
+   "offset": 40,
+   "address": "4c3f2120",
+   "source": "sldmodu.c"
+  },
+  "getType": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "gcEndSpecType_e",
+   "stride": 4,
+   "offset": 12,
+   "address": "4b3490a0",
+   "source": "sldmodu.c"
+  },
+  "getUpToPointRef": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moPointRef_w",
+   "stride": 8,
+   "offset": 296,
+   "address": "4b424120",
+   "source": "sldmodu.c"
+  },
+  "moRevEndSpec_c": {
+   "kind": "set",
+   "width": 8,
+   "ctype": "moFeature_c",
+   "stride": 0,
+   "offset": 328,
+   "address": "4c3e19f0",
+   "source": "sldmodu.c"
+  }
+ },
+ "moRevolution_c": {
+  "getAngle2Dim": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moDisplayDim_c",
+   "stride": 0,
+   "offset": 1960,
+   "address": "4b4232c0",
+   "source": "sldmodu.c"
+  },
+  "getAngleDim": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moDisplayDim_c",
+   "stride": 0,
+   "offset": 1952,
+   "address": "4c3ed750",
+   "source": "sldmodu.c"
+  },
+  "getEndSpec": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moRevEndSpec_c",
+   "stride": 0,
+   "offset": 2160,
+   "address": "4b3489d0",
+   "source": "sldmodu.c"
+  },
+  "getMatchedDimHandle": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1968,
+   "address": "4c3eef40",
+   "source": "sldmodu.c"
+  },
+  "getReverseDir": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1980,
+   "address": "4b423ae0",
+   "source": "sldmodu.c"
+  },
+  "isAxisValid": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1992,
+   "address": "4c3f5b60",
+   "source": "sldmodu.c"
+  },
+  "moRevolution_c": {
+   "kind": "set",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1980,
+   "address": "4c3e1f70",
+   "source": "sldmodu.c"
+  }
+ },
+ "moSketchChain_c": {
+  "getEndConditionMap": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 184,
+   "address": "4c7e0b30",
+   "source": "sldmodu.c"
+  },
+  "hasTrimmedEnd": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 200,
+   "address": "4c7e0d30",
+   "source": "sldmodu.c"
+  },
+  "hasTrimmedStart": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 192,
+   "address": "4c7e0d80",
+   "source": "sldmodu.c"
+  }
+ },
+ "moSketchExtRef_w": {
+  "getGeometry": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moCompSketchEntHandle_c",
+   "stride": 0,
+   "offset": 80,
+   "address": "4c36e5b0",
+   "source": "para417_accessors.c"
+  },
+  "getLegalBodies": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 80,
+   "address": "4c36ecd0",
+   "source": "para417_accessors.c"
+  },
+  "getPointOn": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "CObject",
+   "stride": 0,
+   "offset": 80,
+   "address": "4c3767c0",
+   "source": "para417_accessors.c"
+  },
+  "isEquivalent": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 168,
+   "address": "4c384d40",
+   "source": "para417_accessors.c"
+  }
+ },
+ "moSketchRegion_c": {
+  "addSegmentsToBoudaryList": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4b9d8310",
+   "source": "sldmodu.c"
+  },
+  "addToBoundarySegments": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "su_CObList",
+   "stride": 0,
+   "offset": 8,
+   "address": "4b9d8770",
+   "source": "sldmodu.c"
+  },
+  "addToBoundarySegmentsInOrder": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4b9d87c0",
+   "source": "sldmodu.c"
+  },
+  "destroyBody": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "gcBody_w",
+   "stride": 0,
+   "offset": 24,
+   "address": "4b9d88e0",
+   "source": "sldmodu.c"
+  },
+  "getBondarySegmentsList": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4b9d8a70",
+   "source": "sldmodu.c"
+  },
+  "getDBKey": {
+   "kind": "get",
+   "width": 1,
+   "ctype": "char",
+   "stride": 0,
+   "offset": 48,
+   "address": "4b9d8ac0",
+   "source": "sldmodu.c"
+  },
+  "hasSameBoundaryEntities": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4b9d8f60",
+   "source": "sldmodu.c"
+  },
+  "iGetSketch": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "uoTempAssemblySHDData_c",
+   "stride": 0,
+   "offset": 16,
+   "address": "4b323950",
+   "source": "task2.c"
+  },
+  "iSetSketch": {
+   "kind": "set",
+   "width": 8,
+   "ctype": "sgSketch",
+   "stride": 0,
+   "offset": 16,
+   "address": "4b332810",
+   "source": "para417_serialize.c"
+  },
+  "moSketchRegion_c": {
+   "kind": "set",
+   "width": 8,
+   "ctype": "sgSketch",
+   "stride": 0,
+   "offset": 16,
+   "address": "4b9d7fe0",
+   "source": "sldmodu.c"
+  }
+ },
+ "moVertexRef_c": {
+  "getVertex": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "uint",
+   "stride": 0,
+   "offset": 236,
+   "address": "4b7df690",
+   "source": "para417_accessors.c"
+  }
+ },
+ "sgArcHandle": {
+  "IsDirFlipped": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c59f360",
+   "source": "sldmodu_accessors.c"
+  },
+  "applyEndTangency": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c59f3a0",
+   "source": "sldmodu_accessors.c"
+  },
+  "changePoint": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c5a02a0",
+   "source": "sldmodu_accessors.c"
+  },
+  "createMirrorAboutPlane": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c5a0bc0",
+   "source": "sldmodu_accessors.c"
+  },
+  "doDelete": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "undefined4",
+   "stride": 0,
+   "offset": 24,
+   "address": "4ba952c0",
+   "source": "sldmodu_accessors.c"
+  },
+  "getArc": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c5a2a10",
+   "source": "sldmodu_accessors.c"
+  },
+  "getCenterPointHandle": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 28,
+   "address": "4c5a2b50",
+   "source": "sldmodu_accessors.c"
+  },
+  "getHandles": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c5a2e40",
+   "source": "sldmodu_accessors.c"
+  },
+  "getLineHandleAtEnd": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c5a2fe0",
+   "source": "sldmodu_accessors.c"
+  },
+  "getLineHandleAtStart": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c5a3070",
+   "source": "sldmodu_accessors.c"
+  },
+  "getNormal": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c5a3140",
+   "source": "sldmodu_accessors.c"
+  },
+  "getRotationDir": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c5a41a0",
+   "source": "sldmodu_accessors.c"
+  },
+  "isCircle": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c5a4910",
+   "source": "sldmodu_accessors.c"
+  }
+ },
+ "sgExtEnt_c": {
+  "getComponentRef": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "CObject",
+   "stride": 0,
+   "offset": 8,
+   "address": "4c47e6c0",
+   "source": "para417_accessors.c"
+  },
+  "getExtLineRef": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moLineRef_w",
+   "stride": 0,
+   "offset": 8,
+   "address": "4c47e750",
+   "source": "para417_accessors.c"
+  },
+  "getExtSketchRef": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moSketchExtRef_w",
+   "stride": 0,
+   "offset": 8,
+   "address": "4c47e7a0",
+   "source": "para417_accessors.c"
+  },
+  "getIsoRatio": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 32,
+   "address": "4c47e850",
+   "source": "para417_accessors.c"
+  },
+  "getSingleFaceRef": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moSingleFaceRef_w",
+   "stride": 0,
+   "offset": 8,
+   "address": "4c47e880",
+   "source": "para417_accessors.c"
+  }
+ },
+ "sgLineHandle": {
+  "getLine": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c61a3d0",
+   "source": "para417_accessors.c"
+  },
+  "getLineEndPoint": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c61a400",
+   "source": "para417_accessors.c"
+  },
+  "getLineStartPoint": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c61a4f0",
+   "source": "para417_accessors.c"
+  }
+ },
+ "sgPointHandle": {
+  "addCenterReference": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c636220",
+   "source": "sldmodu_serialize.c"
+  },
+  "center": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c636fd0",
+   "source": "para417_serialize.c"
+  },
+  "getAttachedEnts": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c637b90",
+   "source": "para417_accessors.c"
+  },
+  "getBiExtGeomRefCount": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c6385b0",
+   "source": "para417_accessors.c"
+  },
+  "getContour1": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c6385f0",
+   "source": "para417_accessors.c"
+  },
+  "getContour2": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c638630",
+   "source": "para417_accessors.c"
+  },
+  "getEntitiesUsingPoint": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 28,
+   "address": "4c638b20",
+   "source": "para417_accessors.c"
+  },
+  "getFirstVirtualPoint": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c639d30",
+   "source": "para417_accessors.c"
+  },
+  "getGeomReferenceCount": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c639e30",
+   "source": "para417_accessors.c"
+  },
+  "getPoint": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c639fb0",
+   "source": "para417_serialize.c"
+  },
+  "getSecondVirtualPoint": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c63a290",
+   "source": "para417_accessors.c"
+  },
+  "getSketchPoint": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c63a300",
+   "source": "para417_accessors.c"
+  },
+  "getTwoContours": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c63a370",
+   "source": "para417_accessors.c"
+  },
+  "getType": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c63a4f0",
+   "source": "para417_serialize.c"
+  },
+  "getValidAndInternalAttachedEnts": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c63a540",
+   "source": "para417_accessors.c"
+  },
+  "isACPointOf1SpanSpline": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 28,
+   "address": "4ba02e20",
+   "source": "para417_accessors.c"
+  },
+  "isCenterOfMass": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c63c550",
+   "source": "para417_accessors.c"
+  },
+  "isEqual": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c63c750",
+   "source": "para417_accessors.c"
+  }
+ },
+ "sgSketch": {
+  "addOrFindPointNew": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "double",
+   "stride": 0,
+   "offset": 600,
+   "address": "4c6cf960",
+   "source": "task2.c"
+  },
+  "arcEnd": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 40,
+   "address": "4c4eb6b0",
+   "source": "para417_serialize.c"
+  },
+  "getActivePointCount": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4c4f78a0",
+   "source": "para417_accessors.c"
+  },
+  "getBlock": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "undefined8",
+   "stride": 0,
+   "offset": 1400,
+   "address": "4c4f7d90",
+   "source": "para417_accessors.c"
+  },
+  "getBlockManager": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "sgBlockManager",
+   "stride": 0,
+   "offset": 1400,
+   "address": "4b347390",
+   "source": "para417_accessors.c"
+  },
+  "getCallBackThroughPMForSlotHW": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1476,
+   "address": "4b3eeec0",
+   "source": "para417_accessors.c"
+  },
+  "getCenterLines": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 16,
+   "address": "4c4f7ea0",
+   "source": "para417_accessors.c"
+  },
+  "getCircularPattArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 192,
+   "address": "4c4f7fb0",
+   "source": "para417_accessors.c"
+  },
+  "getConnectedEntities": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moDrawing_c",
+   "stride": 0,
+   "offset": 304,
+   "address": "4bc2bc90",
+   "source": "para417_accessors.c"
+  },
+  "getConstrainToTolerantFlag": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1440,
+   "address": "4b3491c0",
+   "source": "para417_accessors.c"
+  },
+  "getConstrainedStatus": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "sgConstrainedStatus_e",
+   "stride": 0,
+   "offset": 292,
+   "address": "4c57f300",
+   "source": "para417_accessors.c"
+  },
+  "getContourList": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "suObList",
+   "stride": 0,
+   "offset": 1488,
+   "address": "4b3eef10",
+   "source": "para417_accessors.c"
+  },
+  "getDBKey": {
+   "kind": "get",
+   "width": 1,
+   "ctype": "char",
+   "stride": 0,
+   "offset": 1496,
+   "address": "4c4f8150",
+   "source": "para417_accessors.c"
+  },
+  "getDerivedInferenceCalledUpdateToDrag": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1444,
+   "address": "4b3eef20",
+   "source": "para417_accessors.c"
+  },
+  "getDetachDragMode": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 944,
+   "address": "4b36df90",
+   "source": "para417_accessors.c"
+  },
+  "getEntHandleDataManager": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moAnimationManager_c",
+   "stride": 0,
+   "offset": 1400,
+   "address": "4c4f9b20",
+   "source": "para417_accessors.c"
+  },
+  "getEntitiesInLoop": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moCurveSet_c",
+   "stride": 0,
+   "offset": 1424,
+   "address": "4c4f9b70",
+   "source": "para417_accessors.c"
+  },
+  "getEntityForDetaching": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "sgEntHandle",
+   "stride": 0,
+   "offset": 952,
+   "address": "4b3486a0",
+   "source": "para417_accessors.c"
+  },
+  "getEquiDistArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 200,
+   "address": "4c4f9c40",
+   "source": "para417_accessors.c"
+  },
+  "getEquiDistConArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 208,
+   "address": "4c4f9c60",
+   "source": "para417_accessors.c"
+  },
+  "getInsertionPoint": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "mgPoint_c",
+   "stride": 0,
+   "offset": 1384,
+   "address": "4c94d790",
+   "source": "para417_accessors.c"
+  },
+  "getInsertionPtCoordForFormTool": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4c4fa690",
+   "source": "para417_accessors.c"
+  },
+  "getIntersectionArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 80,
+   "address": "4c4fa760",
+   "source": "para417_accessors.c"
+  },
+  "getIsVerySmallSketch": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 976,
+   "address": "4b32c8d0",
+   "source": "para417_accessors.c"
+  },
+  "getLinearPattArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 184,
+   "address": "4c4fa850",
+   "source": "para417_accessors.c"
+  },
+  "getLinearPattConArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 168,
+   "address": "4c4fa870",
+   "source": "para417_accessors.c"
+  },
+  "getLogG1ArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 136,
+   "address": "4c4fa890",
+   "source": "para417_accessors.c"
+  },
+  "getLogG2ArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 144,
+   "address": "4c4fa8b0",
+   "source": "para417_accessors.c"
+  },
+  "getLogG3ArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 152,
+   "address": "4c4fa8d0",
+   "source": "para417_accessors.c"
+  },
+  "getLoopDimFromEntHandle": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "sgLoopManager",
+   "stride": 0,
+   "offset": 1424,
+   "address": "4c4fa8f0",
+   "source": "para417_accessors.c"
+  },
+  "getLoopManager": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "sgLoopManager",
+   "stride": 0,
+   "offset": 1424,
+   "address": "4b4090d0",
+   "source": "para417_accessors.c"
+  },
+  "getMakeNewItemsConstruction": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1436,
+   "address": "4b3eef40",
+   "source": "para417_accessors.c"
+  },
+  "getMaxArcCount": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 40,
+   "address": "4c4fabf0",
+   "source": "para417_accessors.c"
+  },
+  "getMaxEllipseCount": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 48,
+   "address": "4c4fac10",
+   "source": "para417_accessors.c"
+  },
+  "getMaxHatchCount": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 32,
+   "address": "4c4fac30",
+   "source": "para417_accessors.c"
+  },
+  "getMaxLineCount": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 16,
+   "address": "4c4fac50",
+   "source": "para417_accessors.c"
+  },
+  "getMaxParabolaCount": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 56,
+   "address": "4c4fac70",
+   "source": "para417_accessors.c"
+  },
+  "getMaxSplineCount": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 64,
+   "address": "4c4facd0",
+   "source": "para417_accessors.c"
+  },
+  "getMaxTextCount": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 24,
+   "address": "4c4facf0",
+   "source": "para417_accessors.c"
+  },
+  "getOffsetArr": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "moRefWrapper_c",
+   "stride": 0,
+   "offset": 72,
+   "address": "4b324030",
+   "source": "sldmodu_serialize.c"
+  },
+  "getOffsetArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 72,
+   "address": "4c4fad10",
+   "source": "para417_accessors.c"
+  },
+  "getOffsetDimArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 128,
+   "address": "4c4fad70",
+   "source": "para417_accessors.c"
+  },
+  "getOriginPointH": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4c4fad90",
+   "source": "para417_serialize.c"
+  },
+  "getOverrideColor": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 596,
+   "address": "4c4fae50",
+   "source": "para417_accessors.c"
+  },
+  "getOwnerProfInterface": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 304,
+   "address": "4c94ec60",
+   "source": "para417_accessors.c"
+  },
+  "getPasteSketchIDMap": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "sgPasteSketchIDMap_c",
+   "stride": 0,
+   "offset": 1072,
+   "address": "4c4faeb0",
+   "source": "para417_accessors.c"
+  },
+  "getPipes": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "pipes",
+   "stride": 0,
+   "offset": 1032,
+   "address": "4c4faef0",
+   "source": "para417_accessors.c"
+  },
+  "getPointGreatestX": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 8,
+   "address": "4c4faf50",
+   "source": "para417_accessors.c"
+  },
+  "getPretendEditingSketch": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1100,
+   "address": "4b349fe0",
+   "source": "para417_accessors.c"
+  },
+  "getPreviewPGMManager": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 1232,
+   "address": "4c4fb3f0",
+   "source": "para417_accessors.c"
+  },
+  "getProfileTypeForUsage": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "uint",
+   "stride": 0,
+   "offset": 852,
+   "address": "4c628950",
+   "source": "para417_accessors.c"
+  },
+  "getSilhouetteArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 264,
+   "address": "4c4fc5a0",
+   "source": "para417_accessors.c"
+  },
+  "getSketchBlockHandle": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "undefined8",
+   "stride": 0,
+   "offset": 1400,
+   "address": "4c4fc5c0",
+   "source": "para417_accessors.c"
+  },
+  "getSketchEdges": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moProfileFeature_c",
+   "stride": 0,
+   "offset": 304,
+   "address": "4c628ff0",
+   "source": "para417_accessors.c"
+  },
+  "getSketchOffsetArr": {
+   "kind": "get",
+   "width": 8,
+   "ctype": "aabbTopTreeNode",
+   "stride": 0,
+   "offset": 88,
+   "address": "4b323630",
+   "source": "para417_serialize.c"
+  },
+  "getSketchOffsetArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 88,
+   "address": "4c4fc6b0",
+   "source": "para417_accessors.c"
+  },
+  "getSketchPictureDim": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 272,
+   "address": "4c4fc6d0",
+   "source": "para417_accessors.c"
+  },
+  "getSketchUseType": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 300,
+   "address": "4b350960",
+   "source": "sldmodu_accessors3.c"
+  },
+  "getStyledCurveArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 96,
+   "address": "4c4fc860",
+   "source": "para417_accessors.c"
+  },
+  "getTailBlock": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "sgBlockManager",
+   "stride": 0,
+   "offset": 1400,
+   "address": "4c4fc880",
+   "source": "para417_accessors.c"
+  },
+  "getUnderlyingPGMSegmentForPGMSection": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 984,
+   "address": "4c580f50",
+   "source": "para417_accessors.c"
+  },
+  "getUserUnitsTab": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 304,
+   "address": "4c4fcb20",
+   "source": "para417_accessors.c"
+  },
+  "getValG1ArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 104,
+   "address": "4c4fcb40",
+   "source": "para417_accessors.c"
+  },
+  "getValG2ArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 112,
+   "address": "4c4fcb60",
+   "source": "para417_accessors.c"
+  },
+  "getValG3ArrI": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 120,
+   "address": "4c4fcb80",
+   "source": "para417_accessors.c"
+  },
+  "getlinearPattConArrCount": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 168,
+   "address": "4b3eef50",
+   "source": "para417_accessors.c"
+  },
+  "hatchEnd": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 32,
+   "address": "4c4fdc10",
+   "source": "para417_serialize.c"
+  },
+  "is3D": {
+   "kind": "get",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 1376,
+   "address": "4c502b30",
+   "source": "para417_serialize.c"
+  },
+  "isAFabricatedRoute": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moFeature_c",
+   "stride": 0,
+   "offset": 304,
+   "address": "4c502b70",
+   "source": "para417_accessors.c"
+  },
+  "isAssemblyLayoutSketch": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "CObject",
+   "stride": 0,
+   "offset": 304,
+   "address": "4c502bd0",
+   "source": "para417_accessors.c"
+  },
+  "isBoundaryBoxSketch": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 300,
+   "address": "4c502c10",
+   "source": "para417_accessors.c"
+  },
+  "isChangeIntRef": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 304,
+   "address": "4c745880",
+   "source": "para417_accessors.c"
+  },
+  "isClean": {
+   "kind": "get_derived",
+   "width": 4,
+   "ctype": "int",
+   "stride": 0,
+   "offset": 292,
+   "address": "4c502c50",
+   "source": "para417_accessors.c"
+  },
+  "isConsistent": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 304,
+   "address": "4c45a450",
+   "source": "para417_accessors.c"
+  },
+  "isDetachableDrawing": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "moDrView",
+   "stride": 0,
+   "offset": 304,
+   "address": "4c502d70",
+   "source": "para417_accessors.c"
+  },
+  "isDimensionDirectionAssigned": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 984,
+   "address": "4c585f30",
+   "source": "para417_accessors.c"
+  },
+  "isDragging": {
+   "kind": "get_derived",
+   "width": 8,
+   "ctype": "longlong",
+   "stride": 0,
+   "offset": 896,
+   "address": "4b3ef0f0",
+   "source": "para417_accessors.c"
+  }
+ }
+}
