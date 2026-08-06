@@ -341,6 +341,20 @@ def _triangle(value: Any, vertex_count: int) -> Triangle:
     return indices
 
 
+def _facet_is_degenerate(
+    points: tuple[Point, ...], facet: Triangle, tolerance: float
+) -> bool:
+    corners = tuple(points[index] for index in facet)
+    edges = tuple(
+        _subtract(corners[(index + 1) % 3], corners[index]) for index in range(3)
+    )
+    lengths = tuple(_length(edge) for edge in edges)
+    if min(lengths) <= tolerance:
+        return True
+    normal_length = _length(_cross(edges[0], _subtract(corners[2], corners[0])))
+    return normal_length <= tolerance * max(lengths)
+
+
 def _geometry(
     points: tuple[Point, ...], facets: tuple[Triangle, ...], tolerance: float
 ):
@@ -2336,9 +2350,16 @@ def triangle_mesh_brep(
     if not math.isfinite(tolerance) or tolerance <= 0.0:
         raise ValueError("tolerance must be finite and positive")
     points = tuple(_point(vertex) for vertex in vertices)
-    facets = tuple(_triangle(triangle, len(points)) for triangle in triangles)
-    if not facets:
+    declared = tuple(_triangle(triangle, len(points)) for triangle in triangles)
+    if not declared:
         raise ValueError("at least one triangle is required")
+    facets = tuple(
+        facet
+        for facet in declared
+        if not _facet_is_degenerate(points, facet, tolerance)
+    )
+    if not facets:
+        raise ValueError("at least one triangle area must exceed the BRep tolerance")
     oriented = _oriented_components(points, facets, tolerance)
     if oriented is None:
         return _independent_brep(points, facets, tolerance)
