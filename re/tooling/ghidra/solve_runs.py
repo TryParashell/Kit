@@ -36,6 +36,7 @@ class Solver:
         self.runs: Dict[str, int] = {}
         self.run_evidence: Dict[str, List[dict]] = collections.defaultdict(list)
         self.conflicts: List[dict] = []
+        self.variable: set = set()
         self.trees: Dict[str, List[List[int]]] = {}
         for trace in self.traces:
             label = trace["label"]
@@ -64,6 +65,8 @@ class Solver:
         raise KeyError(label)
 
     def record_run(self, key: str, value: int, evidence: dict) -> bool:
+        if key in self.variable:
+            return False
         previous = self.runs.get(key)
         if previous is None:
             self.runs[key] = value
@@ -73,6 +76,8 @@ class Solver:
             self.conflicts.append(
                 {"key": key, "existing": previous, "observed": value, **evidence}
             )
+            self.variable.add(key)
+            self.runs.pop(key, None)
             return False
         self.run_evidence[key].append(evidence)
         return False
@@ -147,10 +152,31 @@ class Solver:
                         progress += 1
         return progress
 
-    def solve(self, rounds: int = 60) -> None:
+    def reset_derived(self) -> None:
+        for trace in self.traces:
+            label = trace["label"]
+            for i, seg in enumerate(trace["segments"]):
+                if seg["kind"] in NO_BODY_KINDS:
+                    self.end[(label, i)] = seg["offset"] + seg["header"]
+                elif seg["depth"] == 0:
+                    self.end[(label, i)] = seg["scope_end"]
+                else:
+                    self.end[(label, i)] = None
+
+    def solve(self, rounds: int = 200) -> None:
         for _ in range(rounds):
             if self.pass_once() == 0:
                 break
+        before = -1
+        while len(self.variable) != before:
+            before = len(self.variable)
+            self.runs = {k: v for k, v in self.runs.items() if k not in self.variable}
+            self.run_evidence.clear()
+            self.reset_derived()
+            self.runs = {}
+            for _ in range(rounds):
+                if self.pass_once() == 0:
+                    break
 
     def bodies(self) -> Dict[str, List[dict]]:
         result: Dict[str, List[dict]] = collections.defaultdict(list)
