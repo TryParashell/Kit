@@ -1,4 +1,23 @@
 {
+ "external_classes": 10,
+ "external_bindings": {
+  "moUnitComponent_c": [
+   "external#43",
+   "external#45"
+  ],
+  "suObList": [
+   "external#82",
+   "external#83",
+   "external#84",
+   "external#85"
+  ],
+  "moPMarkRecord_c": [
+   "external#102",
+   "external#103",
+   "external#104",
+   "external#106"
+  ]
+ },
  "streams_read_for_string_rules": [
   "baseline",
   "circle",
@@ -11,7 +30,7 @@
   "vendor_ring"
  ],
  "version": 1,
- "source": "re/data/segments + re/data/class_layouts_decompiled.json",
+ "source": "re/data/segments + re/data/class_layouts_decompiled.json + re/data/external_classes.json",
  "traces": [
   "baseline",
   "circle",
@@ -82,7 +101,7 @@
  ],
  "run_derivation": "solve_runs.Solver seeded with the exact record end of every traced object, taken from the contiguous preorder subtree of the recorded segmentation; a run is constant only when every traced instance agrees",
  "repeat_count_contract": "a trailing ... entry in child_slots means the child count is not constant across the traced instances; repeat_count is null because no field holding the count has been recovered, and the static segmenter refuses such a class rather than guessing",
- "class_count": 73,
+ "class_count": 76,
  "confirmed_classes": 40,
  "partial_classes": 33,
  "opaque_runs": 46,
@@ -118,62 +137,46 @@
   },
   "external#102": {
    "confidence": "confirmed",
-   "source": "re/data/segments",
+   "source": "re/data/external_classes.json",
+   "external_class": "moPMarkRecord_c",
+   "instances": 13,
+   "note": "resolved to moPMarkRecord_c; own body is 4 bytes by moPMarkRecord_c::Serialize @0x4bb97ca0 reads exactly one long. The traced spans [58] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
    "child_slots": [],
-   "instances": 3,
-   "child_counts": [
-    [
-     0,
-     3
-    ]
-   ],
    "runs": {
-    "leaf": 56
+    "leaf": 4
    }
   },
   "external#103": {
    "confidence": "confirmed",
-   "source": "re/data/segments",
+   "source": "re/data/external_classes.json",
+   "external_class": "moPMarkRecord_c",
+   "instances": 13,
+   "note": "resolved to moPMarkRecord_c; own body is 4 bytes by moPMarkRecord_c::Serialize @0x4bb97ca0 reads exactly one long. The traced spans [58] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
    "child_slots": [],
-   "instances": 5,
-   "child_counts": [
-    [
-     0,
-     5
-    ]
-   ],
    "runs": {
-    "leaf": 56
+    "leaf": 4
    }
   },
   "external#104": {
    "confidence": "confirmed",
-   "source": "re/data/segments",
+   "source": "re/data/external_classes.json",
+   "external_class": "moPMarkRecord_c",
+   "instances": 13,
+   "note": "resolved to moPMarkRecord_c; own body is 4 bytes by moPMarkRecord_c::Serialize @0x4bb97ca0 reads exactly one long. The traced spans [58] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
    "child_slots": [],
-   "instances": 4,
-   "child_counts": [
-    [
-     0,
-     4
-    ]
-   ],
    "runs": {
-    "leaf": 56
+    "leaf": 4
    }
   },
   "external#106": {
    "confidence": "confirmed",
-   "source": "re/data/segments",
+   "source": "re/data/external_classes.json",
+   "external_class": "moPMarkRecord_c",
+   "instances": 13,
+   "note": "resolved to moPMarkRecord_c; own body is 4 bytes by moPMarkRecord_c::Serialize @0x4bb97ca0 reads exactly one long. The traced spans [58] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
    "child_slots": [],
-   "instances": 1,
-   "child_counts": [
-    [
-     0,
-     1
-    ]
-   ],
    "runs": {
-    "leaf": 56
+    "leaf": 4
    }
   },
   "external#4": {
@@ -199,198 +202,116 @@
    ]
   },
   "external#43": {
-   "confidence": "partial",
-   "source": "re/data/segments",
-   "child_slots": [
-    "*"
-   ],
-   "instances": 57,
-   "child_counts": [
-    [
-     1,
-     57
-    ]
-   ],
-   "runs": {
-    "lead": 0
-   },
-   "variable_runs": [
-    {
-     "slot": "0",
-     "rule": "opaque",
-     "note": "observed run lengths 77x1, 78x3, 81x3, 85x8, 89x42"
-    }
-   ]
-  },
-  "external#45": {
    "confidence": "confirmed",
-   "source": "re/data/segments",
+   "source": "re/data/external_classes.json",
+   "external_class": "moUnitComponent_c",
+   "instances": 62,
+   "note": "resolved to moUnitComponent_c; own body is 0 bytes by moUnitComponent_c::Serialize @0x4c288670 -> moComponent_c::Serialize @0x4c279a90 reads one nested object and no scalar first. The traced spans [2] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
    "child_slots": [
     "*"
-   ],
-   "instances": 5,
-   "child_counts": [
-    [
-     1,
-     5
-    ]
    ],
    "runs": {
     "lead": 0,
-    "0": 85
+    "0": 0
+   }
+  },
+  "external#45": {
+   "confidence": "confirmed",
+   "source": "re/data/external_classes.json",
+   "external_class": "moUnitComponent_c",
+   "instances": 62,
+   "note": "resolved to moUnitComponent_c; own body is 0 bytes by moUnitComponent_c::Serialize @0x4c288670 -> moComponent_c::Serialize @0x4c279a90 reads one nested object and no scalar first. The traced spans [2] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
+   "child_slots": [
+    "*"
+   ],
+   "runs": {
+    "lead": 0,
+    "0": 0
    }
   },
   "external#82": {
-   "confidence": "partial",
-   "source": "re/data/segments",
+   "confidence": "confirmed",
+   "source": "re/data/external_classes.json",
+   "external_class": "suObList",
+   "instances": 66,
+   "note": "resolved to suObList; own body is 2 bytes by u16 element count followed by that many nested objects. The traced spans [4, 63, 174] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
    "child_slots": [
     "*",
-    "sgLineHandle",
-    "sgLineHandle",
-    "sgLineHandle",
     "..."
-   ],
-   "instances": 15,
-   "child_counts": [
-    [
-     0,
-     9
-    ],
-    [
-     1,
-     4
-    ],
-    [
-     4,
-     2
-    ]
    ],
    "runs": {
     "lead": 2,
-    "0": 0,
-    "1": 0,
-    "2": 0,
-    "3": 0
+    "0": 0
    },
-   "repeat_count": null,
-   "repeat_note": "child count varies across instances: 0x9, 1x4, 4x2"
+   "repeat_count": {
+    "run": "lead",
+    "at": 0,
+    "width": 2
+   },
+   "repeat_note": "u16 element count in the lead run followed by that many nested objects"
   },
   "external#83": {
-   "confidence": "partial",
-   "source": "re/data/segments",
+   "confidence": "confirmed",
+   "source": "re/data/external_classes.json",
+   "external_class": "suObList",
+   "instances": 66,
+   "note": "resolved to suObList; own body is 2 bytes by u16 element count followed by that many nested objects. The traced spans [4, 63, 174] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
    "child_slots": [
     "*",
-    "*",
-    "sgLineHandle",
-    "sgLineHandle",
     "..."
-   ],
-   "instances": 33,
-   "child_counts": [
-    [
-     0,
-     14
-    ],
-    [
-     1,
-     9
-    ],
-    [
-     2,
-     3
-    ],
-    [
-     4,
-     7
-    ]
    ],
    "runs": {
     "lead": 2,
-    "0": 0,
-    "1": 0,
-    "2": 0,
-    "3": 0
+    "0": 0
    },
-   "repeat_count": null,
-   "repeat_note": "child count varies across instances: 0x14, 1x9, 2x3, 4x7"
+   "repeat_count": {
+    "run": "lead",
+    "at": 0,
+    "width": 2
+   },
+   "repeat_note": "u16 element count in the lead run followed by that many nested objects"
   },
   "external#84": {
-   "confidence": "partial",
-   "source": "re/data/segments",
+   "confidence": "confirmed",
+   "source": "re/data/external_classes.json",
+   "external_class": "suObList",
+   "instances": 66,
+   "note": "resolved to suObList; own body is 2 bytes by u16 element count followed by that many nested objects. The traced spans [4, 63, 174] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
    "child_slots": [
     "*",
-    "sgLineHandle",
-    "sgLineHandle",
-    "sgLineHandle",
     "..."
-   ],
-   "instances": 11,
-   "child_counts": [
-    [
-     0,
-     5
-    ],
-    [
-     1,
-     3
-    ],
-    [
-     4,
-     3
-    ]
    ],
    "runs": {
     "lead": 2,
-    "0": 0,
-    "1": 0,
-    "2": 0,
-    "3": 0
+    "0": 0
    },
-   "repeat_count": null,
-   "repeat_note": "child count varies across instances: 0x5, 1x3, 4x3"
+   "repeat_count": {
+    "run": "lead",
+    "at": 0,
+    "width": 2
+   },
+   "repeat_note": "u16 element count in the lead run followed by that many nested objects"
   },
   "external#85": {
-   "confidence": "partial",
-   "source": "re/data/segments",
+   "confidence": "confirmed",
+   "source": "re/data/external_classes.json",
+   "external_class": "suObList",
+   "instances": 66,
+   "note": "resolved to suObList; own body is 2 bytes by u16 element count followed by that many nested objects. The traced spans [4, 63, 174] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
    "child_slots": [
     "*",
-    "*",
-    "*",
-    "sgLineHandle",
     "..."
-   ],
-   "instances": 7,
-   "child_counts": [
-    [
-     0,
-     2
-    ],
-    [
-     1,
-     2
-    ],
-    [
-     2,
-     1
-    ],
-    [
-     3,
-     1
-    ],
-    [
-     4,
-     1
-    ]
    ],
    "runs": {
     "lead": 2,
-    "0": 0,
-    "1": 0,
-    "2": 0,
-    "3": 0
+    "0": 0
    },
-   "repeat_count": null,
-   "repeat_note": "child count varies across instances: 0x2, 1x2, 2x1, 3x1, 4x1"
+   "repeat_count": {
+    "run": "lead",
+    "at": 0,
+    "width": 2
+   },
+   "repeat_note": "u16 element count in the lead run followed by that many nested objects"
   },
   "moArcBackedUpData_c": {
    "confidence": "confirmed",
@@ -1530,6 +1451,17 @@
     "9": 8
    }
   },
+  "moPMarkRecord_c": {
+   "confidence": "confirmed",
+   "source": "re/data/external_classes.json",
+   "external_class": "moPMarkRecord_c",
+   "instances": 13,
+   "note": "resolved to moPMarkRecord_c; own body is 4 bytes by moPMarkRecord_c::Serialize @0x4bb97ca0 reads exactly one long. The traced spans [58] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
+   "child_slots": [],
+   "runs": {
+    "leaf": 4
+   }
+  },
   "moPerBodyChooserData_c": {
    "confidence": "confirmed",
    "source": "re/data/segments",
@@ -1968,6 +1900,20 @@
     "1": 117
    }
   },
+  "moUnitComponent_c": {
+   "confidence": "confirmed",
+   "source": "re/data/external_classes.json",
+   "external_class": "moUnitComponent_c",
+   "instances": 62,
+   "note": "resolved to moUnitComponent_c; own body is 0 bytes by moUnitComponent_c::Serialize @0x4c288670 -> moComponent_c::Serialize @0x4c279a90 reads one nested object and no scalar first. The traced spans [2] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
+   "child_slots": [
+    "*"
+   ],
+   "runs": {
+    "lead": 0,
+    "0": 0
+   }
+  },
   "sgArcHandle": {
    "confidence": "confirmed",
    "serialize": "sldmodu.dll 0x4c5c91a0 sgEntHandle::Serialize",
@@ -2369,6 +2315,27 @@
     }
    ],
    "source": "re/data/class_layouts_decompiled.json"
+  },
+  "suObList": {
+   "confidence": "confirmed",
+   "source": "re/data/external_classes.json",
+   "external_class": "suObList",
+   "instances": 66,
+   "note": "resolved to suObList; own body is 2 bytes by u16 element count followed by that many nested objects. The traced spans [4, 63, 174] are longer because bytes an ancestor reads after this object returns are absorbed into its row, so they belong to the ancestor run and not to this class.",
+   "child_slots": [
+    "*",
+    "..."
+   ],
+   "runs": {
+    "lead": 2,
+    "0": 0
+   },
+   "repeat_count": {
+    "run": "lead",
+    "at": 0,
+    "width": 2
+   },
+   "repeat_note": "u16 element count in the lead run followed by that many nested objects"
   }
  }
 }
