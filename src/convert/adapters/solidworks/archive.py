@@ -65,6 +65,7 @@ class SegmentationError(ArchiveError):
         self.base = base
         self.progress = progress
         self.depth = depth
+        self.reached: tuple[StaticSegment, ...] = ()
         super().__init__(
             f"class {class_name!r} slot {slot!r} at byte offset {offset}: {reason}"
         )
@@ -117,9 +118,7 @@ def read_tag(blob: bytes, offset: int) -> Tag:
         )
     if token == BIG_OBJECT_TAG:
         if offset + 6 > len(blob):
-            raise ArchiveError(
-                f"big object tag at offset {offset} has no 32 bit index"
-            )
+            raise ArchiveError(f"big object tag at offset {offset} has no 32 bit index")
         wide_token = struct.unpack_from("<I", blob, offset + 2)[0]
         index = wide_token & ~BIG_CLASS_TAG_BIT
         if index > MAX_MAP_INDEX:
@@ -369,6 +368,13 @@ class VariableRun:
 
 
 @dataclass(frozen=True, slots=True)
+class RepeatField:
+    run: str
+    at: int
+    width: int
+
+
+@dataclass(frozen=True, slots=True)
 class ClassLayout:
     name: str
     child_slots: tuple[str, ...]
@@ -377,18 +383,31 @@ class ClassLayout:
     confidence: str
     source: str
     repeat_note: str = ""
-    repeat_rule: str = ""
+    repeat_count: RepeatField | None = None
+    repeat_unresolved: bool = False
 
     @property
     def repeats(self) -> bool:
-        return REPEATED_SLOT in self.child_slots or bool(self.repeat_rule)
+        return self.repeat_unresolved
+
+    @property
+    def template_slot(self) -> int:
+        return len(self.child_slots) - 2
+
+    def run_key(self, slot: int) -> str:
+        if self.repeat_count is not None and slot >= self.template_slot:
+            return str(self.template_slot)
+        return str(slot)
 
     def run_keys(self) -> tuple[str, ...]:
         if not self.child_slots:
             return (LEAF_RUN,)
-        return (LEAD_RUN,) + tuple(
-            str(slot) for slot in range(len(self.child_slots))
+        span = (
+            self.template_slot + 1
+            if self.repeat_count is not None
+            else len(self.child_slots)
         )
+        return (LEAD_RUN,) + tuple(str(slot) for slot in range(span))
 
 
 @dataclass(frozen=True, slots=True)
@@ -478,7 +497,18 @@ def _class_layout(name: str, entry: Mapping[str, object]) -> ClassLayout:
                 note=str(item.get("note", "")),
             )
         )
-    repeat = entry.get("repeat_count")
+    raw_repeat = entry.get("repeat_count")
+    repeat: RepeatField | None = None
+    if isinstance(raw_repeat, Mapping) and REPEATED_SLOT in slots:
+        run = str(raw_repeat.get("run", ""))
+        at = int(raw_repeat.get("at", -1))
+        width = int(raw_repeat.get("width", 0))
+        if not run or at < 0 or width not in (1, 2, 4):
+            raise ArchiveError(f"repeat_count of {name!r} is malformed")
+        if len(slots) < 2:
+            raise ArchiveError(f"repeat_count of {name!r} has no template slot")
+        repeat = RepeatField(run=run, at=at, width=width)
+    unresolved = (REPEATED_SLOT in slots or raw_repeat is not None) and repeat is None
     return ClassLayout(
         name=name,
         child_slots=slots,
@@ -487,7 +517,8 @@ def _class_layout(name: str, entry: Mapping[str, object]) -> ClassLayout:
         confidence=str(entry.get("confidence", "partial")),
         source=str(entry.get("source", "")),
         repeat_note=str(entry.get("repeat_note", "")),
-        repeat_rule="" if repeat is None else str(repeat),
+        repeat_count=repeat,
+        repeat_unresolved=unresolved,
     )
 
 
@@ -497,6 +528,7 @@ class _Frame:
     class_name: str
     layout: ClassLayout
     slot: int
+    total: int
 
 
 def _scalar(blob: bytes, offset: int, width: int) -> int:
@@ -600,6 +632,40 @@ def _run_length(
     return length
 
 
+def _repeat_total(
+    blob: bytes,
+    run_start: int,
+    layout: ClassLayout,
+    offset: int,
+    base: int,
+) -> int:
+    repeat = layout.repeat_count
+    if repeat is None:
+        raise SegmentationError(
+            layout.name,
+            LEAD_RUN,
+            offset,
+            "a repeated child count was requested without a repeat_count rule",
+            base=base,
+        )
+    try:
+        count = _scalar(blob, run_start + repeat.at, repeat.width)
+    except ArchiveError as error:
+        raise SegmentationError(
+            layout.name, repeat.run, offset, str(error), base=base
+        ) from error
+    template = layout.template_slot
+    if count < 0 or template < 0:
+        raise SegmentationError(
+            layout.name,
+            repeat.run,
+            offset,
+            f"repeated child count {count} is not usable",
+            base=base,
+        )
+    return template + count
+
+
 def _advance(
     blob: bytes,
     cursor: int,
@@ -626,6 +692,7 @@ def _segment_walk(
     base: int,
     layouts: LayoutTable,
     header_size: int,
+    segments: list[StaticSegment],
     progress: list[int],
 ) -> tuple[StaticSegment, ...]:
     if base < 1:
@@ -635,7 +702,6 @@ def _segment_walk(
             f"stream header of {header_size} bytes does not fit a "
             f"{len(blob)} byte stream"
         )
-    segments: list[StaticSegment] = []
     frames: list[_Frame] = []
     class_names: dict[int, str] = {}
     object_owner: dict[int, str] = {}
@@ -728,18 +794,30 @@ def _segment_walk(
                 )
             if layout.child_slots:
                 amount = _run_length(blob, cursor, layout, LEAD_RUN, offset, base)
-                cursor = _advance(
-                    blob, cursor, amount, layout, LEAD_RUN, offset, base
+                cursor = _advance(blob, cursor, amount, layout, LEAD_RUN, offset, base)
+                frame = _Frame(
+                    node=node,
+                    class_name=name,
+                    layout=layout,
+                    slot=0,
+                    total=(
+                        -1
+                        if layout.repeat_count is not None
+                        else len(layout.child_slots)
+                    ),
                 )
-                frames.append(
-                    _Frame(node=node, class_name=name, layout=layout, slot=0)
-                )
+                if (
+                    layout.repeat_count is not None
+                    and layout.repeat_count.run == LEAD_RUN
+                ):
+                    frame.total = _repeat_total(
+                        blob, cursor - amount, layout, offset, base
+                    )
+                frames.append(frame)
                 pushed = True
             else:
                 amount = _run_length(blob, cursor, layout, LEAF_RUN, offset, base)
-                cursor = _advance(
-                    blob, cursor, amount, layout, LEAF_RUN, offset, base
-                )
+                cursor = _advance(blob, cursor, amount, layout, LEAF_RUN, offset, base)
         segments.append(
             StaticSegment(
                 index=node,
@@ -761,22 +839,27 @@ def _segment_walk(
             continue
         while frames:
             frame = frames[-1]
-            key = str(frame.slot)
-            amount = _run_length(
-                blob, cursor, frame.layout, key, segments[frame.node].offset, base
-            )
-            cursor = _advance(
-                blob,
-                cursor,
-                amount,
-                frame.layout,
-                key,
-                segments[frame.node].offset,
-                base,
-            )
-            if frame.slot + 1 < len(frame.layout.child_slots):
+            key = frame.layout.run_key(frame.slot)
+            origin = segments[frame.node].offset
+            run_start = cursor
+            amount = _run_length(blob, cursor, frame.layout, key, origin, base)
+            cursor = _advance(blob, cursor, amount, frame.layout, key, origin, base)
+            repeat = frame.layout.repeat_count
+            if repeat is not None and frame.total < 0 and repeat.run == key:
+                frame.total = _repeat_total(blob, run_start, frame.layout, origin, base)
+            limit = frame.total if frame.total >= 0 else frame.layout.template_slot
+            if frame.slot + 1 < limit:
                 frame.slot += 1
                 break
+            if frame.total < 0:
+                raise SegmentationError(
+                    frame.class_name,
+                    key,
+                    origin,
+                    "the repeated child count was not read before the repeated "
+                    "slots began",
+                    base=base,
+                )
             frames.pop()
         segments[node].end = cursor
         if not frames and cursor > len(blob):
@@ -811,12 +894,15 @@ def segment(
     header_size: int = STREAM_HEADER_SIZE,
 ) -> tuple[StaticSegment, ...]:
     progress = [0, 0]
+    reached: list[StaticSegment] = []
     try:
-        return _segment_walk(blob, base, layouts, header_size, progress)
+        return _segment_walk(blob, base, layouts, header_size, reached, progress)
     except SegmentationError as error:
         if error.progress < 0:
             error.progress = progress[0]
             error.depth = progress[1]
+        if not error.reached:
+            error.reached = tuple(reached)
         raise
 
 
@@ -867,9 +953,7 @@ def build_model(
                 )
             )
         elif item.kind == NULL_KIND:
-            model.nodes.append(
-                Node(kind=NULL_KIND, body=body, origin=item.offset)
-            )
+            model.nodes.append(Node(kind=NULL_KIND, body=body, origin=item.offset))
         else:
             raise ArchiveError(
                 f"unsupported tag kind {item.kind!r} at offset {item.offset}"

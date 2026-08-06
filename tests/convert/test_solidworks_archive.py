@@ -127,11 +127,26 @@ def test_recorded_segmentation_round_trips_byte_identically(label: str) -> None:
     payload = _recorded(label)
     blob = _recorded_stream(payload)
     segments = _static_segments(blob, payload)
-    model = build_model(
-        blob, segments, payload["base_map_index"], segments[0].offset
-    )
+    model = build_model(blob, segments, payload["base_map_index"], segments[0].offset)
     assert len(model.nodes) == payload["object_count"]
     assert model.emit() == blob
+
+
+@pytest.mark.parametrize("label", RECORDED_LABELS)
+def test_static_segmentation_agrees_with_the_recorded_offsets(label: str) -> None:
+    payload = _recorded(label)
+    blob = _recorded_stream(payload)
+    layouts = _layouts()
+    expected = [item["offset"] for item in payload["segments"]]
+    header = payload["segments"][0]["offset"]
+    try:
+        produced = segment(blob, payload["base_map_index"], layouts, header_size=header)
+        reached = [item.offset for item in produced]
+    except SegmentationError as failure:
+        reached = [item.offset for item in failure.reached]
+        assert failure.offset in expected, (label, failure.offset)
+    assert reached
+    assert reached == expected[: len(reached)], label
 
 
 @pytest.mark.parametrize("label", RECORDED_LABELS)
@@ -317,7 +332,9 @@ def test_segment_refuses_an_opaque_leaf_run() -> None:
             ],
         }
     )
-    blob = b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + b"\x00" * 8
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + b"\x00" * 8
+    )
     with pytest.raises(SegmentationError) as failure:
         segment(blob, 109, layouts)
     assert failure.value.class_name == "solo"
@@ -427,7 +444,13 @@ def test_string_and_count_and_conditional_rules_measure_a_run() -> None:
             "child_slots": [],
             "runs": {},
             "variable_runs": [
-                {"slot": "leaf", "rule": "count", "at": 2, "count_width": 2, "stride": 4},
+                {
+                    "slot": "leaf",
+                    "rule": "count",
+                    "at": 2,
+                    "count_width": 2,
+                    "stride": 4,
+                },
                 {"slot": "leaf", "rule": "string", "at": 1, "tail": 0},
                 {
                     "slot": "leaf",
@@ -453,9 +476,7 @@ def test_string_and_count_and_conditional_rules_measure_a_run() -> None:
         + b"\x00" * 8
         + b"\x00" * 3
     )
-    blob = (
-        b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + body
-    )
+    blob = b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + body
     segments = segment(blob, 109, layouts)
     assert len(segments) == 1
     assert segments[0].end == len(blob)
@@ -517,7 +538,9 @@ def test_a_count_rule_without_a_width_is_refused() -> None:
             "variable_runs": [{"slot": "leaf", "rule": "count", "at": 0}],
         }
     )
-    blob = b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + b"\x00" * 4
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + b"\x00" * 4
+    )
     with pytest.raises(SegmentationError) as failure:
         segment(blob, 109, layouts)
     assert "count width" in str(failure.value)
@@ -532,7 +555,9 @@ def test_a_conditional_rule_without_a_predicate_is_refused() -> None:
             "variable_runs": [{"slot": "leaf", "rule": "conditional", "at": 0}],
         }
     )
-    blob = b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + b"\x00" * 4
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + b"\x00" * 4
+    )
     with pytest.raises(SegmentationError) as failure:
         segment(blob, 109, layouts)
     assert "predicate" in str(failure.value)
@@ -568,8 +593,14 @@ def test_shipped_layout_table_matches_the_recorded_classes() -> None:
         assert entry.confidence in {"confirmed", "partial", "not found"}
         assert entry.source
         if entry.confidence == "confirmed":
-            assert set(entry.run_keys()) <= set(entry.runs)
             assert not entry.repeats
+            for key in entry.run_keys():
+                elements = entry.variable_runs.get(key, ())
+                assert key in entry.runs or elements, (name, key)
+                assert all(element.rule != "opaque" for element in elements), (
+                    name,
+                    key,
+                )
         for slot, elements in entry.variable_runs.items():
             assert elements
             assert slot in set(entry.run_keys()) | {"lead"}
@@ -608,6 +639,7 @@ def test_fixture_segmentation_failures_name_the_blocking_class() -> None:
         assert report.blocking_class, name
         assert report.blocking_slot, name
         assert report.blocking_offset >= STREAM_HEADER_SIZE, name
-        assert report.blocking_class in layouts.classes or report.blocking_class.startswith(
-            "external#"
+        assert (
+            report.blocking_class in layouts.classes
+            or report.blocking_class.startswith("external#")
         ), name

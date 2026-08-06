@@ -103,9 +103,7 @@ def slot_names(
 
 
 def child_counts(solver: solve_runs.Solver) -> Dict[str, collections.Counter]:
-    table: Dict[str, collections.Counter] = collections.defaultdict(
-        collections.Counter
-    )
+    table: Dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     for label, segments in solver.segments.items():
         kids = solver.kids[label]
         for node, item in enumerate(segments):
@@ -116,9 +114,7 @@ def child_counts(solver: solve_runs.Solver) -> Dict[str, collections.Counter]:
 
 
 def observed_lengths(solver: solve_runs.Solver) -> Dict[str, collections.Counter]:
-    table: Dict[str, collections.Counter] = collections.defaultdict(
-        collections.Counter
-    )
+    table: Dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     for label, segments in solver.segments.items():
         kids = solver.kids[label]
         ends = solver.end
@@ -147,12 +143,218 @@ def observed_lengths(solver: solve_runs.Solver) -> Dict[str, collections.Counter
     return table
 
 
+def leaf_instances(
+    solver: solve_runs.Solver,
+) -> Dict[str, List[dict]]:
+    table: Dict[str, List[dict]] = collections.defaultdict(list)
+    for label, segments in solver.segments.items():
+        kids = solver.kids[label]
+        for node, item in enumerate(segments):
+            if item["kind"] in NO_BODY_KINDS or kids[node]:
+                continue
+            end = solver.end[(label, node)]
+            if end is None:
+                continue
+            parent = item["parent"]
+            if parent < 0:
+                context = ("<root>", -1)
+            else:
+                context = (
+                    segments[parent]["class_name"],
+                    kids[parent].index(node),
+                )
+            table[item["class_name"]].append(
+                {
+                    "label": label,
+                    "node": node,
+                    "head": item["offset"] + item["header"],
+                    "span": end - item["offset"] - item["header"],
+                    "context": context,
+                }
+            )
+    return table
+
+
+def string_length(blob: bytes, offset: int) -> int:
+    if blob[offset : offset + 3] != b"\xff\xfe\xff":
+        return -1
+    units = blob[offset + 3]
+    head = 4
+    if units == 0xFF:
+        units = int.from_bytes(blob[offset + 4 : offset + 6], "little")
+        head = 6
+    end = offset + head + 2 * units
+    if end > len(blob):
+        return -1
+    return head + 2 * units
+
+
+def rebalance_string_leaves(
+    solver: solve_runs.Solver, streams: Mapping[str, bytes]
+) -> Tuple[Dict[str, int], Dict[Tuple[str, int], int]]:
+    tails: Dict[str, int] = {}
+    shifts: Dict[Tuple[str, int], int] = {}
+    for name, rows in sorted(leaf_instances(solver).items()):
+        if any(row["label"] not in streams for row in rows):
+            continue
+        spans = {row["span"] for row in rows}
+        if len(spans) < 2:
+            continue
+        measured: List[Tuple[dict, int]] = []
+        for row in rows:
+            length = string_length(streams[row["label"]], row["head"])
+            if length < 0 or length > row["span"]:
+                measured = []
+                break
+            measured.append((row, row["span"] - length))
+        if not measured:
+            continue
+        floor = min(tail for _, tail in measured)
+        deltas: Dict[Tuple[str, int], set] = collections.defaultdict(set)
+        for row, tail in measured:
+            deltas[row["context"]].add(tail - floor)
+        if any(len(values) != 1 for values in deltas.values()):
+            continue
+        owners = slot_owners(solver)
+        conflict = False
+        for context, values in deltas.items():
+            delta = next(iter(values))
+            if delta and (context == ("<root>", -1) or owners.get(context) != {name}):
+                conflict = True
+        if conflict:
+            continue
+        tails[name] = floor
+        for context, values in deltas.items():
+            delta = next(iter(values))
+            if delta:
+                shifts[context] = shifts.get(context, 0) + delta
+    return tails, shifts
+
+
+def slot_owners(solver: solve_runs.Solver) -> Dict[Tuple[str, int], set]:
+    table: Dict[Tuple[str, int], set] = collections.defaultdict(set)
+    for label, segments in solver.segments.items():
+        kids = solver.kids[label]
+        for node, item in enumerate(segments):
+            if item["kind"] in NO_BODY_KINDS:
+                continue
+            for slot, child in enumerate(kids[node]):
+                entry = segments[child]
+                table[(item["class_name"], slot)].add(
+                    POLYMORPHIC_SLOT
+                    if entry["kind"] in NO_BODY_KINDS
+                    else entry["class_name"]
+                )
+    return table
+
+
+def parent_instances(solver: solve_runs.Solver) -> Dict[str, List[dict]]:
+    table: Dict[str, List[dict]] = collections.defaultdict(list)
+    for label, segments in solver.segments.items():
+        kids = solver.kids[label]
+        for node, item in enumerate(segments):
+            if item["kind"] in NO_BODY_KINDS or not kids[node]:
+                continue
+            own_end = solver.end[(label, node)]
+            if own_end is None:
+                continue
+            slots = kids[node]
+            child_ends = [solver.end[(label, child)] for child in slots]
+            if any(value is None for value in child_ends):
+                continue
+            table[item["class_name"]].append(
+                {
+                    "label": label,
+                    "head": item["offset"] + item["header"],
+                    "offsets": [segments[child]["offset"] for child in slots],
+                    "ends": child_ends,
+                    "names": [
+                        (
+                            POLYMORPHIC_SLOT
+                            if segments[child]["kind"] in NO_BODY_KINDS
+                            else segments[child]["class_name"]
+                        )
+                        for child in slots
+                    ],
+                    "own_end": own_end,
+                }
+            )
+    return table
+
+
+def repeat_shape(
+    solver: solve_runs.Solver, streams: Mapping[str, bytes], name: str
+) -> dict | None:
+    rows = parent_instances(solver).get(name, [])
+    if not rows or any(row["label"] not in streams for row in rows):
+        return None
+    if len({len(row["names"]) for row in rows}) < 2:
+        return None
+    smallest = min(len(row["names"]) for row in rows)
+    for template in range(smallest + 1):
+        templates = {
+            row["names"][slot]
+            for row in rows
+            for slot in range(template, len(row["names"]))
+        }
+        if len(templates) != 1 or POLYMORPHIC_SLOT in templates:
+            continue
+        values = set()
+        for row in rows:
+            for slot in range(template, len(row["names"])):
+                bound = (
+                    row["offsets"][slot + 1]
+                    if slot + 1 < len(row["names"])
+                    else row["own_end"]
+                )
+                values.add(bound - row["ends"][slot])
+        if len(values) != 1:
+            continue
+        run = LEAD_RUN if template == 0 else str(template - 1)
+        if template == 0:
+            starts = [row["head"] for row in rows]
+        else:
+            starts = [row["ends"][template - 1] for row in rows]
+        bounds = [
+            (
+                row["offsets"][template]
+                if template < len(row["offsets"])
+                else row["own_end"]
+            )
+            for row in rows
+        ]
+        span = min(bound - start for bound, start in zip(bounds, starts))
+        if span <= 0:
+            continue
+        for width in (2, 4):
+            for at in range(0, max(span - width + 1, 0)):
+                if all(
+                    int.from_bytes(
+                        streams[row["label"]][start + at : start + at + width],
+                        "little",
+                    )
+                    == len(row["names"]) - template
+                    for row, start in zip(rows, starts)
+                ):
+                    return {
+                        "template": template,
+                        "name": next(iter(templates)),
+                        "run": run,
+                        "at": at,
+                        "width": width,
+                        "template_run": next(iter(values)),
+                    }
+    return None
+
+
 def build_classes(
     solver: solve_runs.Solver,
+    streams: Mapping[str, bytes],
 ) -> Tuple[Dict[str, dict], Dict[str, int]]:
     names = slot_names(solver)
     counts = child_counts(solver)
     lengths = observed_lengths(solver)
+    string_tails, slot_shifts = rebalance_string_leaves(solver, streams)
     classes: Dict[str, dict] = {}
     statistics = {"confirmed": 0, "partial": 0, "opaque_runs": 0}
     for name in sorted(counts):
@@ -165,19 +367,44 @@ def build_classes(
             concrete = {item for item in candidates if item != POLYMORPHIC_SLOT}
             slots.append(concrete.pop() if len(concrete) == 1 else POLYMORPHIC_SLOT)
         varying = len(seen) > 1
-        if varying:
+        shape = repeat_shape(solver, streams, name) if varying else None
+        if shape is not None:
+            slots = slots[: shape["template"]] + [shape["name"], REPEATED_SLOT]
+        elif varying:
             slots.append(REPEATED_SLOT)
-        needed = (
-            [LEAF_RUN]
-            if widest == 0
-            else [LEAD_RUN] + [str(slot) for slot in range(widest)]
-        )
+        if shape is not None:
+            needed = [LEAD_RUN] + [str(slot) for slot in range(shape["template"] + 1)]
+        elif widest == 0:
+            needed = [LEAF_RUN]
+        else:
+            needed = [LEAD_RUN] + [str(slot) for slot in range(widest)]
         runs: Dict[str, int] = {}
         variable: List[dict] = []
+        opaque = 0
         for key in needed:
             full = f"{name}@{key}"
+            if shape is not None and key == str(shape["template"]):
+                runs[key] = shape["template_run"]
+                continue
             if full in solver.runs:
-                runs[key] = solver.runs[full]
+                value = solver.runs[full]
+                if key not in (LEAD_RUN, LEAF_RUN):
+                    value += slot_shifts.get((name, int(key)), 0)
+                runs[key] = value
+                continue
+            if key == LEAF_RUN and name in string_tails:
+                variable.append(
+                    {
+                        "slot": LEAF_RUN,
+                        "rule": "string",
+                        "at": 0,
+                        "tail": string_tails[name],
+                        "note": (
+                            "every traced instance opens with an ff fe ff string and "
+                            f"closes with {string_tails[name]} constant bytes"
+                        ),
+                    }
+                )
                 continue
             note = ", ".join(
                 f"{length}x{tally}"
@@ -195,24 +422,45 @@ def build_classes(
                 }
             )
             statistics["opaque_runs"] += 1
+            opaque += 1
         repeat_note = ""
         if varying:
             tally = ", ".join(
                 f"{count}x{times}" for count, times in sorted(observed.items())
             )
             repeat_note = f"child count varies across instances: {tally}"
-        confidence = "confirmed" if not variable and not varying else "partial"
+            if shape is not None:
+                repeat_note += (
+                    f"; the count sits in run {shape['run']} at offset "
+                    f"{shape['at']} as a {shape['width']} byte value and the "
+                    f"repeated slot holds {shape['name']}"
+                )
+        confidence = (
+            "confirmed"
+            if not opaque and (not varying or shape is not None)
+            else "partial"
+        )
         statistics[confidence] += 1
         entry: Dict[str, object] = {
             "confidence": confidence,
             "source": SOLVED_SOURCE,
             "child_slots": slots,
             "instances": sum(observed.values()),
-            "child_counts": [[count, times] for count, times in sorted(observed.items())],
+            "child_counts": [
+                [count, times] for count, times in sorted(observed.items())
+            ],
             "runs": {key: runs[key] for key in needed if key in runs},
         }
         if varying:
-            entry["repeat_count"] = None
+            entry["repeat_count"] = (
+                None
+                if shape is None
+                else {
+                    "run": shape["run"],
+                    "at": shape["at"],
+                    "width": shape["width"],
+                }
+            )
             entry["repeat_note"] = repeat_note
         if variable:
             entry["variable_runs"] = variable
@@ -239,15 +487,36 @@ def merge_decompiled(
     return merged, len(incoming)
 
 
+def traced_streams(traces: Sequence[Mapping[str, object]]) -> Dict[str, bytes]:
+    sys.path.insert(0, str(ROOT / "src"))
+    from convert.adapters.solidworks.container import SldprtArchive
+    from convert.adapters.solidworks.format import RESOLVED_FEATURES_STREAM
+
+    streams: Dict[str, bytes] = {}
+    for trace in traces:
+        part = Path(str(trace["part"]))
+        if not part.is_file():
+            continue
+        blob = SldprtArchive.from_bytes(part.read_bytes()).streams[
+            RESOLVED_FEATURES_STREAM
+        ]
+        if len(blob) != int(trace["stream_length"]):
+            continue
+        streams[str(trace["label"])] = blob
+    return streams
+
+
 def generate(segments_dir: Path, decompiled: Path, labels: str) -> dict:
     traces = solve_runs.load_traces(str(segments_dir), labels)
     if not traces:
         raise ValueError(f"no segmentations found under {segments_dir}")
     solver = TilingSolver(traces)
     solver.solve()
-    classes, statistics = build_classes(solver)
+    streams = traced_streams(traces)
+    classes, statistics = build_classes(solver, streams)
     classes, decompiled_count = merge_decompiled(classes, decompiled)
     return {
+        "streams_read_for_string_rules": sorted(streams),
         "version": 1,
         "source": (
             f"{SOLVED_SOURCE} + {DECOMPILED_SOURCE}"
