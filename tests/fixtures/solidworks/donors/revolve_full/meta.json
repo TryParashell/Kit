@@ -1,0 +1,68 @@
+{
+  "arc_counts": [
+    0
+  ],
+  "axis_directions": [
+    [
+      0.0,
+      1.0
+    ]
+  ],
+  "container_streams": [
+    {
+      "file": "Contents__CMgr.bin",
+      "name": "Contents/CMgr"
+    },
+    {
+      "file": "Contents__Config-0.bin",
+      "name": "Contents/Config-0"
+    },
+    {
+      "file": "Contents__Config-0-ModelHeader.bin",
+      "name": "Contents/Config-0-ModelHeader"
+    },
+    {
+      "file": "Contents__Definition.bin",
+      "name": "Contents/Definition"
+    },
+    {
+      "file": "Header2.bin",
+      "name": "Header2"
+    }
+  ],
+  "depth_present": [
+    false
+  ],
+  "donor_id": "revolve_full",
+  "feature_ids": [
+    31
+  ],
+  "feature_names": [
+    "Revolve1"
+  ],
+  "features": [
+    [
+      "revolve-boss",
+      "rectangle",
+      "front-sketch-axis",
+      "full-revolution"
+    ]
+  ],
+  "inherited_directions": [],
+  "measured": true,
+  "point_counts": [
+    4
+  ],
+  "sketch_ids": [
+    26
+  ],
+  "sketch_names": [
+    "Sketch1"
+  ],
+  "spare_equations": [],
+  "spare_plane_frames": [],
+  "spare_plane_ids": [],
+  "spare_plane_names": [],
+  "stream_bytes": 12135,
+  "swept_arc_counts": []
+}

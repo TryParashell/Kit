@@ -140,7 +140,9 @@ def extract(fixture_root: Path) -> dict[str, object]:
         "resolved_bytes": resolved_bytes,
         "container_bytes": container_bytes,
         "metadata_bytes": metadata_bytes + manifest_bytes,
-        "total_bytes": resolved_bytes + container_bytes + metadata_bytes
+        "total_bytes": resolved_bytes
+        + container_bytes
+        + metadata_bytes
         + manifest_bytes,
         "removed": [str(path.relative_to(fixture_root)) for path in removed],
     }
