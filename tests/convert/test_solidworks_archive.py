@@ -61,7 +61,7 @@ RECORDED_LABELS = (
     "vendor_ring",
 )
 FIXTURES_VERIFYING_BYTE_IDENTICALLY = 0
-CONFIRMED_CLASS_FLOOR = 38
+CONFIRMED_CLASS_FLOOR = 50
 
 
 def _layouts() -> LayoutTable:
