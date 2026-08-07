@@ -26,6 +26,7 @@ STRING_MARKER = b"\xff\xfe\xff"
 SHORT_STRING_LIMIT = 0xFF
 LONG_STRING_LIMIT = 0xFFFE
 STREAM_HEADER_SIZE = 6
+MO_VERSION_PREFIX = "_MO_VERSION_"
 DEFINITION_KIND = "definition"
 CLASS_REFERENCE_KIND = "classref"
 OBJECT_REFERENCE_KIND = "objectref"
@@ -80,6 +81,20 @@ class Tag:
     schema: int
     class_name: str
     wide: bool
+
+
+def container_mo_version(stream_names: Iterable[str]) -> int | None:
+    found: set[int] = set()
+    for name in stream_names:
+        head = str(name).replace("\\", "/").split("/", 1)[0]
+        if not head.startswith(MO_VERSION_PREFIX):
+            continue
+        digits = head[len(MO_VERSION_PREFIX) :]
+        if digits.isdigit():
+            found.add(int(digits))
+    if not found:
+        return None
+    return max(found)
 
 
 def read_tag(blob: bytes, offset: int) -> Tag:
@@ -385,10 +400,23 @@ class ClassLayout:
     repeat_note: str = ""
     repeat_count: RepeatField | None = None
     repeat_unresolved: bool = False
+    runs_by_version: Mapping[str, Mapping[int, int]] = field(default_factory=dict)
 
     @property
     def repeats(self) -> bool:
         return self.repeat_unresolved
+
+    @property
+    def constant_run_keys(self) -> frozenset[str]:
+        return frozenset(set(self.runs) | set(self.runs_by_version))
+
+    def constant_run(self, key: str, mo_version: int | None) -> int | None:
+        gated = self.runs_by_version.get(key)
+        if gated is not None and mo_version is not None:
+            length = gated.get(mo_version)
+            if length is not None:
+                return length
+        return self.runs.get(key)
 
     @property
     def template_slot(self) -> int:
@@ -470,6 +498,32 @@ def _class_layout(name: str, entry: Mapping[str, object]) -> ClassLayout:
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
             raise ArchiveError(f"run {name}@{key} is not a non negative integer")
         runs[str(key)] = int(value)
+    raw_gated = entry.get("runs_by_version", {})
+    if not isinstance(raw_gated, Mapping):
+        raise ArchiveError(f"layout entry for {name!r} has a malformed runs_by_version")
+    gated: dict[str, Mapping[int, int]] = {}
+    for key, mapping in raw_gated.items():
+        if not isinstance(mapping, Mapping):
+            raise ArchiveError(
+                f"runs_by_version {name}@{key} does not hold a version mapping"
+            )
+        by_version: dict[int, int] = {}
+        for version, value in mapping.items():
+            text = str(version)
+            if not text.isdigit():
+                raise ArchiveError(
+                    f"runs_by_version {name}@{key} names a "
+                    f"non numeric document version {text!r}"
+                )
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ArchiveError(
+                    f"run {name}@{key} at document version {text} is not a "
+                    "non negative integer"
+                )
+            by_version[int(text)] = int(value)
+        if not by_version:
+            raise ArchiveError(f"runs_by_version {name}@{key} names no version")
+        gated[str(key)] = by_version
     raw_variable = entry.get("variable_runs", ())
     if isinstance(raw_variable, str) or not isinstance(raw_variable, Sequence):
         raise ArchiveError(f"layout entry for {name!r} has a malformed variable_runs")
@@ -519,6 +573,7 @@ def _class_layout(name: str, entry: Mapping[str, object]) -> ClassLayout:
         repeat_note=str(entry.get("repeat_note", "")),
         repeat_count=repeat,
         repeat_unresolved=unresolved,
+        runs_by_version=gated,
     )
 
 
@@ -612,16 +667,25 @@ def _run_length(
     key: str,
     offset: int,
     base: int,
+    mo_version: int | None,
 ) -> int:
-    if key in layout.runs:
-        return layout.runs[key]
+    constant = layout.constant_run(key, mo_version)
+    if constant is not None:
+        return constant
     elements = layout.variable_runs.get(key)
     if not elements:
+        reason = "no constant run length and no rule recorded in the layout table"
+        if key in layout.runs_by_version:
+            reason += (
+                f" for document version {mo_version}"
+                if mo_version is not None
+                else " and no document version was supplied"
+            )
         raise SegmentationError(
             layout.name,
             key,
             offset,
-            "no constant run length and no rule recorded in the layout table",
+            reason,
             base=base,
         )
     length = 0
@@ -694,6 +758,7 @@ def _segment_walk(
     header_size: int,
     segments: list[StaticSegment],
     progress: list[int],
+    mo_version: int | None,
 ) -> tuple[StaticSegment, ...]:
     if base < 1:
         raise ArchiveError(f"archive map base {base} must be positive")
@@ -793,7 +858,9 @@ def _segment_walk(
                     base=base,
                 )
             if layout.child_slots:
-                amount = _run_length(blob, cursor, layout, LEAD_RUN, offset, base)
+                amount = _run_length(
+                    blob, cursor, layout, LEAD_RUN, offset, base, mo_version
+                )
                 cursor = _advance(blob, cursor, amount, layout, LEAD_RUN, offset, base)
                 frame = _Frame(
                     node=node,
@@ -816,7 +883,9 @@ def _segment_walk(
                 frames.append(frame)
                 pushed = True
             else:
-                amount = _run_length(blob, cursor, layout, LEAF_RUN, offset, base)
+                amount = _run_length(
+                    blob, cursor, layout, LEAF_RUN, offset, base, mo_version
+                )
                 cursor = _advance(blob, cursor, amount, layout, LEAF_RUN, offset, base)
         segments.append(
             StaticSegment(
@@ -842,7 +911,9 @@ def _segment_walk(
             key = frame.layout.run_key(frame.slot)
             origin = segments[frame.node].offset
             run_start = cursor
-            amount = _run_length(blob, cursor, frame.layout, key, origin, base)
+            amount = _run_length(
+                blob, cursor, frame.layout, key, origin, base, mo_version
+            )
             cursor = _advance(blob, cursor, amount, frame.layout, key, origin, base)
             repeat = frame.layout.repeat_count
             if repeat is not None and frame.total < 0 and repeat.run == key:
@@ -892,11 +963,16 @@ def segment(
     layouts: LayoutTable,
     *,
     header_size: int = STREAM_HEADER_SIZE,
+    mo_version: int | None = None,
 ) -> tuple[StaticSegment, ...]:
+    if mo_version is not None and mo_version < 0:
+        raise ArchiveError(f"document version {mo_version} must not be negative")
     progress = [0, 0]
     reached: list[StaticSegment] = []
     try:
-        return _segment_walk(blob, base, layouts, header_size, reached, progress)
+        return _segment_walk(
+            blob, base, layouts, header_size, reached, progress, mo_version
+        )
     except SegmentationError as error:
         if error.progress < 0:
             error.progress = progress[0]
@@ -1051,9 +1127,12 @@ def verify(
     layouts: LayoutTable,
     *,
     header_size: int = STREAM_HEADER_SIZE,
+    mo_version: int | None = None,
 ) -> VerifyReport:
     try:
-        segments = segment(blob, base, layouts, header_size=header_size)
+        segments = segment(
+            blob, base, layouts, header_size=header_size, mo_version=mo_version
+        )
     except SegmentationError as error:
         return VerifyReport(
             length=len(blob),

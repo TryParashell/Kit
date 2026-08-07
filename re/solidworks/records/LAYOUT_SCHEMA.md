@@ -95,6 +95,51 @@ must then name the field holding the count.
 Constant run lengths in bytes, keyed as above. Copy these from `solve_runs.py` output rather than
 re-deriving them by hand.
 
+### `runs_by_version`
+
+Some runs are constant within one document generation and a different constant in another,
+because `Serialize` gates a field on the document version that `su_CArchive` carries for the whole
+stream. `runs_by_version` records that:
+
+```json
+"moCompFeature_c": {
+  "confidence": "confirmed",
+  "child_slots": ["*"],
+  "runs": { "lead": 0 },
+  "runs_by_version": { "0": { "0": 85 }, "18000": { "0": 89 } }
+}
+```
+
+Each key is a **minimum document version**, written as a decimal string, and each value is a run
+map keyed exactly like `runs`. For a stream of version `V` the applicable gate is the one with the
+greatest key `<= V`; the keys that gate names override `runs`, and every other key falls through to
+`runs`. A `"0"` gate is therefore the default, because every document version is non-negative. When
+no gate is `<= V`, only `runs` applies, and a run that neither `runs` nor the selected gate names is
+refused with the version in the message rather than guessed.
+
+Gates must be non-negative, unique and non-empty, and may only name keys the class actually has.
+`runs` stays the place for a length that does not depend on the generation, so a class normally
+carries both.
+
+The version is a property of the stream, not of the bytes inside a run, and that is the point. A
+positional `conditional` rule cannot express a length difference that sits inside the run whose
+length is being computed, because the predicate's own offset would depend on the answer. The
+document version is uniform per stream and known before segmentation starts, so it is the only
+sound discriminator for this shape.
+
+#### Where the version comes from
+
+`document_version()` in `src/convert/adapters/solidworks/archive.py` reads it from the container's
+storage names: a `.SLDPRT` carries `_MO_VERSION_<n>/Biography`, `_MO_VERSION_<n>/History` and
+friends, and `<n>` is the modelling-object serialization generation. The highest `<n>` present
+wins. That is preferred over `swXmlContents/Features` `swVersion`, which agrees on all nine traced
+parts but is an optional XML side-car rather than part of the container's own structure. When no
+`_MO_VERSION_*` storage is present the caller's `default` applies, and the shipped default is
+`DEFAULT_DOCUMENT_VERSION = 18000`, the generation Kit itself authors.
+
+`segment()`, `verify()` and `build_model()` all take `version` as a keyword with that default, and
+`VerifyReport.version` records which one a report was produced with.
+
 ### `variable_runs`
 
 One entry per run that is not a constant. `rule` is one of:

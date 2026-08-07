@@ -767,58 +767,6 @@ _BASE_BODY_COUNTERS = {
 }
 _RECTANGLE_BOSS_POINT_OFFSETS = (6119, 6297, 6459, 6621)
 _RECTANGLE_BOSS_DEPTH_OFFSET = 10092
-_BASE_RECTANGLE_BOSS_PARTITION = (
-    b"c-jHZ4l(g03;+Nl9o2E#fk>jLSeUXKiSL<88UO$U3;+Ol0hO5hb5unZ$IqP!C{Hth;wuml9~h7%AOb33oJ`<Ck_nj!A%I>cn"
-    b"IXhX5=<sQ05J%PsK|<n;&XL<;`{a6R#CNo!2SnXwfn<byH&g85Bq!ebNcqZnFJzi-{kh=obx@8?mpdjTGAp?x4tsd8gEWFxt"
-    b"Yoaw=r3H@BZvyv8UKG(7&v*YcQWJ=5v*uBb9vvxqP9JAFMo(9~^>MxoS;yO>OO3AQq+*n?2jry1K@zSyf%VMt+4TlAoXOi(A"
-    b"&0AKDlFk2vo2`v(dmg`WO=^f!9f6|%)*Pgh=k5hsywXVJ^$_j-k%p`vWjp?G;ue=dK>>&x!<2KMe9$``?PoLqcHI4-T?#1{;"
-    b"8?aTLNy?kG1K9}q1?^X#zDOc52*2`s!S^29tJ0&6xPt?4%WgbV$Xo%ck|50V0*-P<blCg=YoU%UGyVC{^_U8x7%GHmATi!V^"
-    b"+@H%1j(8J%PPlVILKvi2I8+)fP_8u`v3@4a>&bc78l`Dn`+5pFnN29?76uOHhl-wsu<@QEj8VvM$uya6BV_}*@$5zj;%rEcy"
-    b"!`j-m)84KM<R|R*U`CNX2?u4I18O~ls5$M+b!3bIM%zf3;FJB!85TOf;P`7Bz96qn5(%uQ+M90647bAm^+=mk}|`Q7P=0s<q"
-    b"{KF+@nOF*}<3zB_gRY25y!c9!=GEcy6=T=x*AaX;13gYe}{?S+H`MC-VW@r{YtCL0l-YbbaH>Oh-EIncdddmPj@yI=or~6#;"
-    b"00+z3?tIMiiMM52;{9FzGWRwC7yYHJNq7RXJg3PLd*<|~FmQOf1U5T!oZoOUxE)|8v@{FV@8%6KXW+DwSzZJAV4JmaRCy;`r"
-    b"9{ci(wv)n4TDHJg_<qGyV#;J0-#UQmN6K+eg6ysL8T`DGHsADCw=3~s1+YAPlBsN=TZkI)}_;P13W<0zzXBrdcN=3Ro*<Wny"
-    b"@7kB`@6P8e#3HGbJ1&R7{qe&3(s(SC#p!mpsio0PxEZyjIo_1?+<LFgVpYl#x%1kv7Reor@pQ)XT}suv4IOUtCa)nG&$P8Fs"
-    b"D)f2OXaR>gPbjQ#+fKJD4e7+#P61SLIAsH#-n4LoH2udsfY9Bu4Hq@%eeTJ&cvHq#*w1nIKnQRxDzKKY2+1Xw%pSYPnh5sTX"
-    b"bxm+*_Y&Z%$`glkq0cl4YB2#t6wpQ%o7TdYPGgT>$q<!>oimL(d7XII=$vi{lKtGy4aMgW3L}z8?RWD3C+y`EzIQ<w(d6`sv"
-    b"Ux=fbhh!a!GV^uJ{3oun~JS#T~0Swq;L>PZ#PoH3G@NEcl_IF|G8$O`^z$H-_RkDI~!b-3!%Ylr`~>FWhYE}iu2x}g3I#%m~"
-    b"-0=`9K<VulFP-n}^-^CuaxIrCaRE&{rMYbYcEj8i<#sx-MIc9l=$+`)5+TOuzUtaz}RO0?Qrf0)WnFZ?|z(jq&#o11$d<>%K"
-    b"Y5SKypF4Y@pY|$-S7W$FC@S;DOpaef=K=oL$b%tcRAOUhaILJ9^{_o855w|E6^mjGK)2D+;SEw(B2ys`LaT%}N9ttbWPd`xD"
-    b"xeBkM0LjH!8$uB0X?YU*a%-Ue2;>h2=Ff1NrUE>dC*0Y@YS35#tAkhpfy2Df>smgx&lTLzIyl?WD|Ia2^cld8li2Hgv<;uLO"
-    b"UUvG7q}I;mBrYG$}PD7%|2iak)Qjg{#q6)U4sGM&waQDH6ygnK?lu#rQUPgb-9Sk7;@t716WvMmlZ8zgo6W5NTt)or&H7SBL"
-    b"DRw{8U@8xXmfP6r`xk$8zng=~km5LyfW@yS6BovdK0gagC@YrE71K?njF^2N~M$Xb@iIyl>m2|KFfhB3z2#n9HtF5WRXl<xs"
-    b"!({6c;-j*tc*O}oC2rcYgkKUdt&PTmnuyRAoJCN`s3t88442RY6Hl}X_Azn>y_X;i|?TEG0X)t>=My+f+h)|N*)}*mjmFgyR"
-    b"nWEhc?=aGhs&qBd+e(yfWlQD!{ce=*Hey?u)eX3#E;y>xMNB7Rv*dZl^wP}OZu)DO%N)IjR)GE(Y;#J`*R#oX%3jFoQaL@nU"
-    b"W~i^fOI3X&(ascsh47hv8;|(O*tp<X{igcm){i*<1EctK<tzrRs8=a$VF(@bI8Hkz4Al}M6e=)I>>vYR(num#S;u^jCuhplt"
-    b"2WF%SuQfG8u|k^}@5EBvyT9Zn1|aii!esmv$G*`hQ2oWibkLmm?~=X2TWOz$Wfhd#wu1u)4{c7#l#v<mm{Ig8DL5<%kMPWL("
-    b"8&Hhq`cYgG(D-$Xmj*!~hPf*1$TlLIsw5Xuo1sVz~FViz^3y;jA3=(_2;8GG^yDgspjWKahxnTu{9NL^u|GA#Lr)n2RON$7i"
-    b"M=NMaA5~u(=r~~MrE>V#Kf_xRKXlAQ+tG!mmO6XbIs~IC}Ts9Y1RS`4i&Nlpbh=^}7o3@oSMmi9aiBmENehjka=w`C?8d8>?"
-    b"lB9r`9=kF`o-ZPuG6E(u=(kc0q@oP-j+sMch(y#%-r3ANSm~mXZiP@SeJnCNtjE(3vW=V=4Q7F_QeAxvA0VO`hKoM8T6zFon"
-    b"v46)ohW8Pet?wPN90!N#lg2UW2E~aRO3W9y`pABy*3>Hat|qLommmauSXc(hSMpAGlu(dO=TXsrj^XcIx<R{oPrLs{qzG*KQ"
-    b"VP>WlL7orQiZ)>rwc$1XDd~dc0!h^3smmZFsrInBP|=bH{K_P<Aj}3VJ6yfU@gX&~QxJuQjvg$U#`2=L}mehYW2*4s)68WOR"
-    b"p&gaCQy?Eu{G18BDvZ);&&V#E|ypIK0JIXE)H`!v9va)jPNIVw*9tQX+zax?@Ugzf@-%m>zPEzkY1>Cw?C$GEUgor7UBrEYQ"
-    b">x8tL>4(YW33dfFvB~PPf>TM8&+agR^l|VlYlb+*)WaVQeRtGyPr~|C2RE%1NkUkekVQn1`<F*U?w-L9e{kUmY<ED~&oDa)0"
-    b"xaU+^ps-T<l}ex~r~{tSpfMLnVK<xzEpTvk2n$B5(5KHXW5F}9={JYQVe|?XOpZaIAkZAt!T4y<m<yz?tCOJx!$f5*7Chs}K"
-    b")b=JJ_+kfEWTaxEF#C{ggj@KWf^@TGE1SHl9R0b)6gAxL0+`W_BiwxksO5PuxL+$<1gqFP|iRZHZmuno{?7l@^j?5-o^5XRd"
-    b"AY-<0u%Gmr<+g^*JklAfYMmnciW`8-+s%(%tYnfS%(03jdDboQ{m>$Es95F>v@->hYpT5fH^u1ig=G&`<F`2AYQcSvd##t0i"
-    b"c!C}Y>BJx83Mmwc%0u=vvF=pRK|Q~2}p8fdSVNWZGwQ%aX1A?)v^NT0*|^VaV-<V|baYtRpau9v^_asjTlO3+`w3i^5IM?lY"
-    b"G*HKzJHIBS3?^yH;&<}yGdG3h33)g!k=x<#G{Rs3C&^xhf1f26m_I>%IMSmCi0nnE-u1WHOd{Bb^-c`^KK|cuka_l;YoMuBu"
-    b"K9oP%S^i*3d7b5HaOy=+Cai)oBO3uj99<>)Nvpi?^PbG>ucipzh{KAZ_{;eytru9%dE@U0v-Xiic^k@Pl!(>%4k%_NnZ6?*^"
-    b"`2ri``X{Qf?U+fy@{NzFyB%~Ug|wz<)&lB<?GxDc_VB`an6K&N1p0^(aJh<xc4mW`F!MyxsPb-nMF=;^viHd8NX(SKP*r9Sw"
-    b"4}_kEaFvR^tD5f(rJ_Y55qmPvtXq?&oq*zK}2FD}K%47%zD=ei1l@B)h~UyH70jYZKcD7{U&yg!VCLzU()a_9?XIxP3?A`pn"
-    b"Y4wY1Nmo#NNTC{mvr+IPJD`T88%%Y3j#k-BJT-&?7RP|os8XB3$)ETS(Jp)cf#1<)?yOW=j?!I#k9;6peH*H?!218-m3SJ2+"
-    b"%5)(ygnW6n?Da)W-;3SVC<HzMEN&9K=CrEzL8+BBEtovt&DRuu^Z%W<2f7bGgxp6!4gZ=eASQOuj^j1ixg3XcdxYG=9!VEFD"
-    b"N%mcl+%n7@=eaEEdUNDk-j%lf4eh*be@%PDw(m2X`29bOCS1(`000000001@0ssIb9o2E#fk>jLSeUXKiSL<Y1ONbn0ssJb0"
-    b"fm!USJOZgfNw1d2m*@d_@pO~;@W~DA}+OpQ~`n34VM_2DMZs2+lb)4@B6;*8}2*!C;SP%`sVQ;;Fki5FPi4dcjwN{WM<MdhD"
-    b"D^RQj0VP8p8FVh*lG-tJWr)%65!&i55*M!%?Qz+O5TtByE+_I#nudB@<d%xzAr(TEYDj!oga7u<6?8*ZpNaU%7mzQ^eaZpQV"
-    b"?eP_p_7`oxp@iS%Up2QG!K3Nsxg(j=cGEU)lK{1Sh_FYrj1BF*v~dnI4S$T*oJ6J-$u!4FHx`JfS2(GI`@;<YkX*1&q$AVm_"
-    b"BNzx9R!G;7Rp#!$UOfacypuQO#h(iSC!$#2Qx2W4hTn3%2VVV?3DKl%uGl=%UUf2f*U>*5G%>M|Z9>k~daeNM+g)_wG@lkvc"
-    b"U%;2~C42*4$9M2;d>?n=hxh^PB)*65!WH6M_$KTkeuR(VYxpYcCq9J_<CFLVY-4UIP|!_&H@WS22VTPZ>LAS;=iw&Y#`?oh4"
-    b"^h|x2K!Nkmr)a<W)|^s;u=^@yM^{#;!3EXy%Mj0TBzndErx}>vvNF}Tt4-AQY_P9H2GY{&tV_4+2c`+I+Z6qV>a*D@u&DLbA"
-    b"5u};K%qi?!oV|hkuzzRB>?N2xY}py50LjJfWP9q}^>>3FZAsE88|4$BHWXCZ1q0lt;@{G2OP(4o@Q$D6$f!>eAyzhn|eZ(#m"
-    b"m1_Lza(-+A|Of$`~RyNVmSinl7$v=VLZ9hsgY_tAs*>Zais@>M)7GJ;Y5aSrvlpUcqk=LXi6C11D>d}Kof!|WFHQPNA1yBWi"
-    b"e0=MDKbPVp(|7PPZ**%9Jf6a#8U%+gxH~;_u000000Q{9@W&"
-)
 _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE = MappingProxyType(
     {
         "application": "SOLIDWORKS 2025",
@@ -883,13 +831,6 @@ _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE = MappingProxyType(
 )
 _BLIND_END_SPEC = bytes.fromhex(
     "ffff01000b006d6f456e64537065635f63000001000000000000000000000000000000000000000000"
-)
-_BASE_BIOGRAPHY = (
-    b"c-s5_pOJx=AvfPCGe5m3u^^)|KADMufg!++fx+at90Mbe%?ZRjKnxP+Vt{}zsSFJN|NUp+lwd#tAQ4*fS)c#E>KA"
-    b"?o=qN)?pqz*^gB3#zLpXycgCBzngFlcJ4CEIxR044cLn=cqgE4~<P=pzz*}>nH6=Ehgc7157bRen%7>XG38Pb7dB"
-    b"G5bq1~-OGh8&>T#Xz}Wpk5!KDK0=0{2786yn!ML49-CHMGOTv<T32wfY=iPc5eac@<I@KZ=kzM!0t^1+Frt-2V?~"
-    b"Sb%FdBf})2|+(x9q;&!?H1B*pUcNrN9R%MeM-T~`*hzM_lDrSf(u;_x*Uo;r;_#UB)kUa6B1J#qyFKq+%Gec7-P("
-    b"Py<M0Ua=n2DGo*j-MHPJUP#gSg5N=&oX5>Pi9n1jI*H4FG46z}x"
 )
 _HEADER_OBJECTS = (
     (1, "Annotations", False),

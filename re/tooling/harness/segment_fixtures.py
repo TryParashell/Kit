@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import struct
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Mapping, Tuple
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -16,10 +16,13 @@ for candidate in (str(ROOT / "src"),):
 
 from convert.adapters.solidworks.archive import (
     LayoutTable,
+    MO_VERSION_PREFIX,
     STREAM_HEADER_SIZE,
     VerifyReport,
+    container_mo_version,
     verify,
 )
+from convert.adapters.solidworks.container import SldprtArchive
 
 DEFAULT_FIXTURES = ROOT / "tests" / "fixtures" / "solidworks" / "donors"
 DEFAULT_LAYOUTS = ROOT / "re" / "data" / "class_layouts.json"
@@ -27,6 +30,7 @@ DEFAULT_SEGMENTS = ROOT / "re" / "data" / "segments"
 FEATURE_COUNT_OFFSET = 604
 FIRST_FEATURE_BASE = 109
 BASE_SEARCH_SPAN = 12
+VENDOR_LABEL_PREFIX = "vendor_"
 
 
 CLASS_DEFINITION_MARKER = b"\xff\xff\x01\x00"
@@ -57,6 +61,76 @@ def fixture_feature_count(donor: Path) -> int:
     return len(features) if isinstance(features, list) else -1
 
 
+def donor_stream_names(donor: Path) -> List[str]:
+    names: List[str] = []
+    meta = donor / "meta.json"
+    if meta.is_file():
+        payload = json.loads(meta.read_text(encoding="utf-8"))
+        listed = payload.get("container_streams")
+        if isinstance(listed, list):
+            for item in listed:
+                if isinstance(item, dict) and isinstance(item.get("name"), str):
+                    names.append(str(item["name"]))
+    return names
+
+
+def donor_mo_version(donor: Path) -> Tuple[int | None, str]:
+    meta = donor / "meta.json"
+    if meta.is_file():
+        payload = json.loads(meta.read_text(encoding="utf-8"))
+        recorded = payload.get("mo_version")
+        if isinstance(recorded, int) and not isinstance(recorded, bool):
+            return int(recorded), "mo_version field in the fixture meta.json"
+    names = donor_stream_names(donor)
+    found = container_mo_version(names)
+    if found is not None:
+        return found, (
+            f"{MO_VERSION_PREFIX}{found} among the {len(names)} container stream "
+            "names in the fixture meta.json"
+        )
+    return None, (
+        f"neither an mo_version field nor a {MO_VERSION_PREFIX}* storage among the "
+        f"{len(names)} container stream names in the fixture meta.json"
+    )
+
+
+def traced_mo_versions(segments_dir: Path) -> Dict[str, int]:
+    table: Dict[str, int] = {}
+    for path in sorted(segments_dir.glob("segments_*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        part = Path(str(payload["part"]))
+        if not part.is_file():
+            continue
+        archive = SldprtArchive.from_bytes(part.read_bytes())
+        found = container_mo_version(archive.streams)
+        if found is not None:
+            table[str(payload["label"])] = found
+    return table
+
+
+def authored_mo_version(traced: Mapping[str, int]) -> Tuple[int | None, str]:
+    authored = {
+        label: version
+        for label, version in traced.items()
+        if not label.startswith(VENDOR_LABEL_PREFIX)
+    }
+    if not authored:
+        return None, (
+            "no authored traced part is present in this checkout, so no document "
+            "version can be read for the donor corpus"
+        )
+    found = sorted(set(authored.values()))
+    if len(found) != 1:
+        return None, (
+            f"the {len(authored)} authored traced parts disagree on the document "
+            f"version {found}"
+        )
+    return found[0], (
+        f"{MO_VERSION_PREFIX}{found[0]} read from the {len(authored)} authored traced "
+        "parts, which the same writer produced as the donor corpus"
+    )
+
+
 def recorded_bases(segments_dir: Path) -> Dict[str, int]:
     table: Dict[str, int] = {}
     for path in sorted(segments_dir.glob("segments_*.json")):
@@ -84,9 +158,15 @@ def derived_base(blob: bytes) -> Tuple[int, str]:
 
 
 def best_base(
-    blob: bytes, layouts: LayoutTable, start: int
+    blob: bytes, layouts: LayoutTable, start: int, mo_version: int | None
 ) -> Tuple[int, str, VerifyReport]:
-    first = verify(blob, start, layouts, header_size=STREAM_HEADER_SIZE)
+    first = verify(
+        blob,
+        start,
+        layouts,
+        header_size=STREAM_HEADER_SIZE,
+        mo_version=mo_version,
+    )
     if first.identical:
         return start, "derived", first
     candidates = [
@@ -98,7 +178,13 @@ def best_base(
     ]
     best = first
     for candidate in candidates:
-        report = verify(blob, candidate, layouts, header_size=STREAM_HEADER_SIZE)
+        report = verify(
+            blob,
+            candidate,
+            layouts,
+            header_size=STREAM_HEADER_SIZE,
+            mo_version=mo_version,
+        )
         if report.identical:
             return candidate, "searched", report
         if report.segmented and not best.segmented:
@@ -121,17 +207,30 @@ def run(fixtures: Path, layouts_path: Path, segments_dir: Path) -> dict:
     rows: List[dict] = []
     blockers: collections.Counter = collections.Counter()
     required: collections.Counter = collections.Counter()
+    versions: collections.Counter = collections.Counter()
+    traced = traced_mo_versions(segments_dir)
+    corpus_version, corpus_rule = authored_mo_version(traced)
     for donor in donors:
         blob = (donor / "resolved.bin").read_bytes()
         start, rule = derived_base(blob)
-        base, method, report = best_base(blob, layouts, start)
+        mo_version, version_rule = donor_mo_version(donor)
+        if mo_version is None:
+            mo_version, version_rule = corpus_version, corpus_rule
+        versions[mo_version if mo_version is not None else -1] += 1
+        base, method, report = best_base(blob, layouts, start, mo_version)
         meta_features = fixture_feature_count(donor)
         scanned = scanned_class_names(blob)
         outstanding = sorted(name for name in scanned if name in partial)
         unknown = sorted(name for name in scanned if name not in layouts.classes)
         for name in outstanding:
             required[name] += 1
-        row = {"donor": donor.name, "base_rule": rule, "base_method": method}
+        row = {
+            "donor": donor.name,
+            "base_rule": rule,
+            "base_method": method,
+            "mo_version": mo_version if mo_version is not None else -1,
+            "mo_version_rule": version_rule,
+        }
         row.update(report.as_dict())
         row["base"] = base
         row["meta_feature_count"] = meta_features
@@ -155,6 +254,18 @@ def run(fixtures: Path, layouts_path: Path, segments_dir: Path) -> dict:
         "fixtures": str(fixtures),
         "layouts": str(layouts_path),
         "layout_source": layouts.source,
+        "mo_versions": dict(sorted(versions.items())),
+        "mo_version_derivation": (
+            "a run length recorded under runs_by_version is selected by the document "
+            "generation, which is the _MO_VERSION_<n> storage name in the containing "
+            "SLDPRT; a donor fixture records only its Contents and Header2 streams, so "
+            "none carries that storage and no meta.json holds an mo_version field, and "
+            "the generation is therefore taken from the authored traced parts, whose "
+            "writer also produced the donor corpus; -1 marks a donor whose generation "
+            "could not be established, and such a donor is segmented with no version "
+            "so a version gated run is refused rather than guessed"
+        ),
+        "mo_version_of_traced_parts": dict(sorted(traced.items())),
         "class_count": len(layouts.classes),
         "confirmed_classes": sum(
             1 for entry in layouts.classes.values() if entry.confidence == "confirmed"

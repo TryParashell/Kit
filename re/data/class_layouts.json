@@ -30,7 +30,7 @@
   "vendor_ring"
  ],
  "version": 1,
- "source": "re/data/segments + re/data/class_layouts_decompiled.json + re/data/external_classes.json",
+ "source": "re/data/segments + re/data/class_layouts_decompiled.json + re/data/class_layouts_versioned.json + re/data/external_classes.json",
  "traces": [
   "baseline",
   "circle",
@@ -42,7 +42,7 @@
   "vendor_cojinete",
   "vendor_ring"
  ],
- "run_keys": 404,
+ "run_keys": 490,
  "conflicting_run_keys": [
   "ParallelPlaneDistanceDim_c@2",
   "external#43@0",
@@ -55,15 +55,19 @@
   "moCStringHandle_c@leaf",
   "moCompRefPlane_c@1",
   "moDefaultRefPlnData_c@lead",
-  "moDisplayDistanceDim_c@17",
-  "moDisplayRadialDim_c@20",
-  "moEdgeRef_c@0",
-  "moExtrusion_c@5",
+  "moDisplayDistanceDim_c@19",
+  "moDisplayRadialDim_c@22",
+  "moExtrusion_c@11",
+  "moExtrusion_c@12",
+  "moExtrusion_c@9",
   "moFR_c@0",
-  "moFaceRef_c@0",
+  "moFaceRef_c@3",
+  "moFaceRef_c@4",
+  "moFaceRef_c@5",
+  "moFaceRef_c@6",
   "moFeatureDimHandle_c@0",
   "moFromEndSpec_c@leaf",
-  "moICE_c@6",
+  "moICE_c@7",
   "moNotesAreaFtrFolder_c@4",
   "moPointBackedUpData_c@leaf",
   "moSketchChain_c@1",
@@ -79,9 +83,14 @@
   "sgLLDist@5",
   "sgLineHandle@0",
   "sgLineHandle@1",
+  "sgLineHandle@10",
+  "sgLineHandle@11",
+  "sgLineHandle@12",
+  "sgLineHandle@15",
+  "sgLineHandle@17",
   "sgLineHandle@2",
-  "sgLineHandle@27",
   "sgLineHandle@3",
+  "sgLineHandle@39",
   "sgLineHandle@4",
   "sgLineHandle@5",
   "sgLineHandle@6",
@@ -91,21 +100,45 @@
   "sgLineHandle@lead",
   "sgLineHandle@leaf",
   "sgPointHandle@leaf",
+  "sgSketch@10",
   "sgSketch@11",
+  "sgSketch@12",
+  "sgSketch@13",
+  "sgSketch@14",
+  "sgSketch@15",
+  "sgSketch@16",
   "sgSketch@17",
+  "sgSketch@18",
+  "sgSketch@19",
+  "sgSketch@20",
   "sgSketch@21",
+  "sgSketch@23",
+  "sgSketch@24",
+  "sgSketch@25",
   "sgSketch@3",
+  "sgSketch@4",
   "sgSketch@5",
+  "sgSketch@6",
   "sgSketch@7",
+  "sgSketch@8",
   "sgSketch@9"
  ],
  "run_derivation": "solve_runs.Solver seeded with the exact record end of every traced object, taken from the contiguous preorder subtree of the recorded segmentation; a run is constant only when every traced instance agrees",
  "repeat_count_contract": "a trailing ... entry in child_slots means the child count is not constant across the traced instances; repeat_count is null because no field holding the count has been recovered, and the static segmenter refuses such a class rather than guessing",
  "class_count": 76,
- "confirmed_classes": 40,
- "partial_classes": 33,
- "opaque_runs": 46,
+ "confirmed_classes": 41,
+ "partial_classes": 32,
+ "opaque_runs": 70,
  "decompiled_classes": 15,
+ "versioned_classes": 11,
+ "version_gated_classes": [
+  "moCompFeature_c",
+  "moCompRefPlane_c",
+  "moDisplayDistanceDim_c",
+  "moFeatureDimHandle_c",
+  "moSketchExtRef_w"
+ ],
+ "version_gate_contract": "runs_by_version maps a run key to a mapping from document version to run length; the segmenter consults it before runs, falls back to runs when the version is unknown or absent from the mapping, and refuses the class when neither names the run",
  "classes": {
   "ParallelPlaneDistanceDim_c": {
    "confidence": "partial",
@@ -314,8 +347,8 @@
    "repeat_note": "u16 element count in the lead run followed by that many nested objects"
   },
   "moArcBackedUpData_c": {
-   "confidence": "confirmed",
-   "source": "re/data/segments",
+   "confidence": "partial",
+   "serialize": "sldmodu.dll 0x4c2c8230 moArcBackedUpData_c::Serialize",
    "child_slots": [
     "moPointBackedUpData_c",
     "moPointBackedUpData_c",
@@ -325,23 +358,20 @@
     "*",
     "*"
    ],
-   "instances": 2,
-   "child_counts": [
-    [
-     7,
-     2
-    ]
-   ],
    "runs": {
     "lead": 0,
     "0": 0,
-    "1": 0,
+    "1": 12,
     "2": 0,
     "3": 0,
     "4": 0,
     "5": 0,
     "6": 0
-   }
+   },
+   "variable_runs": [],
+   "note": "Declared here only because it is the other half of the moPointBackedUpData_c result. solve_runs.py could not separate run 1 from the second point's body, so it recorded run 1 as 0 and let that point absorb 12 bytes. With the point pinned at 24 by its own Serialize, run 1 is 12 and the class tiles: 2 + 24 for the first point, 12, 2 + 24 for the second, 0, 2 + 24 for the third, then four 2-byte object reads with zero runs, which is 98 bytes and exactly the traced scope end of both instances in vendor_ring. The claim is partial rather than confirmed because the read order in FUN_4c2c8230 is one i32 then ReadObject moPointBackedUpData_c, moPointBackedUpData_c, moLineBackedUpData_c, moLineBackedUpData_c, moPointBackedUpData_c, which is five objects preceded by four bytes, while the trace records seven object slots with a zero lead. The extra slots and the placement of the i32 must come from the unreconciled base FUN_4c2d2fb0, so the runs here are the arithmetic that tiles rather than a read-by-read transcription. Only two instances exist in the whole corpus, both in vendor_ring.",
+   "fields": [],
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moBBoxCenterData_c": {
    "confidence": "partial",
@@ -364,24 +394,32 @@
    ]
   },
   "moCStringHandle_c": {
-   "confidence": "partial",
-   "source": "re/data/segments",
+   "confidence": "confirmed",
+   "serialize": "sldmfcu.dll 0x3ca867b0 moCStringHandle_c::Serialize",
    "child_slots": [],
-   "instances": 18,
-   "child_counts": [
-    [
-     0,
-     18
-    ]
-   ],
    "runs": {},
    "variable_runs": [
     {
      "slot": "leaf",
-     "rule": "opaque",
-     "note": "observed run lengths 4x7, 101x3, 103x4, 111x1, 135x1, 208x1, 214x1"
+     "rule": "string",
+     "at": 0,
+     "tail": 0,
+     "note": "the whole body is one operator>>(CStringT) at this+0x08"
     }
-   ]
+   ],
+   "note": "moCStringHandle_c has no entry in serialize_map.json because the class does not live in sldmodu: its vftable is sldmfcu.dll 0x3cf1e270 and slot 5 is FUN_3ca867b0, which was absent from every existing dump and was recovered with one headless DumpFunctions pass over proj_sldmfcu. The body is su_CObject::Serialize, which reads nothing, followed by exactly one operator>>(su_CArchive&, CStringT<wchar_t>&) into this+0x08 and a store of the literal 1 into this+0x10 that touches no bytes. So the leaf run is the string and nothing else. Measured against the stream: the string decoder returns 4, 4, 4, 4, 4, 4, 4, 14, 16, 32, 38, 208 and 214 bytes at the 18 traced heads, and the traced span equals the string length exactly in the 9 instances that sit in a non-final slot of moExtObject_c. The 9 that sit in the final slot measure 79, 87, 87, 87, 97 and so on bytes longer, and those surplus bytes are read by moExtObject_c, moFR_c and the surrounding moFromSktEntSurfIdRep_c or moEndFaceSurfIdRep_c frames after this object returns, so they are absorption and not part of this class.",
+   "fields": [
+    {
+     "run": "leaf",
+     "offset": 0,
+     "width": 0,
+     "type": "cstring",
+     "name": "Name",
+     "role": "authored",
+     "confidence": "confirmed"
+    }
+   ],
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moCommentsFolder_c": {
    "confidence": "confirmed",
@@ -460,13 +498,14 @@
    "runs": {
     "lead": 0
    },
-   "variable_runs": [
-    {
-     "slot": "0",
-     "rule": "opaque",
-     "note": "only slot. The child is a classref external#43 read by moCompRef_c::Serialize and its body end has no witness in any trace, so the split of the entry between the child and this run is undetermined. What is measured across all 30 instances: the traced scope from the end of the instances own tag is 93 bytes in the seven authored 18000-era parts and 89 in the two 13000/14000-era vendor parts, and consecutive instances are 119 bytes apart in the former and 115 in the latter, so the per-entry stride is 2 (classref tag) + scope + 24 (inter-entry bytes) and the array length is 93 + 119*(n-1) or 89 + 115*(n-1) by generation. moCompFeature_c::Serialize itself contributes at most two i32 flags, both gated on moArchiveHelper_c::hasCondition bits set by the caller rather than by the stream, and then FUN_4bbb16e0, which for ver >= 0x4a5 reads only i32 tree-node id and su_CTime, 8 bytes, matching the id at end-8 and the time_t at end-4."
+   "runs_by_version": {
+    "0": {
+     "18000": 89,
+     "14000": 85,
+     "13000": 85
     }
-   ],
+   },
+   "note": "The only slot holds this class single child, a classref to moUnitComponent_c that the traces record as external#43 in eight parts and external#45 in vendor_cojinete. re/data/external_classes.json slot component measures that class at own_body_lengths [0] with one nested object reference of traced_span_lengths [2], so the whole child subtree is 4 bytes: 2 for the classref tag, 0 of own body and 2 for the object reference. The traced scope from the end of this class own tag is 93 bytes in the 18000-era authored parts and 89 bytes in the 13000/14000-era vendor parts, so run 0 is 93 - 4 = 89 at document version 18000 and 89 - 4 = 85 at 14000 and 13000. Consecutive instances are 119 bytes apart in the authored parts and 115 in the vendor parts, so the array length is 93 + 119*(n-1) or 89 + 115*(n-1) by generation. moCompFeature_c::Serialize itself contributes at most two i32 flags, both gated on moArchiveHelper_c::hasCondition bits set by the caller rather than by the stream, and then FUN_4bbb16e0, which for ver >= 0x4a5 reads only the i32 tree node id and a su_CTime, 8 bytes, matching the id at end-8 and the time_t at end-4. The length is gated on the document version rather than on a positional predicate because a predicate inside this run would have to be read at an offset that depends on the run length being computed.",
    "fields": [
     {
      "run": "0",
@@ -500,29 +539,40 @@
   },
   "moCompRefPlane_c": {
    "confidence": "partial",
-   "source": "re/data/segments",
+   "serialize": "sldmodu.dll 0x4bc22e00 moCompRefPlane_c::Serialize",
    "child_slots": [
     "*",
     "*"
    ],
-   "instances": 22,
-   "child_counts": [
-    [
-     2,
-     22
-    ]
-   ],
    "runs": {
-    "lead": 0,
-    "0": 0
+    "lead": 0
+   },
+   "runs_by_version": {
+    "0": {
+     "14000": 85,
+     "18000": 89
+    }
    },
    "variable_runs": [
     {
      "slot": "1",
      "rule": "opaque",
-     "note": "observed run lengths 42x21, 114x1"
+     "note": "42 bytes in 21 of the 22 traced instances and 114 in planetop node 211. Slot 1 is not the last child of the enclosing moProfileFeature_c, so 114 is a hard witness and not absorption; the 72-byte difference is real and unexplained. moCompRefPlane_c contributes only the i32 at this+0x100, gated on ver > 0x4bb, so at most 4 of those bytes belong to this class and the rest are read by the enclosing profile feature after this object returns."
     }
-   ]
+   ],
+   "note": "moCompRefPlane_c::Serialize is FUN_4bc22e00: the base FUN_4bc22cb0, then one i32 into this+0x100 for ver > 0x4bb. For ver >= 0x2d1 that base is moCompFeature_c::Serialize at 0x4bc222f0 followed by a single operator>>(moRefGeom_c**), which is exactly the two object slots the trace records. Run 0 is therefore moCompFeature_c own post-child run, and it inherits that class version gate: with the moUnitComponent_c classref in slot 0 pinned to its own 4-byte subtree from external_classes.json, run 0 measures 89 in all 17 instances carried by 18000-era parts and 85 in all 5 carried by 14000-era parts, with neither value appearing in the other generation. The generated table records run 0 as 0 because solve_runs.py lets the classref absorb those bytes, which is what produced the 22 run mismatches verify_class_layouts.py reports for this class; declaring the gate removes all 22. The class stays partial because run 1 is still open.",
+   "fields": [
+    {
+     "run": "1",
+     "offset": 0,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x100",
+     "role": "authored",
+     "confidence": "partial"
+    }
+   ],
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moCompSketchEntHandle_c": {
    "confidence": "confirmed",
@@ -576,38 +626,32 @@
    "repeat_note": "child count varies across instances: 3x3, 4x1"
   },
   "moDefaultRefPlnData_c": {
-   "confidence": "partial",
-   "serialize": "sldmodu.dll 0x4c2d1cf0, which calls su_CObject::Serialize and then tail-jumps through virtual slot 0x150",
+   "confidence": "confirmed",
+   "serialize": "sldmodu.dll 0x4c2d1cf0 moRefPlnData_c::Serialize, which calls su_CObject::Serialize and then tail-jumps through virtual slot 0x150 to sldmodu.dll 0x4c2d6070",
    "child_slots": [
+    "*",
     "*",
     "*",
     "*"
    ],
    "runs": {
     "0": 47,
-    "1": 0
+    "1": 0,
+    "2": 0,
+    "3": 0
    },
    "variable_runs": [
     {
      "slot": "lead",
-     "rule": "conditional",
+     "rule": "count",
      "at": 48,
-     "width": 72,
-     "predicate": "HasBasis",
-     "predicate_at": 0,
-     "predicate_width": 1,
-     "values": [
-      1
-     ],
+     "count_width": 1,
+     "stride": 72,
      "tail": 65,
-     "note": "48 bytes are two f64[3] vectors, the plane origin and its normal. The u8 at +48 is 1 when a 9-double row-major orthonormal basis follows and 0 when it is omitted. Measured lead is 114 for the first moDefaultRefPlnData_c of every one of the 9 traced parts, whose normal is +Z (Front, the identity basis), and 186 for the second and third, whose normals are +Y and +X. The 66-byte tail is four f64 then a u8 then four f64."
-    },
-    {
-     "slot": "2",
-     "rule": "opaque",
-     "note": "last slot; every one of the 27 traced instances leaves exactly 2 bytes between the end of its last child and its traced scope_end, so 2 is the only value that tiles, but the traced scope_end of a non-top-level object is an upper bound rather than a witness and those 2 bytes may belong to the parent moRefPlane_c. Settling it needs the indirect callee at virtual slot 0x150 reached from 0x4c2d1cf0."
+     "note": "the u8 at +48 is the mgXform_c::restore basis-present flag, 0 or 1, expressed as a count of one 72 byte block because the count rule evaluates identically in the shipped segmenter and in verify_class_layouts.py while the conditional rule does not. The 48 bytes of at are the mgPoint_c::restore root point and the mgVector_c::restore normal. The 65 byte tail is the mgXform_c translation f64[3], its f64 scale, one trailing u8 and the four moRefPlaneBorder_c f64 border sizes."
     }
    ],
+   "note": "The body serializer is the virtual slot 42 callee FUN_4c2d6070, which was absent from every existing dump and was recovered with one headless DumpFunctions pass over proj_sldmodu. Its read order is mgPoint_c::restore, mgVector_c::restore, mgXform_c::restore, four border doubles for ver >= 0x160, ReadObject moCompEdge_c, three i32, one u8 for ver > 0xe5, mgPoint_c::restore of the display root point for moDefaultRefPlnData_c and ver > 0x81d, i32 for ver > 0xe24, i32 for ver > 0x10da, u16 for ver > 0x17dd, ReadObject moCompFaceMeshFacetFin_c for ver > 0x2b83, ReadObject moRefAxis_c and ReadObject moCompSketchEntHandle_c for ver > 0x2ba5. Every one of those gates is open at both 14000 and 18000, the two generations in this corpus, so the class needs no runs_by_version; the lowest gate that would change its shape is 0x2ba5 = 11173, below which slots 2 and 3 disappear. That gives four object slots, not the three the trace records: the fourth ReadObject is recorded by the tracer as a depth 3 null nested under the third rather than as a fourth sibling, which is why solve_runs.py leaves the last run variable. Declaring four slots with runs 1, 2 and 3 all zero makes the body end land exactly on the parent moRefPlane_c scope end in all 27 traced instances. Run 0 is 47 = 4 + 4 + 4 + 1 + 24 + 4 + 4 + 2, matching the solved constant exactly. The previously recorded conditional lead rule with at = 48 evaluates to 113 rather than 114 in the shipped segmenter, because that segmenter does not add predicate_width to the run length, and that single byte is what made 23 of the 32 donor fixtures refuse at moDefaultRefPlnData_c slot 0.",
    "fields": [
     {
      "run": "lead",
@@ -644,9 +688,99 @@
      "name": "Basis",
      "role": "derived",
      "confidence": "confirmed"
+    },
+    {
+     "run": "lead",
+     "offset": -65,
+     "width": 24,
+     "type": "f64[3]",
+     "name": "Translation",
+     "role": "derived",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "lead",
+     "offset": -41,
+     "width": 8,
+     "type": "f64",
+     "name": "Scale",
+     "role": "derived",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "lead",
+     "offset": -32,
+     "width": 32,
+     "type": "f64[4]",
+     "name": "BorderSize",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "0",
+     "offset": 0,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x50",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "0",
+     "offset": 4,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x54",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "0",
+     "offset": 8,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x58",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "0",
+     "offset": 13,
+     "width": 24,
+     "type": "f64[3]",
+     "name": "DisplayRootPoint",
+     "role": "derived",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "0",
+     "offset": 37,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x5c",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "0",
+     "offset": 41,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x60",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "0",
+     "offset": 45,
+     "width": 2,
+     "type": "u16",
+     "name": "field@0x64",
+     "role": "authored",
+     "confidence": "confirmed"
     }
    ],
-   "source": "re/data/class_layouts_decompiled.json"
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moDetailCabinet_c": {
    "confidence": "confirmed",
@@ -654,22 +788,26 @@
    "child_slots": [
     "external#4",
     "*",
+    "moNotesAreaFtrFolder_c",
+    "*",
     "*",
     "*"
    ],
    "instances": 9,
    "child_counts": [
     [
-     4,
+     6,
      9
     ]
    ],
    "runs": {
     "lead": 0,
     "0": 4,
-    "1": 473,
-    "2": 30,
-    "3": 68
+    "1": 2,
+    "2": 0,
+    "3": 45,
+    "4": 30,
+    "5": 68
    }
   },
   "moDisplayDistanceDim_c": {
@@ -707,36 +845,34 @@
     "8": 44,
     "9": 0,
     "10": 40,
+    "11": 0,
     "12": 0,
     "13": 0,
     "14": 4,
     "15": 0,
     "16": 182
    },
+   "runs_by_version": {
+    "17": {
+     "18000": 4
+    }
+   },
    "variable_runs": [
     {
      "slot": "6",
      "rule": "opaque",
-     "note": "the preceding child's body end has no witness; the run itself is not known to vary."
-    },
-    {
-     "slot": "11",
-     "rule": "opaque",
-     "note": "the preceding child's body end has no witness; the run itself is not known to vary."
-    },
-    {
-     "slot": "17",
-     "rule": "opaque",
-     "note": "last slot. solve_runs.py reports this key as variable, but every one of the 16 other runs is constant across all 14 traced instances and the observed body-length spread (1457, 1739, 1766, 1784, 1838) is fully accounted for by the varying spans of the object children in slots 6 and 11. There is no evidence that this run varies; it simply has no witness."
+     "note": "resolves to 244 bytes in the two vendor_cojinete instances and has no witness in the other twelve, because the preceding child body end is itself unresolved there. One value from one part is not enough to declare it."
     }
    ],
+   "note": "Two of the three runs the generated table leaves opaque close under the pinned-external replay. Run 11 is a flat 0 in all 14 traced instances, so it moves into runs. Run 17 is the last slot and measures 4 bytes in all ten instances carried by 18000-era parts; the four 14000-era instances split 0, 0, 0 and 170, so that generation is genuinely unresolved and is deliberately left out of the mapping. A stream at 14000 therefore refuses this run with the version named rather than taking a guessed constant, which is the intended behaviour when runs does not carry the key. Run 6 stays opaque.",
    "fields": [],
-   "source": "re/data/class_layouts_decompiled.json"
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moDisplayRadialDim_c": {
    "confidence": "partial",
    "source": "re/data/segments",
    "child_slots": [
+    "*",
     "*",
     "*",
     "*",
@@ -757,12 +893,13 @@
     "*",
     "*",
     "*",
+    "*",
     "*"
    ],
    "instances": 4,
    "child_counts": [
     [
-     21,
+     23,
      4
     ]
    ],
@@ -773,25 +910,27 @@
     "2": 33,
     "3": 48,
     "4": 83,
-    "5": 378,
-    "6": 0,
+    "5": 274,
+    "6": 102,
     "7": 0,
-    "8": 44,
-    "9": 0,
-    "10": 40,
-    "11": 0,
+    "8": 0,
+    "9": 44,
+    "10": 0,
+    "11": 40,
     "12": 0,
     "13": 0,
-    "14": 4,
-    "15": 0,
-    "16": 238,
-    "17": 4,
-    "18": 4,
-    "19": 4
+    "14": 0,
+    "15": 4,
+    "16": 0,
+    "17": 12,
+    "18": 224,
+    "19": 4,
+    "20": 4,
+    "21": 4
    },
    "variable_runs": [
     {
-     "slot": "20",
+     "slot": "22",
      "rule": "opaque",
      "note": "observed run lengths 0x2, 170x2"
     }
@@ -822,28 +961,30 @@
    }
   },
   "moEdgeRef_c": {
-   "confidence": "partial",
+   "confidence": "confirmed",
    "source": "re/data/segments",
    "child_slots": [
+    "*",
+    "*",
+    "*",
+    "*",
     "*"
    ],
    "instances": 2,
    "child_counts": [
     [
-     1,
+     5,
      2
     ]
    ],
    "runs": {
-    "lead": 36
-   },
-   "variable_runs": [
-    {
-     "slot": "0",
-     "rule": "opaque",
-     "note": "observed run lengths 100x1, 108x1"
-    }
-   ]
+    "lead": 36,
+    "0": 0,
+    "1": 0,
+    "2": 0,
+    "3": 0,
+    "4": 0
+   }
   },
   "moEndFace3IntSurfIdRep_c": {
    "confidence": "confirmed",
@@ -975,34 +1116,27 @@
    ],
    "runs": {
     "lead": 0,
+    "0": 4,
     "1": 49,
     "2": 30,
     "3": 52,
     "4": 4,
+    "6": 52,
     "7": 8
    },
    "variable_runs": [
     {
-     "slot": "0",
-     "rule": "opaque",
-     "note": "the preceding child is a classref external#4 whose body end has no witness."
-    },
-    {
      "slot": "5",
      "rule": "opaque",
-     "note": "measured 587, 705 (x3), 707 (x3), 1063 and 1161 bytes across the 9 traced extrusions. This is the moModelFeature_c / moFeature_c portion of the base chain that precedes the surface-id suObArray in slot 6. moBodyFeature_c::Serialize is 0x4bb8aa10 and its own unnamed base is FUN_4bb886c0; neither is reconciled against these runs."
-    },
-    {
-     "slot": "6",
-     "rule": "opaque",
-     "note": "the preceding child is the surface-id suObArray, a classref external#102..104; its body end has no witness."
+     "note": "measured 587, 705 x3, 707 x3 at 18000 and 1063 and 1161 at 14000 across the nine traced extrusions. This is the moModelFeature_c and moFeature_c portion of the base chain that precedes the surface-id suObArray in slot 6, and it tracks feature content rather than the document generation: the 18000 side alone spans 587 to 707, so no runs_by_version entry can close it. moBodyFeature_c::Serialize is 0x4bb8aa10 and its own unnamed base is FUN_4bb886c0; neither is reconciled against these runs."
     },
     {
      "slot": "8",
      "rule": "opaque",
-     "note": "last slot. Documented in re/solidworks/records/SERIALIZE.md section 2 as 4 (moFromEndSpec_c type) + 16 or 20 (moEndSpec_c tail) + 12 (f64@0x7d0 and i32@0x7a8) + 0 or 4 driver trailer, but the split is inside the moEndSpec_c child, not in this run."
+     "note": "last slot, holding moEndSpec_c, whose own last slot holds moFromEndSpec_c. moFromEndSpec_c::Serialize at 0x4bb900d0 reads a u32 type and, for the type 0 that every traced instance carries, nothing else, so its own body is 4 bytes and the 32, 36 or 40 bytes the trace reports for it are read by moEndSpec_c and by this run. The split between moEndSpec_c run 6 and this run has no witness because both are last slots, so both stay unclosed."
     }
    ],
+   "note": "Runs 0 and 6 were opaque only because of where the child body ended. Replaying the layout with the classref in slot 0 pinned to external#4 and the surface-id array in slot 6 pinned to its own body length from external_classes.json puts run 0 at a flat 4 bytes in all nine traced instances and run 6 at a flat 52, in both generations. Run 6 is the same 52 that moICE_c carries after its own surface-id array, which is the cross-check: the two classes share vftable slot 5. Runs 5 and 8 remain opaque and both are genuinely content-dependent rather than version gated.",
    "fields": [
     {
      "run": "8",
@@ -1023,7 +1157,7 @@
      "confidence": "confirmed"
     }
    ],
-   "source": "re/data/class_layouts_decompiled.json"
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moFR_c": {
    "confidence": "partial",
@@ -1053,23 +1187,62 @@
    "confidence": "partial",
    "source": "re/data/segments",
    "child_slots": [
-    "*"
+    "*",
+    "*",
+    "*",
+    "*",
+    "*",
+    "*",
+    "*",
+    "..."
    ],
    "instances": 37,
    "child_counts": [
     [
-     1,
-     37
+     4,
+     2
+    ],
+    [
+     5,
+     1
+    ],
+    [
+     6,
+     6
+    ],
+    [
+     7,
+     28
     ]
    ],
    "runs": {
-    "lead": 36
+    "lead": 36,
+    "0": 0,
+    "1": 0,
+    "2": 0
    },
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 4x2, 5x1, 6x6, 7x28",
    "variable_runs": [
     {
-     "slot": "0",
+     "slot": "3",
      "rule": "opaque",
-     "note": "observed run lengths 30x1, 32x1, 34x1, 36x1, 70x1, 92x1, 96x1, 98x1, 116x1, 130x7, 138x1, 142x1, 158x3, 162x3, 169x1, 221x3, 260x1, 318x3, 320x3, 502x1, 562x1"
+     "note": "observed run lengths 0x35, 20x1, 24x1"
+    },
+    {
+     "slot": "4",
+     "rule": "opaque",
+     "note": "observed run lengths 0x34, 24x1"
+    },
+    {
+     "slot": "5",
+     "rule": "opaque",
+     "note": "observed run lengths 0x28, 20x3, 24x2, 48x1"
+    },
+    {
+     "slot": "6",
+     "rule": "opaque",
+     "note": "observed run lengths 20x13, 24x12, 48x3"
     }
    ]
   },
@@ -1130,20 +1303,22 @@
     "3": 0,
     "4": 15
    },
+   "runs_by_version": {
+    "0": {
+     "14000": 78,
+     "18000": 82
+    }
+   },
    "variable_runs": [
-    {
-     "slot": "0",
-     "rule": "opaque",
-     "note": "measured 82 bytes in 10 of 12 traced instances and 78 in the two instances of the older vendor parts, so the 4-byte difference is a version gate inside the base FUN_4c864440, which is not reconciled. moModDimHandle_c::Serialize itself contributes only the final Dimension_c object read in slot 5."
-    },
     {
      "slot": "5",
      "rule": "opaque",
-     "note": "last slot; the child is a ParallelPlaneDistanceDim_c whose body end has no witness."
+     "note": "last slot; the child is a ParallelPlaneDistanceDim_c whose body end has no witness in any trace."
     }
    ],
+   "note": "Run 0 is the span of the base FUN_4c864440, which moModDimHandle_c::Serialize calls before its own single ReadObject in slot 5. It measures 82 bytes in the ten instances carried by the seven 18000-era authored parts and 78 bytes in the two instances carried by the 14000-era vendor parts, with no instance of either value in the other generation, so the 4-byte difference is a document version gate inside that base and is declared as runs_by_version rather than as a positional predicate. A predicate would have to be located at an offset that itself depends on the run length being computed. The class stays partial because slot 5 is still unwitnessed.",
    "fields": [],
-   "source": "re/data/class_layouts_decompiled.json"
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moFromEndSpec_c": {
    "confidence": "partial",
@@ -1288,6 +1463,7 @@
     "3": 52,
     "4": 6,
     "5": 0,
+    "7": 52,
     "8": 8
    },
    "variable_runs": [
@@ -1299,12 +1475,7 @@
     {
      "slot": "6",
      "rule": "opaque",
-     "note": "measured 873 bytes in 3 of 4 traced instances and 1131 in vendor_ring. Same base-chain payload as moExtrusion_c slot 5; moICE_c does not override Serialize, slot 5 of both vftables is 0x4bb8eba0."
-    },
-    {
-     "slot": "7",
-     "rule": "opaque",
-     "note": "the preceding child is the surface-id suObArray, a classref external#103..104."
+     "note": "measured 873 bytes in the three 18000-era instances and 1131 in vendor_ring. Same base-chain payload as moExtrusion_c slot 5; moICE_c does not override Serialize, slot 5 of both vftables is 0x4bb8eba0. The spread is not a version gate: the three 18000 instances agree with each other and the single 14000 instance differs, but moExtrusion_c slot 5 spans 587 to 1161 within the 18000 era alone, so this run tracks feature content rather than the generation."
     },
     {
      "slot": "9",
@@ -1312,8 +1483,9 @@
      "note": "last slot."
     }
    ],
+   "note": "Run 7 follows the surface-id suObArray in slot 7 and is a flat 52 bytes in all four traced instances. It reads as version gated only while the suObArray child is measured the way solve_runs.py measures it: against that attribution the run comes out 18 bytes in the three 18000-era instances and 22 in the single 14000-era instance in vendor_ring, which invites a runs_by_version entry. Replaying the layout with the suObArray pinned to its own body length from external_classes.json instead, as external#103 and external#104, moves 34 bytes back into this run at 18000 and 30 at 14000 and both land on 52. That is the correction: the apparent 4-byte generation difference was an artefact of where the child body ended, not a gate in the code, and declaring the gate would have been wrong in both eras. Slots 0, 6 and 9 remain opaque.",
    "fields": [],
-   "source": "re/data/class_layouts_decompiled.json"
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moInkMarkupFolder_c": {
    "confidence": "confirmed",
@@ -1384,8 +1556,8 @@
    }
   },
   "moNotesAreaFtrFolder_c": {
-   "confidence": "partial",
-   "source": "re/data/segments",
+   "confidence": "confirmed",
+   "serialize": "sldmodu.dll 0x4c280660 moFtrFolder_c::Serialize",
    "child_slots": [
     "external#4",
     "*",
@@ -1393,27 +1565,55 @@
     "*",
     "moNotesAreaFtrFolder_c"
    ],
-   "instances": 18,
-   "child_counts": [
-    [
-     5,
-     18
-    ]
-   ],
    "runs": {
     "lead": 0,
     "0": 4,
     "1": 47,
     "2": 30,
-    "3": 44
+    "3": 44,
+    "4": 16
    },
-   "variable_runs": [
+   "variable_runs": [],
+   "note": "moFtrFolder_c::Serialize reads moFolder_c::Serialize, then one ReadObject into this+0x380, then AR_get_long this+0x374, then this+0x38c gated on ver > 0xf61, then this+0x370 gated on virtual slot 0xa28 and ver > 0x23b9, then this+0x394 gated on ver > 0x279b. Every gate is open at 14000 and at 18000, so the post-child run is a flat 4 + 4 + 4 + 4 = 16 in both generations and no runs_by_version entry is needed. The trace records two instances per part, an outer definition and the nested classref it reads in slot 4, and reports run 4 as 0 for the outer and 32 for the inner because the inner is the last read in the outer frame and absorbs the outer 16 trailing bytes into its row. 16 is the only value that satisfies both frames at once: the inner children end 32 bytes before the shared scope end, 16 closes the inner and the remaining 16 closes the outer, landing exactly on the next object read in the grandparent frame in all nine traces.",
+   "fields": [
     {
-     "slot": "4",
-     "rule": "opaque",
-     "note": "observed run lengths 0x9, 32x9"
+     "run": "4",
+     "offset": 0,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x374",
+     "role": "authored",
+     "confidence": "confirmed"
+    },
+    {
+     "run": "4",
+     "offset": 4,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x38c",
+     "role": "authored",
+     "confidence": "partial"
+    },
+    {
+     "run": "4",
+     "offset": 8,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x370",
+     "role": "authored",
+     "confidence": "partial"
+    },
+    {
+     "run": "4",
+     "offset": 12,
+     "width": 4,
+     "type": "i32",
+     "name": "field@0x394",
+     "role": "authored",
+     "confidence": "partial"
     }
-   ]
+   ],
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moOriginProfileFeature_c": {
    "confidence": "confirmed",
@@ -1485,24 +1685,26 @@
    }
   },
   "moPointBackedUpData_c": {
-   "confidence": "partial",
-   "source": "re/data/segments",
+   "confidence": "confirmed",
+   "serialize": "sldmodu.dll 0x4c2cfbb0 moPointBackedUpData_c::Serialize",
    "child_slots": [],
-   "instances": 8,
-   "child_counts": [
-    [
-     0,
-     8
-    ]
-   ],
-   "runs": {},
-   "variable_runs": [
+   "runs": {
+    "leaf": 24
+   },
+   "variable_runs": [],
+   "note": "The body is su_CObject::Serialize, which reads nothing, followed by exactly one operator>>(su_CArchive&, mgPoint_c&) into this+0x08, which is three f64. 24 is witnessed exactly, not merely bounded: in both traced moArcBackedUpData_c instances the first and third moPointBackedUpData_c sit in a non-final slot and their tag-to-next-tag distance is exactly 2 + 24. The second sits in a non-final slot too and measures 2 + 24 + 12, which puts 12 bytes into moArcBackedUpData_c run 1 rather than into this class. The two instances the trace reports at 36 bytes are that same middle slot. Both instances under moSketchExtRef_w measure 24.",
+   "fields": [
     {
-     "slot": "leaf",
-     "rule": "opaque",
-     "note": "observed run lengths 24x6, 36x2"
+     "run": "leaf",
+     "offset": 0,
+     "width": 24,
+     "type": "f64[3]",
+     "name": "Point",
+     "role": "authored",
+     "confidence": "confirmed"
     }
-   ]
+   ],
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moProfileFeature_c": {
    "confidence": "partial",
@@ -1636,12 +1838,14 @@
     "*",
     "*",
     "*",
+    "*",
+    "*",
     "*"
    ],
    "instances": 4,
    "child_counts": [
     [
-     6,
+     8,
      4
     ]
    ],
@@ -1651,8 +1855,10 @@
     "1": 0,
     "2": 0,
     "3": 0,
-    "4": 15,
-    "5": 264
+    "4": 1,
+    "5": 0,
+    "6": 10,
+    "7": 264
    }
   },
   "moSkDimHandleValG2_c": {
@@ -1664,12 +1870,14 @@
     "*",
     "*",
     "*",
+    "*",
+    "*",
     "*"
    ],
    "instances": 2,
    "child_counts": [
     [
-     6,
+     8,
      2
     ]
    ],
@@ -1679,8 +1887,10 @@
     "1": 0,
     "2": 0,
     "3": 0,
-    "4": 15,
-    "5": 244
+    "4": 1,
+    "5": 0,
+    "6": 10,
+    "7": 244
    }
   },
   "moSketchChain_c": {
@@ -1779,6 +1989,12 @@
    "runs": {
     "lead": 0
    },
+   "runs_by_version": {
+    "1": {
+     "14000": 54,
+     "18000": 58
+    }
+   },
    "variable_runs": [
     {
      "slot": "0",
@@ -1786,16 +2002,12 @@
      "note": "read by the base FUN_4c2d2290; the preceding child is a moCompSketchEntHandle_c or moCompEdge_c whose body end has no witness in the traces."
     },
     {
-     "slot": "1",
-     "rule": "opaque",
-     "note": "measured 54 bytes in 4 of 5 traced instances and 58 in circle node 166. moSketchExtRef_w::Serialize itself contributes only the u16 at this+0xa8 here, so the other 52 or 56 bytes come from the base FUN_4c2d2290, which is not reconciled."
-    },
-    {
      "slot": "2",
      "rule": "opaque",
      "note": "last slot; no witness in any trace."
     }
    ],
+   "note": "moSketchExtRef_w::Serialize contributes only the u16 at this+0xa8 to run 1; the rest of that run comes from the base FUN_4c2d2290. The previously recorded reading of the traced spans was 54 bytes in four instances and 58 in circle node 166, which reads as a one-off. Grouping the same five instances by the document version of their container instead shows the split is clean: every 14000-era instance measures 54 and every 18000-era instance measures 58, so the 4 bytes are a version gate in the base rather than an outlier. With only five instances and a single generation-crossing pair this is a partial claim, and slots 0 and 2 remain unwitnessed.",
    "fields": [
     {
      "run": "1",
@@ -1807,7 +2019,7 @@
      "confidence": "partial"
     }
    ],
-   "source": "re/data/class_layouts_decompiled.json"
+   "source": "re/data/class_layouts_versioned.json"
   },
   "moSketchRegion_c": {
    "confidence": "partial",

@@ -653,10 +653,10 @@
     {
      "slot": "lead",
      "rule": "conditional",
-     "at": 48,
+     "at": 49,
      "width": 72,
      "predicate": "HasBasis",
-     "predicate_at": 0,
+     "predicate_at": 48,
      "predicate_width": 1,
      "values": [
       1
@@ -718,13 +718,14 @@
    "runs": {
     "lead": 0
    },
-   "variable_runs": [
-    {
-     "slot": "0",
-     "rule": "opaque",
-     "note": "only slot. The child is a classref external#43 read by moCompRef_c::Serialize and its body end has no witness in any trace, so the split of the entry between the child and this run is undetermined. What is measured across all 30 instances: the traced scope from the end of the instances own tag is 93 bytes in the seven authored 18000-era parts and 89 in the two 13000/14000-era vendor parts, and consecutive instances are 119 bytes apart in the former and 115 in the latter, so the per-entry stride is 2 (classref tag) + scope + 24 (inter-entry bytes) and the array length is 93 + 119*(n-1) or 89 + 115*(n-1) by generation. moCompFeature_c::Serialize itself contributes at most two i32 flags, both gated on moArchiveHelper_c::hasCondition bits set by the caller rather than by the stream, and then FUN_4bbb16e0, which for ver >= 0x4a5 reads only i32 tree-node id and su_CTime, 8 bytes, matching the id at end-8 and the time_t at end-4."
+   "runs_by_version": {
+    "0": {
+     "18000": 89,
+     "14000": 85,
+     "13000": 85
     }
-   ],
+   },
+   "note": "The only slot holds this class single child, a classref to moUnitComponent_c that the traces record as external#43 in eight parts and external#45 in vendor_cojinete. re/data/external_classes.json slot component measures that class at own_body_lengths [0] with one nested object reference of traced_span_lengths [2], so the whole child subtree is 4 bytes: 2 for the classref tag, 0 of own body and 2 for the object reference. The traced scope from the end of this class own tag is 93 bytes in the 18000-era authored parts and 89 bytes in the 13000/14000-era vendor parts, so run 0 is 93 - 4 = 89 at document version 18000 and 89 - 4 = 85 at 14000 and 13000. Consecutive instances are 119 bytes apart in the authored parts and 115 in the vendor parts, so the array length is 93 + 119*(n-1) or 89 + 115*(n-1) by generation. moCompFeature_c::Serialize itself contributes at most two i32 flags, both gated on moArchiveHelper_c::hasCondition bits set by the caller rather than by the stream, and then FUN_4bbb16e0, which for ver >= 0x4a5 reads only the i32 tree node id and a su_CTime, 8 bytes, matching the id at end-8 and the time_t at end-4. The length is gated on the document version rather than on a positional predicate because a predicate inside this run would have to be read at an offset that depends on the run length being computed.",
    "fields": [
     {
      "run": "0",
