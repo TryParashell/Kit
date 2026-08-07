@@ -15,11 +15,12 @@ for candidate in (str(ROOT / "src"),):
         sys.path.insert(0, candidate)
 
 from convert.adapters.solidworks.archive import (
+    BaseResolution,
     LayoutTable,
     MO_VERSION_PREFIX,
     STREAM_HEADER_SIZE,
-    VerifyReport,
     container_mo_version,
+    resolve_base,
     verify,
 )
 from convert.adapters.solidworks.container import SldprtArchive
@@ -27,9 +28,7 @@ from convert.adapters.solidworks.container import SldprtArchive
 DEFAULT_FIXTURES = ROOT / "tests" / "fixtures" / "solidworks" / "donors"
 DEFAULT_LAYOUTS = ROOT / "re" / "data" / "class_layouts.json"
 DEFAULT_SEGMENTS = ROOT / "re" / "data" / "segments"
-FEATURE_COUNT_OFFSET = 604
 FIRST_FEATURE_BASE = 109
-BASE_SEARCH_SPAN = 12
 VENDOR_LABEL_PREFIX = "vendor_"
 
 
@@ -139,57 +138,31 @@ def recorded_bases(segments_dir: Path) -> Dict[str, int]:
     return table
 
 
-def derived_base(blob: bytes) -> Tuple[int, str]:
-    if len(blob) < FEATURE_COUNT_OFFSET + 2:
-        return FIRST_FEATURE_BASE, "stream too short for the history array length"
-    doubled = struct.unpack_from("<H", blob, FEATURE_COUNT_OFFSET)[0]
-    if doubled < 2 or doubled % 2:
+def seed_base(donor: Path) -> Tuple[int, str]:
+    features = fixture_feature_count(donor)
+    if features > 0:
         return (
-            FIRST_FEATURE_BASE,
-            f"history array length {doubled} at byte {FEATURE_COUNT_OFFSET} "
-            "is not twice a positive feature count",
+            FIRST_FEATURE_BASE + features - 1,
+            f"{FIRST_FEATURE_BASE} + {features} - 1 from the features array of the "
+            "fixture meta.json",
         )
-    features = doubled // 2
     return (
-        FIRST_FEATURE_BASE + features - 1,
-        f"history array length {doubled} at byte {FEATURE_COUNT_OFFSET} "
-        f"gives {features} features",
+        FIRST_FEATURE_BASE,
+        f"{FIRST_FEATURE_BASE}, the base of the smallest traced document, because "
+        "the fixture meta.json names no features array",
     )
 
 
-def best_base(
-    blob: bytes, layouts: LayoutTable, start: int, mo_version: int | None
-) -> Tuple[int, str, VerifyReport]:
-    first = verify(
+def resolved_base(
+    blob: bytes, layouts: LayoutTable, seed: int, mo_version: int | None
+) -> BaseResolution:
+    return resolve_base(
         blob,
-        start,
+        seed,
         layouts,
         header_size=STREAM_HEADER_SIZE,
         mo_version=mo_version,
     )
-    if first.identical:
-        return start, "derived", first
-    candidates = [
-        candidate
-        for candidate in range(
-            max(1, start - BASE_SEARCH_SPAN), start + BASE_SEARCH_SPAN + 1
-        )
-        if candidate != start
-    ]
-    best = first
-    for candidate in candidates:
-        report = verify(
-            blob,
-            candidate,
-            layouts,
-            header_size=STREAM_HEADER_SIZE,
-            mo_version=mo_version,
-        )
-        if report.identical:
-            return candidate, "searched", report
-        if report.segmented and not best.segmented:
-            best = report
-    return start, "derived", best
 
 
 def run(fixtures: Path, layouts_path: Path, segments_dir: Path) -> dict:
@@ -212,12 +185,21 @@ def run(fixtures: Path, layouts_path: Path, segments_dir: Path) -> dict:
     corpus_version, corpus_rule = authored_mo_version(traced)
     for donor in donors:
         blob = (donor / "resolved.bin").read_bytes()
-        start, rule = derived_base(blob)
+        seed, rule = seed_base(donor)
         mo_version, version_rule = donor_mo_version(donor)
         if mo_version is None:
             mo_version, version_rule = corpus_version, corpus_rule
         versions[mo_version if mo_version is not None else -1] += 1
-        base, method, report = best_base(blob, layouts, start, mo_version)
+        resolution = resolved_base(blob, layouts, seed, mo_version)
+        base = resolution.base
+        method = "seed" if base == seed else "refined"
+        report = verify(
+            blob,
+            base,
+            layouts,
+            header_size=STREAM_HEADER_SIZE,
+            mo_version=mo_version,
+        )
         meta_features = fixture_feature_count(donor)
         scanned = scanned_class_names(blob)
         outstanding = sorted(name for name in scanned if name in partial)
@@ -233,11 +215,10 @@ def run(fixtures: Path, layouts_path: Path, segments_dir: Path) -> dict:
         }
         row.update(report.as_dict())
         row["base"] = base
+        row["base_resolution"] = resolution.as_dict()
         row["meta_feature_count"] = meta_features
-        row["meta_base"] = (
-            FIRST_FEATURE_BASE + meta_features - 1 if meta_features > 0 else -1
-        )
-        row["base_agrees_with_meta"] = row["meta_base"] == base
+        row["meta_base"] = seed
+        row["base_agrees_with_meta"] = seed == base
         row["scanned_class_count"] = len(scanned)
         row["outstanding_partial_classes"] = outstanding
         row["classes_absent_from_layout_table"] = unknown
@@ -287,26 +268,36 @@ def run(fixtures: Path, layouts_path: Path, segments_dir: Path) -> dict:
             "segmentation"
         ),
         "recorded_trace_bases": recorded_bases(segments_dir),
-        "bases_agreeing_with_fixture_metadata": sum(
+        "bases_taken_from_the_metadata_seed": sum(
             1 for row in rows if row["base_agrees_with_meta"]
         ),
-        "bases_disagreeing_with_fixture_metadata": [
+        "bases_refined_away_from_the_metadata_seed": [
             {
                 "donor": row["donor"],
-                "derived": row["base"],
-                "from_metadata": row["meta_base"],
+                "resolved": row["base"],
+                "seed": row["meta_base"],
+                "objects_reached": row["base_resolution"]["progress"],
+                "tried": row["base_resolution"]["tried"],
             }
             for row in rows
             if not row["base_agrees_with_meta"]
         ],
         "base_derivation": (
-            "base = 109 + feature_count - 1 where 2 * feature_count is the u16 at "
-            f"stream byte {FEATURE_COUNT_OFFSET}; when the derived base does not "
-            f"produce a byte identical re-emit, bases within {BASE_SEARCH_SPAN} of "
-            "it are searched and the method column records which one was used; the "
-            "derived value is cross checked against 109 + feature_count - 1 taken "
-            "from each fixture meta.json, and the disagreements are listed because "
-            "segmentation stops too early to settle them independently"
+            "the base is seeded at 109 + feature_count - 1 from the features array of "
+            "the fixture meta.json and then refined against the stream: when the walk "
+            "stops on a class or object reference at or above the trial base that no "
+            "definition has produced, the reference index minus the counter offset of "
+            "every definition already reached names the bases that would resolve it, "
+            "and each is walked in turn until one segments or the candidates run out; "
+            "the base that reaches the most objects wins and the method column records "
+            "whether that was the seed or a refinement; the seed is only a seed, "
+            "because 109 + feature_count - 1 is refuted by the fixtures whose "
+            "Contents/Config-0 node population differs from the traced boss family: a "
+            "revolve feature adds one counter unit (boss_disjoint_revolve, boss_revcut "
+            "and arcboss_cut_cut_cut_through_rev resolve one above the seed), a "
+            "mid-plane end condition removes one (boss_midplane resolves one below), "
+            "and the extra document metadata of arcboss_cut_cut_cut_through_rev_meta "
+            "moves it to 337, far outside any fixed window"
         ),
         "donors": rows,
     }

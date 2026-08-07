@@ -90,6 +90,53 @@ The class name expected in each slot, in read order. `"*"` means the slot is pol
 tag at that position decides. A trailing `"..."` entry means the slot repeats, and `repeat_count`
 must then name the field holding the count.
 
+#### A concrete slot name binds an external class by identity
+
+A class-reference token whose index is **below** the stream's `base` names a class some earlier
+stream of the same document defined. `re/solidworks/archive/EXTERNAL_CLASSES.md` §2 shows that
+index is document-specific and is **not** a function of `base`: `moUnitComponent_c` is 43 in eight
+traced parts and 45 in `COJINETE INFERIOR`, `suObList` moves over 82–85, `moPMarkRecord_c` over
+102–106, and two donor fixtures reference `moUnitComponent_c` at 42. So the table cannot enumerate
+the indices, and `external#<index>` aliases only cover the ones a trace happened to record.
+
+The binding therefore runs off the slot, not the index. `gen_class_layouts.py` rewrites any slot
+whose traced occupant resolves to one of those classes so it carries the **class name** rather than
+the alias — `moCompFeature_c.child_slots` is `["moUnitComponent_c"]`, not `["*"]` or
+`["external#43"]`. When `segment()` meets a class reference below `base` that no
+`external#<index>` entry names, it takes the layout of the class the slot declares. That is the
+class the parent's decompiled `Serialize` is recorded to read at that position, so the resolution
+is by identity and holds at any index.
+
+Three constraints keep it sound:
+
+* A slot is bound only when **every** traced occupant of it resolves to the same class. A slot with
+  two different resolved occupants stays `"*"`.
+* A slot at or past a repeated template is left alone, because rewriting it would move
+  `template_slot` and change the child count arithmetic.
+* A `"*"` slot binds nothing. An unknown below-base index in a polymorphic slot is still refused
+  with `no layout entry recorded for this class`, because nothing names what it holds.
+
+## Deriving the map base
+
+`base` is the `su_CArchive` map counter `Contents/Config-0-ResolvedFeatures` starts at, which is
+the final counter of `Contents/Config-0`. It is not in the stream. `109 + feature_count - 1` fits
+the traced `boss1..boss4` family but is **refuted** as a rule: a revolve feature adds one counter
+unit to `Config-0` (`boss_disjoint_revolve`, `boss_revcut` and `arcboss_cut_cut_cut_through_rev`
+sit one above it), a mid-plane end condition removes one (`boss_midplane` sits one below), and the
+extra document metadata of `arcboss_cut_cut_cut_through_rev_meta` puts its base at **337**.
+
+`resolve_base()` in `src/convert/adapters/solidworks/archive.py` therefore treats that expression
+as a **seed** and refines it against the stream. When the walk stops on a class reference at or
+above the trial base that no definition has produced, the counter offset of every definition
+already reached is known, so `reference index - offset` enumerates the bases that would resolve
+that reference. Each is walked in turn and the base reaching the most objects wins;
+`BaseResolution` records the seed, the candidates tried, the candidates the refinement implied, and
+whether the winner came from the seed or from a refinement.
+
+Only class-reference failures feed the refinement. An object-reference index at or above the base
+is, in these streams, a payload word a mis-parse walked into — the `18000` generation word and the
+tree ids — and it yields no candidate that any fixture needs.
+
 ### `runs`
 
 Constant run lengths in bytes, keyed as above. Copy these from `solve_runs.py` output rather than

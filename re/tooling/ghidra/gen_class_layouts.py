@@ -599,6 +599,54 @@ def merge_external(
     return merged, pinned, bindings
 
 
+def external_slot_classes(
+    solver: solve_runs.Solver, aliases: Mapping[str, str]
+) -> Dict[Tuple[str, int], str]:
+    table: Dict[Tuple[str, int], set] = collections.defaultdict(set)
+    for label, segments in solver.segments.items():
+        kids = solver.kids[label]
+        for node, item in enumerate(segments):
+            if item["kind"] in NO_BODY_KINDS:
+                continue
+            for slot, child in enumerate(kids[node]):
+                entry = segments[child]
+                if entry["kind"] in NO_BODY_KINDS:
+                    continue
+                resolved = aliases.get(str(entry["class_name"]))
+                if resolved is not None:
+                    table[(str(item["class_name"]), slot)].add(resolved)
+    return {key: next(iter(value)) for key, value in table.items() if len(value) == 1}
+
+
+def bind_external_slots(
+    classes: Dict[str, dict],
+    table: Mapping[Tuple[str, int], str],
+    aliases: Mapping[str, str],
+) -> Tuple[Dict[str, dict], List[dict]]:
+    merged = dict(classes)
+    bound: List[dict] = []
+    for (parent, slot), resolved in sorted(table.items()):
+        entry = merged.get(parent)
+        if entry is None or resolved not in merged:
+            continue
+        slots = list(entry.get("child_slots", ()))
+        if slot >= len(slots):
+            continue
+        if REPEATED_SLOT in slots and slot >= len(slots) - 2:
+            continue
+        current = str(slots[slot])
+        if current == resolved:
+            continue
+        if current != POLYMORPHIC_SLOT and current not in aliases:
+            continue
+        slots[slot] = resolved
+        updated = dict(entry)
+        updated["child_slots"] = slots
+        merged[parent] = updated
+        bound.append({"class": parent, "slot": slot, "was": current, "now": resolved})
+    return merged, bound
+
+
 def traced_streams(traces: Sequence[Mapping[str, object]]) -> Dict[str, bytes]:
     sys.path.insert(0, str(ROOT / "src"))
     from convert.adapters.solidworks.container import SldprtArchive
@@ -635,12 +683,29 @@ def generate(
     classes, decompiled_count = merge_decompiled(classes, decompiled)
     classes, versioned_count = merge_versioned(classes, versioned)
     classes, external_count, external_bindings = merge_external(classes, external)
+    aliases = {
+        alias: name for name, group in external_bindings.items() for alias in group
+    }
+    classes, bound_slots = bind_external_slots(
+        classes, external_slot_classes(solver, aliases), aliases
+    )
     gated = sorted(
         name for name, entry in classes.items() if "runs_by_version" in entry
     )
     return {
         "external_classes": external_count,
         "external_bindings": external_bindings,
+        "external_slot_bindings": bound_slots,
+        "external_slot_binding_contract": (
+            "a child slot whose traced occupant is one of the resolved external "
+            "classes carries that class name rather than the document specific "
+            "external#<index> alias, so the segmenter binds an unknown below base "
+            "class index from the class the parent Serialize is recorded to read at "
+            "that position instead of from the index; a slot is only bound when every "
+            "traced occupant of it resolves to the same class, and a slot at or past a "
+            "repeated template is left alone because rewriting it would move the "
+            "template"
+        ),
         "streams_read_for_string_rules": sorted(streams),
         "version": 1,
         "source": " + ".join(

@@ -39,6 +39,8 @@ OPAQUE_RULE = "opaque"
 STRING_RULE = "string"
 COUNT_RULE = "count"
 CONDITIONAL_RULE = "conditional"
+EXTERNAL_PREFIX = "external#"
+BASE_RESOLUTION_LIMIT = 64
 
 
 class ArchiveError(SldprtFormatError):
@@ -58,6 +60,8 @@ class SegmentationError(ArchiveError):
         base: int = -1,
         progress: int = -1,
         depth: int = -1,
+        unresolved_index: int = -1,
+        unresolved_kind: str = "",
     ) -> None:
         self.class_name = class_name
         self.slot = slot
@@ -66,6 +70,8 @@ class SegmentationError(ArchiveError):
         self.base = base
         self.progress = progress
         self.depth = depth
+        self.unresolved_index = unresolved_index
+        self.unresolved_kind = unresolved_kind
         self.reached: tuple[StaticSegment, ...] = ()
         super().__init__(
             f"class {class_name!r} slot {slot!r} at byte offset {offset}: {reason}"
@@ -751,6 +757,34 @@ def _advance(
     return end
 
 
+def _declared_slot_class(layouts: LayoutTable, frames: Sequence[_Frame]) -> str:
+    if not frames:
+        return ""
+    frame = frames[-1]
+    layout = frame.layout
+    slots = layout.child_slots
+    slot = frame.slot
+    if layout.repeat_count is not None and slot >= layout.template_slot:
+        slot = layout.template_slot
+    if slot < 0 or slot >= len(slots):
+        return ""
+    declared = slots[slot]
+    if declared in (POLYMORPHIC_SLOT, REPEATED_SLOT):
+        return ""
+    if declared not in layouts:
+        return ""
+    return declared
+
+
+def _external_name(
+    class_index: int, layouts: LayoutTable, frames: Sequence[_Frame]
+) -> str:
+    alias = f"{EXTERNAL_PREFIX}{class_index}"
+    if alias in layouts:
+        return alias
+    return _declared_slot_class(layouts, frames) or alias
+
+
 def _segment_walk(
     blob: bytes,
     base: int,
@@ -804,8 +838,12 @@ def _segment_walk(
                     f"class reference {class_index} is at or above the base {base} "
                     "but no definition has been seen",
                     base=base,
+                    unresolved_index=class_index,
+                    unresolved_kind=CLASS_REFERENCE_KIND,
                 )
-            name = class_names.get(class_index, f"external#{class_index}")
+            name = class_names.get(class_index, "")
+            if not name:
+                name = _external_name(class_index, layouts, frames)
             object_index = counter
             object_owner[object_index] = name
             counter += 1
@@ -820,8 +858,10 @@ def _segment_walk(
                     f"object reference {object_index} is at or above the base {base} "
                     "but no such object has been seen",
                     base=base,
+                    unresolved_index=object_index,
+                    unresolved_kind=OBJECT_REFERENCE_KIND,
                 )
-            name = object_owner.get(object_index, f"external#{object_index}")
+            name = object_owner.get(object_index, f"{EXTERNAL_PREFIX}{object_index}")
         else:
             class_index = 0
             object_index = 0
@@ -980,6 +1020,103 @@ def segment(
         if not error.reached:
             error.reached = tuple(reached)
         raise
+
+
+@dataclass(frozen=True, slots=True)
+class BaseResolution:
+    base: int
+    seed: int
+    segmented: bool
+    progress: int
+    offset: int
+    tried: tuple[int, ...]
+    implied: tuple[int, ...]
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "base": self.base,
+            "seed": self.seed,
+            "segmented": self.segmented,
+            "progress": self.progress,
+            "offset": self.offset,
+            "tried": list(self.tried),
+            "implied": list(self.implied),
+        }
+
+
+def implied_bases(error: SegmentationError, base: int) -> tuple[int, ...]:
+    if error.unresolved_index < 0:
+        return ()
+    if error.unresolved_kind != CLASS_REFERENCE_KIND:
+        return ()
+    offsets = {
+        item.class_index - base
+        for item in error.reached
+        if item.kind == DEFINITION_KIND
+    }
+    found = {
+        error.unresolved_index - value
+        for value in offsets
+        if error.unresolved_index - value >= 1
+    }
+    return tuple(sorted(found, reverse=True))
+
+
+def resolve_base(
+    blob: bytes,
+    seed: int,
+    layouts: LayoutTable,
+    *,
+    header_size: int = STREAM_HEADER_SIZE,
+    mo_version: int | None = None,
+    limit: int = BASE_RESOLUTION_LIMIT,
+) -> BaseResolution:
+    if seed < 1:
+        raise ArchiveError(f"base seed {seed} must be positive")
+    if limit < 1:
+        raise ArchiveError(f"base resolution limit {limit} must be positive")
+    queue: list[int] = [seed]
+    tried: list[int] = []
+    implied: list[int] = []
+    chosen = seed
+    best = (0, -1, -1)
+    while queue and len(tried) < limit:
+        candidate = queue.pop(0)
+        if candidate < 1 or candidate in tried:
+            continue
+        tried.append(candidate)
+        try:
+            produced = segment(
+                blob,
+                candidate,
+                layouts,
+                header_size=header_size,
+                mo_version=mo_version,
+            )
+        except SegmentationError as error:
+            score = (0, error.progress, error.offset)
+            if score > best:
+                best = score
+                chosen = candidate
+            for value in implied_bases(error, candidate):
+                if value not in tried and value not in queue:
+                    queue.append(value)
+                    implied.append(value)
+            continue
+        except ArchiveError:
+            continue
+        chosen = candidate
+        best = (1, len(produced), len(blob))
+        break
+    return BaseResolution(
+        base=chosen,
+        seed=seed,
+        segmented=bool(best[0]),
+        progress=best[1],
+        offset=best[2],
+        tried=tuple(tried),
+        implied=tuple(implied),
+    )
 
 
 def build_model(

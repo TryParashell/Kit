@@ -268,7 +268,7 @@
     "*",
     "..."
    ],
-   "repeat_count": "EntityCount",
+   "repeat_count": null,
    "runs": {
     "lead": 49,
     "0": 8,
@@ -279,7 +279,7 @@
     {
      "slot": "3",
      "rule": "opaque",
-     "note": "start of the sketch-entity list. The u16 at lead+0 is the entity count: it equals the number of traced child pairs in 24 of 24 instances (1 for the origin sketches, 3 for the circle sketch, 4 for the rectangle sketches). Each entity is a handle object, run 0, a second handle object, then a payload run. The payload is 138 bytes for a line but 360, 461, 507, 968, 1075, 6016 and 6622 bytes were also measured, so the stride is not fixed and the run length is still not computable. Closing it needs sgSketch::Serialize at 0x4c5d28c0, 182 KB of decompiled C, the largest Serialize in the corpus."
+     "note": "start of the sketch-entity list. The lead run is a constant 49 bytes in all 24 traced instances and is not what blocks this class; the child count is. The u16 at lead+0 is the entity count and it does not determine the child count: entity count 4 appears with 12 children eleven times and with 27 children once, and entity counts 1, 3, 9 and 11 appear with 10, 25, 30 and 60 children. It does not determine the handle count either, since entity 9 and entity 11 both carry 10 handle children while entity 4 carries 8 in the authored parts and 2 in Piston Ring KF, so the earlier reading of the entity count as a count of child pairs is refuted by the two vendor parts. Every 1, 2 and 4 byte field at every offset of the 49 byte lead run was tested against the child count of all 24 instances and none differs from it by a constant, so no repeat_count field exists in the lead run and the segmenter must keep refusing the class rather than fit one. The 24 instances hold 6 distinct child counts and 12 distinct child name and run vectors; the runs between children take the values 0, 8, 14, 16, 17, 39, 80, 87, 89, 91, 92, 100, 103 and 104, and the recurring 8 then 39 motif is a pair of null ReadObject results that a per entity branch emits. sgSketch::Serialize at 0x4c5d28c0 is 4850 lines of decompiled C holding 53 counted loops, 70 AR_get scalar reads and only 7 polymorphic operator>> sites, so the child objects are read from inside loops whose element size is chosen by a per element u16 selector and gated on the file version at thresholds 0x218, 0x2e4, 0x3f0, 0x49c and 0x1c4a. That shape is a typed element walk, not a run length, and none of the constant, runs_by_version, string, count or conditional rules can express it: closing it needs a new rule kind that dispatches on the selector, and the evidence in hand does not pin one."
     }
    ],
    "fields": [
