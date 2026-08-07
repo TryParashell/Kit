@@ -17,6 +17,7 @@ ROOT = HERE.parents[2]
 DEFAULT_SEGMENTS = ROOT / "re" / "data" / "segments"
 DEFAULT_DECOMPILED = ROOT / "re" / "data" / "class_layouts_decompiled.json"
 DEFAULT_EXTERNAL = ROOT / "re" / "data" / "external_classes.json"
+DEFAULT_VERSIONED = ROOT / "re" / "data" / "class_layouts_versioned.json"
 DEFAULT_OUT = ROOT / "re" / "data" / "class_layouts.json"
 EXTERNAL_SOURCE = "re/data/external_classes.json"
 EXTERNAL_PREFIX = "external#"
@@ -28,13 +29,32 @@ REPEATED_SLOT = "..."
 POLYMORPHIC_SLOT = "*"
 SOLVED_SOURCE = "re/data/segments"
 DECOMPILED_SOURCE = "re/data/class_layouts_decompiled.json"
+VERSIONED_SOURCE = "re/data/class_layouts_versioned.json"
+
+
+def reparented(
+    segments: Sequence[Mapping[str, object]],
+) -> Tuple[List[List[int]], List[int]]:
+    kids = solve_runs.children_of(segments)
+    parents = [int(item["parent"]) for item in segments]
+    for node in range(len(segments) - 1, -1, -1):
+        if segments[node]["kind"] not in NO_BODY_KINDS or not kids[node]:
+            continue
+        owner = parents[node]
+        moved = kids[node]
+        kids[node] = []
+        for child in moved:
+            parents[child] = owner
+        if owner >= 0:
+            kids[owner] = sorted(kids[owner] + moved)
+    return kids, parents
 
 
 def record_ends(trace: Mapping[str, object]) -> List[int]:
     segments = list(trace["segments"])
     total = int(trace["stream_length"])
     count = len(segments)
-    children = solve_runs.children_of(segments)
+    children = reparented(segments)[0]
     last = list(range(count))
     for node in range(count - 1, -1, -1):
         bound = node
@@ -53,7 +73,7 @@ def record_ends(trace: Mapping[str, object]) -> List[int]:
 
 def contiguous(trace: Mapping[str, object]) -> bool:
     segments = list(trace["segments"])
-    children = solve_runs.children_of(segments)
+    children = reparented(segments)[0]
     reach: List[set] = [set() for _ in segments]
     for node in range(len(segments) - 1, -1, -1):
         acc: set = set()
@@ -73,10 +93,14 @@ class TilingSolver(solve_runs.Solver):
     def __init__(self, traces: Sequence[Mapping[str, object]]) -> None:
         super().__init__(traces)
         self.exact: Dict[str, List[int]] = {}
+        self.parents: Dict[str, List[int]] = {}
         for trace in traces:
             label = str(trace["label"])
             if not contiguous(trace):
                 raise ValueError(f"trace {label} has interleaved object subtrees")
+            kids, parents = reparented(list(trace["segments"]))
+            self.kids[label] = kids
+            self.parents[label] = parents
             self.exact[label] = record_ends(trace)
 
     def seed(self) -> None:
@@ -148,7 +172,7 @@ def observed_lengths(solver: solve_runs.Solver) -> Dict[str, collections.Counter
 
 
 def leaf_instances(
-    solver: solve_runs.Solver,
+    solver: TilingSolver,
 ) -> Dict[str, List[dict]]:
     table: Dict[str, List[dict]] = collections.defaultdict(list)
     for label, segments in solver.segments.items():
@@ -159,7 +183,7 @@ def leaf_instances(
             end = solver.end[(label, node)]
             if end is None:
                 continue
-            parent = item["parent"]
+            parent = solver.parents[label][node]
             if parent < 0:
                 context = ("<root>", -1)
             else:
@@ -472,8 +496,8 @@ def build_classes(
     return classes, statistics
 
 
-def merge_decompiled(
-    classes: Dict[str, dict], path: Path
+def merge_authored(
+    classes: Dict[str, dict], path: Path, source: str
 ) -> Tuple[Dict[str, dict], int]:
     if not path.is_file():
         return classes, 0
@@ -486,9 +510,21 @@ def merge_decompiled(
         if not isinstance(entry, dict):
             raise ValueError(f"{path} entry for {name} is not an object")
         combined = dict(entry)
-        combined["source"] = DECOMPILED_SOURCE
+        combined["source"] = source
         merged[name] = combined
     return merged, len(incoming)
+
+
+def merge_decompiled(
+    classes: Dict[str, dict], path: Path
+) -> Tuple[Dict[str, dict], int]:
+    return merge_authored(classes, path, DECOMPILED_SOURCE)
+
+
+def merge_versioned(
+    classes: Dict[str, dict], path: Path
+) -> Tuple[Dict[str, dict], int]:
+    return merge_authored(classes, path, VERSIONED_SOURCE)
 
 
 def _external_layout(slot: str, record: Mapping[str, object]) -> dict:
@@ -582,7 +618,13 @@ def traced_streams(traces: Sequence[Mapping[str, object]]) -> Dict[str, bytes]:
     return streams
 
 
-def generate(segments_dir: Path, decompiled: Path, external: Path, labels: str) -> dict:
+def generate(
+    segments_dir: Path,
+    decompiled: Path,
+    external: Path,
+    versioned: Path,
+    labels: str,
+) -> dict:
     traces = solve_runs.load_traces(str(segments_dir), labels)
     if not traces:
         raise ValueError(f"no segmentations found under {segments_dir}")
@@ -591,7 +633,9 @@ def generate(segments_dir: Path, decompiled: Path, external: Path, labels: str) 
     streams = traced_streams(traces)
     classes, statistics = build_classes(solver, streams)
     classes, decompiled_count = merge_decompiled(classes, decompiled)
+    classes, versioned_count = merge_versioned(classes, versioned)
     classes, external_count, external_bindings = merge_external(classes, external)
+    gated = sorted(name for name, entry in classes.items() if "runs_by_version" in entry)
     return {
         "external_classes": external_count,
         "external_bindings": external_bindings,
@@ -600,6 +644,7 @@ def generate(segments_dir: Path, decompiled: Path, external: Path, labels: str) 
         "source": " + ".join(
             [SOLVED_SOURCE]
             + ([DECOMPILED_SOURCE] if decompiled_count else [])
+            + ([VERSIONED_SOURCE] if versioned_count else [])
             + ([EXTERNAL_SOURCE] if external_count else [])
         ),
         "traces": [str(trace["label"]) for trace in traces],
@@ -621,6 +666,14 @@ def generate(segments_dir: Path, decompiled: Path, external: Path, labels: str) 
         "partial_classes": statistics["partial"],
         "opaque_runs": statistics["opaque_runs"],
         "decompiled_classes": decompiled_count,
+        "versioned_classes": versioned_count,
+        "version_gated_classes": gated,
+        "version_gate_contract": (
+            "runs_by_version maps a run key to a mapping from document version to run "
+            "length; the segmenter consults it before runs, falls back to runs when "
+            "the version is unknown or absent from the mapping, and refuses the class "
+            "when neither names the run"
+        ),
         "classes": dict(sorted(classes.items())),
     }
 
@@ -630,6 +683,7 @@ def main() -> int:
     parser.add_argument("--segments", default=str(DEFAULT_SEGMENTS))
     parser.add_argument("--decompiled", default=str(DEFAULT_DECOMPILED))
     parser.add_argument("--external", default=str(DEFAULT_EXTERNAL))
+    parser.add_argument("--versioned", default=str(DEFAULT_VERSIONED))
     parser.add_argument("--labels", default="")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     arguments = parser.parse_args()
@@ -637,6 +691,7 @@ def main() -> int:
         Path(arguments.segments),
         Path(arguments.decompiled),
         Path(arguments.external),
+        Path(arguments.versioned),
         arguments.labels,
     )
     destination = Path(arguments.out)
@@ -645,13 +700,16 @@ def main() -> int:
         json.dump(payload, handle, indent=1)
         handle.write("\n")
     print(
-        "classes=%d confirmed=%d partial=%d opaque_runs=%d decompiled=%d external=%d"
+        "classes=%d confirmed=%d partial=%d opaque_runs=%d decompiled=%d "
+        "versioned=%d version_gated=%d external=%d"
         % (
             payload["class_count"],
             payload["confirmed_classes"],
             payload["partial_classes"],
             payload["opaque_runs"],
             payload["decompiled_classes"],
+            payload["versioned_classes"],
+            len(payload["version_gated_classes"]),
             payload["external_classes"],
         )
     )

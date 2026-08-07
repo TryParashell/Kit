@@ -31,6 +31,7 @@ from convert.adapters.solidworks.archive import (
     StaticSegment,
     ArchiveError,
     build_model,
+    container_mo_version,
     encode_class_definition,
     encode_class_reference,
     encode_null,
@@ -74,14 +75,33 @@ def _recorded(label: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _recorded_stream(payload: dict) -> bytes:
+def _recorded_part(payload: dict) -> tuple[bytes, int | None]:
     part = Path(payload["part"])
     if not part.is_file():
         pytest.skip(f"traced part {part} is not present in this checkout")
     archive = SldprtArchive.from_bytes(part.read_bytes())
     blob = archive.streams[RESOLVED_FEATURES_STREAM]
     assert len(blob) == payload["stream_length"]
-    return blob
+    return blob, container_mo_version(archive.streams)
+
+
+def _authored_mo_version() -> int | None:
+    found: set[int] = set()
+    for label in RECORDED_LABELS:
+        if label.startswith("vendor_"):
+            continue
+        path = SEGMENTS / f"segments_{label}.json"
+        if not path.is_file():
+            continue
+        part = Path(json.loads(path.read_text(encoding="utf-8"))["part"])
+        if not part.is_file():
+            continue
+        version = container_mo_version(SldprtArchive.from_bytes(part.read_bytes()).streams)
+        if version is not None:
+            found.add(version)
+    if len(found) != 1:
+        return None
+    return found.pop()
 
 
 def _static_segments(blob: bytes, payload: dict) -> tuple[StaticSegment, ...]:
@@ -125,7 +145,7 @@ def _donor_streams() -> tuple[tuple[str, bytes], ...]:
 @pytest.mark.parametrize("label", RECORDED_LABELS)
 def test_recorded_segmentation_round_trips_byte_identically(label: str) -> None:
     payload = _recorded(label)
-    blob = _recorded_stream(payload)
+    blob = _recorded_part(payload)[0]
     segments = _static_segments(blob, payload)
     model = build_model(blob, segments, payload["base_map_index"], segments[0].offset)
     assert len(model.nodes) == payload["object_count"]
@@ -135,12 +155,18 @@ def test_recorded_segmentation_round_trips_byte_identically(label: str) -> None:
 @pytest.mark.parametrize("label", RECORDED_LABELS)
 def test_static_segmentation_agrees_with_the_recorded_offsets(label: str) -> None:
     payload = _recorded(label)
-    blob = _recorded_stream(payload)
+    blob, version = _recorded_part(payload)
     layouts = _layouts()
     expected = [item["offset"] for item in payload["segments"]]
     header = payload["segments"][0]["offset"]
     try:
-        produced = segment(blob, payload["base_map_index"], layouts, header_size=header)
+        produced = segment(
+            blob,
+            payload["base_map_index"],
+            layouts,
+            header_size=header,
+            mo_version=version,
+        )
         reached = [item.offset for item in produced]
     except SegmentationError as failure:
         reached = [item.offset for item in failure.reached]
@@ -563,6 +589,148 @@ def test_a_conditional_rule_without_a_predicate_is_refused() -> None:
     assert "predicate" in str(failure.value)
 
 
+def test_container_mo_version_reads_the_storage_name() -> None:
+    names = (
+        "Contents/Config-0-ResolvedFeatures",
+        "_DL_VERSION_11000/DLUpdateStamp",
+        "_MO_VERSION_14000/Biography",
+        "_MO_VERSION_14000/History",
+    )
+    assert container_mo_version(names) == 14000
+    assert container_mo_version(("_MO_VERSION_18000\\History",)) == 18000
+    assert container_mo_version(("_MO_VERSION_18000",)) == 18000
+    assert container_mo_version(("_MO_VERSION_14000/H", "_MO_VERSION_18000/H")) == 18000
+    assert container_mo_version(("Contents/Definition", "Header2")) is None
+    assert container_mo_version(("_MO_VERSION_beta/History",)) is None
+    assert container_mo_version(()) is None
+
+
+@pytest.mark.parametrize("label", RECORDED_LABELS)
+def test_recorded_parts_carry_a_readable_document_version(label: str) -> None:
+    payload = _recorded(label)
+    version = _recorded_part(payload)[1]
+    assert version == (14000 if label.startswith("vendor_") else 18000), label
+
+
+def test_a_version_gated_run_is_taken_for_a_version_it_names() -> None:
+    layouts = _single_class_table(
+        {
+            "confidence": "partial",
+            "child_slots": [],
+            "runs": {},
+            "runs_by_version": {"leaf": {"18000": 8, "14000": 4}},
+        }
+    )
+    entry = layouts["solo"]
+    assert entry.constant_run("leaf", 18000) == 8
+    assert entry.constant_run("leaf", 14000) == 4
+    assert entry.constant_run_keys == frozenset({"leaf"})
+    head = b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1)
+    wide = segment(head + b"\x00" * 8, 109, layouts, mo_version=18000)
+    assert wide[0].end == len(head) + 8
+    narrow = segment(head + b"\x00" * 4, 109, layouts, mo_version=14000)
+    assert narrow[0].end == len(head) + 4
+
+
+def test_a_version_the_gate_omits_falls_back_to_the_plain_run() -> None:
+    layouts = _single_class_table(
+        {
+            "confidence": "partial",
+            "child_slots": ["*"],
+            "runs": {"lead": 2, "0": 6},
+            "runs_by_version": {"0": {"18000": 10}},
+        }
+    )
+    entry = layouts["solo"]
+    assert entry.constant_run("0", 18000) == 10
+    assert entry.constant_run("0", 14000) == 6
+    assert entry.constant_run("0", None) == 6
+    assert entry.constant_run("lead", 18000) == 2
+    assert entry.constant_run("missing", 18000) is None
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("solo", 1)
+        + b"\x00" * 2
+        + encode_null()
+        + b"\x00" * 6
+    )
+    assert segment(blob, 109, layouts, mo_version=14000)[-1].end == len(blob)
+    assert segment(blob, 109, layouts)[-1].end == len(blob)
+
+
+def test_a_version_gated_run_without_a_fallback_is_refused() -> None:
+    layouts = _single_class_table(
+        {
+            "confidence": "partial",
+            "child_slots": [],
+            "runs": {},
+            "runs_by_version": {"leaf": {"18000": 4}},
+        }
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + b"\x00" * 4
+    )
+    assert segment(blob, 109, layouts, mo_version=18000)[0].end == len(blob)
+    with pytest.raises(SegmentationError) as missed:
+        segment(blob, 109, layouts, mo_version=14000)
+    assert missed.value.class_name == "solo"
+    assert missed.value.slot == "leaf"
+    assert "document version 14000" in str(missed.value)
+    with pytest.raises(SegmentationError) as unknown:
+        segment(blob, 109, layouts)
+    assert "no document version was supplied" in str(unknown.value)
+
+
+def test_segment_rejects_a_negative_document_version() -> None:
+    layouts = _single_class_table(
+        {"confidence": "confirmed", "child_slots": [], "runs": {"leaf": 0}}
+    )
+    blob = b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1)
+    with pytest.raises(ArchiveError):
+        segment(blob, 109, layouts, mo_version=-1)
+
+
+def test_runs_by_version_is_validated() -> None:
+    with pytest.raises(ArchiveError):
+        LayoutTable.from_mapping(
+            {"version": 1, "classes": {"solo": {"runs_by_version": []}}}
+        )
+    with pytest.raises(ArchiveError):
+        LayoutTable.from_mapping(
+            {"version": 1, "classes": {"solo": {"runs_by_version": {"leaf": 4}}}}
+        )
+    with pytest.raises(ArchiveError):
+        LayoutTable.from_mapping(
+            {"version": 1, "classes": {"solo": {"runs_by_version": {"leaf": {}}}}}
+        )
+    with pytest.raises(ArchiveError):
+        LayoutTable.from_mapping(
+            {
+                "version": 1,
+                "classes": {"solo": {"runs_by_version": {"leaf": {"v8": 4}}}},
+            }
+        )
+    with pytest.raises(ArchiveError):
+        LayoutTable.from_mapping(
+            {
+                "version": 1,
+                "classes": {"solo": {"runs_by_version": {"leaf": {"18000": -1}}}},
+            }
+        )
+
+
+def test_the_shipped_table_gates_moCompFeature_c_on_the_document_version() -> None:
+    entry = _layouts()["moCompFeature_c"]
+    assert entry.child_slots == ("*",)
+    assert entry.runs == {"lead": 0}
+    assert entry.runs_by_version == {"0": {18000: 89, 14000: 85, 13000: 85}}
+    assert entry.constant_run("0", 18000) == 89
+    assert entry.constant_run("0", 14000) == 85
+    assert entry.constant_run("0", 13000) == 85
+    assert entry.constant_run("0", None) is None
+    assert not entry.variable_runs
+
+
 def test_layout_table_validates_its_input() -> None:
     with pytest.raises(ArchiveError):
         LayoutTable.from_mapping({"version": 1})
@@ -592,11 +760,17 @@ def test_shipped_layout_table_matches_the_recorded_classes() -> None:
     for name, entry in layouts.classes.items():
         assert entry.confidence in {"confirmed", "partial", "not found"}
         assert entry.source
+        assert set(entry.runs_by_version) <= set(entry.run_keys()), name
+        for key, gated in entry.runs_by_version.items():
+            assert gated, (name, key)
+            for version, length in gated.items():
+                assert version > 0, (name, key)
+                assert length >= 0, (name, key)
         if entry.confidence == "confirmed":
             assert not entry.repeats
             for key in entry.run_keys():
                 elements = entry.variable_runs.get(key, ())
-                assert key in entry.runs or elements, (name, key)
+                assert key in entry.constant_run_keys or elements, (name, key)
                 assert all(element.rule != "opaque" for element in elements), (
                     name,
                     key,
@@ -622,9 +796,16 @@ def test_fixture_verification_count_does_not_regress() -> None:
     layouts = _layouts()
     streams = _donor_streams()
     assert len(streams) == 32
+    version = _authored_mo_version()
     identical = 0
     for _, blob in streams:
-        report = verify(blob, 109, layouts, header_size=STREAM_HEADER_SIZE)
+        report = verify(
+            blob,
+            109,
+            layouts,
+            header_size=STREAM_HEADER_SIZE,
+            mo_version=version,
+        )
         if report.identical:
             identical += 1
     assert identical >= FIXTURES_VERIFYING_BYTE_IDENTICALLY
@@ -642,7 +823,7 @@ def test_resolved_external_classes_carry_measured_runs() -> None:
         assert not entry.repeats, name
         for key in entry.run_keys():
             elements = entry.variable_runs.get(key, ())
-            assert key in entry.runs or elements, (name, key)
+            assert key in entry.constant_run_keys or elements, (name, key)
             for element in elements:
                 assert element.rule != "opaque", (name, key)
     aliases = {name for name in resolved if name.startswith("external#")}
@@ -653,8 +834,15 @@ def test_resolved_external_classes_carry_measured_runs() -> None:
 
 def test_fixture_segmentation_failures_name_the_blocking_class() -> None:
     layouts = _layouts()
+    version = _authored_mo_version()
     for name, blob in _donor_streams():
-        report = verify(blob, 109, layouts, header_size=STREAM_HEADER_SIZE)
+        report = verify(
+            blob,
+            109,
+            layouts,
+            header_size=STREAM_HEADER_SIZE,
+            mo_version=version,
+        )
         if report.identical:
             continue
         assert report.blocking_class, name
@@ -663,4 +851,5 @@ def test_fixture_segmentation_failures_name_the_blocking_class() -> None:
         assert (
             report.blocking_class in layouts.classes
             or report.blocking_class.startswith("external#")
+            or report.blocking_class == "<stream>"
         ), name
