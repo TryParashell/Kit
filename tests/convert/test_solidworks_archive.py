@@ -37,8 +37,10 @@ from convert.adapters.solidworks.archive import (
     encode_null,
     encode_object_reference,
     encode_string,
+    implied_bases,
     read_string,
     read_tag,
+    resolve_base,
     segment,
     verify,
 )
@@ -62,6 +64,8 @@ RECORDED_LABELS = (
 )
 FIXTURES_VERIFYING_BYTE_IDENTICALLY = 0
 CONFIRMED_CLASS_FLOOR = 50
+FIXTURE_OBJECT_FLOOR = 4764
+FIXTURE_BASE_SEED = 109
 
 
 def _layouts() -> LayoutTable:
@@ -422,6 +426,169 @@ def test_segment_refuses_an_unresolved_reference_at_or_above_the_base() -> None:
     assert "no definition has been seen" in str(failure.value)
 
 
+def test_a_below_base_class_index_binds_from_the_declared_slot() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "parent": {
+                    "confidence": "confirmed",
+                    "child_slots": ["owned"],
+                    "runs": {"lead": 0, "0": 0},
+                },
+                "owned": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"leaf": 3},
+                },
+            },
+        }
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("parent", 1)
+        + encode_class_reference(42)
+        + bytes(range(3))
+    )
+    segments = segment(blob, 109, layouts)
+    assert [item.class_name for item in segments] == ["parent", "owned"]
+    assert segments[1].class_index == 42
+    assert segments[1].end == len(blob)
+    assert verify(blob, 109, layouts).identical
+
+
+def test_a_below_base_class_index_keeps_its_alias_when_the_table_names_it() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "parent": {
+                    "confidence": "confirmed",
+                    "child_slots": ["owned"],
+                    "runs": {"lead": 0, "0": 0},
+                },
+                "owned": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"leaf": 9},
+                },
+                "external#42": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"leaf": 3},
+                },
+            },
+        }
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("parent", 1)
+        + encode_class_reference(42)
+        + bytes(range(3))
+    )
+    segments = segment(blob, 109, layouts)
+    assert [item.class_name for item in segments] == ["parent", "external#42"]
+
+
+def test_a_polymorphic_slot_leaves_a_below_base_index_unbound() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "parent": {
+                    "confidence": "confirmed",
+                    "child_slots": ["*"],
+                    "runs": {"lead": 0, "0": 0},
+                },
+            },
+        }
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("parent", 1)
+        + encode_class_reference(42)
+    )
+    with pytest.raises(SegmentationError) as failure:
+        segment(blob, 109, layouts)
+    assert failure.value.class_name == "external#42"
+    assert "no layout entry" in str(failure.value)
+
+
+def _base_refinement_table() -> LayoutTable:
+    return LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "first": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"leaf": 0},
+                },
+                "second": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"leaf": 0},
+                },
+            },
+        }
+    )
+
+
+def test_resolve_base_refines_from_an_unresolved_class_reference() -> None:
+    layouts = _base_refinement_table()
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("first", 1)
+        + encode_class_definition("second", 1)
+        + encode_class_reference(203)
+        + encode_class_reference(201)
+    )
+    resolution = resolve_base(blob, 109, layouts)
+    assert resolution.base == 201
+    assert resolution.segmented
+    assert resolution.seed == 109
+    assert 201 in resolution.implied
+    assert resolution.tried[0] == 109
+    assert verify(blob, resolution.base, layouts).identical
+
+
+def test_resolve_base_keeps_a_seed_that_already_segments() -> None:
+    layouts = _base_refinement_table()
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("first", 1)
+        + encode_class_reference(109)
+    )
+    resolution = resolve_base(blob, 109, layouts)
+    assert resolution.base == 109
+    assert resolution.tried == (109,)
+    assert resolution.implied == ()
+    assert resolution.segmented
+
+
+def test_resolve_base_rejects_an_unusable_seed_or_limit() -> None:
+    layouts = _base_refinement_table()
+    blob = b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("first", 1)
+    with pytest.raises(ArchiveError):
+        resolve_base(blob, 0, layouts)
+    with pytest.raises(ArchiveError):
+        resolve_base(blob, 109, layouts, limit=0)
+
+
+def test_implied_bases_ignores_an_unresolved_object_reference() -> None:
+    layouts = _base_refinement_table()
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("first", 1)
+        + encode_object_reference(18000)
+    )
+    with pytest.raises(SegmentationError) as failure:
+        segment(blob, 109, layouts)
+    assert failure.value.unresolved_index == 18000
+    assert failure.value.unresolved_kind == OBJECT_REFERENCE_KIND
+    assert implied_bases(failure.value, 109) == ()
+
+
 def test_segment_tiles_and_re_emits_a_synthetic_stream() -> None:
     layouts = LayoutTable.from_mapping(
         {
@@ -723,7 +890,7 @@ def test_runs_by_version_is_validated() -> None:
 
 def test_the_shipped_table_gates_moCompFeature_c_on_the_document_version() -> None:
     entry = _layouts()["moCompFeature_c"]
-    assert entry.child_slots == ("*",)
+    assert entry.child_slots == ("moUnitComponent_c",)
     assert entry.runs == {"lead": 0}
     assert entry.runs_by_version == {"0": {18000: 89, 14000: 85, 13000: 85}}
     assert entry.constant_run("0", 18000) == 89
@@ -811,6 +978,40 @@ def test_fixture_verification_count_does_not_regress() -> None:
         if report.identical:
             identical += 1
     assert identical >= FIXTURES_VERIFYING_BYTE_IDENTICALLY
+
+
+def _donor_feature_count(name: str) -> int:
+    meta = DONORS / name / "meta.json"
+    if not meta.is_file():
+        return -1
+    features = json.loads(meta.read_text(encoding="utf-8")).get("features")
+    return len(features) if isinstance(features, list) else -1
+
+
+def test_fixture_object_reach_does_not_regress() -> None:
+    layouts = _layouts()
+    version = _authored_mo_version()
+    reached = 0
+    for name, blob in _donor_streams():
+        features = _donor_feature_count(name)
+        seed = FIXTURE_BASE_SEED + features - 1 if features > 0 else FIXTURE_BASE_SEED
+        resolution = resolve_base(
+            blob,
+            seed,
+            layouts,
+            header_size=STREAM_HEADER_SIZE,
+            mo_version=version,
+        )
+        report = verify(
+            blob,
+            resolution.base,
+            layouts,
+            header_size=STREAM_HEADER_SIZE,
+            mo_version=version,
+        )
+        assert report.object_count > 0, name
+        reached += report.object_count
+    assert reached >= FIXTURE_OBJECT_FLOOR
 
 
 def test_resolved_external_classes_carry_measured_runs() -> None:
