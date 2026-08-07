@@ -25,6 +25,7 @@ PINNED_EXTERNAL_SLOTS = ("component", "object_list", "pmark_record")
 NO_BODY_KINDS = solve_runs.NO_BODY_KINDS
 LEAD_RUN = "lead"
 LEAF_RUN = "leaf"
+LOOP_TAIL_RUN = "tail"
 REPEATED_SLOT = "..."
 POLYMORPHIC_SLOT = "*"
 SOLVED_SOURCE = "re/data/segments"
@@ -490,6 +491,37 @@ def build_classes(
                 }
             )
             entry["repeat_note"] = repeat_note
+        if varying and shape is None and seen[0] > 0:
+            prefix = seen[0]
+            entry["repeat_prefix"] = prefix
+            kept = {LEAD_RUN} | {str(slot) for slot in range(prefix - 1)}
+            variable = [item for item in variable if item["slot"] in kept]
+            observed_tail = ", ".join(
+                f"{length}x{tally}"
+                for length, tally in sorted(
+                    lengths.get(f"{name}@{prefix - 1}", {}).items()
+                )
+            )
+            variable.append(
+                {
+                    "slot": LOOP_TAIL_RUN,
+                    "rule": "opaque",
+                    "note": (
+                        f"every traced instance carries at least {prefix} children, so "
+                        f"the segmenter walks those {prefix} slots with the runs solved "
+                        "above and refuses the run that follows the last of them; the "
+                        f"run after slot {prefix - 1} takes the lengths "
+                        f"{observed_tail} across the traced instances because that slot "
+                        "closes the shortest instances and continues the longer ones"
+                        if observed_tail
+                        else (
+                            f"every traced instance carries at least {prefix} children, "
+                            f"so the segmenter walks those {prefix} slots and refuses "
+                            "the run that follows the last of them"
+                        )
+                    ),
+                }
+            )
         if variable:
             entry["variable_runs"] = variable
         classes[name] = entry
@@ -692,6 +724,23 @@ def generate(
     gated = sorted(
         name for name, entry in classes.items() if "runs_by_version" in entry
     )
+    grouped = sorted(name for name, entry in classes.items() if entry.get("groups"))
+    for name in grouped:
+        entry = classes[name]
+        if entry.get("child_slots") or entry.get("repeat_prefix"):
+            raise ValueError(
+                f"{name} carries run groups and slot based children; a grouped class "
+                "drives its whole child list from the groups"
+            )
+        if LEAD_RUN not in entry.get("runs", {}):
+            raise ValueError(f"{name} carries run groups but no lead run")
+        for group in entry["groups"]:
+            if len(group.get("slots", ())) != len(group.get("element", ())):
+                raise ValueError(
+                    f"run group {name}@{group.get('name')} names "
+                    f"{len(group.get('slots', ()))} slots for "
+                    f"{len(group.get('element', ()))} element runs"
+                )
     return {
         "external_classes": external_count,
         "external_bindings": external_bindings,
@@ -726,7 +775,24 @@ def generate(
             "a trailing ... entry in child_slots means the child count is not "
             "constant across the traced instances; repeat_count is null because no "
             "field holding the count has been recovered, and the static segmenter "
-            "refuses such a class rather than guessing"
+            "never guesses the count. repeat_prefix carries the smallest child count "
+            "any traced instance of the class holds, which is the number of leading "
+            "child slots every instance is known to fill; the segmenter walks exactly "
+            "that prefix with the runs solved for those slots and then refuses the "
+            "tail run, so an unresolved child count costs the objects past the prefix "
+            "instead of the whole class"
+        ),
+        "grouped_classes": grouped,
+        "group_contract": (
+            "a class whose body is a chain of counted loops rather than a fixed slot "
+            "list carries groups instead of child_slots: each group reads a count of "
+            "count.width bytes sitting count.back bytes ahead of its own first "
+            "element, walks that many copies of element with one run per element "
+            "child, and then consumes trailer bytes whether or not the count was zero, "
+            "so the trailers of empty groups accumulate into the run that follows the "
+            "last child actually read; repeat replaces the count for a group whose "
+            "children are unconditional, and element_by_version overrides element per "
+            "document version exactly as runs_by_version overrides runs"
         ),
         "class_count": len(classes),
         "confirmed_classes": statistics["confirmed"],

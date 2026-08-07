@@ -8,7 +8,10 @@
   "string": "ff fe ff <u8 units> then units UTF-16LE code units, so 4 + 2*units; ff fe ff ff <u16 units> then 6 + 2*units",
   "count": "count_width bytes of count at the cursor, then stride bytes per element, so count_width + stride*count",
   "conditional": "predicate_width bytes read at predicate_at relative to the cursor; the element is width bytes when the value is in values and 0 bytes otherwise; predicate_at bytes are part of at",
-  "opaque": "length is not computable from the bytes at hand; a segmenter must refuse rather than guess"
+  "opaque": "length is not computable from the bytes at hand; a segmenter must refuse rather than guess",
+  "groups": "an ordered chain of counted child groups for a class whose body is a sequence of loops rather than a fixed slot list; each group reads its count out of the stream at count.back bytes ahead of its first element as a count.width scalar, walks that many copies of element, and consumes trailer bytes after the last one",
+  "repeat": "a group whose element count is a constant rather than a stream field",
+  "element_by_version": "a group element whose runs differ per document version, keyed by the exact version the stream carries, falling through to element when the version is not named"
  },
  "classes": {
   "sgEntHandle": {
@@ -262,26 +265,11 @@
   "sgSketch": {
    "confidence": "partial",
    "serialize": "sldmodu.dll 0x4c5d28c0 sgSketch::Serialize",
-   "child_slots": [
-    "*",
-    "*",
-    "*",
-    "..."
-   ],
+   "child_slots": [],
    "repeat_count": null,
    "runs": {
-    "lead": 49,
-    "0": 8,
-    "1": 39,
-    "2": 0
+    "lead": 49
    },
-   "variable_runs": [
-    {
-     "slot": "3",
-     "rule": "opaque",
-     "note": "start of the sketch-entity list. The lead run is a constant 49 bytes in all 24 traced instances and is not what blocks this class; the child count is. The u16 at lead+0 is the entity count and it does not determine the child count: entity count 4 appears with 12 children eleven times and with 27 children once, and entity counts 1, 3, 9 and 11 appear with 10, 25, 30 and 60 children. It does not determine the handle count either, since entity 9 and entity 11 both carry 10 handle children while entity 4 carries 8 in the authored parts and 2 in Piston Ring KF, so the earlier reading of the entity count as a count of child pairs is refuted by the two vendor parts. Every 1, 2 and 4 byte field at every offset of the 49 byte lead run was tested against the child count of all 24 instances and none differs from it by a constant, so no repeat_count field exists in the lead run and the segmenter must keep refusing the class rather than fit one. The 24 instances hold 6 distinct child counts and 12 distinct child name and run vectors; the runs between children take the values 0, 8, 14, 16, 17, 39, 80, 87, 89, 91, 92, 100, 103 and 104, and the recurring 8 then 39 motif is a pair of null ReadObject results that a per entity branch emits. sgSketch::Serialize at 0x4c5d28c0 is 4850 lines of decompiled C holding 53 counted loops, 70 AR_get scalar reads and only 7 polymorphic operator>> sites, so the child objects are read from inside loops whose element size is chosen by a per element u16 selector and gated on the file version at thresholds 0x218, 0x2e4, 0x3f0, 0x49c and 0x1c4a. That shape is a typed element walk, not a run length, and none of the constant, runs_by_version, string, count or conditional rules can express it: closing it needs a new rule kind that dispatches on the selector, and the evidence in hand does not pin one."
-    }
-   ],
    "fields": [
     {
      "run": "lead",
@@ -289,8 +277,145 @@
      "width": 2,
      "type": "u16",
      "name": "EntityCount",
-     "role": "derived",
+     "role": "authored",
      "confidence": "confirmed"
+    }
+   ],
+   "repeat_prefix": 0,
+   "repeat_note": "sgSketch does not have a fixed child arity and its children are not one repeated template either: the body is an ordered chain of counted loops, each with its own count read out of the stream just ahead of it, its own multi child element, and its own trailing filler. sgSketch::Serialize at 0x4c5d28c0 holds only four tagged reads once specialised to version 18000 while the traced scopes hold 10 to 343, and the rsp column of the traces places every ReadObject one and two frames below it, so the loops live in its callees. FUN_4c5e1e30, its single dimension list callee, shows the shape directly: fourteen su_CArchive::AR_get_ushort reads, each immediately driving a do/while whose body is one su_CArchive::ReadObject. The six groups below reproduce the child offsets of all twenty traced sgSketch instances whose scopes are fully derivable, at document versions 14000 and 18000, with zero residual against the recorded scope_end.",
+   "groups": [
+    {
+     "name": "entity",
+     "count": {
+      "back": 49,
+      "width": 2
+     },
+     "slots": [
+      "*",
+      "*",
+      "*",
+      "*"
+     ],
+     "element": [
+      8,
+      39,
+      0,
+      87
+     ],
+     "trailer": 4,
+     "note": "the entity loop. Each element is four tagged reads: two null slots that carry an 8 byte and a 39 byte run, the entity handle, and the entity itself whose 87 byte run closes with the inline moLineViz_c record the 0x800 < version gate takes. The count is the u16 EntityCount at offset 0 of the 49 byte lead, which is 49 bytes ahead of the first element."
+    },
+    {
+     "name": "point",
+     "count": {
+      "back": 12,
+      "width": 2
+     },
+     "slots": [
+      "*",
+      "*"
+     ],
+     "element": [
+      8,
+      80
+     ],
+     "trailer": 13,
+     "note": "the sketch point loop. Each element is two tagged reads with an 8 byte and an 80 byte run. The count is the u16 that sits 12 bytes ahead of the loop, inside the 35 byte record that closes the last entity, and the four trailing bytes of the entity group separate them."
+    },
+    {
+     "name": "relation",
+     "count": {
+      "back": 6,
+      "width": 2
+     },
+     "slots": [
+      "*",
+      "*",
+      "*",
+      "*"
+     ],
+     "element": [
+      0,
+      16,
+      17,
+      4
+     ],
+     "element_by_version": {
+      "14000": [
+       0,
+       16,
+       16,
+       4
+      ],
+      "18000": [
+       0,
+       16,
+       17,
+       4
+      ]
+     },
+     "trailer": 2,
+     "note": "the first relation loop. Each element is four tagged reads: a null slot with no run, a 16 byte handle record, a 17 byte record at document version 18000 and 16 bytes at 14000, and the relation handle followed by 4 bytes. The count is the u16 6 bytes ahead of the loop, inside the 13 byte run that closes the point group."
+    },
+    {
+     "name": "constraint",
+     "count": {
+      "back": 6,
+      "width": 2
+     },
+     "slots": [
+      "*",
+      "*",
+      "*",
+      "*",
+      "*",
+      "*",
+      "*",
+      "*",
+      "*"
+     ],
+     "element": [
+      0,
+      16,
+      17,
+      0,
+      4,
+      26,
+      0,
+      0,
+      6
+     ],
+     "trailer": 8,
+     "note": "the second relation loop, read as nine tagged reads per element with the runs 0, 16, 17, 0, 4, 26, 0, 0 and 6. The count is the u16 6 bytes ahead of the loop. Only document version 18000 exercises this loop in the traces, so its element is not version gated; the 14000 parts all carry a count of zero here."
+    },
+    {
+     "name": "lists",
+     "repeat": 1,
+     "slots": [
+      "suObList",
+      "suObList"
+     ],
+     "element": [
+      170,
+      38
+     ],
+     "trailer": 0,
+     "note": "the two suObList children the sketch always reads after the relation loops, with the 170 byte and 38 byte runs that separate them. Both carry their own u16 element count in their own lead, so the segmenter descends into them; every traced instance holds zero elements in the first and zero or one in the second."
+    },
+    {
+     "name": "chain",
+     "count": {
+      "back": 4,
+      "width": 2
+     },
+     "slots": [
+      "moSketchChain_c"
+     ],
+     "element": [
+      0
+     ],
+     "trailer": 21,
+     "note": "the sketch chain loop. Each element is a single moSketchChain_c with no run of its own, and the group closes with 21 bytes. The count is the u16 4 bytes ahead of the loop, inside the 38 byte run that follows the second suObList."
     }
    ]
   },

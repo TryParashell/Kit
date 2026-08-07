@@ -33,6 +33,7 @@ OBJECT_REFERENCE_KIND = "objectref"
 NULL_KIND = "null"
 LEAD_RUN = "lead"
 LEAF_RUN = "leaf"
+TAIL_RUN = "tail"
 REPEATED_SLOT = "..."
 POLYMORPHIC_SLOT = "*"
 OPAQUE_RULE = "opaque"
@@ -396,6 +397,26 @@ class RepeatField:
 
 
 @dataclass(frozen=True, slots=True)
+class RunGroup:
+    name: str
+    repeat: int
+    count_back: int
+    count_width: int
+    slots: tuple[str, ...]
+    element: tuple[int, ...]
+    element_by_version: Mapping[int, tuple[int, ...]]
+    trailer: int
+    note: str
+
+    def element_runs(self, mo_version: int | None) -> tuple[int, ...]:
+        if mo_version is not None:
+            gated = self.element_by_version.get(mo_version)
+            if gated is not None:
+                return gated
+        return self.element
+
+
+@dataclass(frozen=True, slots=True)
 class ClassLayout:
     name: str
     child_slots: tuple[str, ...]
@@ -406,11 +427,21 @@ class ClassLayout:
     repeat_note: str = ""
     repeat_count: RepeatField | None = None
     repeat_unresolved: bool = False
+    repeat_prefix: int = 0
     runs_by_version: Mapping[str, Mapping[int, int]] = field(default_factory=dict)
+    groups: tuple[RunGroup, ...] = ()
+
+    @property
+    def walks_groups(self) -> bool:
+        return bool(self.groups)
 
     @property
     def repeats(self) -> bool:
-        return self.repeat_unresolved
+        return self.repeat_unresolved and self.repeat_prefix <= 0
+
+    @property
+    def walks_a_prefix(self) -> bool:
+        return self.repeat_unresolved and self.repeat_prefix > 0
 
     @property
     def constant_run_keys(self) -> frozenset[str]:
@@ -429,13 +460,23 @@ class ClassLayout:
         return len(self.child_slots) - 2
 
     def run_key(self, slot: int) -> str:
+        if self.walks_a_prefix and slot >= self.repeat_prefix - 1:
+            return TAIL_RUN
         if self.repeat_count is not None and slot >= self.template_slot:
             return str(self.template_slot)
         return str(slot)
 
     def run_keys(self) -> tuple[str, ...]:
+        if self.groups:
+            return (LEAD_RUN,)
         if not self.child_slots:
             return (LEAF_RUN,)
+        if self.walks_a_prefix:
+            return (
+                (LEAD_RUN,)
+                + tuple(str(slot) for slot in range(self.repeat_prefix - 1))
+                + (TAIL_RUN,)
+            )
         span = (
             self.template_slot + 1
             if self.repeat_count is not None
@@ -489,6 +530,103 @@ class LayoutTable:
         if not isinstance(payload, Mapping):
             raise ArchiveError(f"layout table {location} is not a json object")
         return cls.from_mapping(payload)
+
+
+def _run_group(name: str, entry: Mapping[str, object]) -> RunGroup:
+    label = str(entry.get("name", ""))
+    if not label:
+        raise ArchiveError(f"a run group of {name!r} has no name")
+    raw_element = entry.get("element", ())
+    if isinstance(raw_element, str) or not isinstance(raw_element, Sequence):
+        raise ArchiveError(f"run group {name}@{label} has a malformed element")
+    element = tuple(int(value) for value in raw_element)
+    if not element or any(value < 0 for value in element):
+        raise ArchiveError(
+            f"run group {name}@{label} needs one non negative run per element child"
+        )
+    raw_slots = entry.get("slots", ())
+    if isinstance(raw_slots, str) or not isinstance(raw_slots, Sequence):
+        raise ArchiveError(f"run group {name}@{label} has a malformed slots list")
+    slots = tuple(str(value) for value in raw_slots)
+    if len(slots) != len(element):
+        raise ArchiveError(
+            f"run group {name}@{label} names {len(slots)} slots for "
+            f"{len(element)} element runs"
+        )
+    trailer = int(entry.get("trailer", 0) or 0)
+    if trailer < 0:
+        raise ArchiveError(f"run group {name}@{label} has a negative trailer")
+    raw_gated = entry.get("element_by_version", {})
+    if not isinstance(raw_gated, Mapping):
+        raise ArchiveError(
+            f"run group {name}@{label} has a malformed element_by_version"
+        )
+    gated: dict[int, tuple[int, ...]] = {}
+    for version, values in raw_gated.items():
+        text = str(version)
+        if not text.isdigit():
+            raise ArchiveError(
+                f"run group {name}@{label} names a non numeric document "
+                f"version {text!r}"
+            )
+        if isinstance(values, str) or not isinstance(values, Sequence):
+            raise ArchiveError(
+                f"run group {name}@{label} at document version {text} has no element"
+            )
+        widths = tuple(int(value) for value in values)
+        if len(widths) != len(element) or any(value < 0 for value in widths):
+            raise ArchiveError(
+                f"run group {name}@{label} at document version {text} does not hold "
+                f"{len(element)} non negative runs"
+            )
+        gated[int(text)] = widths
+    raw_count = entry.get("count")
+    raw_repeat = entry.get("repeat")
+    if raw_count is None and raw_repeat is None:
+        raise ArchiveError(f"run group {name}@{label} has neither a count nor a repeat")
+    if raw_count is not None and raw_repeat is not None:
+        raise ArchiveError(f"run group {name}@{label} has both a count and a repeat")
+    note = str(entry.get("note", ""))
+    if raw_repeat is not None:
+        if (
+            not isinstance(raw_repeat, int)
+            or isinstance(raw_repeat, bool)
+            or raw_repeat < 1
+        ):
+            raise ArchiveError(
+                f"run group {name}@{label} has a repeat that is not a positive integer"
+            )
+        return RunGroup(
+            name=label,
+            repeat=int(raw_repeat),
+            count_back=0,
+            count_width=0,
+            slots=slots,
+            element=element,
+            element_by_version=gated,
+            trailer=trailer,
+            note=note,
+        )
+    if not isinstance(raw_count, Mapping):
+        raise ArchiveError(f"run group {name}@{label} has a malformed count")
+    back = int(raw_count.get("back", 0) or 0)
+    width = int(raw_count.get("width", 0) or 0)
+    if width not in (1, 2, 4) or back < width:
+        raise ArchiveError(
+            f"run group {name}@{label} has a count of width {width} that does not "
+            f"fit in the {back} bytes ahead of the group"
+        )
+    return RunGroup(
+        name=label,
+        repeat=-1,
+        count_back=back,
+        count_width=width,
+        slots=slots,
+        element=element,
+        element_by_version=gated,
+        trailer=trailer,
+        note=note,
+    )
 
 
 def _class_layout(name: str, entry: Mapping[str, object]) -> ClassLayout:
@@ -569,6 +707,39 @@ def _class_layout(name: str, entry: Mapping[str, object]) -> ClassLayout:
             raise ArchiveError(f"repeat_count of {name!r} has no template slot")
         repeat = RepeatField(run=run, at=at, width=width)
     unresolved = (REPEATED_SLOT in slots or raw_repeat is not None) and repeat is None
+    raw_prefix = entry.get("repeat_prefix", 0)
+    if (
+        not isinstance(raw_prefix, int)
+        or isinstance(raw_prefix, bool)
+        or raw_prefix < 0
+    ):
+        raise ArchiveError(f"repeat_prefix of {name!r} is not a non negative integer")
+    prefix = int(raw_prefix)
+    if prefix and not unresolved:
+        raise ArchiveError(
+            f"repeat_prefix of {name!r} names a prefix for a class whose child "
+            "count is already resolved"
+        )
+    if prefix > len(slots):
+        raise ArchiveError(
+            f"repeat_prefix {prefix} of {name!r} exceeds its {len(slots)} child slots"
+        )
+    raw_groups = entry.get("groups", ())
+    if isinstance(raw_groups, str) or not isinstance(raw_groups, Sequence):
+        raise ArchiveError(f"layout entry for {name!r} has a malformed groups list")
+    parsed: list[RunGroup] = []
+    for item in raw_groups:
+        if not isinstance(item, Mapping):
+            raise ArchiveError(f"a run group of {name!r} is not a mapping")
+        parsed.append(_run_group(name, item))
+    groups = tuple(parsed)
+    if groups and (slots or repeat is not None or unresolved or prefix):
+        raise ArchiveError(
+            f"layout entry for {name!r} drives its children from run groups and "
+            "must not also declare child slots"
+        )
+    if groups and LEAD_RUN not in runs and LEAD_RUN not in gated:
+        raise ArchiveError(f"layout entry for {name!r} has run groups but no lead run")
     return ClassLayout(
         name=name,
         child_slots=slots,
@@ -579,7 +750,9 @@ def _class_layout(name: str, entry: Mapping[str, object]) -> ClassLayout:
         repeat_note=str(entry.get("repeat_note", "")),
         repeat_count=repeat,
         repeat_unresolved=unresolved,
+        repeat_prefix=prefix,
         runs_by_version=gated,
+        groups=groups,
     )
 
 
@@ -590,6 +763,10 @@ class _Frame:
     layout: ClassLayout
     slot: int
     total: int
+    group: int = 0
+    step: int = 0
+    plan: tuple[int, ...] = ()
+    key: str = LEAD_RUN
 
 
 def _scalar(blob: bytes, offset: int, width: int) -> int:
@@ -757,11 +934,49 @@ def _advance(
     return end
 
 
+def _group_open(
+    blob: bytes,
+    cursor: int,
+    frame: _Frame,
+    offset: int,
+    base: int,
+    mo_version: int | None,
+) -> tuple[int, bool]:
+    layout = frame.layout
+    while frame.group < len(layout.groups):
+        group = layout.groups[frame.group]
+        frame.group += 1
+        frame.key = group.name
+        if group.repeat >= 0:
+            count = group.repeat
+        else:
+            try:
+                count = _scalar(blob, cursor - group.count_back, group.count_width)
+            except ArchiveError as error:
+                raise SegmentationError(
+                    layout.name, group.name, offset, str(error), base=base
+                ) from error
+        if count:
+            plan = list(group.element_runs(mo_version)) * count
+            plan[-1] += group.trailer
+            frame.plan = tuple(plan)
+            frame.step = 0
+            return cursor, True
+        cursor = _advance(blob, cursor, group.trailer, layout, group.name, offset, base)
+    return cursor, False
+
+
 def _declared_slot_class(layouts: LayoutTable, frames: Sequence[_Frame]) -> str:
     if not frames:
         return ""
     frame = frames[-1]
     layout = frame.layout
+    if layout.groups:
+        group = layout.groups[frame.group - 1]
+        declared = group.slots[frame.step % len(group.slots)]
+        if declared in (POLYMORPHIC_SLOT, REPEATED_SLOT) or declared not in layouts:
+            return ""
+        return declared
     slots = layout.child_slots
     slot = frame.slot
     if layout.repeat_count is not None and slot >= layout.template_slot:
@@ -897,7 +1112,7 @@ def _segment_walk(
                     + (f" ({layout.repeat_note})" if layout.repeat_note else ""),
                     base=base,
                 )
-            if layout.child_slots:
+            if layout.groups:
                 amount = _run_length(
                     blob, cursor, layout, LEAD_RUN, offset, base, mo_version
                 )
@@ -907,21 +1122,37 @@ def _segment_walk(
                     class_name=name,
                     layout=layout,
                     slot=0,
-                    total=(
-                        -1
-                        if layout.repeat_count is not None
-                        else len(layout.child_slots)
-                    ),
+                    total=-1,
                 )
-                if (
-                    layout.repeat_count is not None
-                    and layout.repeat_count.run == LEAD_RUN
-                ):
-                    frame.total = _repeat_total(
-                        blob, cursor - amount, layout, offset, base
+                cursor, opened = _group_open(
+                    blob, cursor, frame, offset, base, mo_version
+                )
+                if opened:
+                    frames.append(frame)
+                    pushed = True
+            elif layout.child_slots:
+                amount = _run_length(
+                    blob, cursor, layout, LEAD_RUN, offset, base, mo_version
+                )
+                cursor = _advance(blob, cursor, amount, layout, LEAD_RUN, offset, base)
+                total = -1
+                if layout.walks_a_prefix:
+                    total = layout.repeat_prefix
+                elif layout.repeat_count is None:
+                    total = len(layout.child_slots)
+                elif layout.repeat_count.run == LEAD_RUN:
+                    total = _repeat_total(blob, cursor - amount, layout, offset, base)
+                if total != 0:
+                    frames.append(
+                        _Frame(
+                            node=node,
+                            class_name=name,
+                            layout=layout,
+                            slot=0,
+                            total=total,
+                        )
                     )
-                frames.append(frame)
-                pushed = True
+                    pushed = True
             else:
                 amount = _run_length(
                     blob, cursor, layout, LEAF_RUN, offset, base, mo_version
@@ -948,8 +1179,28 @@ def _segment_walk(
             continue
         while frames:
             frame = frames[-1]
-            key = frame.layout.run_key(frame.slot)
             origin = segments[frame.node].offset
+            if frame.layout.groups:
+                cursor = _advance(
+                    blob,
+                    cursor,
+                    frame.plan[frame.step],
+                    frame.layout,
+                    frame.key,
+                    origin,
+                    base,
+                )
+                frame.step += 1
+                if frame.step < len(frame.plan):
+                    break
+                cursor, opened = _group_open(
+                    blob, cursor, frame, origin, base, mo_version
+                )
+                if opened:
+                    break
+                frames.pop()
+                continue
+            key = frame.layout.run_key(frame.slot)
             run_start = cursor
             amount = _run_length(
                 blob, cursor, frame.layout, key, origin, base, mo_version
@@ -985,7 +1236,7 @@ def _segment_walk(
         frame = frames[-1]
         raise SegmentationError(
             frame.class_name,
-            str(frame.slot),
+            frame.key if frame.layout.groups else str(frame.slot),
             segments[frame.node].offset,
             f"stream ended with {len(frames)} open objects",
             base=base,
