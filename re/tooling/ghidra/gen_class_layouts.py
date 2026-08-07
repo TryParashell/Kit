@@ -635,7 +635,9 @@ def generate(
     classes, decompiled_count = merge_decompiled(classes, decompiled)
     classes, versioned_count = merge_versioned(classes, versioned)
     classes, external_count, external_bindings = merge_external(classes, external)
-    gated = sorted(name for name, entry in classes.items() if "runs_by_version" in entry)
+    gated = sorted(
+        name for name, entry in classes.items() if "runs_by_version" in entry
+    )
     return {
         "external_classes": external_count,
         "external_bindings": external_bindings,

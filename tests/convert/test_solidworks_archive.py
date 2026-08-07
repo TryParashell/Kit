@@ -96,7 +96,9 @@ def _authored_mo_version() -> int | None:
         part = Path(json.loads(path.read_text(encoding="utf-8"))["part"])
         if not part.is_file():
             continue
-        version = container_mo_version(SldprtArchive.from_bytes(part.read_bytes()).streams)
+        version = container_mo_version(
+            SldprtArchive.from_bytes(part.read_bytes()).streams
+        )
         if version is not None:
             found.add(version)
     if len(found) != 1:
