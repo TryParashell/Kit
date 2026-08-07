@@ -2564,7 +2564,7 @@
     }
    ],
    "repeat_prefix": 0,
-   "repeat_note": "sgSketch does not have a fixed child arity and its children are not one repeated template either: the body is an ordered chain of counted loops, each with its own count read out of the stream just ahead of it, its own multi child element, and its own trailing filler. sgSketch::Serialize at 0x4c5d28c0 holds only four tagged reads once specialised to version 18000 while the traced scopes hold 10 to 343, and the rsp column of the traces places every ReadObject one and two frames below it, so the loops live in its callees. FUN_4c5e1e30, its single dimension list callee, shows the shape directly: fourteen su_CArchive::AR_get_ushort reads, each immediately driving a do/while whose body is one su_CArchive::ReadObject. The six groups below reproduce the child offsets of all twenty traced sgSketch instances whose scopes are fully derivable, at document versions 14000 and 18000, with zero residual against the recorded scope_end.",
+   "repeat_note": "sgSketch does not have a fixed child arity and its children are not one repeated template either: the body is an ordered chain of counted loops, each with its own count read out of the stream just ahead of it, its own multi child element, and its own trailing filler. sgSketch::Serialize at 0x4c5d28c0 reads the counts itself and delegates the tagged reads: specialised to document version 18000 it holds 68 do/while loops and 41 scalar reads but only four tagged reads, and each loop is opened by a su_CArchive::AR_get_int or AR_get_ushort that also sizes the destination array immediately before the loop, exactly as at lines 630, 635 and 667 of the specialised body, while the loop body calls FUN_4c5d0b70, FUN_4c5cc540, FUN_4c5e1e30 and friends to do the ReadObject work. That is why the rsp column of the traces places every ReadObject one and two frames below sgSketch::Serialize and yet the counts are still in sgSketch::Serialize's own frame, and why the count of each group sits a fixed distance ahead of the group rather than at a fixed offset in the lead. FUN_4c5e1e30, the single dimension list callee, shows the same shape one level down: fourteen AR_get_ushort reads, each immediately driving a do/while whose body is one ReadObject. The six groups below reproduce the child offsets of all twenty traced sgSketch instances whose scopes are fully derivable, at document versions 14000 and 18000, with zero residual against the recorded scope_end. The four instances not counted stop on an sgExtEnt_c or moSketchExtRef_w run that no trace resolves, not on a group, and every child they do reach lands on a recorded tag offset. The counts are shipped as u16 because that is the only width the point group admits at its offset; the relation, constraint and chain counts admit either two or four bytes there, since no traced instance carries a count above 4.",
    "groups": [
     {
      "name": "entity",
@@ -2585,7 +2585,7 @@
       87
      ],
      "trailer": 4,
-     "note": "the entity loop. Each element is four tagged reads: two null slots that carry an 8 byte and a 39 byte run, the entity handle, and the entity itself whose 87 byte run closes with the inline moLineViz_c record the 0x800 < version gate takes. The count is the u16 EntityCount at offset 0 of the 49 byte lead, which is 49 bytes ahead of the first element."
+     "note": "the entity loop. Each element is four tagged reads: two null slots that carry an 8 byte and a 39 byte run, the entity handle, and the entity itself whose 87 byte run closes with the inline moLineViz_c record the 0x800 < version gate takes. The count is the u16 EntityCount at offset 0 of the 49 byte lead, which is 49 bytes ahead of the first element. Across the traced instances counts 1 and 4 are witnessed."
     },
     {
      "name": "point",
@@ -2602,7 +2602,7 @@
       80
      ],
      "trailer": 13,
-     "note": "the sketch point loop. Each element is two tagged reads with an 8 byte and an 80 byte run. The count is the u16 that sits 12 bytes ahead of the loop, inside the 35 byte record that closes the last entity, and the four trailing bytes of the entity group separate them."
+     "note": "the sketch point loop. Each element is two tagged reads with an 8 byte and an 80 byte run. The count is the u16 that sits 12 bytes ahead of the loop, inside the 35 byte record that closes the last entity, and the four trailing bytes of the entity group separate them. Across the traced instances counts 0 and 5 are witnessed."
     },
     {
      "name": "relation",
@@ -2637,7 +2637,7 @@
       ]
      },
      "trailer": 2,
-     "note": "the first relation loop. Each element is four tagged reads: a null slot with no run, a 16 byte handle record, a 17 byte record at document version 18000 and 16 bytes at 14000, and the relation handle followed by 4 bytes. The count is the u16 6 bytes ahead of the loop, inside the 13 byte run that closes the point group."
+     "note": "the first relation loop. Each element is four tagged reads: a null slot with no run, a 16 byte handle record, a 17 byte record at document version 18000 and 16 bytes at 14000, and the relation handle followed by 4 bytes. The count is the u16 6 bytes ahead of the loop, inside the 13 byte run that closes the point group. Across the traced instances counts 1 and 4 are witnessed."
     },
     {
      "name": "constraint",
@@ -2668,7 +2668,7 @@
       6
      ],
      "trailer": 8,
-     "note": "the second relation loop, read as nine tagged reads per element with the runs 0, 16, 17, 0, 4, 26, 0, 0 and 6. The count is the u16 6 bytes ahead of the loop. Only document version 18000 exercises this loop in the traces, so its element is not version gated; the 14000 parts all carry a count of zero here."
+     "note": "the second relation loop, read as nine tagged reads per element with the runs 0, 16, 17, 0, 4, 26, 0, 0 and 6. The count is the u16 6 bytes ahead of the loop. Only document version 18000 exercises this loop in the traces, so its element is not version gated; the 14000 parts all carry a count of zero here. Across the traced instances counts 0 and 1 are witnessed."
     },
     {
      "name": "lists",
@@ -2697,7 +2697,7 @@
       0
      ],
      "trailer": 21,
-     "note": "the sketch chain loop. Each element is a single moSketchChain_c with no run of its own, and the group closes with 21 bytes. The count is the u16 4 bytes ahead of the loop, inside the 38 byte run that follows the second suObList."
+     "note": "the sketch chain loop. Each element is a single moSketchChain_c with no run of its own, and the group closes with 21 bytes. The count is the u16 4 bytes ahead of the loop, inside the 38 byte run that follows the second suObList. Across the traced instances counts 0 and 1 are witnessed."
     }
    ],
    "source": "re/data/class_layouts_decompiled.json"
