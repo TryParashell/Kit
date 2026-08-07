@@ -64,7 +64,7 @@ RECORDED_LABELS = (
 )
 FIXTURES_VERIFYING_BYTE_IDENTICALLY = 0
 CONFIRMED_CLASS_FLOOR = 50
-FIXTURE_OBJECT_FLOOR = 4764
+FIXTURE_OBJECT_FLOOR = 4892
 FIXTURE_BASE_SEED = 109
 
 
@@ -722,6 +722,327 @@ def test_unresolved_repeat_count_is_refused() -> None:
     with pytest.raises(SegmentationError) as failure:
         segment(blob, 109, layouts)
     assert "child count" in str(failure.value)
+
+
+def _prefix_table(prefix: int, tail: dict | None = None) -> LayoutTable:
+    entry: dict = {
+        "confidence": "partial",
+        "child_slots": ["*", "*", "..."],
+        "runs": {"lead": 4, "0": 2, "1": 6},
+        "repeat_count": None,
+        "repeat_prefix": prefix,
+    }
+    if tail is not None:
+        entry["variable_runs"] = [tail]
+    return LayoutTable.from_mapping({"version": 1, "classes": {"solo": entry}})
+
+
+def _prefix_stream() -> bytes:
+    return (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("solo", 1)
+        + bytes(range(4))
+        + encode_null()
+        + bytes(range(2))
+        + encode_null()
+        + bytes(range(6))
+        + encode_null()
+    )
+
+
+def test_a_repeat_prefix_walks_the_known_children_and_refuses_the_tail() -> None:
+    layouts = _prefix_table(
+        2, {"slot": "tail", "rule": "opaque", "note": "the child count is not pinned"}
+    )
+    layout = layouts["solo"]
+    assert layout.walks_a_prefix
+    assert not layout.repeats
+    assert layout.run_keys() == ("lead", "0", "tail")
+    assert layout.run_key(0) == "0"
+    assert layout.run_key(1) == "tail"
+    with pytest.raises(SegmentationError) as failure:
+        segment(_prefix_stream(), 109, layouts)
+    assert failure.value.class_name == "solo"
+    assert failure.value.slot == "tail"
+    assert failure.value.offset == STREAM_HEADER_SIZE
+    assert "not pinned" in str(failure.value)
+    assert [item.kind for item in failure.value.reached] == [
+        DEFINITION_KIND,
+        NULL_KIND,
+        NULL_KIND,
+    ]
+    assert [item.offset for item in failure.value.reached[1:]] == [
+        STREAM_HEADER_SIZE + 10 + 4,
+        STREAM_HEADER_SIZE + 10 + 4 + 2 + 2,
+    ]
+
+
+def test_a_prefix_of_one_refuses_before_the_second_child() -> None:
+    layouts = _prefix_table(1)
+    with pytest.raises(SegmentationError) as failure:
+        segment(_prefix_stream(), 109, layouts)
+    assert failure.value.slot == "tail"
+    assert len(failure.value.reached) == 2
+
+
+def test_a_class_with_no_prefix_is_still_refused_at_its_lead() -> None:
+    layouts = _prefix_table(0)
+    with pytest.raises(SegmentationError) as failure:
+        segment(_prefix_stream(), 109, layouts)
+    assert failure.value.slot == "lead"
+    assert "child count" in str(failure.value)
+
+
+def test_repeat_prefix_is_validated() -> None:
+    with pytest.raises(ArchiveError):
+        _prefix_table(-1)
+    with pytest.raises(ArchiveError):
+        _prefix_table(4)
+    with pytest.raises(ArchiveError):
+        LayoutTable.from_mapping(
+            {
+                "version": 1,
+                "classes": {
+                    "solo": {
+                        "confidence": "confirmed",
+                        "child_slots": ["*"],
+                        "runs": {"lead": 0, "0": 0},
+                        "repeat_prefix": 1,
+                    }
+                },
+            }
+        )
+
+
+def test_a_repeat_count_of_zero_reads_no_children() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "list": {
+                    "confidence": "confirmed",
+                    "child_slots": ["*", "..."],
+                    "runs": {"lead": 2, "0": 0},
+                    "repeat_count": {"run": "lead", "at": 0, "width": 2},
+                },
+            },
+        }
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("list", 1)
+        + struct.pack("<H", 0)
+        + encode_class_definition("list", 1)
+        + struct.pack("<H", 1)
+        + encode_null()
+    )
+    segments = segment(blob, 109, layouts)
+    assert [item.depth for item in segments] == [0, 0, 1]
+    assert segments[0].end == segments[1].offset
+    assert verify(blob, 109, layouts).identical
+
+
+def test_the_shipped_table_drives_sgSketch_from_run_groups() -> None:
+    layout = _layouts()["sgSketch"]
+    assert layout.walks_groups
+    assert layout.child_slots == ()
+    assert layout.repeat_count is None
+    assert layout.repeat_prefix == 0
+    assert not layout.repeats
+    assert not layout.walks_a_prefix
+    assert layout.run_keys() == ("lead",)
+    assert layout.constant_run("lead", 18000) == 49
+    assert not layout.variable_runs
+    assert [group.name for group in layout.groups] == [
+        "entity",
+        "point",
+        "relation",
+        "constraint",
+        "lists",
+        "chain",
+    ]
+    shape = {group.name: group for group in layout.groups}
+    assert shape["entity"].element == (8, 39, 0, 87)
+    assert (shape["entity"].count_back, shape["entity"].count_width) == (49, 2)
+    assert shape["entity"].trailer == 4
+    assert shape["point"].element == (8, 80)
+    assert (shape["point"].count_back, shape["point"].count_width) == (12, 2)
+    assert shape["point"].trailer == 13
+    assert shape["relation"].element_runs(18000) == (0, 16, 17, 4)
+    assert shape["relation"].element_runs(14000) == (0, 16, 16, 4)
+    assert shape["relation"].trailer == 2
+    assert shape["constraint"].element == (0, 16, 17, 0, 4, 26, 0, 0, 6)
+    assert shape["constraint"].trailer == 8
+    assert shape["lists"].repeat == 1
+    assert shape["lists"].element == (170, 38)
+    assert shape["lists"].slots == ("suObList", "suObList")
+    assert shape["chain"].element == (0,)
+    assert shape["chain"].slots == ("moSketchChain_c",)
+    assert (shape["chain"].count_back, shape["chain"].count_width) == (4, 2)
+    assert shape["chain"].trailer == 21
+    for group in layout.groups:
+        assert group.note
+        assert len(group.slots) == len(group.element)
+
+
+def test_run_groups_are_validated() -> None:
+    def table(group: dict) -> LayoutTable:
+        return LayoutTable.from_mapping(
+            {
+                "version": 1,
+                "classes": {
+                    "solo": {
+                        "confidence": "partial",
+                        "child_slots": [],
+                        "runs": {"lead": 0},
+                        "groups": [group],
+                    }
+                },
+            }
+        )
+
+    sound = {
+        "name": "loop",
+        "count": {"back": 2, "width": 2},
+        "slots": ["*"],
+        "element": [0],
+    }
+    assert table(sound)["solo"].walks_groups
+    with pytest.raises(ArchiveError):
+        table({**sound, "name": ""})
+    with pytest.raises(ArchiveError):
+        table({**sound, "element": []})
+    with pytest.raises(ArchiveError):
+        table({**sound, "element": [-1]})
+    with pytest.raises(ArchiveError):
+        table({**sound, "slots": ["*", "*"]})
+    with pytest.raises(ArchiveError):
+        table({**sound, "trailer": -1})
+    with pytest.raises(ArchiveError):
+        table({**sound, "count": {"back": 1, "width": 2}})
+    with pytest.raises(ArchiveError):
+        table({**sound, "count": {"back": 2, "width": 3}})
+    with pytest.raises(ArchiveError):
+        table({"name": "loop", "slots": ["*"], "element": [0]})
+    with pytest.raises(ArchiveError):
+        table({**sound, "repeat": 1})
+    with pytest.raises(ArchiveError):
+        table({"name": "loop", "repeat": 0, "slots": ["*"], "element": [0]})
+    with pytest.raises(ArchiveError):
+        table({**sound, "element_by_version": {"nope": [0]}})
+    with pytest.raises(ArchiveError):
+        table({**sound, "element_by_version": {"18000": [0, 0]}})
+    with pytest.raises(ArchiveError):
+        LayoutTable.from_mapping(
+            {
+                "version": 1,
+                "classes": {
+                    "solo": {
+                        "confidence": "partial",
+                        "child_slots": ["*"],
+                        "runs": {"lead": 0, "0": 0},
+                        "groups": [sound],
+                    }
+                },
+            }
+        )
+    with pytest.raises(ArchiveError):
+        LayoutTable.from_mapping(
+            {
+                "version": 1,
+                "classes": {
+                    "solo": {
+                        "confidence": "partial",
+                        "child_slots": [],
+                        "runs": {},
+                        "groups": [sound],
+                    }
+                },
+            }
+        )
+
+
+def test_a_run_group_walks_its_count_element_and_trailer() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "solo": {
+                    "confidence": "partial",
+                    "child_slots": [],
+                    "runs": {"lead": 2},
+                    "groups": [
+                        {
+                            "name": "pairs",
+                            "count": {"back": 2, "width": 2},
+                            "slots": ["*", "*"],
+                            "element": [1, 3],
+                            "trailer": 5,
+                        },
+                        {
+                            "name": "singles",
+                            "count": {"back": 5, "width": 1},
+                            "slots": ["*"],
+                            "element": [0],
+                            "trailer": 0,
+                        },
+                    ],
+                }
+            },
+        }
+    )
+    body = (
+        struct.pack("<H", 2)
+        + encode_null()
+        + b"\x00"
+        + encode_null()
+        + b"\x00" * 3
+        + encode_null()
+        + b"\x00"
+        + encode_null()
+        + b"\x00" * 3
+        + b"\x01\x00\x00\x00\x00"
+        + encode_null()
+    )
+    blob = b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + body
+    segments = segment(blob, 109, layouts)
+    assert [item.depth for item in segments] == [0, 1, 1, 1, 1, 1]
+    assert segments[-1].end == len(blob)
+    assert verify(blob, 109, layouts).identical
+
+
+def test_a_run_group_whose_counts_are_all_zero_reads_no_children() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "solo": {
+                    "confidence": "partial",
+                    "child_slots": [],
+                    "runs": {"lead": 2},
+                    "groups": [
+                        {
+                            "name": "loop",
+                            "count": {"back": 2, "width": 2},
+                            "slots": ["*"],
+                            "element": [0],
+                            "trailer": 3,
+                        }
+                    ],
+                }
+            },
+        }
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("solo", 1)
+        + struct.pack("<H", 0)
+        + b"\x00" * 3
+    )
+    segments = segment(blob, 109, layouts)
+    assert len(segments) == 1
+    assert segments[0].end == len(blob)
+    assert verify(blob, 109, layouts).identical
 
 
 def test_a_count_rule_without_a_width_is_refused() -> None:

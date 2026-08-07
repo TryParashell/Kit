@@ -14,7 +14,8 @@ the rule for any run that is not constant.
 `re/tooling/ghidra/solve_runs.py` solves the constant runs directly from the nine traced
 segmentations in `re/data/segments/`. Against those traces it resolves **303 run keys** and leaves
 **27 variable** across **12 classes**. Those twelve are the ones that need a decompiled layout,
-because their bodies carry a string, a count-driven array, or a conditional field:
+because their bodies carry a string, a count-driven array, a conditional field, or a chain of
+counted loops:
 
 `sgLineHandle`, `sgArcHandle`, `sgEntHandle`, `sgLLDist`, `sgSketch`, `sgPointHandle`,
 `moSketchChain_c`, `moSketchRegion_c`, `moSketchExtRef_w`, `moExtrusion_c`, `moICE_c`,
@@ -38,6 +39,8 @@ A class with no children has a single run, keyed `leaf`.
 | `lead` | bytes from the end of the object's own tag to the start of child 0 |
 | `<i>` | bytes from the end of child `i` to the start of child `i+1`, or to the end of the body for the last child |
 | `leaf` | the whole body, for a class that never has children |
+| `tail` | bytes from the end of the last child the segmenter is allowed to walk to whatever follows it, for a class whose child count is not resolved; see `repeat_prefix` |
+| `<group name>` | the run key a class driven by `groups` reports, naming the group that failed rather than a slot index; see `groups` |
 
 ## Schema
 
@@ -136,6 +139,141 @@ whether the winner came from the seed or from a refinement.
 Only class-reference failures feed the refinement. An object-reference index at or above the base
 is, in these streams, a payload word a mis-parse walked into — the `18000` generation word and the
 tree ids — and it yields no candidate that any fixture needs.
+
+### `repeat_count` and `repeat_prefix`
+
+A trailing `"..."` in `child_slots` says the child count varies across the traced instances.
+`repeat_count` closes it when a field holding the count has been recovered:
+
+```json
+"suObList": {
+  "child_slots": ["*", "..."],
+  "runs": { "lead": 2, "0": 0 },
+  "repeat_count": { "run": "lead", "at": 0, "width": 2 }
+}
+```
+
+`repeat_count` is `null` when no such field has been found. The segmenter never guesses the count,
+but refusing the whole class is more pessimistic than the evidence requires: the leading child
+slots that **every** traced instance fills are known, and so are the runs between them. That is
+what `repeat_prefix` records.
+
+```json
+"moFaceRef_c": {
+  "child_slots": ["*", "*", "*", "*", "*", "*", "*", "..."],
+  "runs": { "lead": 36, "0": 0, "1": 0, "2": 0 },
+  "repeat_count": null,
+  "repeat_prefix": 4,
+  "variable_runs": [{ "slot": "tail", "rule": "opaque", "note": "..." }]
+}
+```
+
+`repeat_prefix` is the smallest child count any traced instance of the class holds, so slots `0`
+through `repeat_prefix - 1` are present in every instance and the runs `0` through
+`repeat_prefix - 2` are solved from every instance rather than from a subset. The segmenter walks
+exactly that prefix, then asks for the `tail` run instead of the run key the slot index would
+name. `tail` is normally absent or `opaque`, so the walk stops there with the class and its own
+offset in the error, and the objects before the prefix ends are reached instead of lost. The
+generator derives `repeat_prefix` for every class it leaves with a null `repeat_count`, and drops
+any `variable_runs` entry for a slot past the prefix because those runs are never consulted.
+
+`repeat_prefix` is a floor on the arity of the class, not a claim about it. It is only sound
+because the run after the last prefix child is refused: the class is never asserted to end there,
+and a document whose instance is shorter than every traced one is the one case it does not cover,
+which is why the tail is refused rather than measured.
+
+`repeat_prefix` must be `0` for a class whose child count is already resolved, and must not exceed
+the number of declared child slots.
+
+### `groups`
+
+`child_slots` plus `repeat_count` covers a class whose body is a fixed slot list, optionally with
+**one** repeated template at the end. It cannot express a body that is a *chain* of independent
+counted loops, each with its own count, its own multi-child element and its own trailing filler.
+`sgSketch` is that shape, and `groups` records it.
+
+```json
+"sgSketch": {
+  "child_slots": [],
+  "runs": { "lead": 49 },
+  "groups": [
+    {
+      "name": "entity",
+      "count": { "back": 49, "width": 2 },
+      "slots": ["*", "*", "*", "*"],
+      "element": [8, 39, 0, 87],
+      "trailer": 4
+    },
+    {
+      "name": "relation",
+      "count": { "back": 6, "width": 2 },
+      "slots": ["*", "*", "*", "*"],
+      "element": [0, 16, 17, 4],
+      "element_by_version": { "14000": [0, 16, 16, 4], "18000": [0, 16, 17, 4] },
+      "trailer": 2
+    },
+    {
+      "name": "lists",
+      "repeat": 1,
+      "slots": ["suObList", "suObList"],
+      "element": [170, 38],
+      "trailer": 0
+    }
+  ]
+}
+```
+
+A class with `groups` has no `child_slots`, no `repeat_count` and no `repeat_prefix`: the group
+chain is the whole child list. It still carries a `lead` run, because the lead is read before the
+first group opens and is often where the first count sits.
+
+| key | meaning |
+|---|---|
+| `name` | the group's identifier; it is the run key the segmenter reports when a group fails |
+| `element` | one run length per child of a single iteration, in read order; the run is the bytes from the end of that child to the start of the next |
+| `slots` | the class expected in each element child, exactly as `child_slots` does it, one entry per `element` entry; `"*"` for a polymorphic slot |
+| `count` | `back` bytes ahead of the group's first element sits a `width` byte little-endian count of iterations |
+| `repeat` | a constant iteration count, for a group whose children are unconditional rather than counted |
+| `trailer` | bytes consumed after the last iteration, before the next group's first element |
+| `element_by_version` | per document version `element` overrides, keyed exactly like `runs_by_version` |
+
+The walk is:
+
+```
+cursor = end of the lead run
+for each group:
+    count = repeat, or the width byte scalar at cursor - back
+    repeat count times:
+        for each element run:
+            read the tag at cursor, walk that child, then skip the run
+    cursor += trailer
+the object ends at cursor when every group is exhausted
+```
+
+Two consequences of that order are load-bearing.
+
+`count` is read **backwards** from the group's own start, not forwards from a run of the parent.
+That is the only expressible form, because the count physically precedes the loop it drives and the
+number of bytes between them is fixed while the bytes ahead of it are not: they belong to the
+previous group, whose length depends on its own count. `back` must therefore be at least `width`.
+
+`trailer` is consumed **unconditionally**, including for a group whose count is zero. A group with
+a zero count contributes no child and no tag, only its trailer, so the trailers of a run of empty
+groups accumulate into the run that follows the last child actually read. That is exactly what the
+traces show: the origin sketch of every traced part carries one entity and no points, and the run
+after its last entity child measures `87 + 4 + 13` — the entity element's own run, the entity
+group's trailer, and the empty point group's trailer.
+
+Because a group with a zero count leaves no tag behind, a count field is only *witnessed* by the
+instances whose count is non-zero. `sgSketch` has six groups and the traces exercise two distinct
+counts for four of them, so those four `back` offsets are pinned by a real difference; the values
+themselves are recorded in each group's `note`.
+
+`element_by_version` uses the same exact-version keying as `runs_by_version` and is only declared
+for a group whose element is observed to differ between generations. `sgSketch.relation` is: its
+third child carries 17 bytes at document version 18000 and 16 at 14000. `sgSketch.constraint` has
+the same shape but only 18000 ever gives it a non-zero count, so it is left ungated rather than
+gated by inference.
 
 ### `runs`
 

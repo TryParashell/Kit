@@ -169,7 +169,11 @@
   "sgSketch@9"
  ],
  "run_derivation": "solve_runs.Solver seeded with the exact record end of every traced object, taken from the contiguous preorder subtree of the recorded segmentation; a run is constant only when every traced instance agrees",
- "repeat_count_contract": "a trailing ... entry in child_slots means the child count is not constant across the traced instances; repeat_count is null because no field holding the count has been recovered, and the static segmenter refuses such a class rather than guessing",
+ "repeat_count_contract": "a trailing ... entry in child_slots means the child count is not constant across the traced instances; repeat_count is null because no field holding the count has been recovered, and the static segmenter never guesses the count. repeat_prefix carries the smallest child count any traced instance of the class holds, which is the number of leading child slots every instance is known to fill; the segmenter walks exactly that prefix with the runs solved for those slots and then refuses the tail run, so an unresolved child count costs the objects past the prefix instead of the whole class",
+ "grouped_classes": [
+  "sgSketch"
+ ],
+ "group_contract": "a class whose body is a chain of counted loops rather than a fixed slot list carries groups instead of child_slots: each group reads a count of count.width bytes sitting count.back bytes ahead of its own first element, walks that many copies of element with one run per element child, and then consumes trailer bytes whether or not the count was zero, so the trailers of empty groups accumulate into the run that follows the last child actually read; repeat replaces the count for a group whose children are unconditional, and element_by_version overrides element per document version exactly as runs_by_version overrides runs",
  "class_count": 76,
  "confirmed_classes": 41,
  "partial_classes": 32,
@@ -668,7 +672,15 @@
     "3": 0
    },
    "repeat_count": null,
-   "repeat_note": "child count varies across instances: 3x3, 4x1"
+   "repeat_note": "child count varies across instances: 3x3, 4x1",
+   "repeat_prefix": 3,
+   "variable_runs": [
+    {
+     "slot": "tail",
+     "rule": "opaque",
+     "note": "every traced instance carries at least 3 children, so the segmenter walks those 3 slots with the runs solved above and refuses the run that follows the last of them; the run after slot 2 takes the lengths 0x4 across the traced instances because that slot closes the shortest instances and continues the longer ones"
+    }
+   ]
   },
   "moDefaultRefPlnData_c": {
    "confidence": "confirmed",
@@ -1268,26 +1280,12 @@
    },
    "repeat_count": null,
    "repeat_note": "child count varies across instances: 4x2, 5x1, 6x6, 7x28",
+   "repeat_prefix": 4,
    "variable_runs": [
     {
-     "slot": "3",
+     "slot": "tail",
      "rule": "opaque",
-     "note": "observed run lengths 0x35, 20x1, 24x1"
-    },
-    {
-     "slot": "4",
-     "rule": "opaque",
-     "note": "observed run lengths 0x34, 24x1"
-    },
-    {
-     "slot": "5",
-     "rule": "opaque",
-     "note": "observed run lengths 0x28, 20x3, 24x2, 48x1"
-    },
-    {
-     "slot": "6",
-     "rule": "opaque",
-     "note": "observed run lengths 20x13, 24x12, 48x3"
+     "note": "every traced instance carries at least 4 children, so the segmenter walks those 4 slots with the runs solved above and refuses the run that follows the last of them; the run after slot 3 takes the lengths 0x35, 20x1, 24x1 across the traced instances because that slot closes the shortest instances and continues the longer ones"
     }
    ]
   },
@@ -1792,7 +1790,15 @@
     "9": 8
    },
    "repeat_count": null,
-   "repeat_note": "child count varies across instances: 6x2, 10x13"
+   "repeat_note": "child count varies across instances: 6x2, 10x13",
+   "repeat_prefix": 6,
+   "variable_runs": [
+    {
+     "slot": "tail",
+     "rule": "opaque",
+     "note": "every traced instance carries at least 6 children, so the segmenter walks those 6 slots with the runs solved above and refuses the run that follows the last of them; the run after slot 5 takes the lengths 0x15 across the traced instances because that slot closes the shortest instances and continues the longer ones"
+    }
+   ]
   },
   "moRefPlane_c": {
    "confidence": "confirmed",
@@ -2257,11 +2263,12 @@
    },
    "repeat_count": null,
    "repeat_note": "child count varies across instances: 5x6, 10x1, 11x1",
+   "repeat_prefix": 5,
    "variable_runs": [
     {
-     "slot": "9",
+     "slot": "tail",
      "rule": "opaque",
-     "note": "observed run lengths 0x1, 14x1"
+     "note": "every traced instance carries at least 5 children, so the segmenter walks those 5 slots with the runs solved above and refuses the run that follows the last of them; the run after slot 4 takes the lengths 0x8 across the traced instances because that slot closes the shortest instances and continues the longer ones"
     }
    ]
   },
@@ -2540,26 +2547,11 @@
   "sgSketch": {
    "confidence": "partial",
    "serialize": "sldmodu.dll 0x4c5d28c0 sgSketch::Serialize",
-   "child_slots": [
-    "*",
-    "*",
-    "*",
-    "..."
-   ],
+   "child_slots": [],
    "repeat_count": null,
    "runs": {
-    "lead": 49,
-    "0": 8,
-    "1": 39,
-    "2": 0
+    "lead": 49
    },
-   "variable_runs": [
-    {
-     "slot": "3",
-     "rule": "opaque",
-     "note": "start of the sketch-entity list. The lead run is a constant 49 bytes in all 24 traced instances and is not what blocks this class; the child count is. The u16 at lead+0 is the entity count and it does not determine the child count: entity count 4 appears with 12 children eleven times and with 27 children once, and entity counts 1, 3, 9 and 11 appear with 10, 25, 30 and 60 children. It does not determine the handle count either, since entity 9 and entity 11 both carry 10 handle children while entity 4 carries 8 in the authored parts and 2 in Piston Ring KF, so the earlier reading of the entity count as a count of child pairs is refuted by the two vendor parts. Every 1, 2 and 4 byte field at every offset of the 49 byte lead run was tested against the child count of all 24 instances and none differs from it by a constant, so no repeat_count field exists in the lead run and the segmenter must keep refusing the class rather than fit one. The 24 instances hold 6 distinct child counts and 12 distinct child name and run vectors; the runs between children take the values 0, 8, 14, 16, 17, 39, 80, 87, 89, 91, 92, 100, 103 and 104, and the recurring 8 then 39 motif is a pair of null ReadObject results that a per entity branch emits. sgSketch::Serialize at 0x4c5d28c0 is 4850 lines of decompiled C holding 53 counted loops, 70 AR_get scalar reads and only 7 polymorphic operator>> sites, so the child objects are read from inside loops whose element size is chosen by a per element u16 selector and gated on the file version at thresholds 0x218, 0x2e4, 0x3f0, 0x49c and 0x1c4a. That shape is a typed element walk, not a run length, and none of the constant, runs_by_version, string, count or conditional rules can express it: closing it needs a new rule kind that dispatches on the selector, and the evidence in hand does not pin one."
-    }
-   ],
    "fields": [
     {
      "run": "lead",
@@ -2567,8 +2559,145 @@
      "width": 2,
      "type": "u16",
      "name": "EntityCount",
-     "role": "derived",
+     "role": "authored",
      "confidence": "confirmed"
+    }
+   ],
+   "repeat_prefix": 0,
+   "repeat_note": "sgSketch does not have a fixed child arity and its children are not one repeated template either: the body is an ordered chain of counted loops, each with its own count read out of the stream just ahead of it, its own multi child element, and its own trailing filler. sgSketch::Serialize at 0x4c5d28c0 holds only four tagged reads once specialised to version 18000 while the traced scopes hold 10 to 343, and the rsp column of the traces places every ReadObject one and two frames below it, so the loops live in its callees. FUN_4c5e1e30, its single dimension list callee, shows the shape directly: fourteen su_CArchive::AR_get_ushort reads, each immediately driving a do/while whose body is one su_CArchive::ReadObject. The six groups below reproduce the child offsets of all twenty traced sgSketch instances whose scopes are fully derivable, at document versions 14000 and 18000, with zero residual against the recorded scope_end.",
+   "groups": [
+    {
+     "name": "entity",
+     "count": {
+      "back": 49,
+      "width": 2
+     },
+     "slots": [
+      "*",
+      "*",
+      "*",
+      "*"
+     ],
+     "element": [
+      8,
+      39,
+      0,
+      87
+     ],
+     "trailer": 4,
+     "note": "the entity loop. Each element is four tagged reads: two null slots that carry an 8 byte and a 39 byte run, the entity handle, and the entity itself whose 87 byte run closes with the inline moLineViz_c record the 0x800 < version gate takes. The count is the u16 EntityCount at offset 0 of the 49 byte lead, which is 49 bytes ahead of the first element."
+    },
+    {
+     "name": "point",
+     "count": {
+      "back": 12,
+      "width": 2
+     },
+     "slots": [
+      "*",
+      "*"
+     ],
+     "element": [
+      8,
+      80
+     ],
+     "trailer": 13,
+     "note": "the sketch point loop. Each element is two tagged reads with an 8 byte and an 80 byte run. The count is the u16 that sits 12 bytes ahead of the loop, inside the 35 byte record that closes the last entity, and the four trailing bytes of the entity group separate them."
+    },
+    {
+     "name": "relation",
+     "count": {
+      "back": 6,
+      "width": 2
+     },
+     "slots": [
+      "*",
+      "*",
+      "*",
+      "*"
+     ],
+     "element": [
+      0,
+      16,
+      17,
+      4
+     ],
+     "element_by_version": {
+      "14000": [
+       0,
+       16,
+       16,
+       4
+      ],
+      "18000": [
+       0,
+       16,
+       17,
+       4
+      ]
+     },
+     "trailer": 2,
+     "note": "the first relation loop. Each element is four tagged reads: a null slot with no run, a 16 byte handle record, a 17 byte record at document version 18000 and 16 bytes at 14000, and the relation handle followed by 4 bytes. The count is the u16 6 bytes ahead of the loop, inside the 13 byte run that closes the point group."
+    },
+    {
+     "name": "constraint",
+     "count": {
+      "back": 6,
+      "width": 2
+     },
+     "slots": [
+      "*",
+      "*",
+      "*",
+      "*",
+      "*",
+      "*",
+      "*",
+      "*",
+      "*"
+     ],
+     "element": [
+      0,
+      16,
+      17,
+      0,
+      4,
+      26,
+      0,
+      0,
+      6
+     ],
+     "trailer": 8,
+     "note": "the second relation loop, read as nine tagged reads per element with the runs 0, 16, 17, 0, 4, 26, 0, 0 and 6. The count is the u16 6 bytes ahead of the loop. Only document version 18000 exercises this loop in the traces, so its element is not version gated; the 14000 parts all carry a count of zero here."
+    },
+    {
+     "name": "lists",
+     "repeat": 1,
+     "slots": [
+      "suObList",
+      "suObList"
+     ],
+     "element": [
+      170,
+      38
+     ],
+     "trailer": 0,
+     "note": "the two suObList children the sketch always reads after the relation loops, with the 170 byte and 38 byte runs that separate them. Both carry their own u16 element count in their own lead, so the segmenter descends into them; every traced instance holds zero elements in the first and zero or one in the second."
+    },
+    {
+     "name": "chain",
+     "count": {
+      "back": 4,
+      "width": 2
+     },
+     "slots": [
+      "moSketchChain_c"
+     ],
+     "element": [
+      0
+     ],
+     "trailer": 21,
+     "note": "the sketch chain loop. Each element is a single moSketchChain_c with no run of its own, and the group closes with 21 bytes. The count is the u16 4 bytes ahead of the loop, inside the 38 byte run that follows the second suObList."
     }
    ],
    "source": "re/data/class_layouts_decompiled.json"
