@@ -60,9 +60,7 @@ from convert.adapters.solidworks.format import (
     RESOLVED_FEATURES_STREAM,
 )
 from convert.adapters.solidworks.native import (
-    _BASE_RESOLVED_FEATURES,
-    _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE,
-    _base_record,
+    UNSYNTHESIZED_STREAMS,
     encode_native_part,
 )
 from convert.adapters.solidworks.parasolid import encode_blank_partition_stream

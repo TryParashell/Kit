@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass, field, replace
 import hashlib
 import itertools
@@ -18,7 +17,6 @@ import struct
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 import xml.etree.ElementTree as ET
-import zlib
 
 from interchange import (
     BooleanOperation,
@@ -46,7 +44,6 @@ from .format import (
     CLASS_MARKER,
     CONFIGURATION_STREAM,
     DIMENSION_SCALAR_HEADERS,
-    DISPLAY_LISTS_STREAM,
     KIT_RESOLVED_STREAM,
     PART_SUFFIX,
     PLANE_FEATURE_TYPES,
@@ -54,7 +51,6 @@ from .format import (
     SERIALIZED_STRING_MARKER,
     dimension_scalar_value_offset,
 )
-from .parasolid import encode_blank_partition_stream
 from .resolved import (
     ANGLE_COPY_DELTAS,
     DEPTH_COPY_DELTAS,
@@ -65,7 +61,6 @@ from .resolved import (
     SKETCH_CHAIN_CLASS,
     circle_radius_mm,
     locate_features,
-    patch_rectangle_pad,
 )
 
 _RADIANS_TO_DEGREES = 180.0 / math.pi
@@ -507,83 +502,17 @@ _SOLIDWORKS_XML_NAMESPACE = "http://www.solidworks.com/sw2003/schema"
 _SOLIDWORKS_CONFIGURATION_FLAGS = -2143288960
 _CREATION_STAMP_LOW = 1577836800
 _CREATION_STAMP_HIGH = 1893456000
-_BASE_BODY_COUNTERS = {
-    0: 0x6B,
-    4: 0x12,
-    1495: 0x80,
-    1690: 0x81,
-    1724: 0x83,
-    2315: 0x46,
-    3483: 0x94,
-    3806: 0x97,
-    4049: 0x94,
-    4376: 0x97,
-    5128: 0x52,
-    5302: 0x52,
-}
-_RECTANGLE_BOSS_POINT_OFFSETS = (6119, 6297, 6459, 6621)
-_RECTANGLE_BOSS_DEPTH_OFFSET = 10092
-_RECTANGLE_BOSS_NATIVE_WRITE_PROFILE = MappingProxyType(
-    {
-        "application": "SOLIDWORKS 2025",
-        "support_plane_object_id": 2,
-        "sketch_name": "Sketch1",
-        "sketch_geometry": "closed-axis-aligned-four-line-rectangle",
-        "sketch_variable_parameters": frozenset(
-            {"minimum_x_mm", "minimum_y_mm", "maximum_x_mm", "maximum_y_mm"}
-        ),
-        "sketch_constraints": frozenset(),
-        "feature_name": "Boss-Extrude1",
-        "feature_operation": "blind-unreversed-join",
-        "feature_variable_parameters": frozenset({"D1_mm"}),
-        "cache_bounds_mm": (-20.0, -10.0, 20.0, 10.0),
-        "cache_depth_mm": 10.0,
-        "resolved_features_size": 11285,
-        "resolved_features_variable_ranges": (
-            (6119, 16),
-            (6297, 16),
-            (6459, 16),
-            (6621, 16),
-            (10092, 8),
-        ),
-        "resolved_features_fixed_bytes": 11213,
-        "oracle_partition": (
-            3790,
-            "56df5b4e4ccac3158b60ea75dd57959b991660d6d9c7bc05cbff795e56f44439",
-        ),
-        "envelope_streams": MappingProxyType(
-            {
-                "Contents/CMgr": (
-                    1985,
-                    "79d8327f0ec9965500ac044320d9054666d1685cc9b294d766998ba75b654e16",
-                ),
-                "Contents/Config-0": (
-                    25248,
-                    "7a9117f55f6a3b4f790b8438940cc3e54d9b3125daeea7b8492e5f840eb86429",
-                ),
-                "Contents/Config-0-LWDATA": (
-                    1437,
-                    "570d1a2ee4895160fdee5c4731eb0fffe0868dd99798e6868eb3c6e432009c17",
-                ),
-                "Contents/Config-0-ModelHeader": (
-                    2347,
-                    "311de5a2f1e2abe699ffbe87f545525caa8fc7f48303c25ff07ff4d18043d7d3",
-                ),
-                "Contents/Definition": (
-                    3810,
-                    "1de1a4f10c22851eb4b7925b7cc73f8e4534217c544c20cded6f49644bce4e94",
-                ),
-                DISPLAY_LISTS_STREAM: (
-                    6270,
-                    "0003781d79ee5e4bbcf52b57fc375b6b3644bc87eda2db1956a63d0d3dcde211",
-                ),
-                "Header2": (
-                    2347,
-                    "311de5a2f1e2abe699ffbe87f545525caa8fc7f48303c25ff07ff4d18043d7d3",
-                ),
-            }
-        ),
-    }
+UNSYNTHESIZED_STREAMS = (
+    "Contents/CMgr",
+    "Contents/Config-0",
+    "Contents/Definition",
+)
+UNSYNTHESIZED_STREAM_NOTES = (
+    "Contents/CMgr, Contents/Config-0 and Contents/Definition are load critical for "
+    "the SOLIDWORKS reader and their record grammar is not yet recovered, so they are "
+    "omitted rather than approximated",
+    "Contents/Config-0-ResolvedFeatures carries Kit records that the SOLIDWORKS "
+    "reader does not accept, so the part is not vendor loadable",
 )
 _BLIND_END_SPEC = bytes.fromhex(
     "ffff01000b006d6f456e64537065635f63000001000000000000000000000000000000000000000000"
@@ -718,7 +647,6 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         for object_id, name, kind in _KEYWORD_ONLY_OBJECTS
     )
     objects = (*base, *authored)
-    blank_native = not authored and not document.sketches
     keywords = _keywords_payload(
         document,
         model_name,
@@ -727,71 +655,26 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         identity,
     )
     features = _features_payload(document, model_name, object_ids, identity)
-    if blank_native or _is_native_resolved_objects(authored):
-        resolved = (
-            _base_record(_BASE_RESOLVED_FEATURES)
-            if blank_native
-            else _resolved_payload(objects)
-        )
-        kit_resolved: bytes | None = None
-    else:
-        resolved = _base_record(_BASE_RESOLVED_FEATURES)
-        kit_resolved = _resolved_payload(objects)
-    envelope_streams = _native_envelope_streams(
-        document,
-        model_name,
-        identity,
-        rectangle_boss=_is_rectangle_boss_objects(authored),
-    )
+    resolved = _resolved_payload(objects)
+    envelope_streams = _native_envelope_streams(document, model_name, identity)
     configuration_data = envelope_streams.get(CONFIGURATION_STREAM, b"")
-    parsed = (
-        decode_native_model(keywords, resolved, configuration_data)
-        if kit_resolved is None
-        else decode_native_model(
-            keywords,
-            kit_resolved,
-            configuration_data,
-            resolved_stream=KIT_RESOLVED_STREAM,
-        )
+    parsed = decode_native_model(
+        keywords,
+        resolved,
+        configuration_data,
+        resolved_stream=KIT_RESOLVED_STREAM,
     )
     capabilities = _proved_write_capabilities(document, authored, parsed, object_ids)
-    freecad_rectangle = _freecad_rectangle_boss_objects(document, authored)
     mixed_capabilities: frozenset[Capability] = frozenset()
     partition: bytes | None = None
     application_usable = False
     vendor_loadable = False
-    if freecad_rectangle:
-        capabilities = frozenset(
-            (
-                *capabilities,
-                Capability.EDITABLE_SKETCHES,
-                Capability.PARAMETRIC_HISTORY,
-                Capability.BODY_STRUCTURE,
-            )
-        )
-        mixed_capabilities = frozenset({Capability.PARAMETERS})
-        bounds = _write_rectangle_bounds(authored[0])
-        if bounds is None:
-            raise SldprtFormatError("native rectangle record requires one rectangle")
-        partition = encode_blank_partition_stream()
-        vendor_loadable = True
-        application_usable = True
-        capabilities = capabilities | {Capability.BREP}
-    lanes = tuple(
-        (
-            object_ids[f"configuration:{configuration.id}"],
-            resolved,
-        )
-        for configuration in document.configurations
-    )
-    if not lanes:
-        lanes = ((0, resolved),)
     return NativePartStreams(
         keywords,
         features,
         resolved,
-        kit_resolved,
-        lanes,
+        resolved,
+        (),
         capabilities,
         mixed_capabilities,
         MappingProxyType(object_ids),
@@ -799,6 +682,7 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         partition,
         application_usable,
         vendor_loadable,
+        UNSYNTHESIZED_STREAM_NOTES,
     )
 
 
@@ -2014,11 +1898,6 @@ def _xml_text(value: str) -> str:
 
 
 def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
-    authored = objects[len(_BASE_OBJECTS) :]
-    if _is_rectangle_boss_objects(authored):
-        return _base_rectangle_boss_payload(authored[0], authored[1])
-    if _is_base_body_objects(authored):
-        return _base_body_payload()
     output = bytearray(struct.pack("<IH", len(objects), max(0, len(objects) - 1)))
     for item in objects:
         output.extend(_class_declaration(item.class_name))
@@ -2036,87 +1915,6 @@ def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
         for dimension in item.dimensions:
             output.extend(_scalar_record(dimension))
     return bytes(output)
-
-
-def _is_base_body_objects(authored: tuple[_WriteObject, ...]) -> bool:
-    return (
-        len(authored) == 1
-        and authored[0].object_id == 26
-        and authored[0].name == "Imported1"
-        and authored[0].class_name == "moBaseBody_c"
-        and not authored[0].dimensions
-        and not authored[0].payload
-    )
-
-
-def _is_native_resolved_objects(authored: tuple[_WriteObject, ...]) -> bool:
-    return _is_rectangle_boss_objects(authored) or _is_base_body_objects(authored)
-
-
-def _is_rectangle_boss_objects(authored: tuple[_WriteObject, ...]) -> bool:
-    return (
-        len(authored) == 2
-        and authored[0].object_id == 26
-        and authored[0].name == "Sketch1"
-        and authored[0].class_name == "moProfileFeature_c"
-        and authored[1].object_id == 32
-        and authored[1].name == "Boss-Extrude1"
-        and authored[1].class_name == "moExtrusion_c"
-        and len(authored[1].dimensions) == 1
-    )
-
-
-def _freecad_rectangle_boss_objects(
-    document: CadDocument,
-    authored: tuple[_WriteObject, ...],
-) -> bool:
-    if not _is_rectangle_boss_objects(authored):
-        return False
-    source_sketch = next(
-        (item for item in document.sketches if item.id == authored[0].source_id), None
-    )
-    source_feature = next(
-        (
-            item
-            for item in document.feature_timeline
-            if item.id == authored[1].source_id
-        ),
-        None,
-    )
-    return (
-        source_sketch is not None
-        and source_feature is not None
-        and _freecad_rectangle_boss_dimension(
-            document,
-            source_sketch,
-            source_feature,
-        )
-        is not None
-    )
-
-
-def _base_body_payload() -> bytes:
-    output = bytearray(_base_record(_BASE_RESOLVED_FEATURES))
-    for offset, value in _BASE_BODY_COUNTERS.items():
-        output[offset] = value
-    return bytes(output[:-4]) + _base_record(_BASE_BODY_FEATURE) + bytes(output[-4:])
-
-
-def _base_rectangle_boss_payload(
-    sketch: _WriteObject, extrusion: _WriteObject
-) -> bytes:
-    bounds = _write_rectangle_bounds(sketch)
-    if bounds is None:
-        raise SldprtFormatError("native rectangle record requires one closed rectangle")
-    minimum_x, minimum_y, maximum_x, maximum_y = bounds
-    return patch_rectangle_pad(
-        _base_record(_BASE_RECTANGLE_BOSS_FEATURES),
-        minimum_x_mm=minimum_x,
-        minimum_y_mm=minimum_y,
-        maximum_x_mm=maximum_x,
-        maximum_y_mm=maximum_y,
-        depth_mm=extrusion.dimensions[0].value_mm,
-    )
 
 
 def _class_declaration(name: str) -> bytes:
@@ -2194,8 +1992,6 @@ def _native_envelope_streams(
     document: CadDocument,
     model_name: str,
     identity: _NativeIdentity,
-    *,
-    rectangle_boss: bool = False,
 ) -> Mapping[str, bytes]:
     configuration_name = next(
         (
@@ -2223,38 +2019,10 @@ def _native_envelope_streams(
         "_MO_VERSION_18000/Biography": _biography_payload(model_name, identity),
         "_MO_VERSION_18000/History": _version_history_payload(),
     }
-    if rectangle_boss:
-        streams.update(_rectangle_boss_envelope_streams())
-    else:
-        model_header = _model_header_payload(identity, configuration_name)
-        streams.update(
-            {
-                "Contents/CMgr": _base_record(_BASE_CONFIGURATION_MANAGER),
-                "Contents/Config-0": _base_record(_BASE_CONFIGURATION),
-                "Contents/Config-0-LWDATA": _base_record(_BASE_LIGHTWEIGHT_DATA),
-                "Contents/Config-0-ModelHeader": model_header,
-                "Contents/Definition": _base_record(_BASE_DEFINITION),
-                "Header2": model_header,
-            }
-        )
+    model_header = _model_header_payload(identity, configuration_name)
+    streams["Contents/Config-0-ModelHeader"] = model_header
+    streams["Header2"] = model_header
     return MappingProxyType(streams)
-
-
-def _rectangle_boss_envelope_streams() -> Mapping[str, bytes]:
-    model_header = _base_record(_BASE_RECTANGLE_BOSS_MODEL_HEADER)
-    return MappingProxyType(
-        {
-            "Contents/CMgr": _base_record(_BASE_RECTANGLE_BOSS_CONFIGURATION_MANAGER),
-            "Contents/Config-0": _base_record(_BASE_RECTANGLE_BOSS_CONFIGURATION),
-            "Contents/Config-0-LWDATA": _base_record(
-                _BASE_RECTANGLE_BOSS_LIGHTWEIGHT_DATA
-            ),
-            "Contents/Config-0-ModelHeader": model_header,
-            "Contents/Definition": _base_record(_BASE_RECTANGLE_BOSS_DEFINITION),
-            DISPLAY_LISTS_STREAM: _base_record(_BASE_RECTANGLE_BOSS_DISPLAY_LISTS),
-            "Header2": model_header,
-        }
-    )
 
 
 def encode_native_assembly_envelope(
@@ -2457,11 +2225,6 @@ def _native_assembly_identity(
         _ASSEMBLY_CONFIGURATION_FLAGS,
         _ASSEMBLY_REFERENCE_NAME,
     )
-
-
-def _base_record(chunks: bytes | tuple[bytes, ...]) -> bytes:
-    encoded = chunks if isinstance(chunks, bytes) else b"".join(chunks)
-    return zlib.decompress(base64.b85decode(encoded))
 
 
 def _model_header_payload(
