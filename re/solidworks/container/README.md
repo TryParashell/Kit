@@ -90,11 +90,18 @@ resource cannot drift from its source.
 
 Established by deleting streams and rebuilding in SOLIDWORKS (`../archive/MULTISTREAM.md` §5):
 
-| class                                                 | streams                                                                                                                                        |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **load-critical**                                     | `Contents/Config-0-ResolvedFeatures`, `Contents/CMgr`, `Contents/Config-0-ModelHeader` + `Header2`, `Contents/Config-0`, `Contents/Definition` |
-| **stale-safe** (keep the donor's copy, do not update) | `Contents/Config-0-LWDATA`, `Contents/DisplayLists`, `_MO_VERSION_*/Biography`                                                                 |
-| **droppable**                                         | `Contents/Config-0-Partition`, `ThirdPtyStore/VisualStates`                                                                                    |
+| class             | streams                                                                                                                                        |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **load-critical** | `Contents/Config-0-ResolvedFeatures`, `Contents/CMgr`, `Contents/Config-0-ModelHeader` + `Header2`, `Contents/Config-0`, `Contents/Definition` |
+
+Of the five load-critical streams, `Contents/Definition` is **solved and emitted from scratch** — see
+`../records/DEFINITION.md`, where a constructively emitted one is measured opening in SOLIDWORKS 2025
+with the correct volume and centre of mass in two different host documents. `Contents/CMgr` and
+`Contents/Config-0` remain the open blockers: `../archive/MULTISTREAM.md` §3 characterises 4 of 28
+`CMgr` nodes and 3 of 123 `Config-0` objects, and records that the `Config-0` growth rule is not
+general beyond four features.
+| **stale-safe** (keep the donor's copy, do not update) | `Contents/Config-0-LWDATA`, `Contents/DisplayLists`, `_MO_VERSION_*/Biography` |
+| **droppable** | `Contents/Config-0-Partition`, `ThirdPtyStore/VisualStates` |
 
 Dropping `Config-0-Partition` is why every volume in `../measurements/` is a genuine rebuild rather
 than a cached solid being read back.
