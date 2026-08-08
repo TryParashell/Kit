@@ -513,6 +513,8 @@ _CREATION_STAMP_HIGH = 1893456000
 UNSYNTHESIZED_STREAMS: tuple[str, ...] = ()
 UNSYNTHESIZED_STREAM_NOTES: tuple[str, ...] = ()
 _NON_SOLID_FEATURE_CLASSES = frozenset({"moRefPlane_c", "moProfileFeature_c"})
+_VENDOR_RESOLVED_SOLID_FEATURES = 1
+_CONFIGURATION_ROOT_TREE_ID = 0
 _BLIND_END_SPEC = bytes.fromhex(
     "ffff01000b006d6f456e64537065635f63000001000000000000000000000000000000000000000000"
 )
@@ -2000,6 +2002,14 @@ def _solid_feature_tree_ids(objects: tuple[_WriteObject, ...]) -> tuple[int, ...
     )
 
 
+def _configuration_atom_tree_ids(
+    solid_feature_tree_ids: tuple[int, ...],
+) -> tuple[int, ...]:
+    return solid_feature_tree_ids[:_VENDOR_RESOLVED_SOLID_FEATURES] or (
+        _CONFIGURATION_ROOT_TREE_ID,
+    )
+
+
 def _native_envelope_streams(
     document: CadDocument,
     model_name: str,
@@ -2040,7 +2050,7 @@ def _native_envelope_streams(
     streams["Contents/Definition"] = encode_definition_stream(
         assembly=document.assembly is not None
     )
-    tree_ids = solid_feature_tree_ids or (0,)
+    tree_ids = _configuration_atom_tree_ids(solid_feature_tree_ids)
     atom_ids = atom_ids_for(len(tree_ids))
     streams[CONFIGURATION_MANAGER_STREAM] = encode_cmgr_stream(
         feature_tree_ids=tree_ids,
