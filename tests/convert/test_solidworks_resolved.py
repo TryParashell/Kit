@@ -14,7 +14,6 @@ import xml.etree.ElementTree as ElementTree
 
 import pytest
 
-from convert import write_document
 from convert.adapters.solidworks.container import SldprtArchive, SldprtFormatError
 from convert.adapters.solidworks.format import KEYWORDS_STREAM, RESOLVED_FEATURES_STREAM
 from convert.adapters.solidworks.resolved import (
@@ -63,8 +62,6 @@ from convert.adapters.solidworks.resolved import (
     tree_nodes,
 )
 
-from tests.convert.test_solidworks_writer import _freecad_rectangle_pad_document
-
 CORPUS = Path(__file__).resolve().parents[2] / ".rescratch" / "corpus2"
 PARTS = CORPUS / "parts"
 PATCHED = CORPUS / "patched"
@@ -75,6 +72,7 @@ AUTHORED_CORPUS = (
 )
 DIAMETER_PREFIX = "<MOD-DIAM>"
 RADIUS_PREFIX = "R"
+RECTANGLE_PAD_PART = "CUTBASE_cd5"
 
 BIELA_EXTRUSIONS = (
     (35, BOSS_KIND, 38.0),
@@ -249,11 +247,8 @@ def _patched_stream(name: str) -> bytes:
     return archive.require(RESOLVED_FEATURES_STREAM)
 
 
-def _written_rectangle_pad_stream(tmp_path: Path) -> bytes:
-    target = tmp_path / "GeneralLocator.SLDPRT"
-    write_document(_freecad_rectangle_pad_document(), target, allow_carrier=False)
-    archive = SldprtArchive.from_bytes(target.read_bytes())
-    return archive.require(RESOLVED_FEATURES_STREAM)
+def _rectangle_pad_stream() -> bytes:
+    return _corpus_stream(RECTANGLE_PAD_PART)
 
 
 def _centred_corners(
@@ -332,14 +327,13 @@ def test_circle_geometry_round_trips_through_the_seventeen_degree_point() -> Non
             circle_circumference_point_mm(radius)
 
 
-def test_written_rectangle_pad_is_reachable_through_the_general_locator(
-    tmp_path: Path,
-) -> None:
-    resolved = _written_rectangle_pad_stream(tmp_path)
+@corpus_parts
+def test_written_rectangle_pad_is_reachable_through_the_general_locator() -> None:
+    resolved = _rectangle_pad_stream()
     features = locate_features(resolved)
     layout = locate_rectangle_pad(resolved)
     assert layout is not None
-    assert len(features) == 1
+    assert len(features) == 2
     feature = features[0]
     assert feature.kind == BOSS_KIND
     assert feature.flags == BOSS_FLAGS
@@ -353,32 +347,45 @@ def test_written_rectangle_pad_is_reachable_through_the_general_locator(
         x_offset for x_offset, _ in layout.point_offsets
     )
     assert feature.corners_mm == layout.corners_mm
-    assert feature.bounds_mm == (-30.0, -15.0, 30.0, 15.0)
-    assert feature.depth_mm == pytest.approx(12.0)
+    assert feature.bounds_mm == (-20.0, -10.0, 20.0, 10.0)
+    assert feature.depth_mm == pytest.approx(10.0)
     assert feature.reversed is False
     assert feature.end_condition_code == BLIND_END_CONDITION
+    assert features[1].kind == CUT_KIND
+    assert features[1].depth_offset != layout.depth_offset
+    assert features[1].corners_mm != layout.corners_mm
 
 
-def test_name_records_expose_the_tree_nodes_and_dimension_scalars(
-    tmp_path: Path,
-) -> None:
-    resolved = _written_rectangle_pad_stream(tmp_path)
+@corpus_parts
+def test_name_records_expose_the_tree_nodes_and_dimension_scalars() -> None:
+    resolved = _rectangle_pad_stream()
     records = name_records(resolved)
     nodes = tree_nodes(resolved)
-    assert {node.name for node in nodes} >= {"Sketch1", "Boss-Extrude1"}
+    assert {node.name for node in nodes} >= {
+        "Sketch1",
+        "Boss-Extrude1",
+        "Sketch2",
+        "Cut-Extrude1",
+    }
     assert {node.offset for node in nodes} <= {record.offset for record in records}
     assert [node.flags for node in nodes if node.name == "Boss-Extrude1"] == [
         BOSS_FLAGS
     ]
+    assert [node.flags for node in nodes if node.name == "Cut-Extrude1"] == [CUT_FLAGS]
     assert [node.flags for node in nodes if node.name == "Sketch1"] == [SKETCH_FLAGS]
+    assert [node.flags for node in nodes if node.name == "Sketch2"] == [SKETCH_FLAGS]
     scalars = dimension_scalars(resolved)
     depths = [scalar for scalar in scalars if scalar.name.startswith("D")]
-    assert [scalar.value_mm for scalar in depths] == [pytest.approx(12.0)]
-    assert len(sketch_points(resolved)) == 4
+    assert [scalar.value_mm for scalar in depths] == [
+        pytest.approx(10.0),
+        pytest.approx(5.0),
+    ]
+    assert len(sketch_points(resolved)) == 8
 
 
-def test_patch_features_rewrites_a_written_rectangle_pad(tmp_path: Path) -> None:
-    resolved = _written_rectangle_pad_stream(tmp_path)
+@corpus_parts
+def test_patch_features_rewrites_a_written_rectangle_pad() -> None:
+    resolved = _rectangle_pad_stream()
     corners = rectangle_corners_mm(-11.0, -6.0, 19.0, 8.0)
     patched = patch_features(
         resolved,
@@ -407,10 +414,11 @@ def test_patch_features_rewrites_a_written_rectangle_pad(tmp_path: Path) -> None
     assert patch_features(resolved, {}) == resolved
 
 
-def test_patch_features_rejects_edits_the_stream_cannot_hold(tmp_path: Path) -> None:
-    resolved = _written_rectangle_pad_stream(tmp_path)
+@corpus_parts
+def test_patch_features_rejects_edits_the_stream_cannot_hold() -> None:
+    resolved = _rectangle_pad_stream()
     rejected = (
-        {1: FeatureEdit(depth_mm=5.0)},
+        {9: FeatureEdit(depth_mm=5.0)},
         {0: FeatureEdit(corners_mm=((0.0, 0.0),))},
         {0: FeatureEdit(corners_mm=_centred_corners(math.inf, 4.0))},
         {0: FeatureEdit(depth_mm=0.0)},
