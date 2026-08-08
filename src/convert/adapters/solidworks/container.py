@@ -48,6 +48,12 @@ def signature_triplet(file_id: int) -> tuple[bytes, bytes, bytes] | None:
     return None
 
 
+def container_signatures(blob: bytes | bytearray) -> tuple[bytes, bytes, bytes]:
+    data = bytes(blob)
+    signatures, _ = _template_fields(data, SldprtArchive.from_bytes(data))
+    return signatures
+
+
 @dataclass(frozen=True, slots=True)
 class StreamRecord:
     name: str
