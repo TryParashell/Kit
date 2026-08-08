@@ -13,11 +13,14 @@ import struct
 import pytest
 
 from convert.adapters.solidworks import SldprtArchive, build_sldprt
+from convert.adapters.solidworks.container import container_signatures
 
 _MARKER = bytes.fromhex("140006000800")
 _LOCAL_SIGNATURE = bytes.fromhex("a1909b1f")
 _CENTRAL_SIGNATURE = bytes.fromhex("a576970f")
 _END_SIGNATURE = bytes.fromhex("7a004720")
+_VENDOR_FILE_ID = 0x715BE98F
+_VENDOR_SIGNATURES = (_LOCAL_SIGNATURE, _CENTRAL_SIGNATURE, _END_SIGNATURE)
 
 
 def _decoded_name(value: bytes) -> str:
@@ -30,8 +33,9 @@ def test_generated_container_has_complete_native_directory() -> None:
         ("swXmlContents/KeyWords", b"<?xml version='1.0'?><KeyWords/>"),
         ("Contents/OleItems", b""),
     )
-    blob = build_sldprt(streams, file_id=0x715BE98F)
+    blob = build_sldprt(streams, file_id=_VENDOR_FILE_ID, signatures=_VENDOR_SIGNATURES)
     archive = SldprtArchive.from_bytes(blob)
+    assert archive.file_id == _VENDOR_FILE_ID
     assert archive.streams == dict(streams)
     end_offset = len(blob) - 22
     (
@@ -142,8 +146,11 @@ def test_generated_container_supports_variable_stream_sizes_and_counts() -> None
 
 def test_generated_container_reuses_template_identity() -> None:
     template = build_sldprt(
-        {"Contents/SolidWorks": b"<swSolidWorks/>"}, file_id=0x715BE98F
+        {"Contents/SolidWorks": b"<swSolidWorks/>"},
+        file_id=_VENDOR_FILE_ID,
+        signatures=_VENDOR_SIGNATURES,
     )
+    assert container_signatures(template) == _VENDOR_SIGNATURES
     streams = {
         "Contents/SolidWorks": b"<swSolidWorks version='2'/>",
         "ThirdPty/KitData": b"kit",

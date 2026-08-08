@@ -30,6 +30,7 @@ from convert.adapters.solidworks.adapter import (
     _solid_body_feature,
     _timeline,
 )
+from convert.adapters.solidworks.container import container_signatures
 from convert.adapters.solidworks.format import CLASS_MARKER, SERIALIZED_STRING_MARKER
 from convert.adapters.solidworks.native import (
     NativeConstraint,
@@ -418,6 +419,7 @@ def test_parasolid_stream_discovery_does_not_depend_on_its_name() -> None:
         streams,
         file_id=archive.file_id,
         format_version=archive.format_version,
+        signatures=container_signatures(SAMPLE.read_bytes()),
     )
     document = read_sldprt(renamed)
     assert len(document.brep_payloads) == 3
