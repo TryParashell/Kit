@@ -65,9 +65,7 @@ DOCUMENT_STAMP_LOW = 0x10000000
 DISPLAY_GEOMETRY_CACHE_BYTES = 96
 DISPLAY_GEOMETRY_CACHE_DEFAULT = bytes(DISPLAY_GEOMETRY_CACHE_BYTES)
 
-RESIDUAL_SPANS = (
-    ("display_geometry_cache", ROOT_CLASS, DISPLAY_GEOMETRY_CACHE_BYTES),
-)
+RESIDUAL_SPANS = (("display_geometry_cache", ROOT_CLASS, DISPLAY_GEOMETRY_CACHE_BYTES),)
 
 VISUAL_PROPERTIES = (
     ("appearance_id", "u32", 15651274),
@@ -542,9 +540,7 @@ def atom_ids_for(feature_count: int) -> tuple[int, ...]:
 def tree_ids_for(feature_count: int) -> tuple[int, ...]:
     if feature_count < 1:
         raise SldprtFormatError("a SOLIDWORKS part carries at least one solid feature")
-    return tuple(
-        FIRST_TREE_ID + TREE_ID_STEP * index for index in range(feature_count)
-    )
+    return tuple(FIRST_TREE_ID + TREE_ID_STEP * index for index in range(feature_count))
 
 
 def encode_cmgr_stream(
