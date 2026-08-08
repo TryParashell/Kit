@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import json
 import pathlib
+import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 VENDORED = ROOT / "re/binaries/sldmfcu.dll"
@@ -9,7 +10,6 @@ MANIFEST = ROOT / "re/binaries/manifest.json"
 INSTALLED = pathlib.Path(
     r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\sldmfcu.dll",
 )
-SHIPPED = ROOT / "src/convert/adapters/solidworks/data/sldprt_signature_table.bin"
 RECORD = ROOT / "re/data/signature_table.json"
 HOST_NAME = "sldmfcu.dll"
 BLOCK_OFFSET = 0x566C40
@@ -76,7 +76,14 @@ def provenance(
         "signature_array_file_offset": BLOCK_OFFSET + ENTRY_COUNT * ID_STRIDE,
         "id_encoding": "big-endian u32",
         "signature_encoding": "little-endian u32 stored big-endian",
-        "shipped_resource": str(SHIPPED.relative_to(ROOT)).replace("\\", "/"),
+        "reader": "FUN_3cc4d270 keys on file_id, caches the row magics at +0x88/+0x8c/+0x90",
+        "comparison_sites": {
+            "local": "FUN_3cc528b0 unz+0xc8",
+            "central": "FUN_3cc52ac0 unz+0xcc",
+            "end": "FUN_3cc51900 backward scan on unz+0xd0",
+        },
+        "writer": "FUN_3cc4a8c0 draws a random index in [0,1000) and emits that row",
+        "shipped_rows": 1,
         "entries": [
             {
                 "index": index,
@@ -88,6 +95,19 @@ def provenance(
             for index, (file_id, triplet) in enumerate(rows)
         ],
     }
+
+
+def shipped_row() -> tuple[int, bytes] | None:
+    sys.path.insert(0, str(ROOT / "src"))
+    try:
+        from convert.adapters.solidworks import container
+    except ImportError:
+        return None
+    file_id = getattr(container, "DEFAULT_FILE_ID", None)
+    triplet = getattr(container, "DEFAULT_SIGNATURES", None)
+    if file_id is None or triplet is None:
+        return None
+    return int(file_id), b"".join(triplet)
 
 
 def main() -> int:
@@ -114,24 +134,32 @@ def main() -> int:
         print(f"MISMATCH host digest differs from {MANIFEST.name} {expected}")
         return 1
     if args.check:
-        if not SHIPPED.is_file():
-            print(f"shipped resource {SHIPPED} is missing")
+        shipped = shipped_row()
+        if shipped is None:
+            print("container.py exposes no default signature row")
             return 1
-        shipped = SHIPPED.read_bytes()
-        if shipped != table:
-            print("MISMATCH shipped resource differs from the DLL")
+        file_id, triplet = shipped
+        index = next(
+            (
+                position
+                for position, (candidate, payload) in enumerate(rows)
+                if candidate == file_id and payload == triplet
+            ),
+            None,
+        )
+        if index is None:
+            print(f"MISMATCH 0x{file_id:08x} {triplet.hex()} is not a row of the DLL")
             return 1
-        print("shipped resource matches the DLL byte for byte")
+        print(f"shipped row 0x{file_id:08x} is DLL table index {index}")
+        print(f"shipped vendor bytes {4 + len(triplet)} of {len(table)}")
         return 0
-    SHIPPED.parent.mkdir(parents=True, exist_ok=True)
-    SHIPPED.write_bytes(table)
     RECORD.parent.mkdir(parents=True, exist_ok=True)
     RECORD.write_text(
         json.dumps(provenance(path, rows, digest), indent=2) + "\n",
         encoding="utf-8",
         newline="\n",
     )
-    print(f"wrote {SHIPPED.relative_to(ROOT)} and {RECORD.relative_to(ROOT)}")
+    print(f"wrote {RECORD.relative_to(ROOT)}")
     return 0
 
 
