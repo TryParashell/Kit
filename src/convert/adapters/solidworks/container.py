@@ -115,9 +115,18 @@ def build_sldprt(
     file_id: int | None = None,
     format_version: int = 4,
     template: bytes | bytearray | None = None,
+    signatures: tuple[bytes, bytes, bytes] | None = None,
 ) -> bytes:
     type_ids: dict[str, int] = {}
-    if template is None:
+    if template is not None and signatures is not None:
+        raise ValueError("SLDPRT signatures cannot be given alongside a template")
+    if template is None and signatures is not None:
+        if len(signatures) != 3 or any(len(value) != 4 for value in signatures):
+            raise ValueError("SLDPRT signatures must be three four byte values")
+        if file_id is None:
+            raise ValueError("SLDPRT signatures require the paired file id")
+        signatures = tuple(bytes(value) for value in signatures)
+    elif template is None:
         if file_id is None:
             file_id = DEFAULT_FILE_ID
         signatures = signature_triplet(file_id)
