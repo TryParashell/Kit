@@ -48,8 +48,10 @@ from convert.adapters.solidworks.adapter import (
     _native_stream_sha256,
     _semantic_sha256,
 )
+from convert.adapters.solidworks.cmgr import CONFIGURATION_MANAGER_STREAM
 from convert.adapters.solidworks.format import (
     COMPONENT_TREE_STREAM,
+    CONFIGURATION_STREAM,
     CONTENT_TYPES_STREAM,
     FEATURES_STREAM,
     KEYWORDS_STREAM,
@@ -432,7 +434,9 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     resolved_features = archive.require(KIT_RESOLVED_STREAM)
     features = archive.require(FEATURES_STREAM)
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    assert UNSYNTHESIZED_STREAMS == ()
+    assert archive.require(CONFIGURATION_MANAGER_STREAM)
+    assert archive.require(CONFIGURATION_STREAM)
     assert "Contents/DisplayLists" not in archive.streams
     assert "Contents/Config-0-LWDATA" not in archive.streams
     assert archive.require("Contents/Config-0-ModelHeader") == archive.require(
@@ -816,7 +820,9 @@ def test_source_less_native_rectangle_boss_records_are_parametric() -> None:
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    assert UNSYNTHESIZED_STREAMS == ()
+    assert archive.require(CONFIGURATION_MANAGER_STREAM)
+    assert archive.require(CONFIGURATION_STREAM)
     resolved = archive.require(KIT_RESOLVED_STREAM)
     native = decode_native_model(
         archive.require(KEYWORDS_STREAM),
@@ -856,7 +862,9 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     data = target.read_bytes()
     archive = SldprtArchive.from_bytes(data)
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    assert UNSYNTHESIZED_STREAMS == ()
+    assert archive.require(CONFIGURATION_MANAGER_STREAM)
+    assert archive.require(CONFIGURATION_STREAM)
     resolved = archive.require(KIT_RESOLVED_STREAM)
     partition = archive.require(PARTITION_STREAM)
     native = decode_native_model(
@@ -1074,7 +1082,9 @@ def test_non_native_document_writes_no_vendor_resolved_feature_lanes() -> None:
     part = encode_native_part(_document_without_source(source), "memory")
     assert part.configuration_lanes == ()
     assert part.donor_notes == UNSYNTHESIZED_STREAM_NOTES
-    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    assert UNSYNTHESIZED_STREAMS == ()
+    assert archive.require(CONFIGURATION_MANAGER_STREAM)
+    assert archive.require(CONFIGURATION_STREAM)
     records = archive.require(KIT_RESOLVED_STREAM)
     assert records == part.kit_resolved_features
     assert result.application_usable is False
@@ -1119,7 +1129,9 @@ def test_non_native_kit_resolved_stream_preserves_decoded_records() -> None:
     assert {item.native_stream for item in native.sketches} == {KIT_RESOLVED_STREAM}
     assert {item.native_stream for item in native.operations} == {KIT_RESOLVED_STREAM}
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    assert UNSYNTHESIZED_STREAMS == ()
+    assert archive.require(CONFIGURATION_MANAGER_STREAM)
+    assert archive.require(CONFIGURATION_STREAM)
     restored = read_sldprt(output.getvalue())
     assert [item.name for item in restored.sketches] == ["CustomSketch"]
     assert [item.name for item in restored.feature_timeline] == ["CustomBoss"]
@@ -1179,7 +1191,9 @@ def test_source_less_brep_only_writes_native_imported_feature_metadata() -> None
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    assert UNSYNTHESIZED_STREAMS == ()
+    assert archive.require(CONFIGURATION_MANAGER_STREAM)
+    assert archive.require(CONFIGURATION_STREAM)
     resolved = archive.require(KIT_RESOLVED_STREAM)
     native = decode_native_model(
         archive.require(KEYWORDS_STREAM),
