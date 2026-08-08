@@ -2032,11 +2032,26 @@ def _native_envelope_streams(
         "_MO_VERSION_18000/Biography": _biography_payload(model_name, identity),
         "_MO_VERSION_18000/History": _version_history_payload(),
     }
-    model_header = _model_header_payload(identity, configuration_name)
+    model_header = _model_header_payload(
+        identity, configuration_name, solid_feature_tree_ids=solid_feature_tree_ids
+    )
     streams["Contents/Config-0-ModelHeader"] = model_header
     streams["Header2"] = model_header
     streams["Contents/Definition"] = encode_definition_stream(
         assembly=document.assembly is not None
+    )
+    tree_ids = solid_feature_tree_ids or (0,)
+    atom_ids = atom_ids_for(len(tree_ids))
+    streams[CONFIGURATION_MANAGER_STREAM] = encode_cmgr_stream(
+        feature_tree_ids=tree_ids,
+        configuration_name=configuration_name,
+        part_name=identity.reference_name,
+        atom_ids=atom_ids,
+    )
+    streams[CONFIGURATION_STREAM] = encode_config0_stream(
+        part_name=identity.reference_name,
+        atoms=tuple(reversed(tuple(zip(atom_ids, tree_ids, strict=True)))),
+        high_water=(atom_ids[-1], FIRST_ATOM_ID + 2 * len(atom_ids)),
     )
     return MappingProxyType(streams)
 
@@ -2247,8 +2262,16 @@ def _model_header_payload(
     identity: _NativeIdentity,
     configuration_name: str,
     user_name: str = "Kit",
+    solid_feature_tree_ids: tuple[int, ...] = (),
 ) -> bytes:
-    return _header_payload(identity, configuration_name, _HEADER_OBJECTS, "", user_name)
+    return _header_payload(
+        identity,
+        configuration_name,
+        _HEADER_OBJECTS,
+        "",
+        user_name,
+        max(solid_feature_tree_ids) + 1 if solid_feature_tree_ids else None,
+    )
 
 
 def _header_payload(
@@ -2257,6 +2280,7 @@ def _header_payload(
     objects: Sequence[tuple[int, str, bool]],
     document_path: str,
     user_name: str = "Kit",
+    next_object_id: int | None = None,
 ) -> bytes:
     legacy_stamp = bytes.fromhex("f65a1a69")
     output = bytearray(_class_declaration("moHeader_c"))
