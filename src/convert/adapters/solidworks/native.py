@@ -38,6 +38,7 @@ from interchange import (
 )
 
 from .container import SldprtFormatError
+from .definition import encode_definition_stream
 from .format import (
     ASSEMBLY_SUFFIX,
     CANONICAL_PLANE_FEATURE_TYPE,
@@ -505,12 +506,11 @@ _CREATION_STAMP_HIGH = 1893456000
 UNSYNTHESIZED_STREAMS = (
     "Contents/CMgr",
     "Contents/Config-0",
-    "Contents/Definition",
 )
 UNSYNTHESIZED_STREAM_NOTES = (
-    "Contents/CMgr, Contents/Config-0 and Contents/Definition are load critical for "
-    "the SOLIDWORKS reader and their record grammar is not yet recovered, so they are "
-    "omitted rather than approximated",
+    "Contents/CMgr and Contents/Config-0 are load critical for the SOLIDWORKS reader "
+    "and their record grammar is not yet recovered, so they are omitted rather than "
+    "approximated",
     "Contents/Config-0-ResolvedFeatures carries Kit records that the SOLIDWORKS "
     "reader does not accept, so the part is not vendor loadable",
 )
@@ -2022,6 +2022,9 @@ def _native_envelope_streams(
     model_header = _model_header_payload(identity, configuration_name)
     streams["Contents/Config-0-ModelHeader"] = model_header
     streams["Header2"] = model_header
+    streams["Contents/Definition"] = encode_definition_stream(
+        assembly=document.assembly is not None
+    )
     return MappingProxyType(streams)
 
 
