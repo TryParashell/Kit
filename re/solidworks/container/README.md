@@ -6,9 +6,9 @@ SOLIDWORKS**.
 
 ## What is here
 
-| file | what it establishes | confidence |
-|---|---|---|
-| `STATIC.md` | Static census of the 63-file real-world corpus through Kit's own container parser, no COM: `format_version` 4 in all 63, 61 distinct `file_id`s, 61 distinct signature triplets, 234 distinct `mo*`/`sg*` classes, 11 distinct tree-node flag values, 83 distinct stream names (30 present in all 63, **39 unknown to Kit**), plus a per-file table of bytes / streams / lanes / classes / nodes / scalars / sketch points. | **confirmed** as a census (measured over real bytes). The "present in all 63 files" column is labelled *candidate* load-critical, not proven. |
+| file        | what it establishes                                                                                                                                                                                                                                                                                                                                                                                                         | confidence                                                                                                                                    |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STATIC.md` | Static census of the 63-file real-world corpus through Kit's own container parser, no COM: `format_version` 4 in all 63, 61 distinct `file_id`s, 61 distinct signature triplets, 234 distinct `mo*`/`sg*` classes, 11 distinct tree-node flag values, 83 distinct stream names (30 present in all 63, **39 unknown to Kit**), plus a per-file table of bytes / streams / lanes / classes / nodes / scalars / sketch points. | **confirmed** as a census (measured over real bytes). The "present in all 63 files" column is labelled _candidate_ load-critical, not proven. |
 
 Machine-readable: `../../data/container_inventory_static.json`,
 `../../data/container_inventory_reader.json`, `../../data/corpus_census_per_file.json`.
@@ -21,10 +21,10 @@ SOLIDWORKS, so for a long time a file could only be written by reusing a donor's
 
 **There is no algorithm relating them. It is a 1000-entry lookup table baked into `sldmfcu.dll`.**
 
-| array | virtual address | file offset (SW 2025 `sldmfcu.dll`) | size | element |
-|---|---|---|---|---|
-| ids | `0x3cf5a440` | **`0x566c40`** | 4000 bytes | `u32` file id, **big-endian** |
-| signatures | `0x3cf5b3e0` | **`0x567be0`** | 12000 bytes | three `u32`, **big-endian** |
+| array      | virtual address | file offset (SW 2025 `sldmfcu.dll`) | size        | element                       |
+| ---------- | --------------- | ----------------------------------- | ----------- | ----------------------------- |
+| ids        | `0x3cf5a440`    | **`0x566c40`**                      | 4000 bytes  | `u32` file id, **big-endian** |
+| signatures | `0x3cf5b3e0`    | **`0x567be0`**                      | 12000 bytes | three `u32`, **big-endian**   |
 
 Exactly **1000** entries each, parallel: entry `i` of the id array pairs with entry `i` of the
 signature array. The only function referencing either array is the initialiser `FUN_3cc4e200`, which
@@ -53,12 +53,17 @@ and all three of its signatures are exactly the parallel entry. Nothing was hand
 Reproduce:
 
 ```powershell
+uv run python re\tooling\ghidra\gen_signature_table.py
+uv run python re\tooling\ghidra\gen_signature_table.py --check
 uv run python re\tooling\ghidra\sigtable.py
 ```
 
-Reads `re/binaries/sldmfcu.dll` (falling back to the install), rewrites
-`../../data/signature_table.json`, then rescans the corpora. Needs the `.SLDPRT` corpora under
-`.rescratch/` for the 184-file half; the 1000-entry extraction half needs only the DLL.
+`gen_signature_table.py` reads `re/binaries/sldmfcu.dll` (falling back to the install), verifies its
+SHA-256 against `re/binaries/manifest.json`, and writes both the shipped resource
+`src/convert/adapters/solidworks/data/sldprt_signature_table.bin` and the provenance record
+`../../data/signature_table.json`. `--check` re-extracts and compares the shipped resource byte for
+byte. `sigtable.py` then rescans the corpora; that half needs the `.SLDPRT` corpora under
+`.rescratch/`, while the 1000-entry extraction needs only the DLL.
 
 ### Why every mixer search failed
 
@@ -73,18 +78,23 @@ it.
 `build_sldprt(..., file_id=..., template=None)` used to raise
 `"SLDPRT file id requires a native template with matching signatures"` for any id outside two
 hardcoded pairs (they turned out to be table entries **711** `0xEC6E2386` and **750** `0x715BE98F`).
-With `../../data/signature_table.json` it can serve all 1000 ids and the donor template is no longer
-needed **for the container framing**. Stream content still needs a donor — nothing here changes that.
+It now serves all 1000 ids from the generated resource, and the donor template is no longer needed
+**for the container framing**. Stream content still needs a donor — nothing here changes that.
+
+`container.py` carries no signature bytes of its own. The base85 literal that used to sit in it was
+removed; the table is loaded from the package resource through `importlib.resources`, and
+`tests/convert/test_solidworks_signature_table.py` re-extracts from the tracked DLL in-test so the
+resource cannot drift from its source.
 
 ## Streams: droppable, stale-safe, load-critical
 
 Established by deleting streams and rebuilding in SOLIDWORKS (`../archive/MULTISTREAM.md` §5):
 
-| class | streams |
-|---|---|
-| **load-critical** | `Contents/Config-0-ResolvedFeatures`, `Contents/CMgr`, `Contents/Config-0-ModelHeader` + `Header2`, `Contents/Config-0`, `Contents/Definition` |
-| **stale-safe** (keep the donor's copy, do not update) | `Contents/Config-0-LWDATA`, `Contents/DisplayLists`, `_MO_VERSION_*/Biography` |
-| **droppable** | `Contents/Config-0-Partition`, `ThirdPtyStore/VisualStates` |
+| class                                                 | streams                                                                                                                                        |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **load-critical**                                     | `Contents/Config-0-ResolvedFeatures`, `Contents/CMgr`, `Contents/Config-0-ModelHeader` + `Header2`, `Contents/Config-0`, `Contents/Definition` |
+| **stale-safe** (keep the donor's copy, do not update) | `Contents/Config-0-LWDATA`, `Contents/DisplayLists`, `_MO_VERSION_*/Biography`                                                                 |
+| **droppable**                                         | `Contents/Config-0-Partition`, `ThirdPtyStore/VisualStates`                                                                                    |
 
 Dropping `Config-0-Partition` is why every volume in `../measurements/` is a genuine rebuild rather
 than a cached solid being read back.
@@ -96,8 +106,8 @@ and `../archive/GRAMMAR.md`.
 
 ## Also relevant
 
-* `../records/ANSWERS.md` **Q7** is the full derivation of the signature table, including the
+- `../records/ANSWERS.md` **Q7** is the full derivation of the signature table, including the
   decompiled initialiser loop. `../../data/sldmfcu_sigtable_refs.c` is that function's decompiled C.
-* `../corpus/CORPUS2.md` §9 shows the container being rebuilt end to end four times — donor stream
+- `../corpus/CORPUS2.md` §9 shows the container being rebuilt end to end four times — donor stream
   reused, `Partition` dropped, file id and triplet carried over — with measured volumes agreeing to
   12 significant figures.

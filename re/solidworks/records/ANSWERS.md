@@ -1,6 +1,6 @@
 # Direct answers to the seven open questions
 
-Confidence words are used exactly as in `SERIALIZE.md`: **confirmed** = decompiled *and*
+Confidence words are used exactly as in `SERIALIZE.md`: **confirmed** = decompiled _and_
 cross-checked against real bytes; **partial** = decompiled but not exercised by any available file;
 **not found** = not recovered.
 
@@ -47,7 +47,7 @@ the observed crash. So the honest position is unchanged from `GRAMMAR.md`: **bos
 from a donor of the right operation**, and the reason is now known — it is not a hidden opcode, it
 is the derived face-identity records.
 
-The remaining unrecovered piece is *which base-class `Serialize` writes the flags word*.
+The remaining unrecovered piece is _which base-class `Serialize` writes the flags word_.
 `moExtrusion_c::Serialize` → `moBodyFeature_c::Serialize` → `FUN_4bb886c0` (unnamed base), and the
 flags live in that unnamed base chain (`moModelFeature_c` / `moFeature_c` / `moNode_c`). Recovering
 it is mechanical with the tooling here but was not completed. **partial.**
@@ -70,7 +70,7 @@ In the field order that is item 31 of §1 in `SERIALIZE.md`: it is the first of 
 `moFromEndSpec_c` read, i.e. run offset +20. Read back by `verify_layout.py`, it is **1 in all 13
 `moEndSpec_c` objects of all 9 traced parts**, including the two V8 production parts.
 
-So a written file that produces a separate body is *not* doing so because merge is 0 — merge is
+So a written file that produces a separate body is _not_ doing so because merge is 0 — merge is
 already 1 in every donor. The 32000 mm³ / 2-body result must come from elsewhere. The two
 candidates the segmentation actually exposes are the `moPerBodyChooserData_c` object inside the
 extrusion (a real traced child, `moEndSpec_c`'s sibling under `moExtrusion_c`) and the
@@ -90,27 +90,27 @@ at all.**
 
 Full table in `SERIALIZE.md` §3. The four things asked for:
 
-* **End-condition code**: `+0x0c` for direction 0, `+0x10` for direction 1, both `i32`.
-  `moRevEndSpec_c::getType(int i)` is *the same machine code* as `moEndSpec_c::getType(int i)` —
+- **End-condition code**: `+0x0c` for direction 0, `+0x10` for direction 1, both `i32`.
+  `moRevEndSpec_c::getType(int i)` is _the same machine code_ as `moEndSpec_c::getType(int i)` —
   `return *(int *)(this + 4*i + 0xc)` — so the revolve and the extrude share the
   `swEndConditions_e` offset. In stream terms, for a class definition: `marker + 32` and
   `marker + 36`. Value 0 in all 37 corpus parts.
-* **Direction / reverse flag**: there is **no** `getDirection()` on `moRevEndSpec_c`. What exists
+- **Direction / reverse flag**: there is **no** `getDirection()` on `moRevEndSpec_c`. What exists
   is `getOffsetReverse(i)` at `+0x140` / `+0x144` (`marker + 64` / `marker + 68`), and
   `getSingleEnd()` at `+0x08` (`marker + 20`), which the reader forces to 1 when
   `getType(0) == 6`. The extrude's separate `getDirection()`/`getFlip()` pair at `+0x8c`/`+0x88`
   has no counterpart here. So the "reverse a revolve" flag is **not found** as a distinct field in
   this record; a two-direction revolve is expressed by `getType(1) != 0` plus a second angle
   dimension, not by a flag.
-* **Second angle**: not a scalar. `moRevEndSpec_c::getAngle(i)` reads the `moDisplayDim_c*` at
+- **Second angle**: not a scalar. `moRevEndSpec_c::getAngle(i)` reads the `moDisplayDim_c*` at
   `+0x18 + 8i` and returns `6.2831853071796` (2π) when it is null. Items 14 and 15 of the record
   are those two dimension object reads. A modern file stores the angle only in the dimension
   chain; the raw doubles at `+0x150`/`+0x158` (`getRevolveAngle(i)`) are read **only when the file
   version is below 4547** and are absent from every corpus file. This is the direct explanation
   for the 52-byte constant: a 360° single-direction revolve genuinely stores no angle.
-* **Thin-feature thickness**: not in `moRevEndSpec_c`. The two `0.01` doubles at `+0x38`/`+0x40`
+- **Thin-feature thickness**: not in `moRevEndSpec_c`. The two `0.01` doubles at `+0x38`/`+0x40`
   (`marker + 48` / `marker + 56`) sit between the up-to-point references and `getOffsetReverse`,
-  i.e. in the per-direction *offset* group, and `moRevEndSpec_c::getSurfOffsetDist(i)` returns the
+  i.e. in the per-direction _offset_ group, and `moRevEndSpec_c::getSurfOffsetDist(i)` returns the
   literal `0.01` when its dimension at `+0x28 + 8i` is null — the same default. So they are the
   per-direction surface-offset distances, default 10 mm, **partial** (no file exercises a non-zero
   offset). Thin-feature revolves use a different class: `moRevolutionThin_c`, whose own
@@ -134,18 +134,18 @@ there is a second copy for the second direction at `marker + 37`.
 
 What each code changes in the record, straight from the branches:
 
-| code | name | extra record | where |
-|---|---|---|---|
-| 0 | Blind | none | depth is in the `moDisplayDim_c` at `+0x18` |
-| 1 | ThroughAll | none | no depth dimension is written |
-| 2 | ThroughNext | none | |
-| **3** | **UpToVertex** | **one extra `operator>>` reading a `moPointRef_w*`**, before the surface-array flag | `+0x68` for direction 0, `+0x70` for direction 1 |
-| 4 | UpToSurface | none extra beyond the surface-ref array that every record has | the array at `+0x28`/`+0x48`, gated by the `uchar` flag that precedes it |
-| 5 | OffsetFromSurface | as 4 | the offset value lives in the dimension chain |
-| 6 | MidPlane | none, but the reader forces `getSingleEnd()` to 1 | |
-| **7** | **UpToBody** | **one extra `operator>>` reading a `moRefWrapper_c*`**, after the `+0x130` field | `+0x78` for direction 0, `+0x80` for direction 1 |
-| 9 | ThroughAllBoth | none; pairs with `getType(1) = 1` | observed |
-| 10, 11 | UpToSelection, UpToNext | no branch on these values | |
+| code   | name                    | extra record                                                                        | where                                                                    |
+| ------ | ----------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 0      | Blind                   | none                                                                                | depth is in the `moDisplayDim_c` at `+0x18`                              |
+| 1      | ThroughAll              | none                                                                                | no depth dimension is written                                            |
+| 2      | ThroughNext             | none                                                                                |                                                                          |
+| **3**  | **UpToVertex**          | **one extra `operator>>` reading a `moPointRef_w*`**, before the surface-array flag | `+0x68` for direction 0, `+0x70` for direction 1                         |
+| 4      | UpToSurface             | none extra beyond the surface-ref array that every record has                       | the array at `+0x28`/`+0x48`, gated by the `uchar` flag that precedes it |
+| 5      | OffsetFromSurface       | as 4                                                                                | the offset value lives in the dimension chain                            |
+| 6      | MidPlane                | none, but the reader forces `getSingleEnd()` to 1                                   |                                                                          |
+| **7**  | **UpToBody**            | **one extra `operator>>` reading a `moRefWrapper_c*`**, after the `+0x130` field    | `+0x78` for direction 0, `+0x80` for direction 1                         |
+| 9      | ThroughAllBoth          | none; pairs with `getType(1) = 1`                                                   | observed                                                                 |
+| 10, 11 | UpToSelection, UpToNext | no branch on these values                                                           |                                                                          |
 
 So exactly **two** codes add records — 3 and 7 — and both add a single object read at a known
 position. Codes 4 and 5 need no new record: the surface reference is carried by the
@@ -170,7 +170,7 @@ their branches are code-only. **partial** for those.
 **Answer: neither belongs to the class it was attributed to. Status: partial — the misattribution
 is confirmed, the true owner of `moExtrusion_c + 114` is not.**
 
-* `moFromEndSpec_c + 140`: **`moFromEndSpec_c` owns only 4 bytes** in this corpus. Its whole record
+- `moFromEndSpec_c + 140`: **`moFromEndSpec_c` owns only 4 bytes** in this corpus. Its whole record
   is one `i32` type code, and every branch that would extend it requires that code to be 3, 4 or 5;
   it is 0 (sketch plane) in all 9 traced parts. Byte 140 past the marker is therefore inside
   another object entirely. The tail budget in `SERIALIZE.md` §2 accounts for every byte after
@@ -178,9 +178,8 @@ is confirmed, the true owner of `moExtrusion_c + 114` is not.**
   12 for `moExtrusion_c`, plus a 4-byte driver trailer when the extrusion is last — with nothing
   left over, so there is no unexplained double in that region at all. The `0.0` / `0.016` value the
   earlier work saw at that marker-relative offset is a field of whatever object follows.
-* `moICE_c + 106/+108` and `moExtrusion_c + 114`: `moExtrusion_c::Serialize` owns exactly one
-  double, at `this + 0x7d0`, and it is the **third-from-last** item in the whole record, not byte
-  114. In all 9 traced parts it reads `0.0`. Byte 114 past the `moExtrusion_c` marker is inside the
+- `moICE_c + 106/+108` and `moExtrusion_c + 114`: `moExtrusion_c::Serialize` owns exactly one
+  double, at `this + 0x7d0`, and it is the **third-from-last** item in the whole record, not byte 114. In all 9 traced parts it reads `0.0`. Byte 114 past the `moExtrusion_c` marker is inside the
   base-class region (the traced 49/30/52-byte runs), produced by the unnamed base
   `FUN_4bb886c0` below `moBodyFeature_c::Serialize` — not recovered here.
 
@@ -188,15 +187,15 @@ A general observation from the tail that is worth recording because it explains 
 values. `verify_layout.py` now decodes the shared tail run of all 9 traced parts, and three
 `moEndSpec_c` tail fields behave like uninitialised memory rather than parameters:
 
-| field | seven authored parts | `Piston Ring KF` | `COJINETE INFERIOR` |
-|---|---|---|---|
-| `getCapEnd(0)` `+0x148` | `1348739666` in all seven | 0 | 0 |
-| `getCapEnd(1)` `+0x14c` | 0 | 0 | 0 |
-| `getDelInitFace()` `+0x150` | `1168530297` in all seven | 0 | 0 |
-| `getKnitRes()` `+0x154` | `52818912` / `53700368` / `52476704`, varies per file | 0 | 0 |
-| `getCreateSolidFrmCappedMidPlaneSurfExt()` `+0x158` | 0 | absent (old version) | absent |
-| `moExtrusion_c +0x7d0` | `0.0` | `0.0` | `0.0` |
-| `moExtrusion_c +0x7a8` | `0xffffffff` | `0xffffffff` | `0xffffffff` |
+| field                                               | seven authored parts                                  | `Piston Ring KF`     | `COJINETE INFERIOR` |
+| --------------------------------------------------- | ----------------------------------------------------- | -------------------- | ------------------- |
+| `getCapEnd(0)` `+0x148`                             | `1348739666` in all seven                             | 0                    | 0                   |
+| `getCapEnd(1)` `+0x14c`                             | 0                                                     | 0                    | 0                   |
+| `getDelInitFace()` `+0x150`                         | `1168530297` in all seven                             | 0                    | 0                   |
+| `getKnitRes()` `+0x154`                             | `52818912` / `53700368` / `52476704`, varies per file | 0                    | 0                   |
+| `getCreateSolidFrmCappedMidPlaneSurfExt()` `+0x158` | 0                                                     | absent (old version) | absent              |
+| `moExtrusion_c +0x7d0`                              | `0.0`                                                 | `0.0`                | `0.0`               |
+| `moExtrusion_c +0x7a8`                              | `0xffffffff`                                          | `0xffffffff`         | `0xffffffff`        |
 
 Fields SOLIDWORKS never initialises for a plain solid extrude serialise whatever the allocation
 happened to contain — deterministic for one build and code path (hence identical across the seven
@@ -237,10 +236,10 @@ signatures is removed. Status: confirmed, 184 of 184 real files.**
 
 `sldmfcu.dll` holds two adjacent arrays in `.rdata`:
 
-| array | virtual address | file offset (SW 2025 `sldmfcu.dll`) | size | element |
-|---|---|---|---|---|
-| ids | `0x3cf5a440` | `0x566c40` | 4000 bytes | `u32` file id, **big-endian** |
-| signatures | `0x3cf5b3e0` | `0x567be0` | 12000 bytes | three `u32`, **big-endian** |
+| array      | virtual address | file offset (SW 2025 `sldmfcu.dll`) | size        | element                       |
+| ---------- | --------------- | ----------------------------------- | ----------- | ----------------------------- |
+| ids        | `0x3cf5a440`    | `0x566c40`                          | 4000 bytes  | `u32` file id, **big-endian** |
+| signatures | `0x3cf5b3e0`    | `0x567be0`                          | 12000 bytes | three `u32`, **big-endian**   |
 
 Both have exactly **1000** entries and the arrays are parallel: entry `i` of the id array pairs
 with entry `i` of the signature array. The initialiser `FUN_3cc4e200` (decompiled in
@@ -283,6 +282,43 @@ There is no arithmetic relation to find. The ids and signatures are 4000 unrelat
 baked into the DLL. XOR keys, affine maps over GF(2), LCGs, CRC32, rotations and bit permutations
 were all correctly ruled out because none of them exists.
 
+### Closure — the table is irreducible, measured over all 1000 pairs
+
+The search was rerun exhaustively over all 1000 `(id, triplet)` pairs rather than the 58 files of
+the earlier study, and the negative is now definitive. This question is closed.
+
+Over all 1000 pairs, a Gaussian elimination over GF(2) for a 32x32 bit matrix plus a 32-bit offset
+finds **0 of 32 solvable output bits** for each of the three signatures, keyed on `file_id`, on the
+`.rdata` array index, and on both together — and equally 0 of 32 in the inverse direction and
+between any two signatures. The same solver recovers CRC-32, byteswap and `rotl ^ const` at 32 of
+32 bits from the same 1000 inputs, so it is the absence of structure that is being measured, not a
+limitation of the method. Since every CRC is affine over a fixed-length input, this one result
+rules out every CRC polynomial, init and xorout, every XOR key, every rotation and every bit or
+byte permutation at once. Independently, the lowest width at which "output mod 2^w is a function of
+input mod 2^w" fails is **w = 1** for all six key/signature combinations, which eliminates every
+polynomial of any degree over Z/2^32, every LCG chain and every multiplicative hash. And the table
+does not compress: 16,000 bytes go to **16,011** with zlib -9 and **16,060** with lzma -9e, byte
+chi-square 218.7 on 255 df with all 256 values present. A 16,000-byte incompressible blob with no
+affine, polynomial, per-byte or per-bit structure is a table of random constants, which is exactly
+what `FUN_3cc4e200` treats it as.
+
+Exhausted and all **0 of 1000**: 1953 CRC variants; 930 unseeded hashes and mixers; murmur2,
+murmur3, xxhash32, xxhash64, one-at-a-time, SipHash and lookup3 at **all 65536 seeds** across 9
+input encodings; TEA, XTEA, Speck32/64 and RC5 at **all 65536 repeated-word keys**. Affine mod
+2^32 reached a best of 2 of 1000 and LCG 2 of 999, which is noise. There is no signature
+interdependence — all 1000 XOR and arithmetic differences are distinct — and no per-byte
+substitution.
+
+One positional artifact is real and is recorded here so the question does not reopen on it: within
+32-element blocks of the `end` word there is a measurable index-correlated pattern, but it covers
+**250 of 96,000 output bits, 0.26%**, while a container needs 96 bits per entry. It is measured,
+quantified and useless. Entry 477's low byte is `0x75` where entry 989's is `0x74`, which is the
+documented exception to it. Two single-bit correlations at 3.5–4.6 sigma were also chased and fail
+split-half replication.
+
+Reproduction: `.rescratch/para417_sigrel/` holds 23 scripts, one family per file, each writing a
+`.out` log, plus `REPORT.md`.
+
 ### Verification
 
 `sigtable.py` extracts all 1000 pairs, then reads every `.SLDPRT` / `.SLDASM` under `examples/`,
@@ -296,12 +332,27 @@ parts=184 match=184 mismatch=0 unknown=0 unreadable=0
 ```
 
 **184 of 184 real SOLIDWORKS files — every file id present in the table, every one of the three
-signatures exactly the parallel entry.** The full table is written to `out/signature_table.json`.
+signatures exactly the parallel entry.** The full extraction, with the host digest and the two
+array offsets, is written to `re/data/signature_table.json`.
+
+### How the table is stored and regenerated
+
+Because the relation is irreducible, the 16,000 bytes have to be carried as data. They are _not_
+hand-written source. `re/tooling/ghidra/gen_signature_table.py` reads the tracked vendor DLL
+`re/binaries/sldmfcu.dll`, checks its SHA-256 against `re/binaries/manifest.json`, extracts the two
+parallel arrays at file offsets `0x566C40` and `0x567BE0`, and writes both the shipped resource
+`src/convert/adapters/solidworks/data/sldprt_signature_table.bin` and the human-readable
+provenance record `re/data/signature_table.json`. `container.py` loads that resource through
+`importlib.resources`; it holds no signature bytes of its own.
+
+`gen_signature_table.py --check` re-extracts from the DLL and compares against the shipped resource
+byte for byte. `tests/convert/test_solidworks_signature_table.py` performs the same reproduction as
+a test, so the resource cannot drift from the DLL it came from.
 
 ### What this changes
 
-`build_sldprt(..., file_id=..., template=None)` currently raises
-`"SLDPRT file id requires a native template with matching signatures"` for any id outside the two
-hardcoded pairs. With `out/signature_table.json` it can serve all 1000 ids and the donor template
-is no longer needed *for the container framing*. It is still needed for stream content — nothing
-here changes that.
+`build_sldprt(..., file_id=..., template=None)` used to raise
+`"SLDPRT file id requires a native template with matching signatures"` for any id outside two
+hardcoded pairs. It now serves all 1000 ids from the extracted table, and the donor template is no
+longer needed _for the container framing_. It is still needed for stream content — nothing here
+changes that.
