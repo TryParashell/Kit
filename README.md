@@ -16,13 +16,13 @@ to you under it immediately and permanently.
 
 Kit by Parashell is a source-available CAD interchange SDK for translating geometry, feature trees, assemblies and more between proprietary formats.
 
-## *Currently* supported CAD software
+## _Currently_ supported CAD software
 
 - SOLIDWORKS
 - Parashell
 - FreeCAD
 
-## *Planned* (in-order)
+## _Planned_ (in-order)
 
 1. Fusion360
 2. CATIA
@@ -30,6 +30,17 @@ Kit by Parashell is a source-available CAD interchange SDK for translating geome
 4. Rhino
 5. Creo
 6. AutoCAD
+
+## Formats
+
+| CAD             | suffixes                  |
+| --------------- | ------------------------- |
+| SOLIDWORKS      | `.SLDPRT`, `.SLDASM`      |
+| FreeCAD         | `.FCStd`                  |
+| CATIA           | `.CATPart`, `.CATProduct` |
+| Kit interchange | `.json`                   |
+
+Kit reads and writes these formats natively, without requiring CAD software to be installed.
 
 ## Architecture
 
@@ -54,5 +65,20 @@ The returned `ConversionResult` carries the document, the write result, and the 
 ### Default reversible swaps
 
 By default a conversion is reversible.
+
+### Strict mode
+
+Pass `allow_carrier=False` to refuse a carrier result. The write then fails with
+`ApplicationUsabilityError` unless the attestation reports the output as application usable and
+vendor loadable, with nothing dropped and no unmet requirements:
+
+```python
+result = convert("bracket.SLDPRT", "bracket.FCStd", allow_carrier=False)
+```
+
+## Distribution
+
+Internal use only. Kit is source-available under the PolyForm Strict License 1.0.0 and is not
+published to any public package index.
 
 License: Polyform Strict 1.0.0

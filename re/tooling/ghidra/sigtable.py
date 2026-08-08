@@ -1,32 +1,20 @@
-import json
 import pathlib
 import struct
 import sys
 
-SW = pathlib.Path(r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS")
-VENDORED = pathlib.Path(__file__).resolve().parents[2] / "binaries" / "sldmfcu.dll"
-HOST = VENDORED if VENDORED.exists() else SW / "sldmfcu.dll"
-BLOCK_OFFSET = 0x566C40
-ENTRY_COUNT = 1000
-ID_BYTES = ENTRY_COUNT * 4
+from gen_signature_table import BLOCK_OFFSET, ENTRY_COUNT, host_dll
+from gen_signature_table import extract as extract_rows
+
+HOST = host_dll(None)
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-OUT = ROOT / "re/data"
 
 
-def extract(path=HOST, block=BLOCK_OFFSET, count=ENTRY_COUNT):
-    blob = path.read_bytes()
-    ids_base = block
-    sig_base = block + count * 4
-    rows = []
-    for i in range(count):
-        raw_id = blob[ids_base + 4 * i : ids_base + 4 * i + 4]
-        file_id = int.from_bytes(raw_id, "big")
-        trip = []
-        for k in range(3):
-            raw = blob[sig_base + 12 * i + 4 * k : sig_base + 12 * i + 4 * k + 4]
-            trip.append(bytes(reversed(raw)))
-        rows.append((i, file_id, tuple(trip)))
-    return rows
+def extract(path=None):
+    rows = extract_rows(path or HOST)
+    return [
+        (index, file_id, (triplet[0:4], triplet[4:8], triplet[8:12]))
+        for index, (file_id, triplet) in enumerate(rows)
+    ]
 
 
 def locate(path=HOST):
@@ -66,25 +54,7 @@ def main():
     table = {}
     for i, file_id, trip in rows:
         table.setdefault(file_id, (i, trip))
-    OUT.mkdir(parents=True, exist_ok=True)
-    dump = {
-        "host": HOST.name,
-        "block_file_offset": BLOCK_OFFSET,
-        "entry_count": ENTRY_COUNT,
-        "id_array_file_offset": BLOCK_OFFSET,
-        "signature_array_file_offset": BLOCK_OFFSET + ID_BYTES,
-        "entries": [
-            {
-                "index": i,
-                "file_id": f"{file_id:08x}",
-                "local": trip[0].hex(),
-                "central": trip[1].hex(),
-                "end": trip[2].hex(),
-            }
-            for i, file_id, trip in rows
-        ],
-    }
-    (OUT / "signature_table.json").write_text(json.dumps(dump, indent=1))
+    print("host", HOST, "block", hex(BLOCK_OFFSET), "count", ENTRY_COUNT)
     print("anchors", [hex(v) for v in locate()])
     print("distinct file_ids", len(table), "of", ENTRY_COUNT)
     for i, file_id, trip in rows[709:714] + rows[748:753]:
