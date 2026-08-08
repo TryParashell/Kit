@@ -41,6 +41,7 @@ from convert.adapters.solidworks import (
     read_sldprt,
     write_sldprt,
 )
+from convert.adapters.solidworks.container import container_signatures
 from convert.adapters.solidworks.adapter import (
     _ASSEMBLY_DONOR_CARRIED_STREAMS,
     _document_without_source,
@@ -60,14 +61,12 @@ from convert.adapters.solidworks.format import (
     RESOLVED_FEATURES_STREAM,
 )
 from convert.adapters.solidworks.native import (
+    UNSYNTHESIZED_STREAM_NOTES,
     UNSYNTHESIZED_STREAMS,
     encode_native_part,
 )
 from convert.adapters.solidworks.parasolid import encode_blank_partition_stream
-from convert.adapters.solidworks.resolved import (
-    BLIND_END_CONDITION,
-    locate_rectangle_pad,
-)
+from convert.adapters.solidworks.resolved import BLIND_END_CONDITION
 from convert.parasolid import _parasolid_header, _scan_partition_records
 from interchange import (
     BooleanOperation,
@@ -279,6 +278,7 @@ def test_pre_payload_field_solidworks_carrier_restores_payload_semantics() -> No
         streams,
         file_id=archive.file_id,
         format_version=archive.format_version,
+        signatures=container_signatures(generated.getvalue()),
     )
     restored = read_sldprt(legacy)
     fields = {
@@ -431,8 +431,12 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     keywords = archive.require(KEYWORDS_STREAM)
     resolved_features = archive.require(KIT_RESOLVED_STREAM)
     features = archive.require(FEATURES_STREAM)
-    assert archive.require(RESOLVED_FEATURES_STREAM) == _base_record(
-        _BASE_RESOLVED_FEATURES
+    assert RESOLVED_FEATURES_STREAM not in archive.streams
+    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    assert "Contents/DisplayLists" not in archive.streams
+    assert "Contents/Config-0-LWDATA" not in archive.streams
+    assert archive.require("Contents/Config-0-ModelHeader") == archive.require(
+        "Header2"
     )
     assert keywords.startswith(b"\x86<?xml")
     assert features.startswith(b"<?xml")
@@ -468,7 +472,15 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     assert result.metadata["native_assembly"] is False
     assert result.metadata["native_self_contained"] is False
     assert result.metadata["referenced_files_written"] == 0
-    assert [item.code for item in result.diagnostics] == ["sldprt.neutral_write"]
+    assert [item.code for item in result.diagnostics] == [
+        "sldprt.neutral_write",
+        "sldprt.donor_declined",
+    ]
+    assert [
+        item.severity
+        for item in result.diagnostics
+        if item.code == "sldprt.donor_declined"
+    ] == [Severity.WARNING]
     replay = BytesIO()
     replay_result = write_sldprt(reread, replay)
     assert replay.getvalue() == output.read_bytes()
@@ -582,8 +594,11 @@ def test_source_less_native_system_features_are_emitted_once() -> None:
     output = BytesIO()
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
+    assert RESOLVED_FEATURES_STREAM not in archive.streams
     native = decode_native_model(
-        archive.require(KEYWORDS_STREAM), archive.require(RESOLVED_FEATURES_STREAM)
+        archive.require(KEYWORDS_STREAM),
+        archive.require(KIT_RESOLVED_STREAM),
+        resolved_stream=KIT_RESOLVED_STREAM,
     )
     system_ids = {
         1,
@@ -684,7 +699,7 @@ def test_source_less_native_dimension_scalar_roundtrips() -> None:
     assert result.vendor_loadable is False
 
 
-def test_source_less_native_configuration_lanes_are_complete() -> None:
+def test_source_less_native_configuration_lanes_are_absent() -> None:
     source = replace(
         document(),
         configurations=(
@@ -695,8 +710,18 @@ def test_source_less_native_configuration_lanes_are_complete() -> None:
     output = BytesIO()
     result = write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
-    assert archive.require("Contents/Config-0-ResolvedFeatures")
-    assert archive.require("Contents/Config-1-ResolvedFeatures")
+    assert [
+        name
+        for name in archive.streams
+        if name.startswith("Contents/Config-") and name.endswith("-ResolvedFeatures")
+    ] == []
+    assert (
+        encode_native_part(
+            _document_without_source(source), "memory"
+        ).configuration_lanes
+        == ()
+    )
+    assert archive.require(KIT_RESOLVED_STREAM)
     features = ET.fromstring(archive.require(FEATURES_STREAM))
     configurations = [
         item
@@ -790,10 +815,17 @@ def test_source_less_native_rectangle_boss_records_are_parametric() -> None:
     output = BytesIO()
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
-    resolved = archive.require(RESOLVED_FEATURES_STREAM)
-    native = decode_native_model(archive.require(KEYWORDS_STREAM), resolved)
-    assert len(resolved) == 11285
+    assert RESOLVED_FEATURES_STREAM not in archive.streams
+    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    resolved = archive.require(KIT_RESOLVED_STREAM)
+    native = decode_native_model(
+        archive.require(KEYWORDS_STREAM),
+        resolved,
+        resolved_stream=KIT_RESOLVED_STREAM,
+    )
+    assert native.diagnostics == ()
     assert native.sketches[0].object_id == 26
+    assert native.sketches[0].name == "Sketch1"
     assert native.sketches[0].profiles[0].coordinates == (
         -30.0,
         -15.0,
@@ -802,15 +834,13 @@ def test_source_less_native_rectangle_boss_records_are_parametric() -> None:
     )
     assert native.operations[0].object_id == 32
     assert native.operations[0].name == "Boss-Extrude1"
+    assert native.operations[0].profile_id == native.sketches[0].object_id
     assert native.operations[0].length_mm == pytest.approx(12.0)
-    assert struct.unpack_from("<d", resolved, 10092)[0] == pytest.approx(0.012)
-    profile = _RECTANGLE_BOSS_NATIVE_WRITE_PROFILE
-    assert profile["resolved_features_size"] == len(resolved)
-    assert profile["resolved_features_fixed_bytes"] == 11213
-    for name, (size, sha256) in profile["envelope_streams"].items():
-        payload = archive.require(name)
-        assert len(payload) == size
-        assert hashlib.sha256(payload).hexdigest() == sha256
+    assert native.operations[0].termination_code == BLIND_END_CONDITION
+    assert native.operations[0].native_stream == KIT_RESOLVED_STREAM
+    restored = read_sldprt(output.getvalue())
+    assert restored.sketches[0].entities == sketch.entities
+    assert restored.feature_timeline[0].definition == feature.definition
 
 
 def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
@@ -818,25 +848,28 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
 ) -> None:
     source = _freecad_rectangle_pad_document()
     target = tmp_path / "FreeCADRectanglePad.SLDPRT"
-    result = write_document(source, target, allow_carrier=False)
+    with pytest.raises(ApplicationUsabilityError) as captured:
+        write_document(source, target, allow_carrier=False)
+    assert not target.exists()
+    assert Capability.PARAMETRIC_HISTORY in captured.value.unimplemented_capabilities
+    result = write_document(source, target, allow_carrier=True)
     data = target.read_bytes()
     archive = SldprtArchive.from_bytes(data)
-    resolved = archive.require(RESOLVED_FEATURES_STREAM)
+    assert RESOLVED_FEATURES_STREAM not in archive.streams
+    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    resolved = archive.require(KIT_RESOLVED_STREAM)
     partition = archive.require(PARTITION_STREAM)
-    native = decode_native_model(archive.require(KEYWORDS_STREAM), resolved)
+    native = decode_native_model(
+        archive.require(KEYWORDS_STREAM),
+        resolved,
+        resolved_stream=KIT_RESOLVED_STREAM,
+    )
     transfers = {item.capability: item for item in result.transfers}
-    assert result.application_usable is True
-    assert result.vendor_loadable is True
-    assert result.near_lossless is True
+    assert result.application_usable is False
+    assert result.vendor_loadable is False
+    assert result.near_lossless is False
     assert result.requirements == ()
-    assert len(resolved) == 11285
     assert partition == encode_blank_partition_stream()
-    layout = locate_rectangle_pad(resolved)
-    assert layout is not None
-    assert layout.bounds_mm == (-30.0, -15.0, 30.0, 15.0)
-    assert layout.depth_mm == pytest.approx(12.0)
-    assert layout.reversed is False
-    assert layout.end_condition_code == BLIND_END_CONDITION
     assert native.sketches[0].object_id == 26
     assert native.sketches[0].profiles[0].coordinates == (
         -30.0,
@@ -846,8 +879,11 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     )
     assert native.operations[0].object_id == 32
     assert native.operations[0].length_mm == pytest.approx(12.0)
-    assert transfers[Capability.PARAMETERS].mode.value == "mixed"
-    assert transfers[Capability.PARAMETERS].carrier_reason.value == "target_unsupported"
+    assert native.operations[0].termination_code == BLIND_END_CONDITION
+    assert transfers[Capability.PARAMETERS].mode.value == "carrier"
+    assert (
+        transfers[Capability.PARAMETERS].carrier_reason.value == "writer_unimplemented"
+    )
     for capability in (
         Capability.NATIVE_PAYLOADS,
         Capability.PROVENANCE,
@@ -856,11 +892,14 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
         assert transfers[capability].mode.value == "carrier"
         assert transfers[capability].carrier_reason.value == "target_unsupported"
     restored = read_sldprt(data)
+    assert (
+        restored.feature_timeline[0].definition == source.feature_timeline[0].definition
+    )
     replay = BytesIO()
     replay_result = write_sldprt(restored, replay)
     assert replay.getvalue() == data
-    assert replay_result.application_usable is True
-    assert replay_result.vendor_loadable is True
+    assert replay_result.application_usable is False
+    assert replay_result.vendor_loadable is False
 
 
 @pytest.mark.parametrize(
@@ -1021,35 +1060,32 @@ def _non_native_rectangle_boss_document() -> CadDocument:
     )
 
 
-def test_non_native_document_writes_only_loadable_resolved_feature_lanes() -> None:
+def test_non_native_document_writes_no_vendor_resolved_feature_lanes() -> None:
     source = _non_native_rectangle_boss_document()
     output = BytesIO()
     result = write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
-    donor = _base_record(_BASE_RESOLVED_FEATURES)
     lanes = sorted(
         name
         for name in archive.streams
         if name.startswith("Contents/Config-") and name.endswith("-ResolvedFeatures")
     )
-    assert lanes == [
-        RESOLVED_FEATURES_STREAM,
-        "Contents/Config-1-ResolvedFeatures",
-    ]
-    assert [archive.require(name) for name in lanes] == [donor, donor]
-    assert len(donor) == 5556
+    assert lanes == []
+    part = encode_native_part(_document_without_source(source), "memory")
+    assert part.configuration_lanes == ()
+    assert part.donor_notes == UNSYNTHESIZED_STREAM_NOTES
+    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
     records = archive.require(KIT_RESOLVED_STREAM)
-    assert records != donor
-    assert (
-        records
-        == encode_native_part(
-            _document_without_source(source), "memory"
-        ).kit_resolved_features
-    )
+    assert records == part.kit_resolved_features
     assert result.application_usable is False
     assert result.vendor_loadable is False
     assert result.metadata["compatibility"] == "native-metadata-with-kit-neutral"
     assert result.metadata["native_content"] == "native-metadata"
+    donor_declined = next(
+        item for item in result.diagnostics if item.code == "sldprt.donor_declined"
+    )
+    assert donor_declined.severity is Severity.WARNING
+    assert all(note in donor_declined.message for note in UNSYNTHESIZED_STREAM_NOTES)
 
 
 def test_non_native_kit_resolved_stream_preserves_decoded_records() -> None:
@@ -1082,9 +1118,8 @@ def test_non_native_kit_resolved_stream_preserves_decoded_records() -> None:
     assert {item.native_stream for item in native.planes} == {KIT_RESOLVED_STREAM}
     assert {item.native_stream for item in native.sketches} == {KIT_RESOLVED_STREAM}
     assert {item.native_stream for item in native.operations} == {KIT_RESOLVED_STREAM}
-    loadable = decode_native_model(keywords, _base_record(_BASE_RESOLVED_FEATURES))
-    assert loadable.sketches == ()
-    assert loadable.operations == ()
+    assert RESOLVED_FEATURES_STREAM not in archive.streams
+    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
     restored = read_sldprt(output.getvalue())
     assert [item.name for item in restored.sketches] == ["CustomSketch"]
     assert [item.name for item in restored.feature_timeline] == ["CustomBoss"]
@@ -1143,18 +1178,22 @@ def test_source_less_brep_only_writes_native_imported_feature_metadata() -> None
     output = BytesIO()
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
-    resolved = archive.require(RESOLVED_FEATURES_STREAM)
-    native = decode_native_model(archive.require(KEYWORDS_STREAM), resolved)
+    assert RESOLVED_FEATURES_STREAM not in archive.streams
+    assert not set(UNSYNTHESIZED_STREAMS) & set(archive.streams)
+    resolved = archive.require(KIT_RESOLVED_STREAM)
+    native = decode_native_model(
+        archive.require(KEYWORDS_STREAM),
+        resolved,
+        resolved_stream=KIT_RESOLVED_STREAM,
+    )
     imported = next(item for item in native.features if item.object_id == 26)
     classes = {item.offset: item.name for item in native.classes}
     assert imported.name == "Imported1"
     assert imported.kind == "Imported"
     assert classes[imported.native_offset - 18] == "moBaseBody_c"
-    assert len(resolved) == 5913
-    assert resolved[0] == 0x6B
-    assert resolved[4] == 0x12
-    assert resolved[1495] == 0x80
-    assert resolved[5302] == 0x52
+    assert native.diagnostics == ()
+    assert imported.native_end == len(resolved)
+    assert resolved[imported.native_offset : imported.native_end] == imported.data
 
 
 def test_public_sdk_does_not_promote_generated_parasolid_partition(tmp_path) -> None:
@@ -1201,6 +1240,7 @@ def test_native_sldprt_read_preserves_partition_and_adds_typed_brep() -> None:
         streams,
         file_id=source.file_id,
         format_version=source.format_version,
+        signatures=container_signatures(SAMPLE.read_bytes()),
     )
     decoded = read_sldprt(native)
     assert decoded.brep is not None
@@ -1233,6 +1273,7 @@ def test_native_sldprt_include_brep_false_omits_typed_and_raw_geometry() -> None
         streams,
         file_id=source.file_id,
         format_version=source.format_version,
+        signatures=container_signatures(SAMPLE.read_bytes()),
     )
     decoded = read_sldprt(native, include_brep=False)
     assert decoded.brep is None
@@ -1443,6 +1484,7 @@ def test_native_template_patches_driving_dimension_without_carrier_opt_in(
             streams,
             file_id=archive.file_id,
             format_version=archive.format_version,
+            signatures=container_signatures(output.read_bytes()),
         )
     )
     native_parameter = next(
@@ -1495,6 +1537,7 @@ def test_recomputed_attestation_cannot_forge_native_template_claims(
         streams,
         file_id=archive.file_id,
         format_version=archive.format_version,
+        signatures=container_signatures(trusted.read_bytes()),
     )
     restored = read_sldprt(forged)
     assert restored.parameters[0].value.value == pytest.approx(forged_value)
@@ -1542,6 +1585,7 @@ def test_attestation_cannot_promote_kit_stream_to_native_exact(tmp_path) -> None
         streams,
         file_id=archive.file_id,
         format_version=archive.format_version,
+        signatures=container_signatures(trusted.read_bytes()),
     )
     restored = read_sldprt(forged)
     blocked = tmp_path / "blocked.SLDPRT"
@@ -1579,6 +1623,7 @@ def test_native_template_patches_same_width_feature_name(tmp_path) -> None:
             streams,
             file_id=archive.file_id,
             format_version=archive.format_version,
+            signatures=container_signatures(output.read_bytes()),
         )
     )
     assert native.feature_timeline[0].name == target_name
