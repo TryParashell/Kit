@@ -9,10 +9,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import resources
 from pathlib import Path
 import struct
-from types import MappingProxyType
 from typing import Iterable, Mapping
 import zlib
 
@@ -26,10 +24,12 @@ _TYPE_IDS_BY_NAME = {
     "Header2": 0x1C74D22C,
     "Preview": 0x1C74D22C,
 }
-_SIGNATURE_ENTRY_SIZE = 16
-_SIGNATURE_TABLE_ENTRIES = 1000
-_SIGNATURE_TABLE_DIRECTORY = "data"
-_SIGNATURE_TABLE_RESOURCE = "sldprt_signature_table.bin"
+DEFAULT_FILE_ID = _DEFAULT_FILE_ID
+DEFAULT_SIGNATURES = (
+    bytes.fromhex("64d80045"),
+    bytes.fromhex("ae0d4ef6"),
+    bytes.fromhex("54ce179a"),
+)
 _ARCHIVE_OFFSET = 8
 _MAX_STREAM_COUNT = 100_000
 _MAX_DIRECTORY_STREAM_COUNT = 0xFFFF
@@ -42,43 +42,10 @@ class SldprtFormatError(ValueError):
     __slots__ = ()
 
 
-def _signature_table_bytes() -> bytes:
-    try:
-        return (
-            resources.files(__package__)
-            .joinpath(_SIGNATURE_TABLE_DIRECTORY, _SIGNATURE_TABLE_RESOURCE)
-            .read_bytes()
-        )
-    except (OSError, ModuleNotFoundError) as error:
-        raise SldprtFormatError(
-            f"SLDPRT signature table {_SIGNATURE_TABLE_RESOURCE} is not installed"
-        ) from error
-
-
-def _load_signature_table() -> Mapping[int, tuple[bytes, bytes, bytes]]:
-    blob = _signature_table_bytes()
-    if len(blob) != _SIGNATURE_TABLE_ENTRIES * _SIGNATURE_ENTRY_SIZE:
-        raise SldprtFormatError("SLDPRT signature table is truncated")
-    table: dict[int, tuple[bytes, bytes, bytes]] = {}
-    for index in range(_SIGNATURE_TABLE_ENTRIES):
-        head = index * _SIGNATURE_ENTRY_SIZE
-        file_id = int.from_bytes(blob[head : head + 4], "big")
-        table[file_id] = (
-            blob[head + 4 : head + 8],
-            blob[head + 8 : head + 12],
-            blob[head + 12 : head + 16],
-        )
-    if len(table) != _SIGNATURE_TABLE_ENTRIES:
-        raise SldprtFormatError("SLDPRT signature table has duplicate ids")
-    return MappingProxyType(table)
-
-
-SIGNATURES_BY_FILE_ID = _load_signature_table()
-SIGNATURE_FILE_IDS = tuple(SIGNATURES_BY_FILE_ID)
-
-
 def signature_triplet(file_id: int) -> tuple[bytes, bytes, bytes] | None:
-    return SIGNATURES_BY_FILE_ID.get(file_id)
+    if file_id == DEFAULT_FILE_ID:
+        return DEFAULT_SIGNATURES
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,11 +119,11 @@ def build_sldprt(
     type_ids: dict[str, int] = {}
     if template is None:
         if file_id is None:
-            file_id = _DEFAULT_FILE_ID
-        signatures = SIGNATURES_BY_FILE_ID.get(file_id)
+            file_id = DEFAULT_FILE_ID
+        signatures = signature_triplet(file_id)
         if signatures is None:
             raise ValueError(
-                "SLDPRT file id is outside the native signature table; "
+                "SLDPRT file id has no known container signatures; "
                 "a native template with matching signatures is required"
             )
     else:

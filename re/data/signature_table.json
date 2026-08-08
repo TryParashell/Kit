@@ -8,7 +8,14 @@
   "signature_array_file_offset": 5667808,
   "id_encoding": "big-endian u32",
   "signature_encoding": "little-endian u32 stored big-endian",
-  "shipped_resource": "src/convert/adapters/solidworks/data/sldprt_signature_table.bin",
+  "reader": "FUN_3cc4d270 keys on file_id, caches the row magics at +0x88/+0x8c/+0x90",
+  "comparison_sites": {
+    "local": "FUN_3cc528b0 unz+0xc8",
+    "central": "FUN_3cc52ac0 unz+0xcc",
+    "end": "FUN_3cc51900 backward scan on unz+0xd0"
+  },
+  "writer": "FUN_3cc4a8c0 draws a random index in [0,1000) and emits that row",
+  "shipped_rows": 1,
   "entries": [
     {
       "index": 0,
