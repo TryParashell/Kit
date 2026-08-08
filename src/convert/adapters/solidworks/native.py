@@ -37,6 +37,13 @@ from interchange import (
     ValueKind,
 )
 
+from .cmgr import (
+    CONFIGURATION_MANAGER_STREAM,
+    FIRST_ATOM_ID,
+    atom_ids_for,
+    encode_cmgr_stream,
+)
+from .config0 import encode_config0_stream
 from .container import SldprtFormatError
 from .definition import encode_definition_stream
 from .format import (
@@ -503,17 +510,9 @@ _SOLIDWORKS_XML_NAMESPACE = "http://www.solidworks.com/sw2003/schema"
 _SOLIDWORKS_CONFIGURATION_FLAGS = -2143288960
 _CREATION_STAMP_LOW = 1577836800
 _CREATION_STAMP_HIGH = 1893456000
-UNSYNTHESIZED_STREAMS = (
-    "Contents/CMgr",
-    "Contents/Config-0",
-)
-UNSYNTHESIZED_STREAM_NOTES = (
-    "Contents/CMgr and Contents/Config-0 are load critical for the SOLIDWORKS reader "
-    "and their record grammar is not yet recovered, so they are omitted rather than "
-    "approximated",
-    "Contents/Config-0-ResolvedFeatures carries Kit records that the SOLIDWORKS "
-    "reader does not accept, so the part is not vendor loadable",
-)
+UNSYNTHESIZED_STREAMS: tuple[str, ...] = ()
+UNSYNTHESIZED_STREAM_NOTES: tuple[str, ...] = ()
+_NON_SOLID_FEATURE_CLASSES = frozenset({"moRefPlane_c", "moProfileFeature_c"})
 _BLIND_END_SPEC = bytes.fromhex(
     "ffff01000b006d6f456e64537065635f63000001000000000000000000000000000000000000000000"
 )
@@ -656,7 +655,12 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
     )
     features = _features_payload(document, model_name, object_ids, identity)
     resolved = _resolved_payload(objects)
-    envelope_streams = _native_envelope_streams(document, model_name, identity)
+    envelope_streams = _native_envelope_streams(
+        document,
+        model_name,
+        identity,
+        _solid_feature_tree_ids(authored),
+    )
     configuration_data = envelope_streams.get(CONFIGURATION_STREAM, b"")
     parsed = decode_native_model(
         keywords,
@@ -1988,10 +1992,19 @@ def _native_identity(document: CadDocument, model_name: str) -> _NativeIdentity:
     )
 
 
+def _solid_feature_tree_ids(objects: tuple[_WriteObject, ...]) -> tuple[int, ...]:
+    return tuple(
+        item.object_id
+        for item in objects
+        if item.class_name not in _NON_SOLID_FEATURE_CLASSES
+    )
+
+
 def _native_envelope_streams(
     document: CadDocument,
     model_name: str,
     identity: _NativeIdentity,
+    solid_feature_tree_ids: tuple[int, ...] = (),
 ) -> Mapping[str, bytes]:
     configuration_name = next(
         (
