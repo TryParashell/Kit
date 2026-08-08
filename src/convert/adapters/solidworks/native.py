@@ -2316,9 +2316,14 @@ def _header_payload(
             output.extend(_serialized_string(action))
         output.extend(struct.pack("<I", object_id))
         output.extend(_serialized_string(name))
+    watermark = (
+        max(item[0] for item in objects) + 1
+        if next_object_id is None
+        else max(next_object_id, max(item[0] for item in objects) + 1)
+    )
     output.extend(
         legacy_stamp
-        + struct.pack("<IH", max(item[0] for item in objects) + 1, 0)
+        + struct.pack("<IH", watermark, 0)
         + struct.pack("<I", identity.last_modified_stamp)
     )
     output.extend(_class_declaration("moExtObject_c"))
