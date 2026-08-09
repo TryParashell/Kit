@@ -416,59 +416,67 @@
    "confidence": "partial",
    "serialize": "sldmodu.dll 0x4bb8eba0 moExtrusion_c::Serialize",
    "child_slots": [
+    "external#4",
     "*",
     "*",
     "*",
     "*",
     "*",
     "*",
-    "suObArray",
+    "moPerBodyChooserData_c",
     "*",
-    "moEndSpec_c"
+    "*",
+    "moPMarkRecord_c",
+    "*",
+    "moPMarkRecord_c",
+    "moEndSpec_c",
+    "*",
+    "moEndSpec_c",
+    "..."
    ],
    "runs": {
     "lead": 0,
     "0": 4,
-    "1": 49,
-    "2": 30,
-    "3": 52,
-    "4": 4,
-    "6": 52,
-    "7": 8
+    "1": 2,
+    "2": 45,
+    "3": 30,
+    "4": 52,
+    "5": 4,
+    "6": 24,
+    "7": 0,
+    "8": 6,
+    "10": 0,
+    "13": 0,
+    "14": 6,
+    "15": 0
    },
+   "repeat_count": null,
+   "repeat_note": "child count varies across instances: 14x7, 16x2",
+   "repeat_prefix": 14,
    "variable_runs": [
     {
-     "slot": "5",
+     "slot": "9",
      "rule": "opaque",
-     "note": "measured 587, 705 x3, 707 x3 at 18000 and 1063 and 1161 at 14000 across the nine traced extrusions. This is the moModelFeature_c and moFeature_c portion of the base chain that precedes the surface-id suObArray in slot 6, and it tracks feature content rather than the document generation: the 18000 side alone spans 587 to 707, so no runs_by_version entry can close it. moBodyFeature_c::Serialize is 0x4bb8aa10 and its own unnamed base is FUN_4bb886c0; neither is reconciled against these runs."
+     "note": "observed run lengths 8x2, 20x7"
     },
     {
-     "slot": "8",
+     "slot": "11",
      "rule": "opaque",
-     "note": "last slot, holding moEndSpec_c, whose own last slot holds moFromEndSpec_c. moFromEndSpec_c::Serialize at 0x4bb900d0 reads a u32 type and, for the type 0 that every traced instance carries, nothing else, so its own body is 4 bytes and the 32, 36 or 40 bytes the trace reports for it are read by moEndSpec_c and by this run. The split between moEndSpec_c run 6 and this run has no witness because both are last slots, so both stay unclosed."
+     "note": "observed run lengths 0x7, 14x2"
+    },
+    {
+     "slot": "12",
+     "rule": "opaque",
+     "note": "observed run lengths 0x2, 6x7"
+    },
+    {
+     "slot": "tail",
+     "rule": "opaque",
+     "note": "every traced instance carries at least 14 children, so the segmenter walks those 14 slots with the runs solved above and refuses the run that follows the last of them; the run after slot 13 takes the lengths 0x9 across the traced instances because that slot closes the shortest instances and continues the longer ones"
     }
    ],
-   "note": "Runs 0 and 6 were opaque only because of where the child body ended. Replaying the layout with the classref in slot 0 pinned to external#4 and the surface-id array in slot 6 pinned to its own body length from external_classes.json puts run 0 at a flat 4 bytes in all nine traced instances and run 6 at a flat 52, in both generations. Run 6 is the same 52 that moICE_c carries after its own surface-id array, which is the cross-check: the two classes share vftable slot 5. Runs 5 and 8 remain opaque and both are genuinely content-dependent rather than version gated.",
-   "fields": [
-    {
-     "run": "8",
-     "offset": -12,
-     "width": 8,
-     "type": "f64",
-     "name": "field@0x7d0",
-     "role": "constant",
-     "confidence": "confirmed"
-    },
-    {
-     "run": "8",
-     "offset": -4,
-     "width": 4,
-     "type": "i32",
-     "name": "field@0x7a8",
-     "role": "constant",
-     "confidence": "confirmed"
-    }
-   ]
+   "note": "This entry used to declare nine child slots with runs 1 = 49, 3 = 52, 6 = 52 and an opaque run 5 measuring 587, 705 x3, 707 x3 at 18000 and 1063 and 1161 at 14000. That shape was an absorption: the nine traced instances carry 14 or 16 children, not 9, and run 5 in particular swallowed a ff ff 01 00 16 00 moPerBodyChooserData_c class definition at +30, so the nine-slot walk placed every object after the second child at the wrong offset and disagreed with the recorded segmentations. The slots and runs above are the ones solve_runs.Solver derives from the exact record end of every traced object in all nine recorded segmentations, seeded by TilingSolver, and the static walk driven by them agrees with the recorded object offsets of baseline, cutbase, padplane, planetop, three and twopad for every object it reaches. The Ghidra facts the old note recorded still hold and are recovered by this shape: run 0 is a flat 4 bytes in all nine instances with the classref in slot 0 pinned to external#4, and the surface-id suObArray is a real child rather than an absorbed run. moBodyFeature_c::Serialize is 0x4bb8aa10 and its own unnamed base is FUN_4bb886c0; neither is reconciled against runs 9, 11 and 12, which stay opaque, and the f64 at this+0x7d0 and the i32 at this+0x7a8 that the old run 8 carried belong inside the superseded region and no longer map to a run key here. re/solidworks/records/RESOLVEDFEATURES.md section 7 records the refutation.",
+   "fields": []
   },
   "moCompRefPlane_c": {
    "confidence": "partial",

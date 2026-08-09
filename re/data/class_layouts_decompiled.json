@@ -881,6 +881,27 @@
     }
    ]
   },
+  "moCompSketchEntHandle_c": {
+   "confidence": "partial",
+   "serialize": "sldmodu.dll 0x4bc222f0 moCompFeature_c::Serialize",
+   "child_slots": [
+    "*",
+    "sgPointHandle"
+   ],
+   "runs": {
+    "lead": 0,
+    "1": 0
+   },
+   "runs_by_version": {
+    "0": {
+     "18000": 89,
+     "14000": 85
+    }
+   },
+   "variable_runs": [],
+   "note": "Run 0 carries the same moCompFeature_c post-child body as moCompFeature_c and moCompRefPlane_c, and it inherits the same version gate for the same reason: slot 0 holds a moUnitComponent_c classref that external_classes.json pins to a 4-byte subtree, so the bytes the tracer attributes to that child belong to this run. The generated table recorded run 0 as 0 because solve_runs.py let the classref absorb them, which put the sgPointHandle in slot 1 exactly 89 bytes too early in the 18000-era circle trace and 85 too early in both 14000-era vendor traces. The three witnesses are CIRCLE_r10 at 18000, where the recorded gap from the end of the object reference at 6468 to the sgPointHandle classref at 6557 is 89 bytes, and vendor_cojinete and vendor_ring at 14000, where the same gap is 85. Those are the only three traced instances, and they agree with the 89/85 split moCompFeature_c already declares. The class stays partial because no traced instance carries a 13000-era witness, so a 13000 stream refuses this run with the version named rather than taking the 85 that moCompFeature_c records for that generation.",
+   "fields": []
+  },
   "moProfileFeature_c": {
    "confidence": "partial",
    "serialize": "sldmodu.dll 0x4bb99220 moProfileFeature_c::Serialize",
