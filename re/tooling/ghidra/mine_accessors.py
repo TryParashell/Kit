@@ -200,8 +200,7 @@ def main() -> int:
                     entry["conflicts_with"] = previous["offset"]
                 bucket[member] = entry
     payload = {
-        cls: dict(sorted(members.items()))
-        for cls, members in sorted(result.items())
+        cls: dict(sorted(members.items())) for cls, members in sorted(result.items())
     }
     with open(args.out, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=1)

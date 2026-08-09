@@ -206,7 +206,9 @@ class Solver:
                         "depth": seg["depth"],
                         "children": len(self.kids[label][i]),
                         "span": seg["scope_end"] - seg["offset"] - seg["header"],
-                        "body": None if end is None else end - seg["offset"] - seg["header"],
+                        "body": (
+                            None if end is None else end - seg["offset"] - seg["header"]
+                        ),
                     }
                 )
         return result
@@ -271,7 +273,13 @@ def main() -> int:
     resolved = sum(1 for v in bodies.values() for r in v if r["body"] is not None)
     print(
         "objects=%d resolved=%d runkeys=%d variable=%d conflicts=%d"
-        % (total, resolved, len(solver.runs), len(solver.variable), len(solver.conflicts))
+        % (
+            total,
+            resolved,
+            len(solver.runs),
+            len(solver.variable),
+            len(solver.conflicts),
+        )
     )
     return 0
 
