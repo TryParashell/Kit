@@ -505,13 +505,22 @@ _KEYWORD_ONLY_OBJECT_IDS = frozenset(item[0] for item in _KEYWORD_ONLY_OBJECTS)
 _SYSTEM_OBJECT_IDS = frozenset(range(1, 26))
 _NAME_TOKEN = 0x8004
 _NAME_PREFIX = struct.pack("<H", _NAME_TOKEN) + b"\xff\xfe\xff"
+_FOLDER_FLAGS = 0x40000000
+_REFERENCE_GEOMETRY_FLAGS = 0xC0000000
+_BOSS_EXTRUDE_FLAGS = 0x40000140
+_CUT_EXTRUDE_FLAGS = 0x400201CA
+_REFERENCE_GEOMETRY_CLASSES = frozenset({"moRefPlane_c", "moOriginProfileFeature_c"})
+_CONFIG0_FIRST_FEATURE_COUNTER = 109
 _SCALAR_HEADER = DIMENSION_SCALAR_HEADERS[0]
 _SOLIDWORKS_XML_NAMESPACE = "http://www.solidworks.com/sw2003/schema"
 _SOLIDWORKS_CONFIGURATION_FLAGS = -2143288960
 _CREATION_STAMP_LOW = 1577836800
 _CREATION_STAMP_HIGH = 1893456000
-UNSYNTHESIZED_STREAMS: tuple[str, ...] = ()
-UNSYNTHESIZED_STREAM_NOTES: tuple[str, ...] = ()
+VENDOR_UNLOADABLE_NOTES = (
+    "Contents/Config-0-ResolvedFeatures is the SOLIDWORKS feature tree authority and "
+    "its record grammar is not yet recovered, so the generated part opens in "
+    "SOLIDWORKS but the vendor reader recovers no feature tree and no solid bodies",
+)
 _NON_SOLID_FEATURE_CLASSES = frozenset({"moRefPlane_c", "moProfileFeature_c"})
 _VENDOR_RESOLVED_SOLID_FEATURES = 1
 _CONFIGURATION_ROOT_TREE_ID = 0
@@ -673,8 +682,8 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
     capabilities = _proved_write_capabilities(document, authored, parsed, object_ids)
     mixed_capabilities: frozenset[Capability] = frozenset()
     partition: bytes | None = None
-    application_usable = False
-    vendor_loadable = False
+    vendor_loadable = RESOLVED_FEATURES_STREAM in envelope_streams
+    application_usable = vendor_loadable
     return NativePartStreams(
         keywords,
         features,
@@ -688,7 +697,7 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         partition,
         application_usable,
         vendor_loadable,
-        UNSYNTHESIZED_STREAM_NOTES,
+        VENDOR_UNLOADABLE_NOTES,
     )
 
 
@@ -1903,20 +1912,21 @@ def _xml_text(value: str) -> str:
     return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _resolved_base_map_index(objects: tuple[_WriteObject, ...]) -> int:
+    authored = tuple(
+        item for item in objects if item.object_id not in _SYSTEM_OBJECT_IDS
+    )
+    features = len(_solid_feature_tree_ids(authored))
+    return _CONFIG0_FIRST_FEATURE_COUNTER + max(features, 1) - 1
+
+
 def _resolved_payload(objects: tuple[_WriteObject, ...]) -> bytes:
-    output = bytearray(struct.pack("<IH", len(objects), max(0, len(objects) - 1)))
+    output = bytearray(
+        struct.pack("<IH", _resolved_base_map_index(objects), max(0, len(objects) - 1))
+    )
     for item in objects:
         output.extend(_class_declaration(item.class_name))
-        operation = item.kind == "Extrusion"
-        operation_code = 2 if item.class_name == "moCut_c" else 0
-        output.extend(
-            _name_record(
-                item.name,
-                item.object_id,
-                operation=operation,
-                operation_code=operation_code,
-            )
-        )
+        output.extend(_name_record(item.name, item.object_id, _tree_node_flags(item)))
         output.extend(item.payload)
         for dimension in item.dimensions:
             output.extend(_scalar_record(dimension))
@@ -1928,21 +1938,30 @@ def _class_declaration(name: str) -> bytes:
     return CLASS_MARKER + struct.pack("<H", len(encoded)) + encoded
 
 
-def _name_record(
-    name: str, object_id: int, *, operation: bool = False, operation_code: int = 0
-) -> bytes:
+def _tree_node_flags(item: _WriteObject) -> int:
+    if item.kind == "Extrusion":
+        return (
+            _CUT_EXTRUDE_FLAGS if item.class_name == "moCut_c" else _BOSS_EXTRUDE_FLAGS
+        )
+    if item.class_name in _REFERENCE_GEOMETRY_CLASSES:
+        return _REFERENCE_GEOMETRY_FLAGS
+    return _FOLDER_FLAGS
+
+
+def _name_record(name: str, object_id: int, flags: int) -> bytes:
     encoded = name.encode("utf-16le")
     units = len(encoded) // 2
     if not 1 <= units <= 255:
         raise SldprtFormatError(
             "native SOLIDWORKS object name exceeds 255 UTF-16 units"
         )
-    fields = (
-        b"\0" * 4 + struct.pack("<HBBI", 0x0140, operation_code, 0x40, object_id)
-        if operation
-        else struct.pack("<dI", 2.0, object_id)
+    return (
+        _NAME_PREFIX
+        + bytes((units,))
+        + encoded
+        + struct.pack("<III", 0, flags, object_id)
+        + b"\0" * 16
     )
-    return _NAME_PREFIX + bytes((units,)) + encoded + fields + b"\0" * 16
 
 
 def _scalar_record(dimension: _WriteDimension) -> bytes:
