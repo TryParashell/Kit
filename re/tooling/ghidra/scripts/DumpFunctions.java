@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+// SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+//
+// This SPDX license identifier and copyright notice must not be
+// removed, altered, or obscured. Doing so is a material breach of
+// the PolyForm Strict License 1.0.0 and voids all licenses granted
+// to you under it immediately and permanently.
+
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -37,7 +45,7 @@ public class DumpFunctions extends GhidraScript {
         List<String> specs = new ArrayList<>();
         for (String raw : Files.readAllLines(Paths.get(args[1]))) {
             String text = raw.trim();
-            if (!text.isEmpty() && !text.startsWith(";")) {
+            if (!text.isEmpty() && !text.startsWith(";") && !text.startsWith("#")) {
                 specs.add(text);
             }
         }
