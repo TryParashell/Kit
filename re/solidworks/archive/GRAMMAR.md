@@ -16,19 +16,19 @@ SOLIDWORKS. Claims marked PARTIAL or OPAQUE are called out as such.
 
 ## 0. Summary of what is new here
 
-| finding | status |
-|---|---|
-| `moCompFeature_c` is the feature tree: a fixed-stride array, one entry per tree node, carrying the `KeyWords` id | **CONFIRMED**, 51/51 corpus files |
-| The `xx aa 70 6a` / `xx af 70 6a` "object-index noise" of report 2 §11 is a `u32` Unix `time_t` | **CONFIRMED** |
-| `ff ff 01 00` is `wNewClassTag` (`0xFFFF`) + `u16` schema; schema is 1 for every class in every corpus file | **CONFIRMED** |
-| The reader is not MFC's `CArchive`; it is SOLIDWORKS' own `su_CArchive`, exported by name from `swccu.dll` | **CONFIRMED** (see `WINDBG.md`) |
-| `swXmlContents/KeyWords` starts with a `0x86` tag byte and uses CRLF, not a UTF-8 BOM | **CONFIRMED**, and a BOM crashes SOLIDWORKS |
-| boss ↔ cut is **not** selected by the tree flags word — it is opaque | measured, corrects report 2 §7.2 |
-| end condition (blind ↔ MidPlane) and direction are writable in place for any feature | measured, exact |
-| the sketch support plane is writable in place | measured, exact, verified by centre of mass |
-| tree order is taken from the `moCompFeature_c` array order | measured, exact |
-| the five derived depth copies and the bbox cache must be left stale, not written wrong | measured |
-| `moCompFeature_c` entry count is the one thing that changes stream length structurally per feature | **CONFIRMED** |
+| finding                                                                                                          | status                                      |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `moCompFeature_c` is the feature tree: a fixed-stride array, one entry per tree node, carrying the `KeyWords` id | **CONFIRMED**, 51/51 corpus files           |
+| The `xx aa 70 6a` / `xx af 70 6a` "object-index noise" of report 2 §11 is a `u32` Unix `time_t`                  | **CONFIRMED**                               |
+| `ff ff 01 00` is `wNewClassTag` (`0xFFFF`) + `u16` schema; schema is 1 for every class in every corpus file      | **CONFIRMED**                               |
+| The reader is not MFC's `CArchive`; it is SOLIDWORKS' own `su_CArchive`, exported by name from `swccu.dll`       | **CONFIRMED** (see `WINDBG.md`)             |
+| `swXmlContents/KeyWords` starts with a `0x86` tag byte and uses CRLF, not a UTF-8 BOM                            | **CONFIRMED**, and a BOM crashes SOLIDWORKS |
+| boss ↔ cut is **not** selected by the tree flags word — it is opaque                                             | measured, corrects report 2 §7.2            |
+| end condition (blind ↔ MidPlane) and direction are writable in place for any feature                             | measured, exact                             |
+| the sketch support plane is writable in place                                                                    | measured, exact, verified by centre of mass |
+| tree order is taken from the `moCompFeature_c` array order                                                       | measured, exact                             |
+| the five derived depth copies and the bbox cache must be left stale, not written wrong                           | measured                                    |
+| `moCompFeature_c` entry count is the one thing that changes stream length structurally per feature               | **CONFIRMED**                               |
 
 ---
 
@@ -54,13 +54,13 @@ so every volume quoted is a genuine rebuild from the feature stream.
 The stream is a byte-compatible clone of MFC `CArchive` object serialization. Runtime
 confirmation is in `WINDBG.md`; the tags are:
 
-| bytes | meaning |
-|---|---|
-| `00 00` | `wNullTag` — a null object pointer |
-| `ff ff` `<u16 schema>` `<u16 nameLen>` `<ascii name>` | `wNewClassTag`: a class *definition*. `CRuntimeClass::Store` writes schema then name length then the name. |
-| `<u16 t>` with `t & 0x8000`, `t != 0xffff` | class *reference*: class map index `t & 0x7fff` |
-| `<u16 t>` with `t & 0x8000 == 0`, `t != 0` | object *reference*: object map index `t` |
-| `7f ff` then `<u32>` | `wBigObjectTag` escape for indices ≥ 0x7fff (not seen in this corpus) |
+| bytes                                                 | meaning                                                                                                    |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `00 00`                                               | `wNullTag` — a null object pointer                                                                         |
+| `ff ff` `<u16 schema>` `<u16 nameLen>` `<ascii name>` | `wNewClassTag`: a class _definition_. `CRuntimeClass::Store` writes schema then name length then the name. |
+| `<u16 t>` with `t & 0x8000`, `t != 0xffff`            | class _reference_: class map index `t & 0x7fff`                                                            |
+| `<u16 t>` with `t & 0x8000 == 0`, `t != 0`            | object _reference_: object map index `t`                                                                   |
+| `7f ff` then `<u32>`                                  | `wBigObjectTag` escape for indices ≥ 0x7fff (not seen in this corpus)                                      |
 
 So the constant `CLASS_MARKER = ff ff 01 00` in `src/convert/adapters/solidworks/format.py` is
 really `wNewClassTag` followed by **schema 1**. `probe_tags.py` scanned for `ff ff <any schema>`
@@ -99,7 +99,7 @@ constraint on authoring:
 `0x8076` in a 1-feature file, `0x8077` in a 2-feature file and `0x8078` in a 3-feature file —
 the same class, three different indices, because more objects precede its definition.
 
-Renumbering is mechanical *if* you can enumerate the tokens, and enumerating them needs the
+Renumbering is mechanical _if_ you can enumerate the tokens, and enumerating them needs the
 object segmentation, which needs per-class `Serialize` layouts. That is the remaining blocker
 (§8). `WINDBG.md` describes the runtime route that lifts it.
 
@@ -133,11 +133,11 @@ tree-node name records (and therefore the `id` attribute in `swXmlContents/KeyWo
 
 Each entry ends with, relative to the entry end:
 
-| offset | width | field | authored or derived |
-|---|---|---|---|
-| `end - 8` | `u32` | tree-node id, the same value as `KeyWords` `id` | **AUTHORED** |
-| `end - 4` | `u32` | Unix `time_t` of when the node was last touched | **AUTHORED** (any plausible value works) |
-| `end - 12` | `u32` | constant `0x00004650` (18000 = the SOLIDWORKS version stamp) | constant |
+| offset     | width | field                                                        | authored or derived                      |
+| ---------- | ----- | ------------------------------------------------------------ | ---------------------------------------- |
+| `end - 8`  | `u32` | tree-node id, the same value as `KeyWords` `id`              | **AUTHORED**                             |
+| `end - 4`  | `u32` | Unix `time_t` of when the node was last touched              | **AUTHORED** (any plausible value works) |
+| `end - 12` | `u32` | constant `0x00004650` (18000 = the SOLIDWORKS version stamp) | constant                                 |
 
 The 119-byte entry begins with the 26-byte inter-entry block
 
@@ -171,10 +171,10 @@ non-tag part is 22 bytes.
 
 ### 3.2 Measured behaviour
 
-* Swapping two 119-byte entry pairs reorders the tree. SOLIDWORKS opened the result with the
+- Swapping two 119-byte entry pairs reorders the tree. SOLIDWORKS opened the result with the
   tree in the swapped order, one body, and the volume unchanged (`E9`, `results.md`) — so
   **rebuild order comes from this array**, not from stream order.
-* Deleting the last entry pair is a 238-byte length change and therefore a map-index change
+- Deleting the last entry pair is a 238-byte length change and therefore a map-index change
   (§2.3). Result in `results.md` (`E10`).
 
 ---
@@ -196,18 +196,18 @@ Mask `0x7FFFFFFF`; bit `0x80000000` is the tree-expanded UI state and carries no
 meaning. Values enumerated across the V8 production corpus (`.rescratch/v8/flagmap.json`) and
 the two authored corpora:
 
-| flags | node kind | name stems seen |
-|---|---|---|
-| `0x40000000` | folder, sketch, plane data, fillet, pattern | `Comments`, `Sketch*`, `Fillet*`, `*Pattern*` |
-| `0xC0000000` | reference plane / origin | `Front Plane`, `Top Plane`, `Right Plane`, `Origin` |
-| `0x40000140`, `0x40000040` | extruded **boss** | `Boss-Extrude*` |
-| `0x400201CA` | extruded **cut** | `Cut-Extrude*` |
-| `0x40000001` | chamfer | `Chamfer*` |
-| `0x40004003`, `0x40004002` | sweep | `Sweep*` |
-| `0x40004404` | loft | `Loft*` |
+| flags                      | node kind                                   | name stems seen                                     |
+| -------------------------- | ------------------------------------------- | --------------------------------------------------- |
+| `0x40000000`               | folder, sketch, plane data, fillet, pattern | `Comments`, `Sketch*`, `Fillet*`, `*Pattern*`       |
+| `0xC0000000`               | reference plane / origin                    | `Front Plane`, `Top Plane`, `Right Plane`, `Origin` |
+| `0x40000140`, `0x40000040` | extruded **boss**                           | `Boss-Extrude*`                                     |
+| `0x400201CA`               | extruded **cut**                            | `Cut-Extrude*`                                      |
+| `0x40000001`               | chamfer                                     | `Chamfer*`                                          |
+| `0x40004003`, `0x40004002` | sweep                                       | `Sweep*`                                            |
+| `0x40004404`               | loft                                        | `Loft*`                                             |
 
-`flags` at `name_text_end + 4` is **AUTHORED**, and it is the only place a boss is *distinguishable*
-from a cut in this stream — there is no `moCut_c` class. But it is **not** what *selects* the
+`flags` at `name_text_end + 4` is **AUTHORED**, and it is the only place a boss is _distinguishable_
+from a cut in this stream — there is no `moCut_c` class. But it is **not** what _selects_ the
 operation. Measured (`results.md` §1, E1/E2 and A3): flipping cut → boss or boss → cut on a
 2-feature donor kills the SOLIDWORKS process, and writing cut flags onto a boss skeleton is
 silently ignored and rebuilds a boss. The flags word is a tree annotation that has to agree with
@@ -217,7 +217,7 @@ the operation; the operation itself lives in the `moExtrusion_c` / `moICE_c` bod
 `node id` at `name_text_end + 8` is **AUTHORED** and must match `moCompFeature_c` and
 `swXmlContents/KeyWords`.
 
-The feature *name* string is a label. It is variable-length, so changing it moves every
+The feature _name_ string is a label. It is variable-length, so changing it moves every
 subsequent offset; `serialize.py` deliberately keeps the skeleton's name and makes `KeyWords`
 agree with it rather than the other way round.
 
@@ -241,11 +241,11 @@ Every 2-D sketch coordinate is wrapped in a fixed 18-byte prefix and a 4-byte su
 `resolvedlib.sketch_coordinates` enumerates them; assigning each to the last `Sketch*` name
 record before it partitions them per sketch exactly (report 2 §6.4, re-verified here).
 
-* **Rectangle**: four free points, corner order `(min,min) (max,max) (min,max) (max,min)`,
+- **Rectangle**: four free points, corner order `(min,min) (max,max) (min,max) (max,min)`,
   strides `178, 162, 162` — the first gap is 16 bytes longer than the other two, so the uniform
   162-byte stride this section used to claim is right for the last two gaps and wrong for the
   first (`../records/RESOLVEDFEATURES.md` §5). **AUTHORED**.
-* **Circle**: one free point (the centre) plus one on-curve point at exactly **17°**. There is
+- **Circle**: one free point (the centre) plus one on-curve point at exactly **17°**. There is
   no radius field; radius is `hypot(dx, dy)`. **AUTHORED** as
   `centre + r·(cos 17°, sin 17°)`.
 
@@ -268,9 +268,9 @@ in `KeyWords` has no `<Dimension>` child.
 
 Anchored on the feature's own depth scalar:
 
-| field | feature 1 | features 2+ |
-|---|---|---|
-| direction reverse, 1 byte | `scalar − 824` | `scalar − 721` |
+| field                       | feature 1      | features 2+    |
+| --------------------------- | -------------- | -------------- |
+| direction reverse, 1 byte   | `scalar − 824` | `scalar − 721` |
 | `swEndConditions_e`, 1 byte | `scalar − 818` | `scalar − 715` |
 
 Feature 1 additionally mirrors the direction flag at `moFromEndSpec_c + 29`.
@@ -302,7 +302,7 @@ inside the stream. The blob is a **DERIVED CACHE**: it may be left describing th
 position and SOLIDWORKS re-resolves the reference (report 2 §3, §7 case C/D). It cannot be
 deleted the way the Partition can.
 
-The face reference itself is OPAQUE to this work: a writer cannot choose *which* face supports
+The face reference itself is OPAQUE to this work: a writer cannot choose _which_ face supports
 a sketch, only inherit the choice from a skeleton.
 
 ---
@@ -312,12 +312,12 @@ a sketch, only inherit the choice from a skeleton.
 All of these follow from the sketch and the depth. None is an authored parameter, and all four
 prior round-trip proofs left them stale and still got exact volumes.
 
-| record | fields | rule |
-|---|---|---|
-| `moBBoxCenterData_c` | `+28/+36/+44` body bbox centre `(x, y, z)` m, `+52` bounding-sphere diameter | `diameter = 2·√(hx²+hy²+hz²)` |
-| `moRefPlane_c`, `moDefaultRefPlnData_c` | three display rectangles, one per principal plane | half-extent × 1.1 about the bbox centre |
-| `moLengthParameter_c` (and its unmarked copies) | annotation witness points at scalar `+32/+40/+56/+64/+229/+245`, and scalar `+318 = (extent/2)/5` | derived from the profile's max corner |
-| the embedded Parasolid | the supporting face surface | re-resolved on rebuild |
+| record                                          | fields                                                                                            | rule                                    |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `moBBoxCenterData_c`                            | `+28/+36/+44` body bbox centre `(x, y, z)` m, `+52` bounding-sphere diameter                      | `diameter = 2·√(hx²+hy²+hz²)`           |
+| `moRefPlane_c`, `moDefaultRefPlnData_c`         | three display rectangles, one per principal plane                                                 | half-extent × 1.1 about the bbox centre |
+| `moLengthParameter_c` (and its unmarked copies) | annotation witness points at scalar `+32/+40/+56/+64/+229/+245`, and scalar `+318 = (extent/2)/5` | derived from the profile's max corner   |
+| the embedded Parasolid                          | the supporting face surface                                                                       | re-resolved on rebuild                  |
 
 `serialize.py` leaves all of these stale by default. That is not laziness — it is a measured
 requirement. Writing the six depth copies with the blind-forward sign pattern
@@ -385,7 +385,7 @@ understood; renumbering them is not proven safe.
    therefore the class-reference tokens. Without segmentation the tokens cannot be enumerated,
    so they cannot be renumbered.
 3. **Feature count** is therefore bounded by the available skeletons. `serialize.py` covers
-   1, 2 and 3 features and *refuses* a 4-feature request with an explicit error rather than
+   1, 2 and 3 features and _refuses_ a 4-feature request with an explicit error rather than
    emitting something that would crash SOLIDWORKS.
 4. **Profile type beyond rectangle and circle.** Polygon, slot and spline profiles use `sg*`
    classes not present in either authored corpus. The V8 production corpus contains them
