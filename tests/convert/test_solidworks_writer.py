@@ -66,7 +66,6 @@ from convert.adapters.solidworks.native import (
     VENDOR_UNLOADABLE_NOTES,
     encode_native_part,
 )
-from convert.adapters.solidworks.parasolid import encode_blank_partition_stream
 from convert.adapters.solidworks.resolved import BLIND_END_CONDITION
 from convert.parasolid import _parasolid_header, _scan_partition_records
 from interchange import (
