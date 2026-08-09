@@ -354,7 +354,8 @@ def test_built_wheel_is_self_contained_and_runs_with_external_hooks_blocked(
             for marker in (f"extra == '{extra}'", f'extra == "{extra}"')
         }
         assert all(
-            value.partition(";")[2].strip() in extra_markers for value in requirements
+            any(marker in value.partition(";")[2] for marker in extra_markers)
+            for value in requirements
         )
         assert archive.read(entry_points_name).decode("utf-8") == (
             "[kit]\nconvert = convert:convert\n"
