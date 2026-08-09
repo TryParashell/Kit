@@ -63,8 +63,7 @@ from convert.adapters.solidworks.format import (
     RESOLVED_FEATURES_STREAM,
 )
 from convert.adapters.solidworks.native import (
-    UNSYNTHESIZED_STREAM_NOTES,
-    UNSYNTHESIZED_STREAMS,
+    VENDOR_UNLOADABLE_NOTES,
     encode_native_part,
 )
 from convert.adapters.solidworks.parasolid import encode_blank_partition_stream
@@ -434,7 +433,6 @@ def test_freecad_document_writes_structural_solidworks_container(tmp_path) -> No
     resolved_features = archive.require(KIT_RESOLVED_STREAM)
     features = archive.require(FEATURES_STREAM)
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert UNSYNTHESIZED_STREAMS == ()
     assert archive.require(CONFIGURATION_MANAGER_STREAM)
     assert archive.require(CONFIGURATION_STREAM)
     assert "Contents/DisplayLists" not in archive.streams
@@ -820,7 +818,6 @@ def test_source_less_native_rectangle_boss_records_are_parametric() -> None:
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert UNSYNTHESIZED_STREAMS == ()
     assert archive.require(CONFIGURATION_MANAGER_STREAM)
     assert archive.require(CONFIGURATION_STREAM)
     resolved = archive.require(KIT_RESOLVED_STREAM)
@@ -862,7 +859,6 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     data = target.read_bytes()
     archive = SldprtArchive.from_bytes(data)
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert UNSYNTHESIZED_STREAMS == ()
     assert archive.require(CONFIGURATION_MANAGER_STREAM)
     assert archive.require(CONFIGURATION_STREAM)
     resolved = archive.require(KIT_RESOLVED_STREAM)
@@ -1081,8 +1077,7 @@ def test_non_native_document_writes_no_vendor_resolved_feature_lanes() -> None:
     assert lanes == []
     part = encode_native_part(_document_without_source(source), "memory")
     assert part.configuration_lanes == ()
-    assert part.donor_notes == UNSYNTHESIZED_STREAM_NOTES
-    assert UNSYNTHESIZED_STREAMS == ()
+    assert part.donor_notes == VENDOR_UNLOADABLE_NOTES
     assert archive.require(CONFIGURATION_MANAGER_STREAM)
     assert archive.require(CONFIGURATION_STREAM)
     records = archive.require(KIT_RESOLVED_STREAM)
@@ -1095,7 +1090,7 @@ def test_non_native_document_writes_no_vendor_resolved_feature_lanes() -> None:
         item for item in result.diagnostics if item.code == "sldprt.donor_declined"
     )
     assert donor_declined.severity is Severity.WARNING
-    assert all(note in donor_declined.message for note in UNSYNTHESIZED_STREAM_NOTES)
+    assert all(note in donor_declined.message for note in VENDOR_UNLOADABLE_NOTES)
 
 
 def test_non_native_kit_resolved_stream_preserves_decoded_records() -> None:
@@ -1129,7 +1124,6 @@ def test_non_native_kit_resolved_stream_preserves_decoded_records() -> None:
     assert {item.native_stream for item in native.sketches} == {KIT_RESOLVED_STREAM}
     assert {item.native_stream for item in native.operations} == {KIT_RESOLVED_STREAM}
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert UNSYNTHESIZED_STREAMS == ()
     assert archive.require(CONFIGURATION_MANAGER_STREAM)
     assert archive.require(CONFIGURATION_STREAM)
     restored = read_sldprt(output.getvalue())
@@ -1191,7 +1185,6 @@ def test_source_less_brep_only_writes_native_imported_feature_metadata() -> None
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
     assert RESOLVED_FEATURES_STREAM not in archive.streams
-    assert UNSYNTHESIZED_STREAMS == ()
     assert archive.require(CONFIGURATION_MANAGER_STREAM)
     assert archive.require(CONFIGURATION_STREAM)
     resolved = archive.require(KIT_RESOLVED_STREAM)
