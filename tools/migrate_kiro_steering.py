@@ -32,15 +32,20 @@ DESCRIPTIONS = {
     "frontend-stack": "Use the required Next.js, React, shadcn, and frontend stack. Use when scaffolding, upgrading, or changing frontend applications.",
     "git-never-touch-main": "Protect the main branch. Use before any Git commit, push, pull, merge, rebase, reset, cherry-pick, or revert operation.",
     "hostcontrol-contract": "Keep HostControl services, schemas, tests, documentation, and consumers synchronized. Use when changing a HostControl service contract.",
+    "identifier-markers": "Prefix boolean-returning functions and methods with Is, Has, or Can. Use when naming or renaming any function or method that returns a bool.",
     "layout-system": "Use existing global layout primitives and avoid hand-rolled layout. Use when changing React or Next.js page layout, shells, or spacing.",
     "linear-issue-tracking": "Track work end-to-end in Linear. Use when starting, updating, or completing a task that requires a Linear issue workflow.",
+    "lossless-translation": "Hold every format translation to lossless, vendor loadable, application usable, and parametric output verified in the target application. Use when converting between CAD formats or reporting translation results.",
     "mcp-tool-doc-pages": "Document agent-facing MCP tools with standalone Mintlify pages. Use when creating or changing MCP tools or their documentation.",
+    "naming-convention": "Apply the PascalCase identifier casing and length ranges. Use when naming or renaming classes, functions, methods, variables, globals, or constants.",
+    "no-donor-blocks": "Never ship vendor bytes; reverse engineer proprietary binary formats until they can be emitted from first principles. Use when reading or writing SOLIDWORKS, CATIA, Parasolid, or any proprietary CAD format.",
     "no-stubs": "Deliver complete implementations with no stubs, placeholders, or incomplete code. Use for all code changes and bug fixes.",
     "no-unrequested-styling": "Limit UI changes to the requested scope. Use when changing pages, visual styling, layout, or components.",
     "page-title-separator": "Use the double-colon separator in public page titles. Use when editing document metadata, SEO titles, or public landing and marketing routes.",
     "pin-dependencies": "Pin GitHub Actions and runners to immutable references. Use when editing GitHub Actions workflows, actions, or runner versions.",
     "pixi-lockfiles": "Relock Pixi manifests. Use whenever editing pixi.toml, Pixi dependencies, environments, or channels.",
     "python-package-manager": "Use uv for Python dependency management. Use when changing Python dependencies, pyproject.toml, uv.lock, CI, or container commands.",
+    "rationale-comments": "Explain why each class, function, lambda, and module-level constant exists in a comment directly above it. Use when adding or editing Python declarations.",
     "react-doctor": "Run React Doctor and resolve introduced regressions. Use when changing React source files, components, hooks, or JSX.",
     "shadcn-pages": "Follow the shadcn UI CLI-first composition method. Use when adding UI primitives or building React and Next.js pages.",
     "spdx-header": "Apply the repository's required SPDX headers. Use when creating project files; Agent Skills use schema-required license frontmatter instead.",
@@ -156,16 +161,16 @@ def check_skills() -> list[str]:
 
     errors = validate_specs()
     for stale_directory in stale_skill_directories():
-        errors.append(
-            f"unexpected generated skill: {stale_directory.relative_to(ROOT)}"
-        )
+        location = stale_directory.relative_to(ROOT).as_posix()
+        errors.append(f"unexpected generated skill: {location}")
     for name in sorted(DESCRIPTIONS):
         target = target_path(name)
+        location = target.relative_to(ROOT).as_posix()
         if not target.is_file():
-            errors.append(f"missing generated skill: {target.relative_to(ROOT)}")
+            errors.append(f"missing generated skill: {location}")
             continue
         if target.read_text(encoding="utf-8") != render_skill(name):
-            errors.append(f"out-of-date generated skill: {target.relative_to(ROOT)}")
+            errors.append(f"out-of-date generated skill: {location}")
     return errors
 
 
