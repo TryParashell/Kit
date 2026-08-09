@@ -1,7 +1,11 @@
 ---
-inclusion: always
+name: spdx-header
+description: "Apply the repository's required SPDX headers. Use when creating project files; Agent Skills use schema-required license frontmatter instead."
+license: LicenseRef-PolyForm-Strict-1.0.0
+metadata:
+  source: ".kiro/steering/spdx-header.md"
+  kiro-inclusion: "always"
 ---
-
 # SPDX License Header — Required On Every New File
 
 Every new file created in this repository MUST start with the SPDX license header block defined in `HEADER_NOTICE` at the repository root. This applies to files you create yourself and to files you generate on the user's behalf.
