@@ -15,6 +15,13 @@ Add the header to every new file in the repository, **except** files under:
 
 Binary files that cannot contain a text comment (images, compiled artifacts, CAD binaries, etc.) are exempt for the obvious reason that there is nowhere to put it.
 
+## Agent Skills exception
+
+`SKILL.md` files under `.agents/skills/` must begin with the Agent Skills YAML
+frontmatter. Use `license: LicenseRef-PolyForm-Strict-1.0.0` in that
+frontmatter instead of the comment header. The SPDX guard validates this field
+in place of the standard header.
+
 ## The Header
 
 Copy the exact text from `HEADER_NOTICE`, then prefix each line with that language's line-comment token (`#`, `//`, `--`, etc.), or wrap it in the language's block-comment syntax when the file has no line-comment token (e.g. HTML/Markdown `<!-- -->`). Do not paraphrase, shorten, or reorder the lines:

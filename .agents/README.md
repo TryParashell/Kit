@@ -30,8 +30,10 @@ python tools/migrate_kiro_steering.py --write
 python tools/migrate_kiro_steering.py --check
 ```
 
-`--check` is also covered by `tests/test_agent_skills_migration.py`, preventing
-the two trees from silently drifting.
+`--write` removes skill directories that are no longer represented by the
+source mapping, while `--check` reports them. `--check` is also covered by
+`tests/test_agent_skills_migration.py`, preventing the two trees from silently
+drifting.
 
 ## Mapping
 
