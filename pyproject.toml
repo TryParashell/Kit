@@ -38,7 +38,7 @@ Issues = "https://github.com/TryParashell/Kit/issues"
 [project.optional-dependencies]
 dev = [
     "pytest==9.1.1",
-    "pywin32==312",
+    "pywin32==312 ; sys_platform == 'win32'",
 ]
 
 [project.entry-points."kit"]
