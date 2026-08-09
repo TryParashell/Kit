@@ -33,6 +33,8 @@ import sys
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 HEADER_NOTICE_PATH = REPO_ROOT / "HEADER_NOTICE"
+AGENT_SKILLS_DIRECTORY = REPO_ROOT / ".agents" / "skills"
+AGENT_SKILL_LICENSE_FIELD = "license: LicenseRef-PolyForm-Strict-1.0.0"
 
 # Paths under these prefixes are entirely out of scope for the header
 # requirement (matches .kiro/steering/spdx-header.md).
@@ -46,14 +48,38 @@ EXEMPT_PATHS = {"HEADER_NOTICE"}
 # Extension -> single-line comment prefix.
 LINE_COMMENT_EXTENSIONS = {
     "#": {
-        ".py", ".pyi", ".sh", ".bash", ".zsh",
-        ".yml", ".yaml", ".toml", ".lock",
-        ".cfg", ".ini", ".conf", ".gitattributes",
+        ".py",
+        ".pyi",
+        ".sh",
+        ".bash",
+        ".zsh",
+        ".yml",
+        ".yaml",
+        ".toml",
+        ".lock",
+        ".cfg",
+        ".ini",
+        ".conf",
+        ".gitattributes",
     },
     "//": {
-        ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
-        ".c", ".h", ".cc", ".cpp", ".hpp", ".java",
-        ".go", ".rs", ".swift", ".kt", ".cs",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".mjs",
+        ".cjs",
+        ".c",
+        ".h",
+        ".cc",
+        ".cpp",
+        ".hpp",
+        ".java",
+        ".go",
+        ".rs",
+        ".swift",
+        ".kt",
+        ".cs",
     },
 }
 
@@ -73,10 +99,29 @@ SPECIAL_FILENAME_STYLES = {
 NO_COMMENT_EXTENSIONS = {".json"}
 
 BINARY_EXTENSIONS = {
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf",
-    ".sldprt", ".sldasm", ".catpart", ".catproduct", ".f3d", ".f3z",
-    ".x_t", ".sat", ".step", ".stp", ".iges", ".igs", ".stl",
-    ".zip", ".7z", ".whl",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".ico",
+    ".pdf",
+    ".sldprt",
+    ".sldasm",
+    ".catpart",
+    ".catproduct",
+    ".f3d",
+    ".f3z",
+    ".x_t",
+    ".sat",
+    ".step",
+    ".stp",
+    ".iges",
+    ".igs",
+    ".stl",
+    ".zip",
+    ".7z",
+    ".whl",
 }
 
 
@@ -132,8 +177,32 @@ def leading_offset(lines: list[str]) -> int:
     return 0
 
 
+def is_agent_skill(path: pathlib.Path) -> bool:
+    return path.name == "SKILL.md" and path.parent.parent == AGENT_SKILLS_DIRECTORY
+
+
+def check_agent_skill_license(path: pathlib.Path) -> tuple[bool, str]:
+    lines = read_lines(path)
+    if lines is None:
+        return False, "Agent Skills file is not readable as UTF-8 text"
+    if not lines or lines[0] != "---":
+        return False, "Agent Skills frontmatter is missing"
+    try:
+        frontmatter_end = lines.index("---", 1)
+    except ValueError:
+        return False, "Agent Skills frontmatter is not terminated"
+    license_fields = [
+        line for line in lines[1:frontmatter_end] if line.startswith("license:")
+    ]
+    if license_fields != [AGENT_SKILL_LICENSE_FIELD]:
+        return False, "Agent Skills license field is missing or invalid"
+    return True, "Agent Skills license field OK"
+
+
 def check_file(path: pathlib.Path, canonical: list[str]) -> tuple[bool, str]:
     """Return (ok, reason)."""
+    if is_agent_skill(path):
+        return check_agent_skill_license(path)
     style = style_for(path)
     if style is None:
         return True, "exempt (no comment syntax available)"
@@ -178,7 +247,15 @@ def check_file(path: pathlib.Path, canonical: list[str]) -> tuple[bool, str]:
 
 def diff_files(base: str, head: str) -> list[str]:
     result = subprocess.run(
-        ["git", "diff", "--name-status", "-M", "--diff-filter=ACMR", f"{base}", f"{head}"],
+        [
+            "git",
+            "diff",
+            "--name-status",
+            "-M",
+            "--diff-filter=ACMR",
+            f"{base}",
+            f"{head}",
+        ],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

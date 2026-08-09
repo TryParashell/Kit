@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -81,6 +82,20 @@ def target_path(name: str) -> Path:
     return TARGET_DIR / name / "SKILL.md"
 
 
+def stale_skill_directories() -> list[Path]:
+    if not TARGET_DIR.is_dir():
+        return []
+    expected_names = set(DESCRIPTIONS)
+    return sorted(
+        (
+            path
+            for path in TARGET_DIR.iterdir()
+            if path.is_dir() and path.name not in expected_names
+        ),
+        key=lambda path: path.name,
+    )
+
+
 def render_skill(name: str) -> str:
     """Render one schema-valid Agent Skills document from its Kiro source."""
 
@@ -128,6 +143,8 @@ def validate_specs() -> list[str]:
 def write_skills() -> None:
     """Write every Kiro steering rule to its Agent Skills location."""
 
+    for stale_directory in stale_skill_directories():
+        shutil.rmtree(stale_directory)
     for name in sorted(DESCRIPTIONS):
         target = target_path(name)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -138,6 +155,10 @@ def check_skills() -> list[str]:
     """Report generated skills that are missing or no longer match their source."""
 
     errors = validate_specs()
+    for stale_directory in stale_skill_directories():
+        errors.append(
+            f"unexpected generated skill: {stale_directory.relative_to(ROOT)}"
+        )
     for name in sorted(DESCRIPTIONS):
         target = target_path(name)
         if not target.is_file():
