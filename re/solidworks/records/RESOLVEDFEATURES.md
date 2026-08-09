@@ -12,15 +12,15 @@ Everything below is measured. Controls measured 8000.000000000001 mm³, centre `
 
 ## 1. What landed in shipped code and data
 
-| change | file | effect |
-| --- | --- | --- |
-| `moCompRefPlane_c` run 1 becomes a `conditional` rule | `re/data/class_layouts_versioned.json` | unblocks all 32 donor fixtures |
-| `moProfileFeature_c` gets ten fixed child slots | `re/data/class_layouts_decompiled.json` | `boss1_front_rect_blind` 148 → 223 objects |
-| `moExtrusion_c` gets the sixteen children the traces record | `re/data/class_layouts_versioned.json` | replaces a nine-slot absorption |
-| `moCompSketchEntHandle_c` run 0 gets the 89/85 version gate | `re/data/class_layouts_decompiled.json` | its `sgPointHandle` was 89 bytes early |
-| donor object floor | `tests/convert/test_solidworks_archive.py` | 5244 → **7487** |
-| `_name_record` flag word per node kind | `src/convert/adapters/solidworks/native.py` | correct for planes, Origin and cuts |
-| `_resolved_payload` first `u32` | `src/convert/adapters/solidworks/native.py` | base map index, not the object count |
+| change                                                      | file                                        | effect                                     |
+| ----------------------------------------------------------- | ------------------------------------------- | ------------------------------------------ |
+| `moCompRefPlane_c` run 1 becomes a `conditional` rule       | `re/data/class_layouts_versioned.json`      | unblocks all 32 donor fixtures             |
+| `moProfileFeature_c` gets ten fixed child slots             | `re/data/class_layouts_decompiled.json`     | `boss1_front_rect_blind` 148 → 223 objects |
+| `moExtrusion_c` gets the sixteen children the traces record | `re/data/class_layouts_versioned.json`      | replaces a nine-slot absorption            |
+| `moCompSketchEntHandle_c` run 0 gets the 89/85 version gate | `re/data/class_layouts_decompiled.json`     | its `sgPointHandle` was 89 bytes early     |
+| donor object floor                                          | `tests/convert/test_solidworks_archive.py`  | 5244 → **7487**                            |
+| `_name_record` flag word per node kind                      | `src/convert/adapters/solidworks/native.py` | correct for planes, Origin and cuts        |
+| `_resolved_payload` first `u32`                             | `src/convert/adapters/solidworks/native.py` | base map index, not the object count       |
 
 `archive.py` needed no change: `CONDITIONAL_RULE` and `_element_length` already implement the rule.
 
@@ -45,25 +45,30 @@ traced instances, 114 in `planetop` node 211, "the 72-byte difference is real an
 `BASELINE_40x20x10` (Front-plane sketch) and `PLANE_TOP` (Top-plane sketch) are both **11075
 bytes**, and the diff isolates the whole difference to one 72-byte insertion:
 
-| stream offset | `BASELINE` (Front) | `PLANE_TOP` (Top) | field |
-| --- | --- | --- | --- |
-| 7954 | `50 46 00 00` | `50 46 00 00` | `u32` 18000, the generation stamp |
-| 7958 | `02 00 00 00` | `03 00 00 00` | `u32` support plane object id |
-| 7962 | `f6 5a 1a 69` | `f6 5a 1a 69` | `u32` constant `0x691a5af6` |
-| 7966 | `00 00` | `00 00` | `u16` 0, consumed as the slot-1 null tag |
-| 7968 | `03 00 00 00` | `02 00 00 00` | `u32` axis code, `5 - plane id` |
-| **7972** | **`00`** | **`01`** | **`u8` basis-present flag** |
-| 7973 | — | 72 bytes | 9 × `float64` row-major basis, present only when the flag is 1 |
-| 7997 / 8069 | `double 1.0` | `double 1.0` | |
-| 8008 / 8080 | `04 00 00 00` | `04 00 00 00` | the word that closes the run; the streams realign here, 72 bytes apart |
+| stream offset | `BASELINE` (Front) | `PLANE_TOP` (Top) | field                                                                  |
+| ------------- | ------------------ | ----------------- | ---------------------------------------------------------------------- |
+| 7954          | `50 46 00 00`      | `50 46 00 00`     | `u32` 18000, the generation stamp                                      |
+| 7958          | `02 00 00 00`      | `03 00 00 00`     | `u32` support plane object id                                          |
+| 7962          | `f6 5a 1a 69`      | `f6 5a 1a 69`     | `u32` constant `0x691a5af6`                                            |
+| 7966          | `00 00`            | `00 00`           | `u16` 0, consumed as the slot-1 null tag                               |
+| 7968          | `03 00 00 00`      | `02 00 00 00`     | `u32` axis code, `5 - plane id`                                        |
+| **7972**      | **`00`**           | **`01`**          | **`u8` basis-present flag**                                            |
+| 7973          | —                  | 72 bytes          | 9 × `float64` row-major basis, present only when the flag is 1         |
+| 7997 / 8069   | `double 1.0`       | `double 1.0`      |                                                                        |
+| 8008 / 8080   | `04 00 00 00`      | `04 00 00 00`     | the word that closes the run; the streams realign here, 72 bytes apart |
 
 So run 1 is 42 bytes when the flag is clear and 114 when it is set:
 
 ```json
 {
-  "slot": "1", "rule": "conditional",
-  "at": 0, "predicate_at": 4, "predicate_width": 1,
-  "values": [1], "width": 72, "tail": 42
+  "slot": "1",
+  "rule": "conditional",
+  "at": 0,
+  "predicate_at": 4,
+  "predicate_width": 1,
+  "values": [1],
+  "width": 72,
+  "tail": 42
 }
 ```
 
@@ -73,11 +78,11 @@ for `moSketchChain_c` as "omitted entirely for Front", now with its discriminato
 
 The measured bases, read out of the vendor streams at 7973:
 
-| plane | id | flag | basis, row major |
-| --- | --- | --- | --- |
-| Front | 2 | 0 | absent; the identity is implicit |
-| Top | 3 | 1 | `(1, 0, 0), (0, 0, 1), (0, -1, 0)` |
-| Right | 4 | 1 | `(-0, 0, 1), (-0, 1, 0), (-1, 0, 0)` |
+| plane | id  | flag | basis, row major                     |
+| ----- | --- | ---- | ------------------------------------ |
+| Front | 2   | 0    | absent; the identity is implicit     |
+| Top   | 3   | 1    | `(1, 0, 0), (0, 0, 1), (0, -1, 0)`   |
+| Right | 4   | 1    | `(-0, 0, 1), (-0, 1, 0), (-1, 0, 0)` |
 
 The negative zeros in the Right basis are real bytes: `-0.0` is `00 00 00 00 00 00 00 80` and `0.0`
 is eight zeros, so an emitter that writes `0.0` there is one bit wrong in three doubles. The gate
@@ -99,11 +104,11 @@ u16 top-level nodes - 1
 
 Both readings are pinned by the oracle, one vendor control with only those 6 bytes changed:
 
-| candidate | change | result |
-| --- | --- | --- |
-| control | — | opened, 1 body, 8000.000000000001 mm³ |
-| `p1_count_18` | `u16` 19 → 18 | **crashed** `-2147023170` |
-| `p2_count_20` | `u16` 19 → 20 | **crashed** `-2147023170` |
+| candidate     | change          | result                                                                      |
+| ------------- | --------------- | --------------------------------------------------------------------------- |
+| control       | —               | opened, 1 body, 8000.000000000001 mm³                                       |
+| `p1_count_18` | `u16` 19 → 18   | **crashed** `-2147023170`                                                   |
+| `p2_count_20` | `u16` 19 → 20   | **crashed** `-2147023170`                                                   |
 | `p3_base_110` | `u32` 109 → 110 | **opened**, 1 body, 8000.000000000001 mm³, `[0.0, 0.0, 5.0]`, 19 tree nodes |
 
 The `u16` is a hard **node count minus one** and is **load-critical**: off by one in either
@@ -122,13 +127,13 @@ demands it.
 Vendor control with the resolved stream truncated at a clean top-level node boundary and the header
 count patched down to match. Donor instruments, not Kit output.
 
-| candidate | resolved bytes | header count | result |
-| --- | --- | --- | --- |
-| `t1_header_only` | 6 | 0 | **crashed** `-2147023170` |
-| `t2_folders_only` | 3248 | 13 | **crashed** `-2147023170` |
-| `t3_planes_and_origin` | 5862 | 17 | **crashed** `-2147023170` |
-| `t4_through_sketch` | 8057 | 18 | **crashed** `-2147023170` |
-| `t5_through_extrusion` | 8506 | 19 | **crashed** `-2147023170` |
+| candidate              | resolved bytes | header count | result                    |
+| ---------------------- | -------------- | ------------ | ------------------------- |
+| `t1_header_only`       | 6              | 0            | **crashed** `-2147023170` |
+| `t2_folders_only`      | 3248           | 13           | **crashed** `-2147023170` |
+| `t3_planes_and_origin` | 5862           | 17           | **crashed** `-2147023170` |
+| `t4_through_sketch`    | 8057           | 18           | **crashed** `-2147023170` |
+| `t5_through_extrusion` | 8506           | 19           | **crashed** `-2147023170` |
 
 All five crash, while `para417_partdesign` §3.2 `b1` and this session's `k3_kit_without_resolved`
 both show that **deleting** the stream outright opens the part with 0 bodies and 12 folders. The
@@ -143,24 +148,24 @@ whole stream of a single-feature rectangular pad segments to **265 objects**, `t
 `gaps: []`, `overlaps: []`, `trailing_bytes: 0`, and `Model.emit()` — which recomputes every class
 and object index from the base — returns the input **byte for byte**.
 
-| part | objects | tiles | re-emits identically |
-| --- | --- | --- | --- |
-| `BASELINE_40x20x10`, `CONTROL_A`, `CONTROL_B` | 265 | yes | **yes** |
-| `WIDTH_w40`, `WIDTH_w41`, `WIDTH_w60` | 265 | yes | **yes** |
-| `DEPTH_d10`, `DEPTH_d20`, `HEIGHT_h20`, `OFFSET_x5_y0` | 265 | yes | **yes** |
-| `PLANE_FRONT`, `REVERSED_d10` | 265 | yes | **yes** |
-| `PLANE_TOP`, `PLANE_RIGHT` | 248 | no | no — `moDisplayDistanceDim_c@7` at 10002 |
-| `MIDPLANE_d10` | 248 | no | no — `moDisplayDistanceDim_c@7` at 9930 |
+| part                                                   | objects | tiles | re-emits identically                     |
+| ------------------------------------------------------ | ------- | ----- | ---------------------------------------- |
+| `BASELINE_40x20x10`, `CONTROL_A`, `CONTROL_B`          | 265     | yes   | **yes**                                  |
+| `WIDTH_w40`, `WIDTH_w41`, `WIDTH_w60`                  | 265     | yes   | **yes**                                  |
+| `DEPTH_d10`, `DEPTH_d20`, `HEIGHT_h20`, `OFFSET_x5_y0` | 265     | yes   | **yes**                                  |
+| `PLANE_FRONT`, `REVERSED_d10`                          | 265     | yes   | **yes**                                  |
+| `PLANE_TOP`, `PLANE_RIGHT`                             | 248     | no    | no — `moDisplayDistanceDim_c@7` at 10002 |
+| `MIDPLANE_d10`                                         | 248     | no    | no — `moDisplayDistanceDim_c@7` at 9930  |
 
 **12 of 15.** Before this work, zero parts segmented completely.
 
 On the 32 donor fixtures under `tests/fixtures/solidworks/donors/`, with the shipped table:
 
-| table | objects reached | blockers |
-| --- | --- | --- |
-| before | **5244** | `moCompRefPlane_c@1` ×32 |
-| the two layout findings alone | **7257** | `moExtrusion_c@5` ×23, `moSketchExtRef_w@0` ×6, `sgSketch@0` ×3 |
-| shipped, with the two trace corrections | **7487** | `moSketchExtRef_w@0`, `sgSketch@0`, `moExtrusion_c@9` |
+| table                                   | objects reached | blockers                                                        |
+| --------------------------------------- | --------------- | --------------------------------------------------------------- |
+| before                                  | **5244**        | `moCompRefPlane_c@1` ×32                                        |
+| the two layout findings alone           | **7257**        | `moExtrusion_c@5` ×23, `moSketchExtRef_w@0` ×6, `sgSketch@0` ×3 |
+| shipped, with the two trace corrections | **7487**        | `moSketchExtRef_w@0`, `sgSketch@0`, `moExtrusion_c@9`           |
 
 Every donor advanced, +42.8 % overall. `FIXTURE_OBJECT_FLOOR` in
 `tests/convert/test_solidworks_archive.py` is 7487 so it cannot silently regress.
@@ -201,10 +206,10 @@ Field-level facts gated against the vendor stream while getting there:
 A single-feature pad is 11075 bytes, of which **9877** are class run bytes across the 265 nodes.
 Diffing the tag-level programs:
 
-| comparison | parts | run bytes | varying | invariant |
-| --- | --- | --- | --- | --- |
-| two identically-authored documents | `CONTROL_A`, `CONTROL_B` | 9877 | **50** | 9827 |
-| eight differently-parameterised pads | `WIDTH_w40/41/60`, `HEIGHT_h20`, `DEPTH_d10/20`, `OFFSET_x5_y0`, `BASELINE` | 9877 | **224** | **9653** |
+| comparison                           | parts                                                                       | run bytes | varying | invariant |
+| ------------------------------------ | --------------------------------------------------------------------------- | --------- | ------- | --------- |
+| two identically-authored documents   | `CONTROL_A`, `CONTROL_B`                                                    | 9877      | **50**  | 9827      |
+| eight differently-parameterised pads | `WIDTH_w40/41/60`, `HEIGHT_h20`, `DEPTH_d10/20`, `OFFSET_x5_y0`, `BASELINE` | 9877      | **224** | **9653**  |
 
 Session noise between two authorings of the same part is a `u32` `time_t` at run offset `+22` in
 nine node bodies, one byte at `+85` in two `objectref` runs, and 12 bytes inside `moExtrusion_c@5`.
@@ -233,8 +238,8 @@ Each of these was believed, tested and killed. They are recorded so nobody pays 
 2. **The `u16` in the header is advisory.** Refuted, §3. 18 and 20 both crash a 20-node stream; only
    19 opens.
 3. **The `u32` in the header must equal the `Contents/Config-0` final map counter for the reader.**
-   Refuted, §3. 110 in place of 109 opens with the correct volume. It is required for *static
-   walking*, not by the reader.
+   Refuted, §3. 110 in place of 109 opens with the correct volume. It is required for _static
+   walking_, not by the reader.
 4. **`moCompRefPlane_c@1`'s 72-byte difference is unexplained** — the layout table's own note.
    Refuted, §2: a `u8` flag at run offset `+4` selects a 9-double basis.
 5. **`moCompFeature_c` holds one entry per tree node.** Refuted, §5: two entries in the 20-node
@@ -263,15 +268,15 @@ Each of these was believed, tested and killed. They are recorded so nobody pays 
    `Top Plane` as authored object 26 in place of `Sketch1`. The change was reverted; the measured
    byte order stands as a fact about the block, not about the matching table.
 10. **One `moExtrusion_c@5` length closes the class.** Refuted twice over. 707 is the best of
-   `{587, 635, 705, 707, 779}` for `PLANE_TOP` and still stalls, **and 707 demonstrably absorbs a
-   `moPerBodyChooserData_c` class definition at `+30`** — `ff ff 01 00 16 00
+    `{587, 635, 705, 707, 779}` for `PLANE_TOP` and still stalls, **and 707 demonstrably absorbs a
+    `moPerBodyChooserData_c` class definition at `+30`** — `ff ff 01 00 16 00
    moPerBodyChooserData_c` — so it swallows child objects. It re-emits byte-identically only
-   because `Model.emit()` copies run bytes verbatim; the swallowed class tags would not be
-   renumbered if the object count changed. **This is an absorption artifact, not a field program,
-   and it is deliberately not shipped.** The class has more child slots than the nine declared, and
-   splitting run 5 at that boundary is the next move: it unblocks 23 of the 32 donors.
-   `moExtrusion_c::Serialize` and the `moBodyFeature_c` / `FUN_4bb886c0` base chain named in
-   `external_classes.json::pmark_record` are the entry points.
+    because `Model.emit()` copies run bytes verbatim; the swallowed class tags would not be
+    renumbered if the object count changed. **This is an absorption artifact, not a field program,
+    and it is deliberately not shipped.** The class has more child slots than the nine declared, and
+    splitting run 5 at that boundary is the next move: it unblocks 23 of the 32 donors.
+    `moExtrusion_c::Serialize` and the `moBodyFeature_c` / `FUN_4bb886c0` base chain named in
+    `external_classes.json::pmark_record` are the entry points.
 11. **One `moDisplayDistanceDim_c@6` length closes the three stalling parts.** Refuted: no value in
     `{0, 4, …, 80, 91}` segments `PLANE_TOP`, the best reaching 256 of 265, and the fitted 19 is
     refuted for `PLANE_TOP`, `PLANE_RIGHT` and `MIDPLANE_d10`. The record is the depth dimension's
