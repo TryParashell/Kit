@@ -17,149 +17,3441 @@ MO_VERSION = 18000
 MAP_COUNTER_BASE = 4
 PROLOGUE_CLASS = "moPart_c"
 PROLOGUE_SCHEMA = 1
+PROLOGUE_LENGTH = 26
 NEW_CLASS_TAG = 0xFFFF
 CLASS_TAG_BIT = 0x8000
+NULL_TAG = b"\x00\x00"
 STRING_MARKER = b"\xff\xfe\xff"
+LONG_STRING_UNITS = 0xFF
+ARCHIVE_COUNT_ESCAPE = 0xFFFF
 MO_NODE_FLAG_FOLDER = 0x40000000
 ATOM_TAIL_SECOND_WORD = 10000
 ATOM_TAIL_THIRD_WORD = 0x10000000
-UNIT_PRECISION_LAYOUT = "<IIdIIdIIIIIIII"
-UNIT_PRECISION_LENGTH = 64
+HIGH_WATER_DECLARED_BYTES = 8
+DETAIL_DEFS_CLASS = "moDetailDefs_c"
+DETAIL_DEFS_SERIALIZE = 0x3CB15020
+DETAIL_DEFS_MODULE_IMAGEBASE = 0x3C9F0000
+CHAR_FORMAT_SERIALIZE = 0x3CA7E750
+REL_MGR_SERIALIZE = 0x4C392F10
+PART_SERIALIZE = 0x4C285F50
+DETAIL_REGION_FIRST_NODE = 36
+DETAIL_REGION_LAST_NODE = 58
+
+DETAIL_OWNERS = (
+    '/moDetailDefs_c',
+    '/moDetailDefs_c#0xb8',
+    '/moDetailDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c/moBaseDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moDimDefs_c/moLinearDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngleDimDef_c/moBaseDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngleDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngleDimDef_c/moBaseDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngleDimDef_c/moBaseDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngleDimDef_c/moBaseDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngleDimDef_c/moBaseDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngleDimDef_c/moBaseDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngleDimDef_c/moBaseDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngleDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moArcLengthDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c/moBaseDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moDimDefs_c/moRadialDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c/moBaseDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moDimDefs_c/moHoleCalloutDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c/moBaseDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moDimDefs_c/moOrdinateDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c/moBaseDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moDimDefs_c/moChamferDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c/moBaseDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moDimDefs_c/moDiameterDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngOrdinateDimDef_c/moBaseDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngOrdinateDimDef_c/moBaseDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngOrdinateDimDef_c/moBaseDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngOrdinateDimDef_c/moBaseDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngOrdinateDimDef_c/moBaseDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngOrdinateDimDef_c/moBaseDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngOrdinateDimDef_c/moBaseDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngOrdinateDimDef_c/moBaseDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moDimDefs_c/moAngOrdinateDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c/moLengthUserUnits_c/moLengthUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c/moAngleUserUnits_c/moUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c/moAngleUserUnits_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c/utCharFormat_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c/uiLFConfig_c',
+    '/moDetailDefs_c/moDimDefs_c/moBaseDimDef_c/uiLFConfig_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBalloonDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBalloonDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBalloonDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBalloonDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moNoteDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moNoteDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moNoteDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moNoteDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moDatumDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moDatumDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moDatumDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moDatumDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moGtolDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moGtolDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moGtolDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moGtolDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moSFDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moSFDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moSFDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moSFDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moWeldDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moWeldDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moWeldDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moWeldDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moWeldDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBendNoteDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBendNoteDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBendNoteDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBendNoteDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moRevCloudDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moRevCloudDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moRevCloudDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moRevCloudDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moViewLocationLabelDefs_c/moBaseAnnotationDefs_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moViewLocationLabelDefs_c/moBaseAnnotationDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moViewLocationLabelDefs_c/moBaseAnnotationDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moAnnotationDefs_c/moViewLocationLabelDefs_c',
+    '/moDetailDefs_c/moTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moGeneralTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moGeneralTableDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moTableDefs_c/moGeneralTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moRevisionTableDefs_c/moGeneralTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moRevisionTableDefs_c/moGeneralTableDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moTableDefs_c/moRevisionTableDefs_c/moGeneralTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moRevisionTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moBOMTableDefs_c/moGeneralTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moBOMTableDefs_c/moGeneralTableDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moTableDefs_c/moBOMTableDefs_c/moGeneralTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moBOMTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moHoleTableDefs_c/moGeneralTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moHoleTableDefs_c/moGeneralTableDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moTableDefs_c/moHoleTableDefs_c/moGeneralTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moHoleTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moTitleBlockTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moTitleBlockTableDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moTableDefs_c/moTitleBlockTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moWeldTableDefs_c/moGeneralTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moWeldTableDefs_c/moGeneralTableDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moTableDefs_c/moWeldTableDefs_c/moGeneralTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moWeldTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moBendTableDefs_c/moGeneralTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moBendTableDefs_c/moGeneralTableDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moTableDefs_c/moBendTableDefs_c/moGeneralTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moBendTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moPunchTableDefs_c/moGeneralTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moPunchTableDefs_c/moGeneralTableDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moTableDefs_c/moPunchTableDefs_c/moGeneralTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moPunchTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moFamilyTableDefs_c/moGeneralTableDefs_c',
+    '/moDetailDefs_c/moTableDefs_c/moFamilyTableDefs_c/moGeneralTableDefs_c/utLineWidth_c',
+    '/moDetailDefs_c/moTableDefs_c/moFamilyTableDefs_c/moGeneralTableDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moTableDefs_c/moFamilyTableDefs_c',
+    '/moDetailDefs_c/moLabelDefs_c',
+    '/moDetailDefs_c/moLabelDefs_c/moDetailLabelData_c/moDrViewLabelData_c',
+    '/moDetailDefs_c/moLabelDefs_c/moDetailLabelData_c/moDrViewLabelData_c/utCharFormat_c',
+    '/moDetailDefs_c/moLabelDefs_c/moDetailLabelData_c/moDrViewLabelData_c/utLineWidth_c',
+    '/moDetailDefs_c/moLabelDefs_c/moDetailLabelData_c',
+    '/moDetailDefs_c/moLabelDefs_c/moSectionLabelData_c/moDrViewLabelData_c',
+    '/moDetailDefs_c/moLabelDefs_c/moSectionLabelData_c/moDrViewLabelData_c/utCharFormat_c',
+    '/moDetailDefs_c/moLabelDefs_c/moSectionLabelData_c/moDrViewLabelData_c/utLineWidth_c',
+    '/moDetailDefs_c/moLabelDefs_c/moSectionLabelData_c',
+    '/moDetailDefs_c/moLabelDefs_c/moAuxLabelData_c/moDrViewLabelData_c',
+    '/moDetailDefs_c/moLabelDefs_c/moAuxLabelData_c/moDrViewLabelData_c/utCharFormat_c',
+    '/moDetailDefs_c/moLabelDefs_c/moAuxLabelData_c/moDrViewLabelData_c/utLineWidth_c',
+    '/moDetailDefs_c/moLabelDefs_c/moAuxLabelData_c',
+    '/moDetailDefs_c/moLabelDefs_c/utCharFormat_c',
+    '/moDetailDefs_c/moLabelDefs_c/moOrthoLabelData_c/moDrViewLabelData_c',
+    '/moDetailDefs_c/moLabelDefs_c/moOrthoLabelData_c/moDrViewLabelData_c/utCharFormat_c',
+    '/moDetailDefs_c/moLabelDefs_c/moOrthoLabelData_c/moDrViewLabelData_c/utLineWidth_c',
+    '/moDetailDefs_c/moLabelDefs_c/moOrthoLabelData_c',
+    '/moDetailDefs_c/moLabelDefs_c/moMiscLabelData_c/moDrViewLabelData_c',
+    '/moDetailDefs_c/moLabelDefs_c/moMiscLabelData_c/moDrViewLabelData_c/utCharFormat_c',
+    '/moDetailDefs_c/moLabelDefs_c/moMiscLabelData_c/moDrViewLabelData_c/utLineWidth_c',
+    '/moDetailDefs_c/moLabelDefs_c/moMiscLabelData_c',
+    '/moDetailDefs_c/moSFDataHelper_c',
+    '/moDetailDefs_c/moSFDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moSFDataHelper_c/moAnnotationDataHelper_c',
+    '/moDetailDefs_c/moSFDataHelper_c/moAnnotationDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moNoteDataHelper_c',
+    '/moDetailDefs_c/moNoteDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moNoteDataHelper_c/moAnnotationDataHelper_c',
+    '/moDetailDefs_c/moNoteDataHelper_c/moAnnotationDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moWeldDataHelper_c',
+    '/moDetailDefs_c/moWeldDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moWeldDataHelper_c/moSFDataHelper_c',
+    '/moDetailDefs_c/moWeldDataHelper_c/moSFDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moWeldDataHelper_c/moSFDataHelper_c/moAnnotationDataHelper_c',
+    '/moDetailDefs_c/moWeldDataHelper_c/moSFDataHelper_c/moAnnotationDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moGTolDataHelper_c',
+    '/moDetailDefs_c/moGTolDataHelper_c/moGTolDlgDataFrame_c',
+    '/moDetailDefs_c/moGTolDataHelper_c/moGTolDlgDataFrame_c#0x58',
+    '/moDetailDefs_c/moGTolDataHelper_c/moGTolDlgDataFrame_c#0x80',
+    '/moDetailDefs_c/moGTolDataHelper_c/moGTolDlgDataFrame_c#0xa8',
+    '/moDetailDefs_c/moGTolDataHelper_c/moGTolDlgDataFrame_c#0xd0',
+    '/moDetailDefs_c/moGTolDataHelper_c/moGTolDlgDataFrame_c#0xf8',
+    '/moDetailDefs_c/moGTolDataHelper_c/moGTolDlgDataFrame_c#0x120',
+    '/moDetailDefs_c/moGTolDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moGTolDataHelper_c/moAnnotationDataHelper_c',
+    '/moDetailDefs_c/moGTolDataHelper_c/moAnnotationDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moCenterMarkSymDataHelper_c',
+    '/moDetailDefs_c/moCenterMarkSymDataHelper_c/moAnnotationDataHelper_c',
+    '/moDetailDefs_c/moCenterMarkSymDataHelper_c/moAnnotationDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moDatumFeatureDataHelper_c',
+    '/moDetailDefs_c/moDatumFeatureDataHelper_c/moAnnotationDataHelper_c',
+    '/moDetailDefs_c/moDatumFeatureDataHelper_c/moAnnotationDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moDatumTargetDataHelper_c',
+    '/moDetailDefs_c/moDatumTargetDataHelper_c/mgVector_c',
+    '/moDetailDefs_c/moDatumTargetDataHelper_c/moAnnotationDataHelper_c',
+    '/moDetailDefs_c/moDatumTargetDataHelper_c/moAnnotationDataHelper_c/utCharFormat_c',
+    '/moDetailDefs_c/moSwiftGtsOptions_c',
+    '/moDetailDefs_c/utLineWidthPrintData_c',
+)
+
+MODETAILDEFS_C_FIELDS = (
+    ("i", 0, "long", 4, 4),
+    ("s", 0, ''),
+    ("f", 0, "double", "0x1.47ae147ae147bp-9"),
+    ("i", 0, "uchar", 1, 1),
+    ("i", 0, "uint", 4, 278528),
+    ("i", 0, "long", 4, 2),
+    ("f", 0, "double", "0x1.0624dd2f1a9fcp-9"),
+    ("i", 0, "uchar", 1, 1),
+    ("i", 0, "uchar", 1, 0),
+    ("i", 0, "uchar", 1, 1),
+    ("i", 0, "uchar", 1, 0),
+    ("i", 0, "uchar", 1, 1),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "uint", 4, 2),
+    ("i", 0, "uint", 4, 3),
+    ("i", 0, "uint", 4, 4),
+    ("f", 0, "double", "0x1.4f8b588e368f1p-17"),
+    ("f", 0, "double", "0x1.d5c31593e5fb7p-17"),
+    ("f", 0, "double", "0x1.4f8b588e368f1p-19"),
+    ("i", 0, "uint", 4, 2),
+    ("i", 0, "uint", 4, 3),
+    ("i", 0, "uint", 4, 4),
+    ("f", 0, "double", "0x1.6e05a695f819fp-13"),
+    ("f", 0, "double", "0x1.003727cf60df0p-12"),
+    ("f", 0, "double", "0x1.6e05a695f819fp-15"),
+    ("i", 0, "int", 4, 1),
+    ("f", 0, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 0, "double", "0x1.1df46a2529d44p-7"),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "long", 4, 0),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "uchar", 1, 0),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "uchar", 1, 0),
+    ("i", 0, "uchar", 1, 0),
+    ("i", 0, "short", 2, 65535),
+    ("i", 0, "short", 2, 65535),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 0),
+    ("f", 0, "double", "0x1.0624dd2f1a9fcp-7"),
+    ("i", 0, "int", 4, 0),
+    ("s", 0, ''),
+    ("i", 0, "int", 4, 0),
+    ("s", 0, ''),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "count", 4, 10),
+    ("s", 0, 'm'),
+    ("s", 0, 'mm'),
+    ("s", 0, 'cm'),
+    ("s", 0, 'km'),
+    ("s", 0, 'um'),
+    ("s", 0, 'µm'),
+    ("s", 0, 'nm'),
+    ("s", 0, 's'),
+    ("s", 0, 'Hz'),
+    ("s", 0, 'Pa'),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("c", 1, 5),
+    ("s", 1, 'Description'),
+    ("s", 1, 'High Priority'),
+    ("s", 1, 'Low Priority'),
+    ("s", 1, 'Complete'),
+    ("s", 1, 'Reminder'),
+    ("s", 2, 'Century Gothic'),
+    ("f", 2, "double", "0x1.cac083126e979p-9"),
+    ("i", 2, "int", 4, 0),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("i", 2, "uint", 4, 0),
+    ("f", 2, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 2, "double", "0x1.0000000000000p+0"),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("f", 2, "double", "0x1.0000000000000p+0"),
+    ("i", 2, "uint", 4, 400),
+    ("i", 3, "int", 4, 4),
+    ("f", 3, "double", "0x1.0a569b17481b2p-10"),
+    ("f", 3, "double", "0x1.b0ccbc05d52c1p-9"),
+    ("f", 3, "double", "0x1.a027525460aa6p-8"),
+    ("f", 3, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 3, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 3, "double", "0x1.47ae147ae147bp-8"),
+    ("f", 3, "double", "0x1.47ae147ae147bp-7"),
+    ("f", 3, "double", "0x1.a027525460aa6p-9"),
+    ("f", 3, "double", "0x1.8f81e8a2ec28bp-10"),
+    ("f", 3, "double", "0x1.a027525460aa6p-8"),
+    ("f", 3, "double", "-0x1.9000000000000p+4"),
+    ("i", 3, "int", 4, 2),
+    ("i", 3, "int", 4, 0),
+    ("i", 3, "int", 4, 0),
+    ("i", 3, "int", 4, 20),
+    ("i", 3, "int", 4, 1),
+    ("f", 3, "double", "0x0.0p+0"),
+    ("f", 3, "double", "0x0.0p+0"),
+    ("i", 3, "int", 4, 0),
+    ("i", 3, "int", 4, 0),
+    ("f", 3, "double", "0x1.47ae147ae147bp-7"),
+    ("f", 3, "double", "0x1.89374bc6a7efap-8"),
+    ("f", 3, "double", "0x1.0c152382d7370p-2"),
+    ("i", 3, "uint", 4, 8368),
+    ("i", 3, "int", 4, 1),
+    ("f", 3, "double", "0x1.0000000000000p+0"),
+    ("i", 3, "int", 4, 0),
+    ("i", 3, "int", 4, 1),
+    ("i", 3, "int", 4, 1),
+    ("i", 3, "int", 4, 1),
+    ("i", 3, "int", 4, 1),
+    ("i", 3, "int", 4, 1),
+    ("i", 3, "int", 4, 1),
+    ("i", 4, "int", 4, 4),
+    ("i", 4, "int", 4, 1),
+    ("i", 4, "int", 4, 1),
+    ("f", 4, "double", "0x1.0000000000000p+0"),
+    ("f", 4, "double", "0x1.a027525460aa6p-7"),
+    ("i", 4, "int", 4, 1),
+    ("f", 4, "double", "0x1.0000000000000p+0"),
+    ("f", 4, "double", "0x1.a027525460aa6p-7"),
+    ("i", 4, "int", 4, 1),
+    ("i", 4, "int", 4, 0),
+    ("s", 4, ''),
+    ("s", 4, ''),
+    ("f", 4, "double", "0x0.0p+0"),
+    ("f", 4, "double", "0x0.0p+0"),
+    ("i", 4, "int", 4, 1),
+    ("i", 4, "int", 4, 0),
+    ("i", 4, "int", 4, 1),
+    ("i", 4, "int", 4, 0),
+    ("i", 4, "int", 4, 2),
+    ("i", 4, "int", 4, 3),
+    ("i", 4, "int", 4, 2),
+    ("i", 4, "int", 4, 3),
+    ("i", 4, "short", 2, 65535),
+    ("i", 4, "int", 4, 0),
+    ("i", 4, "int", 4, 0),
+    ("i", 4, "uint", 4, 192),
+    ("i", 5, "long", 4, 2),
+    ("i", 5, "long", 4, 1),
+    ("f", 5, "double", "0x1.999999999999ap-4"),
+    ("i", 5, "long", 4, 4),
+    ("i", 5, "long", 4, 1),
+    ("f", 5, "double", "0x1.921fb54442d28p-1"),
+    ("i", 5, "long", 4, 8),
+    ("i", 5, "long", 4, 0),
+    ("i", 5, "int", 4, 1),
+    ("i", 5, "int", 4, 1),
+    ("f", 5, "double", "0x0.0p+0"),
+    ("i", 5, "ushort", 2, 0),
+    ("i", 5, "int", 4, 0),
+    ("i", 6, "ushort", 2, 0),
+    ("t", 6, "0a80"),
+    ("i", 7, "long", 4, 3),
+    ("i", 7, "long", 4, 1),
+    ("f", 7, "double", "0x1.0000000000000p+0"),
+    ("i", 7, "long", 4, 1),
+    ("i", 7, "long", 4, 1),
+    ("f", 7, "double", "0x1.921fb54442d28p-1"),
+    ("i", 7, "long", 4, 2),
+    ("i", 7, "long", 4, 0),
+    ("i", 7, "int", 4, 1),
+    ("i", 7, "int", 4, 1),
+    ("f", 7, "double", "0x0.0p+0"),
+    ("i", 7, "ushort", 2, 0),
+    ("i", 7, "int", 4, 0),
+    ("i", 8, "ushort", 2, 3),
+    ("t", 8, "0000"),
+    ("i", 9, "long", 4, 2),
+    ("i", 9, "long", 4, 1),
+    ("f", 9, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 9, "long", 4, 10),
+    ("i", 9, "long", 4, 1),
+    ("f", 9, "double", "0x1.921fb54442d28p-1"),
+    ("i", 9, "long", 4, 1),
+    ("i", 9, "long", 4, 0),
+    ("i", 9, "int", 4, 1),
+    ("i", 9, "int", 4, 1),
+    ("f", 9, "double", "0x0.0p+0"),
+    ("i", 9, "ushort", 2, 0),
+    ("i", 9, "int", 4, 0),
+    ("i", 10, "ushort", 2, 0),
+    ("s", 11, 'Century Gothic'),
+    ("f", 11, "double", "0x1.cac083126e979p-9"),
+    ("i", 11, "int", 4, 0),
+    ("f", 11, "double", "0x0.0p+0"),
+    ("i", 11, "uint", 4, 0),
+    ("f", 11, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 11, "double", "0x1.0000000000000p+0"),
+    ("f", 11, "double", "0x0.0p+0"),
+    ("f", 11, "double", "0x0.0p+0"),
+    ("f", 11, "double", "0x1.0000000000000p+0"),
+    ("i", 11, "uint", 4, 400),
+    ("s", 12, 'CONTINUOUS'),
+    ("i", 13, "short", 2, 0),
+    ("f", 13, "float", "-0x1.0000000000000p+0"),
+    ("i", 12, "ushort", 2, 0),
+    ("s", 12, 'CONTINUOUS'),
+    ("i", 13, "short", 2, 0),
+    ("f", 13, "float", "-0x1.0000000000000p+0"),
+    ("i", 12, "ushort", 2, 0),
+    ("i", 4, "int", 4, 1),
+    ("i", 4, "int", 4, 0),
+    ("i", 4, "int", 4, 0),
+    ("i", 14, "uint", 4, 0),
+    ("i", 14, "int", 4, 2),
+    ("i", 14, "int", 4, 0),
+    ("i", 15, "int", 4, 4),
+    ("i", 15, "int", 4, 1),
+    ("i", 15, "int", 4, 1),
+    ("f", 15, "double", "0x1.0000000000000p+0"),
+    ("f", 15, "double", "0x1.a027525460aa6p-7"),
+    ("i", 15, "int", 4, 1),
+    ("f", 15, "double", "0x1.0000000000000p+0"),
+    ("f", 15, "double", "0x1.a027525460aa6p-7"),
+    ("i", 15, "int", 4, 1),
+    ("i", 15, "int", 4, 0),
+    ("s", 15, ''),
+    ("s", 15, ''),
+    ("f", 15, "double", "0x0.0p+0"),
+    ("f", 15, "double", "0x0.0p+0"),
+    ("i", 15, "int", 4, 1),
+    ("i", 15, "int", 4, 0),
+    ("i", 15, "int", 4, 1),
+    ("i", 15, "int", 4, 0),
+    ("i", 15, "int", 4, 2),
+    ("i", 15, "int", 4, 3),
+    ("i", 15, "int", 4, 2),
+    ("i", 15, "int", 4, 3),
+    ("i", 15, "short", 2, 65535),
+    ("i", 15, "int", 4, 0),
+    ("i", 15, "int", 4, 0),
+    ("i", 15, "uint", 4, 192),
+    ("i", 16, "long", 4, 2),
+    ("i", 16, "long", 4, 1),
+    ("f", 16, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 16, "long", 4, 10),
+    ("i", 16, "long", 4, 1),
+    ("f", 16, "double", "0x1.921fb54442d28p-1"),
+    ("i", 16, "long", 4, 1),
+    ("i", 16, "long", 4, 0),
+    ("i", 16, "int", 4, 1),
+    ("i", 16, "int", 4, 1),
+    ("f", 16, "double", "0x0.0p+0"),
+    ("i", 16, "ushort", 2, 0),
+    ("i", 16, "int", 4, 0),
+    ("i", 17, "ushort", 2, 2),
+    ("t", 17, "0000"),
+    ("i", 18, "long", 4, 2),
+    ("i", 18, "long", 4, 1),
+    ("f", 18, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 18, "long", 4, 10),
+    ("i", 18, "long", 4, 1),
+    ("f", 18, "double", "0x1.921fb54442d28p-1"),
+    ("i", 18, "long", 4, 1),
+    ("i", 18, "long", 4, 0),
+    ("i", 18, "int", 4, 1),
+    ("i", 18, "int", 4, 1),
+    ("f", 18, "double", "0x0.0p+0"),
+    ("i", 18, "ushort", 2, 0),
+    ("i", 18, "int", 4, 0),
+    ("i", 19, "ushort", 2, 0),
+    ("s", 20, 'Century Gothic'),
+    ("f", 20, "double", "0x1.cac083126e979p-9"),
+    ("i", 20, "int", 4, 0),
+    ("f", 20, "double", "0x0.0p+0"),
+    ("i", 20, "uint", 4, 0),
+    ("f", 20, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 20, "double", "0x1.0000000000000p+0"),
+    ("f", 20, "double", "0x0.0p+0"),
+    ("f", 20, "double", "0x0.0p+0"),
+    ("f", 20, "double", "0x1.0000000000000p+0"),
+    ("i", 20, "uint", 4, 400),
+    ("s", 21, 'CONTINUOUS'),
+    ("i", 22, "short", 2, 0),
+    ("f", 22, "float", "-0x1.0000000000000p+0"),
+    ("i", 21, "ushort", 2, 0),
+    ("s", 21, 'CONTINUOUS'),
+    ("i", 22, "short", 2, 0),
+    ("f", 22, "float", "-0x1.0000000000000p+0"),
+    ("i", 21, "ushort", 2, 0),
+    ("i", 15, "int", 4, 1),
+    ("i", 15, "int", 4, 0),
+    ("i", 15, "int", 4, 0),
+    ("i", 23, "uint", 4, 322),
+    ("i", 24, "int", 4, 4),
+    ("i", 24, "int", 4, 1),
+    ("i", 24, "int", 4, 1),
+    ("f", 24, "double", "0x1.0000000000000p+0"),
+    ("f", 24, "double", "0x1.a027525460aa6p-7"),
+    ("i", 24, "int", 4, 1),
+    ("f", 24, "double", "0x1.0000000000000p+0"),
+    ("f", 24, "double", "0x1.a027525460aa6p-7"),
+    ("i", 24, "int", 4, 1),
+    ("i", 24, "int", 4, 0),
+    ("s", 24, ''),
+    ("s", 24, ''),
+    ("f", 24, "double", "0x0.0p+0"),
+    ("f", 24, "double", "0x0.0p+0"),
+    ("i", 24, "int", 4, 1),
+    ("i", 24, "int", 4, 0),
+    ("i", 24, "int", 4, 1),
+    ("i", 24, "int", 4, 0),
+    ("i", 24, "int", 4, 2),
+    ("i", 24, "int", 4, 3),
+    ("i", 24, "int", 4, 2),
+    ("i", 24, "int", 4, 3),
+    ("i", 24, "short", 2, 65535),
+    ("i", 24, "int", 4, 0),
+    ("i", 24, "int", 4, 0),
+    ("i", 24, "uint", 4, 192),
+    ("i", 25, "long", 4, 2),
+    ("i", 25, "long", 4, 1),
+    ("f", 25, "double", "0x1.999999999999ap-4"),
+    ("i", 25, "long", 4, 4),
+    ("i", 25, "long", 4, 1),
+    ("f", 25, "double", "0x1.921fb54442d28p-1"),
+    ("i", 25, "long", 4, 8),
+    ("i", 25, "long", 4, 0),
+    ("i", 25, "int", 4, 1),
+    ("i", 25, "int", 4, 1),
+    ("f", 25, "double", "0x0.0p+0"),
+    ("i", 25, "ushort", 2, 0),
+    ("i", 25, "int", 4, 0),
+    ("i", 26, "ushort", 2, 0),
+    ("t", 26, "0a80"),
+    ("i", 27, "long", 4, 3),
+    ("i", 27, "long", 4, 1),
+    ("f", 27, "double", "0x1.0000000000000p+0"),
+    ("i", 27, "long", 4, 1),
+    ("i", 27, "long", 4, 1),
+    ("f", 27, "double", "0x1.921fb54442d28p-1"),
+    ("i", 27, "long", 4, 2),
+    ("i", 27, "long", 4, 0),
+    ("i", 27, "int", 4, 1),
+    ("i", 27, "int", 4, 1),
+    ("f", 27, "double", "0x0.0p+0"),
+    ("i", 27, "ushort", 2, 0),
+    ("i", 27, "int", 4, 0),
+    ("i", 28, "ushort", 2, 3),
+    ("t", 28, "0000"),
+    ("i", 29, "long", 4, 2),
+    ("i", 29, "long", 4, 1),
+    ("f", 29, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 29, "long", 4, 10),
+    ("i", 29, "long", 4, 1),
+    ("f", 29, "double", "0x1.921fb54442d28p-1"),
+    ("i", 29, "long", 4, 1),
+    ("i", 29, "long", 4, 0),
+    ("i", 29, "int", 4, 1),
+    ("i", 29, "int", 4, 1),
+    ("f", 29, "double", "0x0.0p+0"),
+    ("i", 29, "ushort", 2, 0),
+    ("i", 29, "int", 4, 0),
+    ("i", 30, "ushort", 2, 0),
+    ("s", 31, 'Century Gothic'),
+    ("f", 31, "double", "0x1.cac083126e979p-9"),
+    ("i", 31, "int", 4, 0),
+    ("f", 31, "double", "0x0.0p+0"),
+    ("i", 31, "uint", 4, 0),
+    ("f", 31, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 31, "double", "0x1.0000000000000p+0"),
+    ("f", 31, "double", "0x0.0p+0"),
+    ("f", 31, "double", "0x0.0p+0"),
+    ("f", 31, "double", "0x1.0000000000000p+0"),
+    ("i", 31, "uint", 4, 400),
+    ("s", 32, 'CONTINUOUS'),
+    ("i", 33, "short", 2, 0),
+    ("f", 33, "float", "-0x1.0000000000000p+0"),
+    ("i", 32, "ushort", 2, 0),
+    ("s", 32, 'CONTINUOUS'),
+    ("i", 33, "short", 2, 0),
+    ("f", 33, "float", "-0x1.0000000000000p+0"),
+    ("i", 32, "ushort", 2, 0),
+    ("i", 24, "int", 4, 1),
+    ("i", 24, "int", 4, 0),
+    ("i", 24, "int", 4, 0),
+    ("i", 34, "int", 4, 4),
+    ("i", 34, "int", 4, 1),
+    ("i", 34, "int", 4, 1),
+    ("f", 34, "double", "0x1.0000000000000p+0"),
+    ("f", 34, "double", "0x1.a027525460aa6p-7"),
+    ("i", 34, "int", 4, 1),
+    ("f", 34, "double", "0x1.0000000000000p+0"),
+    ("f", 34, "double", "0x1.a027525460aa6p-7"),
+    ("i", 34, "int", 4, 1),
+    ("i", 34, "int", 4, 0),
+    ("s", 34, ''),
+    ("s", 34, ''),
+    ("f", 34, "double", "0x0.0p+0"),
+    ("f", 34, "double", "0x0.0p+0"),
+    ("i", 34, "int", 4, 1),
+    ("i", 34, "int", 4, 0),
+    ("i", 34, "int", 4, 1),
+    ("i", 34, "int", 4, 0),
+    ("i", 34, "int", 4, 2),
+    ("i", 34, "int", 4, 3),
+    ("i", 34, "int", 4, 2),
+    ("i", 34, "int", 4, 3),
+    ("i", 34, "short", 2, 65535),
+    ("i", 34, "int", 4, 0),
+    ("i", 34, "int", 4, 0),
+    ("i", 34, "uint", 4, 192),
+    ("i", 35, "long", 4, 2),
+    ("i", 35, "long", 4, 1),
+    ("f", 35, "double", "0x1.999999999999ap-4"),
+    ("i", 35, "long", 4, 4),
+    ("i", 35, "long", 4, 1),
+    ("f", 35, "double", "0x1.921fb54442d28p-1"),
+    ("i", 35, "long", 4, 8),
+    ("i", 35, "long", 4, 0),
+    ("i", 35, "int", 4, 1),
+    ("i", 35, "int", 4, 1),
+    ("f", 35, "double", "0x0.0p+0"),
+    ("i", 35, "ushort", 2, 0),
+    ("i", 35, "int", 4, 0),
+    ("i", 36, "ushort", 2, 0),
+    ("t", 36, "0a80"),
+    ("i", 37, "long", 4, 3),
+    ("i", 37, "long", 4, 1),
+    ("f", 37, "double", "0x1.0000000000000p+0"),
+    ("i", 37, "long", 4, 1),
+    ("i", 37, "long", 4, 1),
+    ("f", 37, "double", "0x1.921fb54442d28p-1"),
+    ("i", 37, "long", 4, 2),
+    ("i", 37, "long", 4, 0),
+    ("i", 37, "int", 4, 1),
+    ("i", 37, "int", 4, 1),
+    ("f", 37, "double", "0x0.0p+0"),
+    ("i", 37, "ushort", 2, 0),
+    ("i", 37, "int", 4, 0),
+    ("i", 38, "ushort", 2, 3),
+    ("t", 38, "0000"),
+    ("i", 39, "long", 4, 2),
+    ("i", 39, "long", 4, 1),
+    ("f", 39, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 39, "long", 4, 10),
+    ("i", 39, "long", 4, 1),
+    ("f", 39, "double", "0x1.921fb54442d28p-1"),
+    ("i", 39, "long", 4, 1),
+    ("i", 39, "long", 4, 0),
+    ("i", 39, "int", 4, 1),
+    ("i", 39, "int", 4, 1),
+    ("f", 39, "double", "0x0.0p+0"),
+    ("i", 39, "ushort", 2, 0),
+    ("i", 39, "int", 4, 0),
+    ("i", 40, "ushort", 2, 0),
+    ("s", 41, 'Century Gothic'),
+    ("f", 41, "double", "0x1.cac083126e979p-9"),
+    ("i", 41, "int", 4, 0),
+    ("f", 41, "double", "0x0.0p+0"),
+    ("i", 41, "uint", 4, 0),
+    ("f", 41, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 41, "double", "0x1.0000000000000p+0"),
+    ("f", 41, "double", "0x0.0p+0"),
+    ("f", 41, "double", "0x0.0p+0"),
+    ("f", 41, "double", "0x1.0000000000000p+0"),
+    ("i", 41, "uint", 4, 400),
+    ("s", 42, 'CONTINUOUS'),
+    ("i", 43, "short", 2, 0),
+    ("f", 43, "float", "-0x1.0000000000000p+0"),
+    ("i", 42, "ushort", 2, 0),
+    ("s", 42, 'CONTINUOUS'),
+    ("i", 43, "short", 2, 0),
+    ("f", 43, "float", "-0x1.0000000000000p+0"),
+    ("i", 42, "ushort", 2, 0),
+    ("i", 34, "int", 4, 1),
+    ("i", 34, "int", 4, 0),
+    ("i", 34, "int", 4, 0),
+    ("i", 44, "uint", 4, 2),
+    ("i", 44, "int", 4, 1),
+    ("i", 45, "int", 4, 4),
+    ("i", 45, "int", 4, 1),
+    ("i", 45, "int", 4, 1),
+    ("f", 45, "double", "0x1.0000000000000p+0"),
+    ("f", 45, "double", "0x1.a027525460aa6p-7"),
+    ("i", 45, "int", 4, 1),
+    ("f", 45, "double", "0x1.0000000000000p+0"),
+    ("f", 45, "double", "0x1.a027525460aa6p-7"),
+    ("i", 45, "int", 4, 1),
+    ("i", 45, "int", 4, 0),
+    ("s", 45, ''),
+    ("s", 45, ''),
+    ("f", 45, "double", "0x0.0p+0"),
+    ("f", 45, "double", "0x0.0p+0"),
+    ("i", 45, "int", 4, 1),
+    ("i", 45, "int", 4, 0),
+    ("i", 45, "int", 4, 1),
+    ("i", 45, "int", 4, 0),
+    ("i", 45, "int", 4, 2),
+    ("i", 45, "int", 4, 3),
+    ("i", 45, "int", 4, 2),
+    ("i", 45, "int", 4, 3),
+    ("i", 45, "short", 2, 65535),
+    ("i", 45, "int", 4, 1),
+    ("i", 45, "int", 4, 0),
+    ("i", 45, "uint", 4, 192),
+    ("i", 46, "long", 4, 2),
+    ("i", 46, "long", 4, 1),
+    ("f", 46, "double", "0x1.999999999999ap-4"),
+    ("i", 46, "long", 4, 4),
+    ("i", 46, "long", 4, 1),
+    ("f", 46, "double", "0x1.921fb54442d28p-1"),
+    ("i", 46, "long", 4, 8),
+    ("i", 46, "long", 4, 0),
+    ("i", 46, "int", 4, 1),
+    ("i", 46, "int", 4, 1),
+    ("f", 46, "double", "0x0.0p+0"),
+    ("i", 46, "ushort", 2, 0),
+    ("i", 46, "int", 4, 0),
+    ("i", 47, "ushort", 2, 0),
+    ("t", 47, "0a80"),
+    ("i", 48, "long", 4, 3),
+    ("i", 48, "long", 4, 1),
+    ("f", 48, "double", "0x1.0000000000000p+0"),
+    ("i", 48, "long", 4, 1),
+    ("i", 48, "long", 4, 1),
+    ("f", 48, "double", "0x1.921fb54442d28p-1"),
+    ("i", 48, "long", 4, 2),
+    ("i", 48, "long", 4, 0),
+    ("i", 48, "int", 4, 1),
+    ("i", 48, "int", 4, 1),
+    ("f", 48, "double", "0x0.0p+0"),
+    ("i", 48, "ushort", 2, 0),
+    ("i", 48, "int", 4, 0),
+    ("i", 49, "ushort", 2, 3),
+    ("t", 49, "0000"),
+    ("i", 50, "long", 4, 2),
+    ("i", 50, "long", 4, 1),
+    ("f", 50, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 50, "long", 4, 10),
+    ("i", 50, "long", 4, 1),
+    ("f", 50, "double", "0x1.921fb54442d28p-1"),
+    ("i", 50, "long", 4, 1),
+    ("i", 50, "long", 4, 0),
+    ("i", 50, "int", 4, 1),
+    ("i", 50, "int", 4, 1),
+    ("f", 50, "double", "0x0.0p+0"),
+    ("i", 50, "ushort", 2, 0),
+    ("i", 50, "int", 4, 0),
+    ("i", 51, "ushort", 2, 0),
+    ("s", 52, 'Century Gothic'),
+    ("f", 52, "double", "0x1.cac083126e979p-9"),
+    ("i", 52, "int", 4, 0),
+    ("f", 52, "double", "0x0.0p+0"),
+    ("i", 52, "uint", 4, 0),
+    ("f", 52, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 52, "double", "0x1.0000000000000p+0"),
+    ("f", 52, "double", "0x0.0p+0"),
+    ("f", 52, "double", "0x0.0p+0"),
+    ("f", 52, "double", "0x1.0000000000000p+0"),
+    ("i", 52, "uint", 4, 400),
+    ("s", 53, 'CONTINUOUS'),
+    ("i", 54, "short", 2, 0),
+    ("f", 54, "float", "-0x1.0000000000000p+0"),
+    ("i", 53, "ushort", 2, 0),
+    ("s", 53, 'CONTINUOUS'),
+    ("i", 54, "short", 2, 0),
+    ("f", 54, "float", "-0x1.0000000000000p+0"),
+    ("i", 53, "ushort", 2, 0),
+    ("i", 45, "int", 4, 1),
+    ("i", 45, "int", 4, 0),
+    ("i", 45, "int", 4, 0),
+    ("i", 55, "uint", 4, 0),
+    ("i", 56, "int", 4, 4),
+    ("i", 56, "int", 4, 1),
+    ("i", 56, "int", 4, 1),
+    ("f", 56, "double", "0x1.0000000000000p+0"),
+    ("f", 56, "double", "0x1.a027525460aa6p-7"),
+    ("i", 56, "int", 4, 1),
+    ("f", 56, "double", "0x1.0000000000000p+0"),
+    ("f", 56, "double", "0x1.a027525460aa6p-7"),
+    ("i", 56, "int", 4, 1),
+    ("i", 56, "int", 4, 0),
+    ("s", 56, ''),
+    ("s", 56, ''),
+    ("f", 56, "double", "0x0.0p+0"),
+    ("f", 56, "double", "0x0.0p+0"),
+    ("i", 56, "int", 4, 1),
+    ("i", 56, "int", 4, 0),
+    ("i", 56, "int", 4, 1),
+    ("i", 56, "int", 4, 0),
+    ("i", 56, "int", 4, 2),
+    ("i", 56, "int", 4, 3),
+    ("i", 56, "int", 4, 2),
+    ("i", 56, "int", 4, 3),
+    ("i", 56, "short", 2, 65535),
+    ("i", 56, "int", 4, 0),
+    ("i", 56, "int", 4, 0),
+    ("i", 56, "uint", 4, 192),
+    ("i", 57, "long", 4, 2),
+    ("i", 57, "long", 4, 1),
+    ("f", 57, "double", "0x1.999999999999ap-4"),
+    ("i", 57, "long", 4, 4),
+    ("i", 57, "long", 4, 1),
+    ("f", 57, "double", "0x1.921fb54442d28p-1"),
+    ("i", 57, "long", 4, 8),
+    ("i", 57, "long", 4, 0),
+    ("i", 57, "int", 4, 1),
+    ("i", 57, "int", 4, 1),
+    ("f", 57, "double", "0x0.0p+0"),
+    ("i", 57, "ushort", 2, 0),
+    ("i", 57, "int", 4, 0),
+    ("i", 58, "ushort", 2, 0),
+    ("t", 58, "0a80"),
+    ("i", 59, "long", 4, 3),
+    ("i", 59, "long", 4, 1),
+    ("f", 59, "double", "0x1.0000000000000p+0"),
+    ("i", 59, "long", 4, 1),
+    ("i", 59, "long", 4, 1),
+    ("f", 59, "double", "0x1.921fb54442d28p-1"),
+    ("i", 59, "long", 4, 2),
+    ("i", 59, "long", 4, 0),
+    ("i", 59, "int", 4, 1),
+    ("i", 59, "int", 4, 1),
+    ("f", 59, "double", "0x0.0p+0"),
+    ("i", 59, "ushort", 2, 0),
+    ("i", 59, "int", 4, 0),
+    ("i", 60, "ushort", 2, 3),
+    ("t", 60, "0000"),
+    ("i", 61, "long", 4, 2),
+    ("i", 61, "long", 4, 1),
+    ("f", 61, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 61, "long", 4, 10),
+    ("i", 61, "long", 4, 1),
+    ("f", 61, "double", "0x1.921fb54442d28p-1"),
+    ("i", 61, "long", 4, 1),
+    ("i", 61, "long", 4, 0),
+    ("i", 61, "int", 4, 1),
+    ("i", 61, "int", 4, 1),
+    ("f", 61, "double", "0x0.0p+0"),
+    ("i", 61, "ushort", 2, 0),
+    ("i", 61, "int", 4, 0),
+    ("i", 62, "ushort", 2, 0),
+    ("s", 63, 'Century Gothic'),
+    ("f", 63, "double", "0x1.cac083126e979p-9"),
+    ("i", 63, "int", 4, 0),
+    ("f", 63, "double", "0x0.0p+0"),
+    ("i", 63, "uint", 4, 0),
+    ("f", 63, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 63, "double", "0x1.0000000000000p+0"),
+    ("f", 63, "double", "0x0.0p+0"),
+    ("f", 63, "double", "0x0.0p+0"),
+    ("f", 63, "double", "0x1.0000000000000p+0"),
+    ("i", 63, "uint", 4, 400),
+    ("s", 64, 'CONTINUOUS'),
+    ("i", 65, "short", 2, 0),
+    ("f", 65, "float", "-0x1.0000000000000p+0"),
+    ("i", 64, "ushort", 2, 0),
+    ("s", 64, 'CONTINUOUS'),
+    ("i", 65, "short", 2, 0),
+    ("f", 65, "float", "-0x1.0000000000000p+0"),
+    ("i", 64, "ushort", 2, 0),
+    ("i", 56, "int", 4, 1),
+    ("i", 56, "int", 4, 0),
+    ("i", 56, "int", 4, 0),
+    ("i", 66, "int", 4, 1),
+    ("i", 66, "uint", 4, 1),
+    ("f", 66, "double", "0x1.a027525460aa6p-10"),
+    ("i", 67, "int", 4, 4),
+    ("i", 67, "int", 4, 1),
+    ("i", 67, "int", 4, 2),
+    ("f", 67, "double", "0x1.0000000000000p+0"),
+    ("f", 67, "double", "0x1.a027525460aa6p-7"),
+    ("i", 67, "int", 4, 1),
+    ("f", 67, "double", "0x1.0000000000000p+0"),
+    ("f", 67, "double", "0x1.a027525460aa6p-7"),
+    ("i", 67, "int", 4, 1),
+    ("i", 67, "int", 4, 0),
+    ("s", 67, ''),
+    ("s", 67, ''),
+    ("f", 67, "double", "0x0.0p+0"),
+    ("f", 67, "double", "0x0.0p+0"),
+    ("i", 67, "int", 4, 1),
+    ("i", 67, "int", 4, 3),
+    ("i", 67, "int", 4, 1),
+    ("i", 67, "int", 4, 0),
+    ("i", 67, "int", 4, 2),
+    ("i", 67, "int", 4, 3),
+    ("i", 67, "int", 4, 2),
+    ("i", 67, "int", 4, 3),
+    ("i", 67, "short", 2, 65535),
+    ("i", 67, "int", 4, 1),
+    ("i", 67, "int", 4, 0),
+    ("i", 67, "uint", 4, 192),
+    ("i", 68, "long", 4, 2),
+    ("i", 68, "long", 4, 1),
+    ("f", 68, "double", "0x1.999999999999ap-4"),
+    ("i", 68, "long", 4, 4),
+    ("i", 68, "long", 4, 1),
+    ("f", 68, "double", "0x1.921fb54442d28p-1"),
+    ("i", 68, "long", 4, 8),
+    ("i", 68, "long", 4, 0),
+    ("i", 68, "int", 4, 1),
+    ("i", 68, "int", 4, 1),
+    ("f", 68, "double", "0x0.0p+0"),
+    ("i", 68, "ushort", 2, 0),
+    ("i", 68, "int", 4, 0),
+    ("i", 69, "ushort", 2, 0),
+    ("t", 69, "0a80"),
+    ("i", 70, "long", 4, 3),
+    ("i", 70, "long", 4, 1),
+    ("f", 70, "double", "0x1.0000000000000p+0"),
+    ("i", 70, "long", 4, 1),
+    ("i", 70, "long", 4, 1),
+    ("f", 70, "double", "0x1.921fb54442d28p-1"),
+    ("i", 70, "long", 4, 2),
+    ("i", 70, "long", 4, 0),
+    ("i", 70, "int", 4, 1),
+    ("i", 70, "int", 4, 1),
+    ("f", 70, "double", "0x0.0p+0"),
+    ("i", 70, "ushort", 2, 0),
+    ("i", 70, "int", 4, 0),
+    ("i", 71, "ushort", 2, 3),
+    ("t", 71, "0000"),
+    ("i", 72, "long", 4, 2),
+    ("i", 72, "long", 4, 1),
+    ("f", 72, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 72, "long", 4, 10),
+    ("i", 72, "long", 4, 1),
+    ("f", 72, "double", "0x1.921fb54442d28p-1"),
+    ("i", 72, "long", 4, 1),
+    ("i", 72, "long", 4, 0),
+    ("i", 72, "int", 4, 1),
+    ("i", 72, "int", 4, 1),
+    ("f", 72, "double", "0x0.0p+0"),
+    ("i", 72, "ushort", 2, 0),
+    ("i", 72, "int", 4, 0),
+    ("i", 73, "ushort", 2, 0),
+    ("s", 74, 'Century Gothic'),
+    ("f", 74, "double", "0x1.cac083126e979p-9"),
+    ("i", 74, "int", 4, 0),
+    ("f", 74, "double", "0x0.0p+0"),
+    ("i", 74, "uint", 4, 0),
+    ("f", 74, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 74, "double", "0x1.0000000000000p+0"),
+    ("f", 74, "double", "0x0.0p+0"),
+    ("f", 74, "double", "0x0.0p+0"),
+    ("f", 74, "double", "0x1.0000000000000p+0"),
+    ("i", 74, "uint", 4, 400),
+    ("s", 75, 'CONTINUOUS'),
+    ("i", 76, "short", 2, 0),
+    ("f", 76, "float", "-0x1.0000000000000p+0"),
+    ("i", 75, "ushort", 2, 0),
+    ("s", 75, 'CONTINUOUS'),
+    ("i", 76, "short", 2, 0),
+    ("f", 76, "float", "-0x1.0000000000000p+0"),
+    ("i", 75, "ushort", 2, 0),
+    ("i", 67, "int", 4, 1),
+    ("i", 67, "int", 4, 0),
+    ("i", 67, "int", 4, 0),
+    ("i", 77, "int", 4, 0),
+    ("i", 77, "int", 4, 1),
+    ("i", 77, "int", 4, 2),
+    ("i", 77, "int", 4, 2),
+    ("f", 77, "double", "0x0.0p+0"),
+    ("f", 77, "double", "0x0.0p+0"),
+    ("i", 77, "int", 4, 0),
+    ("i", 77, "int", 4, 0),
+    ("i", 78, "int", 4, 4),
+    ("i", 78, "int", 4, 1),
+    ("i", 78, "int", 4, 1),
+    ("f", 78, "double", "0x1.0000000000000p+0"),
+    ("f", 78, "double", "0x1.a027525460aa6p-7"),
+    ("i", 78, "int", 4, 1),
+    ("f", 78, "double", "0x1.0000000000000p+0"),
+    ("f", 78, "double", "0x1.a027525460aa6p-7"),
+    ("i", 78, "int", 4, 1),
+    ("i", 78, "int", 4, 0),
+    ("s", 78, ''),
+    ("s", 78, ''),
+    ("f", 78, "double", "0x0.0p+0"),
+    ("f", 78, "double", "0x0.0p+0"),
+    ("i", 78, "int", 4, 1),
+    ("i", 78, "int", 4, 0),
+    ("i", 78, "int", 4, 1),
+    ("i", 78, "int", 4, 0),
+    ("i", 78, "int", 4, 2),
+    ("i", 78, "int", 4, 3),
+    ("i", 78, "int", 4, 2),
+    ("i", 78, "int", 4, 3),
+    ("i", 78, "short", 2, 65535),
+    ("i", 78, "int", 4, 0),
+    ("i", 78, "int", 4, 0),
+    ("i", 78, "uint", 4, 192),
+    ("i", 79, "long", 4, 2),
+    ("i", 79, "long", 4, 1),
+    ("f", 79, "double", "0x1.999999999999ap-4"),
+    ("i", 79, "long", 4, 4),
+    ("i", 79, "long", 4, 1),
+    ("f", 79, "double", "0x1.921fb54442d28p-1"),
+    ("i", 79, "long", 4, 8),
+    ("i", 79, "long", 4, 0),
+    ("i", 79, "int", 4, 1),
+    ("i", 79, "int", 4, 1),
+    ("f", 79, "double", "0x0.0p+0"),
+    ("i", 79, "ushort", 2, 0),
+    ("i", 79, "int", 4, 0),
+    ("i", 80, "ushort", 2, 0),
+    ("t", 80, "0a80"),
+    ("i", 81, "long", 4, 3),
+    ("i", 81, "long", 4, 1),
+    ("f", 81, "double", "0x1.0000000000000p+0"),
+    ("i", 81, "long", 4, 1),
+    ("i", 81, "long", 4, 1),
+    ("f", 81, "double", "0x1.921fb54442d28p-1"),
+    ("i", 81, "long", 4, 2),
+    ("i", 81, "long", 4, 0),
+    ("i", 81, "int", 4, 1),
+    ("i", 81, "int", 4, 1),
+    ("f", 81, "double", "0x0.0p+0"),
+    ("i", 81, "ushort", 2, 0),
+    ("i", 81, "int", 4, 0),
+    ("i", 82, "ushort", 2, 3),
+    ("t", 82, "0000"),
+    ("i", 83, "long", 4, 2),
+    ("i", 83, "long", 4, 1),
+    ("f", 83, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 83, "long", 4, 10),
+    ("i", 83, "long", 4, 1),
+    ("f", 83, "double", "0x1.921fb54442d28p-1"),
+    ("i", 83, "long", 4, 1),
+    ("i", 83, "long", 4, 0),
+    ("i", 83, "int", 4, 1),
+    ("i", 83, "int", 4, 1),
+    ("f", 83, "double", "0x0.0p+0"),
+    ("i", 83, "ushort", 2, 0),
+    ("i", 83, "int", 4, 0),
+    ("i", 84, "ushort", 2, 0),
+    ("s", 85, 'Century Gothic'),
+    ("f", 85, "double", "0x1.cac083126e979p-9"),
+    ("i", 85, "int", 4, 0),
+    ("f", 85, "double", "0x0.0p+0"),
+    ("i", 85, "uint", 4, 0),
+    ("f", 85, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 85, "double", "0x1.0000000000000p+0"),
+    ("f", 85, "double", "0x0.0p+0"),
+    ("f", 85, "double", "0x0.0p+0"),
+    ("f", 85, "double", "0x1.0000000000000p+0"),
+    ("i", 85, "uint", 4, 400),
+    ("s", 86, 'CONTINUOUS'),
+    ("i", 87, "short", 2, 0),
+    ("f", 87, "float", "-0x1.0000000000000p+0"),
+    ("i", 86, "ushort", 2, 0),
+    ("s", 86, 'CONTINUOUS'),
+    ("i", 87, "short", 2, 0),
+    ("f", 87, "float", "-0x1.0000000000000p+0"),
+    ("i", 86, "ushort", 2, 0),
+    ("i", 78, "int", 4, 1),
+    ("i", 78, "int", 4, 0),
+    ("i", 78, "int", 4, 0),
+    ("i", 88, "int", 4, 1),
+    ("i", 88, "uint", 4, 0),
+    ("i", 89, "int", 4, 4),
+    ("i", 89, "int", 4, 1),
+    ("i", 89, "int", 4, 1),
+    ("f", 89, "double", "0x1.0000000000000p+0"),
+    ("f", 89, "double", "0x1.a027525460aa6p-7"),
+    ("i", 89, "int", 4, 1),
+    ("f", 89, "double", "0x1.0000000000000p+0"),
+    ("f", 89, "double", "0x1.a027525460aa6p-7"),
+    ("i", 89, "int", 4, 1),
+    ("i", 89, "int", 4, 0),
+    ("s", 89, ''),
+    ("s", 89, ''),
+    ("f", 89, "double", "0x0.0p+0"),
+    ("f", 89, "double", "0x0.0p+0"),
+    ("i", 89, "int", 4, 1),
+    ("i", 89, "int", 4, 0),
+    ("i", 89, "int", 4, 1),
+    ("i", 89, "int", 4, 0),
+    ("i", 89, "int", 4, 2),
+    ("i", 89, "int", 4, 2),
+    ("i", 89, "int", 4, 2),
+    ("i", 89, "int", 4, 2),
+    ("i", 89, "short", 2, 65535),
+    ("i", 89, "int", 4, 0),
+    ("i", 89, "int", 4, 0),
+    ("i", 89, "uint", 4, 192),
+    ("i", 90, "long", 4, 2),
+    ("i", 90, "long", 4, 1),
+    ("f", 90, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 90, "long", 4, 10),
+    ("i", 90, "long", 4, 1),
+    ("f", 90, "double", "0x1.921fb54442d28p-1"),
+    ("i", 90, "long", 4, 1),
+    ("i", 90, "long", 4, 0),
+    ("i", 90, "int", 4, 1),
+    ("i", 90, "int", 4, 1),
+    ("f", 90, "double", "0x0.0p+0"),
+    ("i", 90, "ushort", 2, 0),
+    ("i", 90, "int", 4, 0),
+    ("i", 91, "ushort", 2, 2),
+    ("t", 91, "0000"),
+    ("i", 92, "long", 4, 2),
+    ("i", 92, "long", 4, 1),
+    ("f", 92, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 92, "long", 4, 10),
+    ("i", 92, "long", 4, 1),
+    ("f", 92, "double", "0x1.921fb54442d28p-1"),
+    ("i", 92, "long", 4, 1),
+    ("i", 92, "long", 4, 0),
+    ("i", 92, "int", 4, 1),
+    ("i", 92, "int", 4, 1),
+    ("f", 92, "double", "0x0.0p+0"),
+    ("i", 92, "ushort", 2, 0),
+    ("i", 92, "int", 4, 0),
+    ("i", 93, "ushort", 2, 0),
+    ("s", 94, 'Century Gothic'),
+    ("f", 94, "double", "0x1.cac083126e979p-9"),
+    ("i", 94, "int", 4, 0),
+    ("f", 94, "double", "0x0.0p+0"),
+    ("i", 94, "uint", 4, 0),
+    ("f", 94, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 94, "double", "0x1.0000000000000p+0"),
+    ("f", 94, "double", "0x0.0p+0"),
+    ("f", 94, "double", "0x0.0p+0"),
+    ("f", 94, "double", "0x1.0000000000000p+0"),
+    ("i", 94, "uint", 4, 400),
+    ("s", 95, 'CONTINUOUS'),
+    ("i", 96, "short", 2, 0),
+    ("f", 96, "float", "-0x1.0000000000000p+0"),
+    ("i", 95, "ushort", 2, 0),
+    ("s", 95, 'CONTINUOUS'),
+    ("i", 96, "short", 2, 0),
+    ("f", 96, "float", "-0x1.0000000000000p+0"),
+    ("i", 95, "ushort", 2, 0),
+    ("i", 89, "int", 4, 1),
+    ("i", 89, "int", 4, 0),
+    ("i", 89, "int", 4, 0),
+    ("i", 97, "int", 4, 1),
+    ("i", 97, "uint", 4, 21),
+    ("i", 97, "int", 4, 0),
+    ("i", 97, "int", 4, 0),
+    ("i", 97, "int", 4, 0),
+    ("i", 98, "int", 4, 4),
+    ("i", 98, "int", 4, 1),
+    ("i", 98, "int", 4, 1),
+    ("f", 98, "double", "0x1.0000000000000p+0"),
+    ("f", 98, "double", "0x1.a027525460aa6p-7"),
+    ("i", 98, "int", 4, 1),
+    ("f", 98, "double", "0x1.0000000000000p+0"),
+    ("f", 98, "double", "0x1.a027525460aa6p-7"),
+    ("i", 98, "int", 4, 1),
+    ("i", 98, "int", 4, 0),
+    ("s", 98, ''),
+    ("s", 98, ''),
+    ("f", 98, "double", "0x0.0p+0"),
+    ("f", 98, "double", "0x0.0p+0"),
+    ("i", 98, "int", 4, 1),
+    ("i", 98, "int", 4, 0),
+    ("i", 98, "int", 4, 1),
+    ("i", 98, "int", 4, 0),
+    ("i", 98, "int", 4, 2),
+    ("i", 98, "int", 4, 3),
+    ("i", 98, "int", 4, 2),
+    ("i", 98, "int", 4, 3),
+    ("i", 98, "short", 2, 65535),
+    ("i", 98, "int", 4, 0),
+    ("i", 98, "int", 4, 0),
+    ("i", 98, "uint", 4, 192),
+    ("i", 99, "long", 4, 2),
+    ("i", 99, "long", 4, 1),
+    ("f", 99, "double", "0x1.999999999999ap-4"),
+    ("i", 99, "long", 4, 4),
+    ("i", 99, "long", 4, 1),
+    ("f", 99, "double", "0x1.921fb54442d28p-1"),
+    ("i", 99, "long", 4, 8),
+    ("i", 99, "long", 4, 0),
+    ("i", 99, "int", 4, 1),
+    ("i", 99, "int", 4, 1),
+    ("f", 99, "double", "0x0.0p+0"),
+    ("i", 99, "ushort", 2, 0),
+    ("i", 99, "int", 4, 0),
+    ("i", 100, "ushort", 2, 0),
+    ("t", 100, "0a80"),
+    ("i", 101, "long", 4, 3),
+    ("i", 101, "long", 4, 1),
+    ("f", 101, "double", "0x1.0000000000000p+0"),
+    ("i", 101, "long", 4, 1),
+    ("i", 101, "long", 4, 1),
+    ("f", 101, "double", "0x1.921fb54442d28p-1"),
+    ("i", 101, "long", 4, 2),
+    ("i", 101, "long", 4, 0),
+    ("i", 101, "int", 4, 1),
+    ("i", 101, "int", 4, 1),
+    ("f", 101, "double", "0x0.0p+0"),
+    ("i", 101, "ushort", 2, 0),
+    ("i", 101, "int", 4, 0),
+    ("i", 102, "ushort", 2, 3),
+    ("t", 102, "0000"),
+    ("i", 103, "long", 4, 2),
+    ("i", 103, "long", 4, 1),
+    ("f", 103, "double", "0x1.47ae147ae147bp-7"),
+    ("i", 103, "long", 4, 10),
+    ("i", 103, "long", 4, 1),
+    ("f", 103, "double", "0x1.921fb54442d28p-1"),
+    ("i", 103, "long", 4, 1),
+    ("i", 103, "long", 4, 0),
+    ("i", 103, "int", 4, 1),
+    ("i", 103, "int", 4, 1),
+    ("f", 103, "double", "0x0.0p+0"),
+    ("i", 103, "ushort", 2, 0),
+    ("i", 103, "int", 4, 0),
+    ("i", 104, "ushort", 2, 0),
+    ("s", 105, 'Century Gothic'),
+    ("f", 105, "double", "0x1.cac083126e979p-9"),
+    ("i", 105, "int", 4, 0),
+    ("f", 105, "double", "0x0.0p+0"),
+    ("i", 105, "uint", 4, 0),
+    ("f", 105, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 105, "double", "0x1.0000000000000p+0"),
+    ("f", 105, "double", "0x0.0p+0"),
+    ("f", 105, "double", "0x0.0p+0"),
+    ("f", 105, "double", "0x1.0000000000000p+0"),
+    ("i", 105, "uint", 4, 400),
+    ("s", 106, 'CONTINUOUS'),
+    ("i", 107, "short", 2, 0),
+    ("f", 107, "float", "-0x1.0000000000000p+0"),
+    ("i", 106, "ushort", 2, 0),
+    ("s", 106, 'CONTINUOUS'),
+    ("i", 107, "short", 2, 0),
+    ("f", 107, "float", "-0x1.0000000000000p+0"),
+    ("i", 106, "ushort", 2, 0),
+    ("i", 98, "int", 4, 1),
+    ("i", 98, "int", 4, 0),
+    ("i", 98, "int", 4, 0),
+    ("i", 108, "int", 4, 4),
+    ("f", 108, "double", "0x1.a027525460aa6p-8"),
+    ("i", 108, "int", 4, 0),
+    ("i", 108, "int", 4, 0),
+    ("i", 108, "int", 4, 3),
+    ("i", 108, "int", 4, 0),
+    ("i", 108, "int", 4, 0),
+    ("i", 108, "uint", 4, 0),
+    ("i", 108, "int", 4, 1),
+    ("i", 108, "int", 4, 1),
+    ("i", 108, "int", 4, 0),
+    ("i", 108, "int", 4, 1),
+    ("i", 109, "int", 4, 4),
+    ("f", 109, "double", "0x1.999999999999ap-8"),
+    ("i", 109, "int", 4, 0),
+    ("i", 109, "int", 4, 0),
+    ("i", 109, "int", 4, 0),
+    ("i", 109, "int", 4, 0),
+    ("i", 109, "int", 4, 0),
+    ("i", 109, "int", 4, 0),
+    ("i", 109, "short", 2, 65535),
+    ("i", 110, "short", 2, 0),
+    ("f", 110, "float", "-0x1.0000000000000p+0"),
+    ("i", 110, "short", 2, 0),
+    ("f", 110, "float", "-0x1.0000000000000p+0"),
+    ("s", 111, 'Century Gothic'),
+    ("f", 111, "double", "0x1.cac083126e979p-9"),
+    ("i", 111, "int", 4, 0),
+    ("f", 111, "double", "0x0.0p+0"),
+    ("i", 111, "uint", 4, 0),
+    ("f", 111, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 111, "double", "0x1.0000000000000p+0"),
+    ("f", 111, "double", "0x0.0p+0"),
+    ("f", 111, "double", "0x0.0p+0"),
+    ("f", 111, "double", "0x1.0000000000000p+0"),
+    ("i", 111, "uint", 4, 400),
+    ("i", 109, "int", 4, 0),
+    ("i", 112, "int", 4, 2),
+    ("i", 112, "int", 4, 2),
+    ("i", 112, "int", 4, 1),
+    ("i", 112, "int", 4, 1),
+    ("i", 112, "int", 4, 1),
+    ("i", 112, "int", 4, 2),
+    ("s", 112, ''),
+    ("s", 112, ''),
+    ("i", 112, "uint", 4, 1),
+    ("f", 112, "double", "0x1.4cec41dd1a21fp-7"),
+    ("f", 112, "double", "0x1.4cec41dd1a21fp-7"),
+    ("i", 112, "int", 4, 0),
+    ("i", 112, "int", 4, 1),
+    ("s", 112, 'X'),
+    ("f", 112, "double", "0x0.0p+0"),
+    ("f", 112, "double", "0x0.0p+0"),
+    ("f", 112, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("i", 112, "int", 4, 0),
+    ("i", 113, "int", 4, 4),
+    ("f", 113, "double", "0x1.a027525460aa6p-8"),
+    ("i", 113, "int", 4, 1),
+    ("i", 113, "int", 4, 0),
+    ("i", 113, "int", 4, 0),
+    ("i", 113, "int", 4, 0),
+    ("i", 113, "int", 4, 0),
+    ("i", 113, "int", 4, 0),
+    ("i", 113, "short", 2, 65535),
+    ("i", 114, "short", 2, 0),
+    ("f", 114, "float", "-0x1.0000000000000p+0"),
+    ("i", 114, "short", 2, 0),
+    ("f", 114, "float", "-0x1.0000000000000p+0"),
+    ("s", 115, 'Century Gothic'),
+    ("f", 115, "double", "0x1.cac083126e979p-9"),
+    ("i", 115, "int", 4, 0),
+    ("f", 115, "double", "0x0.0p+0"),
+    ("i", 115, "uint", 4, 0),
+    ("f", 115, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 115, "double", "0x1.0000000000000p+0"),
+    ("f", 115, "double", "0x0.0p+0"),
+    ("f", 115, "double", "0x0.0p+0"),
+    ("f", 115, "double", "0x1.0000000000000p+0"),
+    ("i", 115, "uint", 4, 400),
+    ("i", 113, "int", 4, 0),
+    ("i", 116, "int", 4, 0),
+    ("i", 116, "int", 4, 10),
+    ("i", 116, "int", 4, 0),
+    ("f", 116, "double", "0x1.4cec41dd1a21fp-7"),
+    ("f", 116, "double", "0x0.0p+0"),
+    ("f", 116, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("i", 116, "int", 4, 1),
+    ("i", 117, "int", 4, 4),
+    ("f", 117, "double", "0x1.a027525460aa6p-8"),
+    ("i", 117, "int", 4, 1),
+    ("i", 117, "int", 4, 0),
+    ("i", 117, "int", 4, 0),
+    ("i", 117, "int", 4, 0),
+    ("i", 117, "int", 4, 0),
+    ("i", 117, "int", 4, 0),
+    ("i", 117, "short", 2, 65535),
+    ("i", 118, "short", 2, 0),
+    ("f", 118, "float", "-0x1.0000000000000p+0"),
+    ("i", 118, "short", 2, 0),
+    ("f", 118, "float", "-0x1.0000000000000p+0"),
+    ("s", 119, 'Century Gothic'),
+    ("f", 119, "double", "0x1.cac083126e979p-9"),
+    ("i", 119, "int", 4, 0),
+    ("f", 119, "double", "0x0.0p+0"),
+    ("i", 119, "uint", 4, 0),
+    ("f", 119, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 119, "double", "0x1.0000000000000p+0"),
+    ("f", 119, "double", "0x0.0p+0"),
+    ("f", 119, "double", "0x0.0p+0"),
+    ("f", 119, "double", "0x1.0000000000000p+0"),
+    ("i", 119, "uint", 4, 400),
+    ("i", 117, "int", 4, 0),
+    ("i", 120, "int", 4, 0),
+    ("i", 120, "int", 4, 1),
+    ("i", 120, "int", 4, 0),
+    ("i", 120, "int", 4, 1),
+    ("i", 120, "int", 4, 0),
+    ("i", 120, "int", 4, 0),
+    ("i", 121, "int", 4, 4),
+    ("f", 121, "double", "0x1.a027525460aa6p-8"),
+    ("i", 121, "int", 4, 1),
+    ("i", 121, "int", 4, 0),
+    ("i", 121, "int", 4, 0),
+    ("i", 121, "int", 4, 0),
+    ("i", 121, "int", 4, 0),
+    ("i", 121, "int", 4, 0),
+    ("i", 121, "short", 2, 65535),
+    ("i", 122, "short", 2, 0),
+    ("f", 122, "float", "-0x1.0000000000000p+0"),
+    ("i", 122, "short", 2, 0),
+    ("f", 122, "float", "-0x1.0000000000000p+0"),
+    ("s", 123, 'Century Gothic'),
+    ("f", 123, "double", "0x1.cac083126e979p-9"),
+    ("i", 123, "int", 4, 0),
+    ("f", 123, "double", "0x0.0p+0"),
+    ("i", 123, "uint", 4, 0),
+    ("f", 123, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 123, "double", "0x1.0000000000000p+0"),
+    ("f", 123, "double", "0x0.0p+0"),
+    ("f", 123, "double", "0x0.0p+0"),
+    ("f", 123, "double", "0x1.0000000000000p+0"),
+    ("i", 123, "uint", 4, 400),
+    ("i", 121, "int", 4, 0),
+    ("i", 124, "int", 4, 1),
+    ("i", 124, "int", 4, 1),
+    ("i", 124, "wchar_t", 2, 46),
+    ("i", 125, "int", 4, 4),
+    ("f", 125, "double", "0x1.a027525460aa6p-8"),
+    ("i", 125, "int", 4, 1),
+    ("i", 125, "int", 4, 0),
+    ("i", 125, "int", 4, 0),
+    ("i", 125, "int", 4, 0),
+    ("i", 125, "int", 4, 0),
+    ("i", 125, "int", 4, 0),
+    ("i", 125, "short", 2, 65535),
+    ("i", 126, "short", 2, 0),
+    ("f", 126, "float", "-0x1.0000000000000p+0"),
+    ("i", 126, "short", 2, 0),
+    ("f", 126, "float", "-0x1.0000000000000p+0"),
+    ("s", 127, 'Century Gothic'),
+    ("f", 127, "double", "0x1.cac083126e979p-9"),
+    ("i", 127, "int", 4, 0),
+    ("f", 127, "double", "0x0.0p+0"),
+    ("i", 127, "uint", 4, 0),
+    ("f", 127, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 127, "double", "0x1.0000000000000p+0"),
+    ("f", 127, "double", "0x0.0p+0"),
+    ("f", 127, "double", "0x0.0p+0"),
+    ("f", 127, "double", "0x1.0000000000000p+0"),
+    ("i", 127, "uint", 4, 400),
+    ("i", 125, "int", 4, 0),
+    ("i", 128, "int", 4, 0),
+    ("i", 128, "int", 4, 2),
+    ("f", 128, "double", "0x1.0000000000000p+0"),
+    ("f", 128, "double", "0x1.0000000000000p+0"),
+    ("i", 129, "int", 4, 4),
+    ("f", 129, "double", "0x1.a027525460aa6p-8"),
+    ("i", 129, "int", 4, 1),
+    ("i", 129, "int", 4, 0),
+    ("i", 129, "int", 4, 0),
+    ("i", 129, "int", 4, 0),
+    ("i", 129, "int", 4, 0),
+    ("i", 129, "int", 4, 0),
+    ("i", 129, "short", 2, 65535),
+    ("i", 130, "short", 2, 0),
+    ("f", 130, "float", "-0x1.0000000000000p+0"),
+    ("i", 130, "short", 2, 0),
+    ("f", 130, "float", "-0x1.0000000000000p+0"),
+    ("s", 131, 'Century Gothic'),
+    ("f", 131, "double", "0x1.cac083126e979p-9"),
+    ("i", 131, "int", 4, 0),
+    ("f", 131, "double", "0x0.0p+0"),
+    ("i", 131, "uint", 4, 0),
+    ("f", 131, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 131, "double", "0x1.0000000000000p+0"),
+    ("f", 131, "double", "0x0.0p+0"),
+    ("f", 131, "double", "0x0.0p+0"),
+    ("f", 131, "double", "0x1.0000000000000p+0"),
+    ("i", 131, "uint", 4, 400),
+    ("i", 129, "int", 4, 0),
+    ("i", 132, "int", 4, 0),
+    ("s", 133, 'Century Gothic'),
+    ("f", 133, "double", "0x1.15df6555c52e7p-9"),
+    ("i", 133, "int", 4, 0),
+    ("f", 133, "double", "0x0.0p+0"),
+    ("i", 133, "uint", 4, 0),
+    ("f", 133, "double", "0x0.0p+0"),
+    ("f", 133, "double", "0x1.0000000000000p+0"),
+    ("f", 133, "double", "0x0.0p+0"),
+    ("f", 133, "double", "0x0.0p+0"),
+    ("f", 133, "double", "0x1.0000000000000p+0"),
+    ("i", 133, "uint", 4, 400),
+    ("i", 134, "int", 4, 4),
+    ("f", 134, "double", "0x1.a027525460aa6p-8"),
+    ("i", 134, "int", 4, 1),
+    ("i", 134, "int", 4, 0),
+    ("i", 134, "int", 4, 0),
+    ("i", 134, "int", 4, 0),
+    ("i", 134, "int", 4, 0),
+    ("i", 134, "int", 4, 0),
+    ("i", 134, "short", 2, 65535),
+    ("i", 135, "short", 2, 0),
+    ("f", 135, "float", "-0x1.0000000000000p+0"),
+    ("i", 135, "short", 2, 0),
+    ("f", 135, "float", "-0x1.0000000000000p+0"),
+    ("s", 136, 'Century Gothic'),
+    ("f", 136, "double", "0x1.cac083126e979p-9"),
+    ("i", 136, "int", 4, 0),
+    ("f", 136, "double", "0x0.0p+0"),
+    ("i", 136, "uint", 4, 0),
+    ("f", 136, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 136, "double", "0x1.0000000000000p+0"),
+    ("f", 136, "double", "0x0.0p+0"),
+    ("f", 136, "double", "0x0.0p+0"),
+    ("f", 136, "double", "0x1.0000000000000p+0"),
+    ("i", 136, "uint", 4, 400),
+    ("i", 134, "int", 4, 0),
+    ("i", 137, "int", 4, 0),
+    ("i", 137, "int", 4, 0),
+    ("i", 137, "int", 4, 0),
+    ("f", 137, "double", "0x1.4cec41dd1a21fp-7"),
+    ("i", 138, "int", 4, 4),
+    ("f", 138, "double", "0x1.a027525460aa6p-8"),
+    ("i", 138, "int", 4, 1),
+    ("i", 138, "int", 4, 0),
+    ("i", 138, "int", 4, 0),
+    ("i", 138, "int", 4, 0),
+    ("i", 138, "int", 4, 0),
+    ("i", 138, "int", 4, 0),
+    ("i", 138, "short", 2, 65535),
+    ("i", 139, "short", 2, 0),
+    ("f", 139, "float", "-0x1.0000000000000p+0"),
+    ("i", 139, "short", 2, 0),
+    ("f", 139, "float", "-0x1.0000000000000p+0"),
+    ("s", 140, 'Century Gothic'),
+    ("f", 140, "double", "0x1.cac083126e979p-9"),
+    ("i", 140, "int", 4, 0),
+    ("f", 140, "double", "0x0.0p+0"),
+    ("i", 140, "uint", 4, 0),
+    ("f", 140, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 140, "double", "0x1.0000000000000p+0"),
+    ("f", 140, "double", "0x0.0p+0"),
+    ("f", 140, "double", "0x0.0p+0"),
+    ("f", 140, "double", "0x1.0000000000000p+0"),
+    ("i", 140, "uint", 4, 400),
+    ("i", 138, "int", 4, 0),
+    ("i", 141, "int", 4, 4),
+    ("f", 141, "double", "0x1.999999999999ap-8"),
+    ("i", 141, "int", 4, 1),
+    ("i", 141, "int", 4, 0),
+    ("i", 141, "int", 4, 0),
+    ("i", 141, "int", 4, 0),
+    ("i", 141, "int", 4, 0),
+    ("i", 141, "int", 4, 0),
+    ("i", 141, "short", 2, 65535),
+    ("i", 142, "short", 2, 0),
+    ("f", 142, "float", "-0x1.0000000000000p+0"),
+    ("i", 142, "short", 2, 0),
+    ("f", 142, "float", "-0x1.0000000000000p+0"),
+    ("s", 143, 'Century Gothic'),
+    ("f", 143, "double", "0x1.cac083126e979p-9"),
+    ("i", 143, "int", 4, 0),
+    ("f", 143, "double", "0x0.0p+0"),
+    ("i", 143, "uint", 4, 0),
+    ("f", 143, "double", "0x0.0p+0"),
+    ("f", 143, "double", "0x1.0000000000000p+0"),
+    ("f", 143, "double", "0x0.0p+0"),
+    ("f", 143, "double", "0x0.0p+0"),
+    ("f", 143, "double", "0x1.0000000000000p+0"),
+    ("i", 143, "uint", 4, 400),
+    ("i", 141, "int", 4, 0),
+    ("f", 144, "double", "0x1.4cec41dd1a21fp-8"),
+    ("i", 145, "int", 4, 4),
+    ("f", 145, "double", "0x1.999999999999ap-8"),
+    ("i", 145, "int", 4, 0),
+    ("i", 145, "int", 4, 0),
+    ("i", 145, "int", 4, 0),
+    ("i", 145, "int", 4, 0),
+    ("i", 145, "int", 4, 0),
+    ("i", 145, "int", 4, 0),
+    ("i", 145, "short", 2, 65535),
+    ("i", 146, "short", 2, 0),
+    ("f", 146, "float", "-0x1.0000000000000p+0"),
+    ("i", 146, "short", 2, 0),
+    ("f", 146, "float", "-0x1.0000000000000p+0"),
+    ("s", 147, 'Century Gothic'),
+    ("f", 147, "double", "0x1.cac083126e979p-9"),
+    ("i", 147, "int", 4, 0),
+    ("f", 147, "double", "0x0.0p+0"),
+    ("i", 147, "uint", 4, 0),
+    ("f", 147, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 147, "double", "0x1.0000000000000p+0"),
+    ("f", 147, "double", "0x0.0p+0"),
+    ("f", 147, "double", "0x0.0p+0"),
+    ("f", 147, "double", "0x1.0000000000000p+0"),
+    ("i", 147, "uint", 4, 400),
+    ("i", 145, "int", 4, 0),
+    ("i", 148, "int", 4, 7),
+    ("i", 148, "int", 4, 9),
+    ("i", 148, "int", 4, 11),
+    ("i", 148, "int", 4, 2),
+    ("f", 148, "double", "0x1.4cec41dd1a21fp-7"),
+    ("i", 148, "int", 4, 1),
+    ("f", 148, "double", "0x0.0p+0"),
+    ("i", 148, "int", 4, 0),
+    ("i", 149, "int", 4, 4),
+    ("i", 150, "int", 4, 4),
+    ("i", 150, "int", 4, 0),
+    ("i", 150, "uint", 4, 0),
+    ("i", 150, "short", 2, 65535),
+    ("i", 150, "int", 4, 0),
+    ("i", 151, "short", 2, 0),
+    ("f", 151, "float", "-0x1.0000000000000p+0"),
+    ("i", 151, "short", 2, 0),
+    ("f", 151, "float", "-0x1.0000000000000p+0"),
+    ("s", 152, 'Century Gothic'),
+    ("f", 152, "double", "0x1.cac083126e979p-9"),
+    ("i", 152, "int", 4, 0),
+    ("f", 152, "double", "0x0.0p+0"),
+    ("i", 152, "uint", 4, 0),
+    ("f", 152, "double", "0x0.0p+0"),
+    ("f", 152, "double", "0x1.0000000000000p+0"),
+    ("f", 152, "double", "0x0.0p+0"),
+    ("f", 152, "double", "0x0.0p+0"),
+    ("f", 152, "double", "0x1.0000000000000p+0"),
+    ("i", 152, "uint", 4, 400),
+    ("i", 153, "int", 4, 4),
+    ("i", 153, "int", 4, 0),
+    ("i", 153, "uint", 4, 0),
+    ("i", 153, "short", 2, 65535),
+    ("i", 153, "int", 4, 0),
+    ("i", 154, "short", 2, 0),
+    ("f", 154, "float", "-0x1.0000000000000p+0"),
+    ("i", 154, "short", 2, 0),
+    ("f", 154, "float", "-0x1.0000000000000p+0"),
+    ("s", 155, 'Century Gothic'),
+    ("f", 155, "double", "0x1.cac083126e979p-9"),
+    ("i", 155, "int", 4, 0),
+    ("f", 155, "double", "0x0.0p+0"),
+    ("i", 155, "uint", 4, 0),
+    ("f", 155, "double", "0x0.0p+0"),
+    ("f", 155, "double", "0x1.0000000000000p+0"),
+    ("f", 155, "double", "0x0.0p+0"),
+    ("f", 155, "double", "0x0.0p+0"),
+    ("f", 155, "double", "0x1.0000000000000p+0"),
+    ("i", 155, "uint", 4, 400),
+    ("i", 156, "int", 4, 0),
+    ("i", 156, "int", 4, 0),
+    ("i", 156, "int", 4, 1),
+    ("i", 156, "uint", 4, 0),
+    ("i", 156, "int", 4, 0),
+    ("s", 156, ''),
+    ("i", 157, "int", 4, 4),
+    ("i", 157, "int", 4, 0),
+    ("i", 157, "uint", 4, 0),
+    ("i", 157, "short", 2, 65535),
+    ("i", 157, "int", 4, 0),
+    ("i", 158, "short", 2, 0),
+    ("f", 158, "float", "-0x1.0000000000000p+0"),
+    ("i", 158, "short", 2, 0),
+    ("f", 158, "float", "-0x1.0000000000000p+0"),
+    ("s", 159, 'Century Gothic'),
+    ("f", 159, "double", "0x1.cac083126e979p-9"),
+    ("i", 159, "int", 4, 0),
+    ("f", 159, "double", "0x0.0p+0"),
+    ("i", 159, "uint", 4, 0),
+    ("f", 159, "double", "0x0.0p+0"),
+    ("f", 159, "double", "0x1.0000000000000p+0"),
+    ("f", 159, "double", "0x0.0p+0"),
+    ("f", 159, "double", "0x0.0p+0"),
+    ("f", 159, "double", "0x1.0000000000000p+0"),
+    ("i", 159, "uint", 4, 400),
+    ("i", 160, "uint", 4, 0),
+    ("s", 160, ''),
+    ("s", 160, ''),
+    ("s", 160, ''),
+    ("i", 161, "int", 4, 4),
+    ("i", 161, "int", 4, 0),
+    ("i", 161, "uint", 4, 0),
+    ("i", 161, "short", 2, 65535),
+    ("i", 161, "int", 4, 0),
+    ("i", 162, "short", 2, 0),
+    ("f", 162, "float", "-0x1.0000000000000p+0"),
+    ("i", 162, "short", 2, 0),
+    ("f", 162, "float", "-0x1.0000000000000p+0"),
+    ("s", 163, 'Century Gothic'),
+    ("f", 163, "double", "0x1.cac083126e979p-9"),
+    ("i", 163, "int", 4, 0),
+    ("f", 163, "double", "0x0.0p+0"),
+    ("i", 163, "uint", 4, 0),
+    ("f", 163, "double", "0x0.0p+0"),
+    ("f", 163, "double", "0x1.0000000000000p+0"),
+    ("f", 163, "double", "0x0.0p+0"),
+    ("f", 163, "double", "0x0.0p+0"),
+    ("f", 163, "double", "0x1.0000000000000p+0"),
+    ("i", 163, "uint", 4, 400),
+    ("i", 164, "int", 4, 0),
+    ("i", 164, "int", 4, 0),
+    ("f", 164, "double", "0x1.0624dd2f1a9fcp-7"),
+    ("f", 164, "double", "0x1.921fb54442d28p-1"),
+    ("i", 164, "int", 4, 0),
+    ("i", 164, "int", 4, 0),
+    ("i", 164, "int", 4, 2),
+    ("i", 164, "int", 4, 1),
+    ("i", 164, "int", 4, 1),
+    ("i", 164, "int", 4, 1),
+    ("i", 164, "int", 4, 0),
+    ("i", 164, "int", 4, 0),
+    ("i", 164, "int", 4, 2),
+    ("i", 164, "int", 4, 0),
+    ("s", 165, 'Century Gothic'),
+    ("f", 165, "double", "0x1.cac083126e979p-9"),
+    ("i", 165, "int", 4, 0),
+    ("f", 165, "double", "0x0.0p+0"),
+    ("i", 165, "uint", 4, 0),
+    ("f", 165, "double", "0x0.0p+0"),
+    ("f", 165, "double", "0x1.0000000000000p+0"),
+    ("f", 165, "double", "0x0.0p+0"),
+    ("f", 165, "double", "0x0.0p+0"),
+    ("f", 165, "double", "0x1.0000000000000p+0"),
+    ("i", 165, "uint", 4, 400),
+    ("i", 166, "int", 4, 4),
+    ("i", 166, "int", 4, 0),
+    ("i", 166, "uint", 4, 0),
+    ("i", 166, "short", 2, 65535),
+    ("i", 166, "int", 4, 0),
+    ("i", 167, "short", 2, 0),
+    ("f", 167, "float", "-0x1.0000000000000p+0"),
+    ("i", 167, "short", 2, 0),
+    ("f", 167, "float", "-0x1.0000000000000p+0"),
+    ("s", 168, 'Century Gothic'),
+    ("f", 168, "double", "0x1.cac083126e979p-9"),
+    ("i", 168, "int", 4, 0),
+    ("f", 168, "double", "0x0.0p+0"),
+    ("i", 168, "uint", 4, 0),
+    ("f", 168, "double", "0x0.0p+0"),
+    ("f", 168, "double", "0x1.0000000000000p+0"),
+    ("f", 168, "double", "0x0.0p+0"),
+    ("f", 168, "double", "0x0.0p+0"),
+    ("f", 168, "double", "0x1.0000000000000p+0"),
+    ("i", 168, "uint", 4, 400),
+    ("i", 169, "int", 4, 4),
+    ("i", 169, "int", 4, 0),
+    ("i", 169, "uint", 4, 0),
+    ("i", 169, "short", 2, 65535),
+    ("i", 169, "int", 4, 0),
+    ("i", 170, "short", 2, 0),
+    ("f", 170, "float", "-0x1.0000000000000p+0"),
+    ("i", 170, "short", 2, 0),
+    ("f", 170, "float", "-0x1.0000000000000p+0"),
+    ("s", 171, 'Century Gothic'),
+    ("f", 171, "double", "0x1.cac083126e979p-9"),
+    ("i", 171, "int", 4, 0),
+    ("f", 171, "double", "0x0.0p+0"),
+    ("i", 171, "uint", 4, 0),
+    ("f", 171, "double", "0x0.0p+0"),
+    ("f", 171, "double", "0x1.0000000000000p+0"),
+    ("f", 171, "double", "0x0.0p+0"),
+    ("f", 171, "double", "0x0.0p+0"),
+    ("f", 171, "double", "0x1.0000000000000p+0"),
+    ("i", 171, "uint", 4, 400),
+    ("i", 172, "int", 4, 0),
+    ("i", 173, "int", 4, 4),
+    ("i", 173, "int", 4, 0),
+    ("i", 173, "uint", 4, 0),
+    ("i", 173, "short", 2, 65535),
+    ("i", 173, "int", 4, 0),
+    ("i", 174, "short", 2, 0),
+    ("f", 174, "float", "-0x1.0000000000000p+0"),
+    ("i", 174, "short", 2, 0),
+    ("f", 174, "float", "-0x1.0000000000000p+0"),
+    ("s", 175, 'Century Gothic'),
+    ("f", 175, "double", "0x1.cac083126e979p-9"),
+    ("i", 175, "int", 4, 0),
+    ("f", 175, "double", "0x0.0p+0"),
+    ("i", 175, "uint", 4, 0),
+    ("f", 175, "double", "0x0.0p+0"),
+    ("f", 175, "double", "0x1.0000000000000p+0"),
+    ("f", 175, "double", "0x0.0p+0"),
+    ("f", 175, "double", "0x0.0p+0"),
+    ("f", 175, "double", "0x1.0000000000000p+0"),
+    ("i", 175, "uint", 4, 400),
+    ("i", 176, "int", 4, 2),
+    ("i", 176, "int", 4, 2),
+    ("i", 176, "int", 4, 0),
+    ("i", 176, "int", 4, 2),
+    ("i", 177, "int", 4, 4),
+    ("i", 177, "int", 4, 0),
+    ("i", 177, "uint", 4, 0),
+    ("i", 177, "short", 2, 65535),
+    ("i", 177, "int", 4, 0),
+    ("i", 178, "short", 2, 0),
+    ("f", 178, "float", "-0x1.0000000000000p+0"),
+    ("i", 178, "short", 2, 0),
+    ("f", 178, "float", "-0x1.0000000000000p+0"),
+    ("s", 179, 'Century Gothic'),
+    ("f", 179, "double", "0x1.cac083126e979p-9"),
+    ("i", 179, "int", 4, 0),
+    ("f", 179, "double", "0x0.0p+0"),
+    ("i", 179, "uint", 4, 0),
+    ("f", 179, "double", "0x0.0p+0"),
+    ("f", 179, "double", "0x1.0000000000000p+0"),
+    ("f", 179, "double", "0x0.0p+0"),
+    ("f", 179, "double", "0x0.0p+0"),
+    ("f", 179, "double", "0x1.0000000000000p+0"),
+    ("i", 179, "uint", 4, 400),
+    ("i", 180, "int", 4, 0),
+    ("i", 180, "int", 4, 0),
+    ("f", 180, "double", "0x1.0624dd2f1a9fcp-7"),
+    ("f", 180, "double", "0x1.921fb54442d28p-1"),
+    ("i", 180, "int", 4, 0),
+    ("i", 180, "int", 4, 0),
+    ("i", 180, "int", 4, 2),
+    ("i", 180, "int", 4, 0),
+    ("i", 180, "int", 4, 2),
+    ("i", 180, "int", 4, 1),
+    ("i", 181, "int", 4, 4),
+    ("i", 181, "int", 4, 0),
+    ("i", 181, "uint", 4, 0),
+    ("i", 181, "short", 2, 65535),
+    ("i", 181, "int", 4, 0),
+    ("i", 182, "short", 2, 0),
+    ("f", 182, "float", "-0x1.0000000000000p+0"),
+    ("i", 182, "short", 2, 0),
+    ("f", 182, "float", "-0x1.0000000000000p+0"),
+    ("s", 183, 'Century Gothic'),
+    ("f", 183, "double", "0x1.cac083126e979p-9"),
+    ("i", 183, "int", 4, 0),
+    ("f", 183, "double", "0x0.0p+0"),
+    ("i", 183, "uint", 4, 0),
+    ("f", 183, "double", "0x0.0p+0"),
+    ("f", 183, "double", "0x1.0000000000000p+0"),
+    ("f", 183, "double", "0x0.0p+0"),
+    ("f", 183, "double", "0x0.0p+0"),
+    ("f", 183, "double", "0x1.0000000000000p+0"),
+    ("i", 183, "uint", 4, 400),
+    ("i", 184, "uint", 4, 0),
+    ("f", 149, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 149, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("i", 185, "int", 4, 1),
+    ("i", 185, "int", 4, 1),
+    ("i", 186, "int", 4, 2),
+    ("i", 186, "int", 4, 1),
+    ("i", 186, "int", 4, 1),
+    ("i", 186, "int", 4, 1),
+    ("i", 186, "int", 4, 1),
+    ("i", 186, "int", 4, 0),
+    ("i", 186, "int", 4, 0),
+    ("i", 186, "int", 4, 0),
+    ("i", 186, "int", 4, 4),
+    ("i", 186, "int", 4, 0),
+    ("i", 186, "int", 4, 0),
+    ("i", 186, "short", 2, 65535),
+    ("s", 186, ''),
+    ("s", 186, ''),
+    ("i", 186, "uint", 4, 4),
+    ("i", 186, "int", 4, 0),
+    ("i", 186, "int", 4, 0),
+    ("s", 187, 'Century Gothic'),
+    ("f", 187, "double", "0x1.cac083126e979p-9"),
+    ("i", 187, "int", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("i", 187, "uint", 4, 0),
+    ("f", 187, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("i", 187, "uint", 4, 400),
+    ("s", 187, 'Century Gothic'),
+    ("f", 187, "double", "0x1.cac083126e979p-9"),
+    ("i", 187, "int", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("i", 187, "uint", 4, 0),
+    ("f", 187, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("i", 187, "uint", 4, 400),
+    ("i", 188, "short", 2, 0),
+    ("f", 188, "float", "-0x1.0000000000000p+0"),
+    ("i", 188, "short", 2, 0),
+    ("f", 188, "float", "-0x1.0000000000000p+0"),
+    ("s", 187, 'Century Gothic'),
+    ("f", 187, "double", "0x1.cac083126e979p-9"),
+    ("i", 187, "int", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("i", 187, "uint", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("i", 187, "uint", 4, 400),
+    ("s", 187, 'Century Gothic'),
+    ("f", 187, "double", "0x1.cac083126e979p-9"),
+    ("i", 187, "int", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("i", 187, "uint", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("i", 187, "uint", 4, 400),
+    ("s", 187, 'Century Gothic'),
+    ("f", 187, "double", "0x1.cac083126e979p-9"),
+    ("i", 187, "int", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("i", 187, "uint", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("i", 187, "uint", 4, 400),
+    ("s", 187, 'Century Gothic'),
+    ("f", 187, "double", "0x1.cac083126e979p-9"),
+    ("i", 187, "int", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("i", 187, "uint", 4, 0),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x0.0p+0"),
+    ("f", 187, "double", "0x1.0000000000000p+0"),
+    ("i", 187, "uint", 4, 400),
+    ("i", 189, "uint", 4, 24),
+    ("i", 189, "int", 4, 0),
+    ("i", 190, "int", 4, 2),
+    ("i", 190, "int", 4, 2),
+    ("i", 190, "int", 4, 1),
+    ("i", 190, "int", 4, 1),
+    ("i", 190, "int", 4, 1),
+    ("i", 190, "int", 4, 0),
+    ("i", 190, "int", 4, 0),
+    ("i", 190, "int", 4, 0),
+    ("i", 190, "int", 4, 4),
+    ("i", 190, "int", 4, 1),
+    ("i", 190, "int", 4, 0),
+    ("i", 190, "short", 2, 65535),
+    ("s", 190, ''),
+    ("s", 190, ''),
+    ("i", 190, "uint", 4, 4),
+    ("i", 190, "int", 4, 0),
+    ("i", 190, "int", 4, 0),
+    ("s", 191, 'Century Gothic'),
+    ("f", 191, "double", "0x1.cac083126e979p-9"),
+    ("i", 191, "int", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("i", 191, "uint", 4, 0),
+    ("f", 191, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("i", 191, "uint", 4, 400),
+    ("s", 191, 'Century Gothic'),
+    ("f", 191, "double", "0x1.cac083126e979p-9"),
+    ("i", 191, "int", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("i", 191, "uint", 4, 0),
+    ("f", 191, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("i", 191, "uint", 4, 400),
+    ("i", 192, "short", 2, 2),
+    ("f", 192, "float", "-0x1.0000000000000p+0"),
+    ("i", 192, "short", 2, 0),
+    ("f", 192, "float", "-0x1.0000000000000p+0"),
+    ("s", 191, 'Century Gothic'),
+    ("f", 191, "double", "0x1.cac083126e979p-9"),
+    ("i", 191, "int", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("i", 191, "uint", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("i", 191, "uint", 4, 400),
+    ("s", 191, 'Century Gothic'),
+    ("f", 191, "double", "0x1.cac083126e979p-9"),
+    ("i", 191, "int", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("i", 191, "uint", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("i", 191, "uint", 4, 400),
+    ("s", 191, 'Century Gothic'),
+    ("f", 191, "double", "0x1.cac083126e979p-9"),
+    ("i", 191, "int", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("i", 191, "uint", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("i", 191, "uint", 4, 400),
+    ("s", 191, 'Century Gothic'),
+    ("f", 191, "double", "0x1.cac083126e979p-9"),
+    ("i", 191, "int", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("i", 191, "uint", 4, 0),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x0.0p+0"),
+    ("f", 191, "double", "0x1.0000000000000p+0"),
+    ("i", 191, "uint", 4, 400),
+    ("f", 193, "double", "0x1.a027525460aa6p-8"),
+    ("f", 193, "double", "0x1.0a569b17481b2p-9"),
+    ("f", 193, "double", "0x1.a027525460aa6p-7"),
+    ("i", 193, "int", 4, 0),
+    ("i", 193, "int", 4, 0),
+    ("i", 193, "int", 4, 0),
+    ("i", 193, "int", 4, 1),
+    ("i", 193, "int", 4, 1),
+    ("i", 194, "int", 4, 1),
+    ("i", 194, "int", 4, 1),
+    ("i", 194, "int", 4, 1),
+    ("i", 194, "int", 4, 1),
+    ("i", 194, "int", 4, 1),
+    ("i", 194, "int", 4, 0),
+    ("i", 194, "int", 4, 0),
+    ("i", 194, "int", 4, 0),
+    ("i", 194, "int", 4, 4),
+    ("i", 194, "int", 4, 0),
+    ("i", 194, "int", 4, 0),
+    ("i", 194, "short", 2, 65535),
+    ("s", 194, ''),
+    ("s", 194, ''),
+    ("i", 194, "uint", 4, 4),
+    ("i", 194, "int", 4, 1),
+    ("i", 194, "int", 4, 0),
+    ("s", 195, 'Century Gothic'),
+    ("f", 195, "double", "0x1.cac083126e979p-9"),
+    ("i", 195, "int", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("i", 195, "uint", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("i", 195, "uint", 4, 400),
+    ("s", 195, 'Century Gothic'),
+    ("f", 195, "double", "0x1.cac083126e979p-9"),
+    ("i", 195, "int", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("i", 195, "uint", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("i", 195, "uint", 4, 400),
+    ("i", 196, "short", 2, 0),
+    ("f", 196, "float", "-0x1.0000000000000p+0"),
+    ("i", 196, "short", 2, 0),
+    ("f", 196, "float", "-0x1.0000000000000p+0"),
+    ("s", 195, 'Century Gothic'),
+    ("f", 195, "double", "0x1.cac083126e979p-9"),
+    ("i", 195, "int", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("i", 195, "uint", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("i", 195, "uint", 4, 400),
+    ("s", 195, 'Century Gothic'),
+    ("f", 195, "double", "0x1.cac083126e979p-9"),
+    ("i", 195, "int", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("i", 195, "uint", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("i", 195, "uint", 4, 400),
+    ("s", 195, 'Century Gothic'),
+    ("f", 195, "double", "0x1.cac083126e979p-9"),
+    ("i", 195, "int", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("i", 195, "uint", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("i", 195, "uint", 4, 400),
+    ("s", 195, 'Century Gothic'),
+    ("f", 195, "double", "0x1.cac083126e979p-9"),
+    ("i", 195, "int", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("i", 195, "uint", 4, 0),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x0.0p+0"),
+    ("f", 195, "double", "0x1.0000000000000p+0"),
+    ("i", 195, "uint", 4, 400),
+    ("i", 197, "int", 4, 1),
+    ("s", 198, 'Century Gothic'),
+    ("f", 198, "double", "0x1.cac083126e979p-9"),
+    ("i", 198, "int", 4, 0),
+    ("f", 198, "double", "0x0.0p+0"),
+    ("i", 198, "uint", 4, 0),
+    ("f", 198, "double", "0x0.0p+0"),
+    ("f", 198, "double", "0x1.0000000000000p+0"),
+    ("f", 198, "double", "0x0.0p+0"),
+    ("f", 198, "double", "0x0.0p+0"),
+    ("f", 198, "double", "0x1.0000000000000p+0"),
+    ("i", 198, "uint", 4, 400),
+    ("i", 199, "int", 4, 0),
+    ("i", 199, "int", 4, 0),
+    ("i", 199, "int", 4, 1),
+    ("i", 199, "int", 4, 1),
+    ("i", 199, "int", 4, 1),
+    ("i", 199, "int", 4, 0),
+    ("i", 199, "int", 4, 0),
+    ("i", 199, "int", 4, 0),
+    ("i", 199, "int", 4, 4),
+    ("i", 199, "int", 4, 0),
+    ("i", 199, "int", 4, 0),
+    ("i", 199, "short", 2, 65535),
+    ("s", 199, ''),
+    ("s", 199, ''),
+    ("i", 199, "uint", 4, 4),
+    ("i", 199, "int", 4, 0),
+    ("i", 199, "int", 4, 0),
+    ("s", 200, 'Century Gothic'),
+    ("f", 200, "double", "0x1.cac083126e979p-9"),
+    ("i", 200, "int", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("i", 200, "uint", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("i", 200, "uint", 4, 400),
+    ("s", 200, 'Century Gothic'),
+    ("f", 200, "double", "0x1.cac083126e979p-9"),
+    ("i", 200, "int", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("i", 200, "uint", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("i", 200, "uint", 4, 400),
+    ("i", 201, "short", 2, 0),
+    ("f", 201, "float", "-0x1.0000000000000p+0"),
+    ("i", 201, "short", 2, 0),
+    ("f", 201, "float", "-0x1.0000000000000p+0"),
+    ("s", 200, 'Century Gothic'),
+    ("f", 200, "double", "0x1.cac083126e979p-9"),
+    ("i", 200, "int", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("i", 200, "uint", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("i", 200, "uint", 4, 400),
+    ("s", 200, 'Century Gothic'),
+    ("f", 200, "double", "0x1.cac083126e979p-9"),
+    ("i", 200, "int", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("i", 200, "uint", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("i", 200, "uint", 4, 400),
+    ("s", 200, 'Century Gothic'),
+    ("f", 200, "double", "0x1.cac083126e979p-9"),
+    ("i", 200, "int", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("i", 200, "uint", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("i", 200, "uint", 4, 400),
+    ("s", 200, 'Century Gothic'),
+    ("f", 200, "double", "0x1.cac083126e979p-9"),
+    ("i", 200, "int", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("i", 200, "uint", 4, 0),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x0.0p+0"),
+    ("f", 200, "double", "0x1.0000000000000p+0"),
+    ("i", 200, "uint", 4, 400),
+    ("i", 202, "int", 4, 0),
+    ("i", 202, "int", 4, 0),
+    ("i", 203, "int", 4, 0),
+    ("i", 203, "int", 4, 0),
+    ("i", 203, "int", 4, 1),
+    ("i", 203, "int", 4, 1),
+    ("i", 203, "int", 4, 1),
+    ("i", 203, "int", 4, 0),
+    ("i", 203, "int", 4, 0),
+    ("i", 203, "int", 4, 0),
+    ("i", 203, "int", 4, 4),
+    ("i", 203, "int", 4, 0),
+    ("i", 203, "int", 4, 0),
+    ("i", 203, "short", 2, 65535),
+    ("s", 203, ''),
+    ("s", 203, ''),
+    ("i", 203, "uint", 4, 4),
+    ("i", 203, "int", 4, 0),
+    ("i", 203, "int", 4, 0),
+    ("s", 204, 'Century Gothic'),
+    ("f", 204, "double", "0x1.cac083126e979p-9"),
+    ("i", 204, "int", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("i", 204, "uint", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("i", 204, "uint", 4, 400),
+    ("s", 204, 'Century Gothic'),
+    ("f", 204, "double", "0x1.cac083126e979p-9"),
+    ("i", 204, "int", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("i", 204, "uint", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("i", 204, "uint", 4, 400),
+    ("i", 205, "short", 2, 0),
+    ("f", 205, "float", "-0x1.0000000000000p+0"),
+    ("i", 205, "short", 2, 0),
+    ("f", 205, "float", "-0x1.0000000000000p+0"),
+    ("s", 204, 'Century Gothic'),
+    ("f", 204, "double", "0x1.cac083126e979p-9"),
+    ("i", 204, "int", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("i", 204, "uint", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("i", 204, "uint", 4, 400),
+    ("s", 204, 'Century Gothic'),
+    ("f", 204, "double", "0x1.cac083126e979p-9"),
+    ("i", 204, "int", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("i", 204, "uint", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("i", 204, "uint", 4, 400),
+    ("s", 204, 'Century Gothic'),
+    ("f", 204, "double", "0x1.cac083126e979p-9"),
+    ("i", 204, "int", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("i", 204, "uint", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("i", 204, "uint", 4, 400),
+    ("s", 204, 'Century Gothic'),
+    ("f", 204, "double", "0x1.cac083126e979p-9"),
+    ("i", 204, "int", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("i", 204, "uint", 4, 0),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x0.0p+0"),
+    ("f", 204, "double", "0x1.0000000000000p+0"),
+    ("i", 204, "uint", 4, 400),
+    ("i", 206, "int", 4, 0),
+    ("i", 206, "int", 4, 0),
+    ("i", 207, "long", 4, 0),
+    ("s", 207, ''),
+    ("s", 207, ''),
+    ("s", 207, ''),
+    ("s", 207, ''),
+    ("s", 207, ''),
+    ("s", 207, ''),
+    ("s", 207, ''),
+    ("s", 207, ''),
+    ("s", 207, ''),
+    ("s", 207, ''),
+    ("i", 207, "uchar", 1, 0),
+    ("i", 207, "uchar", 1, 0),
+    ("i", 207, "uchar", 1, 0),
+    ("i", 207, "uchar", 1, 0),
+    ("i", 207, "long", 4, 0),
+    ("i", 207, "uchar", 1, 0),
+    ("i", 207, "uchar", 1, 0),
+    ("i", 207, "uchar", 1, 0),
+    ("i", 207, "uchar", 1, 0),
+    ("f", 207, "double", "0x0.0p+0"),
+    ("i", 207, "uchar", 1, 1),
+    ("s", 208, 'Segoe UI'),
+    ("f", 208, "double", "-0x1.0000000000000p+0"),
+    ("i", 208, "int", 4, 0),
+    ("f", 208, "double", "0x0.0p+0"),
+    ("i", 208, "uint", 4, 0),
+    ("f", 208, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 208, "double", "0x1.0000000000000p+0"),
+    ("f", 208, "double", "0x0.0p+0"),
+    ("f", 208, "double", "0x0.0p+0"),
+    ("f", 208, "double", "0x1.0000000000000p+0"),
+    ("i", 208, "uint", 4, 400),
+    ("i", 207, "uchar", 1, 0),
+    ("i", 207, "uchar", 1, 0),
+    ("i", 209, "long", 4, 3),
+    ("i", 209, "long", 4, 4294967295),
+    ("i", 209, "long", 4, 0),
+    ("i", 209, "long", 4, 0),
+    ("i", 209, "uchar", 1, 1),
+    ("s", 210, 'Segoe UI'),
+    ("f", 210, "double", "-0x1.0000000000000p+0"),
+    ("i", 210, "int", 4, 0),
+    ("f", 210, "double", "0x0.0p+0"),
+    ("i", 210, "uint", 4, 0),
+    ("f", 210, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 210, "double", "0x1.0000000000000p+0"),
+    ("f", 210, "double", "0x0.0p+0"),
+    ("f", 210, "double", "0x0.0p+0"),
+    ("f", 210, "double", "0x1.0000000000000p+0"),
+    ("i", 210, "uint", 4, 400),
+    ("i", 209, "uchar", 1, 1),
+    ("i", 209, "long", 4, 0),
+    ("f", 209, "double", "0x0.0p+0"),
+    ("i", 209, "long", 4, 0),
+    ("i", 209, "uchar", 1, 1),
+    ("i", 209, "long", 4, 0),
+    ("f", 209, "double", "0x0.0p+0"),
+    ("i", 209, "long", 4, 0),
+    ("i", 207, "int", 4, 0),
+    ("f", 207, "double", "0x1.921fb54442d28p-1"),
+    ("s", 211, ''),
+    ("s", 211, ''),
+    ("s", 211, ''),
+    ("s", 211, ''),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "long", 4, 0),
+    ("f", 211, "double", "0x0.0p+0"),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "long", 4, 0),
+    ("i", 211, "long", 4, 2),
+    ("i", 211, "long", 4, 0),
+    ("i", 211, "long", 4, 0),
+    ("i", 211, "long", 4, 0),
+    ("i", 211, "long", 4, 3),
+    ("i", 211, "long", 4, 10),
+    ("i", 211, "long", 4, 0),
+    ("f", 211, "double", "0x1.0c6f7a0b5ed8dp-20"),
+    ("f", 211, "double", "0x1.0c6f7a0b5ed8dp-20"),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 1),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 1),
+    ("s", 212, 'Segoe UI'),
+    ("f", 212, "double", "-0x1.0000000000000p+0"),
+    ("i", 212, "int", 4, 0),
+    ("f", 212, "double", "0x0.0p+0"),
+    ("i", 212, "uint", 4, 0),
+    ("f", 212, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 212, "double", "0x1.0000000000000p+0"),
+    ("f", 212, "double", "0x0.0p+0"),
+    ("f", 212, "double", "0x0.0p+0"),
+    ("f", 212, "double", "0x1.0000000000000p+0"),
+    ("i", 212, "uint", 4, 400),
+    ("i", 211, "int", 4, 0),
+    ("i", 211, "int", 4, 0),
+    ("i", 211, "count", 8, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 213, "long", 4, 3),
+    ("i", 213, "long", 4, 4294967295),
+    ("i", 213, "long", 4, 0),
+    ("i", 213, "long", 4, 0),
+    ("i", 213, "uchar", 1, 1),
+    ("s", 214, 'Segoe UI'),
+    ("f", 214, "double", "-0x1.0000000000000p+0"),
+    ("i", 214, "int", 4, 0),
+    ("f", 214, "double", "0x0.0p+0"),
+    ("i", 214, "uint", 4, 0),
+    ("f", 214, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 214, "double", "0x1.0000000000000p+0"),
+    ("f", 214, "double", "0x0.0p+0"),
+    ("f", 214, "double", "0x0.0p+0"),
+    ("f", 214, "double", "0x1.0000000000000p+0"),
+    ("i", 214, "uint", 4, 400),
+    ("i", 213, "uchar", 1, 1),
+    ("i", 213, "long", 4, 0),
+    ("f", 213, "double", "0x0.0p+0"),
+    ("i", 213, "long", 4, 0),
+    ("i", 213, "uchar", 1, 1),
+    ("i", 213, "long", 4, 0),
+    ("f", 213, "double", "0x0.0p+0"),
+    ("i", 213, "long", 4, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "long", 4, 0),
+    ("f", 211, "double", "0x1.4cec41dd1a21fp-7"),
+    ("i", 211, "int", 4, 0),
+    ("i", 211, "int", 4, 1),
+    ("s", 211, 'X'),
+    ("i", 211, "int", 4, 1),
+    ("i", 211, "int", 4, 1),
+    ("i", 211, "int", 4, 0),
+    ("i", 211, "int", 4, 0),
+    ("f", 211, "double", "0x0.0p+0"),
+    ("f", 211, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("i", 211, "int", 4, 1),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 211, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("s", 215, ''),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "long", 4, 0),
+    ("i", 215, "long", 4, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "long", 4, 0),
+    ("i", 215, "long", 4, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "long", 4, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 1),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("s", 215, ''),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("i", 215, "uchar", 1, 0),
+    ("s", 216, 'Segoe UI'),
+    ("f", 216, "double", "-0x1.0000000000000p+0"),
+    ("i", 216, "int", 4, 0),
+    ("f", 216, "double", "0x0.0p+0"),
+    ("i", 216, "uint", 4, 0),
+    ("f", 216, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 216, "double", "0x1.0000000000000p+0"),
+    ("f", 216, "double", "0x0.0p+0"),
+    ("f", 216, "double", "0x0.0p+0"),
+    ("f", 216, "double", "0x1.0000000000000p+0"),
+    ("i", 216, "uint", 4, 400),
+    ("i", 215, "uchar", 1, 1),
+    ("s", 216, 'Segoe UI'),
+    ("f", 216, "double", "-0x1.0000000000000p+0"),
+    ("i", 216, "int", 4, 0),
+    ("f", 216, "double", "0x0.0p+0"),
+    ("i", 216, "uint", 4, 0),
+    ("f", 216, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 216, "double", "0x1.0000000000000p+0"),
+    ("f", 216, "double", "0x0.0p+0"),
+    ("f", 216, "double", "0x0.0p+0"),
+    ("f", 216, "double", "0x1.0000000000000p+0"),
+    ("i", 216, "uint", 4, 400),
+    ("i", 215, "uchar", 1, 1),
+    ("s", 216, 'Segoe UI'),
+    ("f", 216, "double", "-0x1.0000000000000p+0"),
+    ("i", 216, "int", 4, 0),
+    ("f", 216, "double", "0x0.0p+0"),
+    ("i", 216, "uint", 4, 0),
+    ("f", 216, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 216, "double", "0x1.0000000000000p+0"),
+    ("f", 216, "double", "0x0.0p+0"),
+    ("f", 216, "double", "0x0.0p+0"),
+    ("f", 216, "double", "0x1.0000000000000p+0"),
+    ("i", 216, "uint", 4, 400),
+    ("i", 217, "long", 4, 0),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "long", 4, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("f", 217, "double", "0x0.0p+0"),
+    ("i", 217, "uchar", 1, 1),
+    ("s", 218, 'Segoe UI'),
+    ("f", 218, "double", "-0x1.0000000000000p+0"),
+    ("i", 218, "int", 4, 0),
+    ("f", 218, "double", "0x0.0p+0"),
+    ("i", 218, "uint", 4, 0),
+    ("f", 218, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 218, "double", "0x1.0000000000000p+0"),
+    ("f", 218, "double", "0x0.0p+0"),
+    ("f", 218, "double", "0x0.0p+0"),
+    ("f", 218, "double", "0x1.0000000000000p+0"),
+    ("i", 218, "uint", 4, 400),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 219, "long", 4, 3),
+    ("i", 219, "long", 4, 4294967295),
+    ("i", 219, "long", 4, 0),
+    ("i", 219, "long", 4, 0),
+    ("i", 219, "uchar", 1, 1),
+    ("s", 220, 'Segoe UI'),
+    ("f", 220, "double", "-0x1.0000000000000p+0"),
+    ("i", 220, "int", 4, 0),
+    ("f", 220, "double", "0x0.0p+0"),
+    ("i", 220, "uint", 4, 0),
+    ("f", 220, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 220, "double", "0x1.0000000000000p+0"),
+    ("f", 220, "double", "0x0.0p+0"),
+    ("f", 220, "double", "0x0.0p+0"),
+    ("f", 220, "double", "0x1.0000000000000p+0"),
+    ("i", 220, "uint", 4, 400),
+    ("i", 219, "uchar", 1, 1),
+    ("i", 219, "long", 4, 0),
+    ("f", 219, "double", "0x0.0p+0"),
+    ("i", 219, "long", 4, 0),
+    ("i", 219, "uchar", 1, 1),
+    ("i", 219, "long", 4, 0),
+    ("f", 219, "double", "0x0.0p+0"),
+    ("i", 219, "long", 4, 0),
+    ("i", 217, "int", 4, 0),
+    ("f", 217, "double", "0x1.921fb54442d28p-1"),
+    ("i", 217, "long", 4, 0),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("s", 217, ''),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "long", 4, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("f", 217, "double", "0x0.0p+0"),
+    ("i", 217, "uchar", 1, 1),
+    ("s", 218, 'Segoe UI'),
+    ("f", 218, "double", "-0x1.0000000000000p+0"),
+    ("i", 218, "int", 4, 0),
+    ("f", 218, "double", "0x0.0p+0"),
+    ("i", 218, "uint", 4, 0),
+    ("f", 218, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 218, "double", "0x1.0000000000000p+0"),
+    ("f", 218, "double", "0x0.0p+0"),
+    ("f", 218, "double", "0x0.0p+0"),
+    ("f", 218, "double", "0x1.0000000000000p+0"),
+    ("i", 218, "uint", 4, 400),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 217, "uchar", 1, 0),
+    ("i", 219, "long", 4, 3),
+    ("i", 219, "long", 4, 4294967295),
+    ("i", 219, "long", 4, 0),
+    ("i", 219, "long", 4, 0),
+    ("i", 219, "uchar", 1, 1),
+    ("s", 220, 'Segoe UI'),
+    ("f", 220, "double", "-0x1.0000000000000p+0"),
+    ("i", 220, "int", 4, 0),
+    ("f", 220, "double", "0x0.0p+0"),
+    ("i", 220, "uint", 4, 0),
+    ("f", 220, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 220, "double", "0x1.0000000000000p+0"),
+    ("f", 220, "double", "0x0.0p+0"),
+    ("f", 220, "double", "0x0.0p+0"),
+    ("f", 220, "double", "0x1.0000000000000p+0"),
+    ("i", 220, "uint", 4, 400),
+    ("i", 219, "uchar", 1, 1),
+    ("i", 219, "long", 4, 0),
+    ("f", 219, "double", "0x0.0p+0"),
+    ("i", 219, "long", 4, 0),
+    ("i", 219, "uchar", 1, 1),
+    ("i", 219, "long", 4, 0),
+    ("f", 219, "double", "0x0.0p+0"),
+    ("i", 219, "long", 4, 0),
+    ("i", 217, "int", 4, 0),
+    ("f", 217, "double", "0x1.921fb54442d28p-1"),
+    ("i", 221, "count", 4, 2),
+    ("s", 222, ''),
+    ("i", 222, "uchar", 1, 0),
+    ("s", 222, ''),
+    ("s", 222, ''),
+    ("i", 222, "uchar", 1, 0),
+    ("s", 222, ''),
+    ("s", 222, ''),
+    ("c", 223, 0),
+    ("c", 224, 0),
+    ("c", 225, 0),
+    ("c", 226, 0),
+    ("c", 227, 0),
+    ("c", 228, 0),
+    ("i", 222, "int", 4, 0),
+    ("i", 222, "int", 4, 0),
+    ("i", 222, "ushort", 2, 0),
+    ("t", 222, "0000"),
+    ("t", 222, "0000"),
+    ("i", 222, "count", 4, 0),
+    ("s", 222, ''),
+    ("i", 222, "uchar", 1, 0),
+    ("s", 222, ''),
+    ("s", 222, ''),
+    ("i", 222, "uchar", 1, 0),
+    ("s", 222, ''),
+    ("s", 222, ''),
+    ("c", 223, 0),
+    ("c", 224, 0),
+    ("c", 225, 0),
+    ("c", 226, 0),
+    ("c", 227, 0),
+    ("c", 228, 0),
+    ("i", 222, "int", 4, 0),
+    ("i", 222, "int", 4, 0),
+    ("i", 222, "ushort", 2, 0),
+    ("t", 222, "0000"),
+    ("t", 222, "0000"),
+    ("i", 222, "count", 4, 0),
+    ("i", 221, "long", 4, 1),
+    ("i", 221, "long", 4, 2),
+    ("s", 221, ''),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 221, "uchar", 1, 1),
+    ("i", 221, "uchar", 1, 1),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 221, "long", 4, 0),
+    ("i", 221, "uchar", 1, 0),
+    ("s", 221, ''),
+    ("s", 221, ''),
+    ("i", 221, "uchar", 1, 0),
+    ("s", 221, ''),
+    ("s", 221, ''),
+    ("i", 221, "uchar", 1, 0),
+    ("s", 221, ''),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 221, "uchar", 1, 1),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 221, "uchar", 1, 0),
+    ("s", 229, 'Segoe UI'),
+    ("f", 229, "double", "-0x1.0000000000000p+0"),
+    ("i", 229, "int", 4, 0),
+    ("f", 229, "double", "0x0.0p+0"),
+    ("i", 229, "uint", 4, 0),
+    ("f", 229, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 229, "double", "0x1.0000000000000p+0"),
+    ("f", 229, "double", "0x0.0p+0"),
+    ("f", 229, "double", "0x0.0p+0"),
+    ("f", 229, "double", "0x1.0000000000000p+0"),
+    ("i", 229, "uint", 4, 400),
+    ("i", 230, "long", 4, 3),
+    ("i", 230, "long", 4, 4294967295),
+    ("i", 230, "long", 4, 0),
+    ("i", 230, "long", 4, 0),
+    ("i", 230, "uchar", 1, 1),
+    ("s", 231, 'Segoe UI'),
+    ("f", 231, "double", "-0x1.0000000000000p+0"),
+    ("i", 231, "int", 4, 0),
+    ("f", 231, "double", "0x0.0p+0"),
+    ("i", 231, "uint", 4, 0),
+    ("f", 231, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 231, "double", "0x1.0000000000000p+0"),
+    ("f", 231, "double", "0x0.0p+0"),
+    ("f", 231, "double", "0x0.0p+0"),
+    ("f", 231, "double", "0x1.0000000000000p+0"),
+    ("i", 231, "uint", 4, 400),
+    ("i", 230, "uchar", 1, 1),
+    ("i", 230, "long", 4, 0),
+    ("f", 230, "double", "0x0.0p+0"),
+    ("i", 230, "long", 4, 0),
+    ("i", 230, "uchar", 1, 1),
+    ("i", 230, "long", 4, 0),
+    ("f", 230, "double", "0x0.0p+0"),
+    ("i", 230, "long", 4, 0),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 221, "uchar", 1, 0),
+    ("i", 232, "uchar", 1, 0),
+    ("f", 232, "double", "0x0.0p+0"),
+    ("i", 232, "uchar", 1, 1),
+    ("f", 232, "double", "0x0.0p+0"),
+    ("i", 232, "uchar", 1, 0),
+    ("i", 232, "uchar", 1, 0),
+    ("i", 232, "uchar", 1, 0),
+    ("i", 232, "uchar", 1, 0),
+    ("i", 232, "uchar", 1, 0),
+    ("i", 232, "uchar", 1, 0),
+    ("i", 233, "long", 4, 3),
+    ("i", 233, "long", 4, 4294967295),
+    ("i", 233, "long", 4, 0),
+    ("i", 233, "long", 4, 0),
+    ("i", 233, "uchar", 1, 1),
+    ("s", 234, 'Segoe UI'),
+    ("f", 234, "double", "-0x1.0000000000000p+0"),
+    ("i", 234, "int", 4, 0),
+    ("f", 234, "double", "0x0.0p+0"),
+    ("i", 234, "uint", 4, 0),
+    ("f", 234, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 234, "double", "0x1.0000000000000p+0"),
+    ("f", 234, "double", "0x0.0p+0"),
+    ("f", 234, "double", "0x0.0p+0"),
+    ("f", 234, "double", "0x1.0000000000000p+0"),
+    ("i", 234, "uint", 4, 400),
+    ("i", 233, "uchar", 1, 1),
+    ("i", 233, "long", 4, 0),
+    ("f", 233, "double", "0x0.0p+0"),
+    ("i", 233, "long", 4, 0),
+    ("i", 233, "uchar", 1, 1),
+    ("i", 233, "long", 4, 0),
+    ("f", 233, "double", "0x0.0p+0"),
+    ("i", 233, "long", 4, 0),
+    ("i", 232, "uint", 4, 0),
+    ("i", 232, "uchar", 1, 1),
+    ("i", 232, "uchar", 1, 1),
+    ("i", 232, "uchar", 1, 1),
+    ("i", 232, "uchar", 1, 0),
+    ("f", 232, "double", "0x0.0p+0"),
+    ("i", 235, "uchar", 1, 0),
+    ("i", 235, "uchar", 1, 0),
+    ("i", 235, "uchar", 1, 0),
+    ("i", 235, "int", 4, 0),
+    ("i", 235, "int", 4, 0),
+    ("s", 235, ''),
+    ("s", 235, ''),
+    ("i", 235, "int", 4, 0),
+    ("i", 235, "int", 4, 0),
+    ("i", 235, "int", 4, 0),
+    ("i", 236, "long", 4, 3),
+    ("i", 236, "long", 4, 4294967295),
+    ("i", 236, "long", 4, 0),
+    ("i", 236, "long", 4, 0),
+    ("i", 236, "uchar", 1, 1),
+    ("s", 237, 'Segoe UI'),
+    ("f", 237, "double", "-0x1.0000000000000p+0"),
+    ("i", 237, "int", 4, 0),
+    ("f", 237, "double", "0x0.0p+0"),
+    ("i", 237, "uint", 4, 0),
+    ("f", 237, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 237, "double", "0x1.0000000000000p+0"),
+    ("f", 237, "double", "0x0.0p+0"),
+    ("f", 237, "double", "0x0.0p+0"),
+    ("f", 237, "double", "0x1.0000000000000p+0"),
+    ("i", 237, "uint", 4, 400),
+    ("i", 236, "uchar", 1, 1),
+    ("i", 236, "long", 4, 0),
+    ("f", 236, "double", "0x0.0p+0"),
+    ("i", 236, "long", 4, 0),
+    ("i", 236, "uchar", 1, 1),
+    ("i", 236, "long", 4, 0),
+    ("f", 236, "double", "0x0.0p+0"),
+    ("i", 236, "long", 4, 0),
+    ("s", 238, ''),
+    ("s", 238, ''),
+    ("s", 238, ''),
+    ("s", 238, ''),
+    ("s", 238, ''),
+    ("i", 238, "int", 4, 0),
+    ("i", 238, "int", 4, 0),
+    ("f", 238, "double", "0x1.eb851eb851eb8p-6"),
+    ("f", 238, "double", "0x1.eb851eb851eb8p-6"),
+    ("i", 238, "int", 4, 0),
+    ("i", 238, "uchar", 1, 0),
+    ("i", 238, "uchar", 1, 1),
+    ("i", 238, "uchar", 1, 0),
+    ("i", 238, "uchar", 1, 0),
+    ("i", 238, "uchar", 1, 1),
+    ("i", 238, "int", 4, 0),
+    ("f", 238, "double", "0x0.0p+0"),
+    ("i", 238, "int", 4, 4294967295),
+    ("i", 238, "uchar", 1, 0),
+    ("i", 238, "uchar", 1, 0),
+    ("i", 238, "uchar", 1, 0),
+    ("f", 239, "double", "0x0.0p+0"),
+    ("f", 239, "double", "0x0.0p+0"),
+    ("f", 239, "double", "0x0.0p+0"),
+    ("i", 240, "long", 4, 3),
+    ("i", 240, "long", 4, 4294967295),
+    ("i", 240, "long", 4, 0),
+    ("i", 240, "long", 4, 0),
+    ("i", 240, "uchar", 1, 1),
+    ("s", 241, 'Segoe UI'),
+    ("f", 241, "double", "-0x1.0000000000000p+0"),
+    ("i", 241, "int", 4, 0),
+    ("f", 241, "double", "0x0.0p+0"),
+    ("i", 241, "uint", 4, 0),
+    ("f", 241, "double", "0x1.0624dd2f1a9fcp-10"),
+    ("f", 241, "double", "0x1.0000000000000p+0"),
+    ("f", 241, "double", "0x0.0p+0"),
+    ("f", 241, "double", "0x0.0p+0"),
+    ("f", 241, "double", "0x1.0000000000000p+0"),
+    ("i", 241, "uint", 4, 400),
+    ("i", 240, "uchar", 1, 1),
+    ("i", 240, "long", 4, 0),
+    ("f", 240, "double", "0x0.0p+0"),
+    ("i", 240, "long", 4, 0),
+    ("i", 240, "uchar", 1, 1),
+    ("i", 240, "long", 4, 0),
+    ("f", 240, "double", "0x0.0p+0"),
+    ("i", 240, "long", 4, 0),
+    ("f", 242, "double", "0x1.a36e2eb1c432dp-15"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.a36e2eb1c432dp-14"),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.a36e2eb1c432dp-13"),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.a36e2eb1c432dp-13"),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-12"),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.a36e2eb1c432dp-14"),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-12"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-12"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-12"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.a36e2eb1c432dp-13"),
+    ("f", 242, "double", "-0x1.a36e2eb1c432dp-13"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-12"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-12"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.47ae147ae147bp-7"),
+    ("f", 242, "double", "0x1.0000000000000p+0"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 1),
+    ("f", 242, "double", "0x1.a36e2eb1c432dp-14"),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-12"),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-12"),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 0),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 2),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-11"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("f", 242, "double", "0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "-0x1.0624dd2f1a9fcp-11"),
+    ("f", 242, "double", "0x1.1df46a2529983p-7"),
+    ("f", 242, "double", "-0x1.1df46a2529983p-7"),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 2),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("f", 242, "double", "0x1.1df46a2529983p-6"),
+    ("f", 242, "double", "-0x1.1df46a2529983p-6"),
+    ("f", 242, "double", "0x1.1df46a2529983p-7"),
+    ("f", 242, "double", "-0x1.1df46a2529983p-7"),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 1),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 0),
+    ("i", 242, "int", 4, 5),
+    ("i", 242, "int", 4, 4294967295),
+    ("i", 242, "int", 4, 1),
+    ("f", 243, "float", "0x1.797cc40000000p-13"),
+    ("f", 243, "float", "0x1.0624de0000000p-12"),
+    ("f", 243, "float", "0x1.6f00680000000p-12"),
+    ("f", 243, "float", "0x1.0624de0000000p-11"),
+    ("f", 243, "float", "0x1.6f00680000000p-11"),
+    ("f", 243, "float", "0x1.0624de0000000p-10"),
+    ("f", 243, "float", "0x1.6f00680000000p-10"),
+    ("f", 243, "float", "0x1.0624de0000000p-9"),
+    ("f", 0, "double", "0x1.3880000000000p+12"),
+    ("i", 0, "long", 4, 3),
+    ("i", 0, "long", 4, 1),
+    ("i", 0, "uchar", 1, 0),
+    ("i", 0, "uchar", 1, 0),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("f", 0, "double", "0x1.47ae147ae147bp-9"),
+    ("f", 0, "double", "0x1.16872b020c49cp-7"),
+    ("f", 0, "double", "0x1.16872b020c49cp-7"),
+    ("f", 0, "double", "0x1.16872b020c49cp-7"),
+    ("f", 0, "double", "0x1.8000000000000p+1"),
+    ("f", 0, "double", "0x1.8000000000000p+1"),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 4294967295),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 0),
+    ("s", 2, 'Century Gothic'),
+    ("f", 2, "double", "-0x1.0000000000000p+0"),
+    ("i", 2, "int", 4, 12),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("i", 2, "uint", 4, 0),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("f", 2, "double", "0x1.0000000000000p+0"),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("f", 2, "double", "0x1.0000000000000p+0"),
+    ("i", 2, "uint", 4, 400),
+    ("s", 2, 'Century Gothic'),
+    ("f", 2, "double", "-0x1.0000000000000p+0"),
+    ("i", 2, "int", 4, 12),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("i", 2, "uint", 4, 0),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("f", 2, "double", "0x1.0000000000000p+0"),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("f", 2, "double", "0x0.0p+0"),
+    ("f", 2, "double", "0x1.0000000000000p+0"),
+    ("i", 2, "uint", 4, 400),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 1),
+    ("s", 0, 'Plate,'),
+    ("s", 0, ''),
+    ("s", 0, 'x'),
+    ("s", 0, 'x'),
+    ("i", 0, "int", 4, 2),
+    ("i", 0, "int", 4, 3),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("s", 0, 'Sheet'),
+    ("i", 0, "long", 4, 0),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 0),
+    ("s", 0, '%Description%, %MATERIAL%, %LENGTH%, %ANGLE1%, %ANGLE2%, %Angle Direction%, %Angle Rotation%'),
+    ("s", 0, '%Description%, %MATERIAL%, %Bounding Box Length%, %Bounding Box Width%, %Sheet Metal Thickness%, %Bounding Box Area%, %Bends%, %Bend Radius%'),
+    ("s", 0, '%Description%, %MATERIAL%'),
+    ("i", 0, "int", 4, 1),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+    ("i", 0, "int", 4, 0),
+)
+
+RESIDUAL_MORELMGR_C_HEAD = bytes.fromhex("00000000fffeff00000000000000000001000000ffffffff0000ffffffff000000000000")
+
+RESIDUAL_MODETAILDEFS_C_TAIL = bytes.fromhex("0000")
+
+DETAIL_REGION_PLAN = (
+    ("definition", "moRelMgr_c", 1, 1217),
+    ("classref", "moLengthUserUnits_c", 0, 64),
+    ("null", "", 0, 442),
+    ("null", "", 0, 434),
+    ("classref", "moLengthUserUnits_c", 0, 64),
+    ("null", "", 0, 430),
+    ("classref", "moLengthUserUnits_c", 0, 64),
+    ("null", "", 0, 438),
+    ("classref", "moLengthUserUnits_c", 0, 64),
+    ("null", "", 0, 434),
+    ("classref", "moLengthUserUnits_c", 0, 64),
+    ("null", "", 0, 446),
+    ("classref", "moLengthUserUnits_c", 0, 64),
+    ("null", "", 0, 470),
+    ("classref", "moLengthUserUnits_c", 0, 64),
+    ("null", "", 0, 438),
+    ("null", "", 0, 450),
+    ("classref", "moLengthUserUnits_c", 0, 64),
+    ("null", "", 0, 9005),
+    ("null", "", 0, 0),
+    ("null", "", 0, 48),
+    ("null", "", 0, 0),
+    ("null", "", 0, 2676),
+)
 
 
-ANNOTATION_DECLARED_BYTES = [0]
-ANNOTATION_OPAQUE_BYTES = [0]
+WIDTH_KINDS = {
+    "char": 1,
+    "uchar": 1,
+    "short": 2,
+    "ushort": 2,
+    "wchar_t": 2,
+    "int": 4,
+    "uint": 4,
+    "long": 4,
+    "ulong": 4,
+    "float": 4,
+    "double": 8,
+    "count": 4,
+}
 
 
-def encode_unit_precision(fields: tuple[int | float, ...]) -> bytes:
-    return struct.pack(UNIT_PRECISION_LAYOUT, *fields)
+def encode_count(value: int) -> bytes:
+    if value < ARCHIVE_COUNT_ESCAPE:
+        return struct.pack("<H", value)
+    return struct.pack("<HI", ARCHIVE_COUNT_ESCAPE, value)
 
 
-def annotation_style_record(
-    precision: tuple[int | float, ...], font: str, remainder: bytes
-) -> bytes:
-    head = encode_unit_precision(precision)
-    name = encode_string(font)
-    ANNOTATION_DECLARED_BYTES[0] += len(head) + len(name)
-    ANNOTATION_OPAQUE_BYTES[0] += len(remainder)
-    return head + name + remainder
+def encode_detail_field(item: tuple) -> bytes:
+    kind = item[0]
+    if kind == "i":
+        return int(item[4]).to_bytes(item[3], "little")
+    if kind == "f":
+        return struct.pack("<d" if item[2] == "double" else "<f", float.fromhex(item[3]))
+    if kind == "b":
+        return bytes.fromhex(item[3])
+    if kind == "s":
+        return encode_string(item[2])
+    if kind == "c":
+        return encode_count(item[2])
+    if kind == "t":
+        return bytes.fromhex(item[2])
+    raise SldprtFormatError(f"unknown moDetailDefs_c field kind {kind!r}")
 
+
+def encode_detail_defs() -> bytes:
+    return b"".join(encode_detail_field(item) for item in MODETAILDEFS_C_FIELDS)
+
+
+def declared_detail_bytes() -> tuple[int, int]:
+    declared = 0
+    framing = 0
+    for item in MODETAILDEFS_C_FIELDS:
+        width = len(encode_detail_field(item))
+        if item[0] == "t":
+            framing += width
+        else:
+            declared += width
+    return declared, framing
+
+
+def encode_detail_region() -> bytes:
+    return (
+        RESIDUAL_MORELMGR_C_HEAD + encode_detail_defs() + RESIDUAL_MODETAILDEFS_C_TAIL
+    )
+
+
+def detail_region_bodies() -> tuple[bytes, ...]:
+    flat = encode_detail_region()
+    bodies: list[bytes] = []
+    at = 0
+    for index, entry in enumerate(DETAIL_REGION_PLAN):
+        if index:
+            at += 2
+        length = entry[3]
+        bodies.append(flat[at : at + length])
+        at += length
+    if at != len(flat):
+        raise SldprtFormatError(
+            f"moDetailDefs_c region cut {at} of {len(flat)} bytes"
+        )
+    return tuple(bodies)
+
+
+DETAIL_REGION_BODIES = detail_region_bodies()
 
 PART_RECORD_TREE_ID_OFFSET = 0
 PROLOGUE_BODY_TEMPLATE = bytes.fromhex("080b00000000000050460000")
 
 MONODENAME_N000_BODY = bytes.fromhex(
-    "fffeff0650006100720074003700300000000000000000400000000000810000fffeff0000"
-    "000000"
+    "fffeff0650006100720074003700300000000000000000400000000000810000fffeff00"
+    "00000000"
 )
 
 MOVISUALPROPERTIES_N001_BODY = bytes.fromhex(
-    "cad1ee000000000000000000fffeff00fffeff0553007400650065006c00000000000000f0"
-    "3f000000000000f03f000000000000e03f000000000000d43f000000000000000000000000"
-    "00000000000000000100000000000000010000000100000001000000fffeff000100000001"
-    "0000000400000000000000fffeff0e640065006600610075006c00740070006c0061007300"
-    "74006900630003cad1ee000000803f0000000000000000000000000000803f000000000000"
-    "000000000000000000000000803f010000009a99193e00000000000080bf000080bf000080"
-    "bf000000000000000000000000fffeff3f43003a005c00500052004f004700520041007e00"
-    "31005c0053004f004c004900440057007e0031005c0053004f004c004900440057007e0031"
-    "005c0064006100740061005c00670072006100700068006900630073005c006d0061007400"
-    "65007200690061006c0073005c0063006f006c006f0072002e00700032006d00ffffff009a"
-    "99193f0000803ffffeff006f12833a6f12833a000000004001000000000000000000000000"
-    "803f0000000000000000000000000000803f0000000000000000000000000000803f0000b4"
-    "420000803f000080bf000080bffffeff0000000000fffeff00fffeff00fffeff0000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000"
-    "0000000000000000000000000000fffeff000000000000000000fffeff0000000000010000"
-    "00fffeff000000000001000000ffffffff000000000000000000000000"
+    "cad1ee000000000000000000fffeff00fffeff0553007400650065006c00000000000000"
+    "f03f000000000000f03f000000000000e03f000000000000d43f00000000000000000000"
+    "000000000000000000000100000000000000010000000100000001000000fffeff000100"
+    "0000010000000400000000000000fffeff0e640065006600610075006c00740070006c00"
+    "6100730074006900630003cad1ee000000803f0000000000000000000000000000803f00"
+    "0000000000000000000000000000000000803f010000009a99193e00000000000080bf00"
+    "0080bf000080bf000000000000000000000000fffeff3f43003a005c00500052004f0047"
+    "00520041007e0031005c0053004f004c004900440057007e0031005c0053004f004c0049"
+    "00440057007e0031005c0064006100740061005c00670072006100700068006900630073"
+    "005c006d006100740065007200690061006c0073005c0063006f006c006f0072002e0070"
+    "0032006d00ffffff009a99193f0000803ffffeff006f12833a6f12833a00000000400100"
+    "0000000000000000000000803f0000000000000000000000000000803f00000000000000"
+    "00000000000000803f0000b4420000803f000080bf000080bffffeff0000000000fffeff"
+    "00fffeff00fffeff00000000000000000000000000000000000000000000000000000000"
+    "000000000000000000000000000000000000000000000000000000000000000000000000"
+    "0000000000000000000000000000000000000000000000000000000000fffeff00000000"
+    "0000000000fffeff000000000001000000fffeff000000000001000000ffffffff000000"
+    "000000000000000000"
 )
 
 MOUNITSTABLE_N002_BODY = bytes.fromhex("1000")
 
 MOLENGTHUSERUNITS_N003_BODY = bytes.fromhex(
-    "02000000010000009a9999999999b93f0400000001000000282d4454fb21e93f0800000000"
-    "000000010000000100000000000000000024c00000000000000000"
+    "02000000010000009a9999999999b93f0400000001000000282d4454fb21e93f08000000"
+    "00000000010000000100000000000000000024c00000000000000000"
 )
 
 MOLENGTHUSERUNITS_N004_BODY = bytes.fromhex(
-    "0200000001000000000000000000f03f0100000001000000282d4454fb21e93f0200000000"
-    "000000010000000100000000000000000000000000000000000300"
+    "0200000001000000000000000000f03f0100000001000000282d4454fb21e93f02000000"
+    "00000000010000000100000000000000000000000000000000000300"
 )
 
 MOLENGTHUSERUNITS_N005_BODY = bytes.fromhex("")
 
 MOANGLEUSERUNITS_N006_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "000000010000000100000000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "00000000010000000100000000000000000000000000000000000000"
 )
 
 MONUMBERUSERUNITS_N007_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "00000001000000010000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "0000000001000000010000000000000000000000000000000000"
 )
 
 MODENSITYUNITS_N008_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "000000010000000100000000000000000000000000000000000300010000030000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "000000000100000001000000000000000000000000000000000003000100000300000000"
+    "00"
 )
 
 MOFLOATNUMBERUSERUNITS_N009_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "00000001000000010000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "0000000001000000010000000000000000000000000000000000"
 )
 
 MOSPRINGCONSTANTUNITS_N010_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "00000001000000010000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "0000000001000000010000000000000000000000000000000000"
 )
 
 MOUNITSYSUNITS_N011_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "000000010000000100000000000000000000000000000000000400"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "00000000010000000100000000000000000000000000000000000400"
 )
 
 MOFORCEUNITS_N012_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "000000010000000100000000000000000000000000000000000200"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "00000000010000000100000000000000000000000000000000000200"
 )
 
 MOSTRESSUNITS_N013_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "00000001000000010000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "0000000001000000010000000000000000000000000000000000"
 )
 
 MOGRAVITYUNITS_N014_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "00000001000000010000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "0000000001000000010000000000000000000000000000000000"
 )
 
 MOLINEARMOTORUNITS_N015_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "00000001000000010000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "0000000001000000010000000000000000000000000000000000"
 )
 
 MOROTARYMOTORUNITS_N016_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "00000001000000010000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "0000000001000000010000000000000000000000000000000000"
 )
 
 MOPOWERUNITS_N017_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "000000010000000100000000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "00000000010000000100000000000000000000000000000000000000"
 )
 
 MOENERGYUNITS_N018_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "000000010000000100000000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "00000000010000000100000000000000000000000000000000000000"
 )
 
 MOTIMEUNITS_N019_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "000000010000000100000000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "00000000010000000100000000000000000000000000000000000000"
 )
 
 MOFREQUENCYUSERUNITS_N020_BODY = bytes.fromhex(
-    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f0100000000"
-    "00000001000000010000000000000000000000000000000000"
+    "02000000010000007b14ae47e17a843f0a00000001000000282d4454fb21e93f01000000"
+    "0000000001000000010000000000000000000000000000000000"
 )
 
 MOUNITCOMPONENT_N021_BODY = bytes.fromhex("")
@@ -167,26 +3459,26 @@ MOUNITCOMPONENT_N021_BODY = bytes.fromhex("")
 MOUNITCOMPONENT_N022_BODY = bytes.fromhex("00000000000000000000")
 
 GCCURVATUREOBJECT_N023_BODY = bytes.fromhex(
-    "0000000000408f409a99999999993f400000000000001040333333333333f33f0000000000"
-    "00f03f301275614923dd01"
+    "0000000000408f409a99999999993f400000000000001040333333333333f33f00000000"
+    "0000f03f301275614923dd01"
 )
 
 MOTRANSREFPLANEDATA_N024_BODY = bytes.fromhex(
-    "01000000010000005384f700052367005f0000000000000001000000000000000000000000"
-    "000000007b14ae47e17a743f7b14ae47e17a943f7b14ae47e17a843f7b14ae47e17a843f7b"
-    "14ae47e17a94bf7b14ae47e17a84bf0000000000000000445ad33e7976973f000000000000"
-    "0000000000000000000000000000000000000000000000408f403a8c30e28e79453e020000"
-    "000000aaaaaaaabbbbbbbb0000000001000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000"
-    "000000000000000000000000000000000000000000000066000000"
+    "01000000010000005384f700052367005f00000000000000010000000000000000000000"
+    "00000000007b14ae47e17a743f7b14ae47e17a943f7b14ae47e17a843f7b14ae47e17a84"
+    "3f7b14ae47e17a94bf7b14ae47e17a84bf0000000000000000445ad33e7976973f000000"
+    "0000000000000000000000000000000000000000000000000000408f403a8c30e28e7945"
+    "3e020000000000aaaaaaaabbbbbbbb000000000100000000000000000000000000000000"
+    "000000000000000000000000000000000000000000000000000000000000000000000000"
+    "000000000000000000000000000000000000000000000000000000000066000000"
 )
 
 MOTRANSREFPLANEDATA_N025_BODY = bytes.fromhex("")
 
 GCXHATCH_N026_BODY = bytes.fromhex(
-    "fffeff1841004e00530049003300310020002800490072006f006e00200042007200690063"
-    "006b00530074006f006e00650029000000000000000000000000000000f03f000000000000"
-    "000001000000ffffffffffffffff00000000"
+    "fffeff1841004e00530049003300310020002800490072006f006e002000420072006900"
+    "63006b00530074006f006e00650029000000000000000000000000000000f03f00000000"
+    "0000000001000000ffffffffffffffff00000000"
 )
 
 MOMATERIAL_N027_BODY = bytes.fromhex("")
@@ -200,8 +3492,8 @@ MODENSITYPARAMETER_N030_BODY = bytes.fromhex("0000000000408f4000")
 UOMODELDATA_N031_BODY = bytes.fromhex("")
 
 UOMODELDATA_N032_BODY = bytes.fromhex(
-    "00000000000000000000000000000000000000000000000000000000000000006057000000"
-    "00000000006500000001000000"
+    "000000000000000000000000000000000000000000000000000000000000000060570000"
+    "0000000000006500000001000000"
 )
 
 MOATOM_N033_BODY = bytes.fromhex("")
@@ -209,1596 +3501,15 @@ MOATOM_N033_BODY = bytes.fromhex("")
 MOATOM_N034_BODY = bytes.fromhex("0100000000000040ffffffff00000000fffeff0000000000")
 
 MOATOM_N035_BODY = bytes.fromhex(
-    "00000000000065000000000000002000000020000000000000000000000000000000010000"
-    "00ffffffff76a500000100000076a5000006000000504600001027000000000010"
-)
-
-MORELMGR_N036_BODY = bytes.fromhex(
-    "00000000fffeff00000000000000000001000000ffffffff0000ffffffff00000000000004"
-    "000000fffeff007b14ae47e17a643f010040040002000000fca9f1d24d62603f0100010001"
-    "00000000020000000300000004000000f168e388b5f8e43eb75f3e59315ced3ef168e388b5"
-    "f8c43e0200000003000000040000009f815f695ae0263ff00df67c7203303f9f815f695ae0"
-    "063f01000000fca9f1d24d62403f449d52a246df813f010000000000000001000000010000"
-    "00010000000100000001000000000000000000000000010000000000000000000000000000"
-    "000000ffffffff0100000000000000fca9f1d24d62803f00000000fffeff0000000000fffe"
-    "ff000100000000000000000000000000000000000000000000000000000001000000010000"
-    "00010000000100000001000000010000000a000000fffeff016d00fffeff026d006d00fffe"
-    "ff0263006d00fffeff026b006d00fffeff0275006d00fffeff02b5006d00fffeff026e006d"
-    "00fffeff017300fffeff0248007a00fffeff02500061000100000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000000000000000000000000000"
-    "00000000000500fffeff0b4400650073006300720069007000740069006f006e00fffeff0d"
-    "480069006700680020005000720069006f007200690074007900fffeff0c4c006f00770020"
-    "005000720069006f007200690074007900fffeff0843006f006d0070006c00650074006500"
-    "fffeff08520065006d0069006e00640065007200fffeff0e430065006e0074007500720079"
-    "00200047006f00740068006900630079e9263108ac6c3f0000000000000000000000000000"
-    "0000fca9f1d24d62503f000000000000f03f00000000000000000000000000000000000000"
-    "000000f03f9001000004000000b28174b169a5503fc1525dc0cb0c6b3fa60a462575027a3f"
-    "fca9f1d24d62503ffca9f1d24d62503f7b14ae47e17a743f7b14ae47e17a843fa60a462575"
-    "026a3f8bc22e8a1ef8583fa60a462575027a3f00000000000039c002000000000000000000"
-    "000014000000010000000000000000000000000000000000000000000000000000007b14ae"
-    "47e17a843ffa7e6abc7493783f70732d3852c1d03fb020000001000000000000000000f03f"
-    "00000000010000000100000001000000010000000100000001000000040000000100000001"
-    "000000000000000000f03fa60a462575028a3f01000000000000000000f03fa60a46257502"
-    "8a3f0100000000000000fffeff00fffeff0000000000000000000000000000000000010000"
-    "0000000000010000000000000002000000030000000200000003000000ffff000000000000"
-    "0000c000000002000000010000009a9999999999b93f0400000001000000282d4454fb21e9"
-    "3f0800000000000000010000000100000000000000000000000000000000000000"
-)
-
-MOLENGTHUSERUNITS_N037_BODY = bytes.fromhex(
-    "0300000001000000000000000000f03f0100000001000000282d4454fb21e93f0200000000"
-    "000000010000000100000000000000000000000000000000000300"
-)
-
-ANNOTATION_STYLE_RECORD_00 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000000000000"
-        "0200000000000000040000000100000001000000000000000000f03fa60a462575028a3f01"
-        "000000000000000000f03fa60a462575028a3f0100000000000000fffeff00fffeff000000"
-        "00000000000000000000000000000100000000000000010000000000000002000000030000"
-        "000200000003000000ffff0000000000000000c000000002000000010000007b14ae47e17a"
-        "843f0a00000001000000282d4454fb21e93f01000000000000000100000001000000000000"
-        "00000000000000000000000200"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_038 = b"".join((ANNOTATION_STYLE_RECORD_00,))
-
-ANNOTATION_STYLE_RECORD_01 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000042010000"
-        "040000000100000001000000000000000000f03fa60a462575028a3f010000000000000000"
-        "00f03fa60a462575028a3f0100000000000000fffeff00fffeff0000000000000000000000"
-        "00000000000001000000000000000100000000000000020000000300000002000000030000"
-        "00ffff0000000000000000c000000002000000010000009a9999999999b93f040000000100"
-        "0000282d4454fb21e93f080000000000000001000000010000000000000000000000000000"
-        "0000000000"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_039 = b"".join((ANNOTATION_STYLE_RECORD_01,))
-
-MOLENGTHUSERUNITS_N040_BODY = bytes.fromhex(
-    "0300000001000000000000000000f03f0100000001000000282d4454fb21e93f0200000000"
-    "000000010000000100000000000000000000000000000000000300"
-)
-
-ANNOTATION_STYLE_RECORD_02 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000004000000"
-        "0100000001000000000000000000f03fa60a462575028a3f01000000000000000000f03fa6"
-        "0a462575028a3f0100000000000000fffeff00fffeff000000000000000000000000000000"
-        "00000100000000000000010000000000000002000000030000000200000003000000ffff00"
-        "00000000000000c000000002000000010000009a9999999999b93f0400000001000000282d"
-        "4454fb21e93f08000000000000000100000001000000000000000000000000000000000000"
-        "00"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_041 = b"".join((ANNOTATION_STYLE_RECORD_02,))
-
-MOLENGTHUSERUNITS_N042_BODY = bytes.fromhex(
-    "0300000001000000000000000000f03f0100000001000000282d4454fb21e93f0200000000"
-    "000000010000000100000000000000000000000000000000000300"
-)
-
-ANNOTATION_STYLE_RECORD_03 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000002000000"
-        "01000000040000000100000001000000000000000000f03fa60a462575028a3f0100000000"
-        "0000000000f03fa60a462575028a3f0100000000000000fffeff00fffeff00000000000000"
-        "00000000000000000000010000000000000001000000000000000200000003000000020000"
-        "0003000000ffff0100000000000000c000000002000000010000009a9999999999b93f0400"
-        "000001000000282d4454fb21e93f0800000000000000010000000100000000000000000000"
-        "000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_043 = b"".join((ANNOTATION_STYLE_RECORD_03,))
-
-MOLENGTHUSERUNITS_N044_BODY = bytes.fromhex(
-    "0300000001000000000000000000f03f0100000001000000282d4454fb21e93f0200000000"
-    "000000010000000100000000000000000000000000000000000300"
-)
-
-ANNOTATION_STYLE_RECORD_04 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000000000000"
-        "040000000100000001000000000000000000f03fa60a462575028a3f010000000000000000"
-        "00f03fa60a462575028a3f0100000000000000fffeff00fffeff0000000000000000000000"
-        "00000000000001000000000000000100000000000000020000000300000002000000030000"
-        "00ffff0000000000000000c000000002000000010000009a9999999999b93f040000000100"
-        "0000282d4454fb21e93f080000000000000001000000010000000000000000000000000000"
-        "0000000000"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_045 = b"".join((ANNOTATION_STYLE_RECORD_04,))
-
-MOLENGTHUSERUNITS_N046_BODY = bytes.fromhex(
-    "0300000001000000000000000000f03f0100000001000000282d4454fb21e93f0200000000"
-    "000000010000000100000000000000000000000000000000000300"
-)
-
-ANNOTATION_STYLE_RECORD_05 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000001000000"
-        "01000000a60a462575025a3f040000000100000002000000000000000000f03fa60a462575"
-        "028a3f01000000000000000000f03fa60a462575028a3f0100000000000000fffeff00fffe"
-        "ff000000000000000000000000000000000001000000030000000100000000000000020000"
-        "00030000000200000003000000ffff0100000000000000c000000002000000010000009a99"
-        "99999999b93f0400000001000000282d4454fb21e93f080000000000000001000000010000"
-        "0000000000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_047 = b"".join((ANNOTATION_STYLE_RECORD_05,))
-
-MOLENGTHUSERUNITS_N048_BODY = bytes.fromhex(
-    "0300000001000000000000000000f03f0100000001000000282d4454fb21e93f0200000000"
-    "000000010000000100000000000000000000000000000000000300"
-)
-
-ANNOTATION_STYLE_RECORD_06 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000000000000"
-        "01000000020000000200000000000000000000000000000000000000000000000000000004"
-        "0000000100000001000000000000000000f03fa60a462575028a3f01000000000000000000"
-        "f03fa60a462575028a3f0100000000000000fffeff00fffeff000000000000000000000000"
-        "00000000000100000000000000010000000000000002000000030000000200000003000000"
-        "ffff0000000000000000c000000002000000010000009a9999999999b93f04000000010000"
-        "00282d4454fb21e93f08000000000000000100000001000000000000000000000000000000"
-        "00000000"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_049 = b"".join((ANNOTATION_STYLE_RECORD_06,))
-
-MOLENGTHUSERUNITS_N050_BODY = bytes.fromhex(
-    "0300000001000000000000000000f03f0100000001000000282d4454fb21e93f0200000000"
-    "000000010000000100000000000000000000000000000000000300"
-)
-
-ANNOTATION_STYLE_RECORD_07 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000001000000"
-        "00000000040000000100000001000000000000000000f03fa60a462575028a3f0100000000"
-        "0000000000f03fa60a462575028a3f0100000000000000fffeff00fffeff00000000000000"
-        "00000000000000000000010000000000000001000000000000000200000002000000020000"
-        "0002000000ffff0000000000000000c000000002000000010000007b14ae47e17a843f0a00"
-        "000001000000282d4454fb21e93f0100000000000000010000000100000000000000000000"
-        "000000000000000200"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_051 = b"".join((ANNOTATION_STYLE_RECORD_07,))
-
-ANNOTATION_STYLE_RECORD_08 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000001000000"
-        "15000000000000000000000000000000040000000100000001000000000000000000f03fa6"
-        "0a462575028a3f01000000000000000000f03fa60a462575028a3f0100000000000000fffe"
-        "ff00fffeff0000000000000000000000000000000000010000000000000001000000000000"
-        "0002000000030000000200000003000000ffff0000000000000000c0000000020000000100"
-        "00009a9999999999b93f0400000001000000282d4454fb21e93f0800000000000000010000"
-        "000100000000000000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_052 = b"".join((ANNOTATION_STYLE_RECORD_08,))
-
-MOLENGTHUSERUNITS_N053_BODY = bytes.fromhex(
-    "0300000001000000000000000000f03f0100000001000000282d4454fb21e93f0200000000"
-    "000000010000000100000000000000000000000000000000000300"
-)
-
-ANNOTATION_STYLE_RECORD_09 = annotation_style_record(
-    (2, 1, 0.01, 10, 1, 0.78539816339745, 1, 0, 1, 1, 0, 0, 0, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000fffeff0a4300"
-        "4f004e00540049004e0055004f00550053000000000080bf0000fffeff0a43004f004e0054"
-        "0049004e0055004f00550053000000000080bf000001000000000000000000000004000000"
-        "a60a462575027a3f0000000000000000030000000000000000000000000000000100"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_10 = annotation_style_record(
-    (
-        65536,
-        0,
-        5.562684646591794e-309,
-        2577006592,
-        2576980377,
-        8.028e-320,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000200"
-        "00000200000001000000010000000100000002000000fffeff00fffeff00010000001fa2d1"
-        "1dc4ce843f1fa2d11dc4ce843f0000000001000000fffeff01580000000000000000000000"
-        "00000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_11 = annotation_style_record(
-    (
-        2851864576,
-        1649267441,
-        5.56268464634808e-309,
-        178651136,
-        41231686,
-        4.04077e-319,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000000"
-        "00000a000000000000001fa2d11dc4ce843f000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_12 = annotation_style_record(
-    (
-        2851864576,
-        1649267441,
-        5.562684646671872e-309,
-        178651136,
-        41231686,
-        4.04077e-319,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000000"
-        "0000010000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_13 = annotation_style_record(
-    (
-        65536,
-        0,
-        5.562684646268003e-309,
-        178651136,
-        41231686,
-        4.04077e-319,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_14 = annotation_style_record(
-    (
-        0,
-        1,
-        5.56366076433185e-309,
-        178651136,
-        41231686,
-        4.04077e-319,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000000"
-        "0000020000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_15 = annotation_style_record(
-    (
-        0,
-        16368,
-        5.9100129173332e-309,
-        178651136,
-        41231686,
-        4.04077e-319,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex("79e9263108ac6c3f00000000"),
-)
-
-ANNOTATION_STYLE_RECORD_16 = annotation_style_record(
-    (
-        0,
-        0,
-        -3.598220646991178e91,
-        1062232653,
-        0,
-        5.299808824e-315,
-        0,
-        0,
-        0,
-        0,
-        1072693248,
-        400,
-        0,
-        0,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "e7525c55f65d613f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f0000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_17 = annotation_style_record(
-    (
-        0,
-        0,
-        5.562684775865217e-309,
-        178651136,
-        41231686,
-        4.04077e-319,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000000"
-        "00000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_18 = annotation_style_record(
-    (
-        0,
-        2719940608,
-        5.90773830081456e-309,
-        178651136,
-        41231686,
-        4.04077e-319,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f000000000000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_19 = annotation_style_record(
-    (
-        0,
-        26230768,
-        5.562684646268003e-309,
-        2577006592,
-        2576980377,
-        4.0407e-319,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f9001"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_20 = annotation_style_record(
-    (
-        0,
-        2719940608,
-        5.907398781488004e-309,
-        2577006592,
-        2576980377,
-        8.028e-320,
-        0,
-        0,
-        0,
-        0,
-        4294901760,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000700"
-        "0000090000000b00"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_21 = annotation_style_record(
-    (
-        131072,
-        2719940608,
-        1.735724816113555e-309,
-        0,
-        0,
-        5.562684646268003e-309,
-        262144,
-        0,
-        0,
-        4294901760,
-        0,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_22 = annotation_style_record(
-    (
-        0,
-        16368,
-        0.0,
-        0,
-        0,
-        3.791326488278549e-301,
-        262144,
-        0,
-        0,
-        4294901760,
-        0,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f000000000000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_23 = annotation_style_record(
-    (
-        0,
-        26230768,
-        0.0,
-        65536,
-        0,
-        -5.314682691643886e303,
-        262399,
-        0,
-        0,
-        4294901760,
-        0,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_24 = annotation_style_record(
-    (
-        0,
-        0,
-        3.791326488278549e-301,
-        0,
-        4278124544,
-        -5.3153523742649135e303,
-        262399,
-        0,
-        0,
-        4294901760,
-        0,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_25 = annotation_style_record(
-    (0, 0, 0.008, 1413754152, 1072243195, 0.0, 2, 1, 1, 1, 0, 0, 2, 0),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_26 = annotation_style_record(
-    (
-        0,
-        16368,
-        0.0,
-        0,
-        0,
-        3.791326488278549e-301,
-        262144,
-        0,
-        0,
-        4294901760,
-        0,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_27 = annotation_style_record(
-    (
-        0,
-        16368,
-        0.0,
-        0,
-        0,
-        3.791326488278549e-301,
-        262144,
-        0,
-        0,
-        4294901760,
-        0,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_28 = annotation_style_record(
-    (
-        16368,
-        0,
-        0.0,
-        0,
-        0,
-        1.29597213e-316,
-        262144,
-        0,
-        0,
-        4294901760,
-        0,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_29 = annotation_style_record(
-    (
-        0,
-        0,
-        3.791326488278549e-301,
-        131072,
-        131072,
-        2.781342323134e-309,
-        262144,
-        0,
-        0,
-        4294901760,
-        0,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000000"
-        "0000fca9f1d24d62"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_30 = annotation_style_record(
-    (
-        757612416,
-        570119236,
-        8.0834e-320,
-        131072,
-        0,
-        1.390671162214583e-309,
-        262144,
-        0,
-        0,
-        4294901760,
-        0,
-        0,
-        49024,
-        3212836864,
-    ),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f9001000000000000fca9"
-        "f1d24d62403ffca9f1d24d62503f01000000010000000200"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_31 = annotation_style_record(
-    (
-        65536,
-        65536,
-        1.39067116189079e-309,
-        0,
-        0,
-        5.562684646268003e-309,
-        0,
-        0,
-        4294901760,
-        16776959,
-        16776959,
-        4,
-        0,
-        0,
-    ),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_32 = annotation_style_record(
-    (
-        1064086536,
-        0,
-        0.0,
-        0,
-        3539053052,
-        5.248126617e-315,
-        1072693248,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1072693248,
-        400,
-    ),
-    "Century Gothic",
-    bytes.fromhex("79e9263108ac6c3f0000000000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_33 = annotation_style_record(
-    (0, 0, 0.001, 0, 1072693248, 0.0, 0, 0, 0, 1072693248, 400, 0, 49024, 3212836864),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_34 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_35 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_36 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000180000000000"
-        "00000200"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_37 = annotation_style_record(
-    (
-        131072,
-        65536,
-        1.39067116189079e-309,
-        0,
-        0,
-        5.562684646268003e-309,
-        65536,
-        0,
-        4294901760,
-        16776959,
-        16776959,
-        4,
-        0,
-        0,
-    ),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_38 = annotation_style_record(
-    (
-        1064086536,
-        0,
-        0.0,
-        0,
-        3539053052,
-        5.248126617e-315,
-        1072693248,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1072693248,
-        400,
-    ),
-    "Century Gothic",
-    bytes.fromhex("79e9263108ac6c3f0000000000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_39 = annotation_style_record(
-    (0, 0, 0.001, 0, 1072693248, 0.0, 0, 0, 0, 1072693248, 400, 2, 49024, 3212836864),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_40 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_41 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_42 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000a60a46257502"
-        "7a3fb28174b169a5603fa60a462575028a3f00000000000000000000000001000000010000"
-        "000100"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_43 = annotation_style_record(
-    (
-        65536,
-        65536,
-        1.39067116189079e-309,
-        0,
-        0,
-        5.562684646268003e-309,
-        0,
-        0,
-        4294901760,
-        16776959,
-        16776959,
-        4,
-        1,
-        0,
-    ),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_44 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e9263108ac6c3f0000000000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_45 = annotation_style_record(
-    (0, 0, 0.0, 0, 1072693248, 0.0, 0, 0, 0, 1072693248, 400, 0, 49024, 3212836864),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_46 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_47 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_48 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e9263108ac6c3f"),
-)
-
-ANNOTATION_STYLE_RECORD_49 = annotation_style_record(
-    (0, 0, 0.0, 0, 0, 1.0, 0, 0, 0, 0, 0, 1072693248, 400, 1),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f900100000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_50 = annotation_style_record(
-    (
-        0,
-        65536,
-        1.39067116189079e-309,
-        0,
-        0,
-        5.562684646268003e-309,
-        0,
-        0,
-        4294901760,
-        16776959,
-        16776959,
-        4,
-        0,
-        0,
-    ),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_51 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e9263108ac6c3f0000000000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_52 = annotation_style_record(
-    (0, 0, 0.0, 0, 1072693248, 0.0, 0, 0, 0, 1072693248, 400, 0, 49024, 3212836864),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_53 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_54 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_55 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000000"
-        "00000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_56 = annotation_style_record(
-    (
-        0,
-        65536,
-        1.39067116189079e-309,
-        0,
-        0,
-        5.562684646268003e-309,
-        0,
-        0,
-        4294901760,
-        16776959,
-        16776959,
-        4,
-        0,
-        0,
-    ),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_57 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e9263108ac6c3f0000000000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_58 = annotation_style_record(
-    (0, 0, 0.0, 0, 1072693248, 0.0, 0, 0, 0, 1072693248, 400, 0, 49024, 3212836864),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_59 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_60 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex("79e92631"),
-)
-
-ANNOTATION_STYLE_RECORD_61 = annotation_style_record(
-    (1064086536, 0, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex(
-        "79e9263108ac6c3f0000000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000000"
-        "000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_62 = annotation_style_record(
-    (
-        4278190080,
-        4278255614,
-        -5.8290015707601e303,
-        4278255614,
-        4278255614,
-        -5.8290015707601e303,
-        4278255614,
-        4278255614,
-        65534,
-        0,
-        0,
-        0,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex("000000000000f0bf000000000000000000000000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_63 = annotation_style_record(
-    (
-        4054449152,
-        1348619730,
-        -3.105036184601461e231,
-        63,
-        0,
-        0.0,
-        0,
-        4026531840,
-        102463,
-        50331648,
-        4278190080,
-        16777215,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000010000000000"
-        "0000000000000000000000010000000000000000000000000000000000000000282d4454fb"
-        "21e93ffffeff00fffeff00fffeff00fffeff00010100000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_64 = annotation_style_record(
-    (
-        16777216,
-        0,
-        1e-323,
-        0,
-        0,
-        2.1219957911e-313,
-        0,
-        2696277389,
-        1051772663,
-        2696277389,
-        1051772663,
-        16777473,
-        16843009,
-        16777217,
-    ),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_65 = annotation_style_record(
-    (
-        0,
-        0,
-        0.0,
-        0,
-        1072693248,
-        1.976e-321,
-        0,
-        0,
-        0,
-        50331648,
-        4278190080,
-        16777215,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000010000000000"
-        "000000000000000000000001000000000000000000000000000000000000000000001fa2d1"
-        "1dc4ce843f0000000001000000fffeff015800010000000100000000000000000000000000"
-        "000000000000fca9f1d24d62503f01000000000000fffeff00fffeff00fffeff00fffeff00"
-        "fffeff00fffeff00fffeff00fffeff00fffeff00fffeff00fffeff00fffeff00fffeff00ff"
-        "feff00fffeff00fffeff00fffeff0000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_66 = annotation_style_record(
-    (
-        4278190080,
-        65534,
-        0.0,
-        0,
-        0,
-        0.0,
-        0,
-        4294901505,
-        4294901504,
-        4294901504,
-        4294901504,
-        4294901504,
-        0,
-        0,
-    ),
-    "Segoe UI",
-    bytes.fromhex("0000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_67 = annotation_style_record(
-    (
-        12578816,
-        0,
-        0.0,
-        4227858432,
-        1305670057,
-        2.0500493e-317,
-        4190208,
-        0,
-        0,
-        0,
-        0,
-        0,
-        2420109312,
-        16777217,
-    ),
-    "Segoe UI",
-    bytes.fromhex("0000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_68 = annotation_style_record(
-    (
-        12578816,
-        0,
-        0.0,
-        4227858432,
-        1305670057,
-        2.0500493e-317,
-        4190208,
-        0,
-        0,
-        0,
-        0,
-        0,
-        2420109312,
-        16777217,
-    ),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f9001000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_69 = annotation_style_record(
-    (
-        4278190080,
-        4278255614,
-        -5.8290015707601e303,
-        4278255614,
-        4278255614,
-        -5.8290015707601e303,
-        4278255614,
-        4278255614,
-        65534,
-        0,
-        0,
-        0,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex("000000000000f0bf000000000000000000000000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_70 = annotation_style_record(
-    (
-        4054449152,
-        1348619730,
-        -3.105036184601461e231,
-        63,
-        0,
-        0.0,
-        0,
-        4026531840,
-        102463,
-        50331648,
-        4278190080,
-        16777215,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000010000000000"
-        "0000000000000000000000010000000000000000000000000000000000000000282d4454fb"
-        "21e93f00"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_71 = annotation_style_record(
-    (
-        4278190080,
-        4278255614,
-        -5.8290015707601e303,
-        4278255614,
-        4278255614,
-        -5.8290015707601e303,
-        4278255614,
-        4278255614,
-        65534,
-        0,
-        0,
-        0,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex("000000000000f0bf000000000000000000000000000000"),
-)
-
-ANNOTATION_STYLE_RECORD_72 = annotation_style_record(
-    (
-        4054449152,
-        1348619730,
-        -3.105036184601461e231,
-        63,
-        0,
-        0.0,
-        0,
-        4026531840,
-        102463,
-        50331648,
-        4278190080,
-        16777215,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000010000000000"
-        "0000000000000000000000010000000000000000000000000000000000000000282d4454fb"
-        "21e93f02000000fffeff0000fffeff00fffeff0000fffeff00fffeff000000000000000000"
-        "0000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_054 = b"".join(
-    (
-        ANNOTATION_STYLE_RECORD_09,
-        ANNOTATION_STYLE_RECORD_10,
-        ANNOTATION_STYLE_RECORD_11,
-        ANNOTATION_STYLE_RECORD_12,
-        ANNOTATION_STYLE_RECORD_13,
-        ANNOTATION_STYLE_RECORD_14,
-        ANNOTATION_STYLE_RECORD_15,
-        ANNOTATION_STYLE_RECORD_16,
-        ANNOTATION_STYLE_RECORD_17,
-        ANNOTATION_STYLE_RECORD_18,
-        ANNOTATION_STYLE_RECORD_19,
-        ANNOTATION_STYLE_RECORD_20,
-        ANNOTATION_STYLE_RECORD_21,
-        ANNOTATION_STYLE_RECORD_22,
-        ANNOTATION_STYLE_RECORD_23,
-        ANNOTATION_STYLE_RECORD_24,
-        ANNOTATION_STYLE_RECORD_25,
-        ANNOTATION_STYLE_RECORD_26,
-        ANNOTATION_STYLE_RECORD_27,
-        ANNOTATION_STYLE_RECORD_28,
-        ANNOTATION_STYLE_RECORD_29,
-        ANNOTATION_STYLE_RECORD_30,
-        ANNOTATION_STYLE_RECORD_31,
-        ANNOTATION_STYLE_RECORD_32,
-        ANNOTATION_STYLE_RECORD_33,
-        ANNOTATION_STYLE_RECORD_34,
-        ANNOTATION_STYLE_RECORD_35,
-        ANNOTATION_STYLE_RECORD_36,
-        ANNOTATION_STYLE_RECORD_37,
-        ANNOTATION_STYLE_RECORD_38,
-        ANNOTATION_STYLE_RECORD_39,
-        ANNOTATION_STYLE_RECORD_40,
-        ANNOTATION_STYLE_RECORD_41,
-        ANNOTATION_STYLE_RECORD_42,
-        ANNOTATION_STYLE_RECORD_43,
-        ANNOTATION_STYLE_RECORD_44,
-        ANNOTATION_STYLE_RECORD_45,
-        ANNOTATION_STYLE_RECORD_46,
-        ANNOTATION_STYLE_RECORD_47,
-        ANNOTATION_STYLE_RECORD_48,
-        ANNOTATION_STYLE_RECORD_49,
-        ANNOTATION_STYLE_RECORD_50,
-        ANNOTATION_STYLE_RECORD_51,
-        ANNOTATION_STYLE_RECORD_52,
-        ANNOTATION_STYLE_RECORD_53,
-        ANNOTATION_STYLE_RECORD_54,
-        ANNOTATION_STYLE_RECORD_55,
-        ANNOTATION_STYLE_RECORD_56,
-        ANNOTATION_STYLE_RECORD_57,
-        ANNOTATION_STYLE_RECORD_58,
-        ANNOTATION_STYLE_RECORD_59,
-        ANNOTATION_STYLE_RECORD_60,
-        ANNOTATION_STYLE_RECORD_61,
-        ANNOTATION_STYLE_RECORD_62,
-        ANNOTATION_STYLE_RECORD_63,
-        ANNOTATION_STYLE_RECORD_64,
-        ANNOTATION_STYLE_RECORD_65,
-        ANNOTATION_STYLE_RECORD_66,
-        ANNOTATION_STYLE_RECORD_67,
-        ANNOTATION_STYLE_RECORD_68,
-        ANNOTATION_STYLE_RECORD_69,
-        ANNOTATION_STYLE_RECORD_70,
-        ANNOTATION_STYLE_RECORD_71,
-        ANNOTATION_STYLE_RECORD_72,
-    )
-)
-
-MOLENGTHUSERUNITS_N055_BODY = bytes.fromhex("")
-
-MOLENGTHUSERUNITS_N056_BODY = bytes.fromhex(
-    "00000000fffeff0000fffeff00fffeff0000fffeff00fffeff000000000000000000000000"
-    "0000000000000000000000"
-)
-
-MOLENGTHUSERUNITS_N057_BODY = bytes.fromhex("")
-
-ANNOTATION_STYLE_RECORD_73 = bytes.fromhex(
-    "000000000100000002000000fffeff00000101000000000000fffeff00fffeff0000fffeff"
-    "00fffeff0000fffeff0000010000fffeff085300650067006f006500200055004900000000"
-    "000000f0bf00000000000000000000000000"
-)
-
-ANNOTATION_STYLE_RECORD_74 = annotation_style_record(
-    (
-        4227858432,
-        1305670057,
-        2.0500493e-317,
-        4190208,
-        0,
-        0.0,
-        0,
-        0,
-        2420109312,
-        50331649,
-        4278190080,
-        16777215,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000010000000000"
-        "0000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_75 = annotation_style_record(
-    (1, 0, 0.0, 0, 0, 0.0, 1, 0, 0, 50331648, 4278190080, 16777215, 0, 16777216),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000010000000000"
-        "00000000000000000000000100000000000000000000000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_76 = annotation_style_record(
-    (
-        0,
-        65793,
-        0.0,
-        0,
-        0,
-        -5.829001570680268e303,
-        65534,
-        0,
-        0,
-        50331648,
-        4278190080,
-        16777215,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000010000000000"
-        "00000000000000000000000100000000000000000000000000000000fffeff00fffeff00ff"
-        "feff00fffeff00fffeff000000000000000000b81e85eb51b89e3fb81e85eb51b89e3f0000"
-        "000000"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_77 = annotation_style_record(
-    (
-        16777217,
-        0,
-        0.0,
-        4294967295,
-        0,
-        0.0,
-        0,
-        0,
-        0,
-        50331648,
-        4278190080,
-        16777215,
-        0,
-        16777216,
-    ),
-    "Segoe UI",
-    bytes.fromhex(
-        "000000000000f0bf00000000000000000000000000000000fca9f1d24d62503f0000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000010000000000"
-        "000000000000000000000001000000000000000000000000000000002d431cebe2360a3f02"
-        "000000020000002d431cebe2361a3f020000002d431cebe2362a3f020000002d431cebe236"
-        "2a3f02000000fca9f1d24d62403f02000000fca9f1d24d62303f02000000fca9f1d24d6240"
-        "3f02000000020000002d431cebe2361a3f02000000fca9f1d24d6230bf0200000002000000"
-        "02000000fca9f1d24d62403ffca9f1d24d6240bf020000000200000002000000fca9f1d24d"
-        "62403ffca9f1d24d6240bf020000000200000002000000fca9f1d24d62303ffca9f1d24d62"
-        "30bf0200000002000000020000002d431cebe2362a3f2d431cebe2362abf02000000020000"
-        "000200000002000000020000000200000002000000fca9f1d24d62403ffca9f1d24d6240bf"
-        "0200000002000000fca9f1d24d62303ffca9f1d24d6230bf02000000020000000200000002"
-        "0000007b14ae47e17a843f000000000000f03f020000000200000002000000020000000200"
-        "00000200000002000000020000000200000000000000000000000000000000000000000000"
-        "0000000000000000000000000000000000010000002d431cebe2361a3ffca9f1d24d62303f"
-        "fca9f1d24d62303ffca9f1d24d62403ffca9f1d24d6240bf0200000000000000fca9f1d24d"
-        "62403ffca9f1d24d6240bf02000000020000000100000002000000fca9f1d24d62403ffca9"
-        "f1d24d6240bf02000000020000000100000002000000fca9f1d24d62403ffca9f1d24d6240"
-        "bf02000000020000000100000002000000fca9f1d24d62403ffca9f1d24d6240bf02000000"
-        "02000000010000000200000001000000010000000100000001000000010000000100000001"
-        "0000000100000001000000010000000100000001000000010000000100000001000000fca9"
-        "f1d24d62403ffca9f1d24d6240bf839952a246df813f839952a246df81bf02000000020000"
-        "000200000002000000010000000100000002000000020000000100000001000000839952a2"
-        "46df913f839952a246df91bf839952a246df813f839952a246df81bf000000000000000000"
-        "00000000000000000000000100000001000000000000000000000000000000000000000000"
-        "0000000000000000000005000000ffffffff0100000062be3c396f1283393480b7396f1203"
-        "3a3480373a6f12833a3480b73a6f12033b000000000088b340030000000100000000000100"
-        "000000000000010000000100000001000000010000007b14ae47e17a643f9cc420b0726881"
-        "3f9cc420b0"
-    ),
-)
-
-ANNOTATION_STYLE_RECORD_78 = annotation_style_record(
-    (
-        1065445490,
-        2954937500,
-        5.26400014e-315,
-        1074266112,
-        0,
-        5.307579804e-315,
-        0,
-        4294967295,
-        0,
-        0,
-        1,
-        1,
-        1,
-        0,
-    ),
-    "Century Gothic",
-    bytes.fromhex("00000000"),
-)
-
-ANNOTATION_STYLE_RECORD_79 = annotation_style_record(
-    (3220176896, 12, 0.0, 0, 0, 0.0, 1072693248, 0, 0, 0, 0, 0, 1072693248, 400),
-    "Century Gothic",
-    bytes.fromhex(
-        "000000000000f0bf0c00000000000000000000000000000000000000000000000000000000"
-        "00f03f00000000000000000000000000000000000000000000f03f90010000000000000000"
-        "00000000000001000000fffeff0650006c006100740065002c00fffeff00fffeff017800ff"
-        "feff01780002000000030000000100000001000000fffeff05530068006500650074000000"
-        "0000010000000100000000000000fffeff5c25004400650073006300720069007000740069"
-        "006f006e0025002c00200025004d004100540045005200490041004c0025002c0020002500"
-        "4c0045004e0047005400480025002c002000250041004e0047004c004500310025002c0020"
-        "00250041004e0047004c004500320025002c002000250041006e0067006c00650020004400"
-        "6900720065006300740069006f006e0025002c002000250041006e0067006c006500200052"
-        "006f0074006100740069006f006e002500fffeff8c25004400650073006300720069007000"
-        "740069006f006e0025002c00200025004d004100540045005200490041004c0025002c0020"
-        "00250042006f0075006e00640069006e006700200042006f00780020004c0065006e006700"
-        "7400680025002c002000250042006f0075006e00640069006e006700200042006f00780020"
-        "005700690064007400680025002c00200025005300680065006500740020004d0065007400"
-        "61006c00200054006800690063006b006e0065007300730025002c002000250042006f0075"
-        "006e00640069006e006700200042006f0078002000410072006500610025002c0020002500"
-        "420065006e006400730025002c0020002500420065006e0064002000520061006400690075"
-        "0073002500fffeff1925004400650073006300720069007000740069006f006e0025002c00"
-        "200025004d004100540045005200490041004c002500010000000000000000000000000000"
-        "00000000000000"
-    ),
-)
-
-ANNOTATION_STYLE_GROUP_058 = b"".join(
-    (
-        ANNOTATION_STYLE_RECORD_73,
-        ANNOTATION_STYLE_RECORD_74,
-        ANNOTATION_STYLE_RECORD_75,
-        ANNOTATION_STYLE_RECORD_76,
-        ANNOTATION_STYLE_RECORD_77,
-        ANNOTATION_STYLE_RECORD_78,
-        ANNOTATION_STYLE_RECORD_79,
-    )
+    "000000000000650000000000000020000000200000000000000000000000000000000100"
+    "0000ffffffff76a500000100000076a5000006000000504600001027000000000010"
 )
 
 MOENVFOLDER_N059_BODY = bytes.fromhex("")
 
 MONODENAME_N060_BODY = bytes.fromhex(
-    "fffeff124c0069006700680074007300200061006e0064002000430061006d006500720061"
-    "00730000000000000000400600000000000000fffeff0000000000"
+    "fffeff124c0069006700680074007300200061006e0064002000430061006d0065007200"
+    "6100730000000000000000400600000000000000fffeff0000000000"
 )
 
 MONODENAME_N061_BODY = bytes.fromhex("0400")
@@ -1806,107 +3517,99 @@ MONODENAME_N061_BODY = bytes.fromhex("0400")
 MOAMBIENTLIGHT_N062_BODY = bytes.fromhex("")
 
 MONODENAME_N063_BODY = bytes.fromhex(
-    "fffeff0741006d006200690065006e00740000000000000000c00c00000000000000fffeff"
-    "0000000000"
+    "fffeff0741006d006200690065006e00740000000000000000c00c00000000000000fffe"
+    "ff0000000000"
 )
 
 MONODENAME_N064_BODY = bytes.fromhex(
-    "00000000000000000000000000006500000000000000000000000000000000504600000000"
-    "00000000000034e71e00"
+    "000000000000000000000000000065000000000000000000000000000000005046000000"
+    "0000000000000034e71e00"
 )
 
-MONODENAME_N065_BODY = bytes.fromhex(
-    "fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000"
-)
+MONODENAME_N065_BODY = bytes.fromhex("fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000")
 
 MONODENAME_N066_BODY = bytes.fromhex(
-    "0000000005000000000000000000ffffffff4e57dc01dfa4e8d50200ac7e05000100000000"
-    "000000333333333333d33f00000000000000000000000000000000ffffff00000000000100"
-    "00000000000001000000fffeff0941006d006200690065006e0074002d0031000000000000"
-    "00000000000000000000000000f03f01000000000000000000304000000000"
+    "0000000005000000000000000000ffffffff4e57dc01dfa4e8d50200ac7e050001000000"
+    "00000000333333333333d33f00000000000000000000000000000000ffffff0000000000"
+    "010000000000000001000000fffeff0941006d006200690065006e0074002d0031000000"
+    "00000000000000000000000000000000f03f01000000000000000000304000000000"
 )
 
 MODIRECTIONLIGHT_N067_BODY = bytes.fromhex("")
 
 MONODENAME_N068_BODY = bytes.fromhex(
-    "fffeff0c44006900720065006300740069006f006e0061006c00310000000000000000c00d"
-    "00000000000000fffeff0000000000"
+    "fffeff0c44006900720065006300740069006f006e0061006c00310000000000000000c0"
+    "0d00000000000000fffeff0000000000"
 )
 
 MONODENAME_N069_BODY = bytes.fromhex(
-    "00000000000000000000000000006500000000000000000000000000000000504600000000"
-    "00000000000034e71e00"
+    "000000000000000000000000000065000000000000000000000000000000005046000000"
+    "0000000000000034e71e00"
 )
 
-MONODENAME_N070_BODY = bytes.fromhex(
-    "fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000"
-)
+MONODENAME_N070_BODY = bytes.fromhex("fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000")
 
 MONODENAME_N071_BODY = bytes.fromhex(
-    "0000000005000000000000000000ffffffff4e57dc01dfa4e8d50200ac7e05000100000000"
-    "0000009a9999999999b93f333333333333d33f333333333333d33fffffff00000000000100"
-    "00000000000001000000fffeff0d44006900720065006300740069006f006e0061006c002d"
-    "003100000000000000000000000000000000000000f03f0100000000000000000030400000"
-    "00006666666666661c406666666666661c4000000000000000000000000000000000"
+    "0000000005000000000000000000ffffffff4e57dc01dfa4e8d50200ac7e050001000000"
+    "000000009a9999999999b93f333333333333d33f333333333333d33fffffff0000000000"
+    "010000000000000001000000fffeff0d44006900720065006300740069006f006e006100"
+    "6c002d003100000000000000000000000000000000000000f03f01000000000000000000"
+    "3040000000006666666666661c406666666666661c400000000000000000000000000000"
+    "0000"
 )
 
 MODIRECTIONLIGHT_N072_BODY = bytes.fromhex("")
 
 MONODENAME_N073_BODY = bytes.fromhex(
-    "fffeff0c44006900720065006300740069006f006e0061006c00320000000000000000c00e"
-    "00000000000000fffeff0000000000"
+    "fffeff0c44006900720065006300740069006f006e0061006c00320000000000000000c0"
+    "0e00000000000000fffeff0000000000"
 )
 
 MONODENAME_N074_BODY = bytes.fromhex(
-    "00000000000000000000000000006500000000000000000000000000000000504600000000"
-    "00000000000034e71e00"
+    "000000000000000000000000000065000000000000000000000000000000005046000000"
+    "0000000000000034e71e00"
 )
 
-MONODENAME_N075_BODY = bytes.fromhex(
-    "fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000"
-)
+MONODENAME_N075_BODY = bytes.fromhex("fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000")
 
 MONODENAME_N076_BODY = bytes.fromhex(
-    "0000000005000000000000000000ffffffff4e57dc01dfa4e8d50200ac7e05000100000000"
-    "00000000000000000000009a9999999999b93f333333333333d33fffffff00000000000100"
-    "00000000000001000000fffeff0d44006900720065006300740069006f006e0061006c002d"
-    "003100000000000000000000000000000000000000f03f0100000000000000000030400000"
-    "00003333333333330bc066666666666618406666666666661cc00000000000000000"
+    "0000000005000000000000000000ffffffff4e57dc01dfa4e8d50200ac7e050001000000"
+    "0000000000000000000000009a9999999999b93f333333333333d33fffffff0000000000"
+    "010000000000000001000000fffeff0d44006900720065006300740069006f006e006100"
+    "6c002d003100000000000000000000000000000000000000f03f01000000000000000000"
+    "3040000000003333333333330bc066666666666618406666666666661cc0000000000000"
+    "0000"
 )
 
 MODIRECTIONLIGHT_N077_BODY = bytes.fromhex("")
 
 MONODENAME_N078_BODY = bytes.fromhex(
-    "fffeff0c44006900720065006300740069006f006e0061006c00330000000000000000c00f"
-    "00000000000000fffeff0000000000"
+    "fffeff0c44006900720065006300740069006f006e0061006c00330000000000000000c0"
+    "0f00000000000000fffeff0000000000"
 )
 
 MONODENAME_N079_BODY = bytes.fromhex(
-    "00000000000000000000000000006500000000000000000000000000000000504600000000"
-    "00000000000034e71e00"
+    "000000000000000000000000000065000000000000000000000000000000005046000000"
+    "0000000000000034e71e00"
 )
 
-MONODENAME_N080_BODY = bytes.fromhex(
-    "fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000"
-)
+MONODENAME_N080_BODY = bytes.fromhex("fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000")
 
 MONODENAME_N081_BODY = bytes.fromhex(
-    "0000000005000000000000000000ffffffff4e57dc01dfa4e8d50200ac7e05000100000000"
-    "00000000000000000000009a9999999999c93f333333333333d33fffffff00000000000100"
-    "00000000000001000000fffeff0d44006900720065006300740069006f006e0061006c002d"
-    "003100000000000000000000000000000000000000f03f0100000000000000000030400000"
-    "000066666666666622c03333333333330b40cdccccccccccfcbf0000000000000000000000"
-    "00000000000000000065000000000000000000000000000000005046000000000000000000"
-    "0034e71e00"
+    "0000000005000000000000000000ffffffff4e57dc01dfa4e8d50200ac7e050001000000"
+    "0000000000000000000000009a9999999999c93f333333333333d33fffffff0000000000"
+    "010000000000000001000000fffeff0d44006900720065006300740069006f006e006100"
+    "6c002d003100000000000000000000000000000000000000f03f01000000000000000000"
+    "30400000000066666666666622c03333333333330b40cdccccccccccfcbf000000000000"
+    "000000000000000000000000000065000000000000000000000000000000005046000000"
+    "0000000000000034e71e00"
 )
 
-MONODENAME_N082_BODY = bytes.fromhex(
-    "fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000"
-)
+MONODENAME_N082_BODY = bytes.fromhex("fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000")
 
 MONODENAME_N083_BODY = bytes.fromhex(
-    "0000000005000000000000000000ffffffff4e57dc01a86be7d50200ac7e05000100000001"
-    "00000000000000"
+    "0000000005000000000000000000ffffffff4e57dc01a86be7d50200ac7e050001000000"
+    "0100000000000000"
 )
 
 MONODENAME_N084_BODY = bytes.fromhex("")
@@ -1914,90 +3617,93 @@ MONODENAME_N084_BODY = bytes.fromhex("")
 SUOBLIST_N085_BODY = bytes.fromhex("0000")
 
 MOVIEW_N086_BODY = bytes.fromhex(
-    "fffeff0a2a004e006f0072006d0061006c00200054006f0000000000000000000000000000"
-    "000000000000000000000000000000000000f03f0000000000000000000000000000000000"
-    "000000000000000000000000000000f03f000000ffffffff000000000000f0bf0000000000"
-    "0000000000000000000000000000000000000000000000000000000000000000000000"
+    "fffeff0a2a004e006f0072006d0061006c00200054006f00000000000000000000000000"
+    "00000000000000000000000000000000000000f03f000000000000000000000000000000"
+    "0000000000000000000000000000000000f03f000000ffffffff000000000000f0bf0000"
+    "000000000000000000000000000000000000000000000000000000000000000000000000"
+    "0000"
 )
 
 MOVIEW_N087_BODY = bytes.fromhex(
-    "fffeff062a00460072006f006e007400000000000000000000000000000000000000000000"
-    "00000000000000000000f03f00000000000000000000000000000000000000000000000000"
-    "00000000000000f03f000000ffffffff000000000000f0bf00000000010000000000000000"
-    "000000000000000000000000000000000000000000000000000000"
+    "fffeff062a00460072006f006e0074000000000000000000000000000000000000000000"
+    "0000000000000000000000f03f0000000000000000000000000000000000000000000000"
+    "000000000000000000f03f000000ffffffff000000000000f0bf00000000010000000000"
+    "000000000000000000000000000000000000000000000000000000000000"
 )
 
 MOVIEW_N088_BODY = bytes.fromhex(
-    "fffeff052a004200610063006b0001000000000000f0bf0000000000000000205d67cece72"
-    "ff3c0000000000000080000000000000f03f0000000000000000205d67cece72ffbc000000"
-    "0000000080000000000000f0bf000000000000000000000000000000000000000000000000"
-    "000000000000f03f0000000000000000000000000000000000000000000000000000000000"
-    "000000f03f000000ffffffff000000000000f0bf0000000002000000000000000000000000"
-    "0000000000000000000000000000000000000000000000"
+    "fffeff052a004200610063006b0001000000000000f0bf0000000000000000205d67cece"
+    "72ff3c0000000000000080000000000000f03f0000000000000000205d67cece72ffbc00"
+    "00000000000080000000000000f0bf000000000000000000000000000000000000000000"
+    "000000000000000000f03f00000000000000000000000000000000000000000000000000"
+    "00000000000000f03f000000ffffffff000000000000f0bf000000000200000000000000"
+    "00000000000000000000000000000000000000000000000000000000"
 )
 
 MOVIEW_N089_BODY = bytes.fromhex(
-    "fffeff052a004c0065006600740001feffffffffffefbc0000000000000080000000000000"
-    "f0bf0000000000000000000000000000f03f0000000000000080000000000000f03f000000"
-    "0000000000feffffffffffefbc000000000000000000000000000000000000000000000000"
-    "000000000000f03f0000000000000000000000000000000000000000000000000000000000"
-    "000000f03f000000ffffffff000000000000f0bf0000000003000000000000000000000000"
-    "0000000000000000000000000000000000000000000000"
+    "fffeff052a004c0065006600740001feffffffffffefbc00000000000000800000000000"
+    "00f0bf0000000000000000000000000000f03f0000000000000080000000000000f03f00"
+    "00000000000000feffffffffffefbc000000000000000000000000000000000000000000"
+    "000000000000000000f03f00000000000000000000000000000000000000000000000000"
+    "00000000000000f03f000000ffffffff000000000000f0bf000000000300000000000000"
+    "00000000000000000000000000000000000000000000000000000000"
 )
 
 MOVIEW_N090_BODY = bytes.fromhex(
-    "fffeff062a005200690067006800740001feffffffffffefbc000000000000000000000000"
-    "0000f03f0000000000000000000000000000f03f0000000000000000000000000000f0bf00"
-    "00000000000000feffffffffffefbc00000000000000000000000000000000000000000000"
-    "0000000000000000f03f000000000000000000000000000000000000000000000000000000"
-    "0000000000f03f000000ffffffff000000000000f0bf000000000400000000000000000000"
-    "00000000000000000000000000000000000000000000000000"
+    "fffeff062a005200690067006800740001feffffffffffefbc0000000000000000000000"
+    "000000f03f0000000000000000000000000000f03f0000000000000000000000000000f0"
+    "bf0000000000000000feffffffffffefbc00000000000000000000000000000000000000"
+    "0000000000000000000000f03f0000000000000000000000000000000000000000000000"
+    "000000000000000000f03f000000ffffffff000000000000f0bf00000000040000000000"
+    "000000000000000000000000000000000000000000000000000000000000"
 )
 
 MOVIEW_N091_BODY = bytes.fromhex(
-    "fffeff042a0054006f00700001000000000000f03f00000000000000800000000000000000"
-    "0000000000000000feffffffffffefbc000000000000f03f00000000000000800000000000"
-    "00f0bffeffffffffffefbc0000000000000000000000000000000000000000000000000000"
-    "00000000f03f00000000000000000000000000000000000000000000000000000000000000"
-    "00f03f000000ffffffff000000000000f0bf00000000050000000000000000000000000000"
-    "000000000000000000000000000000000000000000"
+    "fffeff042a0054006f00700001000000000000f03f000000000000008000000000000000"
+    "000000000000000000feffffffffffefbc000000000000f03f0000000000000080000000"
+    "000000f0bffeffffffffffefbc0000000000000000000000000000000000000000000000"
+    "00000000000000f03f000000000000000000000000000000000000000000000000000000"
+    "0000000000f03f000000ffffffff000000000000f0bf0000000005000000000000000000"
+    "0000000000000000000000000000000000000000000000000000"
 )
 
 MOVIEW_N092_BODY = bytes.fromhex(
-    "fffeff072a0042006f00740074006f006d0001000000000000f03f00000000000000000000"
-    "0000000000000000000000000000feffffffffffefbc000000000000f0bf00000000000000"
-    "00000000000000f03ffeffffffffffefbc0000000000000000000000000000000000000000"
-    "00000000000000000000f03f00000000000000000000000000000000000000000000000000"
-    "00000000000000f03f000000ffffffff000000000000f0bf00000000060000000000000000"
-    "000000000000000000000000000000000000000000000000000000"
+    "fffeff072a0042006f00740074006f006d0001000000000000f03f000000000000000000"
+    "000000000000000000000000000000feffffffffffefbc000000000000f0bf0000000000"
+    "000000000000000000f03ffeffffffffffefbc0000000000000000000000000000000000"
+    "00000000000000000000000000f03f000000000000000000000000000000000000000000"
+    "0000000000000000000000f03f000000ffffffff000000000000f0bf0000000006000000"
+    "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
 MOVIEW_N093_BODY = bytes.fromhex(
-    "fffeff0a2a00490073006f006d006500740072006900630001c23b7f669ea0e63f00f78ee7"
-    "0320dabf0055bedce879e23f000000000000803c33c15c321a21ea3f404879142479e23fd8"
-    "3b7f669ea0e6bfe8f68ee70320dabfef54bedce879e23f0000000000000000000000000000"
-    "00000000000000000000000000000000f03f00000000000000000000000000000000000000"
-    "00000000000000000000000000f03f000000ffffffff000000000000f0bf00000000070000"
-    "000000000000000000000000000000000000000000000000000000000000000000"
+    "fffeff0a2a00490073006f006d006500740072006900630001c23b7f669ea0e63f00f78e"
+    "e70320dabf0055bedce879e23f000000000000803c33c15c321a21ea3f404879142479e2"
+    "3fd83b7f669ea0e6bfe8f68ee70320dabfef54bedce879e23f0000000000000000000000"
+    "00000000000000000000000000000000000000f03f000000000000000000000000000000"
+    "0000000000000000000000000000000000f03f000000ffffffff000000000000f0bf0000"
+    "000007000000000000000000000000000000000000000000000000000000000000000000"
+    "0000"
 )
 
 MOVIEW_N094_BODY = bytes.fromhex(
-    "fffeff0a2a005400720069006d0065007400720069006300014904933b274dec3f60e05e44"
-    "4fc4cebfb14a0fb5309ad93f000000000000703ca2eb761eea6deb3fceddfd20317be03ff3"
-    "82295656deddbfb67fd03f0f27ddbfb65d07f74e42e83f0000000000000000000000000000"
-    "00000000000000000000000000000000f03f00000000000000000000000000000000000000"
-    "00000000000000000000000000f03f000000ffffffff000000000000f0bf00000000080000"
-    "000000000000000000000000000000000000000000000000000000000000000000"
+    "fffeff0a2a005400720069006d0065007400720069006300014904933b274dec3f60e05e"
+    "444fc4cebfb14a0fb5309ad93f000000000000703ca2eb761eea6deb3fceddfd20317be0"
+    "3ff382295656deddbfb67fd03f0f27ddbfb65d07f74e42e83f0000000000000000000000"
+    "00000000000000000000000000000000000000f03f000000000000000000000000000000"
+    "0000000000000000000000000000000000f03f000000ffffffff000000000000f0bf0000"
+    "000008000000000000000000000000000000000000000000000000000000000000000000"
+    "0000"
 )
 
 MOVIEW_N095_BODY = bytes.fromhex(
-    "fffeff092a00440069006d006500740072006900630001c33b7f669ea0e63fcad83b57a03f"
-    "c8bfe6c3269cdccce53f00000000000070bce7b078c787d4ee3fe03780657425d13fd73b7f"
-    "669ea0e6bfb1d83b57a03fc8bfd1c3269cdccce53f00000000000000000000000000000000"
-    "0000000000000000000000000000f03f000000000000000000000000000000000000000000"
-    "0000000000000000000000f03f000000ffffffff000000000000f0bf000000000900000000"
-    "0000000000000000000000000000000000000000000000000000000000000000320000006c"
-    "000000"
+    "fffeff092a00440069006d006500740072006900630001c33b7f669ea0e63fcad83b57a0"
+    "3fc8bfe6c3269cdccce53f00000000000070bce7b078c787d4ee3fe03780657425d13fd7"
+    "3b7f669ea0e6bfb1d83b57a03fc8bfd1c3269cdccce53f00000000000000000000000000"
+    "0000000000000000000000000000000000f03f0000000000000000000000000000000000"
+    "000000000000000000000000000000f03f000000ffffffff000000000000f0bf00000000"
+    "090000000000000000000000000000000000000000000000000000000000000000000000"
+    "00320000006c000000"
 )
 
 MOFEATCOLORTAB_N096_BODY = bytes.fromhex("00000000")
@@ -2006,22 +3712,18 @@ MOFEATCOLORTAB_N097_BODY = bytes.fromhex("0a0000000000000000000000")
 
 MOSKETCHBLOCKMGR_N098_BODY = bytes.fromhex("")
 
-MOSKETCHBLOCKMGR_N099_BODY = bytes.fromhex(
-    "0100000000000040ffffffff00000000fffeff0000000000"
-)
+MOSKETCHBLOCKMGR_N099_BODY = bytes.fromhex("0100000000000040ffffffff00000000fffeff0000000000")
 
 MOSKETCHBLOCKMGR_N100_BODY = bytes.fromhex(
-    "00000000000000000000000000006500000000000000000000000000000000504600000000"
-    "00000000000034e71e00"
+    "000000000000000000000000000065000000000000000000000000000000005046000000"
+    "0000000000000034e71e00"
 )
 
-MOSKETCHBLOCKMGR_N101_BODY = bytes.fromhex(
-    "fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000"
-)
+MOSKETCHBLOCKMGR_N101_BODY = bytes.fromhex("fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000")
 
 MOSKETCHBLOCKMGR_N102_BODY = bytes.fromhex(
-    "0000000005000000000000000000ffffffff4923dd0117e524600200ac7e050001000000cd"
-    "8cf2d86fcd1b4094513a72743612b500000000"
+    "0000000005000000000000000000ffffffff4923dd0117e524600200ac7e050001000000"
+    "cd8cf2d86fcd1b4094513a72743612b500000000"
 )
 
 MOSKETCHBLOCKMGR_N103_BODY = bytes.fromhex("0000000000000000")
@@ -2029,12 +3731,12 @@ MOSKETCHBLOCKMGR_N103_BODY = bytes.fromhex("0000000000000000")
 SUOBLIST_N104_BODY = bytes.fromhex("0100")
 
 MOANNOTATIONVIEW_N105_BODY = bytes.fromhex(
-    "fffeff042a0054006f00700001000000000000f03f00000000000000000000000000000000"
-    "00000000000000000000000000000000000000000000f03f00000000000000800000000000"
-    "00f0bf00000000000000800000000000000000000000000000000000000000000000000000"
-    "00000000f03f00000000000000000000000000000000000000000000000000000000000000"
-    "00f03f000000ffffffff000000000000f0bf00000000c80000000000000000000000000000"
-    "00000000000000000000000000000000000000000000000000"
+    "fffeff042a0054006f00700001000000000000f03f000000000000000000000000000000"
+    "0000000000000000000000000000000000000000000000f03f0000000000000080000000"
+    "000000f0bf00000000000000800000000000000000000000000000000000000000000000"
+    "00000000000000f03f000000000000000000000000000000000000000000000000000000"
+    "0000000000f03f000000ffffffff000000000000f0bf00000000c8000000000000000000"
+    "000000000000000000000000000000000000000000000000000000000000"
 )
 
 MOANNOTATIONVIEW_N106_BODY = bytes.fromhex("")
@@ -2043,19 +3745,15 @@ MOANNOTATIONVIEW_N107_BODY = bytes.fromhex("000000000000000000000000")
 
 MOANNOTATIONVIEW_N108_BODY = bytes.fromhex("0000000001000000")
 
-MOANNOTATIONVIEW_N109_BODY = bytes.fromhex(
-    "ffffffff00000000ffffffffffffffffc8000000c700000001000000c7000000"
-)
+MOANNOTATIONVIEW_N109_BODY = bytes.fromhex("ffffffff00000000ffffffffffffffffc8000000c700000001000000c7000000")
 
-MOANNOTATIONVIEW_N110_BODY = bytes.fromhex(
-    "000000000000000000000000000000000000000000000000"
-)
+MOANNOTATIONVIEW_N110_BODY = bytes.fromhex("000000000000000000000000000000000000000000000000")
 
 MOANNOTATIONVIEW_N111_BODY = bytes.fromhex("0000")
 
 MOPMARKRECORD_N112_BODY = bytes.fromhex(
-    "03000000010000000000000000000000000000001400000000000000140000000000000000"
-    "0000000000000000000000"
+    "030000000100000000000000000000000000000014000000000000001400000000000000"
+    "000000000000000000000000"
 )
 
 SUOBLIST_N113_BODY = bytes.fromhex("000000000000fffeff00fffeff00")
@@ -2063,60 +3761,65 @@ SUOBLIST_N113_BODY = bytes.fromhex("000000000000fffeff00fffeff00")
 MOCTHREADREFMGR_N114_BODY = bytes.fromhex("0000000000000000")
 
 MOCTHREADREFMGR_N115_BODY = bytes.fromhex(
-    "00000000000000000000000000010000000100000001000000650000006700000000000000"
-    "00408f40000000000000000000000000000000007b14ae47e17a743f8eedb5a0f7c6e03ec7"
-    "bab88d06f0663ffda9f1d24d62803f1392f2809f5e963e2afc9a2da103b33e1392f2809f5e"
-    "b63e0000000000000000000000000000000000000000000000000100000000000000000000"
-    "000000000000000000d7a3703d0ad7ef3f00000000000000000000000000000000fffeff00"
-    "fffeff00000000000000000000000000000000000000000000000000000000000000000000"
-    "00f03f000000000000000000000000000000000000000000000000000000000000f03f0000"
-    "00000000000000000000000000000000000000000000000000000000f03f01000000000000"
-    "000000"
+    "000000000000000000000000000100000001000000010000006500000067000000000000"
+    "0000408f40000000000000000000000000000000007b14ae47e17a743f8eedb5a0f7c6e0"
+    "3ec7bab88d06f0663ffda9f1d24d62803f1392f2809f5e963e2afc9a2da103b33e1392f2"
+    "809f5eb63e00000000000000000000000000000000000000000000000001000000000000"
+    "00000000000000000000000000d7a3703d0ad7ef3f000000000000000000000000000000"
+    "00fffeff00fffeff00000000000000000000000000000000000000000000000000000000"
+    "00000000000000f03f000000000000000000000000000000000000000000000000000000"
+    "000000f03f000000000000000000000000000000000000000000000000000000000000f0"
+    "3f01000000000000000000"
 )
 
 MOPRTEXPLVIEWMANAGER_N116_BODY = bytes.fromhex("")
 
-MOPRTEXPLVIEWMANAGER_N117_BODY = bytes.fromhex(
-    "00000000000000401300000000000000fffeff0000000000"
-)
+MOPRTEXPLVIEWMANAGER_N117_BODY = bytes.fromhex("00000000000000401300000000000000fffeff0000000000")
 
 MOPRTEXPLVIEWMANAGER_N118_BODY = bytes.fromhex(
-    "00000000000000000000000000006500000000000000000000000000000000504600000000"
-    "00000000000034e71e00"
+    "000000000000000000000000000065000000000000000000000000000000005046000000"
+    "0000000000000034e71e00"
 )
 
-MOPRTEXPLVIEWMANAGER_N119_BODY = bytes.fromhex(
-    "fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000"
-)
+MOPRTEXPLVIEWMANAGER_N119_BODY = bytes.fromhex("fffeff0000ffff000003ffffffffffffffff000080bf0000000000000000")
 
-MOPRTEXPLVIEWMANAGER_N120_BODY = bytes.fromhex(
-    "0000000005000000000000000000ffffffff00000000000000000200ac7e050001000000"
-)
+MOPRTEXPLVIEWMANAGER_N120_BODY = bytes.fromhex("0000000005000000000000000000ffffffff00000000000000000200ac7e050001000000")
 
 MOPRTEXPLVIEWMANAGER_N121_BODY = bytes.fromhex("")
 
 MOPRTEXPLVIEWMANAGER_N122_BODY = bytes.fromhex(
-    "0000000000000000ffffffffffffffff000014000000010000000000000000000000000000"
-    "0000000000650000000000000000000000"
+    "0000000000000000ffffffffffffffff0000140000000100000000000000000000000000"
+    "000000000000650000000000000000000000"
 )
 
 ATOM_UNIT_NODE_BODY = bytes.fromhex("0100000000000040ffffffff00000000fffeff0000000000")
 
 ATOM_RECORD_TEMPLATE = bytes.fromhex(
-    "00000000000065000000000000002000000020000000000000000000000000000000010000"
-    "00ffffffff76a500000100000076a5000006000000504600001027000000000010"
+    "000000000000650000000000000020000000200000000000000000000000000000000100"
+    "0000ffffffff76a500000100000076a5000006000000504600001027000000000010"
 )
 
 ATOM_RECORD_CORE_LENGTH = 58
 ATOM_RECORD_ID_OFFSET = 6
 ATOM_RECORD_TREE_ID_OFFSETS = (14, 18)
-ATOM_RECORD_SESSION_STAMP_OFFSETS = (
-    34,
-    46,
-)
+ATOM_RECORD_SESSION_STAMP_OFFSETS = (34, 46)
 REFERENCE_SESSION_STAMP = 1
 REFERENCE_ATOM_ID = 0x65
 REFERENCE_TREE_ID = 32
+ATOM_DEFINITION_POSITION = 33
+HIGH_WATER_POSITION = 115
+PART_NAME_POSITION = 0
+SECONDARY_LENGTH_UNIT_POSITION = 4
+REFERENCE_PART_NAME = 'Part70'
+HIGH_WATER_ID_OFFSET = 25
+REFERENCE_HIGH_WATER = (101, 103)
+REFERENCE_SHA256 = 'a0877db37735da4027459d8161425843e3ad90f1e3e90dc32835f9370dd643bb'
+REFERENCE_LENGTH = 25214
+SINGLE_LENGTH_UNIT_LENGTH = 25148
+PER_FEATURE_ATOM_BYTES = 88
+PER_SOLID_BODY_BYTES = 16
+MEASURED_VOLUME_MM3 = 8000.000000000001
+MO_NODE_SCALARS_AFTER_NAME = bytes.fromhex("00000000000000400000000000810000fffeff0000000000")
 
 NODE_PLAN = (
     ("definition", "moNodeName_c", 1, MONODENAME_N000_BODY),
@@ -2155,29 +3858,29 @@ NODE_PLAN = (
     ("definition", "moAtom_c", 1, MOATOM_N033_BODY),
     ("null", "", 0, MOATOM_N034_BODY),
     ("null", "", 0, MOATOM_N035_BODY),
-    ("definition", "moRelMgr_c", 1, MORELMGR_N036_BODY),
-    ("classref", "moLengthUserUnits_c", 0, MOLENGTHUSERUNITS_N037_BODY),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_038),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_039),
-    ("classref", "moLengthUserUnits_c", 0, MOLENGTHUSERUNITS_N040_BODY),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_041),
-    ("classref", "moLengthUserUnits_c", 0, MOLENGTHUSERUNITS_N042_BODY),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_043),
-    ("classref", "moLengthUserUnits_c", 0, MOLENGTHUSERUNITS_N044_BODY),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_045),
-    ("classref", "moLengthUserUnits_c", 0, MOLENGTHUSERUNITS_N046_BODY),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_047),
-    ("classref", "moLengthUserUnits_c", 0, MOLENGTHUSERUNITS_N048_BODY),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_049),
-    ("classref", "moLengthUserUnits_c", 0, MOLENGTHUSERUNITS_N050_BODY),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_051),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_052),
-    ("classref", "moLengthUserUnits_c", 0, MOLENGTHUSERUNITS_N053_BODY),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_054),
-    ("null", "", 0, MOLENGTHUSERUNITS_N055_BODY),
-    ("null", "", 0, MOLENGTHUSERUNITS_N056_BODY),
-    ("null", "", 0, MOLENGTHUSERUNITS_N057_BODY),
-    ("null", "", 0, ANNOTATION_STYLE_GROUP_058),
+    ("definition", "moRelMgr_c", 1, DETAIL_REGION_BODIES[0]),
+    ("classref", "moLengthUserUnits_c", 0, DETAIL_REGION_BODIES[1]),
+    ("null", "", 0, DETAIL_REGION_BODIES[2]),
+    ("null", "", 0, DETAIL_REGION_BODIES[3]),
+    ("classref", "moLengthUserUnits_c", 0, DETAIL_REGION_BODIES[4]),
+    ("null", "", 0, DETAIL_REGION_BODIES[5]),
+    ("classref", "moLengthUserUnits_c", 0, DETAIL_REGION_BODIES[6]),
+    ("null", "", 0, DETAIL_REGION_BODIES[7]),
+    ("classref", "moLengthUserUnits_c", 0, DETAIL_REGION_BODIES[8]),
+    ("null", "", 0, DETAIL_REGION_BODIES[9]),
+    ("classref", "moLengthUserUnits_c", 0, DETAIL_REGION_BODIES[10]),
+    ("null", "", 0, DETAIL_REGION_BODIES[11]),
+    ("classref", "moLengthUserUnits_c", 0, DETAIL_REGION_BODIES[12]),
+    ("null", "", 0, DETAIL_REGION_BODIES[13]),
+    ("classref", "moLengthUserUnits_c", 0, DETAIL_REGION_BODIES[14]),
+    ("null", "", 0, DETAIL_REGION_BODIES[15]),
+    ("null", "", 0, DETAIL_REGION_BODIES[16]),
+    ("classref", "moLengthUserUnits_c", 0, DETAIL_REGION_BODIES[17]),
+    ("null", "", 0, DETAIL_REGION_BODIES[18]),
+    ("null", "", 0, DETAIL_REGION_BODIES[19]),
+    ("null", "", 0, DETAIL_REGION_BODIES[20]),
+    ("null", "", 0, DETAIL_REGION_BODIES[21]),
+    ("null", "", 0, DETAIL_REGION_BODIES[22]),
     ("definition", "moEnvFolder_c", 1, MOENVFOLDER_N059_BODY),
     ("classref", "moNodeName_c", 0, MONODENAME_N060_BODY),
     ("null", "", 0, MONODENAME_N061_BODY),
@@ -2244,34 +3947,91 @@ NODE_PLAN = (
     ("null", "", 0, MOPRTEXPLVIEWMANAGER_N122_BODY),
 )
 
-ANNOTATION_STYLE_NODE_POSITIONS = (
-    38,
-    39,
-    41,
-    43,
-    45,
-    47,
-    49,
-    51,
-    52,
-    54,
-    58,
+RESIDUAL_SPANS = (
+    ("RESIDUAL_MORELMGR_C_HEAD", 36),
+    ("RESIDUAL_MODETAILDEFS_C_TAIL", 2),
+    ("MOVISUALPROPERTIES_N001_BODY", 621),
+    ("MOUNITSTABLE_N002_BODY", 2),
+    ("MOLENGTHUSERUNITS_N003_BODY", 64),
+    ("MOLENGTHUSERUNITS_N004_BODY", 64),
+    ("MOANGLEUSERUNITS_N006_BODY", 64),
+    ("MONUMBERUSERUNITS_N007_BODY", 62),
+    ("MODENSITYUNITS_N008_BODY", 73),
+    ("MOFLOATNUMBERUSERUNITS_N009_BODY", 62),
+    ("MOSPRINGCONSTANTUNITS_N010_BODY", 62),
+    ("MOUNITSYSUNITS_N011_BODY", 64),
+    ("MOFORCEUNITS_N012_BODY", 64),
+    ("MOSTRESSUNITS_N013_BODY", 62),
+    ("MOGRAVITYUNITS_N014_BODY", 62),
+    ("MOLINEARMOTORUNITS_N015_BODY", 62),
+    ("MOROTARYMOTORUNITS_N016_BODY", 62),
+    ("MOPOWERUNITS_N017_BODY", 64),
+    ("MOENERGYUNITS_N018_BODY", 64),
+    ("MOTIMEUNITS_N019_BODY", 64),
+    ("MOFREQUENCYUSERUNITS_N020_BODY", 62),
+    ("MOUNITCOMPONENT_N022_BODY", 10),
+    ("GCCURVATUREOBJECT_N023_BODY", 48),
+    ("MOTRANSREFPLANEDATA_N024_BODY", 249),
+    ("GCXHATCH_N026_BODY", 40),
+    ("MODENSITYPARAMETER_N029_BODY", 20),
+    ("MODENSITYPARAMETER_N030_BODY", 9),
+    ("UOMODELDATA_N032_BODY", 50),
+    ("MONODENAME_N060_BODY", 24),
+    ("MONODENAME_N061_BODY", 2),
+    ("MONODENAME_N063_BODY", 24),
+    ("MONODENAME_N064_BODY", 47),
+    ("MONODENAME_N065_BODY", 26),
+    ("MONODENAME_N066_BODY", 142),
+    ("MONODENAME_N068_BODY", 24),
+    ("MONODENAME_N069_BODY", 47),
+    ("MONODENAME_N070_BODY", 26),
+    ("MONODENAME_N071_BODY", 182),
+    ("MONODENAME_N073_BODY", 24),
+    ("MONODENAME_N074_BODY", 47),
+    ("MONODENAME_N075_BODY", 26),
+    ("MONODENAME_N076_BODY", 182),
+    ("MONODENAME_N078_BODY", 24),
+    ("MONODENAME_N079_BODY", 47),
+    ("MONODENAME_N080_BODY", 26),
+    ("MONODENAME_N081_BODY", 227),
+    ("MONODENAME_N082_BODY", 26),
+    ("MONODENAME_N083_BODY", 44),
+    ("SUOBLIST_N085_BODY", 2),
+    ("MOVIEW_N086_BODY", 122),
+    ("MOVIEW_N087_BODY", 122),
+    ("MOVIEW_N088_BODY", 194),
+    ("MOVIEW_N089_BODY", 194),
+    ("MOVIEW_N090_BODY", 194),
+    ("MOVIEW_N091_BODY", 194),
+    ("MOVIEW_N092_BODY", 194),
+    ("MOVIEW_N093_BODY", 194),
+    ("MOVIEW_N094_BODY", 194),
+    ("MOVIEW_N095_BODY", 203),
+    ("MOFEATCOLORTAB_N096_BODY", 4),
+    ("MOFEATCOLORTAB_N097_BODY", 12),
+    ("MOSKETCHBLOCKMGR_N099_BODY", 24),
+    ("MOSKETCHBLOCKMGR_N100_BODY", 47),
+    ("MOSKETCHBLOCKMGR_N101_BODY", 26),
+    ("MOSKETCHBLOCKMGR_N102_BODY", 56),
+    ("MOSKETCHBLOCKMGR_N103_BODY", 8),
+    ("SUOBLIST_N104_BODY", 2),
+    ("MOANNOTATIONVIEW_N105_BODY", 198),
+    ("MOANNOTATIONVIEW_N107_BODY", 12),
+    ("MOANNOTATIONVIEW_N108_BODY", 8),
+    ("MOANNOTATIONVIEW_N109_BODY", 32),
+    ("MOANNOTATIONVIEW_N110_BODY", 24),
+    ("MOANNOTATIONVIEW_N111_BODY", 2),
+    ("MOPMARKRECORD_N112_BODY", 48),
+    ("SUOBLIST_N113_BODY", 14),
+    ("MOCTHREADREFMGR_N114_BODY", 8),
+    ("MOCTHREADREFMGR_N115_BODY", 291),
+    ("MOPRTEXPLVIEWMANAGER_N117_BODY", 24),
+    ("MOPRTEXPLVIEWMANAGER_N118_BODY", 47),
+    ("MOPRTEXPLVIEWMANAGER_N119_BODY", 26),
+    ("MOPRTEXPLVIEWMANAGER_N120_BODY", 36),
+    ("MOPRTEXPLVIEWMANAGER_N122_BODY", 54),
 )
-ANNOTATION_STYLE_UNDECODED_BYTES = 92
-ANNOTATION_STYLE_UNDECODED_SPANS = (("ANNOTATION_STYLE_RECORD_73", 92),)
-
-ATOM_DEFINITION_POSITION = 33
-HIGH_WATER_POSITION = 115
-PART_NAME_POSITION = 0
-SECONDARY_LENGTH_UNIT_POSITION = 4
-REFERENCE_PART_NAME = "Part70"
-MO_NODE_SCALARS_AFTER_NAME = bytes.fromhex(
-    "00000000000000400000000000810000fffeff0000000000"
-)
-HIGH_WATER_ID_OFFSET = 25
-REFERENCE_HIGH_WATER = (101, 103)
-REFERENCE_SHA256 = "a0877db37735da4027459d8161425843e3ad90f1e3e90dc32835f9370dd643bb"
-REFERENCE_LENGTH = 25214
+RESIDUAL_BYTES = 6195
 
 
 def atom_tail(generation: int) -> bytes:
@@ -2295,6 +4055,44 @@ def high_water_body(highest: int, next_free: int) -> bytes:
     return bytes(body)
 
 
+def read_leading_string(body: bytes) -> str:
+    units = body[3]
+    head = 4
+    if units == LONG_STRING_UNITS:
+        units = struct.unpack_from("<H", body, 4)[0]
+        head = 6
+    return body[head : head + 2 * units].decode("utf-16-le")
+
+
+def atom_nodes(
+    atoms: tuple[tuple[int, int], ...], session_stamp: int, generation: int
+) -> list[tuple[str, str, int, bytes]]:
+    nodes: list[tuple[str, str, int, bytes]] = []
+    for index, (atom_id, tree_id) in enumerate(atoms):
+        if index:
+            nodes.append(("classref", "moAtom_c", 0, b""))
+        nodes.append(("null", "", 0, ATOM_UNIT_NODE_BODY))
+        record = atom_record(atom_id, tree_id, session_stamp, index)
+        if index == len(atoms) - 1:
+            record += atom_tail(generation)
+        nodes.append(("null", "", 0, record))
+    return nodes
+
+
+def plan_positions(dual_length_units: bool) -> list[int]:
+    positions: list[int] = []
+    for position in range(len(NODE_PLAN)):
+        if position == SECONDARY_LENGTH_UNIT_POSITION and not dual_length_units:
+            continue
+        if position in (
+            ATOM_DEFINITION_POSITION + 1,
+            ATOM_DEFINITION_POSITION + 2,
+        ):
+            continue
+        positions.append(position)
+    return positions
+
+
 def build_nodes(
     part_name: str,
     atoms: tuple[tuple[int, int], ...],
@@ -2304,30 +4102,15 @@ def build_nodes(
     high_water: tuple[int, int],
 ) -> list[tuple[str, str, int, bytes]]:
     nodes: list[tuple[str, str, int, bytes]] = []
-    for position, entry in enumerate(NODE_PLAN):
-        kind, class_name, schema, body = entry
-        if position == SECONDARY_LENGTH_UNIT_POSITION and not dual_length_units:
-            continue
-        if position in (
-            ATOM_DEFINITION_POSITION + 1,
-            ATOM_DEFINITION_POSITION + 2,
-        ):
-            continue
+    for position in plan_positions(dual_length_units):
+        kind, class_name, schema, body = NODE_PLAN[position]
         if position == PART_NAME_POSITION:
             body = encode_string(part_name) + MO_NODE_SCALARS_AFTER_NAME
         elif position == HIGH_WATER_POSITION:
             body = high_water_body(*high_water)
         nodes.append((kind, class_name, schema, body))
-        if position != ATOM_DEFINITION_POSITION:
-            continue
-        for index, (atom_id, tree_id) in enumerate(atoms):
-            if index:
-                nodes.append(("classref", "moAtom_c", 0, b""))
-            nodes.append(("null", "", 0, ATOM_UNIT_NODE_BODY))
-            record = atom_record(atom_id, tree_id, session_stamp, index)
-            if index == len(atoms) - 1:
-                record += atom_tail(generation)
-            nodes.append(("null", "", 0, record))
+        if position == ATOM_DEFINITION_POSITION:
+            nodes.extend(atom_nodes(atoms, session_stamp, generation))
     return nodes
 
 
@@ -2364,6 +4147,11 @@ def encode_config0_stream(
 ) -> bytes:
     if not atoms:
         raise SldprtFormatError("Contents/Config-0 needs at least one atom record")
+    if generation != MO_VERSION:
+        raise SldprtFormatError(
+            f"Contents/Config-0 tables are recovered at generation {MO_VERSION}, "
+            f"{generation} was requested"
+        )
     if high_water is None:
         top = max(atom for atom, _tree in atoms)
         high_water = (top, top + 2 * len(atoms))
@@ -2387,61 +4175,59 @@ def encode_config0_stream(
         elif kind == "objectref":
             out += struct.pack("<H", indices[position])
         else:
-            out += b"\x00\x00"
+            out += NULL_TAG
         out += body
     return bytes(out)
 
 
 def declared_opaque_split(**kwargs: object) -> dict[str, int]:
     stream = encode_config0_stream(**kwargs)
-    plan_bodies = {id(entry[3]): position for position, entry in enumerate(NODE_PLAN)}
-    styled = set(ANNOTATION_STYLE_NODE_POSITIONS)
-    nodes = build_nodes(
-        str(kwargs.get("part_name", REFERENCE_PART_NAME)),
-        tuple(kwargs.get("atoms", ((REFERENCE_ATOM_ID, REFERENCE_TREE_ID),))),
-        int(kwargs.get("session_stamp", REFERENCE_SESSION_STAMP)),
-        int(kwargs.get("generation", MO_VERSION)),
-        bool(kwargs.get("dual_length_units", True)),
-        (REFERENCE_ATOM_ID, REFERENCE_ATOM_ID + 2),
-    )
+    part_name = str(kwargs.get("part_name", REFERENCE_PART_NAME))
+    atoms = tuple(kwargs.get("atoms", ((REFERENCE_ATOM_ID, REFERENCE_TREE_ID),)))
+    session_stamp = int(kwargs.get("session_stamp", REFERENCE_SESSION_STAMP))
+    generation = int(kwargs.get("generation", MO_VERSION))
+    dual_length_units = bool(kwargs.get("dual_length_units", True))
     framing = len(encode_class_definition(PROLOGUE_CLASS, PROLOGUE_SCHEMA))
     declared = len(PROLOGUE_BODY_TEMPLATE)
     opaque = 0
-    for kind, class_name, schema, body in nodes:
+    for position in plan_positions(dual_length_units):
+        kind, class_name, schema, body = NODE_PLAN[position]
         framing += (
             len(encode_class_definition(class_name, schema))
             if kind == "definition"
-            else 2
+            else len(NULL_TAG)
         )
-        position = plan_bodies.get(id(body), -1)
-        if position in styled:
-            continue
-        if position < 0 or position in (PART_NAME_POSITION,):
-            declared += len(body)
+        if DETAIL_REGION_FIRST_NODE <= position <= DETAIL_REGION_LAST_NODE:
+            pass
+        elif position == PART_NAME_POSITION:
+            declared += len(encode_string(part_name)) + len(MO_NODE_SCALARS_AFTER_NAME)
         elif position == HIGH_WATER_POSITION:
-            declared += 8
-            opaque += len(body) - 8
+            declared += HIGH_WATER_DECLARED_BYTES
+            opaque += len(body) - HIGH_WATER_DECLARED_BYTES
         elif body.startswith(STRING_MARKER):
             head = len(encode_string(read_leading_string(body)))
             declared += head
             opaque += len(body) - head
         else:
             opaque += len(body)
-    declared += ANNOTATION_DECLARED_BYTES[0]
-    opaque += ANNOTATION_OPAQUE_BYTES[0] + ANNOTATION_STYLE_UNDECODED_BYTES
+        if position != ATOM_DEFINITION_POSITION:
+            continue
+        for kind, _class_name, _schema, body in atom_nodes(
+            atoms, session_stamp, generation
+        ):
+            framing += len(NULL_TAG)
+            declared += len(body)
+    detail_declared, _detail_framing = declared_detail_bytes()
+    declared += detail_declared
+    opaque += len(RESIDUAL_MORELMGR_C_HEAD) + len(RESIDUAL_MODETAILDEFS_C_TAIL)
     return {
         "stream_bytes": len(stream),
         "derived_framing": framing,
         "declared": declared,
         "opaque": opaque,
         "accounted": framing + declared + opaque,
+        "detail_declared": detail_declared,
+        "residual_head": len(RESIDUAL_MORELMGR_C_HEAD),
+        "residual_tail": len(RESIDUAL_MODETAILDEFS_C_TAIL),
     }
 
-
-def read_leading_string(body: bytes) -> str:
-    units = body[3]
-    head = 4
-    if units == 0xFF:
-        units = struct.unpack_from("<H", body, 4)[0]
-        head = 6
-    return body[head : head + 2 * units].decode("utf-16-le")
