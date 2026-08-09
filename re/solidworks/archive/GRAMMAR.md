@@ -119,7 +119,10 @@ moCompFeature_c record data
 
 so `record_length == 93 + 119 * (n - 1)` where `n` is the number of tree nodes it holds.
 `n == 2 * feature_count`: one entry per sketch and one per extrusion, interleaved
-`sketch1, feature1, sketch2, feature2, …`.
+`sketch1, feature1, sketch2, feature2, …`. That is **2 entries per feature, not one per tree
+node**: the 20-node single-feature baseline carries exactly two entries, for node ids 26 and 32,
+and the folders, the three planes and the Origin get no entry at all
+(`../records/RESOLVEDFEATURES.md` §5).
 
 Verified by `probe_entries.py` on all 51 corpus files: the length equation holds in every file,
 and the id sequence read out of the array equals the `feature_id` field of the corresponding
@@ -148,8 +151,8 @@ UTF-16 string; the two class-reference tokens are the ones that renumber with fe
 except for the two `u32` fields above:
 
 ```
-2b 80                       class reference
-02 00 00 00                 u32 = 2
+2b 80                       class reference -> moUnitComponent_c (external, index 43)
+02 00                       object reference -> the shared component object
 00 x 41
 ff x 16                     four u32 = -1 (null ids)
 00 x 20
@@ -157,6 +160,14 @@ ff x 16                     four u32 = -1 (null ids)
 <u32 node id>
 <u32 time_t>
 ```
+
+The `02 00 00 00` this table used to read as a `u32` = 2 is **not** a scalar. `02 00` is an
+object-reference tag and the next two bytes are the first two of the 41-byte zero run, confirmed by
+the segmenter at `classref external#43 5673..5675`, `objectref external#2 5675..5766`. The
+decomposition is `2 + 2 + 89 = 93`, and the 89 is the `runs_by_version["0"]["18000"]` the layout
+table already records for `moCompFeature_c`. The 26-byte inter-entry block is
+`classref + u16 0 + u32 1 + u32 0x40000000 + i32 -1 + u32 0 + empty string + classref`, so its
+non-tag part is 22 bytes.
 
 ### 3.2 Measured behaviour
 
@@ -231,7 +242,9 @@ Every 2-D sketch coordinate is wrapped in a fixed 18-byte prefix and a 4-byte su
 record before it partitions them per sketch exactly (report 2 §6.4, re-verified here).
 
 * **Rectangle**: four free points, corner order `(min,min) (max,max) (min,max) (max,min)`,
-  stride 162 bytes. **AUTHORED**.
+  strides `178, 162, 162` — the first gap is 16 bytes longer than the other two, so the uniform
+  162-byte stride this section used to claim is right for the last two gaps and wrong for the
+  first (`../records/RESOLVEDFEATURES.md` §5). **AUTHORED**.
 * **Circle**: one free point (the centre) plus one on-curve point at exactly **17°**. There is
   no radius field; radius is `hypot(dx, dy)`. **AUTHORED** as
   `centre + r·(cos 17°, sin 17°)`.
