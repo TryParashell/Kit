@@ -16,12 +16,21 @@ Everything below is measured. Controls measured 8000.000000000001 mm³, centre `
 | --- | --- | --- |
 | `moCompRefPlane_c` run 1 becomes a `conditional` rule | `re/data/class_layouts_versioned.json` | unblocks all 32 donor fixtures |
 | `moProfileFeature_c` gets ten fixed child slots | `re/data/class_layouts_decompiled.json` | `boss1_front_rect_blind` 148 → 223 objects |
-| donor object floor | `tests/convert/test_solidworks_archive.py` | 5244 → **7257** |
+| `moExtrusion_c` gets the sixteen children the traces record | `re/data/class_layouts_versioned.json` | replaces a nine-slot absorption |
+| `moCompSketchEntHandle_c` run 0 gets the 89/85 version gate | `re/data/class_layouts_decompiled.json` | its `sgPointHandle` was 89 bytes early |
+| donor object floor | `tests/convert/test_solidworks_archive.py` | 5244 → **7487** |
 | `_name_record` flag word per node kind | `src/convert/adapters/solidworks/native.py` | correct for planes, Origin and cuts |
 | `_resolved_payload` first `u32` | `src/convert/adapters/solidworks/native.py` | base map index, not the object count |
-| `_principal_plane_ids` Top and Right frames | `src/convert/adapters/solidworks/native.py` | the basis the vendor actually writes |
 
 `archive.py` needed no change: `CONDITIONAL_RULE` and `_element_length` already implement the rule.
+
+The last two layout rows are not new findings, they are the price of the first two. Unblocking
+`moCompRefPlane_c` lets the static walk reach into `moExtrusion_c` and `moCompSketchEntHandle_c` for
+the first time, and both of those disagreed with the recorded WinDbg segmentations about where their
+children start (§7.9, §7.12). The recorded object offsets are ground truth, so the layouts were
+corrected to them rather than left to mis-walk. The two layout findings alone take the donors to
+**7257**; with these two corrections the shipped table reaches **7487**, and all nine recorded
+segmentations agree with the static walk for every object it reaches.
 
 The `moCompRefPlane_c` finding lives in `class_layouts_versioned.json` rather than
 `class_layouts_decompiled.json` because `gen_class_layouts.py` merges the versioned table **after**
@@ -150,10 +159,18 @@ On the 32 donor fixtures under `tests/fixtures/solidworks/donors/`, with the shi
 | table | objects reached | blockers |
 | --- | --- | --- |
 | before | **5244** | `moCompRefPlane_c@1` ×32 |
-| after | **7257** | `moExtrusion_c@5` ×23, `moSketchExtRef_w@0` ×6, `sgSketch@0` ×3 |
+| the two layout findings alone | **7257** | `moExtrusion_c@5` ×23, `moSketchExtRef_w@0` ×6, `sgSketch@0` ×3 |
+| shipped, with the two trace corrections | **7487** | `moSketchExtRef_w@0`, `sgSketch@0`, `moExtrusion_c@9` |
 
-Every donor advanced, +38.4 % overall. `FIXTURE_OBJECT_FLOOR` in
-`tests/convert/test_solidworks_archive.py` is 7257 so it cannot silently regress.
+Every donor advanced, +42.8 % overall. `FIXTURE_OBJECT_FLOOR` in
+`tests/convert/test_solidworks_archive.py` is 7487 so it cannot silently regress.
+
+Against the nine recorded segmentations the static walk now reaches 234 of 321 objects on
+`baseline`, 244 of 536 on `cutbase` and `padplane`, 254 of 615 on `three`, 244 of 400 on `twopad`,
+234 of 321 on `planetop`, 171 of 285 on `circle`, 171 of 573 on `vendor_cojinete` and 181 of 916 on
+`vendor_ring`, and **every offset it produces equals the recorded offset**. It stops on `moFR_c@0`
+in the six pad parts and `moSketchExtRef_w@0` in the other three, and both stop offsets are recorded
+object offsets rather than a mis-step.
 
 Field-level facts gated against the vendor stream while getting there:
 
@@ -226,11 +243,26 @@ Each of these was believed, tested and killed. They are recorded so nobody pays 
    tag plus the first two bytes of a 41-byte zero run.
 7. **The rectangle coordinate stride is a uniform 162 bytes** (`../archive/GRAMMAR.md` §5.1).
    Refuted, §5: the measured strides are `178, 162, 162`.
-8. **The Top plane basis is `((1,0,0),(0,0,-1),(0,1,0))`** — the frame
-   `native.py::_principal_plane_ids` carried. Refuted by the vendor bytes at 7973: Top is
-   `((1,0,0),(0,0,1),(0,-1,0))` and Right is `((-0,0,1),(-0,1,0),(-1,0,0))`, negative zeros
-   included. Both frames are corrected in `native.py`.
-9. **One `moExtrusion_c@5` length closes the class.** Refuted twice over. 707 is the best of
+8. **The 72-byte basis block holds the same matrix as `native.py::_principal_plane_ids`.** Refuted
+   by the vendor bytes at 7973: the block is Top `((1,0,0),(0,0,1),(0,-1,0))` and Right
+   `((-0,0,1),(-0,1,0),(-1,0,0))`, negative zeros included, while the matching table carries Top
+   `x=(1,0,0), y=(0,0,-1), z=(0,1,0)` and Right `x=(0,0,-1), y=(0,1,0), z=(1,0,0)`.
+9. **…and therefore `_principal_plane_ids` carries the wrong signs and must be replaced by the
+   measured rows.** Also refuted, this time by arithmetic and by the suite. The measured block is
+   exactly the **transpose** of the matching table's frame: transposing
+   `[[1,0,0],[0,0,-1],[0,1,0]]` gives `[[1,0,0],[0,0,1],[0,-1,0]]`, and transposing
+   `[[0,0,-1],[0,1,0],[1,0,0]]` gives `[[0,0,1],[0,1,0],[-1,0,0]]`, which is the Right block up to
+   the signed zeros. The two matrices are the plane-to-world and world-to-plane forms of the same
+   rotation, and each is already in the right place: `_plane_frame_block` writes
+   `rows = zip(x_axis, y_axis, z_axis)`, i.e. the transpose, behind a basis-present flag at `+48`,
+   which is the vendor layout; and `_principal_plane_ids` matches the plane-to-world frame that
+   `_principal_plane_frames` hands back on the read path, where Top round-trips as
+   `u=(1,0,0), n=(0,1,0), v=cross(n,u)=(0,0,-1)`. Substituting the measured rows into the matching
+   table double-transposes: measured, it dropped Top and Right from the principal set entirely
+   (`_principal_plane_ids` returned one plane instead of three) and a piston-ring round trip emitted
+   `Top Plane` as authored object 26 in place of `Sketch1`. The change was reverted; the measured
+   byte order stands as a fact about the block, not about the matching table.
+10. **One `moExtrusion_c@5` length closes the class.** Refuted twice over. 707 is the best of
    `{587, 635, 705, 707, 779}` for `PLANE_TOP` and still stalls, **and 707 demonstrably absorbs a
    `moPerBodyChooserData_c` class definition at `+30`** — `ff ff 01 00 16 00
    moPerBodyChooserData_c` — so it swallows child objects. It re-emits byte-identically only
@@ -240,12 +272,22 @@ Each of these was believed, tested and killed. They are recorded so nobody pays 
    splitting run 5 at that boundary is the next move: it unblocks 23 of the 32 donors.
    `moExtrusion_c::Serialize` and the `moBodyFeature_c` / `FUN_4bb886c0` base chain named in
    `external_classes.json::pmark_record` are the entry points.
-10. **One `moDisplayDistanceDim_c@6` length closes the three stalling parts.** Refuted: no value in
+11. **One `moDisplayDistanceDim_c@6` length closes the three stalling parts.** Refuted: no value in
     `{0, 4, …, 80, 91}` segments `PLANE_TOP`, the best reaching 256 of 265, and the fitted 19 is
     refuted for `PLANE_TOP`, `PLANE_RIGHT` and `MIDPLANE_d10`. The record is the depth dimension's
     annotation and its witness geometry moves with the sketch plane and the end condition, which is
     why those three parts are exactly the three that stall. It needs field decoding, not a length.
-11. **The blocker is `sgSketch@tail` ×32 at 4892 objects**, as an earlier brief recorded. Not
+12. **`moCompSketchEntHandle_c` run 0 is zero, as the generated table records.** Refuted: with the
+    `moUnitComponent_c` classref in slot 0 pinned to its own 4-byte subtree, the recorded gap from
+    the end of that object reference to the `sgPointHandle` classref is 89 bytes in `CIRCLE_r10` at
+    18000 and 85 in both `vendor_cojinete` and `vendor_ring` at 14000 — the same gate
+    `moCompFeature_c` already declares, for the same reason, because the class shares that base.
+    Zero put the `sgPointHandle` 89 or 85 bytes early in all three traced instances.
+13. **The nine-slot `moExtrusion_c` entry places objects correctly.** Refuted: the nine traced
+    instances carry 14 or 16 children. The nine-slot walk skipped the object reference at 8115 in
+    `baseline` — its run 1 of 49 is the traced `2 + 2 + 45` with a real child in the middle — and
+    every object it produced after that was at an offset the trace contradicts.
+14. **The blocker is `sgSketch@tail` ×32 at 4892 objects**, as an earlier brief recorded. Not
     reproducible: the measured blocker on the shipped table was `moCompRefPlane_c@1` ×32 at 5244
     objects, and the `groups` rule that brief asked for already existed in `archive.py` and was
     already wired into `sgSketch`.
@@ -253,9 +295,11 @@ Each of these was believed, tested and killed. They are recorded so nobody pays 
 ## 8. What is deliberately not shipped
 
 - The three corpus-fitted run lengths `moExtrusion_c@5 = 707`, `moExtrusion_c@8 = 767` and
-  `moDisplayDistanceDim_c@6 = 19`. The first two are absorption artifacts (§7.9) and shipping them
+  `moDisplayDistanceDim_c@6 = 19`. The first two are absorption artifacts (§7.10) and shipping them
   would tell the next agent that `moExtrusion_c` is decoded when it is swallowing child objects; the
-  third is refuted for three of the fifteen corpus parts.
+  third is refuted for three of the fifteen corpus parts. The shipped `moExtrusion_c` entry does not
+  carry a length for that region at all: it declares the children the traces record and refuses runs
+  9, 11 and 12.
 - Any from-scratch 11075-byte emitter. The honest form of one today is 9653 bytes of constant table,
   which is a donor block.
 
