@@ -36,13 +36,13 @@ source = { editable = "." }
 [package.optional-dependencies]
 dev = [
     { name = "pytest" },
-    { name = "pywin32" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.1.1" },
-    { name = "pywin32", marker = "extra == 'dev'", specifier = "==312" },
+    { name = "pywin32", marker = "sys_platform == 'win32' and extra == 'dev'", specifier = "==312" },
 ]
 provides-extras = ["dev"]
 
