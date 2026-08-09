@@ -880,6 +880,39 @@
      "confidence": "confirmed"
     }
    ]
+  },
+  "moProfileFeature_c": {
+   "confidence": "partial",
+   "serialize": "sldmodu.dll 0x4bb99220 moProfileFeature_c::Serialize",
+   "child_slots": [
+    "external#4",
+    "*",
+    "*",
+    "*",
+    "*",
+    "sgSketch",
+    "sgLineHandle",
+    "moCompRefPlane_c",
+    "*",
+    "*"
+   ],
+   "runs": {
+    "lead": 0,
+    "0": 4,
+    "1": 47,
+    "2": 30,
+    "3": 44,
+    "4": 4,
+    "5": 0,
+    "6": 0,
+    "7": 0,
+    "8": 14,
+    "9": 8
+   },
+   "repeat_prefix": 0,
+   "variable_runs": [],
+   "note": "The generated table derived repeat_prefix 6 from the 6x2, 10x13 child count split and appended a ... slot, which made the segmenter refuse the run after slot 5 in every instance and cost every object past the sketch. The ten slots are declared here instead, because moOriginProfileFeature_c is confirmed with exactly ten fixed child slots and the same runs lead 0, 0 4, 1 47, 2 30, 3 44, 4 4, 5 0, 6 0, 7 0, 8 14, 9 8, and every single feature part in the corpus carries the same ten children in the same order with those same runs, with sgLineHandle in slot 6 where the origin class takes a wildcard. Declaring them takes boss1_front_rect_blind from 148 to 223 objects and the 32 donor fixtures from 5244 to 7257. The class stays partial rather than confirmed because two traced instances carry only 6 children, so ten is the arity of the single feature family and not yet a proven invariant of the class; those two instances stop on the run after their last child instead of being walked to the end.",
+   "fields": []
   }
  }
 }
