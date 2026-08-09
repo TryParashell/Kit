@@ -65,7 +65,7 @@ class ApiShim:
 
 ```python
 # support said five retries was the sweet spot after last outage
-MaxRetries = 5
+KMaxRetries = 5
 ```
 
 ## Methods Inside Classes
