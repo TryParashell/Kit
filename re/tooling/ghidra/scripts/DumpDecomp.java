@@ -36,7 +36,7 @@ public class DumpDecomp extends GhidraScript {
         List<String> wanted = new ArrayList<>();
         for (String raw : patterns) {
             String text = raw.trim();
-            if (!text.isEmpty() && !text.startsWith(";")) {
+            if (!text.isEmpty() && !text.startsWith(";") && !text.startsWith("#")) {
                 wanted.add(text);
             }
         }

@@ -90,7 +90,9 @@ class Dump:
         for path in paths:
             raw = open(path, encoding="utf-8", errors="replace").read()
             lines = raw.splitlines()
-            starts = [i for i, line in enumerate(lines) if line.startswith("=== FUNCTION ")]
+            starts = [
+                i for i, line in enumerate(lines) if line.startswith("=== FUNCTION ")
+            ]
             starts.append(len(lines))
             for k in range(len(starts) - 1):
                 chunk = lines[starts[k] : starts[k + 1]]
@@ -106,7 +108,8 @@ class Dump:
                 record = {
                     "name": name,
                     "address": address,
-                    "source": "%s:%d" % (path.replace("\\", "/").rsplit("/", 1)[-1], starts[k] + 1),
+                    "source": "%s:%d"
+                    % (path.replace("\\", "/").rsplit("/", 1)[-1], starts[k] + 1),
                     "body": "\n".join(chunk),
                 }
                 self.by_address.setdefault(address, record)
@@ -328,9 +331,7 @@ def main() -> int:
     dump = Dump(args.dumps)
     serialize_map = json.load(open(args.map, encoding="utf-8"))
     classes = [
-        line.strip()
-        for line in open(args.classes, encoding="utf-8")
-        if line.strip()
+        line.strip() for line in open(args.classes, encoding="utf-8") if line.strip()
     ]
     payload: Dict[str, dict] = {}
     for name in classes:
@@ -370,10 +371,7 @@ def main() -> int:
         json.dump(payload, handle, indent=1)
         handle.write("\n")
     ok = sum(1 for v in payload.values() if v.get("status") == "ok")
-    print(
-        "classes=%d extracted=%d missing=%d"
-        % (len(payload), ok, len(payload) - ok)
-    )
+    print("classes=%d extracted=%d missing=%d" % (len(payload), ok, len(payload) - ok))
     return 0
 
 
