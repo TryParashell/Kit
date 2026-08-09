@@ -56,7 +56,7 @@ Noun or noun phrase, PascalCase. Covers locals, instance attributes, module-leve
 
 ```python
 UserName = "Jae"     # ok
-MaxRetries = 5       # ok
+KMaxRetries = 5      # ok, K prefix per identifier-markers.md
 Db = None            # too short (2) — invalid
 X = 1                # too short — invalid
 TotalNumberOfActiveUserConnections = 0  # too long — invalid
