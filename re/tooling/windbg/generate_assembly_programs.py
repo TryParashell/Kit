@@ -245,18 +245,45 @@ def AddStrings(
         )
 
 
+# class-relative fields stay attached when unique-file records change stream growth
+def FieldPosition(
+    StreamName: str,
+    StartPos: int,
+    OwnerText: str,
+    StreamShift: int,
+    Segments: tuple[dict[str, Any], ...],
+) -> int:
+    if (
+        StreamName == "Contents/Config-0"
+        and OwnerText.startswith("moTransRefPlaneData_c")
+        and OwnerText.endswith("inline transform row")
+    ):
+        ClassStart = next(
+            int(Segment["offset"])
+            for Segment in Segments
+            if Segment["kind"] == "definition"
+            and Segment["class_name"] == "moTransRefPlaneData_c"
+        )
+        return ClassStart + StartPos - 0x09A6
+    ShiftStart = ShiftStarts.get(StreamName)
+    if ShiftStart is not None and StartPos >= ShiftStart:
+        return StartPos + StreamShift
+    return StartPos
+
+
 # compound fields remain typed named values instead of residual byte spans
 def AddDirectFields(
     StreamName: str,
     Operations: list[tuple[int, int, str, str, Any]],
     Covered: set[int],
     StreamData: bytes,
+    Segments: tuple[dict[str, Any], ...],
 ) -> None:
     StreamShift = len(StreamData) - ReferenceLengths[StreamName]
-    ShiftStart = ShiftStarts.get(StreamName)
     for StartPos, FormatText, OwnerText in DirectFields[StreamName]:
-        if ShiftStart is not None and StartPos >= ShiftStart:
-            StartPos += StreamShift
+        StartPos = FieldPosition(
+            StreamName, StartPos, OwnerText, StreamShift, Segments
+        )
         FieldWidth = struct.calcsize("<" + FormatText)
         ValuesList = struct.unpack_from("<" + FormatText, StreamData, StartPos)
         FieldValue: Any = ValuesList[0] if len(ValuesList) == 1 else ValuesList
@@ -272,8 +299,7 @@ def AddDirectFields(
     StatusStream, StartPos, TextValues, OwnerText = StatusField
     if StreamName != StatusStream:
         return
-    if ShiftStart is not None and StartPos >= ShiftStart:
-        StartPos += StreamShift
+    StartPos = FieldPosition(StreamName, StartPos, OwnerText, StreamShift, Segments)
     FieldWidth = 2
     for _TextValue in TextValues:
         _Decoded, StringWidth = read_string(StreamData, StartPos + FieldWidth)
@@ -324,7 +350,7 @@ def BuildProgram(
     Operations: list[tuple[int, int, str, str, Any]] = []
     Covered: set[int] = set()
     AddStructures(Operations, Covered, StreamData, Segments)
-    AddDirectFields(StreamName, Operations, Covered, StreamData)
+    AddDirectFields(StreamName, Operations, Covered, StreamData, Segments)
     AddStrings(Operations, Covered, StreamData, RowsList)
     AddPrimitives(Operations, Covered, StreamData, RowsList)
     Missing = sorted(set(range(len(StreamData))) - Covered)
