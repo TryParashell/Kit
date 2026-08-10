@@ -18,6 +18,7 @@ from .assembly_programs import EncodeProgram, FieldOwners, StreamPrograms
 from .assembly2_programs import EncodeProgram as EncodeProgram2
 from .assembly3_programs import EncodeProgram as EncodeProgram3
 from .assembly_distinct_programs import EncodeProgram as EncodeProgramDistinct
+from .assembly_distinct_repeat import EncodePathCore
 from .assembly_repeat import EncodeRepCore, RepeatItem
 from .container import SldprtFormatError
 
@@ -65,11 +66,29 @@ def EncodeAsmCore(
         raise SldprtFormatError("native assembly component path has no stem")
     DisplayName = f"<{ConfigName}>_Display State 1"
     AsmPath = str(PureWindowsPath(CompPath).parent / f"{ModelName}.SLDASM")
-    if len(CoreItems) >= 4:
-        if any(ItemValue.CompPath != CompPath for ItemValue in CoreItems):
-            raise SldprtFormatError(
-                "four-or-more native occurrences require one shared component file"
+    if len(CoreItems) >= 3 and any(
+        ItemValue.CompPath != CompPath for ItemValue in CoreItems
+    ):
+        StreamsMap = dict(
+            EncodePathCore(
+                ModelName,
+                ConfigName,
+                tuple(
+                    RepeatItem(
+                        ItemValue.OccurName,
+                        ItemValue.CompPath,
+                        ItemValue.TransX,
+                        ItemValue.TransY,
+                        ItemValue.TransZ,
+                    )
+                    for ItemValue in CoreItems
+                ),
             )
+        )
+        StreamsMap["Header2"] = StreamsMap["Contents/Config-0-ModelHeader"]
+        StreamsMap["Contents/Config-0-MatesList"] = struct.pack("<IH", 170, 0)
+        return MappingProxyType(StreamsMap)
+    if len(CoreItems) >= 4:
         StreamsMap = dict(
             EncodeRepCore(
                 ModelName,
@@ -86,9 +105,7 @@ def EncodeAsmCore(
                 ),
             )
         )
-        StreamsMap["Header2"] = StreamsMap[
-            "Contents/Config-0-ModelHeader"
-        ]
+        StreamsMap["Header2"] = StreamsMap["Contents/Config-0-ModelHeader"]
         StreamsMap["Contents/Config-0-MatesList"] = struct.pack("<IH", 170, 0)
         return MappingProxyType(StreamsMap)
     if len(CoreItems) == 3:
@@ -218,12 +235,8 @@ def EncodeAsmCore(
                     },
                 ),
             }
-            StreamsMap["Header2"] = StreamsMap[
-                "Contents/Config-0-ModelHeader"
-            ]
-            StreamsMap["Contents/Config-0-MatesList"] = struct.pack(
-                "<IH", 170, 0
-            )
+            StreamsMap["Header2"] = StreamsMap["Contents/Config-0-ModelHeader"]
+            StreamsMap["Contents/Config-0-MatesList"] = struct.pack("<IH", 170, 0)
             return MappingProxyType(StreamsMap)
         StreamsMap = {
             "Contents/CMgr": EncodeProgram2(
@@ -319,9 +332,7 @@ def EncodeAsmCore(
 
 # closure reporting makes typed ownership and zero opaque bytes testable
 def CoreCoverage() -> Mapping[str, int]:
-    StreamBytes = sum(
-        len(EncodeProgram(StreamName)) for StreamName in CoreStreamNames
-    )
+    StreamBytes = sum(len(EncodeProgram(StreamName)) for StreamName in CoreStreamNames)
     return MappingProxyType(
         {
             "stream_bytes": StreamBytes,
