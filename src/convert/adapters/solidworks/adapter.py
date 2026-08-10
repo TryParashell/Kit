@@ -189,14 +189,6 @@ _SOURCE_BYTES_KEY = "solidworks_source_bytes"
 _SOURCE_SHA256_KEY = "solidworks_source_sha256"
 _SOURCE_SEMANTIC_SHA256_KEY = "solidworks_source_semantic_sha256"
 _SOURCE_FORMAT_KEY = "solidworks_source_format_id"
-_UNSYNTHESISED_ASSEMBLY_STREAMS = (
-    "Contents/Config-0-LWDATA",
-    DISPLAY_LISTS_STREAM,
-    "Contents/User Units Table",
-    "SwDocContentMgr/SwDocContentMgrInfo",
-    "docProps/ISolidWorksInformation.xml",
-    KEYWORDS_STREAM,
-)
 _ASSEMBLY_READER_REQUIRED_STREAMS = (
     "Contents/CMgr",
     "Contents/Config-0",
@@ -216,7 +208,6 @@ _ASSEMBLY_REWRITABLE_DONOR_STREAMS = frozenset(
         COMPONENT_TREE_STREAM,
     }
 )
-_VENDOR_REJECTED_ASSEMBLY_RECORDS: tuple[str, ...] = ()
 _ATTESTED_COMPATIBILITIES = frozenset(
     {
         "kit-neutral-only",
@@ -1656,7 +1647,17 @@ def _native_attestation(data: bytes) -> dict[str, Any] | None:
         parsed
     ):
         return None
-    proof = _attested_native_proof(document, archive, compatibility)
+    AttestedNativeCaps = frozenset(
+        TransferItem.capability
+        for TransferItem in parsed
+        if TransferItem.mode is TransferMode.NATIVE
+    )
+    proof = _attested_native_proof(
+        document,
+        archive,
+        compatibility,
+        AttestedNativeCaps,
+    )
     if proof is None:
         return None
     expected_transfers = _solidworks_transfers(
@@ -1676,8 +1677,12 @@ def _native_attestation(data: bytes) -> dict[str, Any] | None:
     return value
 
 
+# replay uses attested delivery state only where bytes cannot encode sibling files
 def _attested_native_proof(
-    document: CadDocument, archive: SldprtArchive, compatibility: str
+    document: CadDocument,
+    archive: SldprtArchive,
+    compatibility: str,
+    AttestedNativeCaps: frozenset[Capability],
 ) -> _GeneratedStreams | None:
     streams = archive.streams
     before = _native_stream_sha256(streams)
@@ -1687,11 +1692,23 @@ def _attested_native_proof(
             "native-brep-with-kit-neutral",
             "native-metadata-with-kit-neutral",
         }:
-            proof = _generated_streams(document, bundle_names=bundle_names)
+            proof = _generated_streams(
+                document,
+                bundle_names=bundle_names,
+                BundleComplete=(
+                    Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps
+                ),
+            )
         elif KEYWORDS_STREAM in streams and RESOLVED_FEATURES_STREAM in streams:
             proof = _patch_native_template(document, streams, {})
         else:
-            proof = _generated_streams(document, bundle_names=bundle_names)
+            proof = _generated_streams(
+                document,
+                bundle_names=bundle_names,
+                BundleComplete=(
+                    Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps
+                ),
+            )
     except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
         return None
     if _native_stream_sha256(proof.streams) != before:
@@ -1706,12 +1723,13 @@ def _attested_generated_bundle_names(
     assembly = document.assembly
     if assembly is None or COMPONENT_TREE_STREAM not in archive.streams:
         return {}
-    model_name = PureWindowsPath(document.source.path).stem
+    RootName = assembly.definition(assembly.root_definition_id).name
+    ModelName = RootName or PureWindowsPath(document.source.path).stem or "Assembly"
     try:
         encoding = encode_native_assembly(
             assembly,
             document.configurations,
-            model_name or assembly.definition(assembly.root_definition_id).name,
+            ModelName,
         )
         native = decode_native_assembly(archive, include_tessellation=False)
     except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
@@ -1725,10 +1743,9 @@ def _attested_generated_bundle_names(
         target = definitions.get(native_id) if native_id is not None else None
         if target is None or not target.source_path:
             continue
-        name = PureWindowsPath(target.source_path).name
-        result[definition.id] = name
+        result[definition.id] = target.source_path
         if definition.document_id:
-            result[definition.document_id] = name
+            result[definition.document_id] = target.source_path
     return result
 
 
@@ -1764,6 +1781,7 @@ def _generated_streams(
     document: CadDocument,
     template: bytes | None = None,
     bundle_names: Mapping[str, str] | None = None,
+    BundleComplete: bool | None = None,
 ) -> _GeneratedStreams:
     portable = _document_without_source(document)
     if isinstance(document.source.attributes.get("embedded_source_format_id"), str):
@@ -1852,8 +1870,8 @@ def _generated_streams(
         )
         streams.update(envelope.streams)
         streams[COMPONENT_TREE_STREAM] = encoding.component_tree
-        streams.update(encoding.mate_streams)
         streams.update(AsmCoreStreams(portable.assembly, encoding, AssemblyName))
+        streams.update(encoding.mate_streams)
         assembly_envelope_complete = envelope.envelope_complete
         assembly_notes = _generated_assembly_notes(encoding, envelope, streams)
     if part_partition is not None:
@@ -1872,7 +1890,11 @@ def _generated_streams(
     )
     if (
         portable.assembly is not None
-        and bundle_names is not None
+        and (
+            BundleComplete
+            if BundleComplete is not None
+            else bundle_names is not None
+        )
         and all(
             DefinitionItem.id == portable.assembly.root_definition_id
             or DefinitionItem.document_id in bundle_names
@@ -1951,11 +1973,6 @@ def _assembly_reader_gaps(
         if name not in streams
     ]
     if donor is None:
-        gaps.extend(
-            f"vendor_rejected_record:{name}"
-            for name in _VENDOR_REJECTED_ASSEMBLY_RECORDS
-            if name in streams
-        )
         return tuple(gaps)
     gaps.extend(
         f"donor_stream_absent:{name}"
@@ -1995,11 +2012,6 @@ def _generated_assembly_notes(
         notes.append(
             f"vendor_unread_synthesised_mate:{len(encoding.generated_mate_ids)}"
         )
-    notes.extend(
-        f"absent_vendor_stream:{name}"
-        for name in _UNSYNTHESISED_ASSEMBLY_STREAMS
-        if name not in streams
-    )
     return tuple(notes)
 
 
@@ -2017,16 +2029,16 @@ def _generated_occurrence_labels(assembly: AssemblyData) -> tuple[str, ...]:
     return tuple(labels)
 
 
-# native history uses the direct root occurrence and its resolved file path
+# native history binds every direct occurrence to its path and translation
 def AsmCoreStreams(
     AssemblyValue: AssemblyData,
     EncodingValue: NativeAssemblyEncoding,
     ModelName: str,
 ) -> Mapping[str, bytes]:
     DirectItems = AssemblyValue.children(AssemblyValue.root_definition_id)
-    if not 1 <= len(DirectItems) <= 2:
+    if not DirectItems:
         raise SldprtFormatError(
-            "first-principles assembly history requires one or two direct components"
+            "first-principles assembly history requires a direct component"
         )
     XmlRoot = ET.fromstring(EncodingValue.component_tree)
     XmlSpace = {"sw": "http://www.solidworks.com/sw2003/schema"}
@@ -2073,7 +2085,16 @@ def AsmCoreStreams(
                 "direct assembly components use different configurations"
             )
         ConfigName = InstanceConfig or "Default"
-        CoreItems.append(AsmCoreItem(OccurNames[InstanceIndex], CompPath))
+        MatrixValues = InstanceItem.transform.values
+        CoreItems.append(
+            AsmCoreItem(
+                OccurNames[InstanceIndex],
+                CompPath,
+                MatrixValues[3] / 1000.0,
+                MatrixValues[7] / 1000.0,
+                MatrixValues[11] / 1000.0,
+            )
+        )
     return EncodeAsmCore(ModelName, ConfigName, tuple(CoreItems))
 
 
@@ -2202,6 +2223,7 @@ def _preserved_native_mate_matches(
     return True
 
 
+# replaying the emitted archive prevents capability claims from outrunning bytes
 def _generated_assembly_capabilities(
     assembly: AssemblyData,
     encoding: NativeAssemblyEncoding,
