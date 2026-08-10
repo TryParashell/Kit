@@ -1934,19 +1934,24 @@ def _decoded_document_brep(
     selected: set[str] = set()
     models: list[BrepModel] = []
     for body in bodies:
-        matches = tuple(
+        BodyMatches = tuple(
             payload
             for payload in payloads
             if payload.role == PayloadRole.BREP
             and payload.data is not None
-            and (
-                payload.attributes.get("body_id") == body.id
-                or payload.attributes.get("feature_id") == body.final_feature_id
-            )
+            and payload.attributes.get("body_id") == body.id
         )
-        if len(matches) != 1 or matches[0].id in selected:
+        FeatureMatches = tuple(
+            payload
+            for payload in payloads
+            if payload.role == PayloadRole.BREP
+            and payload.data is not None
+            and payload.attributes.get("feature_id") == body.final_feature_id
+        )
+        Matches = BodyMatches or FeatureMatches
+        if len(Matches) != 1 or Matches[0].id in selected:
             return None
-        payload = matches[0]
+        payload = Matches[0]
         selected.add(payload.id)
         digest = hashlib.sha256(payload.id.encode("utf-8")).hexdigest()[:20]
         model = decode_ascii_brep(

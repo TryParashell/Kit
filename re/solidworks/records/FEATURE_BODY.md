@@ -35,15 +35,15 @@ with the class's identity as the only structural prior.
 The record is the default Front / Top / Right reference-plane data. Every one of the nine traced
 parts has exactly three instances, all with three `null` children.
 
-| offset in `lead` | width | type | name | role | confidence |
-|---|---|---|---|---|---|
-| `+0` | 24 | `f64[3]` | `Origin` | constant `(0, 0, 0)` | confirmed |
-| `+24` | 24 | `f64[3]` | `Normal` | constant, `+Z` / `+Y` / `+X` | confirmed |
-| `+48` | 1 | `u8` | `HasBasis` | constant | confirmed |
-| `+49` | 72 | `f64[9]` | `Basis`, row-major orthonormal, **only if `HasBasis == 1`** | derived | confirmed |
-| next | 32 | `f64[4]` | plane extents | constant | partial |
-| next | 1 | `u8` | — | constant `0` | partial |
-| next | 32 | `f64[4]` | plane extents | constant | partial |
+| offset in `lead` | width | type     | name                                                        | role                         | confidence |
+| ---------------- | ----- | -------- | ----------------------------------------------------------- | ---------------------------- | ---------- |
+| `+0`             | 24    | `f64[3]` | `Origin`                                                    | constant `(0, 0, 0)`         | confirmed  |
+| `+24`            | 24    | `f64[3]` | `Normal`                                                    | constant, `+Z` / `+Y` / `+X` | confirmed  |
+| `+48`            | 1     | `u8`     | `HasBasis`                                                  | constant                     | confirmed  |
+| `+49`            | 72    | `f64[9]` | `Basis`, row-major orthonormal, **only if `HasBasis == 1`** | derived                      | confirmed  |
+| next             | 32    | `f64[4]` | plane extents                                               | constant                     | partial    |
+| next             | 1     | `u8`     | —                                                           | constant `0`                 | partial    |
+| next             | 32    | `f64[4]` | plane extents                                               | constant                     | partial    |
 
 So
 
@@ -54,11 +54,11 @@ lead = 49 + (72 if HasBasis else 0) + 65
 which is **114 or 186**, and the conditional field is exactly the omission the earlier sessions had
 attributed to `moSketchChain_c`:
 
-| instance | `Normal` | `HasBasis` | measured `lead` | instances |
-|---|---|---|---|---|
-| first `moDefaultRefPlnData_c` of the part | `(0, 0, 1)` Front | `0` | 114 | 9 / 9 files |
-| second | `(0, 1, 0)` Top | `1` | 186 | 9 / 9 files |
-| third | `(1, 0, 0)` Right | `1` | 186 | 9 / 9 files |
+| instance                                  | `Normal`          | `HasBasis` | measured `lead` | instances   |
+| ----------------------------------------- | ----------------- | ---------- | --------------- | ----------- |
+| first `moDefaultRefPlnData_c` of the part | `(0, 0, 1)` Front | `0`        | 114             | 9 / 9 files |
+| second                                    | `(0, 1, 0)` Top   | `1`        | 186             | 9 / 9 files |
+| third                                     | `(1, 0, 0)` Right | `1`        | 186             | 9 / 9 files |
 
 **Front omits the basis because it is the identity.** `verify_class_layouts.py` predicts the offset
 of child 0 from this rule and of children 1 and 2 from the constant runs `@0 = 47` and `@1 = 0`, and
@@ -81,28 +81,28 @@ may belong to the parent `moRefPlane_c`. The indirect call at `0x4c2d1cf0` throu
 
 Function: `sldmodu.dll` `0x4c2d3af0`. Read order, complete:
 
-| # | width / kind | condition | `this` offset | name | role | confidence |
-|---|---|---|---|---|---|---|
-| 1 | sub-record, slot 5 | always | `0x08` | `u16 count` then `count` × `u32` entity index | authored | confirmed |
-| 2 | sub-record, slot 5 | always | `0x60` | `u16 count` then `count` × `u32`; count is 1 everywhere | authored | confirmed |
-| 3 | 4 | always | `0x28` | `u32` | authored | confirmed |
-| 4 | 4 | always | `0x38` | `i32` | authored | confirmed |
-| 5 | 4 | always | `0x50` | `i32` | authored | confirmed |
-| 6 | 4 | always | `0x54` | `i32` | authored | confirmed |
-| 7 | 4 | always | `0x58` | `u32` | authored | confirmed |
-| 8 | 4 | always | `0x5c` | `u32` | authored | confirmed |
-| 9 | string | always | `0x80` | `operator>>(CString)`, empty in all 16 | authored | confirmed |
-| 10 | 2 | always | — | handle-presence flags, must be `< 4` | authored | confirmed |
-| 11 | object | flags bit 0 | `0x30` | `sg3DPlaneHandle*` | authored | partial (never set) |
-| 12 | object ×2 | flags bit 1 | `0x40`, `0x48` | `sgPointHandle*` pair | authored | partial (never set) |
-| 13 | 4 | ver > `0xb95` | `0xd0` | `u32` | authored | confirmed |
-| 14 | 4 | ver > `0xc8d` | — | `u32` pair-array length, `0` in all 16 | derived | confirmed |
-| 15 | 8 × length | ver > `0xc8d` | `0xb8` | `su_CMapPtrToPtr` `(u32, u32)` pairs | derived | confirmed (empty) |
-| 16 | object | ver > `0xc8d` | `0xc0` | `ReadObject(contourTrimData_c)` | authored | confirmed |
-| 17 | object | ver > `0xc8d` | `0xc8` | `ReadObject(contourTrimData_c)` | authored | confirmed |
-| 18 | 4 | ver > `0xddc` | `0x90` | `i32` | uninitialised | partial |
-| 19 | 4 | ver > `0xddc` | `0xa0` | `i32` | uninitialised | partial |
-| 20 | 4 | ver >= 4000 | `0xa4` | `i32` | uninitialised | partial |
+| #   | width / kind       | condition     | `this` offset  | name                                                    | role          | confidence          |
+| --- | ------------------ | ------------- | -------------- | ------------------------------------------------------- | ------------- | ------------------- |
+| 1   | sub-record, slot 5 | always        | `0x08`         | `u16 count` then `count` × `u32` entity index           | authored      | confirmed           |
+| 2   | sub-record, slot 5 | always        | `0x60`         | `u16 count` then `count` × `u32`; count is 1 everywhere | authored      | confirmed           |
+| 3   | 4                  | always        | `0x28`         | `u32`                                                   | authored      | confirmed           |
+| 4   | 4                  | always        | `0x38`         | `i32`                                                   | authored      | confirmed           |
+| 5   | 4                  | always        | `0x50`         | `i32`                                                   | authored      | confirmed           |
+| 6   | 4                  | always        | `0x54`         | `i32`                                                   | authored      | confirmed           |
+| 7   | 4                  | always        | `0x58`         | `u32`                                                   | authored      | confirmed           |
+| 8   | 4                  | always        | `0x5c`         | `u32`                                                   | authored      | confirmed           |
+| 9   | string             | always        | `0x80`         | `operator>>(CString)`, empty in all 16                  | authored      | confirmed           |
+| 10  | 2                  | always        | —              | handle-presence flags, must be `< 4`                    | authored      | confirmed           |
+| 11  | object             | flags bit 0   | `0x30`         | `sg3DPlaneHandle*`                                      | authored      | partial (never set) |
+| 12  | object ×2          | flags bit 1   | `0x40`, `0x48` | `sgPointHandle*` pair                                   | authored      | partial (never set) |
+| 13  | 4                  | ver > `0xb95` | `0xd0`         | `u32`                                                   | authored      | confirmed           |
+| 14  | 4                  | ver > `0xc8d` | —              | `u32` pair-array length, `0` in all 16                  | derived       | confirmed           |
+| 15  | 8 × length         | ver > `0xc8d` | `0xb8`         | `su_CMapPtrToPtr` `(u32, u32)` pairs                    | derived       | confirmed (empty)   |
+| 16  | object             | ver > `0xc8d` | `0xc0`         | `ReadObject(contourTrimData_c)`                         | authored      | confirmed           |
+| 17  | object             | ver > `0xc8d` | `0xc8`         | `ReadObject(contourTrimData_c)`                         | authored      | confirmed           |
+| 18  | 4                  | ver > `0xddc` | `0x90`         | `i32`                                                   | uninitialised | partial             |
+| 19  | 4                  | ver > `0xddc` | `0xa0`         | `i32`                                                   | uninitialised | partial             |
+| 20  | 4                  | ver >= 4000   | `0xa4`         | `i32`                                                   | uninitialised | partial             |
 
 Items 1 to 15 are the `lead` run, items 16 and 17 are the two traced children, and items 18 to 20
 are the run after the last child. With the flags at `0` and both counted arrays present:
@@ -163,11 +163,11 @@ classref into a class map inherited from an earlier stream, so the traces name i
 objects at 12 bytes each (a 2-byte classref token plus the 10-byte handle record of
 `SKETCH_HANDLES.md` §2). Decoded on real bytes:
 
-| part / node | count | child body | `moSketchRegion_c` body |
-|---|---|---|---|
-| `vendor_cojinete` node 428 | 1 | 14 | 16 |
-| `circle` node 192 | 1 | 14 | 16 |
-| `baseline` node 201 | 4 | 50 | 52 |
+| part / node                | count | child body | `moSketchRegion_c` body |
+| -------------------------- | ----- | ---------- | ----------------------- |
+| `vendor_cojinete` node 428 | 1     | 14         | 16                      |
+| `circle` node 192          | 1     | 14         | 16                      |
+| `baseline` node 201        | 4     | 50         | 52                      |
 
 The traced body lengths of 16, 54 and 90 that `solve_runs.py` reports are these plus a 38-byte
 ancestor run that the traced scope absorbs; the 16-byte instances are the ones where the ancestor
@@ -183,31 +183,31 @@ keyed in this file. Both of `moSketchRegion_c`'s own runs are `0` and neither va
 
 Function: `sldmodu.dll` `0x4bc222f0`. Read order:
 
-| # | width / kind | condition | name | confidence |
-|---|---|---|---|---|
-| 1 | base | always | `moCompRef_c::Serialize` | not found |
-| 2 | — | ver < `0x2c9` | `FUN_4bc28cf0` legacy path, then return | confirmed (not taken) |
-| 3 | 4 | `hasCondition(1) && hasCondition(0x10000)` | `i32` external flag | partial |
-| 4 | 4 | the guard chain in `LAB_4bc22456` is not taken | `i32` presence flag; `0` ends the record | partial |
-| 5 | sub-record | always reached | `FUN_4bbb16e0` on the `moFRData_c` at `this + 0xf0` | confirmed |
+| #   | width / kind | condition                                      | name                                                | confidence            |
+| --- | ------------ | ---------------------------------------------- | --------------------------------------------------- | --------------------- |
+| 1   | base         | always                                         | `moCompRef_c::Serialize`                            | not found             |
+| 2   | —            | ver < `0x2c9`                                  | `FUN_4bc28cf0` legacy path, then return             | confirmed (not taken) |
+| 3   | 4            | `hasCondition(1) && hasCondition(0x10000)`     | `i32` external flag                                 | partial               |
+| 4   | 4            | the guard chain in `LAB_4bc22456` is not taken | `i32` presence flag; `0` ends the record            | partial               |
+| 5   | sub-record   | always reached                                 | `FUN_4bbb16e0` on the `moFRData_c` at `this + 0xf0` | confirmed             |
 
 `FUN_4bbb16e0` is the history-item record, and for every corpus version it is exactly two fields:
 
-| offset | width | type | name | role | confidence |
-|---|---|---|---|---|---|
-| `end - 8` | 4 | `u32` | tree-node id, `moFRData_c + 0` | authored | confirmed |
-| `end - 4` | 4 | `u32` | `su_CTime`, a Unix `time_t`, `moFRData_c + 8` | derived | confirmed |
+| offset    | width | type  | name                                          | role     | confidence |
+| --------- | ----- | ----- | --------------------------------------------- | -------- | ---------- |
+| `end - 8` | 4     | `u32` | tree-node id, `moFRData_c + 0`                | authored | confirmed  |
+| `end - 4` | 4     | `u32` | `su_CTime`, a Unix `time_t`, `moFRData_c + 8` | derived  | confirmed  |
 
 Its three legacy branches — a `CString` name for ver < `0x4a5`, a discarded `u32` for
 ver < `0xd7b`, an `i32` for `0xa63 < ver < 0xc77` — are all skipped by 13000, 14000 and 18000.
 
 Measured across all nine traces, for all 30 instances:
 
-* `lead = 0` in 30 / 30. The first thing read is the `external#43` classref that
+- `lead = 0` in 30 / 30. The first thing read is the `external#43` classref that
   `moCompRef_c::Serialize` pulls in, with nothing in front of it.
-* the traced scope from the end of the instance's own tag is **93 bytes in the seven authored parts
+- the traced scope from the end of the instance's own tag is **93 bytes in the seven authored parts
   (24 instances) and 89 bytes in the two vendor parts (6 instances)**,
-* consecutive instances start **119 bytes** apart in the authored parts and **115** in the vendor
+- consecutive instances start **119 bytes** apart in the authored parts and **115** in the vendor
   parts, so the per-entry stride is `2` (classref tag) `+ scope` `+ 24` (inter-entry bytes). The
   first entry of a stream is 19 bytes longer (138 or 134) because it is a class definition rather
   than a classref, and `ff ff 01 00 10 00` plus `"moCompFeature_c"` is 19 bytes more than a tag.
@@ -232,106 +232,98 @@ is in the stream prologue, not in any `moCompFeature_c` body.
 
 ---
 
-## 5. `moExtrusion_c` and `moICE_c` — slot 5 / slot 6 remain OPAQUE
+## 5. `moICE_c` — the former 9.6 KB content wall is structurally CLOSED
 
-Function: `sldmodu.dll` `0x4bb8eba0` for both. `moICE_c` does not override `Serialize`; slot 5 of
-both vftables is the same address, so **the two classes have identical record layouts**.
-`moICE_c` does not mean "cut" — it adds only a constructor and a virtual `isICE()`, and there is no
-`moCut_c` class in any corpus. The three fields `moExtrusion_c::Serialize` contributes itself are
-already confirmed in `SERIALIZE.md` §4.
+Function: `sldmodu.dll` `0x4bb8eba0`, shared with `moExtrusion_c`. The old `moICE_c@7` run was not a
+9.6 KB scalar or constant record. It was a trace-ownership error that had absorbed a complete
+result-body object graph. The corrected record exposes as many as **64 direct tagged children** and
+has no opaque variable run.
 
-Measured runs, all nine extrusions and all four `moICE_c`:
+The modern prefix is:
 
-| `moExtrusion_c` | `moICE_c` | value | instances |
-|---|---|---|---|
-| `lead` | `lead` | 0 | 9 / 4 |
-| `@1` | `@1` | 49 | 9 / 4 |
-| `@2` | `@2` | 30 | 9 / 4 |
-| `@3` | `@3` | 52 | 9 / 4 |
-| `@4` | `@4` | 4 / 6 | 9 / 4 |
-| — | `@5` | 0 | 4 |
-| `@7` | `@8` | 8 | 9 / 4 |
+| position    | child / bytes                                                                      | recovered meaning                                           |
+| ----------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| slots 0–6   | the already recovered base objects and runs `4, 2, 45, 30, 52, 6, 0`               | feature/base chain                                          |
+| run 7       | 18 bytes at version 18000, 22 at 14000                                             | generation-gated framing before the result body             |
+| slot 8      | `moCompSolidBody_c`                                                                | result-body graph owner                                     |
+| slots 9–10  | `moICE_c` references                                                               | shared owner/back references; both are real archive objects |
+| slot 11     | `moPMarkRecord_c` after 20 bytes                                                   | surface identifier                                          |
+| slots 12–14 | one wildcard, a second `moPMarkRecord_c`, and `moEndSpec_c`                        | end specification entry                                     |
+| slots 15–63 | the recovered end-specification, display-dimension, handle and chooser descendants | parametric feature payload                                  |
 
-and the one that varies:
+The child at slot 9 selects the native serializer branch and therefore the actual arity:
 
-| run | value | parts |
-|---|---|---|
-| `moExtrusion_c@5` | 707 | `baseline`, `planetop`, `three` |
-| | 705 | `cutbase`, `padplane`, `twopad` |
-| | 587 | `circle` |
-| | 1063 | `vendor_ring` |
-| | 1161 | `vendor_cojinete` |
-| `moICE_c@6` | 873 | `cutbase`, `padplane`, `twopad` |
-| | 1131 | `vendor_ring` |
+| slot-9 runtime class     | total children |
+| ------------------------ | -------------: |
+| `moICE_c`                |             15 |
+| `moCompSolidBody_c`      |             15 |
+| `moFaceRef_c`            |             15 |
+| `null`                   |             60 |
+| `moPerBodyChooserData_c` |             64 |
 
-This run sits between the last small base-class object and the surface-id `suObArray`
-(`external#102`..`external#106`), so it is the `moModelFeature_c` / `moFeature_c` / `moNode_c`
-portion of the base chain — the same gap `SERIALIZE.md` §4 leaves unresolved. Nothing in
-`0x4bb8eba0` or in `moBodyFeature_c::Serialize` (`0x4bb8aa10`) reads it. The addresses that would
-close it are `FUN_4bb886c0`, the unnamed base `moBodyFeature_c::Serialize` calls first, and then
-`moModelFeature_c::Serialize`, `moFeature_c::Serialize` and `moNode_c::Serialize`, whose decompiled
-C is in `out/sldmodu.c` and has never been reconciled against these runs.
+These are content-driven branches, not fixture offsets. The same table handles the three modern
+traces, the older vendor-ring graph with two chooser records, and all authored donors that reach
+the record. The archive walker now segments, tiles and re-emits **17 of 32** independent donor
+streams byte for byte; `boss_boss_cut_cut` traverses **955 archive objects**. This proves complete
+structural ownership and re-emission for those streams. It does not prove first-principles
+synthesis or SOLIDWORKS acceptance: several descendant classes still have only partially named
+scalar fields, and no donor-free feature constructor emits this graph yet.
 
-`@0`, `@6` and `@8` for `moExtrusion_c` (and `@0`, `@7`, `@9` for `moICE_c`) are also `opaque`, but
-for a different reason: they are not known to vary. Each of them follows a child whose own body end
-has no witness — the `external#4` classref in slot 0, the surface-id `suObArray`, and the trailing
-`moEndSpec_c`. `verify_class_layouts.py` still checks 54 `moExtrusion_c` and 28 `moICE_c` run
-boundaries and gets every one right.
+The nested result-body grammar is now:
+
+- `moCompSolidBody_c`: component reference, face reference, `u32` body-id array and a `u16`
+  per-body chooser count;
+- `moFaceRef_c`: 36-byte lead, `u32 EntityCount`, one tagged `moEntityIdRep_c` per entity and a
+  20-byte modern tail;
+- `moPerBodyChooserData_c`: three native `suObArray` records followed by two `i32` fields, a native
+  `su_CDWordArray` (`u16 count` plus `count × u32`) and one final `i32`;
+- `moBBoxCenterData_c`: `i32 CenterType`, three `f64` centre coordinates and one `f64` scale.
+
+The `su_CDWordArray` point matters: its count is not a boolean state flag. Counts zero and one are
+witnessed, but the layout now accepts every native count and sizes the tail algorithmically.
+`moExtrusion_c@5` remains a separate, older fixed-slot layout problem and must not be used to
+reintroduce an opaque run into `moICE_c`.
 
 ---
 
-## 6. `moFeatureDimHandle_c` — a version gate in the base, OPEN
+## 6. `moFeatureDimHandle_c` — eight children with a closed generation gate
 
 Function: `sldmodu.dll` `0x4c86e240` = `moModDimHandle_c::Serialize`, shared by the whole
 `mo*DimHandle_c` family. Its own contribution on a modern file is one object read:
 
-| # | width / kind | condition | `this` offset | name | confidence |
-|---|---|---|---|---|---|
-| 1 | base | always | — | `FUN_4c864440` | not found |
-| 2 | 1 + object + string | ver < `0x322` | `0xe8` | legacy `moExtObject_c` + name path | confirmed (not taken) |
-| 3 | object | `this + 0xe8 == 0` | `0xf0` | `operator>>`, must be a `Dimension_c` | confirmed |
+| #   | width / kind        | condition          | `this` offset | name                                  | confidence            |
+| --- | ------------------- | ------------------ | ------------- | ------------------------------------- | --------------------- |
+| 1   | base                | always             | —             | `FUN_4c864440`                        | not found             |
+| 2   | 1 + object + string | ver < `0x322`      | `0xe8`        | legacy `moExtObject_c` + name path    | confirmed (not taken) |
+| 3   | object              | `this + 0xe8 == 0` | `0xf0`        | `operator>>`, must be a `Dimension_c` | confirmed             |
 
-Measured runs across all 12 instances: `lead = 0`, `@1 = @2 = @3 = 0`, `@4 = 15`, and
+Reparenting all 12 instances exposes eight children, not six. The constant runs are `lead = 0`,
+`@1 = @2 = @3 = 0`, `@4 = 1`, `@5 = 0`, `@6 = 10`, `@7 = 0`, and
 
-| run | value | parts |
-|---|---|---|
-| `@0` | 82 | the seven authored parts, 10 instances |
-| | 78 | `vendor_cojinete` node 543 and `vendor_ring` node 400 |
+| run  | value | parts                                                 |
+| ---- | ----- | ----------------------------------------------------- |
+| `@0` | 82    | the seven authored parts, 10 instances                |
+|      | 78    | `vendor_cojinete` node 543 and `vendor_ring` node 400 |
 
-The 4-byte difference falls in the two older-generation parts, so it is a version gate inside
-`FUN_4c864440` — the same generational split that `SERIALIZE.md` §2 found in the `moEndSpec_c`
-tail. `FUN_4c864440` is the address that would settle it. Until it is read, `@0` stays `opaque`:
-a guessed 82 would mis-segment every 13000/14000-era stream, and a guessed 78 every modern one.
-
-`@5` is the trailing run after the `Dimension_c` child and has no witness.
+The 4-byte difference falls cleanly in the two older-generation parts, so run 0 is encoded as a
+`runs_by_version` gate: 78 at 14000 and 82 at 18000. The old `@4 = 15` had absorbed two null tags and
+their one- and ten-byte following runs. Run 7 now places the final `ParallelPlaneDistanceDim_c` at
+the exact recorded offset in both generations.
 
 ---
 
-## 7. `moDisplayDistanceDim_c` — sixteen of seventeen runs are CONSTANT
+## 7. `moDisplayDistanceDim_c` — twenty children with one older-generation tail open
 
-Function: `sldmodu.dll` `0x4c86acd0`. Every one of the 14 traced instances has exactly 18 children
-and the following runs, identical in all 14:
+Function: `sldmodu.dll` `0x4c86acd0`. Reparenting all 14 traced instances exposes 20 children. The
+old run 5 = 378 had absorbed a null child and its following 102-byte run; it is now run 5 = 274,
+slot 6, and run 6 = 102. Runs 0 through 18 are constant across every instance:
 
-| run | value | run | value |
-|---|---|---|---|
-| `lead` | 2 | `@8` | 44 |
-| `@0` | 0 | `@9` | 0 |
-| `@1` | 0 | `@10` | 40 |
-| `@2` | 33 | `@12` | 0 |
-| `@3` | 48 | `@13` | 0 |
-| `@4` | 83 | `@14` | 4 |
-| `@5` | 378 | `@15` | 0 |
-| `@7` | 0 | `@16` | 182 |
+`lead 2, @0 0, @1 0, @2 33, @3 48, @4 83, @5 274, @6 102, @7 0, @8 0, @9 44,
+@10 0, @11 40, @12 0, @13 0, @14 0, @15 4, @16 0, @17 12, @18 168`.
 
-`verify_class_layouts.py` predicts 224 run boundaries for this class across the nine traces and gets
-every one right.
-
-`solve_runs.py` reports `moDisplayDistanceDim_c@17` as **variable**. That is a misreading of the
-evidence and this document contradicts it: all sixteen measurable runs are constant, and the
-observed body-length spread (1457, 1739, 1766, 1784, 1838) is fully accounted for by the varying
-spans of the object children in slots 6 and 11. There is no evidence that `@17` varies. It is
-simply the last slot, and the class is never at depth 0, so nothing pins it. `@6` and `@11` are
-`opaque` for the same reason — the preceding child's body end has no witness.
+Run 19 is four bytes in all ten 18000-era instances. The four 14000-era instances measure 0, 0, 0
+and 170, so that generation remains deliberately absent from the gate and refuses instead of
+guessing. `verify_class_layouts.py` checks 224 run boundaries for this class with zero mismatches.
 
 ---
 
@@ -339,11 +331,11 @@ simply the last slot, and the class is never at depth 0, so nothing pins it. `@6
 
 Function: `sldmodu.dll` `0x4c2d40f0`. Read order:
 
-| # | width / kind | condition | `this` offset | confidence |
-|---|---|---|---|---|
-| 1 | base | always | — | `FUN_4c2d2290`, not found |
-| 2 | 2 | ver >= `0x94` | `0xa8` | confirmed; the reader throws unless the signed value is in `[-2, 0]` |
-| 3 | object | ver >= `0x8fd` | `0xb0` | `moBackedUpData_c*`, confirmed |
+| #   | width / kind | condition      | `this` offset | confidence                                                           |
+| --- | ------------ | -------------- | ------------- | -------------------------------------------------------------------- |
+| 1   | base         | always         | —             | `FUN_4c2d2290`, not found                                            |
+| 2   | 2            | ver >= `0x94`  | `0xa8`        | confirmed; the reader throws unless the signed value is in `[-2, 0]` |
+| 3   | object       | ver >= `0x8fd` | `0xb0`        | `moBackedUpData_c*`, confirmed                                       |
 
 Three traced children in all five instances, `lead = 0`. `@1`, which is where item 2's `u16`
 lives, measures **54 bytes in four instances and 58 in `circle` node 166**, so 52 or 56 of those
@@ -356,39 +348,39 @@ bytes come from `FUN_4c2d2290`, not from `moSketchExtRef_w`. `@0` and `@2` follo
 
 ## 9. What is closed and what is not
 
-| class | claim | what closed | what blocks the rest |
-|---|---|---|---|
-| `moDefaultRefPlnData_c` | partial | `lead` = 114 or 186 by a `u8` predicate, 27 / 27 | `@2`, bounded to 2 bytes; virtual slot `0x150` off `0x4c2d1cf0` |
-| `moSketchChain_c` | partial | `lead` = 46 + 4·count, 16 / 16; `@0` = 0 | `@1` = 12 has no witness |
-| `moSketchRegion_c` | partial | both runs are 0; body is the `BoundaryEnts` list | the list class is not keyable in this file |
-| `moCompFeature_c` | partial | `lead` = 0; 93-byte scope, 119-byte stride, 30 / 30 | `@0`; `moCompRef_c::Serialize` |
-| `moExtrusion_c` | partial | `lead`, `@1`–`@4`, `@7` | `@5`; `FUN_4bb886c0`, then `moModelFeature_c/moFeature_c/moNode_c::Serialize` |
-| `moICE_c` | partial | `lead`, `@1`–`@5`, `@8` | `@6`; same addresses |
-| `moFeatureDimHandle_c` | partial | `lead`, `@1`–`@4` | `@0` version gate in `FUN_4c864440` |
-| `moDisplayDistanceDim_c` | partial | 16 constant runs, 224 / 224 boundaries | `@17`, `@6`, `@11` have no witness |
-| `moSketchExtRef_w` | partial | `lead` = 0 | `@0`, `@1`; `FUN_4c2d2290` |
+| class                    | claim     | what closed                                                           | what blocks the rest                                                          |
+| ------------------------ | --------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `moDefaultRefPlnData_c`  | partial   | `lead` = 114 or 186 by a `u8` predicate, 27 / 27                      | `@2`, bounded to 2 bytes; virtual slot `0x150` off `0x4c2d1cf0`               |
+| `moSketchChain_c`        | partial   | `lead` = 46 + 4·count, 16 / 16; `@0` = 0                              | `@1` = 12 has no witness                                                      |
+| `moSketchRegion_c`       | partial   | both runs are 0; body is the `BoundaryEnts` list                      | the list class is not keyable in this file                                    |
+| `moCompFeature_c`        | partial   | `lead` = 0; 93-byte scope, 119-byte stride, 30 / 30                   | `@0`; `moCompRef_c::Serialize`                                                |
+| `moExtrusion_c`          | partial   | `lead`, `@1`–`@4`, `@7`                                               | `@5`; `FUN_4bb886c0`, then `moModelFeature_c/moFeature_c/moNode_c::Serialize` |
+| `moICE_c`                | partial   | complete conditional 15/60/64-child graph; 17 exact donor round trips | descendant field semantics and donor-free synthesis                           |
+| `moPerBodyChooserData_c` | confirmed | three counted object arrays and counted `u32` tail                    | —                                                                             |
+| `moFeatureDimHandle_c`   | partial   | `lead`, `@1`–`@4`                                                     | `@0` version gate in `FUN_4c864440`                                           |
+| `moDisplayDistanceDim_c` | partial   | 16 constant runs, 224 / 224 boundaries                                | `@17`, `@6`, `@11` have no witness                                            |
+| `moSketchExtRef_w`       | partial   | `lead` = 0                                                            | `@0`, `@1`; `FUN_4c2d2290`                                                    |
 
 ---
 
 ## 10. Evidence
 
 ```
-class                    claim      inst  comp exact unres runchk  runX  over
-moCompFeature_c          partial      30     0     0    30     30     0     0
-moDefaultRefPlnData_c    partial      27     0     0    27     81     0     0
-moDisplayDistanceDim_c   partial      14     0     0    14    224     0     0
-moExtrusion_c            partial       9     0     0     9     54     0     0
-moFeatureDimHandle_c     partial      12     0     0    12     60     0     0
-moICE_c                  partial       4     0     0     4     28     0     0
-moSketchChain_c          partial      16    16     1     0     32     0     0
-moSketchExtRef_w         partial       5     0     0     5      5     0     0
-moSketchRegion_c         partial      18     5     3    13     18     0     0
+classes=76
+donors=32 segmented=17 tiled=17 identical=17
+boss_boss_cut_cut objects=955
+focused archive tests: 100 passed
 ```
 
-`runchk` is the number of individual run boundaries the layout predicted and compared against a
-recorded object offset; `runX` the number that disagreed; `over` computed bodies that ran past their
-bound. Reproduce with:
+Reproduce the group-aware static walk and byte-identity check with:
 
 ```powershell
-uv run python re/tooling/ghidra/verify_class_layouts.py
+uv run python re/tooling/harness/segment_fixtures.py --out .rescratch/re/census.json
 ```
+
+`verify_class_layouts.py` remains useful for fixed-slot run tables, but it predates `groups` and
+`child_count_by_class`; it deliberately does not validate the 64-child `moICE_c` or the three
+counted arrays in `moPerBodyChooserData_c`. The donor segmenter executes those rules directly and
+then requires a gap-free tiling and byte-identical `Model.emit()` result. The former
+`sgSketch`/`suObList` recorded-layout failures are now encoded by the counted-group and guarded-tail
+rules and the focused suite is clean.

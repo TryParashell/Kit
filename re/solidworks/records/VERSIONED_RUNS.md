@@ -71,15 +71,15 @@ set turned out to be genuinely version gated (section 4).
 `serialize_map.json` points slot 5 of the vftable at `sldmodu.dll 0x4c280660`,
 `moFtrFolder_c::Serialize`. Reading path, in order:
 
-| read | bytes | gate |
-|---|---|---|
-| `moFolder_c::Serialize` | children and runs 0..3 | none |
-| virtual slot `0x1270` | 0 | none |
-| `su_CArchive::ReadObject` into `this+0x380` | object slot 4 | none |
-| `AR_get_long` `this+0x374` | 4 | none |
-| `AR_get_long` `this+0x38c` | 4 | `ver > 0xf61` |
-| `AR_get_long` `this+0x370` | 4 | virtual slot `0xa28` and `ver > 0x23b9` |
-| `AR_get_long` `this+0x394` | 4 | `ver > 0x279b` |
+| read                                        | bytes                  | gate                                    |
+| ------------------------------------------- | ---------------------- | --------------------------------------- |
+| `moFolder_c::Serialize`                     | children and runs 0..3 | none                                    |
+| virtual slot `0x1270`                       | 0                      | none                                    |
+| `su_CArchive::ReadObject` into `this+0x380` | object slot 4          | none                                    |
+| `AR_get_long` `this+0x374`                  | 4                      | none                                    |
+| `AR_get_long` `this+0x38c`                  | 4                      | `ver > 0xf61`                           |
+| `AR_get_long` `this+0x370`                  | 4                      | virtual slot `0xa28` and `ver > 0x23b9` |
+| `AR_get_long` `this+0x394`                  | 4                      | `ver > 0x279b`                          |
 
 `0xf61 = 3937`, `0x23b9 = 9145`, `0x279b = 10139`. Every gate is open at both 14000 and 18000, so the
 post-child run is a flat 16 in both generations. No `runs_by_version` entry is needed, and one would
@@ -105,22 +105,22 @@ That is the only sldmodu function this task had to dump.
 
 Reading path:
 
-| read | bytes | gate |
-|---|---|---|
-| `mgPoint_c::restore` root point | 24 | none |
-| `mgVector_c::restore` normal | 24 | none |
-| `mgXform_c::restore` | 34 or 106 | none |
-| four border doubles | 32 | `ver >= 0x160` |
-| `ReadObject moCompEdge_c` | object slot 0 | none |
-| `AR_get_long` x3 into `+0x50`, `+0x54`, `+0x58` | 12 | none |
-| `AR_get_uchar` | 1 | `ver > 0xe5` |
-| `mgPoint_c::restore` display root point | 24 | `IsKindOf moDefaultRefPlnData_c` and `ver > 0x81d` |
-| `AR_get_long` `+0x5c` | 4 | `ver > 0xe24` |
-| `AR_get_long` `+0x60` | 4 | `ver > 0x10da` |
-| `AR_get_ushort` `+0x64` | 2 | `ver > 0x17dd` |
-| `ReadObject moCompFaceMeshFacetFin_c` | object slot 1 | `ver > 0x2b83` |
-| `ReadObject moRefAxis_c` | object slot 2 | `ver > 0x2ba5` |
-| `ReadObject moCompSketchEntHandle_c` | object slot 3 | `ver > 0x2ba5` |
+| read                                            | bytes         | gate                                               |
+| ----------------------------------------------- | ------------- | -------------------------------------------------- |
+| `mgPoint_c::restore` root point                 | 24            | none                                               |
+| `mgVector_c::restore` normal                    | 24            | none                                               |
+| `mgXform_c::restore`                            | 34 or 106     | none                                               |
+| four border doubles                             | 32            | `ver >= 0x160`                                     |
+| `ReadObject moCompEdge_c`                       | object slot 0 | none                                               |
+| `AR_get_long` x3 into `+0x50`, `+0x54`, `+0x58` | 12            | none                                               |
+| `AR_get_uchar`                                  | 1             | `ver > 0xe5`                                       |
+| `mgPoint_c::restore` display root point         | 24            | `IsKindOf moDefaultRefPlnData_c` and `ver > 0x81d` |
+| `AR_get_long` `+0x5c`                           | 4             | `ver > 0xe24`                                      |
+| `AR_get_long` `+0x60`                           | 4             | `ver > 0x10da`                                     |
+| `AR_get_ushort` `+0x64`                         | 2             | `ver > 0x17dd`                                     |
+| `ReadObject moCompFaceMeshFacetFin_c`           | object slot 1 | `ver > 0x2b83`                                     |
+| `ReadObject moRefAxis_c`                        | object slot 2 | `ver > 0x2ba5`                                     |
+| `ReadObject moCompSketchEntHandle_c`            | object slot 3 | `ver > 0x2ba5`                                     |
 
 Run 0 is therefore `12 + 1 + 24 + 4 + 4 + 2 = 47`, which is exactly the constant `solve_runs.py`
 already had. That agreement is the cross-check that the read order is right.
@@ -300,40 +300,35 @@ instances and has no witness in the other twelve, and one value from one part is
 
 These are real findings. Each is a class that stayed opaque, with the reason.
 
-### 6.1 `sgSketch` — the current wall, and not only an RE gap
+### 6.1 `sgSketch` — six counted child groups are encoded, the incomplete tail is guarded
 
-`sgSketch::Serialize` is `0x4c5d28c0`, 182 KB of decompiled C, the largest in the corpus. The
-segmenter refuses at `sgSketch@lead` with `child count is not constant and no repeat rule is
-recorded`, which is a shape failure before any byte is read: the entry carries
-`"repeat_count": "EntityCount"`, a field name, where the shipped `RepeatField` wants
-`{"run", "at", "width"}`.
+`sgSketch::Serialize` is `0x4c5d28c0`, 182 KB of decompiled C. The old single-repeat model was the
+wrong abstraction: the serializer carries an ordered sequence of separately counted entity, point,
+relation, constraint, list and chain groups. `ClassLayout.groups` now represents those six loops,
+including per-generation relation widths and group trailers. Twenty fully bounded traced instances
+land on every recorded child offset with no residual.
 
-Supplying that would not be enough. The entity list is the problem. Measured against the traces with
-every child pinned, `sgSketch` runs 0, 1 and 2 are flat 8, 39 and 0, and then the per-entity runs
-measure 138 in 15 of 24 instances but also 21, 359, 360, 404, 453, 461, 507, 5948, 6016, 6041 and
-6622. The 138 is a line; the larger values are other entity kinds and nested regions. The schema's
-repeat model carries a single constant `template_run` for every repeated slot, so even a complete
-decode of the entity payload could not be expressed as one repeat rule — the length depends on the
-class of the entity in that slot. Closing `sgSketch` needs either a per-entity dispatch in the layout
-schema or the entity payloads pushed down into the entity classes' own layouts. That is a design
-decision, not a transcription, and it is left open.
+Four traces let their last nested child absorb unrecovered sketch payload. A terminal guard now
+checks the next parent token against the directly witnessed null and vendor class-reference values
+without consuming it. Unknown values refuse at `sgSketch@tail` instead of drifting the class map.
+Three donor fixtures still stop earlier at `sgSketch@0`; one additional fixture stops at that guarded
+tail. The remaining work is therefore specific child-body ownership, not the former inability to
+express the serializer's counted loops.
 
-### 6.2 `moFR_c` — own body is 8 bytes, but the run is context-dependent
+### 6.2 `moFR_c` — CLOSED at 8 wire bytes
 
 `FUN_4bbb1a00` reads `su_CObject::Serialize`, then `operator>>(moExtObject_c**)`, which is the single
 traced child, then for `ver >= 0x2cb` calls `FUN_4bbb16e0`, which at both 14000 and 18000 reads only
 an i32 and a `su_CTime`. The bytes confirm the pair: at `baseline` offset 8591 the i32 is 32 and the
 next dword is `0x6a709324`, a plausible Unix timestamp. So `moFR_c` reads 8 bytes after its child.
 
-The run cannot be declared 8, because the remainder is read by four different enclosing classes and
-the amount differs per class: measured with the child pinned, run 0 is 12 under
-`moFromSktEntSurfIdRep_c`, 16 under `moEndFaceSurfIdRep_c`, 20 under both `...3IntSurfIdRep_c`
-variants, and 79, 87 or 97 where the child is a `moExtObject_c` whose own `Serialize` is not in any
-dump. Declaring 8 would require declaring all four parents' compensating runs and closing
-`moExtObject_c`, and a wrong value there mis-segments 157 object bodies. Left opaque with the finding
-recorded.
+`swccu.dll` `0x31eeb5b0` proves that the eight-byte in-memory `su_CTime` writes one `u32`, so the
+wire record is one i32 reference id plus one u32 time: exactly 8 bytes at both represented
+generations. The enclosing surface-id records now own their 12-, 16- and 20-byte tails separately,
+and `moExtObject_c` owns its strings and version-gated remainder. `moFR_c@0 = 8` is therefore
+confirmed rather than context-dependent.
 
-### 6.3 `moFromEndSpec_c` — own body is 4 bytes, and the surplus has no witness
+### 6.3 `moFromEndSpec_c` — type zero and its enclosing tails are CLOSED
 
 `FUN_4bb900d0` reads `su_CObject::Serialize`, then an i32 type. For type 1 or 2 it reads one object
 and returns. For type 3, 4 or 5 it continues; type 5 reads an object, type 4 reads an f64, type 3
@@ -342,17 +337,19 @@ immediately after the 4 bytes. The type is `00 00 00 00` in all 13 traced instan
 `moFromEndSpec_c` body is exactly 4 bytes and has no children — which is also why the trace records 0
 children for all 13.
 
-The traced 32, 36 and 40 are read by `moEndSpec_c` and `moExtrusion_c` after this object returns.
-Both of those are last slots, so the split between `moEndSpec_c` run 6 and `moExtrusion_c` run 8 has
-no witness anywhere in the corpus and neither can be closed. Declaring 4 alone would move the whole
-remainder of `moEndSpec_c` and mis-segment it, so the run stays opaque.
+The typed layout now uses a guard that accepts only the exercised type zero and consumes exactly
+four bytes; types one through five refuse until their conditional child topology is represented.
+The enclosing split comes directly from the two decompiled serializers: `moEndSpec_c` reads four
+i32 fields after the child at version 14000 and five at version 18000, while
+`moExtrusion_c::Serialize` then reads one f64 and one i32. Those runs are 16/20 and 12 bytes. The
+remaining final four zero bytes are the `ResolvedFeatures` stream footer, now preserved by the
+archive model instead of being absorbed into the last feature.
 
 ### 6.4 `moBBoxCenterData_c` — own body is 36 bytes, parent surplus varies
 
 `FUN_4c2cdb50` reads `su_CObject::Serialize`, an i32 into `this+0x08`, `mgPoint_c::restore` into
 `this+0x10`, and for `ver > 0xfc6` an f64 into `this+0x28`: `4 + 24 + 8 = 36`. The traced leaf is 50
-in 5 instances and 54 in 11, and the split is not by generation — both values occur at 14000 and at
-18000. The 14 or 18 surplus is read by `moPerBodyChooserData_c`, which is itself a last child, so the
+in 5 instances and 54 in 11, and the split is not by generation — both values occur at 14000 and at 18000. The 14 or 18 surplus is read by `moPerBodyChooserData_c`, which is itself a last child, so the
 attribution has no witness. Left opaque.
 
 ### 6.5 `moFaceRef_c`, `sgExtEnt_c`, `sgCircleDim`, `sgLLDist`, `moDisplayRadialDim_c`, `ParallelPlaneDistanceDim_c`
@@ -373,8 +370,11 @@ All measured with pinned children, all still open:
 - `moDisplayRadialDim_c`: every run resolves to a constant except run 20, which is 0 in two instances
   and 170 in two. All four instances are 14000-era. No 18000 witness exists, so nothing can be
   declared for the generation Kit authors.
-- `ParallelPlaneDistanceDim_c`: runs lead, 0 and 1 are flat 4, 0 and 16; run 2 is 474 at 14000 and
-  403 once and 475 nine times at 18000. Not a clean split.
+- `ParallelPlaneDistanceDim_c`: runs lead, 0 and 1 are flat 4, 0 and 16. At version 18000 the byte
+  at run offset 127 is the `mgXform_c` basis marker: value 1 contributes a 72-byte matrix and yields
+  475 bytes in nine traces, while value 0 yields 403 bytes in `planetop`. Version 14000 omits the
+  preceding `Dimension_c` empty-name byte, moves the marker to offset 126 and is pinned to 474 bytes
+  in both traces. This conditional plus generation override is now encoded and verified.
 
 ### 6.6 The other three donor blockers
 
@@ -390,80 +390,38 @@ Not opaque runs, listed so they are not mistaken for this work:
 
 ## 7. Verification
 
-### 7.1 `verify_class_layouts.py` against `class_layouts_versioned.json` alone
+### 7.1 Merged layout verification
 
-```
-class                    claim      inst  comp exact unres runchk  runX  over
-moArcBackedUpData_c      partial       2     2     2     0     14     0     0
-moCStringHandle_c        confirmed    18    18     9     0      0     0     0
-moCompRefPlane_c         partial      22     0     0    22     22     0     0
-moDefaultRefPlnData_c    confirmed    27    27     0     0     81     0     0
-moDisplayDistanceDim_c   partial      14     0     0    14    224     0     0
-moExtrusion_c            partial       9     0     0     9     54     0     0
-moFeatureDimHandle_c     partial      12     0     0    12     60     0     0
-moICE_c                  partial       4     0     0     4     28     0     0
-moNotesAreaFtrFolder_c   confirmed    18     0     0    18     72     0     0
-moPointBackedUpData_c    confirmed     8     8     6     0      0     0     0
-moSketchExtRef_w         partial       5     0     0     5      5     0     0
-classes=11 confirmed=4 failures=0
-```
+`verify_class_layouts.py` against the current merged table covers 29 authored classes and reports
+`classes=29 confirmed=12 failures=0`. The important fixed-slot classes have zero run mismatches:
+`moDisplayDistanceDim_c` 224 checks, `moExtrusion_c` 54, `moFeatureDimHandle_c` 60,
+and `moFR_c` 157. The verifier predates `groups` and `child_count_by_class`, so the conditional
+`moICE_c` graph and the three counted `moPerBodyChooserData_c` arrays are verified by the donor
+segmenter instead. The tool still prints known mismatches for partial fixed-slot layouts such as
+`moCompSolidBody_c`, `moDefaultRefPlnData_c` and `sgLLDist`; those are diagnostic rows and do not
+count as claimed-layout failures.
 
-Zero run mismatches and zero overruns on every class, across 560 run checks and 139 instances. The
-`unres` column is not a failure here: pointed at this file alone the tool has no layout for the
-external and sibling classes those bodies depend on, so it cannot finish the chain.
+### 7.2 Focused converter tests
 
-`verify_class_layouts.py` does not consult `runs_by_version`, so the three gated runs contribute no
-checks in that table. A version-aware replay of the same walk, resolving every run through the
-shipped `ClassLayout.constant_run` with each trace's own `_MO_VERSION_` generation, adds 12 checks to
-`moFeatureDimHandle_c` (60 to 72) and 5 to `moSketchExtRef_w` (5 to 10) and still reports zero
-mismatches and zero overruns. That is the measurement that exercises the gates.
-
-### 7.2 Against the merged table
-
-Merged with `gen_class_layouts.py` in the shipped order, `verify_class_layouts.py` reports 86
-failures without this file and 140 with it. The whole difference is two entries:
-
-| class | without | with | note |
-|---|---|---|---|
-| `moCompRefPlane_c` | 22 mismatches | 0 | fixed by the run 0 version gate, section 4.3 |
-| `moRefPlane_c` | 0 | 27 mismatches + 27 overruns | the artefact below |
-
-`moRefPlane_c` is the parent of `moDefaultRefPlnData_c`. Because this file declares four object slots
-where the trace records three, the modelled body ends two bytes before the trace's `record_ends`, and
-`verify_class_layouts.py` — which walks the recorded tree and never reads the fourth tag — concludes
-`moRefPlane_c` run 7 should be 2 rather than 0. Every one of the 54 entries is that same 2-byte delta,
-in all 27 instances.
-
-This is a genuine disagreement between the two tools and it was measured both ways. Declaring three
-slots and run 2 = 2 instead gives 86 failures, identical to the baseline, and identical donor progress
-(`sgSketch@lead` x23). The four-slot form was kept because it is what `FUN_4c2d6070` does: the fourth
-read is `ReadObject moCompSketchEntHandle_c`, and the three-slot form only works while that handle is
-null, which it happens to be in all nine traced parts and all 32 donors. The shipped segmenter reads
-the fourth tag itself and tiles `moRefPlane_c` exactly, which is why the walk advances past it.
-
-Under the version-aware replay the same comparison is 161 failures without this file and 166 with it,
-which is the same arithmetic: 22 removed, 27 added.
-
-Seven classes became computable that previously could not be resolved at all:
-`moArcBackedUpData_c` 2 instances, `moCStringHandle_c` 18, `moDefaultRefPlnData_c` 27,
-`moExtObject_c` 9, `moNotesAreaFtrFolder_c` 18, `moPointBackedUpData_c` 8 and `moRefPlane_c` 27, so
-109 object bodies in total.
+The focused archive module has **100 passing tests** and no recorded-layout failures. Runtime COM is
+prohibited for this converter; application acceptance must exercise generated files through a
+separate non-runtime validation path.
 
 ### 7.3 Donor fixtures
 
-`segment_fixtures.py` over the 32 donors, before and after, is in section 1. No donor regressed, no
-new blocking run appeared, and the 23 donors that were stopped at `moNotesAreaFtrFolder_c@4` now run
-past both that class and `moDefaultRefPlnData_c` to `sgSketch@lead`. No donor is byte-identical yet;
-the remaining walls are section 6.1 and section 6.6.
+`segment_fixtures.py` over the 32 independent donor streams reaches 18761 objects. Seventeen streams
+segment, tile and re-emit byte for byte. The current blockers are `sgSketch@tail` ×6,
+stream-level ownership ×4, `moSketchChain_c@0` ×3, `moDetailCabinet_c@3` ×1 and `suObList@0` ×1.
+The regression floors are 18761 reached objects and 17 exact round trips.
 
 ## 8. Functions dumped for this task
 
 Everything else came from the existing dumps under `C:\Users\odin\kitgh\out`. Two functions were
 genuinely absent and were recovered with headless `DumpFunctions` passes, depth 1:
 
-| function | module | why it was needed |
-|---|---|---|
-| `FUN_4c2d6070` | `sldmodu.dll`, project `proj_sldmodu` | virtual slot 42 of `moRefPlnData_c`, the entire body of `moDefaultRefPlnData_c` |
+| function       | module                                | why it was needed                                                                                    |
+| -------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `FUN_4c2d6070` | `sldmodu.dll`, project `proj_sldmodu` | virtual slot 42 of `moRefPlnData_c`, the entire body of `moDefaultRefPlnData_c`                      |
 | `FUN_3ca867b0` | `sldmfcu.dll`, project `proj_sldmfcu` | `moCStringHandle_c::Serialize`; the class is not in sldmodu, so it has no `serialize_map.json` entry |
 
 `mgPoint_c::restore`, `mgVector_c::restore` and `mgXform_c::restore` were not resolvable by name in

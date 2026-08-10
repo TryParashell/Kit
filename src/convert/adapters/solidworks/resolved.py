@@ -846,65 +846,6 @@ def sketch_plane_object_id(data: bytes | bytearray) -> int | None:
     return None
 
 
-def patch_rectangle_pad(
-    data: bytes | bytearray,
-    *,
-    minimum_x_mm: float,
-    minimum_y_mm: float,
-    maximum_x_mm: float,
-    maximum_y_mm: float,
-    depth_mm: float,
-    reversed: bool = False,
-    end_condition_code: int = BLIND_END_CONDITION,
-) -> bytes:
-    layout = locate_rectangle_pad(data)
-    if layout is None:
-        raise SldprtFormatError(
-            "donor resolved-features stream is not a rectangular pad layout"
-        )
-    if end_condition_code not in SUPPORTED_END_CONDITIONS:
-        raise SldprtFormatError(
-            f"unsupported SOLIDWORKS end condition code {end_condition_code}"
-        )
-    values = (
-        minimum_x_mm,
-        minimum_y_mm,
-        maximum_x_mm,
-        maximum_y_mm,
-        depth_mm,
-    )
-    if not all(math.isfinite(value) for value in values):
-        raise SldprtFormatError("rectangular pad values must be finite")
-    if maximum_x_mm <= minimum_x_mm or maximum_y_mm <= minimum_y_mm:
-        raise SldprtFormatError("rectangular pad requires a positive extent")
-    if depth_mm <= 0.0:
-        raise SldprtFormatError("rectangular pad requires a positive depth")
-    corners = rectangle_corners_mm(
-        minimum_x_mm, minimum_y_mm, maximum_x_mm, maximum_y_mm
-    )
-    output = bytearray(data)
-    for (x_offset, y_offset), (x, y) in zip(layout.point_offsets, corners, strict=True):
-        struct.pack_into("<d", output, x_offset, x / _METRES)
-        struct.pack_into("<d", output, y_offset, y / _METRES)
-    struct.pack_into("<d", output, layout.depth_offset, depth_mm / _METRES)
-    output[layout.reverse_offset] = 1 if reversed else 0
-    output[layout.end_condition_offset] = end_condition_code
-    if layout.from_reverse_offset is not None:
-        output[layout.from_reverse_offset] = 1 if reversed else 0
-    patched = bytes(output)
-    verification = locate_rectangle_pad(patched)
-    if verification is None:
-        raise SldprtFormatError("patched resolved-features stream cannot be relocated")
-    if not _matches(verification.corners_mm, corners):
-        raise SldprtFormatError("patched rectangular pad geometry does not verify")
-    if not math.isclose(verification.depth_mm, depth_mm, rel_tol=1e-12, abs_tol=1e-9):
-        raise SldprtFormatError("patched rectangular pad depth does not verify")
-    if verification.reversed is not bool(reversed):
-        raise SldprtFormatError("patched rectangular pad direction does not verify")
-    if verification.end_condition_code != end_condition_code:
-        raise SldprtFormatError("patched rectangular pad end condition does not verify")
-    return patched
-
 
 def _name_records(blob: bytes, marker: bytes) -> tuple[NameRecord, ...]:
     result: list[NameRecord] = []

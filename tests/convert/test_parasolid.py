@@ -8,13 +8,11 @@
 
 from __future__ import annotations
 
-import base64
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 import math
 import struct
-import zlib
 
 import pytest
 
@@ -55,7 +53,6 @@ from convert.parasolid import (
     encode_blank_partition_stream,
     encode_brep_model,
     encode_partition_stream,
-    transform_solidworks_rectangle_partition_stream,
 )
 from interchange import (
     CircleCurve,
@@ -70,64 +67,6 @@ from interchange import (
 from tests.interchange.test_brep import triangle_brep
 
 ROOT = Path(__file__).parents[2]
-SOLIDWORKS_RECTANGLE_PARTITION = zlib.decompress(
-    base64.b85decode(
-        b"".join(
-            (
-                b"c-jHZ4l(g03;+Nl9o2E#fk>jLSeUXKiSL<88UO$U3;+Ol0hO5hb5unZ$IqP!C{Hth;wuml9~h7%AOb33oJ`<Ck_nj!A%I>cn",
-                b"IXhX5=<sQ05J%PsK|<n;&XL<;`{a6R#CNo!2SnXwfn<byH&g85Bq!ebNcqZnFJzi-{kh=obx@8?mpdjTGAp?x4tsd8gEWFxt",
-                b"Yoaw=r3H@BZvyv8UKG(7&v*YcQWJ=5v*uBb9vvxqP9JAFMo(9~^>MxoS;yO>OO3AQq+*n?2jry1K@zSyf%VMt+4TlAoXOi(A",
-                b"&0AKDlFk2vo2`v(dmg`WO=^f!9f6|%)*Pgh=k5hsywXVJ^$_j-k%p`vWjp?G;ue=dK>>&x!<2KMe9$``?PoLqcHI4-T?#1{;",
-                b"8?aTLNy?kG1K9}q1?^X#zDOc52*2`s!S^29tJ0&6xPt?4%WgbV$Xo%ck|50V0*-P<blCg=YoU%UGyVC{^_U8x7%GHmATi!V^",
-                b"+@H%1j(8J%PPlVILKvi2I8+)fP_8u`v3@4a>&bc78l`Dn`+5pFnN29?76uOHhl-wsu<@QEj8VvM$uya6BV_}*@$5zj;%rEcy",
-                b"!`j-m)84KM<R|R*U`CNX2?u4I18O~ls5$M+b!3bIM%zf3;FJB!85TOf;P`7Bz96qn5(%uQ+M90647bAm^+=mk}|`Q7P=0s<q",
-                b"{KF+@nOF*}<3zB_gRY25y!c9!=GEcy6=T=x*AaX;13gYe}{?S+H`MC-VW@r{YtCL0l-YbbaH>Oh-EIncdddmPj@yI=or~6#;",
-                b"00+z3?tIMiiMM52;{9FzGWRwC7yYHJNq7RXJg3PLd*<|~FmQOf1U5T!oZoOUxE)|8v@{FV@8%6KXW+DwSzZJAV4JmaRCy;`r",
-                b"9{ci(wv)n4TDHJg_<qGyV#;J0-#UQmN6K+eg6ysL8T`DGHsADCw=3~s1+YAPlBsN=TZkI)}_;P13W<0zzXBrdcN=3Ro*<Wny",
-                b"@7kB`@6P8e#3HGbJ1&R7{qe&3(s(SC#p!mpsio0PxEZyjIo_1?+<LFgVpYl#x%1kv7Reor@pQ)XT}suv4IOUtCa)nG&$P8Fs",
-                b"D)f2OXaR>gPbjQ#+fKJD4e7+#P61SLIAsH#-n4LoH2udsfY9Bu4Hq@%eeTJ&cvHq#*w1nIKnQRxDzKKY2+1Xw%pSYPnh5sTX",
-                b"bxm+*_Y&Z%$`glkq0cl4YB2#t6wpQ%o7TdYPGgT>$q<!>oimL(d7XII=$vi{lKtGy4aMgW3L}z8?RWD3C+y`EzIQ<w(d6`sv",
-                b"Ux=fbhh!a!GV^uJ{3oun~JS#T~0Swq;L>PZ#PoH3G@NEcl_IF|G8$O`^z$H-_RkDI~!b-3!%Ylr`~>FWhYE}iu2x}g3I#%m~",
-                b"-0=`9K<VulFP-n}^-^CuaxIrCaRE&{rMYbYcEj8i<#sx-MIc9l=$+`)5+TOuzUtaz}RO0?Qrf0)WnFZ?|z(jq&#o11$d<>%K",
-                b"Y5SKypF4Y@pY|$-S7W$FC@S;DOpaef=K=oL$b%tcRAOUhaILJ9^{_o855w|E6^mjGK)2D+;SEw(B2ys`LaT%}N9ttbWPd`xD",
-                b"xeBkM0LjH!8$uB0X?YU*a%-Ue2;>h2=Ff1NrUE>dC*0Y@YS35#tAkhpfy2Df>smgx&lTLzIyl?WD|Ia2^cld8li2Hgv<;uLO",
-                b"UUvG7q}I;mBrYG$}PD7%|2iak)Qjg{#q6)U4sGM&waQDH6ygnK?lu#rQUPgb-9Sk7;@t716WvMmlZ8zgo6W5NTt)or&H7SBL",
-                b"DRw{8U@8xXmfP6r`xk$8zng=~km5LyfW@yS6BovdK0gagC@YrE71K?njF^2N~M$Xb@iIyl>m2|KFfhB3z2#n9HtF5WRXl<xs",
-                b"!({6c;-j*tc*O}oC2rcYgkKUdt&PTmnuyRAoJCN`s3t88442RY6Hl}X_Azn>y_X;i|?TEG0X)t>=My+f+h)|N*)}*mjmFgyR",
-                b"nWEhc?=aGhs&qBd+e(yfWlQD!{ce=*Hey?u)eX3#E;y>xMNB7Rv*dZl^wP}OZu)DO%N)IjR)GE(Y;#J`*R#oX%3jFoQaL@nU",
-                b"W~i^fOI3X&(ascsh47hv8;|(O*tp<X{igcm){i*<1EctK<tzrRs8=a$VF(@bI8Hkz4Al}M6e=)I>>vYR(num#S;u^jCuhplt",
-                b"2WF%SuQfG8u|k^}@5EBvyT9Zn1|aii!esmv$G*`hQ2oWibkLmm?~=X2TWOz$Wfhd#wu1u)4{c7#l#v<mm{Ig8DL5<%kMPWL(",
-                b"8&Hhq`cYgG(D-$Xmj*!~hPf*1$TlLIsw5Xuo1sVz~FViz^3y;jA3=(_2;8GG^yDgspjWKahxnTu{9NL^u|GA#Lr)n2RON$7i",
-                b"M=NMaA5~u(=r~~MrE>V#Kf_xRKXlAQ+tG!mmO6XbIs~IC}Ts9Y1RS`4i&Nlpbh=^}7o3@oSMmi9aiBmENehjka=w`C?8d8>?",
-                b"lB9r`9=kF`o-ZPuG6E(u=(kc0q@oP-j+sMch(y#%-r3ANSm~mXZiP@SeJnCNtjE(3vW=V=4Q7F_QeAxvA0VO`hKoM8T6zFon",
-                b"v46)ohW8Pet?wPN90!N#lg2UW2E~aRO3W9y`pABy*3>Hat|qLommmauSXc(hSMpAGlu(dO=TXsrj^XcIx<R{oPrLs{qzG*KQ",
-                b"VP>WlL7orQiZ)>rwc$1XDd~dc0!h^3smmZFsrInBP|=bH{K_P<Aj}3VJ6yfU@gX&~QxJuQjvg$U#`2=L}mehYW2*4s)68WOR",
-                b"p&gaCQy?Eu{G18BDvZ);&&V#E|ypIK0JIXE)H`!v9va)jPNIVw*9tQX+zax?@Ugzf@-%m>zPEzkY1>Cw?C$GEUgor7UBrEYQ",
-                b">x8tL>4(YW33dfFvB~PPf>TM8&+agR^l|VlYlb+*)WaVQeRtGyPr~|C2RE%1NkUkekVQn1`<F*U?w-L9e{kUmY<ED~&oDa)0",
-                b"xaU+^ps-T<l}ex~r~{tSpfMLnVK<xzEpTvk2n$B5(5KHXW5F}9={JYQVe|?XOpZaIAkZAt!T4y<m<yz?tCOJx!$f5*7Chs}K",
-                b")b=JJ_+kfEWTaxEF#C{ggj@KWf^@TGE1SHl9R0b)6gAxL0+`W_BiwxksO5PuxL+$<1gqFP|iRZHZmuno{?7l@^j?5-o^5XRd",
-                b"AY-<0u%Gmr<+g^*JklAfYMmnciW`8-+s%(%tYnfS%(03jdDboQ{m>$Es95F>v@->hYpT5fH^u1ig=G&`<F`2AYQcSvd##t0i",
-                b"c!C}Y>BJx83Mmwc%0u=vvF=pRK|Q~2}p8fdSVNWZGwQ%aX1A?)v^NT0*|^VaV-<V|baYtRpau9v^_asjTlO3+`w3i^5IM?lY",
-                b"G*HKzJHIBS3?^yH;&<}yGdG3h33)g!k=x<#G{Rs3C&^xhf1f26m_I>%IMSmCi0nnE-u1WHOd{Bb^-c`^KK|cuka_l;YoMuBu",
-                b"K9oP%S^i*3d7b5HaOy=+Cai)oBO3uj99<>)Nvpi?^PbG>ucipzh{KAZ_{;eytru9%dE@U0v-Xiic^k@Pl!(>%4k%_NnZ6?*^",
-                b"`2ri``X{Qf?U+fy@{NzFyB%~Ug|wz<)&lB<?GxDc_VB`an6K&N1p0^(aJh<xc4mW`F!MyxsPb-nMF=;^viHd8NX(SKP*r9Sw",
-                b"4}_kEaFvR^tD5f(rJ_Y55qmPvtXq?&oq*zK}2FD}K%47%zD=ei1l@B)h~UyH70jYZKcD7{U&yg!VCLzU()a_9?XIxP3?A`pn",
-                b"Y4wY1Nmo#NNTC{mvr+IPJD`T88%%Y3j#k-BJT-&?7RP|os8XB3$)ETS(Jp)cf#1<)?yOW=j?!I#k9;6peH*H?!218-m3SJ2+",
-                b"%5)(ygnW6n?Da)W-;3SVC<HzMEN&9K=CrEzL8+BBEtovt&DRuu^Z%W<2f7bGgxp6!4gZ=eASQOuj^j1ixg3XcdxYG=9!VEFD",
-                b"N%mcl+%n7@=eaEEdUNDk-j%lf4eh*be@%PDw(m2X`29bOCS1(`000000001@0ssIb9o2E#fk>jLSeUXKiSL<Y1ONbn0ssJb0",
-                b"fm!USJOZgfNw1d2m*@d_@pO~;@W~DA}+OpQ~`n34VM_2DMZs2+lb)4@B6;*8}2*!C;SP%`sVQ;;Fki5FPi4dcjwN{WM<MdhD",
-                b"D^RQj0VP8p8FVh*lG-tJWr)%65!&i55*M!%?Qz+O5TtByE+_I#nudB@<d%xzAr(TEYDj!oga7u<6?8*ZpNaU%7mzQ^eaZpQV",
-                b"?eP_p_7`oxp@iS%Up2QG!K3Nsxg(j=cGEU)lK{1Sh_FYrj1BF*v~dnI4S$T*oJ6J-$u!4FHx`JfS2(GI`@;<YkX*1&q$AVm_",
-                b"BNzx9R!G;7Rp#!$UOfacypuQO#h(iSC!$#2Qx2W4hTn3%2VVV?3DKl%uGl=%UUf2f*U>*5G%>M|Z9>k~daeNM+g)_wG@lkvc",
-                b"U%;2~C42*4$9M2;d>?n=hxh^PB)*65!WH6M_$KTkeuR(VYxpYcCq9J_<CFLVY-4UIP|!_&H@WS22VTPZ>LAS;=iw&Y#`?oh4",
-                b"^h|x2K!Nkmr)a<W)|^s;u=^@yM^{#;!3EXy%Mj0TBzndErx}>vvNF}Tt4-AQY_P9H2GY{&tV_4+2c`+I+Z6qV>a*D@u&DLbA",
-                b"5u};K%qi?!oV|hkuzzRB>?N2xY}py50LjJfWP9q}^>>3FZAsE88|4$BHWXCZ1q0lt;@{G2OP(4o@Q$D6$f!>eAyzhn|eZ(#m",
-                b"m1_Lza(-+A|Of$`~RyNVmSinl7$v=VLZ9hsgY_tAs*>Zais@>M)7GJ;Y5aSrvlpUcqk=LXi6C11D>d}Kof!|WFHQPNA1yBWi",
-                b"e0=MDKbPVp(|7PPZ**%9Jf6a#8U%+gxH~;_u000000Q{9@W&",
-            )
-        )
-    )
-)
 CRANKSHAFT = ROOT / "examples" / "Random" / "Crank" / "Crankshaft.SLDPRT"
 FUEL_INJECTOR = ROOT / "examples" / "Random" / "Cylinder_heads" / "Fuel_injector.SLDPRT"
 POPPET = ROOT / "examples" / "Random" / "Cylinder_heads" / "Poppet.SLDPRT"
@@ -295,168 +234,6 @@ def test_blank_partition_stream_matches_solidworks_2025_protocol() -> None:
     assert all(_parasolid_header(payload.data) is not None for payload in decoded)
 
 
-def test_solidworks_rectangle_partition_transform_is_deterministic() -> None:
-    transformed = transform_solidworks_rectangle_partition_stream(
-        SOLIDWORKS_RECTANGLE_PARTITION,
-        minimum_x_mm=-30.0,
-        minimum_y_mm=-15.0,
-        maximum_x_mm=30.0,
-        maximum_y_mm=15.0,
-        depth_mm=12.0,
-    )
-    repeated = transform_solidworks_rectangle_partition_stream(
-        bytearray(SOLIDWORKS_RECTANGLE_PARTITION),
-        minimum_x_mm=-30,
-        minimum_y_mm=-15,
-        maximum_x_mm=30,
-        maximum_y_mm=15,
-        depth_mm=12,
-    )
-    source_payloads = decode_partition_stream(SOLIDWORKS_RECTANGLE_PARTITION)
-    payloads = decode_partition_stream(transformed)
-    model = decode_brep_model(payloads[0].data)
-    assert transformed == repeated
-    assert len(transformed) == 3791
-    assert sha256(transformed).hexdigest() == (
-        "7e8daf279693883c58ecd9b15c26ee9f18ade2844c2d7731993ed328565563a3"
-    )
-    assert tuple(payload.kind for payload in payloads) == ("partition", "deltas")
-    assert tuple(payload.uncompressed_size for payload in payloads) == (6730, 1124)
-    assert tuple(payload.compressed_size for payload in payloads) == (3077, 642)
-    assert payloads[1].data == source_payloads[1].data
-    assert (
-        transformed[payloads[1].wrapper_offset :]
-        == SOLIDWORKS_RECTANGLE_PARTITION[source_payloads[1].wrapper_offset :]
-    )
-    assert model is not None
-    assert model.validate() == ()
-    assert len(model.bodies) == 1
-    assert len(model.faces) == 6
-    assert len(model.edges) == 12
-    assert len(model.vertices) == 8
-    assert frozenset(_coordinates(vertex.point) for vertex in model.vertices) == (
-        frozenset(
-            (x, y, z) for x in (-30.0, 30.0) for y in (-15.0, 15.0) for z in (0.0, 12.0)
-        )
-    )
-
-
-@pytest.mark.parametrize(
-    ("bounds", "expected"),
-    (
-        ((-12.5, -3.5, 47.25, 18.75, 2.25), (-12.5, -3.5, 0.0, 47.25, 18.75, 2.25)),
-        ((0.25, 4.5, 0.5, 9.75, 0.125), (0.25, 4.5, 0.0, 0.5, 9.75, 0.125)),
-        (
-            (-1000.0, -2000.0, -900.0, -1900.0, 350.0),
-            (-1000.0, -2000.0, 0.0, -900.0, -1900.0, 350.0),
-        ),
-    ),
-)
-def test_solidworks_rectangle_partition_transform_supports_finite_bounds(
-    bounds: tuple[float, float, float, float, float],
-    expected: tuple[float, float, float, float, float, float],
-) -> None:
-    transformed = transform_solidworks_rectangle_partition_stream(
-        SOLIDWORKS_RECTANGLE_PARTITION,
-        minimum_x_mm=bounds[0],
-        minimum_y_mm=bounds[1],
-        maximum_x_mm=bounds[2],
-        maximum_y_mm=bounds[3],
-        depth_mm=bounds[4],
-    )
-    model = decode_brep_model(decode_partition_stream(transformed)[0].data)
-    assert model is not None
-    xs = tuple(vertex.point.x for vertex in model.vertices)
-    ys = tuple(vertex.point.y for vertex in model.vertices)
-    zs = tuple(vertex.point.z for vertex in model.vertices)
-    observed = min(xs), min(ys), min(zs), max(xs), max(ys), max(zs)
-    assert observed == pytest.approx(expected, rel=1e-12, abs=1e-9)
-
-
-def test_solidworks_rectangle_partition_transform_preserves_identity() -> None:
-    transformed = transform_solidworks_rectangle_partition_stream(
-        SOLIDWORKS_RECTANGLE_PARTITION,
-        minimum_x_mm=-20.0,
-        minimum_y_mm=-10.0,
-        maximum_x_mm=20.0,
-        maximum_y_mm=10.0,
-        depth_mm=10.0,
-    )
-    assert transformed == SOLIDWORKS_RECTANGLE_PARTITION
-
-
-@pytest.mark.parametrize(
-    ("bounds", "message"),
-    (
-        ((math.nan, -10.0, 20.0, 10.0, 10.0), "finite numbers"),
-        ((-20.0, -10.0, math.inf, 10.0, 10.0), "finite numbers"),
-        ((-20.0, -10.0, 20.0, -math.inf, 10.0), "finite numbers"),
-        ((-20.0, -10.0, 20.0, 10.0, math.nan), "finite numbers"),
-        ((0.0, -10.0, 0.0, 10.0, 10.0), "positive width"),
-        ((10.0, -10.0, -10.0, 10.0, 10.0), "positive width"),
-        ((-20.0, 5.0, 20.0, 5.0, 10.0), "positive width"),
-        ((-20.0, 10.0, 20.0, -10.0, 10.0), "positive width"),
-        ((-20.0, -10.0, 20.0, 10.0, 0.0), "positive width"),
-        ((-20.0, -10.0, 20.0, 10.0, -1.0), "positive width"),
-        ((True, -10.0, 20.0, 10.0, 10.0), "finite numbers"),
-    ),
-)
-def test_solidworks_rectangle_partition_transform_rejects_invalid_bounds(
-    bounds: tuple[float, float, float, float, float],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        transform_solidworks_rectangle_partition_stream(
-            SOLIDWORKS_RECTANGLE_PARTITION,
-            minimum_x_mm=bounds[0],
-            minimum_y_mm=bounds[1],
-            maximum_x_mm=bounds[2],
-            maximum_y_mm=bounds[3],
-            depth_mm=bounds[4],
-        )
-
-
-def test_solidworks_rectangle_partition_transform_rejects_other_streams() -> None:
-    corrupted = bytearray(SOLIDWORKS_RECTANGLE_PARTITION)
-    corrupted[100] ^= 1
-    donors = (
-        b"",
-        encode_blank_partition_stream(),
-        bytes(corrupted),
-        SOLIDWORKS_RECTANGLE_PARTITION[:-1],
-        SOLIDWORKS_RECTANGLE_PARTITION + b"\0",
-    )
-    for donor in donors:
-        with pytest.raises(ValueError, match="validated donor"):
-            transform_solidworks_rectangle_partition_stream(
-                donor,
-                minimum_x_mm=-30.0,
-                minimum_y_mm=-15.0,
-                maximum_x_mm=30.0,
-                maximum_y_mm=15.0,
-                depth_mm=12.0,
-            )
-
-
-def test_solidworks_rectangle_partition_transform_rejects_its_output() -> None:
-    transformed = transform_solidworks_rectangle_partition_stream(
-        SOLIDWORKS_RECTANGLE_PARTITION,
-        minimum_x_mm=-30.0,
-        minimum_y_mm=-15.0,
-        maximum_x_mm=30.0,
-        maximum_y_mm=15.0,
-        depth_mm=12.0,
-    )
-    with pytest.raises(ValueError, match="validated donor"):
-        transform_solidworks_rectangle_partition_stream(
-            transformed,
-            minimum_x_mm=-40.0,
-            minimum_y_mm=-20.0,
-            maximum_x_mm=40.0,
-            maximum_y_mm=20.0,
-            depth_mm=15.0,
-        )
-
 
 def test_neutral_binary_header_uses_big_endian_schema_length() -> None:
     payload = encode_brep_model(triangle_brep())
@@ -471,7 +248,16 @@ def test_neutral_binary_header_uses_big_endian_schema_length() -> None:
 
 
 def test_neutral_binary_writer_uses_v12_partition_topology() -> None:
-    payload = encode_brep_model(triangle_brep())
+    SourceModel = triangle_brep()
+    SourceModel = replace(
+        SourceModel,
+        vertices=tuple(
+            replace(Vertex, tolerance=1e-7) for Vertex in SourceModel.vertices
+        ),
+        edges=tuple(replace(Edge, tolerance=2e-7) for Edge in SourceModel.edges),
+        faces=tuple(replace(Face, tolerance=3e-7) for Face in SourceModel.faces),
+    )
+    payload = encode_brep_model(SourceModel)
     header = _parasolid_header(payload)
     assert header is not None
     assert header.description == (
@@ -503,6 +289,9 @@ def test_neutral_binary_writer_uses_v12_partition_topology() -> None:
     assert len(restored.faces) == 1
     assert len(restored.edges) == 3
     assert len(restored.vertices) == 3
+    assert {Vertex.tolerance for Vertex in restored.vertices} == {1e-7}
+    assert {Edge.tolerance for Edge in restored.edges} == {2e-7}
+    assert {Face.tolerance for Face in restored.faces} == {3e-7}
 
 
 def test_neutral_binary_writer_uses_v12_body_and_fin_topology() -> None:
@@ -805,11 +594,12 @@ def test_v12_solidworks_body_attributes_bind_the_modifying_feature() -> None:
 
 def test_v12_solidworks_body_attributes_require_complete_feature_ids() -> None:
     model = triangle_brep()
-    with pytest.raises(ValueError, match="body-root"):
-        encode_brep_model(
-            model,
-            solidworks_feature_ids={model.bodies[0].id: 26},
-        )
+    partition = encode_brep_model(
+        model,
+        solidworks_feature_ids={model.bodies[0].id: 26},
+    )
+    assert b"LAST_BODY_MODIFYING_FEATURE_ID" in partition
+    assert decode_brep_model(partition) is not None
     with pytest.raises(ValueError, match="cover every"):
         encode_brep_model(
             model,

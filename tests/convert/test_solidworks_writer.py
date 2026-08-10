@@ -816,14 +816,15 @@ def test_source_less_native_rectangle_boss_records_are_parametric() -> None:
     output = BytesIO()
     write_sldprt(source, output)
     archive = SldprtArchive.from_bytes(output.getvalue())
-    assert RESOLVED_FEATURES_STREAM not in archive.streams
+    assert RESOLVED_FEATURES_STREAM in archive.streams
+    assert KIT_RESOLVED_STREAM not in archive.streams
     assert archive.require(CONFIGURATION_MANAGER_STREAM)
     assert archive.require(CONFIGURATION_STREAM)
-    resolved = archive.require(KIT_RESOLVED_STREAM)
+    resolved = archive.require(RESOLVED_FEATURES_STREAM)
     native = decode_native_model(
         archive.require(KEYWORDS_STREAM),
         resolved,
-        resolved_stream=KIT_RESOLVED_STREAM,
+        resolved_stream=RESOLVED_FEATURES_STREAM,
     )
     assert native.diagnostics == ()
     assert native.sketches[0].object_id == 26
@@ -839,7 +840,7 @@ def test_source_less_native_rectangle_boss_records_are_parametric() -> None:
     assert native.operations[0].profile_id == native.sketches[0].object_id
     assert native.operations[0].length_mm == pytest.approx(12.0)
     assert native.operations[0].termination_code == BLIND_END_CONDITION
-    assert native.operations[0].native_stream == KIT_RESOLVED_STREAM
+    assert native.operations[0].native_stream == RESOLVED_FEATURES_STREAM
     restored = read_sldprt(output.getvalue())
     assert restored.sketches[0].entities == sketch.entities
     assert restored.feature_timeline[0].definition == feature.definition
@@ -853,23 +854,24 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     with pytest.raises(ApplicationUsabilityError) as captured:
         write_document(source, target, allow_carrier=False)
     assert not target.exists()
-    assert Capability.PARAMETRIC_HISTORY in captured.value.unimplemented_capabilities
+    assert captured.value.unimplemented_capabilities == frozenset({Capability.BREP})
     result = write_document(source, target, allow_carrier=True)
     data = target.read_bytes()
     archive = SldprtArchive.from_bytes(data)
-    assert RESOLVED_FEATURES_STREAM not in archive.streams
+    assert RESOLVED_FEATURES_STREAM in archive.streams
+    assert KIT_RESOLVED_STREAM not in archive.streams
     assert archive.require(CONFIGURATION_MANAGER_STREAM)
     assert archive.require(CONFIGURATION_STREAM)
-    resolved = archive.require(KIT_RESOLVED_STREAM)
+    resolved = archive.require(RESOLVED_FEATURES_STREAM)
     partition = archive.require(PARTITION_STREAM)
     native = decode_native_model(
         archive.require(KEYWORDS_STREAM),
         resolved,
-        resolved_stream=KIT_RESOLVED_STREAM,
+        resolved_stream=RESOLVED_FEATURES_STREAM,
     )
     transfers = {item.capability: item for item in result.transfers}
     assert result.application_usable is False
-    assert result.vendor_loadable is False
+    assert result.vendor_loadable is True
     assert result.near_lossless is False
     assert result.requirements == ()
     assert partition == encode_blank_partition_stream()
@@ -883,10 +885,11 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     assert native.operations[0].object_id == 32
     assert native.operations[0].length_mm == pytest.approx(12.0)
     assert native.operations[0].termination_code == BLIND_END_CONDITION
-    assert transfers[Capability.PARAMETERS].mode.value == "carrier"
-    assert (
-        transfers[Capability.PARAMETERS].carrier_reason.value == "writer_unimplemented"
-    )
+    assert transfers[Capability.PARAMETERS].mode.value == "native"
+    assert transfers[Capability.PARAMETRIC_HISTORY].mode.value == "native"
+    assert transfers[Capability.EDITABLE_SKETCHES].mode.value == "native"
+    assert transfers[Capability.BREP].mode.value == "carrier"
+    assert transfers[Capability.BREP].carrier_reason.value == "writer_unimplemented"
     for capability in (
         Capability.NATIVE_PAYLOADS,
         Capability.PROVENANCE,
@@ -902,7 +905,7 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     replay_result = write_sldprt(restored, replay)
     assert replay.getvalue() == data
     assert replay_result.application_usable is False
-    assert replay_result.vendor_loadable is False
+    assert replay_result.vendor_loadable is True
 
 
 @pytest.mark.parametrize(
@@ -1147,8 +1150,14 @@ def test_neutral_brep_writes_native_parasolid_partition() -> None:
     partition = archive.require(PARTITION_STREAM)
     native = decode_partition_stream(partition)[0]
     restored = read_sldprt(output.getvalue())
+    Part = encode_native_part(source, "Part1")
+    FeatureId = Part.object_ids[f"feature:{source.bodies[0].final_feature_id}"]
     assert native.schema == "SCH_1200000_12006"
-    assert native.data == encode_brep_model(source.brep)
+    assert native.data == encode_brep_model(
+        source.brep,
+        solidworks_feature_ids={source.brep.bodies[0].id: FeatureId},
+    )
+    assert b"LAST_BODY_MODIFYING_FEATURE_ID" in native.data
     assert partition != native.data
     assert restored.brep == source.brep
     assert result.metadata["mode"] == "generated"
@@ -1202,7 +1211,8 @@ def test_source_less_brep_only_writes_native_imported_feature_metadata() -> None
     assert resolved[imported.native_offset : imported.native_end] == imported.data
 
 
-def test_public_sdk_does_not_promote_generated_parasolid_partition(tmp_path) -> None:
+# generated Parasolid topology must be credited independently of feature history
+def test_generated_parasolid_partition_is_native_brep(tmp_path) -> None:
     base = document()
     source = replace(
         base,
@@ -1212,11 +1222,21 @@ def test_public_sdk_does_not_promote_generated_parasolid_partition(tmp_path) -> 
     blocked = tmp_path / "blocked.SLDPRT"
     with pytest.raises(ApplicationUsabilityError) as captured:
         write_document(source, blocked, allow_carrier=False)
-    assert Capability.BREP in captured.value.unimplemented_capabilities
+    assert Capability.BREP not in captured.value.unimplemented_capabilities
+    assert captured.value.unimplemented_capabilities == frozenset(
+        {
+            Capability.BODY_STRUCTURE,
+            Capability.EDITABLE_SKETCHES,
+            Capability.PARAMETRIC_HISTORY,
+        }
+    )
     assert not blocked.exists()
     explicit = tmp_path / "explicit.SLDPRT"
     result = write_document(source, explicit, allow_carrier=True)
     assert result.metadata["native_brep"] == "generated"
+    assert next(
+        item for item in result.transfers if item.capability is Capability.BREP
+    ).mode.value == "native"
     assert result.vendor_loadable is False
     assert result.near_lossless is False
     assert open_document(explicit).brep == source.brep

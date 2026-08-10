@@ -185,6 +185,27 @@ def test_ascii_brep_decoder_applies_location_translation() -> None:
         (13.0, -7.0, 5.0),
         (11.0, -4.0, 5.0),
     }
+    ChildData = triangle_mesh_brep(
+        ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0)),
+        ((0, 1, 2),),
+    ).replace(
+        b"Locations 0\n",
+        b"Locations 1\n1\n1 0 0 11\n0 1 0 -7\n0 0 1 5\n",
+        1,
+    )
+    ShellHead, ShellMarker, ShellTail = ChildData.rpartition(b"+2 0 *")
+    assert ShellMarker
+    ChildModel = decode_ascii_brep(ShellHead + b"+2 1 *" + ShellTail)
+    assert ChildModel is not None
+    assert ChildModel.validate() == ()
+    assert {
+        (Vertex.point.x, Vertex.point.y, Vertex.point.z)
+        for Vertex in ChildModel.vertices
+    } == {
+        (11.0, -7.0, 5.0),
+        (13.0, -7.0, 5.0),
+        (11.0, -4.0, 5.0),
+    }
 
 
 def test_structural_validator_requires_exact_physical_version_line() -> None:
@@ -352,3 +373,20 @@ def test_final_shape_ownership_merges_multiple_design_bodies() -> None:
         "body:second",
     }
     assert model.validate(frozenset(value.id for value in bodies)) == ()
+    OwnedPayload = BrepPayload(
+        "payload:owned",
+        "opencascade",
+        "shape",
+        "CASCADE Topology V1",
+        digest,
+        data=data,
+        attributes={"body_id": bodies[0].id},
+        role=PayloadRole.BREP,
+        file_extension=".brep",
+    )
+    SelectedModel = _decoded_document_brep(
+        (OwnedPayload, *payloads),
+        bodies,
+    )
+    assert SelectedModel is not None
+    assert len(SelectedModel.bodies) == 2

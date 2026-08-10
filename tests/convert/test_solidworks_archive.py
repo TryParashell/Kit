@@ -62,9 +62,12 @@ RECORDED_LABELS = (
     "vendor_cojinete",
     "vendor_ring",
 )
-FIXTURES_VERIFYING_BYTE_IDENTICALLY = 0
-CONFIRMED_CLASS_FLOOR = 50
-FIXTURE_OBJECT_FLOOR = 7487
+# all currently closed donor streams must remain exact native round trips
+FIXTURES_VERIFYING_BYTE_IDENTICALLY = 17
+# broad native layouts must never reduce confirmed class coverage
+CONFIRMED_CLASS_FLOOR = 54
+# broader native layouts must never reduce donor objects reached
+FIXTURE_OBJECT_FLOOR = 18761
 FIXTURE_BASE_SEED = 109
 
 
@@ -213,6 +216,12 @@ def test_class_definition_tag_round_trips() -> None:
     assert encode_class_definition(tag.class_name, tag.schema) == encoded
 
 
+# empty class definitions are scalar bytes, never valid native archive objects
+def test_class_definition_rejects_an_empty_name() -> None:
+    with pytest.raises(ArchiveError, match="empty name"):
+        read_tag(struct.pack("<HHH", 0xFFFF, 1, 0), 0)
+
+
 def test_class_reference_tag_round_trips() -> None:
     encoded = encode_class_reference(109)
     assert struct.unpack_from("<H", encoded, 0)[0] == CLASS_TAG_BIT | 109
@@ -287,9 +296,21 @@ def test_empty_string_round_trips() -> None:
     assert read_string(encoded, 0) == ("", 4)
 
 
+def test_ansi_archive_strings_use_the_native_short_and_long_prefixes() -> None:
+    assert read_string(b"\x00", 0) == ("", 1)
+    assert read_string(b"\x03abc", 0) == ("abc", 4)
+    encoded = b"\xff\x2c\x01" + b"n" * 300
+    assert read_string(encoded, 0) == ("n" * 300, len(encoded))
+
+
+def test_unicode_archive_strings_use_the_native_extended_length_prefix() -> None:
+    text = "n" * 0xFFFE
+    encoded = encode_string(text)
+    assert encoded[:10] == b"\xff\xfe\xff\xff\xff\xff\xfe\xff\x00\x00"
+    assert read_string(encoded, 0) == (text, len(encoded))
+
+
 def test_unrepresentable_values_raise_instead_of_truncating() -> None:
-    with pytest.raises(ArchiveError):
-        encode_string("n" * 0xFFFE)
     with pytest.raises(ArchiveError):
         encode_class_definition("cl\u00e4ss", 1)
     with pytest.raises(ArchiveError):
@@ -301,7 +322,7 @@ def test_unrepresentable_values_raise_instead_of_truncating() -> None:
     with pytest.raises(ArchiveError):
         read_tag(b"\xff\xff\x01", 0)
     with pytest.raises(ArchiveError):
-        read_string(b"\x01\x02\x03\x04", 0)
+        read_string(b"\x04\x01", 0)
     assert issubclass(ArchiveError, SldprtFormatError)
 
 
@@ -632,6 +653,63 @@ def test_segment_tiles_and_re_emits_a_synthetic_stream() -> None:
     assert report.trailing_bytes == 0
 
 
+# conditional child counts preserve serializer branches and declared shared references
+def test_child_count_by_class_selects_a_complete_branch() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "parent": {
+                    "confidence": "confirmed",
+                    "child_slots": ["child", "*", "known"],
+                    "child_count_by_class": {
+                        "slot": 0,
+                        "counts": {"child": 2, "null": 3},
+                    },
+                    "runs": {"lead": 0, "0": 0, "2": 0},
+                    "runs_by_child_class": {"1": {"null": 0}},
+                },
+                "child": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"leaf": 0},
+                },
+                "known": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"leaf": 0},
+                },
+            },
+        }
+    )
+    ShortBlob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("parent", 1)
+        + encode_class_definition("child", 1)
+        + encode_null()
+    )
+    LongBlob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("parent", 1)
+        + encode_null()
+        + encode_null()
+        + encode_class_reference(200)
+    )
+    assert [Item.class_name for Item in segment(ShortBlob, 109, layouts)] == [
+        "parent",
+        "child",
+        "null",
+    ]
+    assert [Item.class_name for Item in segment(LongBlob, 109, layouts)] == [
+        "parent",
+        "null",
+        "null",
+        "known",
+    ]
+    assert verify(ShortBlob, 109, layouts).identical
+    assert verify(LongBlob, 109, layouts).identical
+
+
 def test_string_and_count_and_conditional_rules_measure_a_run() -> None:
     layouts = _single_class_table(
         {
@@ -658,6 +736,15 @@ def test_string_and_count_and_conditional_rules_measure_a_run() -> None:
                     "values": [1],
                     "tail": 3,
                 },
+                {
+                    "slot": "leaf",
+                    "rule": "guard",
+                    "at": 4,
+                    "predicate": "variant",
+                    "predicate_at": 0,
+                    "predicate_width": 4,
+                    "values": [0x12345678],
+                },
             ],
         }
     )
@@ -670,6 +757,7 @@ def test_string_and_count_and_conditional_rules_measure_a_run() -> None:
         + b"\x01\x00\x00\x00"
         + b"\x00" * 8
         + b"\x00" * 3
+        + struct.pack("<I", 0x12345678)
     )
     blob = b"\x00" * STREAM_HEADER_SIZE + encode_class_definition("solo", 1) + body
     segments = segment(blob, 109, layouts)
@@ -841,6 +929,29 @@ def test_a_repeat_count_of_zero_reads_no_children() -> None:
     assert segments[0].end == segments[1].offset
     assert verify(blob, 109, layouts).identical
 
+    BackLayouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "list": {
+                    "confidence": "confirmed",
+                    "child_slots": ["*", "..."],
+                    "runs": {"lead": 4, "0": 0},
+                    "repeat_count": {"run": "lead", "back": 2, "width": 2},
+                },
+            },
+        }
+    )
+    BackBlob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("list", 1)
+        + b"\xaa\xbb\x01\x00"
+        + encode_null()
+    )
+    BackSegments = segment(BackBlob, 109, BackLayouts)
+    assert [item.depth for item in BackSegments] == [0, 1]
+    assert verify(BackBlob, 109, BackLayouts).identical
+
 
 def test_the_shipped_table_drives_sgSketch_from_run_groups() -> None:
     layout = _layouts()["sgSketch"]
@@ -850,9 +961,9 @@ def test_the_shipped_table_drives_sgSketch_from_run_groups() -> None:
     assert layout.repeat_prefix == 0
     assert not layout.repeats
     assert not layout.walks_a_prefix
-    assert layout.run_keys() == ("lead",)
+    assert layout.run_keys() == ("lead", "tail")
     assert layout.constant_run("lead", 18000) == 49
-    assert not layout.variable_runs
+    assert layout.variable_runs["tail"][0].predicate == "NextParentToken"
     assert [group.name for group in layout.groups] == [
         "entity",
         "point",
@@ -867,9 +978,15 @@ def test_the_shipped_table_drives_sgSketch_from_run_groups() -> None:
     assert shape["entity"].trailer == 4
     assert shape["point"].element == (8, 80)
     assert (shape["point"].count_back, shape["point"].count_width) == (12, 2)
+    assert shape["point"].CountByChildClass["null"].At == 0
+    assert shape["point"].CountByChildClass["null"].Lead == 12
     assert shape["point"].trailer == 13
+    assert len(shape["point"].ElementRunVariants) == 12
     assert shape["relation"].element_runs(18000) == (0, 16, 17, 4)
     assert shape["relation"].element_runs(14000) == (0, 16, 16, 4)
+    assert len(shape["relation"].ElementRunVariants) == 8
+    assert shape["relation"].CountVariants[0].Count == 1
+    assert shape["relation"].ElementRunVariants[-1].StopGroups
     assert shape["relation"].trailer == 2
     assert shape["constraint"].element == (0, 16, 17, 0, 4, 26, 0, 0, 6)
     assert shape["constraint"].trailer == 8
@@ -883,6 +1000,61 @@ def test_the_shipped_table_drives_sgSketch_from_run_groups() -> None:
     for group in layout.groups:
         assert group.note
         assert len(group.slots) == len(group.element)
+
+
+# this regression test keeps the three native chooser arrays distinct from its DWord tail
+def test_the_shipped_table_drives_per_body_chooser_arrays_from_counts() -> None:
+    layout = _layouts()["moPerBodyChooserData_c"]
+    assert layout.confidence == "confirmed"
+    assert layout.walks_groups
+    assert layout.child_slots == ()
+    assert layout.constant_run("lead", 18000) == 2
+    assert [group.name for group in layout.groups] == [
+        "primary_face_refs",
+        "secondary_face_refs",
+        "bounding_box_centres",
+    ]
+    assert [group.slots for group in layout.groups] == [
+        ("moFaceRef_c",),
+        ("moFaceRef_c",),
+        ("moBBoxCenterData_c",),
+    ]
+    assert [group.trailer for group in layout.groups] == [2, 2, 0]
+    tail = layout.variable_runs["tail"][0]
+    assert tail.rule == "count"
+    assert (tail.at, tail.count_width, tail.stride, tail.tail) == (8, 2, 4, 4)
+
+
+# non-corpus counts prove the native chooser grammar is not fitted to its witnesses
+def test_per_body_chooser_accepts_general_native_array_counts() -> None:
+    layouts = _layouts()
+    body = (
+        struct.pack("<H", 2)
+        + encode_null()
+        + encode_null()
+        + struct.pack("<H", 0)
+        + struct.pack("<H", 3)
+        + encode_null()
+        + encode_null()
+        + encode_null()
+        + struct.pack("<iiHIIIi", 7, 11, 3, 13, 17, 19, 23)
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("moPerBodyChooserData_c", 1)
+        + body
+    )
+    segments = segment(blob, 109, layouts, mo_version=18000)
+    assert [item.class_name for item in segments] == [
+        "moPerBodyChooserData_c",
+        "null",
+        "null",
+        "null",
+        "null",
+        "null",
+    ]
+    assert segments[-1].end == len(blob)
+    assert verify(blob, 109, layouts, mo_version=18000).identical
 
 
 def test_run_groups_are_validated() -> None:
@@ -932,6 +1104,27 @@ def test_run_groups_are_validated() -> None:
         table({**sound, "element_by_version": {"nope": [0]}})
     with pytest.raises(ArchiveError):
         table({**sound, "element_by_version": {"18000": [0, 0]}})
+    with pytest.raises(ArchiveError):
+        table({**sound, "element_run_variants": {}})
+    with pytest.raises(ArchiveError):
+        table({**sound, "count_variants": {}})
+    with pytest.raises(ArchiveError):
+        table({**sound, "trailer_variants": {}})
+    with pytest.raises(ArchiveError):
+        table(
+            {
+                **sound,
+                "element_run_variants": [
+                    {
+                        "slot": 1,
+                        "predicate_at": 0,
+                        "predicate_width": 1,
+                        "values": [1],
+                        "run": 0,
+                    }
+                ],
+            }
+        )
     with pytest.raises(ArchiveError):
         LayoutTable.from_mapping(
             {
@@ -1011,6 +1204,208 @@ def test_a_run_group_walks_its_count_element_and_trailer() -> None:
     assert verify(blob, 109, layouts).identical
 
 
+# this proves grouped scalar widths can branch on content and document generation
+def test_a_run_group_selects_a_versioned_element_run_from_a_predicate() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "solo": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"lead": 2},
+                    "groups": [
+                        {
+                            "name": "items",
+                            "count": {"back": 2, "width": 2},
+                            "slots": ["*"],
+                            "element": [1],
+                            "element_run_variants": [
+                                {
+                                    "slot": 0,
+                                    "predicate_at": 0,
+                                    "predicate_width": 1,
+                                    "values": [0x7A],
+                                    "run": 3,
+                                    "runs_by_version": {"18000": 5},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            },
+        }
+    )
+    Head = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("solo", 1)
+        + struct.pack("<H", 1)
+        + encode_null()
+    )
+    Modern = segment(Head + b"\x7a\x01\x02\x03\x04", 109, layouts, mo_version=18000)
+    Legacy = segment(Head + b"\x7a\x01\x02", 109, layouts, mo_version=14000)
+    Default = segment(Head + b"\x01", 109, layouts, mo_version=18000)
+    assert Modern[-1].end == len(Head) + 5
+    assert Legacy[-1].end == len(Head) + 3
+    assert Default[-1].end == len(Head) + 1
+    assert verify(
+        Head + b"\x7a\x01\x02\x03\x04", 109, layouts, mo_version=18000
+    ).identical
+
+
+# terminal and child-class branches prove group rules do not depend on specimen offsets
+def test_a_run_group_selects_child_class_and_terminal_trailer_variants() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "solo": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"lead": 2},
+                    "groups": [
+                        {
+                            "name": "items",
+                            "count": {"back": 2, "width": 2},
+                            "slots": ["*"],
+                            "element": [1],
+                            "element_run_variants": [
+                                {
+                                    "slot": 0,
+                                    "last": True,
+                                    "child_classes": ["null"],
+                                    "run": 3,
+                                    "trailer": 0,
+                                },
+                                {
+                                    "slot": 0,
+                                    "child_classes": ["null"],
+                                    "run": 2,
+                                },
+                            ],
+                            "trailer": 4,
+                        }
+                    ],
+                }
+            },
+        }
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("solo", 1)
+        + struct.pack("<H", 2)
+        + encode_null()
+        + b"\x01\x02"
+        + encode_null()
+        + b"\x03\x04\x05"
+    )
+    segments = segment(blob, 109, layouts)
+    assert [item.class_name for item in segments] == ["solo", "null", "null"]
+    assert segments[-1].end == len(blob)
+    assert verify(blob, 109, layouts).identical
+
+
+# a fixed serializer branch can bypass later groups without inventing an on-disk count
+def test_a_run_group_count_variant_can_select_a_terminal_fixed_branch() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "solo": {
+                    "confidence": "confirmed",
+                    "child_slots": [],
+                    "runs": {"lead": 0},
+                    "groups": [
+                        {
+                            "name": "fixed_branch",
+                            "count": {"back": 2, "width": 2},
+                            "count_variants": [
+                                {
+                                    "predicate_at": 0,
+                                    "predicate_width": 2,
+                                    "values": [0],
+                                    "count": 1,
+                                }
+                            ],
+                            "slots": ["*"],
+                            "element": [0],
+                            "element_run_variants": [
+                                {
+                                    "slot": 0,
+                                    "last": True,
+                                    "child_classes": ["null"],
+                                    "run": 1,
+                                    "trailer": 0,
+                                    "stop_groups": True,
+                                }
+                            ],
+                        },
+                        {
+                            "name": "unreached",
+                            "repeat": 1,
+                            "slots": ["*"],
+                            "element": [99],
+                        },
+                    ],
+                }
+            },
+        }
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("solo", 1)
+        + encode_null()
+        + b"\x7a"
+    )
+    segments = segment(blob, 109, layouts)
+    assert [item.class_name for item in segments] == ["solo", "null"]
+    assert segments[-1].end == len(blob)
+    assert verify(blob, 109, layouts).identical
+
+
+def test_a_run_group_count_can_branch_after_a_null_child() -> None:
+    layouts = LayoutTable.from_mapping(
+        {
+            "version": 1,
+            "classes": {
+                "solo": {
+                    "confidence": "partial",
+                    "child_slots": [],
+                    "runs": {"lead": 0},
+                    "groups": [
+                        {
+                            "name": "first",
+                            "repeat": 1,
+                            "slots": ["*"],
+                            "element": [0],
+                        },
+                        {
+                            "name": "second",
+                            "count": {"back": 2, "width": 2},
+                            "count_by_child_class": {
+                                "null": {"at": 0, "width": 2, "lead": 4}
+                            },
+                            "slots": ["*"],
+                            "element": [0],
+                        },
+                    ],
+                }
+            },
+        }
+    )
+    blob = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("solo", 1)
+        + encode_null()
+        + struct.pack("<H", 1)
+        + b"\x00\x00"
+        + encode_null()
+    )
+    segments = segment(blob, 109, layouts)
+    assert [item.offset for item in segments] == [6, 16, 22]
+    assert verify(blob, 109, layouts).identical
+
+
 def test_a_run_group_whose_counts_are_all_zero_reads_no_children() -> None:
     layouts = LayoutTable.from_mapping(
         {
@@ -1077,6 +1472,32 @@ def test_a_conditional_rule_without_a_predicate_is_refused() -> None:
     with pytest.raises(SegmentationError) as failure:
         segment(blob, 109, layouts)
     assert "predicate" in str(failure.value)
+    guarded = _single_class_table(
+        {
+            "confidence": "partial",
+            "child_slots": [],
+            "runs": {},
+            "variable_runs": [
+                {
+                    "slot": "leaf",
+                    "rule": "guard",
+                    "at": 4,
+                    "predicate": "variant",
+                    "predicate_at": 0,
+                    "predicate_width": 4,
+                    "values": [0],
+                }
+            ],
+        }
+    )
+    rejected = (
+        b"\x00" * STREAM_HEADER_SIZE
+        + encode_class_definition("solo", 1)
+        + struct.pack("<I", 1)
+    )
+    with pytest.raises(SegmentationError) as failure:
+        segment(rejected, 109, guarded)
+    assert "rejected value 1" in str(failure.value)
 
 
 def test_container_mo_version_reads_the_storage_name() -> None:
@@ -1269,7 +1690,13 @@ def test_shipped_layout_table_matches_the_recorded_classes() -> None:
             assert elements
             assert slot in set(entry.run_keys()) | {"lead"}
             for element in elements:
-                assert element.rule in {"string", "count", "conditional", "opaque"}
+                assert element.rule in {
+                    "string",
+                    "count",
+                    "conditional",
+                    "guard",
+                    "opaque",
+                }
     recorded = set()
     for label in RECORDED_LABELS:
         path = SEGMENTS / f"segments_{label}.json"
@@ -1288,10 +1715,19 @@ def test_fixture_verification_count_does_not_regress() -> None:
     assert len(streams) == 32
     version = _authored_mo_version()
     identical = 0
-    for _, blob in streams:
+    for name, blob in streams:
+        features = _donor_feature_count(name)
+        seed = FIXTURE_BASE_SEED + features - 1 if features > 0 else FIXTURE_BASE_SEED
+        resolution = resolve_base(
+            blob,
+            seed,
+            layouts,
+            header_size=STREAM_HEADER_SIZE,
+            mo_version=version,
+        )
         report = verify(
             blob,
-            109,
+            resolution.base,
             layouts,
             header_size=STREAM_HEADER_SIZE,
             mo_version=version,

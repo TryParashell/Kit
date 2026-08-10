@@ -1132,8 +1132,6 @@ def _shape_records(
             if child is None:
                 break
             children.append(child)
-        if any(child.location for child in children):
-            raise _DecodeFailure("unsupported BRep shape location")
         record_number = shape_count - ordinal + 1
         if any(child.record <= record_number for child in children):
             raise _DecodeFailure("BRep topology is not ordered bottom-up")
@@ -1144,6 +1142,134 @@ def _shape_records(
             geometry,
         )
     return records
+
+
+# required because freecad stores reusable topology under nested shape placements
+def _ApplyLocations(
+    Curves: tuple[LineCurve, ...],
+    Surfaces: tuple[PlaneSurface, ...],
+    Records: Mapping[int, _ShapeRecord],
+    RootRef: _Reference,
+    Locations: tuple[tuple[float, ...], ...],
+    NamePrefix: str,
+) -> tuple[
+    tuple[LineCurve, ...],
+    tuple[PlaneSurface, ...],
+    dict[int, _ShapeRecord],
+    _Reference,
+]:
+    if not RootRef.location and not any(
+        ChildRef.location for Record in Records.values() for ChildRef in Record.children
+    ):
+        return Curves, Surfaces, dict(Records), RootRef
+
+    PlacedCurves: list[LineCurve] = []
+    PlacedSurfaces: list[PlaneSurface] = []
+    PlacedRecords: dict[int, _ShapeRecord] = {}
+    RecordCache: dict[tuple[int, tuple[float, ...]], int] = {}
+    CurveCache: dict[tuple[int, tuple[float, ...]], int] = {}
+    SurfaceCache: dict[tuple[int, tuple[float, ...]], int] = {}
+
+    # reused curves need distinct coordinates whenever their occurrences move
+    def PlaceCurve(CurveIndex: int, Location: tuple[float, ...]) -> int:
+        CurveKey = (CurveIndex, Location)
+        CachedIndex = CurveCache.get(CurveKey)
+        if CachedIndex is not None:
+            return CachedIndex
+        BaseCurve = Curves[CurveIndex - 1]
+        PlacedIndex = len(PlacedCurves) + 1
+        PlacedCurves.append(
+            LineCurve(
+                f"{NamePrefix}:curve:{PlacedIndex}",
+                _location_point(Location, BaseCurve.origin),
+                _location_direction(Location, BaseCurve.direction),
+                provenance=BaseCurve.provenance,
+                attributes=BaseCurve.attributes,
+            )
+        )
+        CurveCache[CurveKey] = PlacedIndex
+        return PlacedIndex
+
+    # reused surfaces need distinct frames whenever their occurrences move
+    def PlaceSurface(SurfaceIndex: int, Location: tuple[float, ...]) -> int:
+        SurfaceKey = (SurfaceIndex, Location)
+        CachedIndex = SurfaceCache.get(SurfaceKey)
+        if CachedIndex is not None:
+            return CachedIndex
+        BaseSurface = Surfaces[SurfaceIndex - 1]
+        PlacedIndex = len(PlacedSurfaces) + 1
+        PlacedSurfaces.append(
+            PlaneSurface(
+                f"{NamePrefix}:surface:{PlacedIndex}",
+                _location_point(Location, BaseSurface.origin),
+                _location_direction(Location, BaseSurface.normal),
+                _location_direction(Location, BaseSurface.reference_direction),
+                provenance=BaseSurface.provenance,
+                attributes=BaseSurface.attributes,
+            )
+        )
+        SurfaceCache[SurfaceKey] = PlacedIndex
+        return PlacedIndex
+
+    # topology occurrences must inherit every placement in their parent chain
+    def PlaceRecord(RecordIndex: int, Location: tuple[float, ...]) -> int:
+        RecordKey = (RecordIndex, Location)
+        CachedIndex = RecordCache.get(RecordKey)
+        if CachedIndex is not None:
+            return CachedIndex
+        if len(PlacedRecords) >= _MAX_SHAPES:
+            raise _DecodeFailure("located BRep topology exceeds shape bounds")
+        SourceRecord = Records[RecordIndex]
+        ChildRefs: list[_Reference] = []
+        for ChildRef in SourceRecord.children:
+            ChildLoc = (
+                _IDENTITY_LOCATION
+                if not ChildRef.location
+                else Locations[ChildRef.location - 1]
+            )
+            ChildMatrix = _location_product(Location, ChildLoc)
+            ChildRecord = PlaceRecord(ChildRef.record, ChildMatrix)
+            ChildRefs.append(_Reference(ChildRef.orientation, ChildRecord))
+        ScaleValue = _location_scale(Location)
+        Geometry = SourceRecord.geometry
+        if isinstance(Geometry, _VertexData):
+            Geometry = _VertexData(
+                Geometry.tolerance * ScaleValue,
+                _location_point(Location, Geometry.point),
+            )
+        elif isinstance(Geometry, _EdgeData):
+            Geometry = _EdgeData(
+                Geometry.tolerance * ScaleValue,
+                PlaceCurve(Geometry.curve, Location),
+                Geometry.first * ScaleValue,
+                Geometry.last * ScaleValue,
+            )
+        elif isinstance(Geometry, _FaceData):
+            Geometry = _FaceData(
+                Geometry.natural,
+                Geometry.tolerance * ScaleValue,
+                PlaceSurface(Geometry.surface, Location),
+            )
+        PlacedIndex = len(PlacedRecords) + 1
+        PlacedRecords[PlacedIndex] = _ShapeRecord(
+            SourceRecord.kind,
+            SourceRecord.flags,
+            tuple(ChildRefs),
+            Geometry,
+        )
+        RecordCache[RecordKey] = PlacedIndex
+        return PlacedIndex
+
+    RootLoc = (
+        _IDENTITY_LOCATION if not RootRef.location else Locations[RootRef.location - 1]
+    )
+    RootIndex = PlaceRecord(RootRef.record, RootLoc)
+    return (
+        tuple(PlacedCurves),
+        tuple(PlacedSurfaces),
+        PlacedRecords,
+        _Reference(RootRef.orientation, RootIndex),
+    )
 
 
 def _opposite(orientation: str) -> str:
@@ -1528,14 +1654,9 @@ def decode_ascii_brep(
         root = _reference(tokens, shape_count, len(locations))
         if root is None or root.orientation != "+" or tokens.peek() is not None:
             raise _DecodeFailure("unsupported BRep root")
-        if root.location:
-            curves, surfaces, records = _located_model_inputs(
-                tuple(curves),
-                tuple(surfaces),
-                records,
-                locations[root.location - 1],
-            )
-            root = _Reference(root.orientation, root.record)
+        curves, surfaces, records, root = _ApplyLocations(
+            tuple(curves), tuple(surfaces), records, root, locations, id_prefix
+        )
         return _model(
             tuple(curves),
             tuple(surfaces),
