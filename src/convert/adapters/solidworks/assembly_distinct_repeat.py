@@ -158,8 +158,8 @@ def _EncodeCMgr(
                     48: DisplayName,
                     184: 23 + ItemIndex,
                     190: ItemValue.OccurName,
-                    275: ConfigName,
-                    313: ConfigName,
+                    275: ItemValue.ConfigName,
+                    313: ItemValue.ConfigName,
                 },
                 UnitStart,
             )
@@ -223,7 +223,7 @@ def _EncodeConfig(
                     177: ItemValue.TransY,
                     185: ItemValue.TransZ - 0.005,
                     283: 3 + ItemIndex,
-                    293: ConfigName,
+                    293: ItemValue.ConfigName,
                     341: 14 + ItemIndex,
                     379: 14 + BaseShift,
                     381: 17 + BaseShift,
@@ -404,10 +404,6 @@ def EncodePathCore(
     if len(CoreItems) < 3:
         raise SldprtFormatError("distinct assembly history requires three components")
     CompPaths = tuple(ItemValue.CompPath for ItemValue in CoreItems)
-    if len(set(CompPaths)) != len(CompPaths):
-        raise SldprtFormatError(
-            "distinct assembly history requires unique component files"
-        )
     if any(not PureWindowsPath(ItemPath).stem for ItemPath in CompPaths):
         raise SldprtFormatError("distinct assembly component path has no stem")
     StreamsMap = {

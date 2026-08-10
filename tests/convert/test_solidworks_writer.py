@@ -1234,9 +1234,12 @@ def test_generated_parasolid_partition_is_native_brep(tmp_path) -> None:
     explicit = tmp_path / "explicit.SLDPRT"
     result = write_document(source, explicit, allow_carrier=True)
     assert result.metadata["native_brep"] == "generated"
-    assert next(
-        item for item in result.transfers if item.capability is Capability.BREP
-    ).mode.value == "native"
+    assert (
+        next(
+            item for item in result.transfers if item.capability is Capability.BREP
+        ).mode.value
+        == "native"
+    )
     assert result.vendor_loadable is False
     assert result.near_lossless is False
     assert open_document(explicit).brep == source.brep
@@ -1751,7 +1754,7 @@ def test_source_less_assembly_emits_redecodable_native_component_graph() -> None
     assert transfers[Capability.ASSEMBLIES] == "native"
     assert transfers[Capability.ASSEMBLY_MATES] == "carrier"
     assert result.application_usable is False
-    assert result.vendor_loadable is False
+    assert result.vendor_loadable is True
     assert native.name == "Engine"
     assert tuple(item.name for item in native.definitions) == (
         "Engine",

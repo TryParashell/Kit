@@ -12,6 +12,7 @@ from dataclasses import replace
 from io import BytesIO
 import struct
 
+from convert import write_document
 from convert.adapters.solidworks.adapter import (
     _ASSEMBLY_READER_REQUIRED_STREAMS,
     _generated_streams,
@@ -19,6 +20,7 @@ from convert.adapters.solidworks.adapter import (
     _replay_compatibility,
     write_sldprt,
 )
+from convert.adapters.solidworks.assembly_core import AsmCoreItem, EncodeAsmCore
 from convert.adapters.solidworks.assembly import (
     MATE_ADVISORY_LOSS_REASONS,
     MATE_BLOCKING_LOSS_REASONS,
@@ -209,6 +211,36 @@ def test_generated_assembly_attestation_replays_its_own_compatibility() -> None:
     assert attestation["vendor_loadable"] is True
     assert attestation["application_usable"] is False
     assert _replay_compatibility(data) == "native-assembly-with-kit-neutral"
+
+
+# six unique component records verify the recovered distinct-path recurrence
+def test_distinct_component_core_scales_without_opaque_payloads() -> None:
+    CoreItems = tuple(
+        AsmCoreItem(
+            f"unit_{ItemIndex}-1",
+            f"C:\\generated\\unit_{ItemIndex}.SLDPRT",
+            (ItemIndex - 1) * 0.05,
+        )
+        for ItemIndex in range(1, 7)
+    )
+    StreamsMap = EncodeAsmCore("SixDistinct", "Default", CoreItems)
+    HeaderData = StreamsMap["Contents/Config-0-ModelHeader"]
+    assert StreamsMap["Header2"] == HeaderData
+    assert len(StreamsMap["Contents/Config-0-ResolvedFeatures"]) == 5722
+    assert len(StreamsMap["Contents/Config-0-MatesList"]) == 6
+    for ItemValue in CoreItems:
+        assert ItemValue.OccurName.encode("utf-16le") in HeaderData
+        assert ItemValue.CompPath.encode("utf-16le") in HeaderData
+    assert struct.pack("<d", 0.25) in StreamsMap["Contents/Config-0"]
+
+
+# public staged writes must serialize final sibling paths into native headers
+def test_public_assembly_bundle_has_no_staging_paths(tmp_path) -> None:
+    OutputPath = tmp_path / "final" / "Engine.SLDASM"
+    write_document(assembly_document(), OutputPath)
+    HeaderData = SldprtArchive.open(OutputPath).streams["Contents/Config-0-ModelHeader"]
+    assert ".kit-".encode("utf-16le") not in HeaderData
+    assert str(OutputPath.parent.resolve()).encode("utf-16le") in HeaderData
 
 
 def test_incomplete_component_structure_withholds_vendor_loadable() -> None:
