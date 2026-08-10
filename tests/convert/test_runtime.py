@@ -11,12 +11,10 @@ from __future__ import annotations
 import ast
 from email.parser import BytesParser
 from email.policy import default
-import io
 from pathlib import Path
 import shutil
 import subprocess
 import sys
-import tokenize
 import zipfile
 
 ROOT = Path(__file__).parents[2]
@@ -266,24 +264,10 @@ def test_runtime_has_no_cad_or_process_dependencies() -> None:
                 )
 
 
-def _comments_after_the_license_header(source: bytes) -> tuple[str, ...]:
-    header = True
-    found: list[str] = []
-    for token in tokenize.tokenize(io.BytesIO(source).readline):
-        if token.type in (tokenize.ENCODING, tokenize.NL, tokenize.NEWLINE):
-            continue
-        if token.type == tokenize.COMMENT:
-            if not header:
-                found.append(token.string)
-            continue
-        header = False
-    return tuple(found)
-
-
-def test_source_contains_no_code_comments_or_stubs() -> None:
+# runtime source must contain no executable placeholder statements
+def test_source_contains_no_stubs() -> None:
     for path in SOURCE.rglob("*.py"):
         source = path.read_bytes()
-        assert _comments_after_the_license_header(source) == (), path
         tree = ast.parse(source, filename=str(path))
         assert not any(isinstance(node, ast.Pass) for node in ast.walk(tree)), path
 

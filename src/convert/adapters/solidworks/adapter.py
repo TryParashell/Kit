@@ -2086,11 +2086,8 @@ def AsmCoreStreams(
             InstanceItem.configuration_name
             or AssemblyValue.definition(InstanceItem.definition_id).configuration_name
         )
-        if ConfigName and (InstanceConfig or "Default") != ConfigName:
-            raise SldprtFormatError(
-                "direct assembly components use different configurations"
-            )
-        ConfigName = InstanceConfig or "Default"
+        if not ConfigName:
+            ConfigName = "Default"
         MatrixValues = InstanceItem.transform.values
         CoreItems.append(
             AsmCoreItem(
@@ -2099,6 +2096,7 @@ def AsmCoreStreams(
                 MatrixValues[3] / 1000.0,
                 MatrixValues[7] / 1000.0,
                 MatrixValues[11] / 1000.0,
+                InstanceConfig or "Default",
             )
         )
     return EncodeAsmCore(ModelName, ConfigName, tuple(CoreItems))

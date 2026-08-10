@@ -72,7 +72,14 @@ HeaderShiftRefs = frozenset({257, 382, 384, 390})
 
 # one repeated item supplies semantic identity and display translation fields
 class RepeatItem:
-    __slots__ = ("OccurName", "CompPath", "TransX", "TransY", "TransZ")
+    __slots__ = (
+        "OccurName",
+        "CompPath",
+        "TransX",
+        "TransY",
+        "TransZ",
+        "ConfigName",
+    )
 
     # immutable initialization keeps one occurrence coherent across all streams
     def __init__(
@@ -82,12 +89,14 @@ class RepeatItem:
         TransX: float = 0.0,
         TransY: float = 0.0,
         TransZ: float = 0.0,
+        ConfigName: str = "Default",
     ) -> None:
         self.OccurName = OccurName
         self.CompPath = CompPath
         self.TransX = TransX
         self.TransY = TransY
         self.TransZ = TransZ
+        self.ConfigName = ConfigName
 
 
 # one operation tuple retains its typed serializer owner and native field value
@@ -159,8 +168,8 @@ def _EncodeCMgr(
                     48: DisplayName,
                     184: 23 + ItemIndex,
                     190: ItemValue.OccurName,
-                    321: ConfigName,
-                    359: ConfigName,
+                    321: ItemValue.ConfigName,
+                    359: ItemValue.ConfigName,
                 },
                 UnitStart,
             )
@@ -221,7 +230,7 @@ def _EncodeConfig(
                     460: 23 + ItemIndex,
                     466: ItemValue.OccurName,
                     532: 8 + (4 * ItemIndex),
-                    339: ConfigName,
+                    339: ItemValue.ConfigName,
                 },
                 UnitStart,
             )

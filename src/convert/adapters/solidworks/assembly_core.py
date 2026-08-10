@@ -47,6 +47,7 @@ class AsmCoreItem:
     TransX: float = 0.0
     TransY: float = 0.0
     TransZ: float = 0.0
+    ConfigName: str = "Default"
 
 
 # native strings use one semantic component occurrence across coupled streams
@@ -80,6 +81,7 @@ def EncodeAsmCore(
                         ItemValue.TransX,
                         ItemValue.TransY,
                         ItemValue.TransZ,
+                        ItemValue.ConfigName,
                     )
                     for ItemValue in CoreItems
                 ),
@@ -100,6 +102,7 @@ def EncodeAsmCore(
                         ItemValue.TransX,
                         ItemValue.TransY,
                         ItemValue.TransZ,
+                        ItemValue.ConfigName,
                     )
                     for ItemValue in CoreItems
                 ),
@@ -123,16 +126,16 @@ def EncodeAsmCore(
                     0x05B2: AsmPath,
                     0x063C: ModelName,
                     0x066B: OccurName,
-                    0x0713: ConfigName,
-                    0x0739: ConfigName,
+                    0x0713: CoreItems[0].ConfigName,
+                    0x0739: CoreItems[0].ConfigName,
                     0x07AA: DisplayName,
                     0x0838: SecondItem.OccurName,
-                    0x08BB: ConfigName,
-                    0x08E1: ConfigName,
+                    0x08BB: SecondItem.ConfigName,
+                    0x08E1: SecondItem.ConfigName,
                     0x0952: DisplayName,
                     0x09E0: ThirdItem.OccurName,
-                    0x0A63: ConfigName,
-                    0x0A89: ConfigName,
+                    0x0A63: ThirdItem.ConfigName,
+                    0x0A89: ThirdItem.ConfigName,
                 },
             ),
             "Contents/Config-0": EncodeProgram3(
@@ -145,10 +148,10 @@ def EncodeAsmCore(
                     0x02C5: ModelName,
                     0x02F4: OccurName,
                     0x0378: SecondItem.OccurName,
-                    0x04C7: ConfigName,
+                    0x04C7: SecondItem.ConfigName,
                     0x0546: SecondItem.OccurName,
                     0x05CA: ThirdItem.OccurName,
-                    0x0719: ConfigName,
+                    0x0719: ThirdItem.ConfigName,
                     0x0798: ThirdItem.OccurName,
                 },
             ),
@@ -193,12 +196,12 @@ def EncodeAsmCore(
                         0x05B2: AsmPath,
                         0x063C: ModelName,
                         0x066B: OccurName,
-                        0x0713: ConfigName,
-                        0x0739: ConfigName,
+                        0x0713: CoreItems[0].ConfigName,
+                        0x0739: CoreItems[0].ConfigName,
                         0x07AA: DisplayName,
                         0x0838: SecondItem.OccurName,
-                        0x08AB: ConfigName,
-                        0x08D1: ConfigName,
+                        0x08AB: SecondItem.ConfigName,
+                        0x08D1: SecondItem.ConfigName,
                     },
                 ),
                 "Contents/Config-0": EncodeProgramDistinct(
@@ -211,7 +214,7 @@ def EncodeAsmCore(
                         0x02C5: ModelName,
                         0x02F4: OccurName,
                         0x0378: SecondItem.OccurName,
-                        0x04B7: ConfigName,
+                        0x04B7: SecondItem.ConfigName,
                         0x0536: SecondItem.OccurName,
                     },
                 ),
@@ -246,12 +249,12 @@ def EncodeAsmCore(
                     0x04D9: DisplayName,
                     0x05B8: ModelName,
                     0x05EB: OccurName,
-                    0x067F: ConfigName,
-                    0x06A5: ConfigName,
+                    0x067F: CoreItems[0].ConfigName,
+                    0x06A5: CoreItems[0].ConfigName,
                     0x0716: DisplayName,
                     0x07A4: SecondItem.OccurName,
-                    0x0827: ConfigName,
-                    0x084D: ConfigName,
+                    0x0827: SecondItem.ConfigName,
+                    0x084D: SecondItem.ConfigName,
                 },
             ),
             "Contents/Config-0": EncodeProgram2(
@@ -263,7 +266,7 @@ def EncodeAsmCore(
                     0x0245: ModelName,
                     0x0278: OccurName,
                     0x02FC: SecondItem.OccurName,
-                    0x044B: ConfigName,
+                    0x044B: SecondItem.ConfigName,
                     0x04CA: SecondItem.OccurName,
                 },
             ),
@@ -295,8 +298,8 @@ def EncodeAsmCore(
                 0x04D9: DisplayName,
                 0x05B8: ModelName,
                 0x05EB: OccurName,
-                0x067F: ConfigName,
-                0x06A5: ConfigName,
+                0x067F: CoreItems[0].ConfigName,
+                0x06A5: CoreItems[0].ConfigName,
             },
         ),
         "Contents/Config-0": EncodeProgram(
