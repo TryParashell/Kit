@@ -157,11 +157,11 @@ from .format import (
 )
 from .native import (
     NativeDimension,
-    NativeEquation,
     NativeFeature,
     NativeMarker,
     NativeModel,
     NativeOperation,
+    NativePlane,
     NativeProfile,
     NativeSketch,
     NativeAssemblyEnvelope,
@@ -262,6 +262,7 @@ class _AssemblyBundle:
     names: Mapping[str, str]
     payloads: Mapping[Path, bytes]
     complete: bool
+    NativeCaps: frozenset[Capability] = frozenset()
 
 
 _WRAPPER_METADATA_KEYS = _SOURCE_KEYS | frozenset(
@@ -769,6 +770,8 @@ class SldprtAdapter:
                 document,
                 template,
                 selected_bundle_names,
+                BundleComplete=(bundle.complete if bundle.names else None),
+                BundleCapabilities=bundle.NativeCaps,
             )
             if portable_carrier:
                 generated = replace(
@@ -1285,7 +1288,14 @@ def _assembly_bundle(
     payloads: dict[Path, bytes] = {}
     used = {destination.name.casefold()}
     complete = True
+    BundleCaps: set[Capability] = set()
     targets: list[tuple[ComponentDefinition, CadDocument, str, Path]] = []
+    FinalValue = settings.values.get("final_destination")
+    FinalPath = (
+        Path(FinalValue).expanduser().resolve()
+        if isinstance(FinalValue, (str, Path))
+        else destination
+    )
     for definition in definitions:
         key = definition.document_id or definition.id
         if key in names:
@@ -1320,7 +1330,7 @@ def _assembly_bundle(
             candidate = f"{stem}-{index}{suffix}"
         used.add(candidate.casefold())
         target = (destination.parent / candidate).resolve()
-        TargetName = str(target)
+        TargetName = str((FinalPath.parent / candidate).resolve())
         names[key] = TargetName
         names[definition.id] = TargetName
         if definition.document_id:
@@ -1360,6 +1370,8 @@ def _assembly_bundle(
         )
         if not native_result:
             complete = False
+        else:
+            BundleCaps.update(result.native_capabilities)
     if any(
         (definition.document_id or definition.id) not in names
         for definition in definitions
@@ -1369,6 +1381,7 @@ def _assembly_bundle(
         frozen_mapping(names),
         frozen_mapping(payloads),
         complete,
+        frozenset(BundleCaps),
     )
 
 
@@ -1695,9 +1708,8 @@ def _attested_native_proof(
             proof = _generated_streams(
                 document,
                 bundle_names=bundle_names,
-                BundleComplete=(
-                    Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps
-                ),
+                BundleComplete=(Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps),
+                BundleCapabilities=AttestedNativeCaps,
             )
         elif KEYWORDS_STREAM in streams and RESOLVED_FEATURES_STREAM in streams:
             proof = _patch_native_template(document, streams, {})
@@ -1705,9 +1717,8 @@ def _attested_native_proof(
             proof = _generated_streams(
                 document,
                 bundle_names=bundle_names,
-                BundleComplete=(
-                    Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps
-                ),
+                BundleComplete=(Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps),
+                BundleCapabilities=AttestedNativeCaps,
             )
     except (KeyError, SldprtFormatError, TypeError, ValueError, struct.error):
         return None
@@ -1782,6 +1793,7 @@ def _generated_streams(
     template: bytes | None = None,
     bundle_names: Mapping[str, str] | None = None,
     BundleComplete: bool | None = None,
+    BundleCapabilities: frozenset[Capability] = frozenset(),
 ) -> _GeneratedStreams:
     portable = _document_without_source(document)
     if isinstance(document.source.attributes.get("embedded_source_format_id"), str):
@@ -1890,11 +1902,7 @@ def _generated_streams(
     )
     if (
         portable.assembly is not None
-        and (
-            BundleComplete
-            if BundleComplete is not None
-            else bundle_names is not None
-        )
+        and (BundleComplete if BundleComplete is not None else bundle_names is not None)
         and all(
             DefinitionItem.id == portable.assembly.root_definition_id
             or DefinitionItem.document_id in bundle_names
@@ -1903,6 +1911,7 @@ def _generated_streams(
         )
     ):
         NativeCaps.add(Capability.COMPONENT_DOCUMENTS)
+        NativeCaps.update(BundleCapabilities)
     if (
         portable.assembly is None
         and payload is not None
@@ -2051,9 +2060,7 @@ def AsmCoreStreams(
         ModelNode = next(
             (
                 NodeItem
-                for NodeItem in XmlRoot.findall(
-                    "sw:swModelList/sw:swModel", XmlSpace
-                )
+                for NodeItem in XmlRoot.findall("sw:swModelList/sw:swModel", XmlSpace)
                 if NodeItem.attrib.get("id") == str(TargetId)
             ),
             None,
@@ -2071,15 +2078,14 @@ def AsmCoreStreams(
             ),
             None,
         )
-        if FileNode is None or not (
-            CompPath := FileNode.attrib.get("swPath", "")
-        ):
+        if FileNode is None or not (CompPath := FileNode.attrib.get("swPath", "")):
             raise SldprtFormatError(
                 "assembly component file is absent from native tree"
             )
-        InstanceConfig = InstanceItem.configuration_name or AssemblyValue.definition(
-            InstanceItem.definition_id
-        ).configuration_name
+        InstanceConfig = (
+            InstanceItem.configuration_name
+            or AssemblyValue.definition(InstanceItem.definition_id).configuration_name
+        )
         if ConfigName and (InstanceConfig or "Default") != ConfigName:
             raise SldprtFormatError(
                 "direct assembly components use different configurations"
@@ -2454,9 +2460,6 @@ def _patch_native_template(
     patched_selections = _selections(patched_model)
     patched_timeline = _timeline(patched_model, patched_selections)
     original_parameters = _parameters(original_model)
-    original_planes = _planes(
-        original_model, {parameter.id for parameter in original_parameters}
-    )
     original_sketches = _sketches(
         original_model, {parameter.id for parameter in original_parameters}
     )
@@ -6470,7 +6473,9 @@ def _timeline(
                 sketch_id=(
                     _sketch_id(operation.profile_id)
                     if operation is not None and operation.profile_id in sketch_by_id
-                    else _sketch_id(feature.object_id) if sketch is not None else None
+                    else _sketch_id(feature.object_id)
+                    if sketch is not None
+                    else None
                 ),
                 parameter_ids=parameter_ids,
                 operation=operation_value,
