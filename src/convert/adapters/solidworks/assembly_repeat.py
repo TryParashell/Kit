@@ -112,8 +112,7 @@ def _SliceOps(
     return tuple(
         Operation
         for Operation in StreamPrograms[StreamName]
-        if Operation[0] >= StartPos
-        and (EndPos is None or Operation[0] < EndPos)
+        if Operation[0] >= StartPos and (EndPos is None or Operation[0] < EndPos)
     )
 
 
@@ -203,9 +202,7 @@ def _EncodeConfig(
         UnitOps = _SliceOps("Contents/Config-0", UnitStart, UnitStart + UnitWidth)
         HashValue = (
             next(
-                Operation[4]
-                for Operation in UnitOps
-                if Operation[0] - UnitStart == 199
+                Operation[4] for Operation in UnitOps if Operation[0] - UnitStart == 199
             )
             if ItemIndex <= TracedCount
             else _OccurHash(ItemValue.OccurName)

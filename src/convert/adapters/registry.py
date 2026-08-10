@@ -518,11 +518,17 @@ def _write_path_staged(
         with TemporaryDirectory(prefix=prefix, dir=final.parent) as temporary:
             staging = Path(temporary)
             staged_destination = staging / final.name
+            OptionValues = dict(options.values)
+            OptionValues["final_destination"] = str(final)
             result = _checked_write(
                 document,
                 adapter,
                 staged_destination,
-                replace(options, overwrite=False),
+                replace(
+                    options,
+                    overwrite=False,
+                    values=frozen_mapping(OptionValues),
+                ),
                 allow_carrier,
                 require_self_contained,
             )
