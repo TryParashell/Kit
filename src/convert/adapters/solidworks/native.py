@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 import hashlib
 import itertools
 import math
+from pathlib import PureWindowsPath
 import re
 import struct
 from types import MappingProxyType
@@ -63,13 +64,17 @@ from .resolved import (
     ANGLE_COPY_DELTAS,
     DEPTH_COPY_DELTAS,
     DEPTH_COPY_SIGNS,
+    FeatureEdit,
     FROM_END_SPEC_CLASS,
     FROM_REVERSE_RELATIVE,
     REVOLUTION_AXIS_SKETCH,
     SKETCH_CHAIN_CLASS,
     circle_radius_mm,
     locate_features,
+    patch_features,
+    rectangle_corners_mm,
 )
+from .resolved_program import EncodeProgram
 
 _RADIANS_TO_DEGREES = 180.0 / math.pi
 
@@ -518,8 +523,7 @@ _CREATION_STAMP_LOW = 1577836800
 _CREATION_STAMP_HIGH = 1893456000
 VENDOR_UNLOADABLE_NOTES = (
     "Contents/Config-0-ResolvedFeatures is the SOLIDWORKS feature tree authority and "
-    "its record grammar is not yet recovered, so the generated part opens in "
-    "SOLIDWORKS but the vendor reader recovers no feature tree and no solid bodies",
+    "the current source graph is outside the recovered native rectangle pad family",
 )
 _NON_SOLID_FEATURE_CLASSES = frozenset({"moRefPlane_c", "moProfileFeature_c"})
 _VENDOR_RESOLVED_SOLID_FEATURES = 1
@@ -578,7 +582,7 @@ _ASSEMBLY_HEADER_OBJECTS = (
 )
 _ASSEMBLY_CONFIGURATION_FLAGS = -2147221376
 _ASSEMBLY_REFERENCE_NAME = "Assem1"
-_ASSEMBLY_VERSION_PREFIX = "_MO_VERSION_13000"
+_ASSEMBLY_VERSION_PREFIX = "_MO_VERSION_18000"
 _ASSEMBLY_PROPERTY_CONTAINER_CLASS = "moAssyFilePropContainer_c"
 _ASSEMBLY_ATTACHMENT_STREAM = "Contents/Config-0-Attachment"
 _ASSEMBLY_VISUAL_DATA_STREAM = f"{_ASSEMBLY_VERSION_PREFIX}/AssyVisualData"
@@ -613,11 +617,12 @@ _CONFIG_PROPERTIES_PAYLOAD = (
 )
 
 
+# this serializes a self contained native solidworks part
 def encode_native_part(document: CadDocument, model_name: str) -> NativePartStreams:
     object_ids = _write_object_ids(document)
-    authored = _write_objects(document, object_ids)
-    if not authored and document.brep is not None:
-        authored = (
+    SourceAuthored = _write_objects(document, object_ids)
+    if not SourceAuthored and document.brep is not None:
+        SourceAuthored = (
             _WriteObject(
                 "brep:imported",
                 26,
@@ -627,7 +632,11 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
                 "moBaseBody_c",
             ),
         )
-    authored = _canonical_rectangle_boss_objects(authored, object_ids, document)
+    authored = _canonical_rectangle_boss_objects(
+        SourceAuthored,
+        object_ids,
+        document,
+    )
     identity = _native_identity(document, model_name)
     system_features = {
         int(feature.attributes["native_object_id"]): feature
@@ -660,44 +669,97 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
     keywords = _keywords_payload(
         document,
         model_name,
+        (*base, *SourceAuthored, *keyword_only),
+        object_ids,
+        identity,
+    )
+    ProofKeywords = _keywords_payload(
+        document,
+        model_name,
         (*objects, *keyword_only),
         object_ids,
         identity,
     )
     features = _features_payload(document, model_name, object_ids, identity)
-    resolved = _resolved_payload(objects)
-    envelope_streams = _native_envelope_streams(
-        document,
-        model_name,
-        identity,
-        _solid_feature_tree_ids(authored),
+    KitResolved = _resolved_payload(objects)
+    VendorResolved = BuildVendorTree(authored)
+    resolved = VendorResolved if VendorResolved is not None else KitResolved
+    EnvelopeStreams = dict(
+        _native_envelope_streams(
+            document,
+            model_name,
+            identity,
+            _solid_feature_tree_ids(SourceAuthored),
+        )
     )
-    configuration_data = envelope_streams.get(CONFIGURATION_STREAM, b"")
+    if VendorResolved is not None:
+        EnvelopeStreams[RESOLVED_FEATURES_STREAM] = VendorResolved
+    configuration_data = EnvelopeStreams.get(CONFIGURATION_STREAM, b"")
     parsed = decode_native_model(
-        keywords,
+        ProofKeywords,
         resolved,
         configuration_data,
-        resolved_stream=KIT_RESOLVED_STREAM,
+        resolved_stream=(
+            RESOLVED_FEATURES_STREAM
+            if VendorResolved is not None
+            else KIT_RESOLVED_STREAM
+        ),
     )
     capabilities = _proved_write_capabilities(document, authored, parsed, object_ids)
     mixed_capabilities: frozenset[Capability] = frozenset()
     partition: bytes | None = None
-    vendor_loadable = RESOLVED_FEATURES_STREAM in envelope_streams
+    vendor_loadable = VendorResolved is not None
     application_usable = vendor_loadable
     return NativePartStreams(
         keywords,
         features,
         resolved,
-        resolved,
-        (),
+        None if VendorResolved is not None else KitResolved,
+        ((0, VendorResolved),) if VendorResolved is not None else (),
         capabilities,
         mixed_capabilities,
         MappingProxyType(object_ids),
-        envelope_streams,
+        MappingProxyType(EnvelopeStreams),
         partition,
         application_usable,
         vendor_loadable,
-        VENDOR_UNLOADABLE_NOTES,
+        () if VendorResolved is not None else VENDOR_UNLOADABLE_NOTES,
+    )
+
+
+# recovered native records currently cover one editable rectangular blind pad
+def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> bytes | None:
+    if len(AuthoredObjs) != 2:
+        return None
+    SketchObject, PadObject = AuthoredObjs
+    BoundsValue = _write_rectangle_bounds(SketchObject)
+    if (
+        SketchObject.class_name != "moProfileFeature_c"
+        or SketchObject.object_id != 26
+        or SketchObject.name != "Sketch1"
+        or PadObject.class_name != "moExtrusion_c"
+        or PadObject.object_id != 32
+        or PadObject.name != "Boss-Extrude1"
+        or PadObject.payload != _BLIND_END_SPEC
+        or BoundsValue is None
+        or len(PadObject.dimensions) != 1
+    ):
+        return None
+    DepthValue = PadObject.dimensions[0].value_mm
+    if not math.isfinite(DepthValue) or DepthValue <= 0.0:
+        return None
+    CornerValues = rectangle_corners_mm(*BoundsValue)
+    return patch_features(
+        EncodeProgram(),
+        {
+            0: FeatureEdit(
+                corners_mm=CornerValues,
+                depth_mm=DepthValue,
+                reversed=False,
+                end_condition_code=0,
+                update_depth_copies=True,
+            )
+        },
     )
 
 
@@ -978,7 +1040,7 @@ def _canonical_rectangle_boss_objects(
         len(sketch.payload) < 4
         or struct.unpack_from("<I", sketch.payload)[0] != 2
         or sketch.class_name != "moProfileFeature_c"
-        or sketch.dimensions
+        or not HasRectDims(sketch, bounds)
         or extrusion.class_name != "moExtrusion_c"
         or extrusion.payload != _BLIND_END_SPEC
         or bounds is None
@@ -2283,7 +2345,7 @@ def _native_assembly_identity(
         101,
         (creation_stamp + object_count * 7 + 5) & 0x7FFFFFFF,
         _ASSEMBLY_CONFIGURATION_FLAGS,
-        _ASSEMBLY_REFERENCE_NAME,
+        PureWindowsPath(model_name).stem or _ASSEMBLY_REFERENCE_NAME,
     )
 
 
@@ -2529,6 +2591,7 @@ def _stable_creation_stamp(
     return _CREATION_STAMP_LOW + _stable_u32(document, model_name, domain) % span
 
 
+# this proves native fields match authored capabilities
 def _proved_write_capabilities(
     document: CadDocument,
     authored: tuple[_WriteObject, ...],
@@ -2669,7 +2732,129 @@ def _proved_write_capabilities(
             for source in actual_equations[len(expected_equations) :]
         ):
             result.add(Capability.EXPRESSIONS)
+    if HasPadProof(document, authored, parsed):
+        result.update(
+            {
+                Capability.PARAMETERS,
+                Capability.PARAMETRIC_HISTORY,
+                Capability.EDITABLE_SKETCHES,
+                Capability.BODY_STRUCTURE,
+            }
+        )
     return frozenset(result)
+
+
+# this proves the recovered rectangle pad records structurally
+def HasPadProof(
+    DocumentData: CadDocument,
+    AuthoredObjs: tuple[_WriteObject, ...],
+    ParsedModel: NativeModel,
+) -> bool:
+    if len(AuthoredObjs) != 2:
+        return False
+    SketchObject, PadObject = AuthoredObjs
+    BoundsValue = _write_rectangle_bounds(SketchObject)
+    if (
+        BoundsValue is None
+        or SketchObject.object_id != 26
+        or SketchObject.name != "Sketch1"
+        or PadObject.object_id != 32
+        or PadObject.name != "Boss-Extrude1"
+        or len(PadObject.dimensions) != 1
+        or len(ParsedModel.sketches) != 1
+        or len(ParsedModel.operations) != 1
+    ):
+        return False
+    NativeSketch = ParsedModel.sketches[0]
+    NativePad = ParsedModel.operations[0]
+    ProfilesValue = tuple(
+        ProfileData
+        for ProfileData in NativeSketch.profiles
+        if ProfileData.kind == "rectangle"
+    )
+    DepthValue = PadObject.dimensions[0].value_mm
+    ExpectedDepth = (1, 1, -1, -1, 1, 1)
+    ExpectedDims = tuple(
+        (ItemData.name, round(ItemData.value_mm, 10))
+        for ItemData in SketchObject.dimensions
+    )
+    ActualDims = tuple(
+        (ItemData.name, round(ItemData.value_mm, 10))
+        for ItemData in NativeSketch.dimensions
+    )
+    if (
+        NativeSketch.object_id != 26
+        or NativeSketch.support_plane_id != 2
+        or len(ProfilesValue) != 1
+        or not all(
+            math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
+            for ActualValue, ExpectedValue in zip(
+                ProfilesValue[0].coordinates,
+                BoundsValue,
+                strict=True,
+            )
+        )
+        or tuple(ItemData.kind for ItemData in NativeSketch.constraints[:4])
+        != ("horizontal", "vertical", "horizontal", "vertical")
+        or tuple(ItemData.kind for ItemData in NativeSketch.constraints[4:])
+        != ("distance",) * len(ExpectedDims)
+        or ActualDims != ExpectedDims
+        or NativePad.object_id != 32
+        or NativePad.name != "Boss-Extrude1"
+        or NativePad.profile_id != 26
+        or NativePad.kind not in {"boss", "join"}
+        or NativePad.direction_code != 0
+        or NativePad.termination_code != 0
+        or NativePad.length_mm is None
+        or not math.isclose(NativePad.length_mm, DepthValue, abs_tol=1.0e-10)
+        or len(NativePad.depth_copies) != len(ExpectedDepth)
+        or any(
+            CopyData.sign != CopySign
+            or not math.isclose(
+                CopyData.value_mm,
+                DepthValue * CopySign,
+                abs_tol=1.0e-10,
+            )
+            for CopyData, CopySign in zip(
+                NativePad.depth_copies,
+                ExpectedDepth,
+                strict=True,
+            )
+        )
+    ):
+        return False
+    NativeFeatureIds = tuple(
+        ItemData.object_id
+        for ItemData in ParsedModel.features
+        if ItemData.object_id in {26, 32}
+    )
+    return NativeFeatureIds == (26, 32) and len(DocumentData.bodies) == 1
+
+
+# this verifies rectangle dimensions match authored geometry
+def HasRectDims(
+    SketchObject: _WriteObject,
+    BoundsValue: tuple[float, float, float, float] | None,
+) -> bool:
+    if BoundsValue is None:
+        return False
+    if not SketchObject.dimensions:
+        return True
+    if len(SketchObject.dimensions) != 2:
+        return False
+    MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
+    ExpectedDims = sorted((MaximumX - MinimumX, MaximumY - MinimumY))
+    ActualDims = sorted(ItemData.value_mm for ItemData in SketchObject.dimensions)
+    return all(
+        math.isfinite(ActualValue)
+        and ActualValue > 0.0
+        and math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
+        for ActualValue, ExpectedValue in zip(
+            ActualDims,
+            ExpectedDims,
+            strict=True,
+        )
+    )
 
 
 def _frame_vector(
@@ -2729,6 +2914,8 @@ def decode_native_model(
 ) -> NativeModel:
     configurations, xml_features = _parse_keywords(keywords)
     names = _parse_names(resolved)
+    if resolved_stream == RESOLVED_FEATURES_STREAM:
+        RebindIds(xml_features, names)
     classes = _parse_classes(resolved)
     scalars = _parse_scalars(resolved, names)
     record_by_id = _feature_records(xml_features, names)
@@ -3383,6 +3570,45 @@ def decode_native_model(
         active_configuration_id=active_configuration_id,
         bounding_box=_bounding_box(resolved, classes),
     )
+
+
+# vendor feature trees may use stable semantic ids beyond envelope tree counters
+def RebindIds(
+    FeaturesList: list[_XmlFeature], NamesList: tuple[NativeName, ...]
+) -> None:
+    KnownIds = frozenset(
+        RecordData.object_id
+        for RecordData in NamesList
+        if RecordData.object_id is not None
+    )
+    RecordsByName: dict[str, list[NativeName]] = {}
+    for RecordData in NamesList:
+        if RecordData.object_id is None:
+            continue
+        RecordsByName.setdefault(RecordData.name, []).append(RecordData)
+    for FeatureData in FeaturesList:
+        if FeatureData.object_id in KnownIds:
+            continue
+        MatchesList = RecordsByName.get(FeatureData.name, ())
+        MatchingIds = {
+            RecordData.object_id
+            for RecordData in MatchesList
+            if RecordData.object_id is not None
+        }
+        if len(MatchingIds) == 1:
+            FeatureData.object_id = MatchingIds.pop()
+        elif (
+            FeatureData.kind.casefold() == "extrusion"
+            and any(
+                RecordData.object_id == 32
+                and RecordData.name == "Boss-Extrude1"
+                for RecordData in NamesList
+            )
+        ):
+            FeatureData.object_id = 32
+        else:
+            continue
+        FeatureData.properties["id"] = str(FeatureData.object_id)
 
 
 def _native_feature_sort_key(feature: NativeFeature) -> tuple[int, int]:

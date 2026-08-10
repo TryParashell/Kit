@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import PureWindowsPath
 import math
@@ -696,6 +696,11 @@ class NativeAssembly:
     application_version: int
 
 
+# this creates immutable empty diagnostics maps for dataclass defaults
+def EmptyTupleMap() -> Mapping[str, tuple[str, ...]]:
+    return MappingProxyType({})
+
+
 @dataclass(frozen=True, slots=True)
 class NativeMateStreamReport:
     streams: Mapping[str, bytes]
@@ -703,7 +708,9 @@ class NativeMateStreamReport:
     encoded_mate_ids: tuple[str, ...]
     unsupported_mate_ids: tuple[str, ...]
     losses: Mapping[str, tuple[str, ...]]
-    unsupported_reasons: Mapping[str, tuple[str, ...]] = MappingProxyType({})
+    unsupported_reasons: Mapping[str, tuple[str, ...]] = field(
+        default_factory=EmptyTupleMap
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -716,8 +723,12 @@ class NativeAssemblyEncoding:
     mates_complete: bool
     unsupported_mate_ids: tuple[str, ...]
     generated_mate_ids: tuple[str, ...] = ()
-    generated_mate_losses: Mapping[str, tuple[str, ...]] = MappingProxyType({})
-    unsupported_mate_reasons: Mapping[str, tuple[str, ...]] = MappingProxyType({})
+    generated_mate_losses: Mapping[str, tuple[str, ...]] = field(
+        default_factory=EmptyTupleMap
+    )
+    unsupported_mate_reasons: Mapping[str, tuple[str, ...]] = field(
+        default_factory=EmptyTupleMap
+    )
 
 
 def encode_native_assembly(
@@ -804,7 +815,7 @@ def encode_native_assembly(
         {
             "xmlns": "http://www.solidworks.com/sw2003/schema",
             "swObjCount": str(max(object_ids.values(), default=0)),
-            "swVersion": "13000",
+            "swVersion": "18000",
         },
     )
     header = ET.SubElement(
@@ -1807,12 +1818,21 @@ def decode_native_assembly(
     )
 
 
+# mate decoding accepts the native six byte zero-record representation
 def decode_mate_list(
     data: bytes, stream: str = "", owner_definition_id: int = 0
 ) -> NativeMateList:
     if len(data) < 6:
         raise SldprtFormatError(f"mate stream is truncated: {stream}")
     native_id, declared_count = struct.unpack_from("<IH", data, 0)
+    if declared_count == 0 and len(data) == 6:
+        return NativeMateList(
+            native_id=native_id,
+            declared_count=0,
+            owner_definition_id=owner_definition_id,
+            mates=(),
+            stream=stream,
+        )
     class_offset = data.find(CLASS_MARKER, 6)
     if class_offset < 0 or class_offset + 6 > len(data):
         raise SldprtFormatError(f"mate stream has no class table: {stream}")

@@ -131,6 +131,7 @@ from .assembly import (
     decode_native_assembly,
     encode_native_assembly,
 )
+from .assembly_core import AsmCoreItem, EncodeAsmCore
 from .container import SldprtArchive, SldprtFormatError, build_sldprt
 from .format import (
     COMPONENT_TREE_STREAM,
@@ -189,11 +190,7 @@ _SOURCE_SHA256_KEY = "solidworks_source_sha256"
 _SOURCE_SEMANTIC_SHA256_KEY = "solidworks_source_semantic_sha256"
 _SOURCE_FORMAT_KEY = "solidworks_source_format_id"
 _UNSYNTHESISED_ASSEMBLY_STREAMS = (
-    "Contents/CMgr",
-    "Contents/Config-0",
     "Contents/Config-0-LWDATA",
-    RESOLVED_FEATURES_STREAM,
-    "Contents/Definition",
     DISPLAY_LISTS_STREAM,
     "Contents/User Units Table",
     "SwDocContentMgr/SwDocContentMgrInfo",
@@ -219,7 +216,7 @@ _ASSEMBLY_REWRITABLE_DONOR_STREAMS = frozenset(
         COMPONENT_TREE_STREAM,
     }
 )
-_VENDOR_REJECTED_ASSEMBLY_RECORDS = ("Contents/Config-0-ModelHeader",)
+_VENDOR_REJECTED_ASSEMBLY_RECORDS: tuple[str, ...] = ()
 _ATTESTED_COMPATIBILITIES = frozenset(
     {
         "kit-neutral-only",
@@ -1331,13 +1328,16 @@ def _assembly_bundle(
             index += 1
             candidate = f"{stem}-{index}{suffix}"
         used.add(candidate.casefold())
-        target = destination.parent / candidate
-        names[key] = candidate
-        names[definition.id] = candidate
+        target = (destination.parent / candidate).resolve()
+        TargetName = str(target)
+        names[key] = TargetName
+        names[definition.id] = TargetName
         if definition.document_id:
-            names[definition.document_id] = candidate
+            names[definition.document_id] = TargetName
         targets.append((definition, component, candidate, target))
-    available_names = {name.casefold() for name in names.values()}
+    available_names = {
+        PureWindowsPath(NameValue).name.casefold() for NameValue in names.values()
+    }
     for definition, component, candidate, target in targets:
         buffer = BytesIO()
         values = dict(settings.values)
@@ -1759,6 +1759,7 @@ def _replay_compatibility(data: bytes) -> str:
     )
 
 
+# this assembles independently serialized solidworks document streams
 def _generated_streams(
     document: CadDocument,
     template: bytes | None = None,
@@ -1794,6 +1795,7 @@ def _generated_streams(
     part_capabilities: frozenset[Capability] = frozenset()
     mixed_capabilities: frozenset[Capability] = frozenset()
     part_partition: bytes | None = None
+    PartObjectIds: Mapping[str, int] = {}
     part_application_usable = False
     part_vendor_loadable = False
     part_donor_notes: tuple[str, ...] = ()
@@ -1815,15 +1817,19 @@ def _generated_streams(
         part_capabilities = part.native_capabilities
         mixed_capabilities = part.mixed_capabilities
         part_partition = part.partition
+        PartObjectIds = part.object_ids
         part_application_usable = part.application_usable
         part_vendor_loadable = part.vendor_loadable
         part_donor_notes = part.donor_notes
     else:
+        RootName = portable.assembly.definition(
+            portable.assembly.root_definition_id
+        ).name
+        AssemblyName = RootName or model_name or "Assembly"
         encoding = encode_native_assembly(
             portable.assembly,
             portable.configurations,
-            model_name
-            or portable.assembly.definition(portable.assembly.root_definition_id).name,
+            AssemblyName,
             bundle_names,
         )
         preserved_mates, mates_complete = _preserved_generated_mate_streams(
@@ -1840,28 +1846,48 @@ def _generated_streams(
             )
         envelope = encode_native_assembly_envelope(
             portable,
-            model_name
-            or portable.assembly.definition(portable.assembly.root_definition_id).name,
+            AssemblyName,
             _generated_occurrence_labels(portable.assembly),
             tuple(mate.name for mate in portable.assembly.mates),
         )
         streams.update(envelope.streams)
         streams[COMPONENT_TREE_STREAM] = encoding.component_tree
         streams.update(encoding.mate_streams)
+        streams.update(AsmCoreStreams(portable.assembly, encoding, AssemblyName))
         assembly_envelope_complete = envelope.envelope_complete
         assembly_notes = _generated_assembly_notes(encoding, envelope, streams)
     if part_partition is not None:
         payload = part_partition
         native_brep = "generated"
     else:
-        payload, native_brep = _parasolid_payload(portable)
+        payload, native_brep = _parasolid_payload(portable, PartObjectIds)
     if payload is not None:
         streams[PARTITION_STREAM] = payload
-    native_capabilities = (
-        _generated_assembly_capabilities(portable.assembly, encoding, streams)
+    NativeCaps = set(
+        _generated_assembly_capabilities(
+            portable.assembly, encoding, streams, portable.configurations
+        )
         if portable.assembly is not None and encoding is not None
         else part_capabilities
     )
+    if (
+        portable.assembly is not None
+        and bundle_names is not None
+        and all(
+            DefinitionItem.id == portable.assembly.root_definition_id
+            or DefinitionItem.document_id in bundle_names
+            or DefinitionItem.id in bundle_names
+            for DefinitionItem in portable.assembly.definitions
+        )
+    ):
+        NativeCaps.add(Capability.COMPONENT_DOCUMENTS)
+    if (
+        portable.assembly is None
+        and payload is not None
+        and native_brep in {"generated", "preserved"}
+    ):
+        NativeCaps.update({Capability.BREP, Capability.NATIVE_PAYLOADS})
+    native_capabilities = frozenset(NativeCaps)
     proof_transfers = _solidworks_transfers(
         _required_capabilities(portable),
         native_capabilities,
@@ -1989,6 +2015,66 @@ def _generated_occurrence_labels(assembly: AssemblyData) -> tuple[str, ...]:
         )
         labels.append(f"{base_name}{suffix}")
     return tuple(labels)
+
+
+# native history uses the direct root occurrence and its resolved file path
+def AsmCoreStreams(
+    AssemblyValue: AssemblyData,
+    EncodingValue: NativeAssemblyEncoding,
+    ModelName: str,
+) -> Mapping[str, bytes]:
+    DirectItems = AssemblyValue.children(AssemblyValue.root_definition_id)
+    if not 1 <= len(DirectItems) <= 2:
+        raise SldprtFormatError(
+            "first-principles assembly history requires one or two direct components"
+        )
+    XmlRoot = ET.fromstring(EncodingValue.component_tree)
+    XmlSpace = {"sw": "http://www.solidworks.com/sw2003/schema"}
+    OccurNames = _generated_occurrence_labels(AssemblyValue)
+    CoreItems: list[AsmCoreItem] = []
+    ConfigName = ""
+    for InstanceItem in DirectItems:
+        InstanceIndex = AssemblyValue.instances.index(InstanceItem)
+        TargetId = EncodingValue.definition_ids[InstanceItem.definition_id]
+        ModelNode = next(
+            (
+                NodeItem
+                for NodeItem in XmlRoot.findall(
+                    "sw:swModelList/sw:swModel", XmlSpace
+                )
+                if NodeItem.attrib.get("id") == str(TargetId)
+            ),
+            None,
+        )
+        if ModelNode is None:
+            raise SldprtFormatError(
+                "assembly component model is absent from native tree"
+            )
+        FileId = ModelNode.attrib.get("swFileRef", "")
+        FileNode = next(
+            (
+                NodeItem
+                for NodeItem in XmlRoot.findall("sw:swHeader/sw:swFile", XmlSpace)
+                if NodeItem.attrib.get("id") == FileId
+            ),
+            None,
+        )
+        if FileNode is None or not (
+            CompPath := FileNode.attrib.get("swPath", "")
+        ):
+            raise SldprtFormatError(
+                "assembly component file is absent from native tree"
+            )
+        InstanceConfig = InstanceItem.configuration_name or AssemblyValue.definition(
+            InstanceItem.definition_id
+        ).configuration_name
+        if ConfigName and (InstanceConfig or "Default") != ConfigName:
+            raise SldprtFormatError(
+                "direct assembly components use different configurations"
+            )
+        ConfigName = InstanceConfig or "Default"
+        CoreItems.append(AsmCoreItem(OccurNames[InstanceIndex], CompPath))
+    return EncodeAsmCore(ModelName, ConfigName, tuple(CoreItems))
 
 
 def _preserved_generated_mate_streams(
@@ -2120,6 +2206,7 @@ def _generated_assembly_capabilities(
     assembly: AssemblyData,
     encoding: NativeAssemblyEncoding,
     streams: Mapping[str, bytes],
+    configurations: Sequence[Configuration],
 ) -> frozenset[Capability]:
     try:
         native = decode_native_assembly(
@@ -2137,6 +2224,23 @@ def _generated_assembly_capabilities(
         result.add(Capability.ASSEMBLIES)
         if len(assembly.definitions) > 1:
             result.add(Capability.EXTERNAL_REFERENCES)
+    OrderedConfigs = tuple(
+        sorted(
+            configurations,
+            key=lambda ConfigurationItem: (
+                not ConfigurationItem.active,
+                configurations.index(ConfigurationItem),
+            ),
+        )
+    )
+    if tuple(
+        (ConfigurationItem.name, ConfigurationItem.active)
+        for ConfigurationItem in OrderedConfigs
+    ) == tuple(
+        (ConfigurationItem.name, ConfigurationItem.most_recent)
+        for ConfigurationItem in native.configurations
+    ):
+        result.add(Capability.CONFIGURATIONS)
     if (
         encoding.mates_complete
         and not encoding.generated_mate_ids
@@ -3687,7 +3791,11 @@ def _mesh_values(meshes: Sequence[Mesh]) -> tuple[Any, ...]:
     )
 
 
-def _parasolid_payload(document: CadDocument) -> tuple[bytes | None, str]:
+# this writes native parasolid geometry with solidworks feature ownership
+def _parasolid_payload(
+    document: CadDocument,
+    ObjectIds: Mapping[str, int] | None = None,
+) -> tuple[bytes | None, str]:
     candidates: list[bytes] = []
     for payload in document.brep_payloads:
         if (
@@ -3716,8 +3824,35 @@ def _parasolid_payload(document: CadDocument) -> tuple[bytes | None, str]:
         ):
             return encode_blank_partition_stream(), "generated"
         return encode_blank_partition_stream(), "none"
+    FeatureIds: dict[str, int] = {}
+    if ObjectIds:
+        DesignBodies = {Body.id: Body for Body in document.bodies}
+        SingleFeatureId = (
+            document.bodies[0].final_feature_id if len(document.bodies) == 1 else ""
+        )
+        for BrepBody in document.brep.bodies:
+            FeatureId = str(BrepBody.attributes.get("feature_id", ""))
+            if not FeatureId and BrepBody.design_body_id in DesignBodies:
+                FeatureId = DesignBodies[BrepBody.design_body_id].final_feature_id
+            if not FeatureId and len(document.brep.bodies) == 1:
+                FeatureId = SingleFeatureId
+            NativeId = ObjectIds.get(f"feature:{FeatureId}")
+            if NativeId is not None:
+                FeatureIds[BrepBody.id] = NativeId
     try:
-        return encode_partition_stream(encode_brep_model(document.brep)), "generated"
+        return (
+            encode_partition_stream(
+                encode_brep_model(
+                    document.brep,
+                    solidworks_feature_ids=(
+                        FeatureIds
+                        if len(FeatureIds) == len(document.brep.bodies)
+                        else None
+                    ),
+                )
+            ),
+            "generated",
+        )
     except ParasolidWriteError as exc:
         return None, f"unsupported:{exc}"
 

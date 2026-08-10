@@ -13,6 +13,7 @@ import hashlib
 import math
 import re
 import struct
+from sys import float_info
 from typing import Iterable, Mapping, Sequence
 import zlib
 
@@ -48,17 +49,6 @@ from interchange import (
 )
 
 _WRAPPER_MAGIC = bytes.fromhex("231dd571da8148a2a85898b21b89ef99")
-_SOLIDWORKS_RECTANGLE_PARTITION_SHA256 = (
-    "56df5b4e4ccac3158b60ea75dd57959b991660d6d9c7bc05cbff795e56f44439"
-)
-_SOLIDWORKS_RECTANGLE_PRIMARY_SHA256 = (
-    "472872dbe3f562c633ad1bc33a52bd78f10cc3c264f987bbc090e5794309bcca"
-)
-_SOLIDWORKS_RECTANGLE_DELTAS_SHA256 = (
-    "17e7adf822244b6d3f17e7fa5fd891d74e2230d9aad265a0f86b30d8eee3506a"
-)
-_SOLIDWORKS_RECTANGLE_SCHEMA = "SCH_3601228_36001_13006"
-_SOLIDWORKS_RECTANGLE_SOURCE_BOUNDS = (-20.0, -10.0, 20.0, 10.0, 10.0)
 _ENTITY_MAGIC = bytes.fromhex("c2bc928f996e0000")
 _INLINE_TERM_TAIL = bytes.fromhex("000000010163435a")
 _INLINE_UV_TAIL = bytes.fromhex("00000002016601")
@@ -134,10 +124,6 @@ def encode_brep_model(
         )
     feature_ids = dict(solidworks_feature_ids or {})
     if feature_ids:
-        if partition:
-            raise ParasolidWriteError(
-                "SOLIDWORKS body attributes require a body-root Parasolid stream"
-            )
         body_ids = frozenset(body.id for body in model.bodies)
         if frozenset(feature_ids) != body_ids:
             raise ParasolidWriteError(
@@ -221,14 +207,6 @@ def _validate_brep_write_support(model: BrepModel) -> None:
         raise ParasolidWriteError(
             "Parasolid B-rep writing does not support degenerate edges"
         )
-    if any(
-        item.tolerance != 0.0
-        for values in (model.vertices, model.edges, model.faces)
-        for item in values
-    ):
-        raise ParasolidWriteError(
-            "Parasolid B-rep writing does not support explicit topology tolerances"
-        )
     loops = {loop.id: loop for loop in model.loops}
     for face in model.faces:
         outer = tuple(loops[loop_id].outer for loop_id in face.loop_ids)
@@ -291,6 +269,19 @@ def _verify_encoded_brep(model: BrepModel, payload: bytes) -> None:
         for source, restored in zip(model.vertices, decoded.vertices)
     ):
         raise ParasolidWriteError("generated Parasolid B-rep changes vertex geometry")
+    if any(
+        not math.isclose(
+            source.tolerance,
+            restored.tolerance,
+            rel_tol=1e-12,
+            abs_tol=1e-15,
+        )
+        for name in ("vertices", "edges", "faces")
+        for source, restored in zip(getattr(model, name), getattr(decoded, name))
+    ):
+        raise ParasolidWriteError(
+            "generated Parasolid B-rep changes topology tolerance"
+        )
 
 
 class _BrepTopology:
@@ -832,6 +823,19 @@ def _encode_brep_body(
         ):
             node_id(solidworks_body_attributes[name], body_id)
 
+    EncodedLoopCoedges: dict[str, tuple[str, ...]] = {}
+    EncodedCoedgeReversed: dict[str, bool] = {}
+    for Loop in model.loops:
+        Face = topology.faces[topology.loop_face[Loop.id]]
+        FaceForward = topology.face_forward(Face.id)
+        EncodedLoopCoedges[Loop.id] = (
+            Loop.coedge_ids if FaceForward else tuple(reversed(Loop.coedge_ids))
+        )
+        for CoedgeId in Loop.coedge_ids:
+            EncodedCoedgeReversed[CoedgeId] = topology.coedges[CoedgeId].reversed ^ (
+                not FaceForward
+            )
+
     vertex_fins: dict[str, list[int]] = {vertex.id: [] for vertex in model.vertices}
     fin_vertex: dict[int, str] = {}
     fin_other: dict[int, int] = {}
@@ -843,8 +847,9 @@ def _encode_brep_body(
             fin_other[real_index] = dummy_index
             fin_other[dummy_index] = real_index
             real = topology.coedges[uses[0]]
-            real_vertex = edge.end_vertex_id if real.reversed else edge.start_vertex_id
-            dummy_vertex = edge.start_vertex_id if real.reversed else edge.end_vertex_id
+            RealReversed = EncodedCoedgeReversed[real.id]
+            real_vertex = edge.end_vertex_id if RealReversed else edge.start_vertex_id
+            dummy_vertex = edge.start_vertex_id if RealReversed else edge.end_vertex_id
             fin_vertex[real_index] = real_vertex
             fin_vertex[dummy_index] = dummy_vertex
             vertex_fins[real_vertex].append(real_index)
@@ -854,9 +859,9 @@ def _encode_brep_body(
                 index = coedges[coedge_id]
                 other = coedges[uses[(position + 1) % len(uses)]]
                 fin_other[index] = other
-                coedge = topology.coedges[coedge_id]
+                CoedgeReversed = EncodedCoedgeReversed[coedge_id]
                 vertex_id = (
-                    edge.end_vertex_id if coedge.reversed else edge.start_vertex_id
+                    edge.end_vertex_id if CoedgeReversed else edge.start_vertex_id
                 )
                 fin_vertex[index] = vertex_id
                 vertex_fins[vertex_id].append(index)
@@ -1148,7 +1153,14 @@ def _encode_brep_body(
             vertices[chain[position + 1]] if position + 1 < len(chain) else 0,
         )
         _v12_pointer(output, points[vertex.id])
-        _bef64(output, _MISSING_PARAMETER)
+        _bef64(
+            output,
+            (
+                _MISSING_PARAMETER
+                if vertex.tolerance == 0.0
+                else vertex.tolerance * _LENGTH_SCALE
+            ),
+        )
         _v12_pointer(output, bodies[body_id])
     for edge in model.edges:
         body_id = edge_body[edge.id]
@@ -1166,7 +1178,14 @@ def _encode_brep_body(
         _v12_node(output, 16, edges[edge.id])
         _i32(output, node_ids[edges[edge.id]])
         _v12_pointer(output, 0)
-        _bef64(output, _MISSING_PARAMETER)
+        _bef64(
+            output,
+            (
+                _MISSING_PARAMETER
+                if edge.tolerance == 0.0
+                else edge.tolerance * _LENGTH_SCALE
+            ),
+        )
         _v12_pointer(output, first_fin)
         _v12_pointer(output, edges[chain[position - 1]] if position else 0)
         _v12_pointer(
@@ -1191,9 +1210,10 @@ def _encode_brep_body(
         loop = topology.loops[topology.coedge_loop[coedge.id]]
         face = topology.faces[topology.loop_face[loop.id]]
         region = topology.regions[face_region[face.id]]
-        position = loop.coedge_ids.index(coedge.id)
-        previous_id = loop.coedge_ids[position - 1]
-        next_id = loop.coedge_ids[(position + 1) % len(loop.coedge_ids)]
+        LoopCoedges = EncodedLoopCoedges[loop.id]
+        position = LoopCoedges.index(coedge.id)
+        previous_id = LoopCoedges[position - 1]
+        next_id = LoopCoedges[(position + 1) % len(LoopCoedges)]
         fin_index = coedges[coedge.id]
         _v12_fin(
             output,
@@ -1207,7 +1227,7 @@ def _encode_brep_body(
             edges[coedge.edge_id],
             0,
             _next_fin_at_vertex(fin_index, vertex_fins),
-            not coedge.reversed,
+            not EncodedCoedgeReversed[coedge.id],
         )
     for edge in dummy_edges:
         fin_index = dummy_fins[edge.id]
@@ -1224,7 +1244,7 @@ def _encode_brep_body(
             edges[edge.id],
             0,
             _next_fin_at_vertex(fin_index, vertex_fins),
-            real.reversed,
+            EncodedCoedgeReversed[real.id],
         )
     for loop in model.loops:
         face = topology.faces[topology.loop_face[loop.id]]
@@ -1236,7 +1256,7 @@ def _encode_brep_body(
         _i32(output, node_ids[loops[loop.id]])
         for value in (
             0,
-            coedges[loop.coedge_ids[0]],
+            coedges[EncodedLoopCoedges[loop.id][0]],
             faces[face.id],
             loops.get(next_loop_id, 0),
         ):
@@ -1277,7 +1297,14 @@ def _encode_brep_body(
                 )
             ),
         )
-        _bef64(output, _MISSING_PARAMETER)
+        _bef64(
+            output,
+            (
+                _MISSING_PARAMETER
+                if face.tolerance == 0.0
+                else face.tolerance * _LENGTH_SCALE
+            ),
+        )
         for value in (
             faces[face_ids[position + 1]] if position + 1 < len(face_ids) else 0,
             faces[face_ids[position - 1]] if position else 0,
@@ -1357,7 +1384,7 @@ def _encode_brep_body(
         )
     _tag(output, 1)
     _v12_pointer(output, 0)
-    if solidworks_triangle:
+    if solidworks_triangle and not partition:
         output = bytearray(_order_solidworks_triangle_records(bytes(output)))
     return bytes(output), sheet
 
@@ -3121,401 +3148,6 @@ def decode_brep_model(
     return _decode_partition_model(data, header)
 
 
-def transform_solidworks_rectangle_partition_stream(
-    data: bytes | bytearray,
-    *,
-    minimum_x_mm: float,
-    minimum_y_mm: float,
-    maximum_x_mm: float,
-    maximum_y_mm: float,
-    depth_mm: float,
-) -> bytes:
-    bounds = _solidworks_rectangle_bounds(
-        minimum_x_mm,
-        minimum_y_mm,
-        maximum_x_mm,
-        maximum_y_mm,
-        depth_mm,
-    )
-    source = bytes(data)
-    if hashlib.sha256(source).hexdigest() != _SOLIDWORKS_RECTANGLE_PARTITION_SHA256:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle Partition does not match the validated donor"
-        )
-    payloads = decode_partition_stream(source, "Contents/Config-0-Partition")
-    if not _is_solidworks_rectangle_partition(payloads):
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle Partition donor framing is invalid"
-        )
-    primary = payloads[0].data
-    header = _parasolid_header(primary)
-    if header is None or header.body_offset != 96:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle Partition donor header is invalid"
-        )
-    original_body = primary[header.body_offset :]
-    tables = _scan_partition_records(original_body)
-    source_model = decode_brep_model(primary)
-    if tables is None or source_model is None:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle Partition donor cannot be decoded"
-        )
-    _validate_solidworks_rectangle_source(source_model, tables)
-    if bounds == _SOLIDWORKS_RECTANGLE_SOURCE_BOUNDS:
-        return source
-    body = bytearray(original_body)
-    point_records = tuple(tables.points.values())
-    used_curve_attributes = frozenset(
-        record.references[3] for record in tables.edge_uses.values()
-    )
-    used_surface_attributes = frozenset(
-        record.references[4] for record in tables.bridges.values()
-    )
-    for record in point_records:
-        values_offset = _solidworks_rectangle_point_offset(original_body, record)
-        transformed = _solidworks_rectangle_vector(record.point, bounds)
-        _pack_solidworks_rectangle_vector(body, values_offset, transformed)
-    for attribute in sorted(used_curve_attributes):
-        geometry = tables.curves[attribute]
-        values_offset = _solidworks_rectangle_carrier_offset(
-            original_body,
-            attribute,
-            geometry,
-        )
-        transformed = _solidworks_rectangle_vector(geometry.origin, bounds)
-        _pack_solidworks_rectangle_vector(body, values_offset, transformed)
-    for attribute in sorted(used_surface_attributes):
-        geometry = tables.surfaces[attribute]
-        values_offset = _solidworks_rectangle_carrier_offset(
-            original_body,
-            attribute,
-            geometry,
-        )
-        transformed = _solidworks_rectangle_vector(geometry.origin, bounds)
-        _pack_solidworks_rectangle_vector(body, values_offset, transformed)
-    patched_primary = primary[: header.body_offset] + bytes(body)
-    transformed_stream = (
-        encode_partition_stream(patched_primary) + source[payloads[1].wrapper_offset :]
-    )
-    transformed_payloads = decode_partition_stream(
-        transformed_stream,
-        "Contents/Config-0-Partition",
-    )
-    if (
-        len(transformed_payloads) != 2
-        or transformed_payloads[0].data != patched_primary
-        or transformed_payloads[1].sha256 != _SOLIDWORKS_RECTANGLE_DELTAS_SHA256
-        or transformed_payloads[1].data != payloads[1].data
-    ):
-        raise ParasolidWriteError(
-            "transformed SOLIDWORKS rectangle Partition framing is invalid"
-        )
-    transformed_model = decode_brep_model(patched_primary)
-    if transformed_model is None:
-        raise ParasolidWriteError(
-            "transformed SOLIDWORKS rectangle Partition cannot be decoded"
-        )
-    _validate_solidworks_rectangle_transform(
-        source_model,
-        transformed_model,
-        bounds,
-    )
-    return transformed_stream
-
-
-def _solidworks_rectangle_bounds(
-    minimum_x_mm: float,
-    minimum_y_mm: float,
-    maximum_x_mm: float,
-    maximum_y_mm: float,
-    depth_mm: float,
-) -> tuple[float, float, float, float, float]:
-    values = (
-        minimum_x_mm,
-        minimum_y_mm,
-        maximum_x_mm,
-        maximum_y_mm,
-        depth_mm,
-    )
-    if any(isinstance(value, bool) for value in values):
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle bounds and depth must be finite numbers"
-        )
-    try:
-        bounds = tuple(float(value) for value in values)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle bounds and depth must be finite numbers"
-        ) from exc
-    if any(not math.isfinite(value) for value in bounds):
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle bounds and depth must be finite numbers"
-        )
-    minimum_x, minimum_y, maximum_x, maximum_y, depth = bounds
-    if minimum_x >= maximum_x or minimum_y >= maximum_y or depth <= 0.0:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle bounds must have positive width, height, and depth"
-        )
-    return minimum_x, minimum_y, maximum_x, maximum_y, depth
-
-
-def _is_solidworks_rectangle_partition(
-    payloads: tuple[ParasolidPayload, ...],
-) -> bool:
-    if len(payloads) != 2:
-        return False
-    primary, deltas = payloads
-    return (
-        primary.wrapper_offset == 0
-        and primary.magic_offset == 4
-        and primary.compressed_offset == 28
-        and primary.compressed_size == 3076
-        and primary.uncompressed_size == 6730
-        and primary.kind == "partition"
-        and primary.schema == _SOLIDWORKS_RECTANGLE_SCHEMA
-        and primary.sha256 == _SOLIDWORKS_RECTANGLE_PRIMARY_SHA256
-        and deltas.wrapper_offset == 3112
-        and deltas.kind == "deltas"
-        and deltas.schema == _SOLIDWORKS_RECTANGLE_SCHEMA
-        and deltas.uncompressed_size == 1124
-        and deltas.sha256 == _SOLIDWORKS_RECTANGLE_DELTAS_SHA256
-    )
-
-
-def _validate_solidworks_rectangle_source(
-    model: BrepModel,
-    tables: _RecordTables,
-) -> None:
-    counts = (
-        len(model.bodies),
-        len(model.regions),
-        len(model.shells),
-        len(model.shell_uses),
-        len(model.faces),
-        len(model.face_uses),
-        len(model.loops),
-        len(model.coedges),
-        len(model.edges),
-        len(model.vertices),
-        len(model.curves),
-        len(model.surfaces),
-        len(model.pcurves),
-        len(model.wires),
-    )
-    expected_counts = (1, 1, 1, 1, 6, 6, 6, 24, 12, 8, 12, 6, 0, 0)
-    expected_vertices = frozenset(
-        (x, y, z) for x in (-20.0, 20.0) for y in (-10.0, 10.0) for z in (0.0, 10.0)
-    )
-    vertices = frozenset(
-        (vertex.point.x, vertex.point.y, vertex.point.z) for vertex in model.vertices
-    )
-    used_curve_attributes = frozenset(
-        record.references[3] for record in tables.edge_uses.values()
-    )
-    used_surface_attributes = frozenset(
-        record.references[4] for record in tables.bridges.values()
-    )
-    if (
-        counts != expected_counts
-        or model.validate()
-        or model.bodies[0].transform != Transform()
-        or not model.regions[0].solid
-        or not model.shells[0].closed
-        or vertices != expected_vertices
-        or len(tables.points) != 8
-        or len(used_curve_attributes) != 12
-        or len(used_surface_attributes) != 6
-        or any(
-            attribute not in tables.curves
-            or not isinstance(tables.curves[attribute], LineCurve)
-            for attribute in used_curve_attributes
-        )
-        or any(
-            attribute not in tables.surfaces
-            or not isinstance(tables.surfaces[attribute], PlaneSurface)
-            for attribute in used_surface_attributes
-        )
-    ):
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle Partition donor geometry is invalid"
-        )
-
-
-def _solidworks_rectangle_point_offset(
-    body: bytes,
-    record: _TopologyRecord,
-) -> int:
-    for prefixed in (False, True):
-        fields = _point_record_fields(body, record.offset, prefixed)
-        parsed = _parse_point(body, record.offset, prefixed)
-        if (
-            fields is not None
-            and parsed is not None
-            and parsed.attribute == record.attribute
-            and parsed.references == record.references
-            and parsed.point == record.point
-        ):
-            return fields[2]
-    raise ParasolidWriteError("SOLIDWORKS rectangle Partition point record is invalid")
-
-
-def _solidworks_rectangle_carrier_offset(
-    body: bytes,
-    attribute: int,
-    geometry: object,
-) -> int:
-    attributes = getattr(geometry, "attributes", {})
-    carrier = attributes.get("carrier_record")
-    if not isinstance(carrier, bytes) or not carrier:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle Partition analytic record is invalid"
-        )
-    offset = body.find(carrier)
-    if offset < 0 or body.find(carrier, offset + 1) >= 0:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle Partition analytic record is ambiguous"
-        )
-    fields = _analytic_record_fields(body, offset)
-    if fields is None or fields[0] != attribute:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle Partition analytic record is invalid"
-        )
-    return fields[1]
-
-
-def _solidworks_rectangle_vector(
-    vector: Vector3 | None,
-    bounds: tuple[float, float, float, float, float],
-) -> tuple[float, float, float]:
-    if vector is None:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle Partition coordinate is missing"
-        )
-    minimum_x, minimum_y, maximum_x, maximum_y, depth = bounds
-    return (
-        _solidworks_rectangle_axis(vector.x, -20.0, 20.0, minimum_x, maximum_x),
-        _solidworks_rectangle_axis(vector.y, -10.0, 10.0, minimum_y, maximum_y),
-        _solidworks_rectangle_axis(vector.z, 0.0, 10.0, 0.0, depth),
-    )
-
-
-def _solidworks_rectangle_axis(
-    value: float,
-    source_minimum: float,
-    source_maximum: float,
-    target_minimum: float,
-    target_maximum: float,
-) -> float:
-    if value == source_minimum:
-        return target_minimum
-    if value == source_maximum:
-        return target_maximum
-    if value == (source_minimum + source_maximum) / 2.0:
-        return target_minimum / 2.0 + target_maximum / 2.0
-    raise ParasolidWriteError(
-        "SOLIDWORKS rectangle Partition contains an unexpected coordinate"
-    )
-
-
-def _pack_solidworks_rectangle_vector(
-    body: bytearray,
-    offset: int,
-    vector: tuple[float, float, float],
-) -> None:
-    try:
-        values = tuple(value / 1000.0 for value in vector)
-        if any(not math.isfinite(value) for value in values):
-            raise OverflowError
-        struct.pack_into(">3d", body, offset, *values)
-    except (OverflowError, struct.error) as exc:
-        raise ParasolidWriteError(
-            "SOLIDWORKS rectangle bounds exceed the Parasolid coordinate range"
-        ) from exc
-
-
-def _validate_solidworks_rectangle_transform(
-    source: BrepModel,
-    transformed: BrepModel,
-    bounds: tuple[float, float, float, float, float],
-) -> None:
-    if transformed.validate():
-        raise ParasolidWriteError(
-            "transformed SOLIDWORKS rectangle Partition geometry is invalid"
-        )
-    collection_names = (
-        "bodies",
-        "regions",
-        "shells",
-        "shell_uses",
-        "faces",
-        "face_uses",
-        "loops",
-        "coedges",
-        "edges",
-        "vertices",
-        "curves",
-        "surfaces",
-    )
-    if any(
-        tuple(item.id for item in getattr(source, name))
-        != tuple(item.id for item in getattr(transformed, name))
-        for name in collection_names
-    ):
-        raise ParasolidWriteError(
-            "transformed SOLIDWORKS rectangle Partition changes topology"
-        )
-    transformed_vertices = {item.id: item for item in transformed.vertices}
-    transformed_curves = {item.id: item for item in transformed.curves}
-    transformed_surfaces = {item.id: item for item in transformed.surfaces}
-    for vertex in source.vertices:
-        expected = _solidworks_rectangle_vector(vertex.point, bounds)
-        if not _solidworks_rectangle_vector_matches(
-            transformed_vertices[vertex.id].point,
-            expected,
-        ):
-            raise ParasolidWriteError(
-                "transformed SOLIDWORKS rectangle Partition changes a vertex"
-            )
-    for curve in source.curves:
-        target = transformed_curves[curve.id]
-        expected = _solidworks_rectangle_vector(curve.origin, bounds)
-        if (
-            not isinstance(curve, LineCurve)
-            or not isinstance(target, LineCurve)
-            or target.direction != curve.direction
-            or not _solidworks_rectangle_vector_matches(target.origin, expected)
-        ):
-            raise ParasolidWriteError(
-                "transformed SOLIDWORKS rectangle Partition changes a curve"
-            )
-    for surface in source.surfaces:
-        target = transformed_surfaces[surface.id]
-        expected = _solidworks_rectangle_vector(surface.origin, bounds)
-        if (
-            not isinstance(surface, PlaneSurface)
-            or not isinstance(target, PlaneSurface)
-            or target.normal != surface.normal
-            or target.reference_direction != surface.reference_direction
-            or not _solidworks_rectangle_vector_matches(target.origin, expected)
-        ):
-            raise ParasolidWriteError(
-                "transformed SOLIDWORKS rectangle Partition changes a surface"
-            )
-
-
-def _solidworks_rectangle_vector_matches(
-    vector: Vector3,
-    expected: tuple[float, float, float],
-) -> bool:
-    return all(
-        math.isclose(actual, intended, rel_tol=1e-12, abs_tol=1e-9)
-        for actual, intended in zip(
-            (vector.x, vector.y, vector.z),
-            expected,
-            strict=True,
-        )
-    )
-
 
 def _parasolid_header(data: bytes) -> _ParasolidHeader | None:
     if len(data) < 12 or not data.startswith(b"PS\x00\x00"):
@@ -3723,13 +3355,18 @@ def _scan_partition_records(body: bytes) -> _RecordTables | None:
                 body,
                 offset,
                 allow_null_owner=tables.v12_partition,
+                AllowTolerance=tables.v12_partition,
             )
         elif kind == 0x0F:
             record = _parse_loop(body, offset)
             if record is not None:
                 loop_candidates.append(record)
         elif kind == 0x10:
-            topology = tables.edge_uses, _parse_edge_use(body, offset)
+            topology = tables.edge_uses, _parse_edge_use(
+                body,
+                offset,
+                AllowTolerance=tables.v12_partition,
+            )
         elif kind == 0x11:
             topology = tables.coedges, _parse_coedge(body, offset)
         elif kind == 0x12:
@@ -5589,19 +5226,27 @@ def _parse_bridge(
     data: bytes,
     offset: int,
     allow_null_owner: bool = False,
+    AllowTolerance: bool = False,
 ) -> _TopologyRecord | None:
     start = _record_start(data, offset, 0x0E)
     if start is None:
         return None
     attribute = _u16(data, start)
     owner = _u16(data, start + 6)
+    Tolerance = 0.0
+    DirectTolerance = False
     if (
         data[start + 8 : start + 9] == b"\x01"
         and data[start + 9 : start + 17] == _ENTITY_MAGIC
     ):
         references = _tripled_refs(data, start + 17, 5)
         marker_offset = start + 32
-    elif data[start + 8 : start + 16] == _ENTITY_MAGIC:
+    elif data[start + 8 : start + 16] == _ENTITY_MAGIC or (
+        AllowTolerance
+        and (Tolerance := _ReadTolerance(data, start + 8)) is not None
+        and Tolerance > 0.0
+    ):
+        DirectTolerance = data[start + 8 : start + 16] != _ENTITY_MAGIC
         tripled = all(
             data[start + 18 + index * 3 : start + 19 + index * 3] == b"\x01"
             for index in range(5)
@@ -5616,6 +5261,13 @@ def _parse_bridge(
         return None
     if attribute is None or owner is None or references is None:
         return None
+    if DirectTolerance and (
+        len(references) < 5
+        or references[2] <= 1
+        or references[3] <= 1
+        or references[4] <= 1
+    ):
+        return None
     if marker_offset >= len(data) or data[marker_offset] not in {0x2B, 0x2D}:
         return None
     if attribute <= 1 or (owner <= 1 and not allow_null_owner):
@@ -5629,6 +5281,7 @@ def _parse_bridge(
         offset,
         data[marker_offset] == 0x2D,
         owner,
+        tolerance=Tolerance,
     )
 
 
@@ -5643,12 +5296,26 @@ def _parse_loop(data: bytes, offset: int) -> _TopologyRecord | None:
     return _TopologyRecord(attribute, references, offset)
 
 
-def _parse_edge_use(data: bytes, offset: int) -> _TopologyRecord | None:
+def _parse_edge_use(
+    data: bytes,
+    offset: int,
+    AllowTolerance: bool = False,
+) -> _TopologyRecord | None:
     start = _record_start(data, offset, 0x10)
     if start is None:
         return None
     attribute = _u16(data, start)
-    if data[start + 8 : start + 16] == _ENTITY_MAGIC:
+    Tolerance = (
+        _ReadTolerance(data, start + 8)
+        if AllowTolerance or data[start + 8 : start + 16] == _ENTITY_MAGIC
+        else None
+    )
+    if Tolerance == 0.0 and data[start + 8 : start + 16] != _ENTITY_MAGIC:
+        Tolerance = None
+    DirectTolerance = (
+        Tolerance is not None and data[start + 8 : start + 16] != _ENTITY_MAGIC
+    )
+    if Tolerance is not None:
         references = _refs(data, start + 16, 6)
     else:
         magic = next(
@@ -5687,7 +5354,11 @@ def _parse_edge_use(data: bytes, offset: int) -> _TopologyRecord | None:
         references = (0, 0, 0, decoded[2], 0, 0)
     if attribute is None or attribute <= 1 or references is None:
         return None
-    return _TopologyRecord(attribute, references, offset)
+    if DirectTolerance and (
+        len(references) < 4 or references[0] <= 1 or references[3] <= 1
+    ):
+        return None
+    return _TopologyRecord(attribute, references, offset, tolerance=Tolerance or 0.0)
 
 
 def _parse_coedge(data: bytes, offset: int) -> _TopologyRecord | None:
@@ -5739,22 +5410,31 @@ def _isolated_fin(attribute: int, references: tuple[int, ...]) -> bool:
     )
 
 
+# topology tolerances need one bounded decoder across every v12 use record
+def _ReadTolerance(Data: bytes, Offset: int) -> float | None:
+    if Data[Offset : Offset + 8] == _ENTITY_MAGIC:
+        return 0.0
+    if Offset < 0 or Offset + 8 > len(Data):
+        return None
+    Value = struct.unpack_from(">d", Data, Offset)[0]
+    if (
+        not math.isfinite(Value)
+        or Value < 0.0
+        or Value / _LENGTH_SCALE > 10_000.0
+        or (Value != 0.0 and Value < float_info.min)
+    ):
+        return None
+    return Value / _LENGTH_SCALE
+
+
 def _parse_vertex_use(data: bytes, offset: int) -> _TopologyRecord | None:
     start = _record_start(data, offset, 0x12)
     if start is None:
         return None
     attribute = _u16(data, start)
-    tolerance = 0.0
-    if data[start + 16 : start + 24] == _ENTITY_MAGIC:
+    Tolerance = _ReadTolerance(data, start + 16)
+    if Tolerance is not None:
         references = _refs(data, start + 6, 5)
-    elif start + 24 <= len(data):
-        direct = _refs(data, start + 6, 5)
-        value = struct.unpack_from(">d", data, start + 16)[0]
-        if direct is not None and math.isfinite(value) and value >= 0.0:
-            references = direct
-            tolerance = value / _LENGTH_SCALE
-        else:
-            references = None
     else:
         references = None
     if references is None:
@@ -5775,6 +5455,7 @@ def _parse_vertex_use(data: bytes, offset: int) -> _TopologyRecord | None:
         if count < 5:
             return None
         references = _tripled_refs(data, start + 6, count)
+        Tolerance = 0.0
     if (
         attribute is None
         or attribute <= 1
@@ -5783,10 +5464,10 @@ def _parse_vertex_use(data: bytes, offset: int) -> _TopologyRecord | None:
         or references[0] > 1
         or len(references) < 5
         or references[4] <= 1
-        or not math.isfinite(tolerance)
+        or Tolerance is None
     ):
         return None
-    return _TopologyRecord(attribute, references, offset, tolerance=tolerance)
+    return _TopologyRecord(attribute, references, offset, tolerance=Tolerance)
 
 
 def _point_record_fields(
@@ -6477,6 +6158,7 @@ def _build_partition_model(
             )
             if first_fin is not None:
                 edge_attributes["parasolid.first_fin"] = first_fin
+        EdgeUse = tables.edge_uses.get(edge_attribute)
         edges.append(
             BrepEdge(
                 _native_id("edge", edge_attribute),
@@ -6486,6 +6168,7 @@ def _build_partition_model(
                 start_parameter,
                 end_parameter,
                 tolerance=max(
+                    EdgeUse.tolerance if EdgeUse is not None else 0.0,
                     vertex_tolerances[start_vertex],
                     vertex_tolerances[end_vertex],
                 ),
@@ -6544,6 +6227,7 @@ def _build_partition_model(
                 for loop_attribute, _ in face_loops[bridge_attribute]
             ),
             not tables.bridges[bridge_attribute].reversed,
+            tolerance=tables.bridges[bridge_attribute].tolerance,
             attributes=frozen_mapping(
                 {
                     **(

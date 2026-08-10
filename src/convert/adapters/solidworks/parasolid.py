@@ -19,7 +19,6 @@ from convert.parasolid import (
     encode_brep_model,
     encode_partition_stream,
     is_native_parasolid_payload,
-    transform_solidworks_rectangle_partition_stream,
 )
 
 from .container import SldprtFormatError
@@ -44,5 +43,4 @@ __all__ = (
     "encode_brep_model",
     "encode_partition_stream",
     "is_native_parasolid_payload",
-    "transform_solidworks_rectangle_partition_stream",
 )
