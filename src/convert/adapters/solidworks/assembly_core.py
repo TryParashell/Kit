@@ -16,7 +16,9 @@ from typing import Mapping
 
 from .assembly_programs import EncodeProgram, FieldOwners, StreamPrograms
 from .assembly2_programs import EncodeProgram as EncodeProgram2
+from .assembly3_programs import EncodeProgram as EncodeProgram3
 from .assembly_distinct_programs import EncodeProgram as EncodeProgramDistinct
+from .assembly_repeat import EncodeRepCore, RepeatItem
 from .container import SldprtFormatError
 
 
@@ -41,6 +43,9 @@ CoreOpaqueBytes = 0
 class AsmCoreItem:
     OccurName: str
     CompPath: str
+    TransX: float = 0.0
+    TransY: float = 0.0
+    TransZ: float = 0.0
 
 
 # native strings use one semantic component occurrence across coupled streams
@@ -51,10 +56,6 @@ def EncodeAsmCore(
 ) -> Mapping[str, bytes]:
     if not ModelName or not ConfigName or not CoreItems:
         raise SldprtFormatError("native assembly core fields cannot be empty")
-    if len(CoreItems) > 2:
-        raise SldprtFormatError(
-            "native assembly core currently supports at most two direct occurrences"
-        )
     OccurName = CoreItems[0].OccurName
     CompPath = CoreItems[0].CompPath
     if not OccurName or not CompPath:
@@ -63,6 +64,99 @@ def EncodeAsmCore(
     if not CompStem:
         raise SldprtFormatError("native assembly component path has no stem")
     DisplayName = f"<{ConfigName}>_Display State 1"
+    AsmPath = str(PureWindowsPath(CompPath).parent / f"{ModelName}.SLDASM")
+    if len(CoreItems) >= 4:
+        if any(ItemValue.CompPath != CompPath for ItemValue in CoreItems):
+            raise SldprtFormatError(
+                "four-or-more native occurrences require one shared component file"
+            )
+        StreamsMap = dict(
+            EncodeRepCore(
+                ModelName,
+                ConfigName,
+                tuple(
+                    RepeatItem(
+                        ItemValue.OccurName,
+                        ItemValue.CompPath,
+                        ItemValue.TransX,
+                        ItemValue.TransY,
+                        ItemValue.TransZ,
+                    )
+                    for ItemValue in CoreItems
+                ),
+            )
+        )
+        StreamsMap["Header2"] = StreamsMap[
+            "Contents/Config-0-ModelHeader"
+        ]
+        StreamsMap["Contents/Config-0-MatesList"] = struct.pack("<IH", 170, 0)
+        return MappingProxyType(StreamsMap)
+    if len(CoreItems) == 3:
+        SecondItem, ThirdItem = CoreItems[1:]
+        if any(ItemValue.CompPath != CompPath for ItemValue in CoreItems):
+            raise SldprtFormatError(
+                "three-occurrence native history requires one shared component file"
+            )
+        StreamsMap = {
+            "Contents/CMgr": EncodeProgram3(
+                "Contents/CMgr",
+                {
+                    0x00CE: ConfigName,
+                    0x04D9: DisplayName,
+                    0x05B2: AsmPath,
+                    0x063C: ModelName,
+                    0x066B: OccurName,
+                    0x0713: ConfigName,
+                    0x0739: ConfigName,
+                    0x07AA: DisplayName,
+                    0x0838: SecondItem.OccurName,
+                    0x08BB: ConfigName,
+                    0x08E1: ConfigName,
+                    0x0952: DisplayName,
+                    0x09E0: ThirdItem.OccurName,
+                    0x0A63: ConfigName,
+                    0x0A89: ConfigName,
+                },
+            ),
+            "Contents/Config-0": EncodeProgram3(
+                "Contents/Config-0",
+                {
+                    0x0030: ModelName,
+                    0x006B: OccurName,
+                    0x01BA: ConfigName,
+                    0x023B: AsmPath,
+                    0x02C5: ModelName,
+                    0x02F4: OccurName,
+                    0x0378: SecondItem.OccurName,
+                    0x04C7: ConfigName,
+                    0x0546: SecondItem.OccurName,
+                    0x05CA: ThirdItem.OccurName,
+                    0x0719: ConfigName,
+                    0x0798: ThirdItem.OccurName,
+                },
+            ),
+            "Contents/Config-0-ResolvedFeatures": EncodeProgram3(
+                "Contents/Config-0-ResolvedFeatures"
+            ),
+            "Contents/Definition": EncodeProgram3("Contents/Definition"),
+            "Contents/Config-0-ModelHeader": EncodeProgram3(
+                "Contents/Config-0-ModelHeader",
+                {
+                    0x008E: ModelName,
+                    0x06AC: OccurName,
+                    0x0714: SecondItem.OccurName,
+                    0x077C: ThirdItem.OccurName,
+                    0x0809: CompPath,
+                    0x08C1: CompStem,
+                    0x0940: AsmPath,
+                    0x09CA: ModelName,
+                    0x09FB: ConfigName,
+                },
+            ),
+        }
+        StreamsMap["Header2"] = StreamsMap["Contents/Config-0-ModelHeader"]
+        StreamsMap["Contents/Config-0-MatesList"] = struct.pack("<IH", 170, 0)
+        return MappingProxyType(StreamsMap)
     if len(CoreItems) == 2:
         SecondItem = CoreItems[1]
         if not SecondItem.OccurName or not SecondItem.CompPath:
@@ -73,9 +167,6 @@ def EncodeAsmCore(
                 raise SldprtFormatError(
                     "second native assembly component path has no stem"
                 )
-            AsmPath = str(
-                PureWindowsPath(CompPath).parent / f"{ModelName}.SLDASM"
-            )
             StreamsMap = {
                 "Contents/CMgr": EncodeProgramDistinct(
                     "Contents/CMgr",

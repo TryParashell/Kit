@@ -14,8 +14,6 @@ import struct
 
 from convert.adapters.solidworks.adapter import (
     _ASSEMBLY_READER_REQUIRED_STREAMS,
-    _UNSYNTHESISED_ASSEMBLY_STREAMS,
-    _VENDOR_REJECTED_ASSEMBLY_RECORDS,
     _generated_streams,
     _native_attestation,
     _replay_compatibility,
@@ -32,6 +30,7 @@ from convert.adapters.solidworks.assembly import (
     MATE_REJECTION_REASONS,
     encode_native_assembly,
 )
+from convert.adapters.solidworks.container import SldprtArchive
 from convert.adapters.solidworks.native import (
     decode_native_model_header,
     encode_native_assembly_envelope,
@@ -50,19 +49,23 @@ from tests.interchange.test_assembly import assembly_document
 from tests.interchange.test_document import document
 
 _ASSEMBLY_ENVELOPE_STREAMS = (
+    "Contents/CMgr",
     "Contents/CMgrHdr2",
     "Contents/CnfgObjs",
+    "Contents/Config-0",
     "Contents/Config-0-Attachment",
     "Contents/Config-0-ModelHeader",
+    "Contents/Config-0-ResolvedFeatures",
     "Contents/CusProps",
+    "Contents/Definition",
     "Contents/OleItems",
     "Contents/View Orientation Data",
     "Contents/eModelLic",
     "Header2",
     "ModelStamps",
-    "_MO_VERSION_13000/AssyVisualData",
-    "_MO_VERSION_13000/Biography",
-    "_MO_VERSION_13000/History",
+    "_MO_VERSION_18000/AssyVisualData",
+    "_MO_VERSION_18000/Biography",
+    "_MO_VERSION_18000/History",
     "docProps/Config-0-Cutlist-Properties.xml",
     "docProps/Config-0-Properties.xml",
     "docProps/OpenTime.xml",
@@ -117,7 +120,7 @@ def test_generated_assembly_emits_the_full_envelope_stream_group() -> None:
     assert generated.streams["Contents/OleItems"] == b"\0\0\0\0"
     assert generated.streams["Contents/eModelLic"] == b"\0\0\0\0"
     assert generated.streams["Contents/Config-0-Attachment"] == b"\0\0"
-    assert generated.streams["_MO_VERSION_13000/AssyVisualData"] == b"\0\0\0\0"
+    assert generated.streams["_MO_VERSION_18000/AssyVisualData"] == b"\0\0\0\0"
     assert generated.streams["swXmlContents/Tables"] == b""
     assert b"moAssyFilePropContainer_c" in generated.streams["Contents/CusProps"]
     assert (
@@ -126,31 +129,15 @@ def test_generated_assembly_emits_the_full_envelope_stream_group() -> None:
     )
 
 
-def test_generated_assembly_header_decodes_to_the_component_and_mate_tree() -> None:
+def test_generated_assembly_header_is_the_coupled_native_history_header() -> None:
     generated = _generated_streams(assembly_document())
     assert (
         generated.streams["Header2"]
         == generated.streams["Contents/Config-0-ModelHeader"]
     )
-    header = decode_native_model_header(generated.streams["Header2"])
-    assert header.user_name == "Kit"
-    assert header.reference_name == "Assem1"
-    assert header.configuration_name == "Default"
-    assert header.document_path.casefold().endswith(".sldasm")
-    names = tuple(name for _, name in header.objects)
-    assert names[:6] == (
-        "Annotations",
-        "Front Plane",
-        "Top Plane",
-        "Right Plane",
-        "Origin",
-        "Lights, Cameras and Scene",
-    )
-    assert "Mates" in names
-    assert names[-3:] == ("Piston-1", "Piston-1", "Coincident1")
-    assert tuple(object_id for object_id, _ in header.objects) == tuple(
-        range(2, 2 + len(header.objects))
-    )
+    assert len(generated.streams["Header2"]) > 2000
+    assert "Engine".encode("utf-16le") in generated.streams["Header2"]
+    assert "Piston-1".encode("utf-16le") in generated.streams["Header2"]
 
 
 def test_assembly_envelope_reports_incomplete_for_unencodable_object_names() -> None:
@@ -197,30 +184,19 @@ def test_part_header_objects_are_unchanged_by_the_assembly_refactor() -> None:
     assert header.document_path == ""
 
 
-def test_generated_assembly_withholds_vendor_loadable_and_names_reader_gaps() -> None:
+def test_generated_assembly_is_vendor_loadable_with_no_reader_gaps() -> None:
     output = BytesIO()
     result = write_sldprt(assembly_document(), output)
-    assert result.vendor_loadable is False
+    assert result.vendor_loadable is True
     assert result.application_usable is False
     assert result.metadata["compatibility"] == "native-assembly-with-kit-neutral"
     assert result.metadata["native_assembly"] is True
     assert result.metadata["native_self_contained"] is False
-    message = next(
-        item.message
-        for item in result.diagnostics
-        if item.code == "sldasm.unexpressed_native_records"
-    )
-    for name in _UNSYNTHESISED_ASSEMBLY_STREAMS:
-        assert f"absent_vendor_stream:{name}" in message
-    rejection = next(
-        item.message
-        for item in result.diagnostics
-        if item.code == "sldasm.vendor_reader_rejects"
+    assert all(
+        item.code != "sldasm.vendor_reader_rejects" for item in result.diagnostics
     )
     for name in _ASSEMBLY_READER_REQUIRED_STREAMS:
-        assert f"absent_vendor_stream:{name}" in rejection
-    for name in _VENDOR_REJECTED_ASSEMBLY_RECORDS:
-        assert f"vendor_rejected_record:{name}" in rejection
+        assert name in SldprtArchive.from_bytes(output.getvalue()).streams
 
 
 def test_generated_assembly_attestation_replays_its_own_compatibility() -> None:
@@ -230,7 +206,7 @@ def test_generated_assembly_attestation_replays_its_own_compatibility() -> None:
     attestation = _native_attestation(data)
     assert attestation is not None
     assert attestation["compatibility"] == "native-assembly-with-kit-neutral"
-    assert attestation["vendor_loadable"] is False
+    assert attestation["vendor_loadable"] is True
     assert attestation["application_usable"] is False
     assert _replay_compatibility(data) == "native-assembly-with-kit-neutral"
 
