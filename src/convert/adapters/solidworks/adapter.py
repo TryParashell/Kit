@@ -1289,7 +1289,7 @@ def _assembly_bundle(
     used = {destination.name.casefold()}
     complete = True
     BundleCaps: set[Capability] = set()
-    targets: list[tuple[ComponentDefinition, CadDocument, str, Path]] = []
+    targets: list[tuple[ComponentDefinition, CadDocument, str, Path, Path]] = []
     FinalValue = settings.values.get("final_destination")
     FinalPath = (
         Path(FinalValue).expanduser().resolve()
@@ -1330,16 +1330,17 @@ def _assembly_bundle(
             candidate = f"{stem}-{index}{suffix}"
         used.add(candidate.casefold())
         target = (destination.parent / candidate).resolve()
-        TargetName = str((FinalPath.parent / candidate).resolve())
+        FinalTarget = (FinalPath.parent / candidate).resolve()
+        TargetName = str(FinalTarget)
         names[key] = TargetName
         names[definition.id] = TargetName
         if definition.document_id:
             names[definition.document_id] = TargetName
-        targets.append((definition, component, candidate, target))
+        targets.append((definition, component, candidate, target, FinalTarget))
     available_names = {
         PureWindowsPath(NameValue).name.casefold() for NameValue in names.values()
     }
-    for definition, component, candidate, target in targets:
+    for definition, component, candidate, target, FinalTarget in targets:
         buffer = BytesIO()
         values = dict(settings.values)
         values["portable"] = False
@@ -1355,9 +1356,12 @@ def _assembly_bundle(
             ),
         )
         payload = buffer.getvalue()
-        if target.exists() and not settings.overwrite:
-            if target.read_bytes() != payload:
-                raise FileExistsError(target)
+        if FinalTarget.exists():
+            if FinalTarget.read_bytes() != payload:
+                if settings.overwrite:
+                    payloads[target] = payload
+                else:
+                    raise FileExistsError(FinalTarget)
         else:
             payloads[target] = payload
         native_result = (
