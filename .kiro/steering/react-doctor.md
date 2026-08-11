@@ -13,6 +13,7 @@ After changing React code, run from the affected project root (the directory con
 ```bash
 npx react-doctor@latest --verbose --silent --yes --no-ci --scope changed
 ```
+
 ## YOU MUST ADD THESE ARGS --silent --yes --no-ci OR ELSE REACT DOCTOR WILL STALL
 
 Then:

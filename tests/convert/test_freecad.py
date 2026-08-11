@@ -140,7 +140,9 @@ from interchange import (
     BooleanOperation,
     BrepPayload,
     Capability,
+    ChamferFeature,
     CircleGeometry,
+    CircularPatternFeature,
     Configuration,
     ConstraintKind,
     ConstraintReference,
@@ -153,6 +155,7 @@ from interchange import (
     GeometryKind,
     HyperbolaGeometry,
     LineGeometry,
+    LinearPatternFeature,
     MateKind,
     Mesh,
     NativeFeatureDefinition,
@@ -164,6 +167,7 @@ from interchange import (
     PointGeometry,
     Selection,
     SelectionPathElement,
+    ShellFeature,
     SketchConstraint,
     SketchEntity,
     Transform,
@@ -1702,6 +1706,418 @@ def test_native_capabilities_follow_restored_sections() -> None:
     )
 
 
+# native chamfer properties must become a semantic editable feature definition
+def test_native_equal_distance_chamfer_is_semantic() -> None:
+    # the fixture mutation adds the exact PartDesign history and property contracts
+    def AddChamfer(RootData: ET.Element) -> None:
+        ObjectsData = RootData.find("./Objects")
+        ObjectData = RootData.find("./ObjectData")
+        assert ObjectsData is not None
+        assert ObjectData is not None
+        ObjectsData.set("Count", str(int(ObjectsData.get("Count", "0")) + 1))
+        ObjectData.set("Count", str(int(ObjectData.get("Count", "0")) + 1))
+        BodyDeps = ObjectsData.find("./ObjectDeps[@Name='Body']")
+        assert BodyDeps is not None
+        ET.SubElement(BodyDeps, "Dep", {"Name": "Chamfer"})
+        BodyDeps.set("Count", str(int(BodyDeps.get("Count", "0")) + 1))
+        ChamferDeps = ET.SubElement(
+            ObjectsData,
+            "ObjectDeps",
+            {"Name": "Chamfer", "Count": "2"},
+        )
+        ET.SubElement(ChamferDeps, "Dep", {"Name": "Pad"})
+        ET.SubElement(ChamferDeps, "Dep", {"Name": "Body"})
+        ET.SubElement(
+            ObjectsData,
+            "Object",
+            {"type": "PartDesign::Chamfer", "name": "Chamfer", "id": "5"},
+        )
+        BodyProperties = ObjectData.find("./Object[@name='Body']/Properties")
+        assert BodyProperties is not None
+        GroupData = BodyProperties.find("./Property[@name='Group']/LinkList")
+        TipData = BodyProperties.find("./Property[@name='Tip']/Link")
+        assert GroupData is not None
+        assert TipData is not None
+        ET.SubElement(GroupData, "Link", {"value": "Chamfer"})
+        GroupData.set("count", str(int(GroupData.get("count", "0")) + 1))
+        TipData.set("value", "Chamfer")
+        BaseData = _native_property(
+            "Base",
+            "App::PropertyLinkSub",
+            "LinkSub",
+            {"value": "Pad", "count": "1"},
+        )
+        ET.SubElement(BaseData[0], "Sub", {"value": "Edge5"})
+        PropertiesData = (
+            _native_property(
+                "Label", "App::PropertyString", "String", {"value": "Chamfer"}
+            ),
+            BaseData,
+            _native_property(
+                "BaseFeature", "App::PropertyLink", "Link", {"value": "Pad"}
+            ),
+            _native_property(
+                "Size",
+                "App::PropertyQuantityConstraint",
+                "Float",
+                {"value": "2"},
+            ),
+            _native_property(
+                "Size2",
+                "App::PropertyQuantityConstraint",
+                "Float",
+                {"value": "1"},
+            ),
+            _native_property("Angle", "App::PropertyAngle", "Float", {"value": "45"}),
+            _native_property(
+                "ChamferType",
+                "App::PropertyEnumeration",
+                "Integer",
+                {"value": "0"},
+            ),
+            _native_property(
+                "FlipDirection",
+                "App::PropertyBool",
+                "Bool",
+                {"value": "false"},
+            ),
+            _native_property(
+                "UseAllEdges",
+                "App::PropertyBool",
+                "Bool",
+                {"value": "false"},
+            ),
+        )
+        ChamferData = ET.SubElement(ObjectData, "Object", {"name": "Chamfer"})
+        ChamferProperties = ET.SubElement(
+            ChamferData,
+            "Properties",
+            {"Count": str(len(PropertiesData)), "TransientCount": "0"},
+        )
+        ChamferProperties.extend(PropertiesData)
+
+    DocumentData = FreeCADAdapter().read(
+        _rewrite_document_xml(_native_part_fixture(), AddChamfer)
+    )
+    ChamferData = next(
+        ItemData
+        for ItemData in DocumentData.feature_timeline
+        if ItemData.kind == FeatureKind.CHAMFER
+    )
+    assert isinstance(ChamferData.definition, ChamferFeature)
+    assert ChamferData.definition.distance == ParameterValue(
+        2.0,
+        ValueKind.LENGTH,
+        "mm",
+    )
+    assert ChamferData.definition.mode == "equal_distance"
+    assert ChamferData.definition.second_distance is None
+    assert ChamferData.definition.angle is None
+    assert ChamferData.input_feature_ids == ("freecad:feature:Pad",)
+    assert len(ChamferData.selection_ids) == 1
+    SelectionData = next(
+        ItemData
+        for ItemData in DocumentData.selections
+        if ItemData.id == ChamferData.selection_ids[0]
+    )
+    assert SelectionData.path[0].entity_kind == "edge"
+    assert SelectionData.path[0].subelement == "Edge5"
+
+
+# native thickness properties must become an inward editable shell definition
+def test_native_inward_thickness_is_semantic() -> None:
+    # the fixture mutation adds the exact source links needed by shell semantics
+    def AddThickness(RootData: ET.Element) -> None:
+        ObjectsData = RootData.find("./Objects")
+        ObjectData = RootData.find("./ObjectData")
+        assert ObjectsData is not None
+        assert ObjectData is not None
+        ObjectsData.set("Count", str(int(ObjectsData.get("Count", "0")) + 1))
+        ObjectData.set("Count", str(int(ObjectData.get("Count", "0")) + 1))
+        BodyDeps = ObjectsData.find("./ObjectDeps[@Name='Body']")
+        assert BodyDeps is not None
+        ET.SubElement(BodyDeps, "Dep", {"Name": "Thickness"})
+        BodyDeps.set("Count", str(int(BodyDeps.get("Count", "0")) + 1))
+        ThicknessDeps = ET.SubElement(
+            ObjectsData,
+            "ObjectDeps",
+            {"Name": "Thickness", "Count": "2"},
+        )
+        ET.SubElement(ThicknessDeps, "Dep", {"Name": "Pad"})
+        ET.SubElement(ThicknessDeps, "Dep", {"Name": "Body"})
+        ET.SubElement(
+            ObjectsData,
+            "Object",
+            {"type": "PartDesign::Thickness", "name": "Thickness", "id": "5"},
+        )
+        BodyProperties = ObjectData.find("./Object[@name='Body']/Properties")
+        assert BodyProperties is not None
+        GroupData = BodyProperties.find("./Property[@name='Group']/LinkList")
+        TipData = BodyProperties.find("./Property[@name='Tip']/Link")
+        assert GroupData is not None
+        assert TipData is not None
+        ET.SubElement(GroupData, "Link", {"value": "Thickness"})
+        GroupData.set("count", str(int(GroupData.get("count", "0")) + 1))
+        TipData.set("value", "Thickness")
+        BaseData = _native_property(
+            "Base",
+            "App::PropertyLinkSub",
+            "LinkSub",
+            {"value": "Pad", "count": "1"},
+        )
+        ET.SubElement(BaseData[0], "Sub", {"value": "Face6"})
+        PropertiesData = (
+            _native_property(
+                "Label", "App::PropertyString", "String", {"value": "Thickness"}
+            ),
+            BaseData,
+            _native_property(
+                "BaseFeature", "App::PropertyLink", "Link", {"value": "Pad"}
+            ),
+            _native_property(
+                "Value",
+                "App::PropertyQuantityConstraint",
+                "Float",
+                {"value": "2"},
+            ),
+            _native_property(
+                "Reversed", "App::PropertyBool", "Bool", {"value": "true"}
+            ),
+        )
+        ThicknessData = ET.SubElement(ObjectData, "Object", {"name": "Thickness"})
+        ThicknessProperties = ET.SubElement(
+            ThicknessData,
+            "Properties",
+            {"Count": str(len(PropertiesData)), "TransientCount": "0"},
+        )
+        ThicknessProperties.extend(PropertiesData)
+
+    DocumentData = FreeCADAdapter().read(
+        _rewrite_document_xml(_native_part_fixture(), AddThickness)
+    )
+    ShellData = next(
+        ItemData
+        for ItemData in DocumentData.feature_timeline
+        if ItemData.kind == FeatureKind.SHELL
+    )
+    assert isinstance(ShellData.definition, ShellFeature)
+    assert ShellData.definition.thickness == ParameterValue(
+        2.0,
+        ValueKind.LENGTH,
+        "mm",
+    )
+    assert ShellData.definition.outward is False
+    assert ShellData.input_feature_ids == ("freecad:feature:Pad",)
+    assert len(ShellData.selection_ids) == 1
+    SelectionData = next(
+        ItemData
+        for ItemData in DocumentData.selections
+        if ItemData.id == ShellData.selection_ids[0]
+    )
+    assert SelectionData.path[0].entity_kind == "face"
+    assert SelectionData.path[0].subelement == "Face6"
+
+
+def test_native_partdesign_linear_pattern_restores_parametric_semantics() -> None:
+    def AddLinearPattern(DocumentRoot: ET.Element) -> None:
+        ObjectData = DocumentRoot.find("./ObjectData")
+        ObjectsData = DocumentRoot.find("./Objects")
+        assert ObjectData is not None
+        assert ObjectsData is not None
+        ObjectsData.set("Count", str(int(ObjectsData.get("Count", "0")) + 1))
+        ObjectData.set("Count", str(int(ObjectData.get("Count", "0")) + 1))
+        BodyDeps = ObjectsData.find("./ObjectDeps[@Name='Body']")
+        assert BodyDeps is not None
+        ET.SubElement(BodyDeps, "Dep", {"Name": "LinearPattern"})
+        BodyDeps.set("Count", str(int(BodyDeps.get("Count", "0")) + 1))
+        PatternDeps = ET.SubElement(
+            ObjectsData,
+            "ObjectDeps",
+            {"Name": "LinearPattern", "Count": "3"},
+        )
+        for DependencyName in ("Pad", "Sketch", "Body"):
+            ET.SubElement(PatternDeps, "Dep", {"Name": DependencyName})
+        ET.SubElement(
+            ObjectsData,
+            "Object",
+            {"type": "PartDesign::LinearPattern", "name": "LinearPattern", "id": "5"},
+        )
+        BodyProperties = ObjectData.find("./Object[@name='Body']/Properties")
+        assert BodyProperties is not None
+        GroupData = BodyProperties.find("./Property[@name='Group']/LinkList")
+        TipData = BodyProperties.find("./Property[@name='Tip']/Link")
+        assert GroupData is not None
+        assert TipData is not None
+        ET.SubElement(GroupData, "Link", {"value": "LinearPattern"})
+        GroupData.set("count", str(int(GroupData.get("count", "0")) + 1))
+        TipData.set("value", "LinearPattern")
+        OriginalsData = _native_property(
+            "Originals",
+            "App::PropertyLinkList",
+            "LinkList",
+            {"count": "1"},
+        )
+        ET.SubElement(OriginalsData[0], "Link", {"value": "Pad"})
+        DirectionData = _native_property(
+            "Direction",
+            "App::PropertyLinkSub",
+            "LinkSub",
+            {"value": "Sketch", "count": "1"},
+        )
+        ET.SubElement(DirectionData[0], "Sub", {"value": "N_Axis"})
+        PropertiesData = (
+            _native_property(
+                "Label", "App::PropertyString", "String", {"value": "LinearPattern"}
+            ),
+            OriginalsData,
+            DirectionData,
+            _native_property("Length", "App::PropertyLength", "Float", {"value": "10"}),
+            _native_property("Offset", "App::PropertyLength", "Float", {"value": "5"}),
+            _native_property(
+                "Occurrences", "App::PropertyInteger", "Integer", {"value": "3"}
+            ),
+            _native_property(
+                "Mode", "App::PropertyEnumeration", "Integer", {"value": "0"}
+            ),
+            _native_property(
+                "Reversed", "App::PropertyBool", "Bool", {"value": "false"}
+            ),
+        )
+        PatternData = ET.SubElement(ObjectData, "Object", {"name": "LinearPattern"})
+        PatternProperties = ET.SubElement(
+            PatternData,
+            "Properties",
+            {"Count": str(len(PropertiesData)), "TransientCount": "0"},
+        )
+        PatternProperties.extend(PropertiesData)
+
+    DocumentData = FreeCADAdapter().read(
+        _rewrite_document_xml(_native_part_fixture(), AddLinearPattern)
+    )
+    PatternData = next(
+        ItemData
+        for ItemData in DocumentData.feature_timeline
+        if ItemData.kind == FeatureKind.PATTERN
+    )
+    assert isinstance(PatternData.definition, LinearPatternFeature)
+    assert PatternData.definition.spacing == ParameterValue(
+        5.0,
+        ValueKind.LENGTH,
+        "mm",
+    )
+    assert PatternData.definition.instance_count == 3
+    assert PatternData.definition.reversed is False
+    assert PatternData.input_feature_ids == ("freecad:feature:Pad",)
+    assert PatternData.selection_ids == (PatternData.definition.direction_selection_id,)
+    SelectionData = next(
+        ItemData
+        for ItemData in DocumentData.selections
+        if ItemData.id == PatternData.definition.direction_selection_id
+    )
+    assert SelectionData.path[0].entity_kind == "native"
+    assert SelectionData.path[0].entity_id == "Sketch"
+    assert SelectionData.path[0].subelement == "N_Axis"
+    assert DocumentData.bodies[0].final_feature_id == PatternData.id
+
+
+def test_native_partdesign_polar_pattern_restores_parametric_semantics() -> None:
+    def AddPolarPattern(DocumentRoot: ET.Element) -> None:
+        ObjectData = DocumentRoot.find("./ObjectData")
+        ObjectsData = DocumentRoot.find("./Objects")
+        assert ObjectData is not None
+        assert ObjectsData is not None
+        ObjectsData.set("Count", str(int(ObjectsData.get("Count", "0")) + 1))
+        ObjectData.set("Count", str(int(ObjectData.get("Count", "0")) + 1))
+        BodyDeps = ObjectsData.find("./ObjectDeps[@Name='Body']")
+        assert BodyDeps is not None
+        ET.SubElement(BodyDeps, "Dep", {"Name": "PolarPattern"})
+        BodyDeps.set("Count", str(int(BodyDeps.get("Count", "0")) + 1))
+        PatternDeps = ET.SubElement(
+            ObjectsData,
+            "ObjectDeps",
+            {"Name": "PolarPattern", "Count": "3"},
+        )
+        for DependencyName in ("Pad", "Sketch", "Body"):
+            ET.SubElement(PatternDeps, "Dep", {"Name": DependencyName})
+        ET.SubElement(
+            ObjectsData,
+            "Object",
+            {"type": "PartDesign::PolarPattern", "name": "PolarPattern", "id": "5"},
+        )
+        BodyProperties = ObjectData.find("./Object[@name='Body']/Properties")
+        assert BodyProperties is not None
+        GroupData = BodyProperties.find("./Property[@name='Group']/LinkList")
+        TipData = BodyProperties.find("./Property[@name='Tip']/Link")
+        assert GroupData is not None
+        assert TipData is not None
+        ET.SubElement(GroupData, "Link", {"value": "PolarPattern"})
+        GroupData.set("count", str(int(GroupData.get("count", "0")) + 1))
+        TipData.set("value", "PolarPattern")
+        OriginalsData = _native_property(
+            "Originals",
+            "App::PropertyLinkList",
+            "LinkList",
+            {"count": "1"},
+        )
+        ET.SubElement(OriginalsData[0], "Link", {"value": "Pad"})
+        AxisData = _native_property(
+            "Axis",
+            "App::PropertyLinkSub",
+            "LinkSub",
+            {"value": "Sketch", "count": "1"},
+        )
+        ET.SubElement(AxisData[0], "Sub", {"value": "N_Axis"})
+        PropertiesData = (
+            _native_property(
+                "Label", "App::PropertyString", "String", {"value": "PolarPattern"}
+            ),
+            OriginalsData,
+            AxisData,
+            _native_property("Angle", "App::PropertyAngle", "Float", {"value": "360"}),
+            _native_property(
+                "Occurrences", "App::PropertyInteger", "Integer", {"value": "4"}
+            ),
+            _native_property(
+                "Reversed", "App::PropertyBool", "Bool", {"value": "false"}
+            ),
+        )
+        PatternData = ET.SubElement(ObjectData, "Object", {"name": "PolarPattern"})
+        PatternProperties = ET.SubElement(
+            PatternData,
+            "Properties",
+            {"Count": str(len(PropertiesData)), "TransientCount": "0"},
+        )
+        PatternProperties.extend(PropertiesData)
+
+    DocumentData = FreeCADAdapter().read(
+        _rewrite_document_xml(_native_part_fixture(), AddPolarPattern)
+    )
+    PatternData = next(
+        ItemData
+        for ItemData in DocumentData.feature_timeline
+        if ItemData.kind == FeatureKind.PATTERN
+    )
+    assert isinstance(PatternData.definition, CircularPatternFeature)
+    assert PatternData.definition.angle == ParameterValue(
+        360.0,
+        ValueKind.ANGLE,
+        "deg",
+    )
+    assert PatternData.definition.instance_count == 4
+    assert PatternData.definition.reversed is False
+    assert PatternData.input_feature_ids == ("freecad:feature:Pad",)
+    assert PatternData.selection_ids == (PatternData.definition.axis_selection_id,)
+    SelectionData = next(
+        ItemData
+        for ItemData in DocumentData.selections
+        if ItemData.id == PatternData.definition.axis_selection_id
+    )
+    assert SelectionData.path[0].entity_kind == "native"
+    assert SelectionData.path[0].entity_id == "Sketch"
+    assert SelectionData.path[0].subelement == "N_Axis"
+    assert DocumentData.bodies[0].final_feature_id == PatternData.id
+
+
 def test_neutral_sections_are_exposed_by_native_freecad_graph() -> None:
     source = neutral_document()
     first_parameter = Parameter("p:a", "A", ParameterValue(2.0))
@@ -1789,8 +2205,7 @@ def test_neutral_sections_are_exposed_by_native_freecad_graph() -> None:
         assert configuration is not None
         assert configuration.get("value") == "config:default"
         shape = root.find(
-            "./ObjectData/Object[@name='BRep']/Properties/"
-            "Property[@name='Shape']/Part"
+            "./ObjectData/Object[@name='BRep']/Properties/Property[@name='Shape']/Part"
         )
         assert shape is not None
         shape_file = shape.get("file", "")
@@ -1842,7 +2257,7 @@ def test_neutral_feature_scope_ignores_native_and_reference_carriers() -> None:
         "Sketches",
     ]
     base = root.find(
-        "./ObjectData/Object[@name='Boss1']/Properties/" "Property[@name='Base']/Link"
+        "./ObjectData/Object[@name='Boss1']/Properties/Property[@name='Base']/Link"
     )
     assert base is not None
     assert base.get("value") == "Sketch1"
@@ -3407,8 +3822,7 @@ def test_native_replay_serializes_feature_suppression_without_source_property() 
     with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
         root = ET.fromstring(archive.read("Document.xml"))
     suppressed = root.find(
-        "./ObjectData/Object[@name='Pad']/Properties/"
-        "Property[@name='Suppressed']/Bool"
+        "./ObjectData/Object[@name='Pad']/Properties/Property[@name='Suppressed']/Bool"
     )
     assert suppressed is not None
     assert suppressed.get("value") == "true"

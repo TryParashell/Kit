@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Revolve donors authored at swVersion 18000, and what the graded family pinned
 
 This document records a SOLIDWORKS 2025 (`RevisionNumber` 33.5.0) authoring session that replaces
@@ -6,6 +16,9 @@ produced by a COM session or by SOLIDWORKS reopening a Kit-written file; nothing
 
 Companion data: `.rescratch/sw/author_revolve.py`, `.rescratch/sw/out/author_revolve.json`,
 `.rescratch/sw/out/revolve_signature.txt`, `.rescratch/sw/out/measure_revolve_new.json`.
+
+Current-status note: the authored files in this report are oracle evidence only. Production emits
+the supported revolution and groove families from typed programs and contains no donor bytes.
 
 ---
 
@@ -66,16 +79,16 @@ Eight parts on one rectangular profile (`6..18` in u, `-9..9` in v) with a centr
 plus two on a six-segment stepped-pin profile. Measured with `GetMassProperties` in the authoring
 session.
 
-| part | call arguments that differ | volume mm³ | `locate_features` |
-|---|---|---|---|
-| `revolve_slab_full` | `SingleDir=1`, `Dir1Type=0`, `Dir1Angle=2π` | 16286.016316209492 | 1 revolve, angle 360° |
-| `revolve_slab_90` | `Dir1Angle=π/2` | 4071.5040790523744 | 1 revolve, angle 90° |
-| `revolve_slab_270` | `Dir1Angle=3π/2` | 12214.512237157118 | 1 revolve, angle 270° |
-| `revolve_slab_90_reversed` | `ReverseDir=1`, `Dir1Angle=π/2` | 4071.5040790523744 | 1 revolve, angle 90° |
-| `revolve_slab_90_midplane` | `SingleDir=0`, `Dir1Type=Dir2Type=1` | 4071.5040790523744 | **0 features** |
-| `revolve_slab_90_45_two_direction` | `SingleDir=0`, `Dir1Type=Dir2Type=2`, `Dir2Angle=π/4` | 6107.25611857856 | **0 features** |
-| `revolve_pin_full` (Top Plane) | six-segment profile | 730.3626960943111 | 1 revolve, angle 360° |
-| `revolve_pin_front_full` (Front Plane) | six-segment profile | 730.3626960943111 | 1 revolve, angle 360° |
+| part                                   | call arguments that differ                            | volume mm³         | `locate_features`     |
+| -------------------------------------- | ----------------------------------------------------- | ------------------ | --------------------- |
+| `revolve_slab_full`                    | `SingleDir=1`, `Dir1Type=0`, `Dir1Angle=2π`           | 16286.016316209492 | 1 revolve, angle 360° |
+| `revolve_slab_90`                      | `Dir1Angle=π/2`                                       | 4071.5040790523744 | 1 revolve, angle 90°  |
+| `revolve_slab_270`                     | `Dir1Angle=3π/2`                                      | 12214.512237157118 | 1 revolve, angle 270° |
+| `revolve_slab_90_reversed`             | `ReverseDir=1`, `Dir1Angle=π/2`                       | 4071.5040790523744 | 1 revolve, angle 90°  |
+| `revolve_slab_90_midplane`             | `SingleDir=0`, `Dir1Type=Dir2Type=1`                  | 4071.5040790523744 | **0 features**        |
+| `revolve_slab_90_45_two_direction`     | `SingleDir=0`, `Dir1Type=Dir2Type=2`, `Dir2Angle=π/4` | 6107.25611857856   | **0 features**        |
+| `revolve_pin_full` (Top Plane)         | six-segment profile                                   | 730.3626960943111  | 1 revolve, angle 360° |
+| `revolve_pin_front_full` (Front Plane) | six-segment profile                                   | 730.3626960943111  | 1 revolve, angle 360° |
 
 Analytic check on the slab family: the profile is an annulus of inner radius 6, outer radius 18 and
 height 18, so a full revolution is `π (18² − 6²) 18 = 16286.016316209...`. Each partial angle is
@@ -111,14 +124,14 @@ never touches them; a surface-offset revolve has no donor.
 `SERIALIZE.md` §3 records that `getAngle(i)` reads the `moDisplayDim_c*` at `+0x18+8i` and returns
 literal 2π when that pointer is null. The graded family makes the consequence measurable:
 
-| part | resolved-features stream bytes |
-|---|---|
-| `revolve_slab_full` (360°) | 12135 |
-| `revolve_slab_90` (90°) | 12247 |
-| `revolve_slab_270` (270°) | 12247 |
+| part                       | resolved-features stream bytes |
+| -------------------------- | ------------------------------ |
+| `revolve_slab_full` (360°) | 12135                          |
+| `revolve_slab_90` (90°)    | 12247                          |
+| `revolve_slab_270` (270°)  | 12247                          |
 
 The 112-byte difference is the display dimension a partial angle needs and a full revolution does
-not carry. `locate_features` *does* report `angle_degrees == 360.0` for the full-revolution part —
+not carry. `locate_features` _does_ report `angle_degrees == 360.0` for the full-revolution part —
 that value comes from the `moAngleParameter_c` scalar, which is present in both shapes. So the
 scalar is patchable in both, but on a 360° donor **patching it changes nothing that SOLIDWORKS
 reads**: with the display-dimension pointer null, `getAngle` still returns 2π and the rebuild still
@@ -156,13 +169,13 @@ Every donor below was authored fresh at 18000 in the session above, patched thro
 SOLIDWORKS. `control healthy: True` before and after the batch
 (`BASELINE_40x20x10.SLDPRT` = 8000.000000000001 both times).
 
-| donor | features | FreeCAD source volume mm³ | SOLIDWORKS volume mm³ | bodies |
-|---|---|---|---|---|
-| `revolve_full` | revolve-boss / rectangle / front-sketch-axis | 16286.01631620949 | 16286.016316209485 | 1 |
-| `revolve_pin_top_full` | revolve-boss / polyline-6 / top-sketch-axis | 730.3626960943112 | 730.3626960943113 | 1 |
-| `revolve_pin_front_full` | revolve-boss / polyline-6 / front-sketch-axis | 730.3626960943112 | 730.3626960943111 | 1 |
-| `boss_disjoint_revolve` | boss + revolve-boss | 24730.36269609431 | 24730.362696094307 | 2 |
-| `arcboss_cut_cut_cut_through_rev` | boss + 3 cuts + revolve-boss | 584449.7296355376 | 584449.7323019443 | 2 |
+| donor                             | features                                      | FreeCAD source volume mm³ | SOLIDWORKS volume mm³ | bodies |
+| --------------------------------- | --------------------------------------------- | ------------------------- | --------------------- | ------ |
+| `revolve_full`                    | revolve-boss / rectangle / front-sketch-axis  | 16286.01631620949         | 16286.016316209485    | 1      |
+| `revolve_pin_top_full`            | revolve-boss / polyline-6 / top-sketch-axis   | 730.3626960943112         | 730.3626960943113     | 1      |
+| `revolve_pin_front_full`          | revolve-boss / polyline-6 / front-sketch-axis | 730.3626960943112         | 730.3626960943111     | 1      |
+| `boss_disjoint_revolve`           | boss + revolve-boss                           | 24730.36269609431         | 24730.362696094307    | 2      |
+| `arcboss_cut_cut_cut_through_rev` | boss + 3 cuts + revolve-boss                  | 584449.7296355376         | 584449.7323019443     | 2      |
 
 `revolve_pin_top_full` additionally reproduces the FreeCAD centre of mass of
 `PartDesignExample`'s `Body001`: `(≈0, ≈0, 19.83790861645005)` against
@@ -182,19 +195,19 @@ resolved-features stream is byte-length identical (17713) to the entry already i
 The eleven authored parts were also opened directly, with control before and after
 (`control healthy: True`, `BASELINE_40x20x10.SLDPRT` = 8000.000000000001 both times):
 
-| part | volume mm³ | analytic | bodies |
-|---|---|---|---|
-| `revolve_slab_full` | 16286.016316209494 | 16286.016316209494 | 1 |
-| `revolve_slab_90` | 4071.5040790523735 | 4071.5040790523734 | 1 |
-| `revolve_slab_270` | 12214.512237157118 | 12214.512237157120 | 1 |
-| `revolve_slab_90_reversed` | 4071.5040790523735 | 4071.5040790523734 | 1 |
-| `revolve_slab_90_midplane` | 4071.5040790523735 | 4071.5040790523734 | 1 |
-| `revolve_slab_90_45_two_direction` | 6107.25611857856 | 6107.256118578603 | 1 |
-| `revolve_pin_full` | 730.3626960943111 | 730.3626960943112 | 1 |
-| `revolve_pin_front_full` | 730.3626960943111 | 730.3626960943112 | 1 |
-| `boss_revcut_full` | 6869.0266447076765 | 6869.026644707673 | 1 |
-| `boss_disjoint_revolve` | 24730.362696094307 | 24730.36269609431 | 2 |
-| `arcboss_cut_cut_cut_through_rev` | 591409.401648088 | — | 2 |
+| part                               | volume mm³         | analytic           | bodies |
+| ---------------------------------- | ------------------ | ------------------ | ------ |
+| `revolve_slab_full`                | 16286.016316209494 | 16286.016316209494 | 1      |
+| `revolve_slab_90`                  | 4071.5040790523735 | 4071.5040790523734 | 1      |
+| `revolve_slab_270`                 | 12214.512237157118 | 12214.512237157120 | 1      |
+| `revolve_slab_90_reversed`         | 4071.5040790523735 | 4071.5040790523734 | 1      |
+| `revolve_slab_90_midplane`         | 4071.5040790523735 | 4071.5040790523734 | 1      |
+| `revolve_slab_90_45_two_direction` | 6107.25611857856   | 6107.256118578603  | 1      |
+| `revolve_pin_full`                 | 730.3626960943111  | 730.3626960943112  | 1      |
+| `revolve_pin_front_full`           | 730.3626960943111  | 730.3626960943112  | 1      |
+| `boss_revcut_full`                 | 6869.0266447076765 | 6869.026644707673  | 1      |
+| `boss_disjoint_revolve`            | 24730.362696094307 | 24730.36269609431  | 2      |
+| `arcboss_cut_cut_cut_through_rev`  | 591409.401648088   | —                  | 2      |
 
 The `arcboss` donor part carries the donor's own placeholder coordinates, so it has no analytic
 expectation; what matters is that it rebuilds into two bodies before any patch is applied.
@@ -223,13 +236,13 @@ The previous "ancillary body" rule — drop a body that a non-model native featu
 gone. It existed so a single-body donor could be selected while a tool body existed, and it dropped
 `PartDesignExample`'s `Endmill006` silently. Both bodies are now expressed.
 
-### Still declined, honestly
+### Historical merged-boss decline (superseded)
 
-A boss in position ≥2 whose solid **overlaps** an earlier one should fuse into one body and does
-not. `kit_boss_boss` measures 32000 mm³ / 2 bodies against FreeCAD's 28800 mm³ / 1 body. That is a
-single-body document, so the multi-body gate never sees it; `moEndSpec_c+0x128` `getMerge()` is
-already `1` in every donor, so merge is not the cause. The second feature's records carry the
-resolved feature scope and that is not located. Unchanged by this work.
+This study's donor-era writer produced 32,000 mm³ and two bodies where overlapping bosses should
+have fused to 28,800 mm³ and one body. It correctly proved that `moEndSpec_c+0x128` `getMerge()` was
+not sufficient. The subsequent typed boss→boss program recovered the resolved feature scope. Its
+output opens and rebuilds as one body at 28,800 mm³; changing `D1@Boss-Extrude2` from 25 to 30
+rebuilds to 30,400 mm³. See `../archive/MULTISTREAM.md` for the current oracle record.
 
 ---
 
@@ -247,11 +260,11 @@ application_usable = part.application_usable and every required capability is
 and this document requires three capabilities that are `CARRIER` /
 `WRITER_UNIMPLEMENTED`:
 
-| capability | why it is not native | evidence |
-|---|---|---|
-| `expressions` | 9 FreeCAD expression bindings, e.g. `<<Attributes002>>.Diameter`, `SetupSheet.HorizRapid`. SOLIDWORKS has equations, so the capability is not target-unsupported, but no equation writer exists. | `document.parameters` with `expression is not None` |
-| `selections` | 5 `ReferenceAxis` sub-element selections (`Sketch.N_Axis`, `Sketch004.V_Axis`). `read_sldprt` recovers SOLIDWORKS selections, so the capability is genuinely supported by the target and the gap is on the write side. | `document.selections` |
-| `support_planes` | The document declares 6 planes; the writer emits the 3 principal ones. `XY_Plane001` collides onto Front Plane's object id 2 and `XZ_Plane001` / `YZ_Plane001` get ids with no plane record, so `_proved_write_capabilities` cannot prove the set. | `.rescratch/pd_planes.txt` |
+| capability       | why it is not native                                                                                                                                                                                                                               | evidence                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `expressions`    | 9 FreeCAD expression bindings, e.g. `<<Attributes002>>.Diameter`, `SetupSheet.HorizRapid`. SOLIDWORKS has equations, so the capability is not target-unsupported, but no equation writer exists.                                                   | `document.parameters` with `expression is not None` |
+| `selections`     | 5 `ReferenceAxis` sub-element selections (`Sketch.N_Axis`, `Sketch004.V_Axis`). `read_sldprt` recovers SOLIDWORKS selections, so the capability is genuinely supported by the target and the gap is on the write side.                             | `document.selections`                               |
+| `support_planes` | The document declares 6 planes; the writer emits the 3 principal ones. `XY_Plane001` collides onto Front Plane's object id 2 and `XZ_Plane001` / `YZ_Plane001` get ids with no plane record, so `_proved_write_capabilities` cannot prove the set. | `.rescratch/pd_planes.txt`                          |
 
 Compare `kit_boss_blind.FCStd`, which requires none of the three and reports
 `application_usable=True` with `support_planes` native.

@@ -14,7 +14,7 @@ from pathlib import Path
 import struct
 from typing import Any
 
-from convert.adapters.solidworks.archive import read_string
+from convert.adapters.solidworks.archive import encode_string, read_string
 from convert.adapters.solidworks.container import SldprtArchive
 from convert.adapters.solidworks.format import CONFIGURATION_STREAM
 
@@ -58,18 +58,27 @@ DirectFields = (
     (0x5E90, "IHH8B", "moSketchBlockMgr_c persistent identifier"),
 )
 
-# native status names are serialized as one counted semantic list
-StatusField = (
-    0x0E01,
-    (
-        "Description",
-        "High Priority",
-        "Low Priority",
-        "Complete",
-        "Reminder",
-    ),
-    "moRelMgr_c status-name table",
+# dimensioned sketches shift native helper fields that bypass primitive readers
+DimensionedBoxDirectFields = (
+    (0x09EE, "2d", "moTransRefPlaneData_c first inline transform row"),
+    (0x0A02, "2d", "moTransRefPlaneData_c second inline transform row"),
+    (0x4556, "3i", "moLengthUserUnits_c detail scalar triplet"),
+    (0x458A, "3i", "moRelMgr_c detail scalar triplet"),
+    (0x5EB0, "IHH8B", "moSketchBlockMgr_c persistent identifier"),
 )
+
+# native status names form one discoverable counted semantic list
+StatusNames = (
+    "Description",
+    "High Priority",
+    "Low Priority",
+    "Complete",
+    "Reminder",
+)
+
+# the reference program uses Part70, so later absolute trace fields follow its width
+ReferencePartNameOffset = 0x2C
+ReferencePartNameWidth = 4 + len("Part70".encode("utf-16le"))
 
 
 # command arguments keep program generation reproducible across workstations
@@ -79,6 +88,14 @@ def ParseArguments() -> argparse.Namespace:
     Parser.add_argument("trace", type=Path)
     Parser.add_argument("segments", type=Path)
     Parser.add_argument("output", type=Path)
+    Parser.add_argument("--range-start", type=lambda Value: int(Value, 0))
+    Parser.add_argument("--range-end", type=lambda Value: int(Value, 0))
+    Parser.add_argument(
+        "--profile",
+        choices=("baseline", "dimensioned-box"),
+        default="baseline",
+    )
+    Parser.add_argument("--fixed", action="store_true")
     return Parser.parse_args()
 
 
@@ -116,7 +133,7 @@ def AddOperation(
 def TraceRows(TraceText: str) -> tuple[tuple[str, int, str], ...]:
     ResultRows: list[tuple[str, int, str]] = []
     for SourceLine in TraceText.splitlines():
-        if not SourceLine.startswith("C "):
+        if not SourceLine.startswith(("C ", "F ")):
             continue
         PartsList = SourceLine.split()
         if len(PartsList) < 5 or PartsList[1] not in PrimitiveWidths:
@@ -215,8 +232,15 @@ def AddDirectFields(
     Operations: list[tuple[int, int, str, str, Any]],
     Covered: set[int],
     StreamData: bytes,
+    ProfileName: str,
 ) -> None:
-    for StartPos, FormatText, OwnerText in DirectFields:
+    _PartName, PartNameWidth = read_string(StreamData, ReferencePartNameOffset)
+    OffsetDelta = PartNameWidth - ReferencePartNameWidth
+    ProfileFields = (
+        DimensionedBoxDirectFields if ProfileName == "dimensioned-box" else DirectFields
+    )
+    for StartPos, FormatText, OwnerText in ProfileFields:
+        StartPos += OffsetDelta
         FieldWidth = struct.calcsize("<" + FormatText)
         ValuesList = struct.unpack_from("<" + FormatText, StreamData, StartPos)
         FieldValue: Any = ValuesList[0] if len(ValuesList) == 1 else ValuesList
@@ -229,19 +253,20 @@ def AddDirectFields(
             "direct:" + FormatText,
             FieldValue,
         )
-    StartPos, TextValues, OwnerText = StatusField
-    FieldWidth = 2
-    for TextValue in TextValues:
-        _Decoded, StringWidth = read_string(StreamData, StartPos + FieldWidth)
-        FieldWidth += StringWidth
+    StatusData = struct.pack("<H", len(StatusNames)) + b"".join(
+        encode_string(TextValue) for TextValue in StatusNames
+    )
+    StartPos = StreamData.find(StatusData)
+    if StartPos < 0 or StreamData.find(StatusData, StartPos + 1) >= 0:
+        raise ValueError("Config-0 status-name table is absent or ambiguous")
     AddOperation(
         Operations,
         Covered,
         StartPos,
-        FieldWidth,
-        OwnerText,
+        len(StatusData),
+        "moRelMgr_c status-name table",
         "stringlist",
-        TextValues,
+        StatusNames,
     )
 
 
@@ -424,9 +449,168 @@ def RenderSource(
     return "\n".join(SourceLines)
 
 
+# fixed topology programs replay typed fields without pretending their records are generic
+def RenderFixedSource(
+    Operations: list[tuple[int, int, str, str, Any]],
+    StreamLength: int,
+) -> str:
+    OwnerNames = tuple(sorted({Operation[2] for Operation in Operations}))
+    OwnerIndex = {OwnerText: Index for Index, OwnerText in enumerate(OwnerNames)}
+    SourceLines = [
+        "# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0",
+        "# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin",
+        "#",
+        "# This SPDX license identifier and copyright notice must not be",
+        "# removed, altered, or obscured. Doing so is a material breach of",
+        "# the PolyForm Strict License 1.0.0 and voids all licenses granted",
+        "# to you under it immediately and permanently.",
+        "",
+        "from __future__ import annotations",
+        "",
+        "from collections.abc import Mapping",
+        "from typing import Any",
+        "",
+        "from .config0_program import EncodeField",
+        "from .container import SldprtFormatError",
+        "",
+        "",
+        "# recovered callsites make every declared field traceable to its native serializer",
+        "FieldOwners = (",
+    ]
+    SourceLines.extend(f"    {OwnerText!r}," for OwnerText in OwnerNames)
+    SourceLines.extend(
+        [
+            ")",
+            "",
+            "# source offsets preserve the exact fixed topology field order",
+            "ConfigOps = (",
+        ]
+    )
+    for StartPos, FieldWidth, OwnerText, KindName, FieldValue in Operations:
+        if KindName.startswith("primitive:"):
+            TypeName = KindName.split(":", 1)[1]
+            ValueText = ValueLiteral(TypeName, FieldValue)
+        else:
+            ValueText = repr(FieldValue)
+        SourceLines.append(
+            f"    ({StartPos}, {FieldWidth}, {OwnerIndex[OwnerText]}, "
+            f"{KindName!r}, {ValueText}),"
+        )
+    SourceLines.extend(
+        [
+            ")",
+            "",
+            "# exact closure proves the fixed program accounts for the complete stream",
+            f"ReferenceLength = {StreamLength}",
+            "",
+            "",
+            "# typed replay emits the fixed configuration without retaining vendor byte spans",
+            "def EncodeProgram(Overrides: Mapping[int, Any] | None = None) -> bytes:",
+            "    FieldOverrides = dict(Overrides or {})",
+            "    OutputData = bytearray()",
+            "    SourceCursor = 0",
+            "    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in ConfigOps:",
+            "        if StartPos != SourceCursor:",
+            "            raise SldprtFormatError(f'Config-0 field program drifted at {StartPos}')",
+            "        FieldValue = FieldOverrides.get(StartPos, DefaultValue)",
+            "        FieldData = EncodeField(KindName, FieldValue)",
+            "        if len(FieldData) != FieldWidth:",
+            "            raise SldprtFormatError(f'Config-0 field width changed at {StartPos}')",
+            "        OutputData.extend(FieldData)",
+            "        SourceCursor += FieldWidth",
+            "    if SourceCursor != ReferenceLength or len(OutputData) != ReferenceLength:",
+            "        raise SldprtFormatError('Config-0 field program did not close its source')",
+            "    return bytes(OutputData)",
+            "",
+        ]
+    )
+    return "\n".join(SourceLines)
+
+
+# range rendering makes a fully typed subrecord reusable without duplicating its parent stream
+def RenderRangeSource(
+    Operations: list[tuple[int, int, str, str, Any]],
+    RangeStart: int,
+    RangeEnd: int,
+) -> str:
+    SelectedOperations = [
+        Operation for Operation in Operations if RangeStart <= Operation[0] < RangeEnd
+    ]
+    OwnerNames = tuple(sorted({Operation[2] for Operation in SelectedOperations}))
+    OwnerIndex = {OwnerText: Index for Index, OwnerText in enumerate(OwnerNames)}
+    SourceLines = [
+        "# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0",
+        "# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin",
+        "#",
+        "# This SPDX license identifier and copyright notice must not be",
+        "# removed, altered, or obscured. Doing so is a material breach of",
+        "# the PolyForm Strict License 1.0.0 and voids all licenses granted",
+        "# to you under it immediately and permanently.",
+        "",
+        "from __future__ import annotations",
+        "",
+        "from .config0_program import EncodeField",
+        "from .container import SldprtFormatError",
+        "",
+        "",
+        "# recovered callsites make every annotation field traceable to its native serializer",
+        "FieldOwners = (",
+    ]
+    SourceLines.extend(f"    {OwnerText!r}," for OwnerText in OwnerNames)
+    SourceLines.extend(
+        [
+            ")",
+            "",
+            "# relative offsets preserve the two-view annotation manager's complete typed order",
+            "AnnotationOps = (",
+        ]
+    )
+    for StartPos, FieldWidth, OwnerText, KindName, FieldValue in SelectedOperations:
+        if KindName.startswith("primitive:"):
+            TypeName = KindName.split(":", 1)[1]
+            ValueText = ValueLiteral(TypeName, FieldValue)
+        else:
+            ValueText = repr(FieldValue)
+        SourceLines.append(
+            f"    ({StartPos - RangeStart}, {FieldWidth}, {OwnerIndex[OwnerText]}, {KindName!r}, {ValueText}),"
+        )
+    SourceLines.extend(
+        [
+            ")",
+            "",
+            "# the source interval records where the reusable manager was observed",
+            f"SourceRange = ({RangeStart}, {RangeEnd})",
+            "",
+            "# exact closure rejects any future field-width or ordering drift",
+            f"ReferenceLength = {RangeEnd - RangeStart}",
+            "",
+            "",
+            "# typed field replay emits the two-view manager without retaining vendor byte spans",
+            "def EncodeTwoViewAnnotationManager() -> bytes:",
+            "    OutputData = bytearray()",
+            "    SourceCursor = 0",
+            "    for StartPos, FieldWidth, OwnerIndex, KindName, FieldValue in AnnotationOps:",
+            "        if StartPos != SourceCursor:",
+            "            raise SldprtFormatError(f'annotation field program drifted at {StartPos}')",
+            "        FieldData = EncodeField(KindName, FieldValue)",
+            "        if len(FieldData) != FieldWidth:",
+            "            raise SldprtFormatError(f'annotation field width changed at {StartPos}')",
+            "        OutputData.extend(FieldData)",
+            "        SourceCursor += FieldWidth",
+            "    if SourceCursor != ReferenceLength:",
+            "        raise SldprtFormatError('annotation field program did not close its source')",
+            "    return bytes(OutputData)",
+            "",
+        ]
+    )
+    return "\n".join(SourceLines)
+
+
 # full closure is mandatory before a generated program can enter production
 def RunMain() -> int:
     Arguments = ParseArguments()
+    if (Arguments.range_start is None) != (Arguments.range_end is None):
+        raise ValueError("Config-0 range generation needs both range boundaries")
     Archive = SldprtArchive.open(Arguments.part)
     StreamData = Archive.require(CONFIGURATION_STREAM)
     TraceText = Arguments.trace.read_text(encoding="utf-8", errors="replace")
@@ -436,9 +620,46 @@ def RunMain() -> int:
     Operations: list[tuple[int, int, str, str, Any]] = []
     Covered: set[int] = set()
     AddStructures(Operations, Covered, StreamData, Segments)
-    AddDirectFields(Operations, Covered, StreamData)
+    AddDirectFields(Operations, Covered, StreamData, Arguments.profile)
     AddStrings(Operations, Covered, StreamData, RowsList)
     AddPrimitives(Operations, Covered, StreamData, RowsList)
+    if Arguments.range_start is not None:
+        RangeStart = Arguments.range_start
+        RangeEnd = Arguments.range_end
+        if not 0 <= RangeStart < RangeEnd <= len(StreamData):
+            raise ValueError("Config-0 generation range exceeds the source stream")
+        MissingRange = sorted(set(range(RangeStart, RangeEnd)) - Covered)
+        if MissingRange:
+            raise ValueError(
+                f"Config-0 range field program leaves bytes uncovered {MissingRange}"
+            )
+        Operations.sort()
+        Arguments.output.write_text(
+            RenderRangeSource(Operations, RangeStart, RangeEnd),
+            encoding="utf-8",
+            newline="\n",
+        )
+        print(
+            json.dumps(
+                {
+                    "stream_bytes": RangeEnd - RangeStart,
+                    "operations": sum(
+                        RangeStart <= Operation[0] < RangeEnd
+                        for Operation in Operations
+                    ),
+                    "owners": len(
+                        {
+                            Operation[2]
+                            for Operation in Operations
+                            if RangeStart <= Operation[0] < RangeEnd
+                        }
+                    ),
+                    "missing": 0,
+                },
+                indent=2,
+            )
+        )
+        return 0
     Missing = sorted(set(range(len(StreamData))) - Covered)
     if Missing:
         RunsList: list[tuple[int, int]] = []
@@ -450,7 +671,11 @@ def RunMain() -> int:
         raise ValueError(f"Config-0 field program leaves ranges uncovered {RunsList}")
     Operations.sort()
     Arguments.output.write_text(
-        RenderSource(Operations, len(StreamData)),
+        (
+            RenderFixedSource(Operations, len(StreamData))
+            if Arguments.fixed
+            else RenderSource(Operations, len(StreamData))
+        ),
         encoding="utf-8",
         newline="\n",
     )

@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/no-unrequested-styling.md"
   kiro-inclusion: "always"
 ---
+
 # No Unrequested Styling — Do Only What Was Asked
 
 This is MANDATORY for every page, view, and component in this workspace. It ranks alongside the formatting, React Doctor, no-stubs, shadcn-pages, design-system-discipline, and layout-system gates. The governing principle: **apply only the styling the user explicitly asked for. Do not add styling decisions they did not request.** If you add a visual property the user never mentioned, the work is NOT done correctly — remove it.

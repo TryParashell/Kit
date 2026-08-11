@@ -121,6 +121,7 @@ def render_skill(name: str) -> str:
         *(f"  {key}: {quote_yaml(value)}" for key, value in metadata.items()),
         "---",
         "",
+        "",
     ]
     return "\n".join(frontmatter) + source_body(source.read_text(encoding="utf-8"))
 
@@ -155,7 +156,7 @@ def write_skills() -> None:
     for name in sorted(DESCRIPTIONS):
         target = target_path(name)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(render_skill(name), encoding="utf-8")
+        target.write_text(render_skill(name), encoding="utf-8", newline="\n")
 
 
 def check_skills() -> list[str]:

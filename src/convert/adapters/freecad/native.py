@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import hashlib
-import io
 import json
 import math
 from pathlib import Path, PurePosixPath
@@ -33,7 +32,9 @@ from interchange import (
     CadDocument,
     CadSource,
     Capability,
+    ChamferFeature,
     CircleGeometry,
+    CircularPatternFeature,
     ComponentDefinition,
     ComponentDocument,
     ComponentInstance,
@@ -53,6 +54,7 @@ from interchange import (
     GeometryKind,
     HyperbolaGeometry,
     LineGeometry,
+    LinearPatternFeature,
     MateConstraint,
     MateEntity,
     MateEntityKind,
@@ -72,6 +74,7 @@ from interchange import (
     Selection,
     SelectionPathElement,
     Severity,
+    ShellFeature,
     Sketch,
     SketchConstraint,
     SketchEntity,
@@ -2930,6 +2933,66 @@ def read_native_fcstd(
             radius = _float(obj, "Radius", _float(obj, "DrivingRadius"))
             definition = FilletFeature(
                 ParameterValue(abs(radius), ValueKind.LENGTH, "mm")
+            )
+        elif kind == FeatureKind.CHAMFER:
+            ChamferType = _enum(obj, "ChamferType")
+            ChamferMode = {
+                0: "equal_distance",
+                1: "two_distances",
+                2: "distance_angle",
+            }.get(ChamferType, f"native:{ChamferType}")
+            definition = ChamferFeature(
+                distance=ParameterValue(
+                    abs(_float(obj, "Size")), ValueKind.LENGTH, "mm"
+                ),
+                mode=ChamferMode,
+                second_distance=(
+                    ParameterValue(abs(_float(obj, "Size2")), ValueKind.LENGTH, "mm")
+                    if ChamferType == 1
+                    else None
+                ),
+                angle=(
+                    ParameterValue(abs(_float(obj, "Angle")), ValueKind.ANGLE, "deg")
+                    if ChamferType == 2
+                    else None
+                ),
+            )
+        elif kind == FeatureKind.SHELL:
+            definition = ShellFeature(
+                thickness=ParameterValue(
+                    abs(_float(obj, "Value")), ValueKind.LENGTH, "mm"
+                ),
+                outward=not _bool(obj, "Reversed"),
+            )
+        elif obj.type_id == "PartDesign::LinearPattern":
+            OccurrenceCount = _enum(obj, "Occurrences", 1)
+            LengthValue = abs(_float(obj, "Length"))
+            OffsetValue = abs(_float(obj, "Offset"))
+            SpacingValue = (
+                LengthValue / (OccurrenceCount - 1)
+                if _enum(obj, "Mode") == 0 and OccurrenceCount > 1
+                else OffsetValue
+            )
+            definition = LinearPatternFeature(
+                spacing=ParameterValue(SpacingValue, ValueKind.LENGTH, "mm"),
+                instance_count=OccurrenceCount,
+                direction_selection_id=(
+                    feature_selections[0].id if feature_selections else ""
+                ),
+                reversed=_bool(obj, "Reversed"),
+            )
+        elif obj.type_id == "PartDesign::PolarPattern":
+            definition = CircularPatternFeature(
+                angle=ParameterValue(
+                    abs(_float(obj, "Angle")),
+                    ValueKind.ANGLE,
+                    "deg",
+                ),
+                instance_count=_enum(obj, "Occurrences", 1),
+                axis_selection_id=(
+                    feature_selections[0].id if feature_selections else ""
+                ),
+                reversed=_bool(obj, "Reversed"),
             )
         else:
             definition = NativeFeatureDefinition(

@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/pin-dependencies.md"
   kiro-inclusion: "always"
 ---
+
 # Pin Dependencies To Immutable References — GitHub Actions And Runners
 
 Every GitHub Actions workflow in this repository MUST reference third-party actions by their full 40-character commit SHA, never by a mutable tag or branch. Runners MUST be pinned to a specific image version, never a floating `-latest` label. This rule is MANDATORY for every workflow file added or edited in this workspace.

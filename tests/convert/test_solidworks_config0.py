@@ -18,21 +18,49 @@ from convert.adapters.solidworks.config0 import (
     CONFIG_FIELD_COUNT,
     CONFIG_OPAQUE_BYTES,
     CONFIG_OWNER_COUNT,
+    FILLET_ANNOTATION_BYTES,
+    FILLET_ATOM_LINK_STAMP,
+    FILLET_ATOM_LINK_STAMP_RELATIVES,
+    FILLET_ATOM_PARENT_RELATIVE,
     MO_VERSION,
+    PATTERN_ANNOTATION_BYTES,
     PER_FEATURE_ATOM_BYTES,
     REFERENCE_ATOM_ID,
     REFERENCE_LENGTH,
     REFERENCE_SHA256,
     REFERENCE_TREE_ID,
     SINGLE_LENGTH_UNIT_LENGTH,
+    TWO_VIEW_ANNOTATION_BYTES,
     declared_opaque_split,
     encode_config0_stream,
 )
+from convert.adapters.solidworks.archive import encode_class_definition
 from convert.adapters.solidworks.config0_program import (
     ConfigOps,
     FieldOwners,
     ReferenceLength,
     ShiftMapReference,
+)
+from convert.adapters.solidworks.config0_box_program import (
+    ConfigOps as BoxConfigOps,
+    EncodeProgram as EncodeBoxConfigProgram,
+    FieldOwners as BoxFieldOwners,
+    ReferenceLength as BoxReferenceLength,
+)
+from convert.adapters.solidworks.config0_two_view_program import (
+    AnnotationOps,
+    FieldOwners as AnnotationFieldOwners,
+    ReferenceLength as AnnotationReferenceLength,
+)
+from convert.adapters.solidworks.config0_fillet_views_program import (
+    AnnotationOps as FilletAnnotationOps,
+    FieldOwners as FilletFieldOwners,
+    ReferenceLength as FilletReferenceLength,
+)
+from convert.adapters.solidworks.config0_pattern_views_program import (
+    AnnotationOps as PatternAnnotationOps,
+    FieldOwners as PatternFieldOwners,
+    ReferenceLength as PatternReferenceLength,
 )
 from convert.adapters.solidworks.container import SldprtFormatError
 
@@ -88,6 +116,168 @@ def test_runtime_program_contains_no_encoded_vendor_blocks() -> None:
     assert "base64" not in SourceText
     assert "b85decode" not in SourceText
     assert "opaque" not in SourceText.casefold()
+
+
+# dimensioned boxes use a closed fixed topology configuration field program
+def test_DimensionedBoxConfigurationIsEntirelyTyped() -> None:
+    SourceCursor = 0
+    for StartPos, FieldWidth, OwnerIndex, KindName, _FieldValue in BoxConfigOps:
+        assert StartPos == SourceCursor
+        assert FieldWidth > 0
+        assert 0 <= OwnerIndex < len(BoxFieldOwners)
+        assert "opaque" not in KindName.casefold()
+        assert "raw" not in KindName.casefold()
+        SourceCursor += FieldWidth
+    assert SourceCursor == BoxReferenceLength == 25158
+    assert len(EncodeBoxConfigProgram()) == BoxReferenceLength
+    ProgramPath = (
+        Path(__file__).parents[2]
+        / "src/convert/adapters/solidworks/config0_box_program.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "base64" not in SourceText
+    assert "b85decode" not in SourceText
+    assert "opaque" not in SourceText.casefold()
+
+
+# the two-view variant remains a field program rather than an embedded vendor record
+def test_two_view_runtime_program_contains_no_encoded_vendor_blocks() -> None:
+    ProgramPath = (
+        Path(__file__).parents[2]
+        / "src/convert/adapters/solidworks/config0_two_view_program.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "base64" not in SourceText
+    assert "b85decode" not in SourceText
+    assert "opaque" not in SourceText.casefold()
+
+
+# a revolved-cut configuration couples a count of two to two typed annotation views
+def test_two_view_annotation_manager_is_typed_and_counted() -> None:
+    SingleData = encode_config0_stream(annotation_view_count=1)
+    DoubleData = encode_config0_stream(annotation_view_count=2)
+    AnnotationTag = encode_class_definition("moAnnotationView_c", 1)
+    AnnotationStart = DoubleData.index(AnnotationTag)
+    assert struct.unpack_from("<H", DoubleData, AnnotationStart - 2)[0] == 2
+    assert len(DoubleData) - len(SingleData) == TWO_VIEW_ANNOTATION_BYTES == 260
+    assert DoubleData.count(AnnotationTag) == 1
+    assert "*Top".encode("utf-16-le") in DoubleData
+    assert "*Right".encode("utf-16-le") in DoubleData
+    assert AnnotationReferenceLength == 584
+    assert len(AnnotationOps) == 113
+    assert len(AnnotationFieldOwners) == 45
+
+
+# terminal fillets need their predecessor atom and distinct two view manager together
+def test_terminal_fillet_configuration_is_typed_and_linked() -> None:
+    StreamData = encode_config0_stream(
+        part_name="Part1",
+        atoms=((101, 34),),
+        high_water=(101, 103),
+        annotation_view_count=2,
+        terminal_parent_tree_id=32,
+    )
+    AtomTag = encode_class_definition("moAtom_c", 1)
+    AtomStart = StreamData.index(AtomTag)
+    assert len(StreamData) == 25470
+    assert struct.unpack_from(
+        "<I", StreamData, AtomStart + FILLET_ATOM_PARENT_RELATIVE
+    ) == (32,)
+    assert all(
+        struct.unpack_from("<I", StreamData, AtomStart + RelativeOffset)[0]
+        == FILLET_ATOM_LINK_STAMP
+        for RelativeOffset in FILLET_ATOM_LINK_STAMP_RELATIVES
+    )
+    assert FILLET_ANNOTATION_BYTES == 258
+    assert FilletReferenceLength == 582
+    assert len(FilletAnnotationOps) == 113
+    assert len(FilletFieldOwners) == 45
+
+
+# generated fillet views must remain field programs instead of hidden stream captures
+def test_fillet_view_program_contains_no_encoded_vendor_blocks() -> None:
+    ProgramPath = (
+        Path(__file__).parents[2]
+        / "src/convert/adapters/solidworks/config0_fillet_views_program.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "base64" not in SourceText
+    assert "b85decode" not in SourceText
+    assert "opaque" not in SourceText.casefold()
+
+
+# linear patterns use their recovered two-view manager without opaque bytes
+def test_linear_pattern_annotation_manager_is_typed_and_counted() -> None:
+    SingleData = encode_config0_stream(
+        part_name="Part1",
+        atoms=((102, 40), (101, 32)),
+        high_water=(102, 105),
+    )
+    PatternData = encode_config0_stream(
+        part_name="Part1",
+        atoms=((102, 40), (101, 32)),
+        high_water=(102, 105),
+        annotation_view_count=2,
+        annotation_view_variant="linear_pattern",
+    )
+    AnnotationTag = encode_class_definition("moAnnotationView_c", 1)
+    AnnotationStart = PatternData.index(AnnotationTag)
+    assert struct.unpack_from("<H", PatternData, AnnotationStart - 2)[0] == 2
+    assert len(PatternData) == 25488
+    assert len(PatternData) - len(SingleData) == PATTERN_ANNOTATION_BYTES == 188
+    assert PatternReferenceLength == 512
+    assert len(PatternAnnotationOps) == 104
+    assert len(PatternFieldOwners) == 45
+
+
+# circular patterns share the byte-identical recovered native pattern view manager
+def test_circular_pattern_annotation_manager_matches_native_pattern_manager() -> None:
+    LinearData = encode_config0_stream(
+        part_name="Part1",
+        atoms=((102, 40), (101, 32)),
+        high_water=(102, 105),
+        annotation_view_count=2,
+        annotation_view_variant="linear_pattern",
+    )
+    CircularData = encode_config0_stream(
+        part_name="Part1",
+        atoms=((102, 46), (101, 32)),
+        high_water=(102, 105),
+        annotation_view_count=2,
+        annotation_view_variant="circular_pattern",
+    )
+    ExpectedData = encode_config0_stream(
+        part_name="Part1",
+        atoms=((102, 46), (101, 32)),
+        high_water=(102, 105),
+        annotation_view_count=2,
+        annotation_view_variant="linear_pattern",
+    )
+    assert CircularData == ExpectedData
+    assert len(CircularData) == len(LinearData)
+
+
+# generated pattern views must remain typed programs instead of hidden stream captures
+def test_pattern_view_program_contains_no_encoded_vendor_blocks() -> None:
+    ProgramPath = (
+        Path(__file__).parents[2]
+        / "src/convert/adapters/solidworks/config0_pattern_views_program.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "base64" not in SourceText
+    assert "b85decode" not in SourceText
+    assert "opaque" not in SourceText.casefold()
+
+
+# unsupported annotation cardinalities cannot create an inconsistent manager record
+@pytest.mark.parametrize("ViewCount", (0, 3))
+def test_unknown_annotation_view_count_is_rejected(ViewCount: int) -> None:
+    with pytest.raises(SldprtFormatError, match="one or two"):
+        encode_config0_stream(annotation_view_count=ViewCount)
 
 
 # each additional feature contributes one class reference and one semantic atom

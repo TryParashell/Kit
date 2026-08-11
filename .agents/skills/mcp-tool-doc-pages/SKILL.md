@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/mcp-tool-doc-pages.md"
   kiro-inclusion: "always"
 ---
+
 # mcp tool documentation pages
 
 Agent facing MCP tools must have standalone Mintlify documentation pages

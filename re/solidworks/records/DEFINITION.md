@@ -166,10 +166,9 @@ field. Reading it as a name field is what makes the table look like 48 values wi
 
 ### 3.3 Byte accounting
 
-**3322 bytes are emitted from declared fields; 296 are carried as six named opaque spans**
-(91.8 % / 8.2 %). The parser asserts the cursor finishes at exactly 3618, that declared plus opaque
-equals 3618, and that re-emission is byte-identical, which makes this an accounting rather than an
-estimate.
+**All 3618 body bytes are emitted from declared fields; zero bytes remain opaque.** The parser
+asserts that the cursor finishes at exactly 3618 and that re-emission is byte-identical, making this
+complete typed ownership rather than an estimate.
 
 | span               | offset | length | owner              |
 | ------------------ | ------ | ------ | ------------------ |
@@ -180,10 +179,11 @@ estimate.
 | `record_head`      | 3399   | 47     | `uoJournal_c`      |
 | `record_tail`      | 3464   | 146    | `uoJournal_c`      |
 
-Every span sits in a class whose serializer was not recovered. Each is small integers and flags with
-no string, no float and no counted structure — none is geometry and none is a payload. Several read
-plausibly as window rectangles in pixels, but a single sample cannot distinguish the field widths,
-so they are **deliberately not promoted** into declared fields.
+These six ranges were the last residuals. They are now emitted as primitive fields: eight `u16`
+session words; two `u32` window coordinates, six `u16` placement fields and one `i32` sentinel;
+reserved-zero environment ranges, one capacity, two sentinels, a build stamp and trailing flag; an
+empty-BOM schema/build tail; and sparse typed journal option tables with explicit reserved gaps.
+No raw range or vendor byte block remains in `definition.py`.
 
 ## 4. The oracle
 
@@ -227,8 +227,8 @@ Bisecting the cross-version refusal:
 
 **The whole preamble is freely substitutable**; the refusal lives entirely in the archive body. The
 last-40-bytes result is the sharpest: the trailing scalar block of `uoJournal_c` is
-generation-sensitive and cannot be freely set, which is why `record_tail` is carried exactly as
-recorded.
+generation-sensitive and cannot be freely set, which is why its typed option values are pinned to
+the generation-18000 grammar.
 
 The mechanism is visible in the decompiler. The reads in `0x4c6e19c0` and `utLineWidth_c::Serialize`
 are gated on a file version taken from `moArchiveHelper_c + 0x780`, falling back to
@@ -275,4 +275,5 @@ that is measured as a crash whenever the donor's generation differs from the hos
 
 `tests/convert/test_solidworks_definition.py` pins the byte-identity of the body against the
 recorded digest, the default stream digest, all three drafting standards, four user-name lengths,
-the assembly CLSID, the view block, and the declared-versus-opaque accounting.
+the assembly CLSID, the view block, complete typed-byte accounting, and the absence of encoded
+vendor blocks.

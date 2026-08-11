@@ -67,6 +67,10 @@ _SHAPE_CHILD_TYPES = {
     b"Co": _SHAPE_TYPES,
 }
 _MAX_RECURSION = 64
+# bounded equivalence buckets prevent adversarial coincident-vertex scans from growing
+_MAX_VERTEX_EQUIVALENCE_BUCKET = 64
+# fifteen significant digits isolate transform round-off without merging real geometry
+_VERTEX_EQUIVALENCE_DIGITS = 15
 
 
 class _DecodeFailure(ValueError):
@@ -1351,6 +1355,47 @@ def _compose(outer: str, inner: str) -> str:
     raise _DecodeFailure("unsupported BRep topology orientation")
 
 
+# Boolean results may join tolerance-equivalent coordinates through distinct vertex records
+def _CanonicalVertexRecords(
+    records: Mapping[int, _ShapeRecord],
+) -> dict[int, int]:
+    ResultData: dict[int, int] = {}
+    BucketData: dict[tuple[str, str, str], list[int]] = {}
+    for NumberValue, RecordData in sorted(records.items(), reverse=True):
+        if RecordData.kind != b"Ve":
+            continue
+        GeometryData = RecordData.geometry
+        if not isinstance(GeometryData, _VertexData):
+            raise _DecodeFailure("invalid BRep vertex topology")
+        PointData = GeometryData.point
+        BucketKey = tuple(
+            format(ItemData, f".{_VERTEX_EQUIVALENCE_DIGITS}g")
+            for ItemData in (PointData.x, PointData.y, PointData.z)
+        )
+        CandidateData = BucketData.setdefault(BucketKey, [])
+        RepresentativeValue = NumberValue
+        for CandidateValue in CandidateData:
+            CandidateGeometry = records[CandidateValue].geometry
+            if not isinstance(CandidateGeometry, _VertexData):
+                raise _DecodeFailure("invalid BRep vertex topology")
+            CandidatePoint = CandidateGeometry.point
+            ToleranceValue = max(
+                GeometryData.tolerance,
+                CandidateGeometry.tolerance,
+            )
+            if (PointData.x - CandidatePoint.x) ** 2 + (
+                PointData.y - CandidatePoint.y
+            ) ** 2 + (PointData.z - CandidatePoint.z) ** 2 <= ToleranceValue**2:
+                RepresentativeValue = CandidateValue
+                break
+        else:
+            if len(CandidateData) >= _MAX_VERTEX_EQUIVALENCE_BUCKET:
+                raise _DecodeFailure("BRep vertex equivalence bucket is too large")
+            CandidateData.append(NumberValue)
+        ResultData[NumberValue] = RepresentativeValue
+    return ResultData
+
+
 # Eulerian ordering handles seam edges that occur in both directions in one wire
 def _OrderWireUses(
     uses: list[_Reference], edge_vertices: Mapping[int, tuple[int, int]]
@@ -1408,6 +1453,7 @@ def _model(
     vertex_ids: dict[int, str] = {}
     edge_ids: dict[int, str] = {}
     edge_vertices: dict[int, tuple[int, int]] = {}
+    CanonicalVertexData = _CanonicalVertexRecords(records)
     for number, record in sorted(records.items(), reverse=True):
         if record.kind == b"Ve":
             geometry = record.geometry
@@ -1432,12 +1478,14 @@ def _model(
             raise _DecodeFailure("BRep edge references a non-vertex")
         identifier = f"{id_prefix}:edge:{number}"
         edge_ids[number] = identifier
-        edge_vertices[number] = (forward[0].record, reversed_values[0].record)
+        StartVertex = CanonicalVertexData[forward[0].record]
+        EndVertex = CanonicalVertexData[reversed_values[0].record]
+        edge_vertices[number] = (StartVertex, EndVertex)
         edges.append(
             BrepEdge(
                 identifier,
-                vertex_ids[forward[0].record],
-                vertex_ids[reversed_values[0].record],
+                vertex_ids[StartVertex],
+                vertex_ids[EndVertex],
                 f"{id_prefix}:curve:{geometry.curve}",
                 geometry.first,
                 geometry.last,

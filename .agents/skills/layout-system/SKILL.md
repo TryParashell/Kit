@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/layout-system.md"
   kiro-inclusion: "always"
 ---
+
 # Layout System — Use globals.css, Never Hand-Roll Layout
 
 This is MANDATORY for every page, view, and component in this workspace. It ranks alongside the formatting, React Doctor, no-stubs, shadcn-pages, and design-system-discipline gates. The layout primitives are already defined once in `src/app/globals.css`. You CONSUME them. You do not reinvent page width, gutters, centering, or spacing with arbitrary utilities. If a page hand-rolls layout that globals.css already provides, the work is NOT done — fix it before reporting completion.

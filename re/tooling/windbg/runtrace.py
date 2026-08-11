@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
 import json
@@ -11,16 +19,23 @@ for candidate in (HERE, GRAMMAR):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
 
-import cdbdrive
-import segment as segmentlib
-import tracelog
+import cdbdrive  # noqa: E402
+import segment as segmentlib  # noqa: E402
+import tracelog  # noqa: E402
 
-import carchive
-import streamlib
+import carchive  # noqa: E402
+import streamlib  # noqa: E402
 
 OUT = SCRATCH / "trace" / "out"
 
-SCRIPT = """.symopt+0x4000
+SCRIPT = """$$ SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+$$ SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+$$
+$$ This SPDX license identifier and copyright notice must not be
+$$ removed, altered, or obscured. Doing so is a material breach of
+$$ the PolyForm Strict License 1.0.0 and voids all licenses granted
+$$ to you under it immediately and permanently.
+.symopt+0x4000
 .symopt-0x20000
 .exepath+ {solidworks}
 .reload /f swccu.dll

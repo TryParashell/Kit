@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/no-donor-blocks.md"
   kiro-inclusion: "always"
 ---
+
 # Kit: ABSOLUTE PROHIBITION ON DONOR BLOCKS — REVERSE ENGINEER THE FORMAT
 
 This is the highest-priority rule in the Kit repository. Kit is a CAD interchange SDK. Its entire reason to exist is that it understands proprietary formats. A donor block is an admission that it does not.
@@ -27,7 +28,7 @@ A writer is finished when its output is `vendor_loadable = True` and `applicatio
 ## ALLOWED
 
 - **Declarative format vocabulary.** `src/convert/adapters/solidworks/topology.py` and the tables in `definition.py` are the precedent: class names, schema numbers, enum codes, line-style dash patterns, annotation-to-line-font bindings. Facts about the format, readable in source, each traceable to a finding in `re/`.
-- **Named residual spans**, small and isolated, when the surrounding record is decoded, the owning class is in the name, the offset and length are documented in `re/`, and there is a decompiler or oracle reason it cannot yet be derived. `definition.py` carries six such spans totalling 296 bytes against 3322 declared. Report that split whenever you land a stream, and drive the opaque number down.
+- **Named residual spans in reverse-engineering tooling only**, small and isolated, when the surrounding record is decoded, the owning class is in the name, the offset and length are documented in `re/`, and there is a decompiler or oracle reason it cannot yet be derived. A residual span marks unfinished research and must never enter production output.
 - **Irreducible format constants**, minimal and proven. `container.py` carries one 16-byte `(file_id, signature triplet)` row because `FUN_3cc4d270` in `sldmfcu.dll` looks the triplet up by `file_id` and `FUN_3cc528b0` / `FUN_3cc52ac0` compare it against the file, and because an exhaustive search over all 1000 pairs proved no computable relation exists. One row is a constant. The 1000-row table was a donor block, and it is gone.
 - **The source document's own streams** when converting that document. SLDPRT → SLDPRT templating off the input is not a donor.
 
@@ -51,7 +52,7 @@ Read these before starting so you do not redo solved problems:
 - `re/METHODOLOGY.md` §9 — the oracle protocol.
 - `re/tooling/ghidra/SETUP.md` — how to drive headless Ghidra here.
 
-The remaining load-critical blockers are `Contents/CMgr` and `Contents/Config-0`. Everything else on the part path is either synthesized or legitimately templated from the source document.
+The supported native part families construct `Contents/Definition`, `Contents/CMgr`, `Contents/Config-0`, `Contents/Config-0-ModelHeader`, `Header2`, and every family-specific `Contents/Config-0-ResolvedFeatures` byte from typed fields. The reference programs for these streams report zero opaque bytes. Remaining work is new feature-family grammar, not permission to reuse recorded streams.
 
 ## THE METHOD
 
@@ -62,7 +63,7 @@ Write every finding into `re/` as you make it — addresses, measured numbers, f
 ## VERIFICATION
 
 1. Recursive scan of `src/` finds zero encoded vendor payload blobs and zero vendor stream data files.
-2. Every emitted byte is derived, declared vocabulary traceable to `re/`, or a named documented residual span.
+2. Every emitted byte is derived or declared vocabulary traceable to `re/`; production output contains zero residual spans.
 3. SOLIDWORKS opens the output with the full feature tree and correct geometry, against a control.
 4. `vendor_loadable` and `application_usable` are `True`, and they are true.
 

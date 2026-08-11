@@ -39,9 +39,9 @@ THREE_FEATURE_DIGEST = (
     "964995442cbf20936436d7ee4a38a5819b6bdb9a9071f740b31e8e2fca92a81d"
 )
 PER_FEATURE_BYTES = 62
-DECLARED_BYTES = 1861
-OPAQUE_BYTES = 96
-RESIDUAL_SPAN_COUNT = 1
+DECLARED_BYTES = 1957
+OPAQUE_BYTES = 0
+RESIDUAL_SPAN_COUNT = 0
 MEASURED_VOLUMES_MM3 = (1476.0000000000002, 11954.000000000002)
 
 
@@ -135,6 +135,29 @@ def test_connected_four_feature_history_uses_the_recovered_link_graph() -> None:
     ) in StreamData
 
 
+# terminal feature histories retain one atom while linking their predecessor explicitly
+def test_terminal_feature_history_uses_the_recovered_link_body() -> None:
+    StreamData = encode_cmgr_stream(
+        feature_tree_ids=(34,),
+        part_name="Part1",
+        terminal_parent_tree_id=32,
+    )
+    TerminalBody = (
+        struct.pack("<IHI", 101, 1, 32)
+        + struct.pack("<II", 1, 34)
+        + bytes(30)
+        + struct.pack("<I", 2)
+        + bytes(8)
+    )
+    assert len(StreamData) == 1973
+    assert TerminalBody in StreamData
+    assert (
+        struct.pack("<HI", 0, 2)
+        + struct.pack("<III", 34, 0x01DD2399, 0x10000000)
+        + struct.pack("<III", 32, 0x01DD2399, 0x10000001)
+    ) in StreamData
+
+
 def test_declared_and_opaque_bytes_tile_the_stream():
     split = declared_opaque_split()
     assert split["stream_bytes"] == ONE_FEATURE_BYTES
@@ -145,24 +168,24 @@ def test_declared_and_opaque_bytes_tile_the_stream():
     assert split["accounted"] == split["stream_bytes"]
 
 
-def test_the_only_residual_span_is_the_display_geometry_cache():
-    assert RESIDUAL_SPANS == (
-        ("display_geometry_cache", ROOT_CLASS, DISPLAY_GEOMETRY_CACHE_BYTES),
-    )
-    assert sum(length for _, _, length in RESIDUAL_SPANS) == OPAQUE_BYTES
-    assert all(owner == ROOT_CLASS for _, owner, _ in RESIDUAL_SPANS)
+# the recovered reserved-zero cache leaves no residual or opaque CMgr bytes
+def test_display_geometry_cache_is_fully_typed_reserved_zero_data():
+    assert RESIDUAL_SPANS == ()
+    assert OPAQUE_BYTES == 0
 
 
-def test_the_shipped_residual_span_default_carries_no_vendor_bytes():
+# the shipped display cache is deterministically authored without vendor bytes
+def test_the_shipped_display_cache_is_reserved_zero_data():
     stream = encode_cmgr_stream()
     assert bytes(DISPLAY_GEOMETRY_CACHE_BYTES) in stream
 
 
-def test_opaque_share_does_not_grow_with_the_feature_count():
+# every generated feature count keeps complete typed ownership
+def test_typed_share_covers_every_feature_count():
     for features in (1, 4, 8):
         split = declared_opaque_split(feature_tree_ids=tree_ids_for(features))
-        assert split["opaque"] == OPAQUE_BYTES
-        assert split["declared"] == split["stream_bytes"] - OPAQUE_BYTES
+        assert split["opaque"] == 0
+        assert split["declared"] == split["stream_bytes"]
 
 
 def test_tables_hold_the_recovered_vocabulary():
@@ -213,6 +236,14 @@ def test_an_empty_feature_set_is_rejected():
 def test_a_short_display_geometry_cache_is_rejected():
     with pytest.raises(SldprtFormatError, match="display_geometry_cache"):
         encode_cmgr_stream(display_geometry_cache=bytes(64))
+
+
+# arbitrary same-width vendor cache bytes cannot enter the first-principles writer
+def test_a_nonzero_display_geometry_cache_is_rejected():
+    with pytest.raises(SldprtFormatError, match="display_geometry_cache"):
+        encode_cmgr_stream(
+            display_geometry_cache=b"\x01" + bytes(DISPLAY_GEOMETRY_CACHE_BYTES - 1)
+        )
 
 
 def test_a_link_chain_without_one_tree_id_per_atom_is_rejected():

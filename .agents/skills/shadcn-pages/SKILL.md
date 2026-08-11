@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/shadcn-pages.md"
   kiro-inclusion: "always"
 ---
+
 # Building Pages with ShadCN — Mandatory Method
 
 This file encodes how the creators of shadcn/ui say to build interfaces. It is NON-NEGOTIABLE for every page, view, and component in any Next.js/React app in this workspace. It ranks alongside the formatting, React Doctor, no-stubs, and component-architecture gates. If a page violates this method, the work is NOT done — rebuild it the right way.
@@ -35,17 +36,17 @@ You MUST reach for the shadcn primitive before writing raw markup. These are FOR
 
 ### Reach for this first
 
-| Use case | Compose from |
-|----------|--------------|
-| Settings page | `Tabs` + `Card` per group + `Separator` + explicit save action |
-| Data dashboard | summary `Card`s + filter bar + `Table` + `Badge` + `DropdownMenu` |
-| CRUD table | `Table` + `DropdownMenu` + `Sheet` + `AlertDialog` for destructive |
-| Entity detail | header + status `Badge` + main `Card` + side `Card` + `AlertDialog` |
-| Auth / onboarding | centered `Card` + `Label` + `Input` + `Button` + inline `Alert` |
-| Global search | `Command` + `Dialog` (keyboard-first) |
-| Pickers | `Popover` + `Command` |
-| Mobile nav / filters | `Sheet` + `Button` + `Separator`; persistent desktop filters in a `Card` sidebar |
-| Empty / loading / error | `Card` + `Skeleton` + `Alert` |
+| Use case                | Compose from                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| Settings page           | `Tabs` + `Card` per group + `Separator` + explicit save action                   |
+| Data dashboard          | summary `Card`s + filter bar + `Table` + `Badge` + `DropdownMenu`                |
+| CRUD table              | `Table` + `DropdownMenu` + `Sheet` + `AlertDialog` for destructive               |
+| Entity detail           | header + status `Badge` + main `Card` + side `Card` + `AlertDialog`              |
+| Auth / onboarding       | centered `Card` + `Label` + `Input` + `Button` + inline `Alert`                  |
+| Global search           | `Command` + `Dialog` (keyboard-first)                                            |
+| Pickers                 | `Popover` + `Command`                                                            |
+| Mobile nav / filters    | `Sheet` + `Button` + `Separator`; persistent desktop filters in a `Card` sidebar |
+| Empty / loading / error | `Card` + `Skeleton` + `Alert`                                                    |
 
 ## Rule 3: Build On Tokens. Never Ad-Hoc Hex Or Palette Classes.
 

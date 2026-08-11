@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Sketch arcs in `Contents/Config-0-ResolvedFeatures`
 
 Scope: can a **partial** arc (an arc segment with a start and an end, as opposed to a full circle) be
@@ -5,10 +15,10 @@ located and read statically from the resolved-features lane, so that
 `resolved.sketch_arcs()` / `patch_sketch_arcs()` can decode one and a donor can carry an
 arc-bearing profile?
 
-**Answer: no.** The partial arc's radius, centre and endpoints are not present in the record family
-the decoder can segment. Nothing was changed in `sketch_arcs` beyond what is stated in §5, and no
-arc profile key was added to the donor library, because a key with no donor and no decoder behind it
-is worse than the decline it would replace. `donor_match._profile()` still declines `ArcGeometry`.
+**Historical answer: no; superseded in part by `ARC_LAYOUT.md`.** This static pass did not locate the
+partial arc's radius, centre, and endpoints in the record family it could segment. The later authored
+differential located the arc representation. Kit still has no arbitrary partial-arc feature program,
+so those source histories fail closed; there is no donor library or donor fallback.
 
 Corpus: `examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024` (57 parts) plus
 `examples/Random/**` (53 parts) = **110** parts with a resolved-features lane and a
@@ -25,18 +35,18 @@ investigation itself.
 
 The trailer taxonomy over all 110 parts (`groups.py` → `groups.txt`):
 
-| role | class | count | reading |
-|---|---|---|---|
-| 0 | 2 | 3764 | free point |
-| 0 | 1 | 2464 | free point on a line-backed entity |
-| 0 | 0 | 1841 | free point, unattributed |
-| 2 | 2 | 1764 | point **constrained on a curve** |
-| 6 | 0 | 1552 | |
-| 8 | 1 | 1330 | |
-| 0 | 4 | 674 | |
-| 1 | 0 | 503 | |
-| 0 | 3 | 432 | |
-| … | | | 28 further pairs, all ≤ 233, every one of them with `role = 0` |
+| role | class | count | reading                                                        |
+| ---- | ----- | ----- | -------------------------------------------------------------- |
+| 0    | 2     | 3764  | free point                                                     |
+| 0    | 1     | 2464  | free point on a line-backed entity                             |
+| 0    | 0     | 1841  | free point, unattributed                                       |
+| 2    | 2     | 1764  | point **constrained on a curve**                               |
+| 6    | 0     | 1552  |                                                                |
+| 8    | 1     | 1330  |                                                                |
+| 0    | 4     | 674   |                                                                |
+| 1    | 0     | 503   |                                                                |
+| 0    | 3     | 432   |                                                                |
+| …    |       |       | 28 further pairs, all ≤ 233, every one of them with `role = 0` |
 
 The decisive negative is here: **there is no `class` value that marks an arc.** Every one of the
 1764 curve-constrained points is `class = 2`, the same value a free point carries, and the 28
@@ -104,7 +114,7 @@ metres, on the 20 smaller arc-bearing parts:
 radial dimension values found as a float64 in the lane: 68/72
 ```
 
-The value *is* stored — with **3 to 11 candidate offsets per value** and no anchor to pick the right
+The value _is_ stored — with **3 to 11 candidate offsets per value** and no anchor to pick the right
 one, and, critically, without the centre or the endpoints anywhere in the coordinate stream. A
 radius alone does not place an arc. Writing one blind would move geometry.
 
@@ -125,26 +135,25 @@ lane also carries **1134** `sg*` class definitions:
 Dissecting the first such object (`firstobjects.py`, on the smallest arc-bearing part,
 `examples/Random/Pistons/Piston_ring.SLDPRT`, 14 109 bytes) shows the object body is 64 bytes of
 base-class data followed by a nested `ff ff 1f 00 03` entity record; the coordinate record that
-`sketch_coordinates()` finds sits *inside* that nested record. The arc's own parameters are in the
+`sketch_coordinates()` finds sits _inside_ that nested record. The arc's own parameters are in the
 `sgArcHandle` body, whose byte extent cannot be computed without the per-class `Serialize` layout.
 
 That is exactly the keystone `GRAMMAR.md` §8 item 1 records as unsolved: without object
 segmentation the object boundaries are unknown, so a field at a fixed offset inside `sgArcHandle`
-cannot be located, and the su_CArchive class-reference token that would let the *second* and later
+cannot be located, and the su_CArchive class-reference token that would let the _second_ and later
 `sgArcHandle` objects be found cannot be computed either (§2.3 — the map index depends on the
 object count before the definition).
 
 ## 5. What was left alone, deliberately
 
-* `resolved.sketch_arcs()` and `patch_sketch_arcs()` keep the centre + 17°-point circle rule
+- `resolved.sketch_arcs()` and `patch_sketch_arcs()` keep the centre + 17°-point circle rule
   unchanged. §2 upgrades the confidence in that rule from "COM-authored only" to "production
   corpus, 578 dimensions"; it does not change a byte of behaviour.
-* No `arc` or `polyline+arc` profile name was added to `donor_library`.
-* `donor_match._profile()` still returns
-  `uses unsupported geometry ArcGeometry`, so `PartDesignExample.FCStd`'s `Pad` still declines.
-  That decline is correct: even with a decoder, expressing that profile would need a donor whose
-  sketch already holds three lines and one arc, and a feature's entity set cannot be changed inside
-  a donor's stream.
+
+* No `arc` or `polyline+arc` profile was added to the historical donor library.
+* The old matcher declined `PartDesignExample.FCStd`'s `Pad`. The current writer also declines that
+  history, for a different architectural reason: no complete typed program yet expresses its three
+  lines and one arc, and donor streams are prohibited.
 
 ## 6. What would lift it
 

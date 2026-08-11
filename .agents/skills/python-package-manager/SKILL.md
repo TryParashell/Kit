@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/python-package-manager.md"
   kiro-inclusion: "always"
 ---
+
 # Python Package Manager
 
 Use uv for Python dependency management everywhere except `Parashell/` and `modules/`.

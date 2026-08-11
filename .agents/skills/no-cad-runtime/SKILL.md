@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/no-cad-runtime.md"
   kiro-inclusion: "always"
 ---
+
 # CAD APPLICATIONS ARE TEST ORACLES ONLY
 
 Production translation must be self-contained. No CAD application or vendor automation facility may participate in a runtime conversion.

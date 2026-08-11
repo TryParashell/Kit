@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/lossless-translation.md"
   kiro-inclusion: "always"
 ---
+
 # THE ONLY ACCEPTANCE CRITERION: LOSSLESS, VENDOR LOADABLE, APPLICATION USABLE, PARAMETRIC
 
 This is the acceptance gate for every translation this workspace performs. It outranks progress reports, partial results, and your own sense that a hard problem has been worked hard enough. It sits alongside `no-donor-blocks.md` and `no-stubs.md`.

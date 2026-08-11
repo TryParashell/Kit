@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/react-doctor.md"
   kiro-inclusion: "always"
 ---
+
 # React Doctor Health Gate
 
 All React code committed to this workspace MUST pass a React Doctor regression check. Run React Doctor after every chat completion that creates or modifies React code, in the same way Prettier and Black are run for formatting, before considering the work done.
@@ -21,6 +22,7 @@ After changing React code, run from the affected project root (the directory con
 ```bash
 npx react-doctor@latest --verbose --silent --yes --no-ci --scope changed
 ```
+
 ## YOU MUST ADD THESE ARGS --silent --yes --no-ci OR ELSE REACT DOCTOR WILL STALL
 
 Then:

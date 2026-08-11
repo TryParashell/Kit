@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/identifier-markers.md"
   kiro-inclusion: "always"
 ---
+
 # Identifier Markers — Old-School Conventions Adapted For Python
 
 This rule layers three historically grounded conventions on top of `naming-convention.md` and `rationale-comments.md`. All three are old standards that cannot be adopted literally in Python, because Python identifiers cannot contain `?` or `!` and raw Hungarian-style prefixes would break the PascalCase and length rules already locked in. This file defines the adapted, Python-legal equivalents and makes them MANDATORY.
@@ -18,11 +19,11 @@ Lisp and Scheme mark boolean-returning functions with a trailing `?` (`empty?`, 
 
 Any function or method that returns a `bool` MUST start with one of:
 
-| Prefix | Use for |
-|--------|---------|
-| `Is` | state checks — `IsValid`, `IsEmpty` |
-| `Has` | possession / containment checks — `HasKey`, `HasAuth` |
-| `Can` | capability / permission checks — `CanEdit`, `CanRetry` |
+| Prefix | Use for                                                |
+| ------ | ------------------------------------------------------ |
+| `Is`   | state checks — `IsValid`, `IsEmpty`                    |
+| `Has`  | possession / containment checks — `HasKey`, `HasAuth`  |
+| `Can`  | capability / permission checks — `CanEdit`, `CanRetry` |
 
 ```python
 # flags empty carts early so checkout never runs on nothing

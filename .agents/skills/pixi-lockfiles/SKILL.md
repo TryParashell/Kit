@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/pixi-lockfiles.md"
   kiro-inclusion: "always"
 ---
+
 # Pixi Manifests — Always Relock Before Finishing
 
 This rule is MANDATORY whenever you touch a `pixi.toml` in this workspace. It ranks alongside the formatting, React Doctor, no-stubs, and HostControl-contract gates. A dependency change is not done when the manifest is edited — it is done when the matching `pixi.lock` has been regenerated and the solve has actually succeeded. An edited manifest with a stale lock is a broken build, because CI and the packaging scripts install from the lock, not the manifest.

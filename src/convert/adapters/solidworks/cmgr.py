@@ -65,7 +65,8 @@ DOCUMENT_STAMP_LOW = 0x10000000
 DISPLAY_GEOMETRY_CACHE_BYTES = 96
 DISPLAY_GEOMETRY_CACHE_DEFAULT = bytes(DISPLAY_GEOMETRY_CACHE_BYTES)
 
-RESIDUAL_SPANS = (("display_geometry_cache", ROOT_CLASS, DISPLAY_GEOMETRY_CACHE_BYTES),)
+# the display cache is a recovered fixed-width reserved-zero field, not an opaque span
+RESIDUAL_SPANS: tuple[tuple[str, str, int], ...] = ()
 
 VISUAL_PROPERTIES = (
     ("appearance_id", "u32", 15651274),
@@ -233,6 +234,7 @@ class CMgrParameters:
     session_counter: int
     display_geometry_cache: bytes
     connected_history: bool
+    terminal_parent_tree_id: int | None
 
     def validate(self) -> None:
         if not self.atom_ids:
@@ -244,11 +246,10 @@ class CMgrParameters:
                 f"{len(self.link_atom_ids)} linked atoms need "
                 f"{len(self.link_atom_ids)} tree ids, got {len(self.link_tree_ids)}"
             )
-        if len(self.display_geometry_cache) != DISPLAY_GEOMETRY_CACHE_BYTES:
+        if self.display_geometry_cache != DISPLAY_GEOMETRY_CACHE_DEFAULT:
             raise SldprtFormatError(
-                "display_geometry_cache is a "
-                f"{DISPLAY_GEOMETRY_CACHE_BYTES} byte span, got "
-                f"{len(self.display_geometry_cache)}"
+                "display_geometry_cache must be the recovered "
+                f"{DISPLAY_GEOMETRY_CACHE_BYTES}-byte reserved-zero field"
             )
         if self.generation != DOCUMENT_GENERATION:
             raise SldprtFormatError(
@@ -258,6 +259,18 @@ class CMgrParameters:
         if self.connected_history and len(self.link_atom_ids) not in {2, 3, 4}:
             raise SldprtFormatError(
                 "the recovered connected-history CMgr shape requires two to four atoms"
+            )
+        if self.terminal_parent_tree_id is not None and (
+            self.connected_history
+            or len(self.atom_ids) != 1
+            or len(self.link_atom_ids) != 1
+            or len(self.link_tree_ids) != 1
+            or self.terminal_parent_tree_id <= 0
+            or self.terminal_parent_tree_id == self.link_tree_ids[0]
+        ):
+            raise SldprtFormatError(
+                "the recovered terminal-history CMgr shape requires one child atom "
+                "and one distinct parent tree"
             )
 
 
@@ -436,6 +449,22 @@ def _link_body(atom_id: int, tree_id: int, next_id: int | None) -> bytes:
     if next_id is None:
         return head + bytes(34) + _pack("u32", LINK_TERMINATOR) + bytes(8)
     return head + bytes(18) + _pack("u32", next_id)
+
+
+# terminal modifiers keep one configuration atom while naming their predecessor tree
+def _TerminalLinkBody(AtomId: int, ParentTreeId: int, ChildTreeId: int) -> bytes:
+    return b"".join(
+        (
+            _pack("u32", AtomId),
+            _pack("u16", LINK_FLAG),
+            _pack("u32", ParentTreeId),
+            _pack("u32", 1),
+            _pack("u32", ChildTreeId),
+            bytes(30),
+            _pack("u32", LINK_TERMINATOR),
+            bytes(8),
+        )
+    )
 
 
 # connected two-operation histories serialize predecessor links as child archive objects
@@ -683,7 +712,16 @@ def build_model(params: CMgrParameters) -> Model:
     )
     null(_link_head(params.link_atom_ids))
     link = -1
-    if params.connected_history:
+    if params.terminal_parent_tree_id is not None:
+        link = definition(
+            LINK_CLASS,
+            _TerminalLinkBody(
+                params.link_atom_ids[0],
+                params.terminal_parent_tree_id,
+                params.link_tree_ids[0],
+            ),
+        )
+    elif params.connected_history:
         LinkParts = (
             _ConnectedFourLinkParts(params.link_atom_ids, params.link_tree_ids)
             if len(params.link_atom_ids) == 4
@@ -766,6 +804,7 @@ def encode_cmgr_stream(
     build: int = DOCUMENT_BUILD,
     display_geometry_cache: bytes = DISPLAY_GEOMETRY_CACHE_DEFAULT,
     connected_history: bool = False,
+    terminal_parent_tree_id: int | None = None,
 ) -> bytes:
     trees = tuple(feature_tree_ids)
     if not trees:
@@ -803,6 +842,14 @@ def encode_cmgr_stream(
             resolved_stamps[IndexValue]
             for IndexValue in StampOrders[len(resolved_stamps)]
         )
+    if terminal_parent_tree_id is not None and feature_stamps is None:
+        resolved_stamps = (
+            resolved_stamps[0],
+            FeatureStamp(
+                tree_id=terminal_parent_tree_id,
+                stamp=Stamp(document_stamp.high, document_stamp.low + 1),
+            ),
+        )
     ResolvedNextIdA = (
         FIRST_ATOM_ID + 1 + 4 * len(resolved_atoms)
         if connected_history and next_id_a == 0
@@ -839,6 +886,7 @@ def encode_cmgr_stream(
         session_counter=session_counter,
         display_geometry_cache=bytes(display_geometry_cache),
         connected_history=connected_history,
+        terminal_parent_tree_id=terminal_parent_tree_id,
     )
     return build_model(params).emit()
 

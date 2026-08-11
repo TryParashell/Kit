@@ -15,6 +15,14 @@ SOLIDWORKS 2025 with the correct volume and centre of mass, with the full 19-nod
 also with a changed part name whose byte sequence exists in no corpus file. Kit emits it from
 `src/convert/adapters/solidworks/config0.py`.
 
+Current closure: the historical residual accounting in §§5.7 and 7–8 records the path used to
+recover the grammar, but it is superseded by the generated `config0_program.py` field program. The shipped
+writer now reports `CONFIG_OPAQUE_BYTES = 0`; its 25,214-byte reference stream is emitted from
+typed operations with contiguous source offsets, every operation has a recovered serializer owner,
+and custom raw prologue bodies are rejected. The two-view default, fillet/chamfer, and
+linear/circular-pattern annotation managers are likewise typed programs with zero opaque bytes.
+No corpus stream or donor block is read at runtime.
+
 The stream is document-level. It carries the units tables, the annotation and dimension style tree,
 the named view table, the lights, the equation manager and the material appearance. Its **only**
 feature-dependent content is a three-node atom record per feature, and a per-solid-body 16-byte
@@ -434,7 +442,7 @@ generated program silently dropped bytes:
    followed by `+0x90` in the same function so the object spans `0x78..0x8f`, and
    `mgVector_c::mgVector_c` is called elsewhere with three `double` arguments.
 
-### 5.7 Region result
+### 5.7 Historical region result (superseded)
 
 ```
 region bytes                     17484
@@ -445,7 +453,7 @@ utCharFormat_c instances         81
 recovered class programs         65
 ```
 
-Two named residual spans remain in the region:
+At this recovery checkpoint, two named residual spans remained in the region:
 
 - **`RESIDUAL_MORELMGR_C_HEAD`, 36 bytes** — `moRelMgr_c`'s own body ahead of `moDetailDefs_c`.
   `EQUATIONS.md` records the `u16` count at `+0`, and every one of the 89 walked payloads has
@@ -522,7 +530,7 @@ proves the 88-byte-per-feature block is load-bearing rather than cosmetic**, and
 Not measured, and therefore not claimed: emission at feature counts above 1 was verified for size
 only. A multi-feature host needs its `Config-0-ResolvedFeatures`, `CMgr` and `ModelHeader` to agree.
 
-## 7. Byte accounting, before and after
+## 7. Historical byte accounting, before and after (superseded)
 
 The region decode moved the split as follows, both measured with
 `declared_opaque_split()` asserting `accounted == stream_bytes`:
@@ -584,9 +592,9 @@ program — folded like `moEnergyUnits_c`, but onto an address Ghidra names afte
 
 That is 1077 declared bytes against 4 residual, and `declared_unit_bytes()` reports exactly that.
 
-### 7.2 What is left
+### 7.2 What remained at this checkpoint
 
-The remaining 5118 bytes are **67 named spans**, listed in `config0.py` as `RESIDUAL_SPANS` with
+The remaining 5118 bytes were **67 named spans**, then listed in `config0.py` as `RESIDUAL_SPANS` with
 `RESIDUAL_BYTES` asserted equal to the split's opaque figure. Every one is named for its owning
 class. The largest:
 
@@ -612,7 +620,7 @@ still above `definition.py`'s 8.2 %, so this is visible debt, not a finished str
 is that the debt is down from 15902 bytes to 5118, no span is unexplained, and the four largest
 classes remaining have addresses against them.
 
-## 8. How Kit emits it
+## 8. Historical transitional emitter (superseded)
 
 `src/convert/adapters/solidworks/config0.py`, following `definition.py`: declarative tables as module
 literals, `MO_VERSION = 18000`, one public `encode_config0_stream(...)`, a `declared_opaque_split()`

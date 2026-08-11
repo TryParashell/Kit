@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/design-system-discipline.md"
   kiro-inclusion: "always"
 ---
+
 # Design System Discipline — Mandatory
 
 This file encodes how serious frontend teams keep UIs consistent. It is NON-NEGOTIABLE for every page, view, and component in any Next.js/React app in this workspace. It ranks alongside the formatting, React Doctor, no-stubs, component-architecture, and shadcn-pages gates. The governing principle: **architect the system so the easiest thing to do is the correct thing.** If a page hand-rolls structure or values that the system already provides, the work is NOT done.
@@ -17,13 +18,17 @@ The visual rules are defined once — spacing scale, typography, colors, radii, 
 Required:
 
 ```tsx
-<Button variant="primary" size="md">Save changes</Button>
+<Button variant="primary" size="md">
+  Save changes
+</Button>
 ```
 
 FORBIDDEN:
 
 ```tsx
-<button className="bg-blue-500 px-3.5 py-[9px] rounded-[6.25px]">Save changes</button>
+<button className="bg-blue-500 px-3.5 py-[9px] rounded-[6.25px]">
+  Save changes
+</button>
 ```
 
 No hand-rolled buttons, inputs, cards, or tables when a system component exists. Variant/size props express intent; arbitrary one-off class soup is entropy and is rejected.
@@ -44,7 +49,11 @@ Pages control the CONTENT area only — never the global layout. Wrap pages in t
 In the Next.js App Router, enforce shared layout through `layout.tsx` per segment so every route inherits the same chrome:
 
 ```tsx
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <AppShell>
       <Sidebar />
@@ -97,7 +106,10 @@ The target shape for a real page in this workspace is boring on purpose:
 ```tsx
 export default function ModelsPage() {
   return (
-    <Page title="Models" description="Configure available inference providers and model routing.">
+    <Page
+      title="Models"
+      description="Configure available inference providers and model routing."
+    >
       <ModelsTable />
     </Page>
   );

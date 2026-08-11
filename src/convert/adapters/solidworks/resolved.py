@@ -263,6 +263,7 @@ class SweptArc:
         return span
 
 
+# feature layouts expose every editable geometric scalar located in the resolved stream
 @dataclass(frozen=True, slots=True)
 class FeatureLayout:
     ordinal: int
@@ -291,6 +292,8 @@ class FeatureLayout:
     axis_offset: int | None = None
     axis_feature_id: int | None = None
     swept_arcs: tuple[SweptArc, ...] = ()
+    SketchDimensionOffsets: tuple[int, ...] = ()
+    SketchDimensionsMm: tuple[float, ...] = ()
 
     @property
     def is_revolution(self) -> bool:
@@ -337,6 +340,7 @@ class FeatureLayout:
         return None
 
 
+# feature edits couple sketch dimensions with the coordinates they drive
 @dataclass(frozen=True, slots=True)
 class FeatureEdit:
     corners_mm: Sequence[tuple[float, float]] | None = None
@@ -348,6 +352,7 @@ class FeatureEdit:
     arc_centres_mm: Sequence[tuple[float, float]] | None = None
     angle_radians: float | None = None
     swept_arc_centres_mm: Sequence[tuple[float, float]] | None = None
+    SketchDimensionsMm: Sequence[float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -612,6 +617,7 @@ def patch_sketch_arcs(data: bytes | bytearray, radii_mm: Mapping[int, float]) ->
     return patched
 
 
+# feature location binds each sketch and operation to its native scalar records
 def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
     blob = bytes(data)
     records = name_records(blob)
@@ -650,6 +656,7 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
             features[ordinal + 1].offset if ordinal + 1 < len(features) else len(blob)
         )
         sketch = _last_node_in_range(profiles, start, feature.offset)
+        SketchScalars = _SketchScalarsInRange(scalars, sketch, feature)
         scalar = next(
             (
                 candidate
@@ -675,6 +682,7 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
                         if sketch is None
                         else _swept_in_range(swept, sketch, feature)
                     ),
+                    SketchScalars=SketchScalars,
                 )
             )
             continue
@@ -692,6 +700,7 @@ def locate_features(data: bytes | bytearray) -> tuple[FeatureLayout, ...]:
                 swept_arcs=(
                     () if sketch is None else _swept_in_range(swept, sketch, feature)
                 ),
+                SketchScalars=SketchScalars,
             )
         )
         extrusions += 1
@@ -723,6 +732,7 @@ def circle_circumference_point_mm(radius_mm: float) -> tuple[float, float]:
     return radius_mm * math.cos(angle), radius_mm * math.sin(angle)
 
 
+# semantic patches update coupled fields and then relocate every edited feature
 def patch_features(data: bytes | bytearray, edits: Mapping[int, FeatureEdit]) -> bytes:
     features = locate_features(data)
     ordinals = {feature.ordinal for feature in features}
@@ -759,6 +769,15 @@ def patch_features(data: bytes | bytearray, edits: Mapping[int, FeatureEdit]) ->
                 struct.pack_into("<d", output, arc.centre_offset, centre[0] / _METRES)
                 struct.pack_into(
                     "<d", output, arc.centre_offset + 8, centre[1] / _METRES
+                )
+        if edit.SketchDimensionsMm is not None:
+            for DimensionOffset, DimensionValue in zip(
+                feature.SketchDimensionOffsets,
+                edit.SketchDimensionsMm,
+                strict=True,
+            ):
+                struct.pack_into(
+                    "<d", output, DimensionOffset, DimensionValue / _METRES
                 )
         if edit.angle_radians is not None:
             struct.pack_into("<d", output, feature.angle_offset, edit.angle_radians)
@@ -1051,6 +1070,21 @@ def _swept_in_range(
     )
 
 
+# sketch scalars lie between their tree node and the consuming feature node
+def _SketchScalarsInRange(
+    ScalarData: tuple[DimensionScalar, ...],
+    SketchData: NameRecord | None,
+    FeatureData: NameRecord,
+) -> tuple[DimensionScalar, ...]:
+    if SketchData is None:
+        return ()
+    return tuple(
+        ItemData
+        for ItemData in ScalarData
+        if SketchData.offset < ItemData.value_offset < FeatureData.offset
+    )
+
+
 def _revolution_nodes(
     blob: bytes,
     nodes: tuple[NameRecord, ...],
@@ -1095,6 +1129,7 @@ def _revolution_layout(
     arcs: tuple[SketchArc, ...],
     *,
     swept_arcs: tuple[SweptArc, ...] = (),
+    SketchScalars: tuple[DimensionScalar, ...] = (),
 ) -> FeatureLayout:
     kind, token, axis = revolution
     angle_offset = None if scalar is None else scalar.value_offset
@@ -1134,6 +1169,10 @@ def _revolution_layout(
         axis_kind=None if axis is None else axis[0],
         axis_offset=None if axis is None else axis[1],
         axis_feature_id=None if axis is None else axis[2],
+        SketchDimensionOffsets=tuple(
+            ItemData.value_offset for ItemData in SketchScalars
+        ),
+        SketchDimensionsMm=tuple(ItemData.value_mm for ItemData in SketchScalars),
     )
 
 
@@ -1149,6 +1188,7 @@ def _feature_layout(
     from_reverse_offset: int | None,
     *,
     swept_arcs: tuple[SweptArc, ...] = (),
+    SketchScalars: tuple[DimensionScalar, ...] = (),
 ) -> FeatureLayout:
     depth_offset = None if scalar is None else scalar.value_offset
     depth_mm = None if scalar is None else scalar.value_mm
@@ -1195,6 +1235,10 @@ def _feature_layout(
         ),
         from_reverse_offset=from_reverse_offset,
         swept_arcs=swept_arcs,
+        SketchDimensionOffsets=tuple(
+            ItemData.value_offset for ItemData in SketchScalars
+        ),
+        SketchDimensionsMm=tuple(ItemData.value_mm for ItemData in SketchScalars),
     )
 
 
@@ -1234,6 +1278,7 @@ def _validate_revolution_edit(feature: FeatureLayout, edit: FeatureEdit) -> None
         )
 
 
+# edit validation rejects partial scalar updates before any bytes are changed
 def _validate_edit(feature: FeatureLayout, edit: FeatureEdit) -> None:
     if feature.is_revolution:
         _validate_revolution_edit(feature, edit)
@@ -1312,6 +1357,22 @@ def _validate_edit(feature: FeatureLayout, edit: FeatureEdit) -> None:
                 "swept sketch arc centres can only be moved together with the "
                 "profile vertices that carry their endpoints"
             )
+    if edit.SketchDimensionsMm is not None:
+        if len(edit.SketchDimensionsMm) != len(feature.SketchDimensionOffsets):
+            raise SldprtFormatError(
+                f"feature {feature.ordinal} has "
+                f"{len(feature.SketchDimensionOffsets)} sketch dimension scalars "
+                f"and {len(edit.SketchDimensionsMm)} values were supplied"
+            )
+        if not feature.SketchDimensionOffsets:
+            raise SldprtFormatError(
+                f"feature {feature.ordinal} has no locatable sketch dimensions"
+            )
+        if not all(
+            math.isfinite(ItemData) and ItemData > 0.0
+            for ItemData in edit.SketchDimensionsMm
+        ):
+            raise SldprtFormatError("sketch dimensions must be finite and positive")
     if edit.depth_mm is not None:
         if feature.depth_offset is None:
             raise SldprtFormatError(
@@ -1338,6 +1399,7 @@ def _validate_edit(feature: FeatureLayout, edit: FeatureEdit) -> None:
             )
 
 
+# post patch relocation proves every edited semantic field remained addressable
 def _verify_features(
     patched: bytes,
     features: tuple[FeatureLayout, ...],
@@ -1361,6 +1423,7 @@ def _verify_features(
             != tuple(arc.centre_offset for arc in before.arcs)
             or tuple(arc.centre_offset for arc in after.swept_arcs)
             != tuple(arc.centre_offset for arc in before.swept_arcs)
+            or after.SketchDimensionOffsets != before.SketchDimensionOffsets
         ):
             raise SldprtFormatError(
                 f"patched feature {ordinal} does not relocate to the same layout"
@@ -1379,6 +1442,22 @@ def _verify_features(
                         f"patched feature {ordinal} swept arc {index} endpoints are "
                         f"not equidistant from its centre"
                     )
+        if edit.SketchDimensionsMm is not None and not all(
+            math.isclose(
+                ActualValue,
+                ExpectedValue,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-9,
+            )
+            for ActualValue, ExpectedValue in zip(
+                after.SketchDimensionsMm,
+                edit.SketchDimensionsMm,
+                strict=True,
+            )
+        ):
+            raise SldprtFormatError(
+                f"patched feature {ordinal} sketch dimensions do not verify"
+            )
         if edit.corners_mm is not None and not _matches(
             after.corners_mm, tuple(edit.corners_mm)
         ):

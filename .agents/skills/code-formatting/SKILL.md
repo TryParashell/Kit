@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/code-formatting.md"
   kiro-inclusion: "always"
 ---
+
 # Code Formatting Stack
 
 All code committed to this workspace MUST be auto-formatted. Run the appropriate formatter after every chat completion that touches code, before considering the work done.

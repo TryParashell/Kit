@@ -45,6 +45,7 @@ from interchange import (
     CadDocument,
     CadSource,
     Capability,
+    ChamferFeature,
     ComponentDefinition,
     ComponentKind,
     Configuration,
@@ -53,7 +54,6 @@ from interchange import (
     ExtrusionFeature,
     FeatureKind,
     FilletFeature,
-    MateKind,
     Mesh,
     PayloadRole,
     Severity,
@@ -610,6 +610,16 @@ def _feature_parts(
                 writable
                 and isinstance(feature.definition, FilletFeature)
                 and not feature.definition.variable_radius_parameter_ids
+                and bool(feature.input_feature_ids)
+                and _feature_has_native_edges(document, feature)
+            )
+        elif kind == FeatureKind.CHAMFER.value:
+            writable = (
+                writable
+                and isinstance(feature.definition, ChamferFeature)
+                and feature.definition.mode == "equal_distance"
+                and feature.definition.second_distance is None
+                and feature.definition.angle is None
                 and bool(feature.input_feature_ids)
                 and _feature_has_native_edges(document, feature)
             )
