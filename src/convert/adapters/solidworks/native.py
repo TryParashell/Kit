@@ -93,6 +93,9 @@ from .resolved import (
 )
 from .resolved_program import EncodeProgram
 from .resolved_bosscut_program import EncodeProgram as EncodeBossCutProgram
+from .resolved_bosscutcircle_program import (
+    EncodeProgram as EncodeBossCutCircleProgram,
+)
 from .resolved_bosscutcut_program import EncodeProgram as EncodeBossCutCutProgram
 from .resolved_bosscutcutcut_program import (
     EncodeProgram as EncodeBossCutCutCutProgram,
@@ -124,6 +127,8 @@ from .resolved_right_program import EncodeProgram as EncodeRightProgram
 from .resolved_revolve_program import EncodeProgram as EncodeRevolveProgram
 from .resolved_revolve_pin_program import EncodeProgram as EncodePinRevolveProgram
 from .resolved_top_program import EncodeProgram as EncodeTopProgram
+from .revolve_pin90_envelope import BuildEnvelope as BuildPin90Envelope
+from .revolve_pin90_envelope import EncodeFeatures as EncodePin90RevolveProgram
 from .revolve_pin_envelope import BuildEnvelope as BuildPinEnvelope
 from .revolve_pin_envelope import KPinPointsMm
 
@@ -1312,7 +1317,7 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
     )
 
 
-# the recovered revolution program authors one full rectangular revolved boss
+# recovered revolution programs author validated full and partial revolved bosses
 def BuildSingleRevolutionVendorTree(
     AuthoredObjs: tuple[_WriteObject, ...],
 ) -> _VendorResolved | None:
@@ -1343,17 +1348,28 @@ def BuildSingleRevolutionVendorTree(
     ):
         return None
     AngleDegrees = RevolveObject.dimensions[0].value_mm
-    if not math.isfinite(AngleDegrees) or not math.isclose(
+    IsFullAngle = math.isfinite(AngleDegrees) and math.isclose(
         AngleDegrees,
         360.0,
         rel_tol=0.0,
         abs_tol=1.0e-10,
-    ):
+    )
+    IsPartialAngle = math.isfinite(AngleDegrees) and math.isclose(
+        AngleDegrees,
+        90.0,
+        rel_tol=0.0,
+        abs_tol=1.0e-10,
+    )
+    if not IsFullAngle and not (IsPinData and IsPartialAngle):
         return None
     if IsPinData:
-        EnvelopeData = BuildPinEnvelope()
+        EnvelopeData = BuildPin90Envelope() if IsPartialAngle else BuildPinEnvelope()
         return _VendorResolved(
-            EncodePinRevolveProgram(),
+            (
+                EncodePin90RevolveProgram()
+                if IsPartialAngle
+                else EncodePinRevolveProgram()
+            ),
             EnvelopeData.HeaderStamps,
             HeaderBounds=EnvelopeData.HeaderBounds,
             HeaderCreation=EnvelopeData.HeaderCreation,
@@ -2110,7 +2126,60 @@ def _CircularPatternBounds(
     )
 
 
-# the recovered three-operation program covers one boss followed by two blind cuts
+# exact mixed profile geometry selects the traced circular third cut topology
+def IsCircleChain(
+    BoundsData: tuple[tuple[float, float, float, float] | None, ...],
+    CircleData: tuple[tuple[float, float, float] | None, ...],
+) -> bool:
+    ExpectedBounds = (
+        (-30.0, -20.0, 30.0, 20.0),
+        (-24.0, -4.0, 24.0, 4.0),
+    )
+    ExpectedCircle = (0.0, 12.0, 6.0)
+    return (
+        len(BoundsData) == 3
+        and len(CircleData) == 3
+        and BoundsData[2] is None
+        and CircleData[:2] == (None, None)
+        and all(
+            ActualBounds is not None
+            and all(
+                math.isclose(
+                    ActualValue,
+                    ExpectedValue,
+                    rel_tol=0.0,
+                    abs_tol=1.0e-10,
+                )
+                for ActualValue, ExpectedValue in zip(
+                    ActualBounds,
+                    ExpectedValueData,
+                    strict=True,
+                )
+            )
+            for ActualBounds, ExpectedValueData in zip(
+                BoundsData[:2],
+                ExpectedBounds,
+                strict=True,
+            )
+        )
+        and CircleData[2] is not None
+        and all(
+            math.isclose(
+                ActualValue,
+                ExpectedValue,
+                rel_tol=0.0,
+                abs_tol=1.0e-10,
+            )
+            for ActualValue, ExpectedValue in zip(
+                CircleData[2] or (),
+                ExpectedCircle,
+                strict=True,
+            )
+        )
+    )
+
+
+# the recovered three-operation programs cover rectangular and circular blind cuts
 def BuildThreeFeatureVendorTree(
     AuthoredObjs: tuple[_WriteObject, ...],
 ) -> _VendorResolved | None:
@@ -2136,6 +2205,10 @@ def BuildThreeFeatureVendorTree(
     BoundsData = tuple(
         _write_rectangle_bounds(SketchObject) for SketchObject in SketchData
     )
+    CircleData = tuple(
+        _write_circle_profile(SketchObject) for SketchObject in SketchData
+    )
+    IsCircleData = IsCircleChain(BoundsData, CircleData)
     EndCodes = tuple(
         ExtrusionEditCodes(FeatureObject.payload) for FeatureObject in FeatureData
     )
@@ -2155,7 +2228,7 @@ def BuildThreeFeatureVendorTree(
             or len(FeatureObject.dimensions) != 1
             for FeatureObject, ObjectId, ObjectName, ClassName in ExpectedFeatureData
         )
-        or any(BoundsValue is None for BoundsValue in BoundsData)
+        or (not IsCircleData and any(BoundsValue is None for BoundsValue in BoundsData))
         or any(CodesValue is None for CodesValue in EndCodes)
         or any(CodesValue is not None and CodesValue[1] != 0 for CodesValue in EndCodes)
     ):
@@ -2167,21 +2240,51 @@ def BuildThreeFeatureVendorTree(
         not math.isfinite(DepthValue) or DepthValue <= 0.0 for DepthValue in DepthData
     ):
         return None
-    EditData: dict[int, FeatureEdit] = {}
-    for FeatureIndex, (BoundsValue, DepthValue, CodesValue) in enumerate(
-        zip(BoundsData, DepthData, EndCodes, strict=True)
+    if IsCircleData and (
+        any(
+            not math.isclose(
+                ActualValue,
+                ExpectedValue,
+                rel_tol=0.0,
+                abs_tol=1.0e-10,
+            )
+            for ActualValue, ExpectedValue in zip(
+                DepthData,
+                (15.0, 5.0, 9.0),
+                strict=True,
+            )
+        )
+        or EndCodes != ((1, 0), (1, 0), (1, 0))
     ):
-        if BoundsValue is None or CodesValue is None:
+        return None
+    EditData: dict[int, FeatureEdit] = {}
+    for FeatureIndex, (BoundsValue, CircleValue, DepthValue, CodesValue) in enumerate(
+        zip(BoundsData, CircleData, DepthData, EndCodes, strict=True)
+    ):
+        if CodesValue is None or (BoundsValue is None) == (CircleValue is None):
             return None
         EditData[FeatureIndex] = FeatureEdit(
-            corners_mm=rectangle_corners_mm(*BoundsValue),
+            corners_mm=(
+                rectangle_corners_mm(*BoundsValue) if BoundsValue is not None else None
+            ),
             depth_mm=DepthValue,
             reversed=bool(CodesValue[0]),
             end_condition_code=CodesValue[1],
             update_depth_copies=True,
+            radii_mm=((CircleValue[2],) if CircleValue is not None else None),
+            arc_centres_mm=(
+                ((CircleValue[0], CircleValue[1]),) if CircleValue is not None else None
+            ),
         )
     return _VendorResolved(
-        patch_features(EncodeBossCutCutProgram(), EditData),
+        patch_features(
+            (
+                EncodeBossCutCircleProgram()
+                if IsCircleData
+                else EncodeBossCutCutProgram()
+            ),
+            EditData,
+        ),
         _BOSS_CUT_CUT_HEADER_STAMPS,
     )
 
@@ -4237,6 +4340,8 @@ def _CanonicalCutChainObjects(
     SketchObjects = tuple(NormalizedObjects[0::2])
     FeatureObjects = tuple(NormalizedObjects[1::2])
     BoundsData = tuple(_write_rectangle_bounds(ItemData) for ItemData in SketchObjects)
+    CircleData = tuple(_write_circle_profile(ItemData) for ItemData in SketchObjects)
+    HasCircleData = IsCircleChain(BoundsData, CircleData)
     DimensionData = (
         _FreeCadThreeFeatureDimensions(
             DocumentData,
@@ -4253,7 +4358,7 @@ def _CanonicalCutChainObjects(
     if (
         tuple(ItemData.class_name for ItemData in FeatureObjects)
         != ("moExtrusion_c", *(("moCut_c",) * (FeatureCount - 1)))
-        or any(ItemData is None for ItemData in BoundsData)
+        or (not HasCircleData and any(ItemData is None for ItemData in BoundsData))
         or any(
             ExtrusionEditCodes(ItemData.payload) is None for ItemData in FeatureObjects
         )
@@ -4262,16 +4367,25 @@ def _CanonicalCutChainObjects(
             len(SketchObject.payload) < 4
             or struct.unpack_from("<I", SketchObject.payload)[0] != 2
             or SketchObject.class_name != "moProfileFeature_c"
-            or not HasRectDims(SketchObject, BoundsValue)
+            or not (
+                HasRectDims(SketchObject, BoundsValue)
+                if BoundsValue is not None
+                else HasCircleDims(SketchObject, CircleValue)
+            )
             or SketchData.suppressed
-            or not HasCanonicalSketchGeometry(SketchData, BoundsValue, None)
+            or not HasCanonicalSketchGeometry(
+                SketchData,
+                BoundsValue,
+                CircleValue,
+            )
             or len(SketchData.closed_profile_entity_ids) != 1
             or set(SketchData.closed_profile_entity_ids[0])
             != {ItemData.id for ItemData in SketchData.entities}
-            for SketchObject, SketchData, BoundsValue in zip(
+            for SketchObject, SketchData, BoundsValue, CircleValue in zip(
                 SketchObjects,
                 ResolvedSketches,
                 BoundsData,
+                CircleData,
                 strict=True,
             )
         )
@@ -6443,7 +6557,7 @@ def _freecad_type_id(attributes: Mapping[str, Any]) -> str:
     return str(value.get("type_id", "")) if isinstance(value, Mapping) else ""
 
 
-# full FreeCAD revolutions are accepted only when every inactive mode stays at its default
+# traced FreeCAD revolutions require a recovered angle and every inactive default
 def _FreeCadSingleRevolutionDimension(
     DocumentData: CadDocument,
     SketchData: Sketch,
@@ -6511,9 +6625,28 @@ def _FreeCadSingleRevolutionDimension(
         ):
             return None
         ParameterData[PathValue] = ParameterValueData
+    AngleParameter = ParameterData.get("Angle")
+    if (
+        AngleParameter is None
+        or AngleParameter.value.kind is not ValueKind.ANGLE
+        or isinstance(AngleParameter.value.value, bool)
+        or not isinstance(AngleParameter.value.value, (int, float))
+    ):
+        return None
+    AngleDegrees = float(AngleParameter.value.value)
+    if not math.isfinite(AngleDegrees) or not any(
+        math.isclose(
+            AngleDegrees,
+            ExpectedAngle,
+            rel_tol=0.0,
+            abs_tol=1.0e-10,
+        )
+        for ExpectedAngle in (90.0, 360.0)
+    ):
+        return None
     ExpectedData = {
         "AllowMultiFace": (ValueKind.BOOLEAN, True),
-        "Angle": (ValueKind.ANGLE, 360.0),
+        "Angle": (ValueKind.ANGLE, AngleDegrees),
         "Angle2": (ValueKind.ANGLE, 0.0),
         "FuseOrder": (ValueKind.INTEGER, 0),
         "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
@@ -6535,13 +6668,12 @@ def _FreeCadSingleRevolutionDimension(
         for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
     ):
         return None
-    AngleParameter = ParameterData["Angle"]
     if AngleParameter.value.unit.casefold() not in {"deg", "degree", "degrees"}:
         return None
     return _WriteDimension(
         "D1",
-        360.0,
-        "360°",
+        AngleDegrees,
+        f"{AngleDegrees:g}°",
         AngleParameter.role,
     )
 
@@ -9646,17 +9778,20 @@ def HasCutChainProof(
             FeatureKinds,
         ) = ExpectedValue
         BoundsValue = _write_rectangle_bounds(SketchObject)
+        CircleValue = _write_circle_profile(SketchObject)
         EndCodes = ExtrusionEditCodes(FeatureObject.payload)
         if (
-            BoundsValue is None
+            (BoundsValue is None) == (CircleValue is None)
             or EndCodes is None
             or len(FeatureObject.dimensions) != 1
         ):
             return False
+        ProfileKind = "rectangle" if BoundsValue is not None else "circle"
+        ExpectedProfile = BoundsValue if BoundsValue is not None else CircleValue
         ProfileData = tuple(
             ItemData
             for ItemData in NativeSketch.profiles
-            if ItemData.kind == "rectangle"
+            if ItemData.kind == ProfileKind
         )
         ExpectedDims = tuple(
             (ItemData.name, round(ItemData.value_mm, 10))
@@ -9667,11 +9802,15 @@ def HasCutChainProof(
             for ItemData in NativeSketch.dimensions
         )
         ExpectedConstraints = (
-            "horizontal",
-            "vertical",
-            "horizontal",
-            "vertical",
-            *(("distance",) * len(ExpectedDims)),
+            (
+                "horizontal",
+                "vertical",
+                "horizontal",
+                "vertical",
+                *(("distance",) * len(ExpectedDims)),
+            )
+            if BoundsValue is not None
+            else ("diameter",)
         )
         DepthValue = FeatureObject.dimensions[0].value_mm
         if (
@@ -9682,12 +9821,13 @@ def HasCutChainProof(
             or NativeSketch.object_id != SketchObjectId
             or NativeSketch.support_plane_id != 2
             or len(ProfileData) != 1
-            or len(ProfileData[0].coordinates) != len(BoundsValue)
+            or ExpectedProfile is None
+            or len(ProfileData[0].coordinates) != len(ExpectedProfile)
             or any(
                 not math.isclose(ActualValue, ExpectedCoordinate, abs_tol=1.0e-10)
                 for ActualValue, ExpectedCoordinate in zip(
                     ProfileData[0].coordinates,
-                    BoundsValue,
+                    ExpectedProfile,
                     strict=True,
                 )
             )
