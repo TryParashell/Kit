@@ -387,7 +387,13 @@ understood; renumbering them is not proven safe.
 
 ---
 
-## 8. What still blocks an arbitrary feature tree
+## 8. Historical blocker inventory for an arbitrary feature tree
+
+This list records the state when the grammar study ended. Segmentation, renumbering, container
+signatures, and the supported feature families were subsequently closed by `SEGMENTATION.md`,
+`MULTISTREAM.md`, and the typed programs in `src/convert/adapters/solidworks`. Items describing
+unrecovered arbitrary profiles, supports, end conditions, and feature classes remain real coverage
+limits; they do not permit a donor fallback.
 
 1. **Object segmentation.** Per-class `Serialize` layouts are unknown for ~45 classes, so the
    byte span of each object cannot be computed statically. Everything below follows from this.
@@ -416,7 +422,8 @@ understood; renumbering them is not proven safe.
    which is the same opaque face-reference problem as §5.5.
    Note that blind → ThroughAll is **not** a byte flip: E3 in `results.md` crashes, because
    ThroughAll deletes the whole dimension object.
-9. **The container signature triplet.** `build_sldprt` still needs a donor template.
+9. **The container signature triplet.** Superseded: `build_sldprt` now computes the complete
+   container from the recovered signature vocabulary and needs no donor template.
 
 Item 1 is the keystone. `WINDBG.md` sets out the runtime route to it and how far it got.
 

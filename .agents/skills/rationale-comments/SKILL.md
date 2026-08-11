@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/rationale-comments.md"
   kiro-inclusion: "always"
 ---
+
 # Rationale Comment Convention — One "Why" Comment Above Every Definition
 
 This rule is MANDATORY for every definition in this codebase. It is separate from and in addition to `naming-convention.md`. Every class, `def`, lambda, and module-level global or constant requires exactly one comment directly above it explaining WHY it exists — not what it does, not how it works.

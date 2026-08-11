@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/frontend-stack.md"
   kiro-inclusion: "always"
 ---
+
 # Frontend Technology Stack
 
 Any frontend work in this workspace MUST use the stack defined below. This applies to new projects, new features, and any refactor that touches the frontend. Do not substitute alternative frameworks, component libraries, or data-fetching layers without explicit instruction from the user.

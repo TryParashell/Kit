@@ -4,7 +4,7 @@ This rule is MANDATORY for every landing page, marketing page, and public-facing
 
 ## Rule
 
-The separator between the brand name and the page name in a browser page title MUST be ` :: ` (space, two colons, space). Never use ` | `, ` - `, ` – `, ` — `, or ` • `.
+The separator between the brand name and the page name in a browser page title MUST be `::` (space, two colons, space). Never use `|`, `-`, `–`, `—`, or `•`.
 
 Correct:
 
@@ -34,7 +34,7 @@ This rule is about the browser/tab title only. It does NOT change on-page visibl
 
 Before considering a landing/marketing page complete, confirm:
 
-1. Every document title uses ` :: ` between brand and page name.
-2. No landing-page title ships with ` | `, ` - `, ` – `, ` — `, or ` • ` as the brand/page separator.
+1. Every document title uses `::` between brand and page name.
+2. No landing-page title ships with `|`, `-`, `–`, `—`, or `•` as the brand/page separator.
 
 If any check fails, the work is not done. Fix it before reporting completion.

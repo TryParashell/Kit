@@ -10,11 +10,11 @@ Lisp and Scheme mark boolean-returning functions with a trailing `?` (`empty?`, 
 
 Any function or method that returns a `bool` MUST start with one of:
 
-| Prefix | Use for |
-|--------|---------|
-| `Is` | state checks — `IsValid`, `IsEmpty` |
-| `Has` | possession / containment checks — `HasKey`, `HasAuth` |
-| `Can` | capability / permission checks — `CanEdit`, `CanRetry` |
+| Prefix | Use for                                                |
+| ------ | ------------------------------------------------------ |
+| `Is`   | state checks — `IsValid`, `IsEmpty`                    |
+| `Has`  | possession / containment checks — `HasKey`, `HasAuth`  |
+| `Can`  | capability / permission checks — `CanEdit`, `CanRetry` |
 
 ```python
 # flags empty carts early so checkout never runs on nothing

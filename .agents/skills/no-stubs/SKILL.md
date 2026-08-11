@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/no-stubs.md"
   kiro-inclusion: "always"
 ---
+
 # ABSOLUTE ZERO TOLERANCE: NO STUBS, NO PLACEHOLDERS, NO INCOMPLETE CODE
 
 This is the single most important rule in this workspace. Every other instruction is secondary to this one.
@@ -45,6 +46,7 @@ Every line of code you write MUST be production-ready, fully functional, and dep
 ## HOW TO VERIFY
 
 Before marking ANY task complete, ask yourself:
+
 1. If I deployed this code to production right now, would it work?
 2. Is there ANY line that is a placeholder for future work?
 3. Is there ANY function that doesn't do what its name says?

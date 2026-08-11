@@ -27,17 +27,17 @@ You MUST reach for the shadcn primitive before writing raw markup. These are FOR
 
 ### Reach for this first
 
-| Use case | Compose from |
-|----------|--------------|
-| Settings page | `Tabs` + `Card` per group + `Separator` + explicit save action |
-| Data dashboard | summary `Card`s + filter bar + `Table` + `Badge` + `DropdownMenu` |
-| CRUD table | `Table` + `DropdownMenu` + `Sheet` + `AlertDialog` for destructive |
-| Entity detail | header + status `Badge` + main `Card` + side `Card` + `AlertDialog` |
-| Auth / onboarding | centered `Card` + `Label` + `Input` + `Button` + inline `Alert` |
-| Global search | `Command` + `Dialog` (keyboard-first) |
-| Pickers | `Popover` + `Command` |
-| Mobile nav / filters | `Sheet` + `Button` + `Separator`; persistent desktop filters in a `Card` sidebar |
-| Empty / loading / error | `Card` + `Skeleton` + `Alert` |
+| Use case                | Compose from                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| Settings page           | `Tabs` + `Card` per group + `Separator` + explicit save action                   |
+| Data dashboard          | summary `Card`s + filter bar + `Table` + `Badge` + `DropdownMenu`                |
+| CRUD table              | `Table` + `DropdownMenu` + `Sheet` + `AlertDialog` for destructive               |
+| Entity detail           | header + status `Badge` + main `Card` + side `Card` + `AlertDialog`              |
+| Auth / onboarding       | centered `Card` + `Label` + `Input` + `Button` + inline `Alert`                  |
+| Global search           | `Command` + `Dialog` (keyboard-first)                                            |
+| Pickers                 | `Popover` + `Command`                                                            |
+| Mobile nav / filters    | `Sheet` + `Button` + `Separator`; persistent desktop filters in a `Card` sidebar |
+| Empty / loading / error | `Card` + `Skeleton` + `Alert`                                                    |
 
 ## Rule 3: Build On Tokens. Never Ad-Hoc Hex Or Palette Classes.
 

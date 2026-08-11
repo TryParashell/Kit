@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/chats.md"
   kiro-inclusion: "always"
 ---
+
 # Chat Policy
 
 Keep all chat responses highly concise.

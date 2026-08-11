@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/linear-issue-tracking.md"
   kiro-inclusion: "always"
 ---
+
 # Linear Issue Tracking Gate
 
 Every problem the user hands you MUST be tracked end-to-end in Linear. Before you start work you log the problem as a Linear issue with a structured analysis, you drive that issue through its workflow states as you work, and you do not consider the task finished until the issue is marked resolved (the completed `Done` state). This is mandatory, the same way formatting and the React Doctor gate are mandatory.

@@ -41,6 +41,7 @@ from convert.adapters.solidworks import (
     read_sldprt,
     write_sldprt,
 )
+from convert.adapters.solidworks.archive import encode_class_definition
 from convert.adapters.solidworks.container import container_signatures
 from convert.adapters.solidworks.adapter import (
     _ASSEMBLY_DONOR_CARRIED_STREAMS,
@@ -63,6 +64,7 @@ from convert.adapters.solidworks.format import (
     RESOLVED_FEATURES_STREAM,
 )
 from convert.adapters.solidworks.native import (
+    HasVendorPartEncoding,
     VENDOR_UNLOADABLE_NOTES,
     decode_native_model_header,
     encode_native_part,
@@ -116,6 +118,20 @@ PISTON_RING = (
 )
 CATPRODUCT = (
     Path(__file__).parents[2] / "examples" / ".CATProduct" / "Tilton_Set.CATProduct"
+)
+
+# this corpus fixture exercises native freecad box semantics when research data is present
+FreeCadBoxCorpus = (
+    Path(__file__).parents[2]
+    / ".rescratch"
+    / "freecad"
+    / "FreeCAD_1.1.3-Windows-x86_64-py311"
+    / "Mod"
+    / "Fem"
+    / "femtest"
+    / "data"
+    / "calculix"
+    / "box.FCStd"
 )
 
 
@@ -601,6 +617,102 @@ def _FreeCADRectangleRevolutionDocument() -> CadDocument:
         selections=(SelectionData,),
         feature_timeline=(FeatureData,),
         bodies=(replace(SourceData.bodies[0], final_feature_id=FeatureData.id),),
+        capabilities=SourceData.capabilities | {Capability.SELECTIONS},
+    )
+
+
+# a synthetic FreeCAD groove exercises mixed extrusion and revolved-cut history
+def _FreeCADPadGrooveDocument() -> CadDocument:
+    SourceData = _FreeCADPadPocketDocument()
+    PadFeature, PocketFeature = SourceData.feature_timeline
+    SketchOne, SketchTwo = SourceData.sketches
+    GroovePoints = (
+        Vector2(-25.0, 0.0),
+        Vector2(25.0, 0.0),
+        Vector2(25.0, 3.0),
+        Vector2(-25.0, 3.0),
+    )
+    GrooveEntities = tuple(
+        SketchEntity(
+            f"freecad:groove-edge:{IndexValue}",
+            GeometryKind.LINE,
+            LineGeometry(
+                GroovePoints[IndexValue],
+                GroovePoints[(IndexValue + 1) % 4],
+            ),
+        )
+        for IndexValue in range(4)
+    )
+    SketchTwo = replace(
+        SketchTwo,
+        entities=GrooveEntities,
+        closed_profile_entity_ids=(tuple(ItemData.id for ItemData in GrooveEntities),),
+    )
+    SelectionData = Selection(
+        "freecad:selection:Groove:ReferenceAxis:0",
+        "Groove.ReferenceAxis.H_Axis",
+        (SelectionPathElement("native", SketchTwo.name, "H_Axis"),),
+        provenance=Provenance("freecad.fcstd", "Groove.ReferenceAxis.H_Axis"),
+        attributes=frozen_mapping(
+            {
+                "freecad_object": "Groove",
+                "freecad_property": "ReferenceAxis",
+                "freecad_target": SketchTwo.name,
+                "freecad_subelement": "H_Axis",
+            }
+        ),
+    )
+    GrooveFeature = replace(
+        PocketFeature,
+        id="freecad:feature:Groove",
+        name="Groove",
+        kind=FeatureKind.REVOLUTION,
+        operation=BooleanOperation.CUT,
+        definition=NativeFeatureDefinition("freecad.fcstd", "PartDesign::Groove"),
+        selection_ids=(SelectionData.id,),
+        provenance=Provenance("freecad.fcstd", "Groove"),
+        attributes=frozen_mapping({"freecad": {"type_id": "PartDesign::Groove"}}),
+    )
+    ValuesData = (
+        ("AllowMultiFace", True, ValueKind.BOOLEAN, ""),
+        ("Angle", 360.0, ValueKind.ANGLE, "deg"),
+        ("Angle2", 0.0, ValueKind.ANGLE, "deg"),
+        ("FuzzyTolerance", -1.0, ValueKind.NUMBER, ""),
+        ("Label", "Groove", ValueKind.STRING, ""),
+        ("Label2", "", ValueKind.STRING, ""),
+        ("Midplane", False, ValueKind.BOOLEAN, ""),
+        ("Refine", True, ValueKind.BOOLEAN, ""),
+        ("Reversed", False, ValueKind.BOOLEAN, ""),
+        ("Suppressed", False, ValueKind.BOOLEAN, ""),
+        ("Type", 0, ValueKind.INTEGER, ""),
+        ("Visibility", True, ValueKind.BOOLEAN, ""),
+    )
+    GrooveParameters = tuple(
+        Parameter(
+            f"freecad:parameter:Groove:{PathValue}",
+            f"Groove.{PathValue}",
+            ParameterValue(ValueData, KindData, UnitData),
+            owner_id=GrooveFeature.id,
+            attributes=frozen_mapping({"freecad_path": PathValue}),
+        )
+        for PathValue, ValueData, KindData, UnitData in ValuesData
+    )
+    GrooveFeature = replace(
+        GrooveFeature,
+        parameter_ids=tuple(ItemData.id for ItemData in GrooveParameters),
+    )
+    PadParameters = tuple(
+        ItemData
+        for ItemData in SourceData.parameters
+        if ItemData.owner_id != PocketFeature.id
+    )
+    return replace(
+        SourceData,
+        parameters=(*PadParameters, *GrooveParameters),
+        sketches=(SketchOne, SketchTwo),
+        selections=(SelectionData,),
+        feature_timeline=(PadFeature, GrooveFeature),
+        bodies=(replace(SourceData.bodies[0], final_feature_id=GrooveFeature.id),),
         capabilities=SourceData.capabilities | {Capability.SELECTIONS},
     )
 
@@ -1243,30 +1355,25 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
 ) -> None:
     source = _freecad_rectangle_pad_document()
     target = tmp_path / "FreeCADRectanglePad.SLDPRT"
-    with pytest.raises(ApplicationUsabilityError) as captured:
-        write_document(source, target, allow_carrier=False)
-    assert not target.exists()
-    assert captured.value.unimplemented_capabilities == frozenset({Capability.BREP})
-    result = write_document(source, target, allow_carrier=True)
+    result = write_document(source, target, allow_carrier=False)
     data = target.read_bytes()
     archive = SldprtArchive.from_bytes(data)
     assert RESOLVED_FEATURES_STREAM in archive.streams
     assert KIT_RESOLVED_STREAM not in archive.streams
     assert archive.require(CONFIGURATION_MANAGER_STREAM)
     assert archive.require(CONFIGURATION_STREAM)
+    assert PARTITION_STREAM not in archive.streams
     resolved = archive.require(RESOLVED_FEATURES_STREAM)
-    partition = archive.require(PARTITION_STREAM)
     native = decode_native_model(
         archive.require(KEYWORDS_STREAM),
         resolved,
         resolved_stream=RESOLVED_FEATURES_STREAM,
     )
     transfers = {item.capability: item for item in result.transfers}
-    assert result.application_usable is False
+    assert result.application_usable is True
     assert result.vendor_loadable is True
-    assert result.near_lossless is False
+    assert result.near_lossless is True
     assert result.requirements == ()
-    assert partition == encode_blank_partition_stream()
     assert native.sketches[0].object_id == 26
     assert native.sketches[0].profiles[0].coordinates == (
         -30.0,
@@ -1280,8 +1387,7 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     assert transfers[Capability.PARAMETERS].mode.value == "native"
     assert transfers[Capability.PARAMETRIC_HISTORY].mode.value == "native"
     assert transfers[Capability.EDITABLE_SKETCHES].mode.value == "native"
-    assert transfers[Capability.BREP].mode.value == "carrier"
-    assert transfers[Capability.BREP].carrier_reason.value == "writer_unimplemented"
+    assert transfers[Capability.BREP].mode.value == "native"
     for capability in (
         Capability.NATIVE_PAYLOADS,
         Capability.PROVENANCE,
@@ -1296,8 +1402,85 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     replay = BytesIO()
     replay_result = write_sldprt(restored, replay)
     assert replay.getvalue() == data
-    assert replay_result.application_usable is False
+    assert replay_result.application_usable is True
     assert replay_result.vendor_loadable is True
+
+
+# exact box lowering preserves all three dimensions in an editable native boss
+@pytest.mark.skipif(not FreeCadBoxCorpus.is_file(), reason="box corpus unavailable")
+def test_FreeCadBoxWritesNativeParametricSolidWorksPart(tmp_path: Path) -> None:
+    SourceData = read_freecad(FreeCadBoxCorpus)
+    TargetPath = tmp_path / "FreeCadBox.SLDPRT"
+    ResultData = write_document(SourceData, TargetPath, allow_carrier=True)
+    ArchiveData = SldprtArchive.from_bytes(TargetPath.read_bytes())
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        ArchiveData.require(CONFIGURATION_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.application_usable is True
+    assert ResultData.vendor_loadable is True
+    assert ResultData.near_lossless is True
+    assert ResultData.requirements == ()
+    assert len(NativeData.sketches) == 1
+    assert NativeData.sketches[0].object_id == 26
+    assert NativeData.sketches[0].profiles[0].coordinates == pytest.approx(
+        (0.0, 0.0, 10.0, 10.0)
+    )
+    assert [
+        (ItemData.name, ItemData.value_mm)
+        for ItemData in NativeData.sketches[0].dimensions
+    ] == [
+        ("D1", 10.0),
+        ("D2", 10.0),
+    ]
+    assert len(NativeData.operations) == 1
+    assert NativeData.operations[0].object_id == 34
+    assert NativeData.operations[0].name == "Boss-Extrude1"
+    assert NativeData.operations[0].profile_id == 26
+    assert NativeData.operations[0].length_mm == pytest.approx(10.0)
+    assert NativeData.operations[0].termination_code == BLIND_END_CONDITION
+    LengthParameter = next(
+        ItemData
+        for ItemData in SourceData.parameters
+        if ItemData.attributes.get("freecad_path") == "Length"
+    )
+    MismatchedSource = replace(
+        SourceData,
+        parameters=tuple(
+            (
+                replace(
+                    ItemData,
+                    value=ParameterValue(12.0, ValueKind.LENGTH, "mm"),
+                )
+                if ItemData.id == LengthParameter.id
+                else ItemData
+            )
+            for ItemData in SourceData.parameters
+        ),
+    )
+    assert not HasVendorPartEncoding(MismatchedSource)
+
+
+# exact preflight agrees with the writer without serializing unsupported histories
+def test_vendor_part_preflight_rejects_an_unrecovered_feature_family() -> None:
+    SourceData = _freecad_rectangle_pad_document()
+    assert HasVendorPartEncoding(SourceData)
+    UnsupportedFeature = replace(
+        SourceData.feature_timeline[0],
+        kind=FeatureKind.LOFT,
+        definition=NativeFeatureDefinition(
+            "freecad.fcstd",
+            "PartDesign::Loft",
+            {},
+        ),
+    )
+    UnsupportedData = replace(
+        SourceData,
+        feature_timeline=(UnsupportedFeature,),
+    )
+    assert not HasVendorPartEncoding(UnsupportedData)
 
 
 # direction variant construction keeps unit and live-oracle fixtures identical
@@ -1457,7 +1640,7 @@ def test_freecad_pad_pad_writes_two_editable_native_bosses() -> None:
     assert ResultData.application_usable is True
     assert ResultData.metadata["native_brep"] == "feature-rebuilt"
     assert KIT_RESOLVED_STREAM not in ArchiveData.streams
-    assert len(ResolvedData) == 16174
+    assert len(ResolvedData) == 16474
     assert [
         (
             ItemData.feature_id,
@@ -1497,6 +1680,81 @@ def test_freecad_pad_pad_writes_two_editable_native_bosses() -> None:
         Capability.PARAMETRIC_HISTORY,
         Capability.EDITABLE_SKETCHES,
         Capability.BODY_STRUCTURE,
+    ):
+        assert TransferData[CapabilityValue] == "native"
+
+
+# mixed pad-groove histories preserve the editable cut profile, angle, and axis
+def test_freecad_pad_groove_writes_editable_native_revolved_cut() -> None:
+    SourceData = _FreeCADPadGrooveDocument()
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    ResolvedData = ArchiveData.require(RESOLVED_FEATURES_STREAM)
+    FeatureData = locate_features(ResolvedData)
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ResolvedData,
+        ArchiveData.require(CONFIGURATION_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.vendor_loadable is True
+    assert ResultData.application_usable is True
+    assert ResultData.metadata["native_brep"] == "feature-rebuilt"
+    assert KIT_RESOLVED_STREAM not in ArchiveData.streams
+    assert len(ResolvedData) == 17713
+    assert [
+        (
+            ItemData.feature_id,
+            ItemData.name,
+            ItemData.kind,
+            ItemData.sketch_id,
+            ItemData.depth_mm,
+            ItemData.angle_radians,
+            ItemData.bounds_mm,
+        )
+        for ItemData in FeatureData
+    ] == [
+        (
+            32,
+            "Boss-Extrude1",
+            "boss",
+            26,
+            pytest.approx(15.0),
+            None,
+            pytest.approx((-30.0, -20.0, 30.0, 20.0)),
+        ),
+        (
+            39,
+            "Cut-Revolve1",
+            "revolve-cut",
+            33,
+            None,
+            pytest.approx(2.0 * 3.141592653589793),
+            pytest.approx((-25.0, 0.0, 25.0, 3.0)),
+        ),
+    ]
+    assert [ItemData.kind for ItemData in NativeData.operations] == [
+        "join",
+        "revolve_cut",
+    ]
+    assert [ItemData.object_id for ItemData in NativeData.operations] == [32, 39]
+    ConfigurationData = ArchiveData.require(CONFIGURATION_STREAM)
+    AnnotationTag = encode_class_definition("moAnnotationView_c", 1)
+    AnnotationStart = ConfigurationData.index(AnnotationTag)
+    assert struct.unpack_from("<H", ConfigurationData, AnnotationStart - 2)[0] == 2
+    assert "*Top".encode("utf-16-le") in ConfigurationData
+    assert "*Right".encode("utf-16-le") in ConfigurationData
+    TransferData = {
+        ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
+    }
+    for CapabilityValue in (
+        Capability.BREP,
+        Capability.PARAMETERS,
+        Capability.PARAMETRIC_HISTORY,
+        Capability.EDITABLE_SKETCHES,
+        Capability.BODY_STRUCTURE,
+        Capability.SELECTIONS,
     ):
         assert TransferData[CapabilityValue] == "native"
 

@@ -8,7 +8,17 @@
 
 from __future__ import annotations
 
+import struct
+
+from .archive import encode_class_definition
+from .config0_fillet_views_program import (
+    EncodeTwoViewAnnotationManager as EncodeFilletAnnotationManager,
+)
+from .config0_pattern_views_program import (
+    EncodeTwoViewAnnotationManager as EncodePatternAnnotationManager,
+)
 from .config0_program import ConfigOps, EncodeProgram, FieldOwners
+from .config0_two_view_program import EncodeTwoViewAnnotationManager
 from .container import SldprtFormatError
 
 
@@ -24,6 +34,14 @@ REFERENCE_HIGH_WATER = (101, 103)
 REFERENCE_SHA256 = "a0877db37735da4027459d8161425843e3ad90f1e3e90dc32835f9370dd643bb"
 REFERENCE_LENGTH = 25214
 SINGLE_LENGTH_UNIT_LENGTH = 25148
+TWO_VIEW_ANNOTATION_BYTES = 260
+FILLET_ANNOTATION_BYTES = 258
+PATTERN_ANNOTATION_BYTES = 188
+
+# the traced fillet atom stores its predecessor and relation stamp after its class tag
+FILLET_ATOM_PARENT_RELATIVE = 60
+FILLET_ATOM_LINK_STAMP_RELATIVES = (84, 92)
+FILLET_ATOM_LINK_STAMP = 650
 
 # measured dynamic widths constrain feature and body growth independently
 PER_FEATURE_ATOM_BYTES = 88
@@ -45,6 +63,9 @@ def encode_config0_stream(
     dual_length_units: bool = True,
     high_water: tuple[int, int] | None = None,
     part_record_body: bytes | None = None,
+    annotation_view_count: int = 1,
+    terminal_parent_tree_id: int | None = None,
+    annotation_view_variant: str = "default",
 ) -> bytes:
     if part_record_body is not None:
         raise SldprtFormatError(
@@ -55,13 +76,87 @@ def encode_config0_stream(
             raise SldprtFormatError("Contents/Config-0 needs at least one atom record")
         HighestId = max(AtomId for AtomId, _TreeId in atoms)
         high_water = (HighestId, HighestId + 2 * len(atoms))
-    return EncodeProgram(
+    StreamData = EncodeProgram(
         PartName=part_name,
         Atoms=tuple(atoms),
         SessionStamp=session_stamp,
         Generation=generation,
         DualLengthUnits=dual_length_units,
         HighWater=high_water,
+    )
+    if terminal_parent_tree_id is not None:
+        if (
+            len(atoms) != 1
+            or not 1 <= terminal_parent_tree_id <= 0xFFFFFFFF
+            or terminal_parent_tree_id == atoms[0][1]
+        ):
+            raise SldprtFormatError(
+                "Config-0 terminal history requires one child atom and one "
+                "distinct parent tree"
+            )
+        AtomTag = encode_class_definition("moAtom_c", 1)
+        AtomStart = StreamData.find(AtomTag)
+        if AtomStart < 0:
+            raise SldprtFormatError("Config-0 terminal atom boundary changed")
+        PatchedData = bytearray(StreamData)
+        struct.pack_into(
+            "<I",
+            PatchedData,
+            AtomStart + FILLET_ATOM_PARENT_RELATIVE,
+            terminal_parent_tree_id,
+        )
+        for RelativeOffset in FILLET_ATOM_LINK_STAMP_RELATIVES:
+            struct.pack_into(
+                "<I",
+                PatchedData,
+                AtomStart + RelativeOffset,
+                FILLET_ATOM_LINK_STAMP,
+            )
+        StreamData = bytes(PatchedData)
+    if annotation_view_count == 1:
+        if terminal_parent_tree_id is not None:
+            raise SldprtFormatError(
+                "Config-0 terminal fillet history requires its two annotation views"
+            )
+        if annotation_view_variant != "default":
+            raise SldprtFormatError(
+                "Config-0 annotation variants require two annotation views"
+            )
+        return StreamData
+    if annotation_view_count != 2:
+        raise SldprtFormatError(
+            "Contents/Config-0 supports one or two recovered annotation views"
+        )
+    AnnotationTag = encode_class_definition("moAnnotationView_c", 1)
+    MarkTag = encode_class_definition("moPMarkRecord_c", 1)
+    AnnotationStart = StreamData.find(AnnotationTag)
+    AnnotationEnd = StreamData.find(MarkTag, AnnotationStart)
+    CountOffset = AnnotationStart - 2
+    if (
+        AnnotationStart < 2
+        or AnnotationEnd < 0
+        or struct.unpack_from("<H", StreamData, CountOffset)[0] != 1
+    ):
+        raise SldprtFormatError("Config-0 annotation manager boundaries changed")
+    if terminal_parent_tree_id is not None:
+        if annotation_view_variant != "default":
+            raise SldprtFormatError(
+                "terminal Config-0 history has a fixed annotation variant"
+            )
+        AnnotationManager = EncodeFilletAnnotationManager()
+    elif annotation_view_variant in {"linear_pattern", "circular_pattern"}:
+        AnnotationManager = EncodePatternAnnotationManager()
+    elif annotation_view_variant == "default":
+        AnnotationManager = EncodeTwoViewAnnotationManager()
+    else:
+        raise SldprtFormatError(
+            f"unsupported Config-0 annotation variant {annotation_view_variant!r}"
+        )
+    return (
+        StreamData[:CountOffset]
+        + struct.pack("<H", annotation_view_count)
+        + AnnotationManager
+        + StreamData[AnnotationEnd:]
     )
 
 

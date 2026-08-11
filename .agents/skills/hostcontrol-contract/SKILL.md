@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/hostcontrol-contract.md"
   kiro-inclusion: "always"
 ---
+
 # HostControl Service Contract — Change All Coupled Files Together
 
 This rule is MANDATORY whenever you add, remove, rename, or change the fields of a HostControl service. It ranks alongside the formatting, React Doctor, no-stubs, and Linear-tracking gates. The HostControl service contract is duplicated across several files that MUST stay in perfect lockstep. Change one without the others and the P0 suite fails CI (exactly the `services keys changed` / `Items in the second set but not the first` failures this rule exists to prevent). If any coupled location is out of sync, the work is NOT done.

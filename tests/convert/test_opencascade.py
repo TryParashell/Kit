@@ -11,12 +11,39 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import convert.opencascade as opencascade
 from convert.adapters.freecad.brep import triangle_mesh_brep
 from convert.adapters.freecad.native import _decoded_document_brep, read_native_fcstd
 from convert.opencascade import decode_ascii_brep, is_structurally_valid_ascii_brep
-from interchange import Body, BrepPayload, PayloadRole
+from interchange import Body, BrepPayload, PayloadRole, Vector3
 
 EXAMPLES = Path(__file__).parents[2] / "examples" / "Random" / "V8_engine"
+
+
+# tolerance-equivalent Boolean vertices must close a wire despite distinct records
+def test_canonical_vertex_records_join_transform_roundoff() -> None:
+    RecordsData = {
+        1: opencascade._ShapeRecord(
+            b"Ve",
+            "0101101",
+            (),
+            opencascade._VertexData(
+                1.0e-7,
+                Vector3(-4.253254041760199, 3.090169943749473, 5.0),
+            ),
+        ),
+        2: opencascade._ShapeRecord(
+            b"Ve",
+            "0101101",
+            (),
+            opencascade._VertexData(
+                1.0e-7,
+                Vector3(-4.253254041760199, 3.0901699437494736, 5.0),
+            ),
+        ),
+    }
+    CanonicalData = opencascade._CanonicalVertexRecords(RecordsData)
+    assert CanonicalData[1] == CanonicalData[2]
 
 
 def _replace_geometry_line(data: bytes, table: bytes, replacement: bytes) -> bytes:
@@ -54,10 +81,7 @@ def _face_triangulation_fixture(surface: int, tail: bytes) -> bytes:
             b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
             b"PolygonOnTriangulations 0\n",
             surfaces,
-            b"Triangulations 1\n"
-            b"3 1 0 0\n"
-            b"0 0 0 1 0 0 0 1 0 1 2 3\n"
-            b"TShapes 1\nFa\n",
+            b"Triangulations 1\n3 1 0 0\n0 0 0 1 0 0 0 1 0 1 2 3\nTShapes 1\nFa\n",
             f"0 0 {surface} 0".encode("ascii"),
             tail,
             b"0101000\n*\n+1 0\n",
@@ -229,9 +253,7 @@ def test_ascii_brep_decoder_composes_nested_locations_in_native_order() -> None:
     )
     DataValue = DataValue.replace(
         b"Locations 0\n",
-        b"Locations 2\n"
-        b"1\n0 -1 0 0\n1 0 0 0\n0 0 1 0\n"
-        b"1\n1 0 0 10\n0 1 0 0\n0 0 1 0\n",
+        b"Locations 2\n1\n0 -1 0 0\n1 0 0 0\n0 0 1 0\n1\n1 0 0 10\n0 1 0 0\n0 0 1 0\n",
         1,
     )
     DataValue = DataValue.replace(b"+2 0 *", b"+2 2 *", 1)
@@ -315,7 +337,7 @@ def test_structural_validator_binds_polygon_nodes_to_triangulation() -> None:
     wrong = data.replace(b"6 1 1 0", b"6 1 2 0", 1)
     closed = data.replace(
         b"PolygonOnTriangulations 1\n2 1 4\np 0 0\n",
-        b"PolygonOnTriangulations 2\n" b"2 1 2\np 0 0\n" b"2 1 4\np 0 0\n",
+        b"PolygonOnTriangulations 2\n2 1 2\np 0 0\n2 1 4\np 0 0\n",
         1,
     ).replace(b"6 1 1 0", b"7 1 2 1 0", 1)
     closed_wrong = closed.replace(b"7 1 2 1 0", b"7 1 2 2 0", 1)

@@ -41,6 +41,7 @@ Every line of code you write MUST be production-ready, fully functional, and dep
 ## HOW TO VERIFY
 
 Before marking ANY task complete, ask yourself:
+
 1. If I deployed this code to production right now, would it work?
 2. Is there ANY line that is a placeholder for future work?
 3. Is there ANY function that doesn't do what its name says?

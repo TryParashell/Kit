@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -31,9 +32,9 @@ RECORDED_BODY_DIGEST = (
     "f5b20e1c8dbe0efece6a9d07f0806a0c8d051509a8c38431024e61986d887a9e"
 )
 RECORDED_BODY_USER = "odin"
-RECORDED_DECLARED_BYTES = 3322
-RECORDED_OPAQUE_BYTES = 296
-RECORDED_OPAQUE_SPANS = 6
+RECORDED_DECLARED_BYTES = 3618
+RECORDED_OPAQUE_BYTES = 0
+RECORDED_OPAQUE_SPANS = 0
 DEFAULT_STREAM_BYTES = 3736
 DEFAULT_STREAM_DIGEST = (
     "7479a6640fa3647a4801f41bc2bd1cc4a08c845620fc0a4412dd2aa407aadf19"
@@ -50,13 +51,24 @@ def test_body_is_byte_identical_to_the_recorded_body():
     assert hashlib.sha256(encoded).hexdigest() == RECORDED_BODY_DIGEST
 
 
-def test_declared_and_opaque_bytes_tile_the_body():
+# typed ownership now covers every byte of the definition body
+def test_declared_bytes_cover_the_complete_body():
     opaque = sum(len(span) for span in OPAQUE_SPANS)
     assert len(OPAQUE_SPANS) == RECORDED_OPAQUE_SPANS
     assert opaque == RECORDED_OPAQUE_BYTES
     assert RECORDED_DECLARED_BYTES + opaque == RECORDED_BODY_BYTES
     encoded = encode_body(standard=DRAFTING_STANDARDS[0], user=RECORDED_BODY_USER)
     assert len(encoded) - opaque == RECORDED_DECLARED_BYTES
+
+
+# source inspection prevents fixed vendor blocks from returning to the writer
+def test_definition_writer_contains_no_encoded_vendor_blocks() -> None:
+    ProgramPath = (
+        Path(__file__).parents[2] / "src/convert/adapters/solidworks/definition.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "OPAQUE_SPANS = (" not in SourceText
 
 
 def test_tables_hold_the_recorded_settings():

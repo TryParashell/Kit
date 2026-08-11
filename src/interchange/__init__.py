@@ -6,6 +6,8 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
+# ruff: noqa: F401
+
 from .assembly import (
     AssemblyData,
     ComponentDefinition,
@@ -92,6 +94,7 @@ from .history import (
     Body,
     BrepPayload,
     ChamferFeature,
+    CircularPatternFeature,
     CombineFeature,
     DomeFeature,
     ExtrusionEndCondition,
@@ -101,6 +104,7 @@ from .history import (
     FeatureStep,
     FilletFeature,
     HoleFeature,
+    LinearPatternFeature,
     MoveBodyFeature,
     NativeFeatureDefinition,
     PayloadRole,

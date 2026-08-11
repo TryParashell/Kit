@@ -52,14 +52,32 @@ PrimitiveFormats = {
 # recovered class names anchor direct fields that bypass primitive archive helpers
 SketchChainClassName = "moSketchChain_c"
 BoundingBoxClassName = "moBBoxCenterData_c"
+ComponentEdgeClassName = "moCompEdge_c"
+# chamfer records finish with counted surface identifiers written without primitive helpers
+ChamferClassName = "Chamfer_c"
 # linear and angular display dimensions share the recovered direct-index layout
 DisplayDimensionClassNames = frozenset(
-    {"moDisplayDistanceDim_c", "moDisplayAngularDim_c"}
+    {
+        "moDisplayDim_c",
+        "moDisplayDistanceDim_c",
+        "moDisplayAngularDim_c",
+        "moDisplayRadialDim_c",
+    }
 )
 
 # payload-relative direct offsets survive both class definitions and compact class references
 BoundingBoxIndexPayloadOffset = 46
-DisplayDimensionIndexPayloadOffset = 526
+# every recovered display-dimension family places its direct index at this payload offset
+DisplayDimensionIndexPayloadOffsets = {
+    "moDisplayDistanceDim_c": 526,
+    "moDisplayAngularDim_c": 526,
+    "moDisplayRadialDim_c": 526,
+}
+# derived display dimensions read a composite direct slot before their index field
+DisplayDimensionDirectSlotPayloadOffset = 522
+
+# fillet component-edge buckets store a counted direct array after their fixed payload
+ComponentEdgeCountPayloadOffset = 62
 
 
 # command arguments keep program generation reproducible across workstations
@@ -190,6 +208,14 @@ def DirectFields(
 ) -> tuple[tuple[int, str, str], ...]:
     SketchSegments = ClassSegments(Segments, SketchChainClassName)
     BoundingSegments = ClassSegments(Segments, BoundingBoxClassName)
+    ComponentEdgeSegments = tuple(
+        Segment
+        for Segment in Segments
+        if Segment.get("class_name") == ComponentEdgeClassName
+    )
+    ChamferSegments = tuple(
+        Segment for Segment in Segments if Segment.get("class_name") == ChamferClassName
+    )
     DisplaySegments = tuple(
         Segment
         for Segment in Segments
@@ -249,12 +275,29 @@ def DirectFields(
                 "resolved field program direct layout requires one derived scalar "
                 f"at display dimension {DimensionIndex}"
             )
+        DisplayClassName = str(DisplaySegment["class_name"])
+        DisplayPayloadStart = int(DisplaySegment["offset"]) + int(
+            DisplaySegment["header"]
+        )
+        if DisplayClassName == "moDisplayDim_c":
+            DisplayIndexPayloadOffset = (
+                526 if int(DisplaySegment["header"]) > 2 else 522
+            )
+        else:
+            DisplayIndexPayloadOffset = DisplayDimensionIndexPayloadOffsets[
+                DisplayClassName
+            ]
+            DirectList.append(
+                (
+                    DisplayPayloadStart + DisplayDimensionDirectSlotPayloadOffset,
+                    "I",
+                    f"display dimension {DimensionIndex} direct slot",
+                )
+            )
         DirectList.extend(
             (
                 (
-                    int(DisplaySegment["offset"])
-                    + int(DisplaySegment["header"])
-                    + DisplayDimensionIndexPayloadOffset,
+                    DisplayPayloadStart + DisplayIndexPayloadOffset,
                     "H",
                     f"display dimension {DimensionIndex} index",
                 ),
@@ -265,6 +308,49 @@ def DirectFields(
                 ),
             )
         )
+    for EdgeIndex, ComponentSegment in enumerate(ComponentEdgeSegments, start=1):
+        BucketChildren = tuple(
+            Segment
+            for Segment in Segments
+            if Segment.get("parent") == ComponentSegment.get("index")
+            and Segment.get("kind") == "null"
+            and int(Segment["end"]) - int(Segment["offset"]) >= 64
+        )
+        for BucketIndex, BucketSegment in enumerate(BucketChildren, start=1):
+            CountOffset = int(BucketSegment["offset"]) + ComponentEdgeCountPayloadOffset
+            CountValue = struct.unpack_from("<H", StreamData, CountOffset)[0]
+            ValuesOffset = CountOffset + 2
+            if CountValue and ValuesOffset + CountValue * 4 <= int(
+                BucketSegment["end"]
+            ):
+                DirectList.append(
+                    (
+                        ValuesOffset,
+                        f"{CountValue}i",
+                        f"component edge {EdgeIndex} bucket {BucketIndex} indices",
+                    )
+                )
+    for ChamferIndex, ChamferSegment in enumerate(ChamferSegments, start=1):
+        ChamferChildren = tuple(
+            Segment
+            for Segment in Segments
+            if Segment.get("parent") == ChamferSegment.get("index")
+            and Segment.get("kind") == "null"
+            and int(Segment["end"]) - int(Segment["offset"]) >= 8
+        )
+        for ChildIndex, ChildSegment in enumerate(ChamferChildren, start=1):
+            ChildOffset = int(ChildSegment["offset"])
+            ChildEnd = int(ChildSegment["end"])
+            CountValue = struct.unpack_from("<H", StreamData, ChildOffset + 6)[0]
+            ValuesOffset = ChildOffset + 8
+            if CountValue and ValuesOffset + CountValue * 4 == ChildEnd:
+                DirectList.append(
+                    (
+                        ValuesOffset,
+                        f"{CountValue}i",
+                        f"chamfer {ChamferIndex} child {ChildIndex} surface identifiers",
+                    )
+                )
     return tuple(DirectList)
 
 

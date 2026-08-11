@@ -8,8 +8,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
 from pathlib import Path
+import struct
 import xml.etree.ElementTree as ElementTree
 
 import pytest
@@ -81,6 +83,27 @@ from convert.adapters.solidworks.resolved_bosscutthrough_program import (
 )
 from convert.adapters.solidworks.resolved_bossboss_program import (
     EncodeProgram as EncodeBossBossProgram,
+)
+from convert.adapters.solidworks.resolved_bosschamfer_program import (
+    EncodeProgram as EncodeBossChamferProgram,
+)
+from convert.adapters.solidworks.resolved_bosscircularpattern_program import (
+    EncodeProgram as EncodeBossCircularPatternProgram,
+)
+from convert.adapters.solidworks.resolved_bossfillet_program import (
+    EncodeProgram as EncodeBossFilletProgram,
+)
+from convert.adapters.solidworks.resolved_bosslinearpattern_program import (
+    EncodeProgram as EncodeBossLinearPatternProgram,
+)
+from convert.adapters.solidworks.resolved_bossrevcut_program import (
+    EncodeProgram as EncodeBossRevCutProgram,
+)
+from convert.adapters.solidworks.resolved_bossshell_program import (
+    EncodeProgram as EncodeBossShellProgram,
+)
+from convert.adapters.solidworks.resolved_box_program import (
+    EncodeProgram as EncodeBoxProgram,
 )
 from convert.adapters.solidworks.resolved_cutbase_program import (
     EncodeProgram as EncodeCutBaseProgram,
@@ -464,6 +487,39 @@ def test_patch_features_rejects_edits_the_stream_cannot_hold() -> None:
             patch_features(resolved, edits)
 
 
+# dimensioned box patches keep sketch constraints and solid depth synchronized
+def test_DimensionedBoxProgramPatchesEveryDrivingDimension() -> None:
+    ProgramData = EncodeBoxProgram()
+    PatchedData = patch_features(
+        ProgramData,
+        {
+            0: FeatureEdit(
+                corners_mm=rectangle_corners_mm(0.0, 0.0, 20.0, 15.0),
+                depth_mm=12.0,
+                update_depth_copies=True,
+                SketchDimensionsMm=(20.0, 15.0),
+            )
+        },
+    )
+    FeatureData = locate_features(PatchedData)[0]
+    assert len(PatchedData) == 14855
+    assert FeatureData.feature_id == 34
+    assert FeatureData.corners_mm == rectangle_corners_mm(0.0, 0.0, 20.0, 15.0)
+    assert FeatureData.SketchDimensionsMm == pytest.approx((20.0, 15.0))
+    assert FeatureData.depth_mm == pytest.approx(12.0)
+
+
+# dimensioned box validation rejects missing or nonpositive sketch constraints
+def test_DimensionedBoxProgramRejectsInvalidDrivingDimensions() -> None:
+    ProgramData = EncodeBoxProgram()
+    for DimensionData in ((10.0,), (10.0, 0.0), (10.0, math.nan)):
+        with pytest.raises(SldprtFormatError):
+            patch_features(
+                ProgramData,
+                {0: FeatureEdit(SketchDimensionsMm=DimensionData)},
+            )
+
+
 @pytest.mark.parametrize("PlaneObjectId", (2, 3, 4))
 # principal-plane patches preserve the coupled support identifier and axis code
 def test_patch_sketch_plane_rewrites_the_principal_plane_reference(
@@ -514,11 +570,247 @@ def test_first_principles_pad_pocket_program_covers_both_operations() -> None:
 def test_first_principles_pad_pad_program_covers_both_operations() -> None:
     ProgramData = EncodeBossBossProgram()
     FeatureData = locate_features(ProgramData)
-    assert len(ProgramData) == 16174
+    assert len(ProgramData) == 16474
     assert [ItemData.kind for ItemData in FeatureData] == [BOSS_KIND, BOSS_KIND]
     assert [ItemData.feature_id for ItemData in FeatureData] == [32, 40]
     assert [ItemData.sketch_id for ItemData in FeatureData] == [26, 33]
     assert [len(ItemData.points) for ItemData in FeatureData] == [4, 4]
+
+
+# the typed pad-groove program retains its additive and angular cut operations
+def test_first_principles_pad_groove_program_covers_both_operations() -> None:
+    ProgramData = EncodeBossRevCutProgram()
+    FeatureData = locate_features(ProgramData)
+    assert len(ProgramData) == 17713
+    assert [ItemData.kind for ItemData in FeatureData] == [BOSS_KIND, "revolve-cut"]
+    assert [ItemData.feature_id for ItemData in FeatureData] == [32, 39]
+    assert [ItemData.sketch_id for ItemData in FeatureData] == [26, 33]
+    assert [len(ItemData.points) for ItemData in FeatureData] == [4, 4]
+    assert FeatureData[1].angle_radians == pytest.approx(2.0 * math.pi)
+
+
+# the fillet program must preserve its live operation identity radius and selection
+def test_first_principles_boss_fillet_program_is_complete() -> None:
+    ProgramData = EncodeBossFilletProgram()
+    NamedData = [
+        ItemData
+        for ItemData in name_records(ProgramData)
+        if ItemData.name in {"Sketch1", "Boss-Extrude1", "Fillet1"}
+    ]
+    ScalarData = dimension_scalars(ProgramData)
+    assert len(ProgramData) == 14962
+    assert hashlib.sha256(ProgramData).hexdigest() == (
+        "fed3e9464e9fa26722941b7355502fe2d3c24243bc00993f22726f39d11418bb"
+    )
+    assert [(ItemData.name, ItemData.feature_id) for ItemData in NamedData] == [
+        ("Sketch1", 26),
+        ("Boss-Extrude1", 32),
+        ("Fillet1", 34),
+    ]
+    assert [(ItemData.name, ItemData.value_mm) for ItemData in ScalarData[-2:]] == [
+        ("D1", 10.0),
+        ("D1", 2.0),
+    ]
+
+
+# source inspection ensures the recovered fillet stream remains field level knowledge
+def test_boss_fillet_program_contains_no_encoded_vendor_blocks() -> None:
+    ProgramPath = (
+        Path(__file__).parents[2]
+        / "src/convert/adapters/solidworks/resolved_bossfillet_program.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "base64" not in SourceText
+    assert "b85decode" not in SourceText
+    assert "opaque" not in SourceText.casefold()
+
+
+# the chamfer program must preserve its live operation identity distance and angle
+def test_first_principles_boss_chamfer_program_is_complete() -> None:
+    ProgramData = EncodeBossChamferProgram()
+    NamedData = [
+        ItemData
+        for ItemData in name_records(ProgramData)
+        if ItemData.name in {"Sketch1", "Boss-Extrude1", "Chamfer1"}
+    ]
+    ScalarData = dimension_scalars(ProgramData)
+    assert len(ProgramData) == 15811
+    assert hashlib.sha256(ProgramData).hexdigest() == (
+        "d8b6f859a0e60e5e6307833ce502723123663bc9e25ca2b46e74f608dd5b9450"
+    )
+    assert [(ItemData.name, ItemData.feature_id) for ItemData in NamedData] == [
+        ("Sketch1", 26),
+        ("Boss-Extrude1", 32),
+        ("Chamfer1", 35),
+    ]
+    assert [(ItemData.name, ItemData.value_mm) for ItemData in ScalarData] == [
+        ("D1", 10.0),
+        ("D1", 2.0),
+        ("D2", pytest.approx(math.pi * 250.0)),
+    ]
+
+
+# source inspection ensures the recovered chamfer stream remains field level knowledge
+def test_boss_chamfer_program_contains_no_encoded_vendor_blocks() -> None:
+    ProgramPath = (
+        Path(__file__).parents[2]
+        / "src/convert/adapters/solidworks/resolved_bosschamfer_program.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "base64" not in SourceText
+    assert "b85decode" not in SourceText
+    assert "opaque" not in SourceText.casefold()
+
+
+# the shell program must preserve its live operation identity thickness and faces
+def test_first_principles_boss_shell_program_is_complete() -> None:
+    ProgramData = EncodeBossShellProgram()
+    NamedData = [
+        ItemData
+        for ItemData in name_records(ProgramData)
+        if ItemData.name in {"Sketch1", "Boss-Extrude1", "Shell1"}
+    ]
+    ScalarData = dimension_scalars(ProgramData)
+    assert len(ProgramData) == 13868
+    assert hashlib.sha256(ProgramData).hexdigest() == (
+        "19572f2d262a02c450ac66315089598074f506880ac0df03f8a74670ffac0191"
+    )
+    assert [(ItemData.name, ItemData.feature_id) for ItemData in NamedData] == [
+        ("Sketch1", 26),
+        ("Boss-Extrude1", 32),
+        ("Shell1", 34),
+    ]
+    assert [(ItemData.name, ItemData.value_mm) for ItemData in ScalarData] == [
+        ("D1", 10.0),
+        ("D1", 2.0),
+    ]
+
+
+# source inspection ensures the recovered shell stream remains field level knowledge
+def test_boss_shell_program_contains_no_encoded_vendor_blocks() -> None:
+    ProgramPath = (
+        Path(__file__).parents[2]
+        / "src/convert/adapters/solidworks/resolved_bossshell_program.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "base64" not in SourceText
+    assert "b85decode" not in SourceText
+    assert "opaque" not in SourceText.casefold()
+
+
+# the linear-pattern program preserves its live seed, count, pitch, and direction records
+def test_first_principles_boss_linear_pattern_program_is_complete() -> None:
+    ProgramData = EncodeBossLinearPatternProgram()
+    NamedData = [
+        ItemData
+        for ItemData in name_records(ProgramData)
+        if ItemData.name in {"Sketch1", "Boss-Extrude1", "LPattern1"}
+    ]
+    ScalarData = dimension_scalars(ProgramData)
+    assert len(ProgramData) == 22264
+    assert hashlib.sha256(ProgramData).hexdigest() == (
+        "fa69899e0a0d5f3271f2e1a9fff8e8eae396c7492f8910ef3ba470b3f53bb370"
+    )
+    assert [(ItemData.name, ItemData.feature_id) for ItemData in NamedData] == [
+        ("Sketch1", 26),
+        ("Boss-Extrude1", 32),
+        ("LPattern1", 40),
+    ]
+    assert ScalarData[0].name == "D1"
+    assert ScalarData[0].value_mm == pytest.approx(5.0)
+    assert next(
+        ItemData for ItemData in ScalarData if ItemData.name == "D3"
+    ).value_mm == (pytest.approx(5.0))
+
+
+# FreeCAD's positive sketch normal requires the native SOLIDWORKS flip witnesses
+def test_boss_linear_pattern_program_exposes_positive_axis_direction_fields() -> None:
+    ProgramData = EncodeBossLinearPatternProgram(
+        {
+            12656: 0.005,
+            14535: 0.005,
+            14569: -0.0,
+            14577: -0.0,
+            14585: 1.0,
+            14620: -0.0,
+            14636: -math.sqrt(0.5),
+            14644: -0.0,
+            14660: math.sqrt(0.5),
+            14668: 1.0,
+            14692: -0.0,
+            18577: 1,
+        }
+    )
+    assert ProgramData[18577] == 1
+    assert struct.unpack_from("<d", ProgramData, 12656)[0] == pytest.approx(0.005)
+    assert struct.unpack_from("<d", ProgramData, 14585)[0] == pytest.approx(1.0)
+    assert struct.unpack_from("<d", ProgramData, 14636)[0] == pytest.approx(
+        -math.sqrt(0.5)
+    )
+    assert struct.unpack_from("<d", ProgramData, 14660)[0] == pytest.approx(
+        math.sqrt(0.5)
+    )
+
+
+# source inspection ensures the recovered pattern stream remains field-level knowledge
+def test_boss_linear_pattern_program_contains_no_encoded_vendor_blocks() -> None:
+    ProgramPath = (
+        Path(__file__).parents[2]
+        / "src/convert/adapters/solidworks/resolved_bosslinearpattern_program.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "base64" not in SourceText
+    assert "b85decode" not in SourceText
+    assert "opaque" not in SourceText.casefold()
+
+
+# the circular-pattern program preserves its live seed, count, angle, and axis records
+def test_first_principles_boss_circular_pattern_program_is_complete() -> None:
+    ProgramData = EncodeBossCircularPatternProgram()
+    NamedData = [
+        ItemData
+        for ItemData in name_records(ProgramData)
+        if ItemData.name in {"Sketch1", "Boss-Extrude1", "CirPattern1"}
+    ]
+    assert len(ProgramData) == 19603
+    assert hashlib.sha256(ProgramData).hexdigest() == (
+        "ced6aec7dd5b4bc323416dfd89afe75d684aa8ad9010b54438ec516798f91be3"
+    )
+    assert [(ItemData.name, ItemData.feature_id) for ItemData in NamedData] == [
+        ("Sketch1", 26),
+        ("Boss-Extrude1", 32),
+        ("CirPattern1", 46),
+    ]
+    assert struct.unpack_from("<i", ProgramData, 13433)[0] == 4
+    assert struct.unpack_from("<d", ProgramData, 13807)[0] == pytest.approx(4.0)
+    assert struct.unpack_from("<d", ProgramData, 13831)[0] == pytest.approx(4.0)
+    assert struct.unpack_from("<d", ProgramData, 18584)[0] == pytest.approx(math.tau)
+    assert struct.unpack_from("<d", ProgramData, 19026)[0] == pytest.approx(math.tau)
+    assert struct.unpack_from("<d", ProgramData, 19050)[0] == pytest.approx(math.tau)
+    assert ProgramData[17876] == 0
+
+
+# FreeCAD's positive sketch normal requires the native circular-direction flip flag
+def test_boss_circular_pattern_program_exposes_direction_field() -> None:
+    ProgramData = EncodeBossCircularPatternProgram({17876: 1})
+    assert ProgramData[17876] == 1
+
+
+# source inspection ensures the circular stream remains field-level knowledge
+def test_boss_circular_pattern_program_contains_no_encoded_vendor_blocks() -> None:
+    ProgramPath = (
+        Path(__file__).parents[2]
+        / "src/convert/adapters/solidworks/resolved_bosscircularpattern_program.py"
+    )
+    SourceText = ProgramPath.read_text(encoding="utf-8")
+    assert "bytes.fromhex" not in SourceText
+    assert "base64" not in SourceText
+    assert "b85decode" not in SourceText
+    assert "opaque" not in SourceText.casefold()
 
 
 # the typed three-operation program preserves the full boss-cut-cut native tree

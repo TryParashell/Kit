@@ -10,7 +10,7 @@ to you under it immediately and permanently.
 
 # The container: file framing and the `file_id` -> signature table
 
-This is the outermost layer and the only one that is **completely** inverted. Nothing else matters
+This is the outermost layer and the first one that was **completely** inverted. Nothing else matters
 until a file opens, and a wrong container header does not produce a clean error — it **hard-crashes
 SOLIDWORKS**.
 
@@ -89,7 +89,8 @@ it.
 `"SLDPRT file id requires a native template with matching signatures"` for any id outside two
 hardcoded pairs (they turned out to be table entries **711** `0xEC6E2386` and **750** `0x715BE98F`).
 It now serves all 1000 ids from the generated resource, and the donor template is no longer needed
-**for the container framing**. Stream content still needs a donor — nothing here changes that.
+for the container framing. Supported stream content is also emitted from typed programs; unsupported
+feature families fail closed. See `../CORPUS_COVERAGE.md` for the current boundary.
 
 `container.py` carries no signature bytes of its own. The base85 literal that used to sit in it was
 removed; the table is loaded from the package resource through `importlib.resources`, and

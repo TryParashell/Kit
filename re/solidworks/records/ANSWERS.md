@@ -210,14 +210,18 @@ values. `verify_layout.py` now decodes the shared tail run of all 9 traced parts
 Fields SOLIDWORKS never initialises for a plain solid extrude serialise whatever the allocation
 happened to contain — deterministic for one build and code path (hence identical across the seven
 authored parts written by the same session) and different for another build (hence zero in the two
-older V8 parts). **A writer should copy them from the donor and must not treat them as
-parameters.**
+older V8 parts). This proves they are not parameters and must not be copied from a sample. The
+current typed programs emit the recovered stable semantics for supported families; an unrecovered
+variant is rejected.
 
 ---
 
 ## Q6 — Profile geometry classes and the sketch-coordinate role/class trailer
 
-**Answer: not found, beyond one structural fact.**
+**Answer: partially superseded.** This pass recovered one structural fact. Later work in
+`../features/ARC_LAYOUT.md` located line, circle, and partial-arc coordinate roles, and the supported
+typed feature programs construct their exact sketch families. Polygon, slot, spline, and arbitrary
+mixed-profile layouts remain unrecovered.
 
 The one fact recovered: `sgArcHandle`, `sgLineHandle` and 18 other handle classes do **not** have
 their own serialiser — slot 5 of every one of their vftables is `sgEntHandle::Serialize`
@@ -230,9 +234,9 @@ Not recovered: the polygon / slot / spline profile layouts, and the meaning of t
 `role ∈ {0, 2, 6, 8, 14, 24, 29}` and `class ∈ {0, 1, 2, 3, 5}` trailer values. `sgSpline` has no
 RTTI vftable in `sldmodu.dll` at all, so it is either in another module or spelled differently.
 The classes that do have their own serialisers are indexed in `out/serialize_map.json` with
-addresses (`sgArc` `0x4c5c6b10`, `sgLine` `0x4c5cc540`, `sgSketch`, `sgDim`, `sgLogDim`, …); the
-next step is one `DumpFunctions.java` run against those addresses, which was not done. **not
-found.**
+addresses (`sgArc` `0x4c5c6b10`, `sgLine` `0x4c5cc540`, `sgSketch`, `sgDim`, `sgLogDim`, …). This
+checkpoint had not yet run `DumpFunctions.java` against them; retain that fact as history, not as the
+current status of the recovered line/circle/arc families.
 
 ---
 

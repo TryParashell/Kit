@@ -6,11 +6,11 @@ This deliberately breaks from PEP 8. That is a project decision, not an oversigh
 
 ## Hard Length Ranges
 
-| Identifier type | Min | Max | Case |
-|-----------------|-----|-----|------|
-| Classes | 5 | 15 | PascalCase |
-| Functions / methods (`def`) | 5 | 15 | PascalCase |
-| Variables / globals / constants | 5 | 25 | PascalCase |
+| Identifier type                 | Min | Max | Case       |
+| ------------------------------- | --- | --- | ---------- |
+| Classes                         | 5   | 15  | PascalCase |
+| Functions / methods (`def`)     | 5   | 15  | PascalCase |
+| Variables / globals / constants | 5   | 25  | PascalCase |
 
 Length is counted in letters only (no underscores exist to count, since none are used). If a name does not fit the range, shorten or expand it — never truncate mid-word into something unreadable. Prefer a synonym or a dropped filler word.
 
@@ -74,23 +74,23 @@ Loop counters, throwaway locals, and lambda arguments must also hit the 5-char f
 
 Abbreviations come from this shared glossary so they stay consistent project-wide instead of being improvised per file.
 
-| Full word | Abbreviation |
-|-----------|--------------|
-| Manager | Mgr |
-| Configuration | Cfg |
-| Account | Acct |
-| Connection | Conn |
-| Database | Db |
-| Message | Msg |
-| Request | Req |
-| Response | Resp |
-| Initialize | Init |
-| Calculate | Calc |
-| Maximum | Max |
-| Minimum | Min |
-| Parameter | Param |
-| Argument | Arg |
-| Reference | Ref |
+| Full word     | Abbreviation |
+| ------------- | ------------ |
+| Manager       | Mgr          |
+| Configuration | Cfg          |
+| Account       | Acct         |
+| Connection    | Conn         |
+| Database      | Db           |
+| Message       | Msg          |
+| Request       | Req          |
+| Response      | Resp         |
+| Initialize    | Init         |
+| Calculate     | Calc         |
+| Maximum       | Max          |
+| Minimum       | Min          |
+| Parameter     | Param        |
+| Argument      | Arg          |
+| Reference     | Ref          |
 
 Add new terms to this table as they come up. Never invent a one-off abbreviation inline — put it here first so every file agrees.
 

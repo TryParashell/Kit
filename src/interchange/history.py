@@ -374,6 +374,24 @@ class ShellFeature(FeatureDefinition):
     outward: bool | None = None
 
 
+# linear-pattern semantics preserve the editable pitch, count, and direction binding
+@dataclass(frozen=True, slots=True)
+class LinearPatternFeature(FeatureDefinition):
+    spacing: ParameterValue
+    instance_count: int
+    direction_selection_id: str
+    reversed: bool = False
+
+
+# circular patterns preserve their angular span, instance count, and selected axis
+@dataclass(frozen=True, slots=True)
+class CircularPatternFeature(FeatureDefinition):
+    angle: ParameterValue
+    instance_count: int
+    axis_selection_id: str
+    reversed: bool = False
+
+
 @dataclass(frozen=True, slots=True)
 class ReferencePlaneFeature(FeatureDefinition):
     support_plane_id: str

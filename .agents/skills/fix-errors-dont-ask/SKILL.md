@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/fix-errors-dont-ask.md"
   kiro-inclusion: "always"
 ---
+
 # WHEN THE USER TALKS ABOUT AN ERROR, FIX IT — DO NOT ASK
 
 WHEN YOU SEE ME TALK ABOUT AN ERROR YOU SHUT THE FUCK UP AND FIX IT.

@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/component-architecture.md"
   kiro-inclusion: "always"
 ---
+
 # Component Architecture Rules
 
 These rules are MANDATORY for any work on Next.js or React applications in this workspace (e.g. `AgentUI/` and any other Next.js app). They are non-negotiable and rank alongside the formatting, React Doctor, and no-stubs gates. Violating them means the work is not done.

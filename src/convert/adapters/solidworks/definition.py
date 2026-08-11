@@ -10,14 +10,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import struct
+from uuid import UUID
 
 from .container import SldprtFormatError
 
 DRAFTING_STANDARDS = ("moBS_c", "moISO_c", "moANSI_c")
 DOCUMENT_GENERATION = 18000
 
-PART_CLSID = bytes.fromhex("303da383c527ce11bfd400400513bb57")
-ASSEMBLY_CLSID = bytes.fromhex("363da383c527ce11bfd400400513bb57")
+# registered document class identifiers distinguish native part and assembly envelopes
+PART_CLSID = UUID("83a33d30-27c5-11ce-bfd4-00400513bb57").bytes_le
+ASSEMBLY_CLSID = UUID("83a33d36-27c5-11ce-bfd4-00400513bb57").bytes_le
 
 PREAMBLE_FLAGS = 0x50
 PREAMBLE_GENERATION = 6
@@ -29,7 +31,8 @@ PREAMBLE_MIDDLE = bytes(24)
 PREAMBLE_SCALE = 1.0
 PREAMBLE_PAD = 0
 PREAMBLE_TAIL = (0.0, 0.0, 0.0, 0.0)
-PREAMBLE_TRAILER = bytes.fromhex("000300010002fa8ca63f09140060")
+# seven recovered trailer words close the generation-18000 definition preamble
+PREAMBLE_TRAILER_WORDS = (768, 256, 512, 36090, 16294, 5129, 24576)
 VIEW_BLOCK_DOUBLES = 9
 
 NEW_CLASS_TOKEN = 0xFFFF
@@ -126,12 +129,17 @@ LINE_FONT_BINDINGS = (
 USER_MODEL_ENV_CLASS = "uiUserModelEnv_c"
 USER_MODEL_ENV_SCHEMA = 1
 
-SESSION_HEADER = bytes.fromhex("010001000a030a00f0050a0000000000")
-WINDOW_PLACEMENT = bytes.fromhex("ef050000e3000000020001000000ee02e3000a00ffffffff")
-ENVIRONMENT_TAIL = bytes.fromhex(
-    "000000000000000000000000600000000000000000000000000000000000000000000000"
-    "ffffffffffffffff3520010000"
-)
+# typed session words preserve the environment schema and viewport dimensions
+SESSION_HEADER_WORDS = (1, 1, 778, 10, 1520, 10, 0, 0)
+# the primary window placement stores its extents, flags, and terminal sentinel
+WINDOW_PLACEMENT_FIELDS = (1519, 227, 2, 1, 0, 750, 227, 10, -1)
+# the environment tail contains reserved regions, capacity, sentinels, and build stamp
+ENVIRONMENT_RESERVED_HEAD_BYTES = 12
+ENVIRONMENT_CAPACITY = 96
+ENVIRONMENT_RESERVED_MIDDLE_BYTES = 20
+ENVIRONMENT_SENTINELS = (-1, -1)
+ENVIRONMENT_BUILD_STAMP = 73781
+ENVIRONMENT_TRAILING_FLAG = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +155,7 @@ class ViewRecord:
     trailer_second: int
     trailer_value: float
     name: str
-    placement: bytes = b""
+    has_window_placement: bool = False
 
 
 VIEW_RECORDS = (
@@ -177,7 +185,7 @@ VIEW_RECORDS = (
         trailer_second=1,
         trailer_value=-1.0,
         name="",
-        placement=WINDOW_PLACEMENT,
+        has_window_placement=True,
     ),
     ViewRecord(
         rotation=(),
@@ -210,33 +218,27 @@ VIEW_RECORDS = (
 BOM_MANAGER_CLASS = "moBomInfoMgr_c"
 BOM_MANAGER_SCHEMA = 1
 BOM_INFO_COUNT = 0
-MANAGER_TAIL = bytes.fromhex("01008c9500000000000003020000")
+# the empty BOM manager tail retains its schema flags and native build identity
+MANAGER_TAIL_WORDS = (1, 38284, 0, 515, 0)
 
 JOURNAL_CLASS = "uoJournal_c"
 JOURNAL_SCHEMA = 0
 JOURNAL_ATTACHMENT = "Design Journal.doc"
 JOURNAL_SLOTS = (("", 0), ("", 0), ("", 0))
 JOURNAL_PAGE_HEIGHT = 1000.0
-RECORD_HEAD = bytes.fromhex(
-    "000000000000000000000100000000000100000000000000000000000001000000000000"
-    "0106000000000000000000"
-)
-RECORD_TAIL = bytes.fromhex(
-    "000000000000000000000000000000000000000000000000000000000000640000000500"
-    "000000000000000000000100000000000000000000000000000001000000000000000000"
-    "000001000000010000000000000001000000000000000000010000000100000000000000"
-    "000000000000000002000000000000000000000000000000000003000000010000000000"
-    "0000"
-)
+# sparse typed journal records replace the former copied binary spans
+JOURNAL_HEAD_FIRST_FLAG = 1
+JOURNAL_HEAD_SECOND_FLAG = 1
+JOURNAL_HEAD_THIRD_FLAG = 1
+JOURNAL_HEAD_SCHEMA_FLAGS = 1537
+JOURNAL_TAIL_PAGE_UNITS = 100
+JOURNAL_TAIL_STYLE = 5
+JOURNAL_TAIL_OPTION_VALUES = (1, 1, 1, 1, 1, 1, 1, 2, 3, 1)
+JOURNAL_RECORD_HEAD_BYTES = 47
+JOURNAL_RECORD_TAIL_BYTES = 146
 
-OPAQUE_SPANS = (
-    SESSION_HEADER,
-    WINDOW_PLACEMENT,
-    ENVIRONMENT_TAIL,
-    MANAGER_TAIL,
-    RECORD_HEAD,
-    RECORD_TAIL,
-)
+# every definition byte now has a typed owner
+OPAQUE_SPANS: tuple[bytes, ...] = ()
 
 
 def encode_string(text: str) -> bytes:
@@ -267,6 +269,9 @@ class ArchiveWriter:
     def i16(self, value: int) -> None:
         self.chunks.append(struct.pack("<h", value))
 
+    def i32(self, value: int) -> None:
+        self.chunks.append(struct.pack("<i", value))
+
     def u32(self, value: int) -> None:
         self.chunks.append(struct.pack("<I", value))
 
@@ -275,6 +280,9 @@ class ArchiveWriter:
 
     def f64(self, value: float) -> None:
         self.chunks.append(struct.pack("<d", value))
+
+    def zeros(self, count: int) -> None:
+        self.chunks.append(bytes(count))
 
     def string(self, text: str) -> None:
         self.chunks.append(encode_string(text))
@@ -344,32 +352,111 @@ def write_view(writer: ArchiveWriter, view: ViewRecord) -> None:
     writer.u16(view.trailer_second)
     writer.f64(view.trailer_value)
     writer.string(view.name)
-    writer.raw(view.placement)
+    if view.has_window_placement:
+        write_window_placement(writer)
+
+
+# typed window coordinates replace the former fixed placement byte block
+def write_window_placement(writer: ArchiveWriter) -> None:
+    LeftValue, TopValue, *WordData, SentinelValue = WINDOW_PLACEMENT_FIELDS
+    writer.u32(LeftValue)
+    writer.u32(TopValue)
+    for ItemData in WordData:
+        writer.u16(ItemData)
+    writer.i32(SentinelValue)
+
+
+# the recovered environment tail is emitted from its primitive field grammar
+def write_environment_tail(writer: ArchiveWriter) -> None:
+    writer.zeros(ENVIRONMENT_RESERVED_HEAD_BYTES)
+    writer.u32(ENVIRONMENT_CAPACITY)
+    writer.zeros(ENVIRONMENT_RESERVED_MIDDLE_BYTES)
+    for ItemData in ENVIRONMENT_SENTINELS:
+        writer.i32(ItemData)
+    writer.u32(ENVIRONMENT_BUILD_STAMP)
+    writer.u8(ENVIRONMENT_TRAILING_FLAG)
 
 
 def write_user_model_env(writer: ArchiveWriter, user: str) -> None:
     writer.begin_object(USER_MODEL_ENV_CLASS, USER_MODEL_ENV_SCHEMA)
     writer.string(user)
-    writer.raw(SESSION_HEADER)
+    for ItemData in SESSION_HEADER_WORDS:
+        writer.u16(ItemData)
     for view in VIEW_RECORDS:
         write_view(writer, view)
-    writer.raw(ENVIRONMENT_TAIL)
+    write_environment_tail(writer)
 
 
 def write_bom_manager(writer: ArchiveWriter) -> None:
     writer.begin_object(BOM_MANAGER_CLASS, BOM_MANAGER_SCHEMA)
     writer.u32(BOM_INFO_COUNT)
-    writer.raw(MANAGER_TAIL)
+    HeadValue, BuildValue, ReservedValue, FlagValue, TailValue = MANAGER_TAIL_WORDS
+    writer.u16(HeadValue)
+    writer.u16(BuildValue)
+    writer.u32(ReservedValue)
+    writer.u16(0)
+    writer.u16(FlagValue)
+    writer.u16(TailValue)
+
+
+# the journal head uses fixed flags separated by explicitly sized reserved regions
+def write_journal_head(writer: ArchiveWriter) -> None:
+    writer.zeros(10)
+    writer.u16(JOURNAL_HEAD_FIRST_FLAG)
+    writer.zeros(4)
+    writer.u32(JOURNAL_HEAD_SECOND_FLAG)
+    writer.zeros(9)
+    writer.u32(JOURNAL_HEAD_THIRD_FLAG)
+    writer.zeros(3)
+    writer.u16(JOURNAL_HEAD_SCHEMA_FLAGS)
+    writer.zeros(9)
+
+
+# the journal tail serializes its recovered sparse option table without raw bytes
+def write_journal_tail(writer: ArchiveWriter) -> None:
+    writer.zeros(30)
+    writer.u32(JOURNAL_TAIL_PAGE_UNITS)
+    writer.u32(JOURNAL_TAIL_STYLE)
+    writer.zeros(8)
+    (
+        FirstValue,
+        SecondValue,
+        ThirdValue,
+        FourthValue,
+        FifthValue,
+        SixthValue,
+        SeventhValue,
+        EighthValue,
+        NinthValue,
+        TenthValue,
+    ) = JOURNAL_TAIL_OPTION_VALUES
+    writer.u32(FirstValue)
+    writer.zeros(12)
+    writer.u32(SecondValue)
+    writer.zeros(8)
+    writer.u32(ThirdValue)
+    writer.u32(FourthValue)
+    writer.zeros(4)
+    writer.u32(FifthValue)
+    writer.zeros(6)
+    writer.u32(SixthValue)
+    writer.u32(SeventhValue)
+    writer.zeros(12)
+    writer.u32(EighthValue)
+    writer.zeros(14)
+    writer.u32(NinthValue)
+    writer.u32(TenthValue)
+    writer.zeros(4)
 
 
 def write_journal(writer: ArchiveWriter) -> None:
     writer.begin_object(JOURNAL_CLASS, JOURNAL_SCHEMA)
     writer.string(JOURNAL_ATTACHMENT)
-    writer.raw(RECORD_HEAD)
+    write_journal_head(writer)
     for text, trailing in JOURNAL_SLOTS:
         writer.string(text)
         writer.u16(trailing)
-    writer.raw(RECORD_TAIL)
+    write_journal_tail(writer)
     writer.f64(JOURNAL_PAGE_HEIGHT)
 
 
@@ -411,7 +498,8 @@ def encode_preamble(
     chunk += struct.pack("<H", PREAMBLE_PAD)
     for value in PREAMBLE_TAIL:
         chunk += struct.pack("<d", value)
-    chunk += PREAMBLE_TRAILER
+    for ItemData in PREAMBLE_TRAILER_WORDS:
+        chunk += struct.pack("<H", ItemData)
     return bytes(chunk)
 
 

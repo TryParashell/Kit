@@ -6,6 +6,7 @@ metadata:
   source: ".kiro/steering/compact-tool-descriptions.md"
   kiro-inclusion: "always"
 ---
+
 # compact tool descriptions
 
 Tool descriptions are loaded into agent context and must stay tiny
