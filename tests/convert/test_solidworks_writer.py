@@ -1675,7 +1675,10 @@ def test_freecad_full_revolution_writes_editable_native_revolved_boss() -> None:
     HeaderData = ArchiveData.require("Contents/Config-0-ModelHeader")
     DecodedHeader = decode_native_model_header(HeaderData)
     assert DecodedHeader.objects[-2:] == ((26, "Sketch1"), (31, "Revolve1"))
-    CreationStamp = struct.unpack_from("<I", ArchiveData.require("ModelStamps"))[0]
+    ResolvedData = ArchiveData.require(RESOLVED_FEATURES_STREAM)
+    SketchCreatedStamp = struct.unpack_from("<I", ResolvedData, 767)[0]
+    SketchModifiedStamp = struct.unpack_from("<I", ResolvedData, 886)[0]
+    assert (SketchCreatedStamp, SketchModifiedStamp) == (1785797027, 1785797028)
     SerializedCreated = b"\xff\xfe\xff\x07" + "Created".encode("utf-16le")
     SerializedModified = b"\xff\xfe\xff\x08" + "Modified".encode("utf-16le")
     SerializedSketch = b"\xff\xfe\xff\x07" + "Sketch1".encode("utf-16le")
@@ -1684,12 +1687,12 @@ def test_freecad_full_revolution_writes_editable_native_revolved_boss() -> None:
         bytes.fromhex("088002000a80")
         + struct.pack("<I", 0)
         + b"\0\0"
-        + struct.pack("<I", CreationStamp + 1)
+        + struct.pack("<I", SketchCreatedStamp)
         + SerializedCreated
         + bytes.fromhex("0a80")
         + struct.pack("<I", 1)
         + b"\0\0"
-        + struct.pack("<I", CreationStamp + 2)
+        + struct.pack("<I", SketchModifiedStamp)
         + SerializedModified
         + struct.pack("<I", 26)
         + SerializedSketch
@@ -1699,7 +1702,7 @@ def test_freecad_full_revolution_writes_editable_native_revolved_boss() -> None:
         bytes.fromhex("088001000a80")
         + struct.pack("<I", 0)
         + b"\0\0"
-        + struct.pack("<I", CreationStamp + 2)
+        + struct.pack("<I", SketchModifiedStamp)
         + SerializedCreated
         + struct.pack("<I", 31)
         + SerializedRevolve

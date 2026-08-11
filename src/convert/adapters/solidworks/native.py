@@ -488,6 +488,13 @@ class _NativeIdentity:
     reference_name: str
 
 
+# resolved bytes and header identities must enter the container as one coupled unit
+@dataclass(frozen=True, slots=True)
+class _VendorResolved:
+    payload: bytes
+    header_stamps: tuple[tuple[int, ...], ...]
+
+
 _BASE_OBJECTS = (
     (8, "Comments", "Comments", "moCommentsFolder_c"),
     (23, "Favorites", "Favorites", "moFavoriteFolder_c"),
@@ -536,6 +543,50 @@ _SOLIDWORKS_XML_NAMESPACE = "http://www.solidworks.com/sw2003/schema"
 _SOLIDWORKS_CONFIGURATION_FLAGS = -2143288960
 _CREATION_STAMP_LOW = 1577836800
 _CREATION_STAMP_HIGH = 1893456000
+# the front rectangular boss program carries these feature-action identities
+_FRONT_BOSS_HEADER_STAMPS = ((1785796991, 1785796991), (1785796991,))
+# the top-plane boss program carries distinct feature-action identities
+_TOP_BOSS_HEADER_STAMPS = ((1785840649, 1785840649), (1785840649,))
+# the right-plane boss program carries distinct feature-action identities
+_RIGHT_BOSS_HEADER_STAMPS = ((1785840740, 1785840741), (1785840741,))
+# the circular boss program carries these feature-action identities
+_CIRCLE_BOSS_HEADER_STAMPS = ((1785797012, 1785797012), (1785797012,))
+# the blind boss-cut program carries four coupled feature-action identities
+_BOSS_CUT_HEADER_STAMPS = (
+    (1785839433, 1785839433),
+    (1785839434,),
+    (1785839434, 1785839435),
+    (1785839435,),
+)
+# the through-all boss-cut program carries its own action identities
+_BOSS_CUT_THROUGH_HEADER_STAMPS = (
+    (1785797023, 1785797023),
+    (1785797023,),
+    (1785797024, 1785797024),
+    (1785797025,),
+)
+# the two-pocket program carries six coupled feature-action identities
+_BOSS_CUT_CUT_HEADER_STAMPS = (
+    (1785839606, 1785839607),
+    (1785839607,),
+    (1785839608, 1785839609),
+    (1785839609,),
+    (1785839609, 1785839610),
+    (1785839610,),
+)
+# the three-pocket program carries eight coupled feature-action identities
+_BOSS_CUT_CUT_CUT_HEADER_STAMPS = (
+    (1785843343, 1785843343),
+    (1785843343,),
+    (1785843344, 1785843344),
+    (1785843345,),
+    (1785843345, 1785843345),
+    (1785843345,),
+    (1785843346, 1785843346),
+    (1785843346,),
+)
+# the revolved-boss program requires its header actions to share these identities
+_REVOLUTION_HEADER_STAMPS = ((1785797027, 1785797028), (1785797028,))
 VENDOR_UNLOADABLE_NOTES = (
     "Contents/Config-0-ResolvedFeatures is the SOLIDWORKS feature tree authority and "
     "the current source graph is outside the recovered native rectangle pad family",
@@ -680,7 +731,8 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         for object_id, name, kind in _KEYWORD_ONLY_OBJECTS
     )
     objects = (*base, *authored)
-    VendorResolved = BuildVendorTree(authored)
+    VendorData = BuildVendorTree(authored)
+    VendorResolved = VendorData.payload if VendorData is not None else None
     SourceKeywords = _keywords_payload(
         document,
         model_name,
@@ -707,6 +759,20 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         if VendorResolved is not None
         else ()
     )
+    HeaderFeatureStamps = (
+        MappingProxyType(
+            {
+                ItemData.object_id: StampData
+                for ItemData, StampData in zip(
+                    authored,
+                    VendorData.header_stamps,
+                    strict=True,
+                )
+            }
+        )
+        if VendorData is not None
+        else MappingProxyType({})
+    )
     EnvelopeStreams = dict(
         _native_envelope_streams(
             document,
@@ -714,6 +780,7 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
             identity,
             _solid_feature_tree_ids(authored),
             HeaderFeatureObjects,
+            HeaderFeatureStamps,
         )
     )
     if VendorResolved is not None:
@@ -752,7 +819,7 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
 
 
 # recovered native records cover proved one- and two-operation extrusion histories
-def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> bytes | None:
+def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved | None:
     if len(AuthoredObjs) == 8:
         return BuildFourFeatureVendorTree(AuthoredObjs)
     if len(AuthoredObjs) == 6:
@@ -789,17 +856,22 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> bytes | None:
         return None
     DirectionCode, TerminationCode = EndCodes
     if BoundsValue is not None:
-        ProgramData = (
-            EncodeProgram()
+        ProgramValue = (
+            (EncodeProgram(), _FRONT_BOSS_HEADER_STAMPS)
             if PlaneObjectId == 2
             else (
-                EncodeTopProgram()
+                (EncodeTopProgram(), _TOP_BOSS_HEADER_STAMPS)
                 if PlaneObjectId == 3
-                else EncodeRightProgram() if PlaneObjectId == 4 else None
+                else (
+                    (EncodeRightProgram(), _RIGHT_BOSS_HEADER_STAMPS)
+                    if PlaneObjectId == 4
+                    else None
+                )
             )
         )
-        if ProgramData is None:
+        if ProgramValue is None:
             return None
+        ProgramData, HeaderStamps = ProgramValue
         EditData = FeatureEdit(
             corners_mm=rectangle_corners_mm(*BoundsValue),
             depth_mm=DepthValue,
@@ -812,6 +884,7 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> bytes | None:
             return None
         CenterX, CenterY, RadiusValue = CircleValue
         ProgramData = EncodeCircleProgram()
+        HeaderStamps = _CIRCLE_BOSS_HEADER_STAMPS
         EditData = FeatureEdit(
             radii_mm=(RadiusValue,),
             arc_centres_mm=((CenterX, CenterY),),
@@ -820,16 +893,19 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> bytes | None:
             end_condition_code=0,
             update_depth_copies=True,
         )
-    return patch_features(
-        ProgramData,
-        {0: EditData},
+    return _VendorResolved(
+        patch_features(
+            ProgramData,
+            {0: EditData},
+        ),
+        HeaderStamps,
     )
 
 
 # the recovered revolution program authors one full rectangular revolved boss
 def BuildSingleRevolutionVendorTree(
     AuthoredObjs: tuple[_WriteObject, ...],
-) -> bytes | None:
+) -> _VendorResolved | None:
     if len(AuthoredObjs) != 2:
         return None
     SketchObject, RevolveObject = AuthoredObjs
@@ -860,19 +936,24 @@ def BuildSingleRevolutionVendorTree(
         abs_tol=1.0e-10,
     ):
         return None
-    return patch_features(
-        EncodeRevolveProgram(),
-        {
-            0: FeatureEdit(
-                corners_mm=rectangle_corners_mm(*BoundsValue),
-                angle_radians=math.radians(AngleDegrees),
-            )
-        },
+    return _VendorResolved(
+        patch_features(
+            EncodeRevolveProgram(),
+            {
+                0: FeatureEdit(
+                    corners_mm=rectangle_corners_mm(*BoundsValue),
+                    angle_radians=math.radians(AngleDegrees),
+                )
+            },
+        ),
+        _REVOLUTION_HEADER_STAMPS,
     )
 
 
 # the plane-supported pad-pocket program is selected only for its exact recovered topology
-def BuildTwoFeatureVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> bytes | None:
+def BuildTwoFeatureVendorTree(
+    AuthoredObjs: tuple[_WriteObject, ...],
+) -> _VendorResolved | None:
     SketchOne, PadObject, SketchTwo, CutObject = AuthoredObjs
     ExpectedData = (
         (SketchOne, 26, "Sketch1"),
@@ -913,11 +994,13 @@ def BuildTwoFeatureVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> bytes |
             return None
         CutDepth: float | None = CutObject.dimensions[0].value_mm
         ProgramData = EncodeBossCutProgram()
+        HeaderStamps = _BOSS_CUT_HEADER_STAMPS
     elif CutCodes == (1, 1):
         if CutObject.dimensions:
             return None
         CutDepth = None
         ProgramData = EncodeBossCutThroughProgram()
+        HeaderStamps = _BOSS_CUT_THROUGH_HEADER_STAMPS
     else:
         return None
     DepthData = (PadObject.dimensions[0].value_mm, CutDepth)
@@ -944,13 +1027,16 @@ def BuildTwoFeatureVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> bytes |
                 end_condition_code=CodesValue[1],
                 update_depth_copies=True,
             )
-    return patch_features(ProgramData, EditData)
+    return _VendorResolved(
+        patch_features(ProgramData, EditData),
+        HeaderStamps,
+    )
 
 
 # the recovered three-operation program covers one boss followed by two blind cuts
 def BuildThreeFeatureVendorTree(
     AuthoredObjs: tuple[_WriteObject, ...],
-) -> bytes | None:
+) -> _VendorResolved | None:
     SketchData = AuthoredObjs[0::2]
     FeatureData = AuthoredObjs[1::2]
     ExpectedSketchData = tuple(
@@ -1017,13 +1103,16 @@ def BuildThreeFeatureVendorTree(
             end_condition_code=CodesValue[1],
             update_depth_copies=True,
         )
-    return patch_features(EncodeBossCutCutProgram(), EditData)
+    return _VendorResolved(
+        patch_features(EncodeBossCutCutProgram(), EditData),
+        _BOSS_CUT_CUT_HEADER_STAMPS,
+    )
 
 
 # the recovered four-operation program covers one boss followed by three blind cuts
 def BuildFourFeatureVendorTree(
     AuthoredObjs: tuple[_WriteObject, ...],
-) -> bytes | None:
+) -> _VendorResolved | None:
     SketchData = AuthoredObjs[0::2]
     FeatureData = AuthoredObjs[1::2]
     ExpectedSketchData = tuple(
@@ -1095,7 +1184,10 @@ def BuildFourFeatureVendorTree(
             end_condition_code=CodesValue[1],
             update_depth_copies=True,
         )
-    return patch_features(EncodeBossCutCutCutProgram(), EditData)
+    return _VendorResolved(
+        patch_features(EncodeBossCutCutCutProgram(), EditData),
+        _BOSS_CUT_CUT_CUT_HEADER_STAMPS,
+    )
 
 
 # encoded extrusion records expose the direction and termination fields used by the patcher
@@ -3797,6 +3889,7 @@ def _native_envelope_streams(
     identity: _NativeIdentity,
     solid_feature_tree_ids: tuple[int, ...] = (),
     header_feature_objects: tuple[tuple[int, str, bool], ...] = (),
+    header_feature_stamps: Mapping[int, tuple[int, ...]] | None = None,
 ) -> Mapping[str, bytes]:
     configuration_name = next(
         (
@@ -3829,6 +3922,7 @@ def _native_envelope_streams(
         configuration_name,
         solid_feature_tree_ids=solid_feature_tree_ids,
         feature_objects=header_feature_objects,
+        feature_stamps=header_feature_stamps,
     )
     streams["Contents/Config-0-ModelHeader"] = model_header
     streams["Header2"] = model_header
@@ -4070,6 +4164,7 @@ def _model_header_payload(
     user_name: str = "Kit",
     solid_feature_tree_ids: tuple[int, ...] = (),
     feature_objects: tuple[tuple[int, str, bool], ...] = (),
+    feature_stamps: Mapping[int, tuple[int, ...]] | None = None,
 ) -> bytes:
     return _header_payload(
         identity,
@@ -4078,6 +4173,7 @@ def _model_header_payload(
         "",
         user_name,
         max(solid_feature_tree_ids) + 1 if solid_feature_tree_ids else None,
+        feature_stamps,
     )
 
 
@@ -4088,6 +4184,7 @@ def _header_payload(
     document_path: str,
     user_name: str = "Kit",
     next_object_id: int | None = None,
+    object_stamps: Mapping[int, tuple[int, ...]] | None = None,
 ) -> bytes:
     legacy_stamp = bytes.fromhex("f65a1a69")
     CStringHandleClassIndex = 14 + sum(
@@ -4112,8 +4209,14 @@ def _header_payload(
     output.extend(struct.pack("<I", 0))
     output.extend(_serialized_string(identity.reference_name))
     LogicalStamp = identity.creation_stamp
+    ObjectStamps = object_stamps or {}
     for object_id, name, modified in objects:
         actions = ("Created", "Modified") if modified else ("Created",)
+        RecoveredStamps = ObjectStamps.get(object_id)
+        if RecoveredStamps is not None and len(RecoveredStamps) != len(actions):
+            raise SldprtFormatError(
+                "native SOLIDWORKS header action stamps do not match object actions"
+            )
         output.extend(bytes.fromhex("0880") + struct.pack("<H", len(actions)))
         if object_id > 16 and modified:
             LogicalStamp += 1
@@ -4121,7 +4224,11 @@ def _header_payload(
             if object_id > 16 and index:
                 LogicalStamp += 1
             StampData = (
-                legacy_stamp if object_id <= 16 else struct.pack("<I", LogicalStamp)
+                struct.pack("<I", RecoveredStamps[index])
+                if RecoveredStamps is not None
+                else (
+                    legacy_stamp if object_id <= 16 else struct.pack("<I", LogicalStamp)
+                )
             )
             output.extend(
                 bytes.fromhex("0a80") + struct.pack("<I", index) + b"\0\0" + StampData
