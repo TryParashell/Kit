@@ -52,36 +52,10 @@
         "moSurfaceBodyFolder_c"
       ],
       "traced_span_lengths": [
-        30,
-        40,
-        42,
-        44,
-        46,
-        48,
-        50,
-        52,
-        54,
-        56,
-        58,
-        64,
-        66,
-        78
+        30, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 64, 66, 78
       ],
       "own_body_lengths": [
-        8,
-        14,
-        16,
-        18,
-        20,
-        22,
-        24,
-        26,
-        28,
-        30,
-        32,
-        38,
-        40,
-        52
+        8, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 38, 40, 52
       ],
       "decompiled_reader": "moNode_c::Serialize @0x4c1db8f0 -> su_CArchive::ReadObject(&moNodeName_c::classmoNodeName_c)",
       "decompiled_serialize": "moNodeName_c::Serialize @0x4c1db8a0 reads exactly one CString",
@@ -128,12 +102,8 @@
         "moCompSketchEntHandle_c",
         "moCompSolidBody_c"
       ],
-      "traced_span_lengths": [
-        2
-      ],
-      "own_body_lengths": [
-        0
-      ],
+      "traced_span_lengths": [2],
+      "own_body_lengths": [0],
       "decompiled_reader": "moCompRef_c::Serialize @0x4bc22f00 -> ::operator>>(archive, &owner) into the moComponent_c* member at +0x58",
       "decompiled_serialize": "moUnitComponent_c::Serialize @0x4c288670 -> moComponent_c::Serialize @0x4c279a90 reads one nested object and no scalar first",
       "caveat": "the decompiled reader names the base class moComponent_c, which is the declared type of the member it fills; the concrete class is pinned by two further measurements: moComponent_c is never defined by name in any stream of any part scanned, so it cannot be the referent, while moUnitComponent_c is defined in Contents/Config-0 and the replayed Contents/Config-0 map places it at exactly the observed index",
@@ -178,14 +148,8 @@
         "sgLLDist",
         "sgSketch"
       ],
-      "traced_span_lengths": [
-        4,
-        63,
-        174
-      ],
-      "own_body_lengths": [
-        2
-      ],
+      "traced_span_lengths": [4, 63, 174],
+      "own_body_lengths": [2],
       "decompiled_reader": "moSketchRegion_c::Serialize @0x4b9d81e0 -> ::operator>>(archive, (suObList **)(this + 8)) and sgSketch::Serialize @0x4c5d28c0 -> ::operator>>(archive, (suObList **)(this + 0x5d0))",
       "decompiled_serialize": "u16 element count followed by that many nested objects",
       "caveat": "the read itself is polymorphic; suObList is the declared type of the member it fills, and suObList is also defined by name in Contents/Config-0, Contents/CMgr and Contents/Config-0-ModelHeader, where the replayed Contents/Config-0 map places it at exactly the observed index",
@@ -223,16 +187,9 @@
         "vendor_ring": 2,
         "vendor_cojinete": 1
       },
-      "parent_classes": [
-        "moExtrusion_c",
-        "moICE_c"
-      ],
-      "traced_span_lengths": [
-        58
-      ],
-      "own_body_lengths": [
-        4
-      ],
+      "parent_classes": ["moExtrusion_c", "moICE_c"],
+      "traced_span_lengths": [58],
+      "own_body_lengths": [4],
       "decompiled_reader": "FUN_4bb886c0 (base Serialize invoked first by moBodyFeature_c::Serialize @0x4bb8aa10) reads AR_get_int then, when non-zero, ::operator>>(archive, (moPMarkRecord_c **)(this + 0x3c8))",
       "decompiled_serialize": "moPMarkRecord_c::Serialize @0x4bb97ca0 reads exactly one long",
       "caveat": "the class name is written literally at the call site and in the demangled symbol of the extraction operator, ??5@YAAEAVsu_CArchive@@AEAV0@AEAPEAVmoPMarkRecord_c@@@Z",
@@ -320,18 +277,7 @@
             "moSurfaceBodyFolder_c"
           ],
           "traced_span_lengths": [
-            30,
-            40,
-            42,
-            44,
-            46,
-            48,
-            52,
-            54,
-            56,
-            58,
-            66,
-            78
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
           ],
           "example_spans": [
             {
@@ -357,36 +303,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              8,
-              14,
-              16,
-              18,
-              20,
-              22,
-              26,
-              28,
-              30,
-              32,
-              40,
-              52
-            ],
-            "trailing_bytes": [
-              20,
-              24
-            ]
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
           }
         },
         "component": {
           "class_index": 43,
           "occurrences": 4,
-          "parents": [
-            "moCompFeature_c",
-            "moCompRefPlane_c"
-          ],
-          "traced_span_lengths": [
-            2
-          ],
+          "parents": ["moCompFeature_c", "moCompRefPlane_c"],
+          "traced_span_lengths": [2],
           "example_spans": [
             {
               "segment_index": 18,
@@ -411,27 +336,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              0
-            ],
-            "nested_first_child": [
-              "objectref"
-            ]
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
           }
         },
         "object_list": {
           "class_index": 82,
           "occurrences": 5,
-          "parents": [
-            "moSketchRegion_c",
-            "null",
-            "sgSketch"
-          ],
-          "traced_span_lengths": [
-            4,
-            63,
-            174
-          ],
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
           "example_spans": [
             {
               "segment_index": 141,
@@ -456,26 +369,16 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              2
-            ],
-            "counts": [
-              0,
-              1,
-              4
-            ],
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
             "count_matches_children": 2
           }
         },
         "pmark_record": {
           "class_index": 102,
           "occurrences": 1,
-          "parents": [
-            "moExtrusion_c"
-          ],
-          "traced_span_lengths": [
-            58
-          ],
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
           "example_spans": [
             {
               "segment_index": 277,
@@ -486,12 +389,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              4
-            ],
-            "pmark_ids": [
-              5
-            ]
+            "own_body_lengths": [4],
+            "pmark_ids": [5]
           }
         }
       }
@@ -525,18 +424,7 @@
             "moSurfaceBodyFolder_c"
           ],
           "traced_span_lengths": [
-            30,
-            40,
-            42,
-            44,
-            46,
-            48,
-            52,
-            54,
-            56,
-            58,
-            66,
-            78
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
           ],
           "example_spans": [
             {
@@ -562,24 +450,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              8,
-              14,
-              16,
-              18,
-              20,
-              22,
-              26,
-              28,
-              30,
-              32,
-              40,
-              52
-            ],
-            "trailing_bytes": [
-              20,
-              24
-            ]
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
           }
         },
         "component": {
@@ -590,9 +462,7 @@
             "moCompRefPlane_c",
             "moCompSketchEntHandle_c"
           ],
-          "traced_span_lengths": [
-            2
-          ],
+          "traced_span_lengths": [2],
           "example_spans": [
             {
               "segment_index": 18,
@@ -617,27 +487,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              0
-            ],
-            "nested_first_child": [
-              "objectref"
-            ]
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
           }
         },
         "object_list": {
           "class_index": 82,
           "occurrences": 5,
-          "parents": [
-            "moSketchRegion_c",
-            "null",
-            "sgSketch"
-          ],
-          "traced_span_lengths": [
-            4,
-            63,
-            174
-          ],
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
           "example_spans": [
             {
               "segment_index": 141,
@@ -662,25 +520,16 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              2
-            ],
-            "counts": [
-              0,
-              1
-            ],
+            "own_body_lengths": [2],
+            "counts": [0, 1],
             "count_matches_children": 2
           }
         },
         "pmark_record": {
           "class_index": 102,
           "occurrences": 1,
-          "parents": [
-            "moExtrusion_c"
-          ],
-          "traced_span_lengths": [
-            58
-          ],
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
           "example_spans": [
             {
               "segment_index": 241,
@@ -691,12 +540,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              4
-            ],
-            "pmark_ids": [
-              5
-            ]
+            "own_body_lengths": [4],
+            "pmark_ids": [5]
           }
         }
       }
@@ -730,18 +575,7 @@
             "moSurfaceBodyFolder_c"
           ],
           "traced_span_lengths": [
-            30,
-            40,
-            42,
-            44,
-            46,
-            48,
-            52,
-            54,
-            56,
-            58,
-            66,
-            78
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
           ],
           "example_spans": [
             {
@@ -767,36 +601,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              8,
-              14,
-              16,
-              18,
-              20,
-              22,
-              26,
-              28,
-              30,
-              32,
-              40,
-              52
-            ],
-            "trailing_bytes": [
-              20,
-              24
-            ]
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
           }
         },
         "component": {
           "class_index": 43,
           "occurrences": 4,
-          "parents": [
-            "moCompFeature_c",
-            "moCompRefPlane_c"
-          ],
-          "traced_span_lengths": [
-            2
-          ],
+          "parents": ["moCompFeature_c", "moCompRefPlane_c"],
+          "traced_span_lengths": [2],
           "example_spans": [
             {
               "segment_index": 18,
@@ -821,27 +634,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              0
-            ],
-            "nested_first_child": [
-              "objectref"
-            ]
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
           }
         },
         "object_list": {
           "class_index": 82,
           "occurrences": 5,
-          "parents": [
-            "moSketchRegion_c",
-            "null",
-            "sgSketch"
-          ],
-          "traced_span_lengths": [
-            4,
-            63,
-            174
-          ],
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
           "example_spans": [
             {
               "segment_index": 141,
@@ -866,26 +667,16 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              2
-            ],
-            "counts": [
-              0,
-              1,
-              4
-            ],
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
             "count_matches_children": 2
           }
         },
         "pmark_record": {
           "class_index": 102,
           "occurrences": 1,
-          "parents": [
-            "moExtrusion_c"
-          ],
-          "traced_span_lengths": [
-            58
-          ],
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
           "example_spans": [
             {
               "segment_index": 277,
@@ -896,12 +687,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              4
-            ],
-            "pmark_ids": [
-              5
-            ]
+            "own_body_lengths": [4],
+            "pmark_ids": [5]
           }
         }
       }
@@ -935,18 +722,7 @@
             "moSurfaceBodyFolder_c"
           ],
           "traced_span_lengths": [
-            30,
-            40,
-            42,
-            44,
-            46,
-            48,
-            52,
-            54,
-            56,
-            58,
-            66,
-            78
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
           ],
           "example_spans": [
             {
@@ -972,36 +748,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              8,
-              14,
-              16,
-              18,
-              20,
-              22,
-              26,
-              28,
-              30,
-              32,
-              40,
-              52
-            ],
-            "trailing_bytes": [
-              20,
-              24
-            ]
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
           }
         },
         "component": {
           "class_index": 43,
           "occurrences": 6,
-          "parents": [
-            "moCompFeature_c",
-            "moCompRefPlane_c"
-          ],
-          "traced_span_lengths": [
-            2
-          ],
+          "parents": ["moCompFeature_c", "moCompRefPlane_c"],
+          "traced_span_lengths": [2],
           "example_spans": [
             {
               "segment_index": 18,
@@ -1026,27 +781,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              0
-            ],
-            "nested_first_child": [
-              "objectref"
-            ]
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
           }
         },
         "object_list": {
           "class_index": 83,
           "occurrences": 8,
-          "parents": [
-            "moSketchRegion_c",
-            "null",
-            "sgSketch"
-          ],
-          "traced_span_lengths": [
-            4,
-            63,
-            174
-          ],
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
           "example_spans": [
             {
               "segment_index": 151,
@@ -1071,26 +814,16 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              2
-            ],
-            "counts": [
-              0,
-              1,
-              4
-            ],
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
             "count_matches_children": 4
           }
         },
         "pmark_record": {
           "class_index": 103,
           "occurrences": 1,
-          "parents": [
-            "moExtrusion_c"
-          ],
-          "traced_span_lengths": [
-            58
-          ],
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
           "example_spans": [
             {
               "segment_index": 287,
@@ -1101,12 +834,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              4
-            ],
-            "pmark_ids": [
-              5
-            ]
+            "own_body_lengths": [4],
+            "pmark_ids": [5]
           }
         }
       }
@@ -1141,18 +870,7 @@
             "moSurfaceBodyFolder_c"
           ],
           "traced_span_lengths": [
-            30,
-            40,
-            42,
-            44,
-            46,
-            48,
-            52,
-            54,
-            56,
-            58,
-            66,
-            78
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
           ],
           "example_spans": [
             {
@@ -1178,24 +896,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              8,
-              14,
-              16,
-              18,
-              20,
-              22,
-              26,
-              28,
-              30,
-              32,
-              40,
-              52
-            ],
-            "trailing_bytes": [
-              20,
-              24
-            ]
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
           }
         },
         "component": {
@@ -1206,9 +908,7 @@
             "moCompRefPlane_c",
             "moCompSolidBody_c"
           ],
-          "traced_span_lengths": [
-            2
-          ],
+          "traced_span_lengths": [2],
           "example_spans": [
             {
               "segment_index": 18,
@@ -1233,27 +933,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              0
-            ],
-            "nested_first_child": [
-              "objectref"
-            ]
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
           }
         },
         "object_list": {
           "class_index": 83,
           "occurrences": 8,
-          "parents": [
-            "moSketchRegion_c",
-            "null",
-            "sgSketch"
-          ],
-          "traced_span_lengths": [
-            4,
-            63,
-            174
-          ],
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
           "example_spans": [
             {
               "segment_index": 151,
@@ -1278,27 +966,16 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              2
-            ],
-            "counts": [
-              0,
-              1,
-              4
-            ],
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
             "count_matches_children": 4
           }
         },
         "pmark_record": {
           "class_index": 103,
           "occurrences": 2,
-          "parents": [
-            "moExtrusion_c",
-            "moICE_c"
-          ],
-          "traced_span_lengths": [
-            58
-          ],
+          "parents": ["moExtrusion_c", "moICE_c"],
+          "traced_span_lengths": [58],
           "example_spans": [
             {
               "segment_index": 287,
@@ -1316,13 +993,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              4
-            ],
-            "pmark_ids": [
-              5,
-              8
-            ]
+            "own_body_lengths": [4],
+            "pmark_ids": [5, 8]
           }
         }
       }
@@ -1357,18 +1029,7 @@
             "moSurfaceBodyFolder_c"
           ],
           "traced_span_lengths": [
-            30,
-            40,
-            42,
-            44,
-            46,
-            48,
-            52,
-            54,
-            56,
-            58,
-            66,
-            78
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
           ],
           "example_spans": [
             {
@@ -1394,24 +1055,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              8,
-              14,
-              16,
-              18,
-              20,
-              22,
-              26,
-              28,
-              30,
-              32,
-              40,
-              52
-            ],
-            "trailing_bytes": [
-              20,
-              24
-            ]
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
           }
         },
         "component": {
@@ -1422,9 +1067,7 @@
             "moCompRefPlane_c",
             "moCompSolidBody_c"
           ],
-          "traced_span_lengths": [
-            2
-          ],
+          "traced_span_lengths": [2],
           "example_spans": [
             {
               "segment_index": 18,
@@ -1449,27 +1092,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              0
-            ],
-            "nested_first_child": [
-              "objectref"
-            ]
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
           }
         },
         "object_list": {
           "class_index": 83,
           "occurrences": 8,
-          "parents": [
-            "moSketchRegion_c",
-            "null",
-            "sgSketch"
-          ],
-          "traced_span_lengths": [
-            4,
-            63,
-            174
-          ],
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
           "example_spans": [
             {
               "segment_index": 151,
@@ -1494,27 +1125,16 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              2
-            ],
-            "counts": [
-              0,
-              1,
-              4
-            ],
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
             "count_matches_children": 4
           }
         },
         "pmark_record": {
           "class_index": 103,
           "occurrences": 2,
-          "parents": [
-            "moExtrusion_c",
-            "moICE_c"
-          ],
-          "traced_span_lengths": [
-            58
-          ],
+          "parents": ["moExtrusion_c", "moICE_c"],
+          "traced_span_lengths": [58],
           "example_spans": [
             {
               "segment_index": 287,
@@ -1532,13 +1152,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              4
-            ],
-            "pmark_ids": [
-              5,
-              8
-            ]
+            "own_body_lengths": [4],
+            "pmark_ids": [5, 8]
           }
         }
       }
@@ -1573,18 +1188,7 @@
             "moSurfaceBodyFolder_c"
           ],
           "traced_span_lengths": [
-            30,
-            40,
-            42,
-            44,
-            46,
-            48,
-            52,
-            54,
-            56,
-            58,
-            66,
-            78
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
           ],
           "example_spans": [
             {
@@ -1610,24 +1214,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              8,
-              14,
-              16,
-              18,
-              20,
-              22,
-              26,
-              28,
-              30,
-              32,
-              40,
-              52
-            ],
-            "trailing_bytes": [
-              20,
-              24
-            ]
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
           }
         },
         "component": {
@@ -1638,9 +1226,7 @@
             "moCompRefPlane_c",
             "moCompSolidBody_c"
           ],
-          "traced_span_lengths": [
-            2
-          ],
+          "traced_span_lengths": [2],
           "example_spans": [
             {
               "segment_index": 18,
@@ -1665,27 +1251,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              0
-            ],
-            "nested_first_child": [
-              "objectref"
-            ]
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
           }
         },
         "object_list": {
           "class_index": 84,
           "occurrences": 11,
-          "parents": [
-            "moSketchRegion_c",
-            "null",
-            "sgSketch"
-          ],
-          "traced_span_lengths": [
-            4,
-            63,
-            174
-          ],
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
           "example_spans": [
             {
               "segment_index": 161,
@@ -1710,27 +1284,16 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              2
-            ],
-            "counts": [
-              0,
-              1,
-              4
-            ],
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
             "count_matches_children": 6
           }
         },
         "pmark_record": {
           "class_index": 104,
           "occurrences": 2,
-          "parents": [
-            "moExtrusion_c",
-            "moICE_c"
-          ],
-          "traced_span_lengths": [
-            58
-          ],
+          "parents": ["moExtrusion_c", "moICE_c"],
+          "traced_span_lengths": [58],
           "example_spans": [
             {
               "segment_index": 297,
@@ -1748,13 +1311,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              4
-            ],
-            "pmark_ids": [
-              5,
-              8
-            ]
+            "own_body_lengths": [4],
+            "pmark_ids": [5, 8]
           }
         }
       }
@@ -1788,19 +1346,7 @@
             "moSolidBodyFolder_c",
             "moSurfaceBodyFolder_c"
           ],
-          "traced_span_lengths": [
-            30,
-            40,
-            42,
-            44,
-            46,
-            48,
-            52,
-            54,
-            56,
-            58,
-            66
-          ],
+          "traced_span_lengths": [30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66],
           "example_spans": [
             {
               "segment_index": 1,
@@ -1825,23 +1371,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              8,
-              14,
-              16,
-              18,
-              20,
-              22,
-              26,
-              28,
-              30,
-              32,
-              40
-            ],
-            "trailing_bytes": [
-              20,
-              24
-            ]
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40],
+            "trailing_bytes": [20, 24]
           }
         },
         "component": {
@@ -1855,9 +1386,7 @@
             "moCompSketchEntHandle_c",
             "moCompSolidBody_c"
           ],
-          "traced_span_lengths": [
-            2
-          ],
+          "traced_span_lengths": [2],
           "example_spans": [
             {
               "segment_index": 18,
@@ -1882,12 +1411,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              0
-            ],
-            "nested_first_child": [
-              "objectref"
-            ]
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
           }
         },
         "object_list": {
@@ -1900,11 +1425,7 @@
             "sgLLDist",
             "sgSketch"
           ],
-          "traced_span_lengths": [
-            4,
-            63,
-            174
-          ],
+          "traced_span_lengths": [4, 63, 174],
           "example_spans": [
             {
               "segment_index": 151,
@@ -1929,28 +1450,16 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              2
-            ],
-            "counts": [
-              0,
-              1,
-              2,
-              4
-            ],
+            "own_body_lengths": [2],
+            "counts": [0, 1, 2, 4],
             "count_matches_children": 7
           }
         },
         "pmark_record": {
           "class_index": 104,
           "occurrences": 2,
-          "parents": [
-            "moExtrusion_c",
-            "moICE_c"
-          ],
-          "traced_span_lengths": [
-            58
-          ],
+          "parents": ["moExtrusion_c", "moICE_c"],
+          "traced_span_lengths": [58],
           "example_spans": [
             {
               "segment_index": 386,
@@ -1968,13 +1477,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              4
-            ],
-            "pmark_ids": [
-              26,
-              29
-            ]
+            "own_body_lengths": [4],
+            "pmark_ids": [26, 29]
           }
         }
       }
@@ -2008,18 +1512,7 @@
             "moSurfaceBodyFolder_c"
           ],
           "traced_span_lengths": [
-            30,
-            40,
-            42,
-            44,
-            46,
-            48,
-            50,
-            52,
-            56,
-            64,
-            66,
-            78
+            30, 40, 42, 44, 46, 48, 50, 52, 56, 64, 66, 78
           ],
           "example_spans": [
             {
@@ -2045,24 +1538,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              8,
-              14,
-              16,
-              18,
-              20,
-              22,
-              24,
-              26,
-              30,
-              38,
-              40,
-              52
-            ],
-            "trailing_bytes": [
-              20,
-              24
-            ]
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 24, 26, 30, 38, 40, 52],
+            "trailing_bytes": [20, 24]
           }
         },
         "component": {
@@ -2073,9 +1550,7 @@
             "moCompRefPlane_c",
             "moCompSketchEntHandle_c"
           ],
-          "traced_span_lengths": [
-            2
-          ],
+          "traced_span_lengths": [2],
           "example_spans": [
             {
               "segment_index": 18,
@@ -2100,28 +1575,15 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              0
-            ],
-            "nested_first_child": [
-              "objectref"
-            ]
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
           }
         },
         "object_list": {
           "class_index": 85,
           "occurrences": 7,
-          "parents": [
-            "moSketchRegion_c",
-            "null",
-            "sgCircleDim",
-            "sgSketch"
-          ],
-          "traced_span_lengths": [
-            4,
-            63,
-            174
-          ],
+          "parents": ["moSketchRegion_c", "null", "sgCircleDim", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
           "example_spans": [
             {
               "segment_index": 141,
@@ -2146,28 +1608,16 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              2
-            ],
-            "counts": [
-              0,
-              1,
-              2,
-              3,
-              4
-            ],
+            "own_body_lengths": [2],
+            "counts": [0, 1, 2, 3, 4],
             "count_matches_children": 5
           }
         },
         "pmark_record": {
           "class_index": 106,
           "occurrences": 1,
-          "parents": [
-            "moExtrusion_c"
-          ],
-          "traced_span_lengths": [
-            58
-          ],
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
           "example_spans": [
             {
               "segment_index": 529,
@@ -2178,12 +1628,8 @@
             }
           ],
           "byte_evidence": {
-            "own_body_lengths": [
-              4
-            ],
-            "pmark_ids": [
-              8
-            ]
+            "own_body_lengths": [4],
+            "pmark_ids": [8]
           }
         }
       }

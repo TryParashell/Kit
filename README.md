@@ -33,11 +33,11 @@ Kit by Parashell is a source-available CAD interchange SDK for translating geome
 
 ## Supported formats
 
-| CAD             | suffixes                  |
-| --------------- | ------------------------- |
-| SOLIDWORKS      | `.SLDPRT`, `.SLDASM`      |
-| FreeCAD         | `.FCStd`                  |
-| CATIA           | `.CATPart`, `.CATProduct` |
+| CAD        | suffixes                  |
+| ---------- | ------------------------- |
+| SOLIDWORKS | `.SLDPRT`, `.SLDASM`      |
+| FreeCAD    | `.FCStd`                  |
+| CATIA      | `.CATPart`, `.CATProduct` |
 
 Kit reads and writes these formats natively, without requiring CAD software to be installed.
 

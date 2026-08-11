@@ -234,7 +234,6 @@ def test_blank_partition_stream_matches_solidworks_2025_protocol() -> None:
     assert all(_parasolid_header(payload.data) is not None for payload in decoded)
 
 
-
 def test_neutral_binary_header_uses_big_endian_schema_length() -> None:
     payload = encode_brep_model(triangle_brep())
     description_length = struct.unpack_from(">H", payload, 4)[0]

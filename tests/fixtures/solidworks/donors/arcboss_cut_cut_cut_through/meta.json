@@ -1,10 +1,5 @@
 {
-  "arc_counts": [
-    0,
-    0,
-    1,
-    0
-  ],
+  "arc_counts": [0, 0, 1, 0],
   "axis_directions": [],
   "container_streams": [
     {
@@ -28,19 +23,9 @@
       "name": "Header2"
     }
   ],
-  "depth_present": [
-    true,
-    true,
-    true,
-    false
-  ],
+  "depth_present": [true, true, true, false],
   "donor_id": "arcboss_cut_cut_cut_through",
-  "feature_ids": [
-    32,
-    40,
-    47,
-    54
-  ],
+  "feature_ids": [32, 40, 47, 54],
   "feature_names": [
     "Boss-Extrude1",
     "Cut-Extrude1",
@@ -48,65 +33,20 @@
     "Cut-Extrude3"
   ],
   "features": [
-    [
-      "boss",
-      "polyline-3-arc-1-ccw",
-      "front",
-      "blind"
-    ],
-    [
-      "cut",
-      "rectangle",
-      "front",
-      "blind"
-    ],
-    [
-      "cut",
-      "circle",
-      "front",
-      "blind"
-    ],
-    [
-      "cut",
-      "polyline-12",
-      "top",
-      "through-all"
-    ]
+    ["boss", "polyline-3-arc-1-ccw", "front", "blind"],
+    ["cut", "rectangle", "front", "blind"],
+    ["cut", "circle", "front", "blind"],
+    ["cut", "polyline-12", "top", "through-all"]
   ],
-  "inherited_directions": [
-    null,
-    null,
-    null,
-    false
-  ],
+  "inherited_directions": [null, null, null, false],
   "measured": true,
-  "point_counts": [
-    4,
-    4,
-    0,
-    12
-  ],
-  "sketch_ids": [
-    26,
-    33,
-    41,
-    48
-  ],
-  "sketch_names": [
-    "Sketch1",
-    "Sketch2",
-    "Sketch3",
-    "Sketch4"
-  ],
+  "point_counts": [4, 4, 0, 12],
+  "sketch_ids": [26, 33, 41, 48],
+  "sketch_names": ["Sketch1", "Sketch2", "Sketch3", "Sketch4"],
   "spare_equations": [],
   "spare_plane_frames": [],
   "spare_plane_ids": [],
   "spare_plane_names": [],
   "stream_bytes": 26894,
-  "swept_arc_counts": [
-    1,
-    0,
-    0,
-    0
-  ]
+  "swept_arc_counts": [1, 0, 0, 0]
 }

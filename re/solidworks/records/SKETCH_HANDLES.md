@@ -21,7 +21,7 @@ the corresponding `Contents/Config-0-ResolvedFeatures` streams.
 `re/data/class_layouts_decompiled.json` against every instance in all nine.
 
 Confidence vocabulary is the one `SERIALIZE.md` uses: **confirmed** = read out of the decompiled
-`Serialize` *and* the byte arithmetic reproduces a real traced span exactly; **partial** = read out
+`Serialize` _and_ the byte arithmetic reproduces a real traced span exactly; **partial** = read out
 of the decompiler but nothing available pins it; **not found** = not recovered.
 
 ---
@@ -37,7 +37,7 @@ and it is the direct cause of the 43 `sgLineHandle@end` and 40 `sgLLDist@end` co
 `sgArcHandle`, `sgPointHandle`, `sgEntHandle` and sixteen further classes — `serialize_map.json`
 lists twenty in total. On every file version in play (13000, 14000, 18000) it reads **three
 scalars and no objects at all**. So every traced "child" of a `sgLineHandle` node is a read that
-happened *after* `sgEntHandle::Serialize` returned, at a stack depth the tracer could not
+happened _after_ `sgEntHandle::Serialize` returned, at a stack depth the tracer could not
 distinguish from deeper. 103 of the 232 traced `sgLineHandle` instances, 14 of 39 `sgPointHandle`,
 6 of 30 `sgArcHandle` and 2 of 8 `sgEntHandle` carry such phantom children.
 
@@ -61,25 +61,25 @@ CStringT(&local_res18, "RefId");   AR_put_long(ar, *(long *)(this + 0x1c));
 CStringT(&local_res18, "DimOnCM"); AR_put_long(ar, *(long *)(this + 8));
 ```
 
-| # | offset in body | `this` offset | width | archive op | name | role | confidence |
-|---|---|---|---|---|---|---|---|
-| 1 | `+0` | `0x18` | 2 | `AR_get_ushort` | `EntIndex` | authored | confirmed |
-| 2 | `+2` | `0x18` | 4 | `AR_get_long`, **only if #1 == `0x777f`** | `EntIndex` escaped | authored | confirmed |
-| 3 | `+2` / `+6` | `0x1c` | 4 | `AR_get_long` | `RefId` | authored | confirmed |
-| 4 | `+6` / `+10` | `0x08` | 4 | `AR_get_long` | `DimOnCM` | derived | confirmed |
+| #   | offset in body | `this` offset | width | archive op                                | name               | role     | confidence |
+| --- | -------------- | ------------- | ----- | ----------------------------------------- | ------------------ | -------- | ---------- |
+| 1   | `+0`           | `0x18`        | 2     | `AR_get_ushort`                           | `EntIndex`         | authored | confirmed  |
+| 2   | `+2`           | `0x18`        | 4     | `AR_get_long`, **only if #1 == `0x777f`** | `EntIndex` escaped | authored | confirmed  |
+| 3   | `+2` / `+6`    | `0x1c`        | 4     | `AR_get_long`                             | `RefId`            | authored | confirmed  |
+| 4   | `+6` / `+10`   | `0x08`        | 4     | `AR_get_long`                             | `DimOnCM`          | derived  | confirmed  |
 
 So the record is **10 bytes normally and 14 bytes when the index escapes**. That is the whole
 record; `su_CObject::Serialize` at the top contributes nothing.
 
 ### Version gates
 
-| gate | effect |
-|---|---|
-| `ver < 0x5b` (91) | a legacy pre-amble that also demands the object pointer read back as null |
-| `ver < 0x77e` (1918) | a bare `u16` with no `su_DBKey`, and the record may end after it |
-| `0x77e <= ver < 0xa84` (2692) | `EntIndex` is sign-extended from `i16` unless it is in `[-99, -37]` |
-| `ver >= 0xa84` | `EntIndex` is a plain `u16` |
-| `ver < 0x17d7` (6103) | `DimOnCM` is not read; the record is 6 or 10 bytes |
+| gate                          | effect                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| `ver < 0x5b` (91)             | a legacy pre-amble that also demands the object pointer read back as null |
+| `ver < 0x77e` (1918)          | a bare `u16` with no `su_DBKey`, and the record may end after it          |
+| `0x77e <= ver < 0xa84` (2692) | `EntIndex` is sign-extended from `i16` unless it is in `[-99, -37]`       |
+| `ver >= 0xa84`                | `EntIndex` is a plain `u16`                                               |
+| `ver < 0x17d7` (6103)         | `DimOnCM` is not read; the record is 6 or 10 bytes                        |
 
 All corpus versions are above every gate, so the modern three-field form is the only one the corpus
 exercises. The legacy widths are recorded here so a reader of a 13000-era file does not have to
@@ -104,11 +104,11 @@ All three inherit `sgEntHandle::Serialize` unchanged — `serialize_map.json` gi
 address for all of them — and none of the 301 traced instances takes the escape. The body is
 therefore the fixed 10-byte `EntIndex` / `RefId` / `DimOnCM` triple.
 
-| class | traced instances | instances whose body ends exactly on the next traced object | body overruns |
-|---|---|---|---|
-| `sgLineHandle` | 232 | 105 | 0 |
-| `sgArcHandle` | 30 | 22 | 0 |
-| `sgPointHandle` | 39 | 12 | 0 |
+| class           | traced instances | instances whose body ends exactly on the next traced object | body overruns |
+| --------------- | ---------------- | ----------------------------------------------------------- | ------------- |
+| `sgLineHandle`  | 232              | 105                                                         | 0             |
+| `sgArcHandle`   | 30               | 22                                                          | 0             |
+| `sgPointHandle` | 39               | 12                                                          | 0             |
 
 Not one of the 301 instances has less than 10 bytes before the next traced object, and 139 of them
 have exactly 10. That is what upgrades 10 from "what the decompiler says" to confirmed.
@@ -129,18 +129,18 @@ body has room for nothing else.
 
 Function: `sldmodu.dll` `0x4c5e0090`. Read order, with the gates:
 
-| # | width / kind | condition | `this` offset | name | role | confidence |
-|---|---|---|---|---|---|---|
-| 0 | base | always | — | `FUN_4c5dfab0` (the `sgDim` chain) | — | not found |
-| 1 | object | always | `0x130` | `ReadObject(sgEntHandle)` — `Entity0` | authored | confirmed |
-| 2 | object | always | `0x158` | `ReadObject(sgEntHandle)` — `Entity1` | authored | confirmed |
-| 3 | 2 | ver >= `0xc9` | `0x180` | `ArcDimType0` | authored | confirmed |
-| 4 | 2 | ver >= `0xc9` | `0x184` | `ArcDimType1` | authored | confirmed |
-| 5 | 2 | ver > `0x2dc` | `0x1b8` | `Quadrant` | authored | confirmed |
-| 6 | 2 | ver > `0x760` | `0x1bc` | `Chamfer` | authored | confirmed |
-| 7 | object | ver > `0x10a4` | `0x1e0` | `ReadObject(sg3DPlaneHandle)` — `ActivePlane` | authored | confirmed |
-| 8 | 24 | ver > `0x1c27` | `0x1c8` | `mgVector_c::restore` — `Direction`, three `f64` | derived | confirmed |
-| 9 | 2 | `0x2f79 < ver < 0x2fa0` | — | a discarded `u16` | — | partial (never taken) |
+| #   | width / kind | condition               | `this` offset | name                                             | role     | confidence            |
+| --- | ------------ | ----------------------- | ------------- | ------------------------------------------------ | -------- | --------------------- |
+| 0   | base         | always                  | —             | `FUN_4c5dfab0` (the `sgDim` chain)               | —        | not found             |
+| 1   | object       | always                  | `0x130`       | `ReadObject(sgEntHandle)` — `Entity0`            | authored | confirmed             |
+| 2   | object       | always                  | `0x158`       | `ReadObject(sgEntHandle)` — `Entity1`            | authored | confirmed             |
+| 3   | 2            | ver >= `0xc9`           | `0x180`       | `ArcDimType0`                                    | authored | confirmed             |
+| 4   | 2            | ver >= `0xc9`           | `0x184`       | `ArcDimType1`                                    | authored | confirmed             |
+| 5   | 2            | ver > `0x2dc`           | `0x1b8`       | `Quadrant`                                       | authored | confirmed             |
+| 6   | 2            | ver > `0x760`           | `0x1bc`       | `Chamfer`                                        | authored | confirmed             |
+| 7   | object       | ver > `0x10a4`          | `0x1e0`       | `ReadObject(sg3DPlaneHandle)` — `ActivePlane`    | authored | confirmed             |
+| 8   | 24           | ver > `0x1c27`          | `0x1c8`       | `mgVector_c::restore` — `Direction`, three `f64` | derived  | confirmed             |
+| 9   | 2            | `0x2f79 < ver < 0x2fa0` | —             | a discarded `u16`                                | —        | partial (never taken) |
 
 Fields 3 to 6 are named by the `su_DBKey` writes in the store branch (`ArcDimType0`,
 `ArcDimType1`, `Quadrant`, `Chamfer`, `ActivePlane`, `Direction`).
@@ -148,9 +148,9 @@ Fields 3 to 6 are named by the `su_DBKey` writes in the store branch (`ArcDimTyp
 Against the traces this closes almost exactly. In the four six-child instances the measured runs
 are `lead = 4`, `@1 = 16`, `@2 = 14`, `@3 = 0`, `@4 = 8`, `@5 = 24`, and:
 
-* `@3 = 0` is the gap between the two `sgEntHandle` reads — the code reads them back to back.
-* `@4 = 8` is exactly `ArcDimType0 + ArcDimType1 + Quadrant + Chamfer`.
-* `@5 = 24` is exactly `mgVector_c::restore`, and it lands **on the traced `scope_end`**, so the
+- `@3 = 0` is the gap between the two `sgEntHandle` reads — the code reads them back to back.
+- `@4 = 8` is exactly `ArcDimType0 + ArcDimType1 + Quadrant + Chamfer`.
+- `@5 = 24` is exactly `mgVector_c::restore`, and it lands **on the traced `scope_end`**, so the
   six-child form tiles with zero residual.
 
 What is still open is `@0`, the run between the `moLengthParameter_c` dimension object and the next
@@ -185,13 +185,13 @@ corpus and the only one in this document that has not been read end to end.
 
 Measured, across all 24 traced instances:
 
-| run | value | instances | confidence |
-|---|---|---|---|
-| `lead` | 49 | 24 / 24 | confirmed |
-| `@0` | 8 | 24 / 24 | confirmed |
-| `@1` | 39 | 24 / 24 | confirmed |
-| `@2` | 0 | 24 / 24 | confirmed |
-| `@3` onward | the entity list | — | opaque |
+| run         | value           | instances | confidence |
+| ----------- | --------------- | --------- | ---------- |
+| `lead`      | 49              | 24 / 24   | confirmed  |
+| `@0`        | 8               | 24 / 24   | confirmed  |
+| `@1`        | 39              | 24 / 24   | confirmed  |
+| `@2`        | 0               | 24 / 24   | confirmed  |
+| `@3` onward | the entity list | —         | opaque     |
 
 Child counts observed are 5, 10, 12, 13, 22 and 26. From slot 3 onward the structure is a
 **repeating pair**: a handle object, then a run of 0, then a second handle object, then a payload
@@ -204,12 +204,12 @@ handle body in §2 — the alternation only comes out constant if each handle is
 **The `u16` at `lead + 0` is the entity count.** It equals the number of traced entity pairs in
 **24 of 24 instances**:
 
-| file / node | `u16` at `lead+0` | traced children | leading pair-free children | trailing list / chain children | pairs |
-|---|---|---|---|---|---|
-| every origin sketch | 1 | 5 | 2 | 1 | 1 |
-| `circle` node 156 | 3 | 10 | 2 | 2 | 3 |
-| every rectangle sketch | 4 | 12 | 2 | 2 | 4 |
-| `vendor_ring` node 166 | 4 | 13 | 2 | 3 | 4 |
+| file / node            | `u16` at `lead+0` | traced children | leading pair-free children | trailing list / chain children | pairs |
+| ---------------------- | ----------------- | --------------- | -------------------------- | ------------------------------ | ----- |
+| every origin sketch    | 1                 | 5               | 2                          | 1                              | 1     |
+| `circle` node 156      | 3                 | 10              | 2                          | 2                              | 3     |
+| every rectangle sketch | 4                 | 12              | 2                          | 2                              | 4     |
+| `vendor_ring` node 166 | 4                 | 13              | 2                          | 3                              | 4     |
 
 That is the count field the `sg*` work needed, and it is in `sgSketch`, not in `sgLineHandle` and
 not in `sgLLDist`.
@@ -226,22 +226,22 @@ for 2-D sketch coordinates account for 38 of the 138, and the remainder is not r
 
 ## 5. Negative results
 
-* **`sgEntHandle::Serialize` reads no objects on any modern version.** Every traced child of a
+- **`sgEntHandle::Serialize` reads no objects on any modern version.** Every traced child of a
   `sgLineHandle`, `sgArcHandle`, `sgPointHandle` or `sgEntHandle` node is a mis-attribution. Any
   model that gives these classes child slots will mis-segment.
-* **`sgLineHandle`'s variable traced spans are not caused by the `EntIndex` escape.**
+- **`sgLineHandle`'s variable traced spans are not caused by the `EntIndex` escape.**
   `SERIALIZE.md` §6 attributes the 12 / 16 / 99-byte spans to the `0x777f` escape. Measured: the
   escape occurs in 0 of 232 `sgLineHandle` instances. The spans vary because the traced scope of a
   handle absorbs its ancestors' trailing runs, not because the record varies.
-* **`solve_runs.py`'s `sgPointHandle@leaf = 2` is wrong**; the record is 10 bytes.
-* **`sgLLDist` has no count field and no repeating slot.** Its six-child form is fixed and tiles
+- **`solve_runs.py`'s `sgPointHandle@leaf = 2` is wrong**; the record is 10 bytes.
+- **`sgLLDist` has no count field and no repeating slot.** Its six-child form is fixed and tiles
   exactly; its one twelve-child instance is an artefact.
-* **No `sgLineHandle` or `sgArcHandle` body contains a coordinate, an angle or a radius.** A
+- **No `sgLineHandle` or `sgArcHandle` body contains a coordinate, an angle or a radius.** A
   10-byte body has no room for one. A full circle and an arc use the same 10-byte handle record.
-* `moSketchRegion_c`'s boundary list stores `sgEntHandle` objects at 12 bytes each — a 2-byte
+- `moSketchRegion_c`'s boundary list stores `sgEntHandle` objects at 12 bytes each — a 2-byte
   classref token plus the 10-byte body — with a `u16` count in front. That is the only place in
   the sketch records where a handle count is written down.
-* The revolve-angle result recorded in `SERIALIZE.md` §3 is unaffected by anything here: there is
+- The revolve-angle result recorded in `SERIALIZE.md` §3 is unaffected by anything here: there is
   still no angle scalar in a modern `moRevEndSpec_c`, and `getAngle` still returns the literal
   `6.2831853071796` through a null dimension pointer.
 

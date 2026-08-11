@@ -3148,7 +3148,6 @@ def decode_brep_model(
     return _decode_partition_model(data, header)
 
 
-
 def _parasolid_header(data: bytes) -> _ParasolidHeader | None:
     if len(data) < 12 or not data.startswith(b"PS\x00\x00"):
         return None

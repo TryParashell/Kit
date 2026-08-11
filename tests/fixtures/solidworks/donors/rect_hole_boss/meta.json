@@ -1,7 +1,5 @@
 {
-  "arc_counts": [
-    1
-  ],
+  "arc_counts": [1],
   "axis_directions": [],
   "container_streams": [
     {
@@ -25,35 +23,16 @@
       "name": "Header2"
     }
   ],
-  "depth_present": [
-    true
-  ],
+  "depth_present": [true],
   "donor_id": "rect_hole_boss",
-  "feature_ids": [
-    32
-  ],
-  "feature_names": [
-    "Boss-Extrude1"
-  ],
-  "features": [
-    [
-      "boss",
-      "rectangle+circle",
-      "front",
-      "blind"
-    ]
-  ],
+  "feature_ids": [32],
+  "feature_names": ["Boss-Extrude1"],
+  "features": [["boss", "rectangle+circle", "front", "blind"]],
   "inherited_directions": [],
   "measured": false,
-  "point_counts": [
-    4
-  ],
-  "sketch_ids": [
-    26
-  ],
-  "sketch_names": [
-    "Sketch1"
-  ],
+  "point_counts": [4],
+  "sketch_ids": [26],
+  "sketch_names": ["Sketch1"],
   "spare_equations": [],
   "spare_plane_frames": [],
   "spare_plane_ids": [],

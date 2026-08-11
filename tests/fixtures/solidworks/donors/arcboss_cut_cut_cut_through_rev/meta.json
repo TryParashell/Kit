@@ -1,21 +1,6 @@
 {
-  "arc_counts": [
-    0,
-    0,
-    1,
-    0,
-    0
-  ],
-  "axis_directions": [
-    null,
-    null,
-    null,
-    null,
-    [
-      0.0,
-      1.0
-    ]
-  ],
+  "arc_counts": [0, 0, 1, 0, 0],
+  "axis_directions": [null, null, null, null, [0.0, 1.0]],
   "container_streams": [
     {
       "file": "Contents__CMgr.bin",
@@ -38,21 +23,9 @@
       "name": "Header2"
     }
   ],
-  "depth_present": [
-    true,
-    true,
-    true,
-    false,
-    false
-  ],
+  "depth_present": [true, true, true, false, false],
   "donor_id": "arcboss_cut_cut_cut_through_rev",
-  "feature_ids": [
-    32,
-    40,
-    47,
-    54,
-    60
-  ],
+  "feature_ids": [32, 40, 47, 54, 60],
   "feature_names": [
     "Boss-Extrude1",
     "Cut-Extrude1",
@@ -61,76 +34,21 @@
     "Revolve1"
   ],
   "features": [
-    [
-      "boss",
-      "polyline-3-arc-1-ccw",
-      "front",
-      "blind"
-    ],
-    [
-      "cut",
-      "rectangle",
-      "front",
-      "blind"
-    ],
-    [
-      "cut",
-      "circle",
-      "front",
-      "blind"
-    ],
-    [
-      "cut",
-      "polyline-12",
-      "top",
-      "through-all"
-    ],
-    [
-      "revolve-boss",
-      "polyline-6",
-      "top-sketch-axis",
-      "full-revolution"
-    ]
+    ["boss", "polyline-3-arc-1-ccw", "front", "blind"],
+    ["cut", "rectangle", "front", "blind"],
+    ["cut", "circle", "front", "blind"],
+    ["cut", "polyline-12", "top", "through-all"],
+    ["revolve-boss", "polyline-6", "top-sketch-axis", "full-revolution"]
   ],
-  "inherited_directions": [
-    null,
-    null,
-    null,
-    false,
-    null
-  ],
+  "inherited_directions": [null, null, null, false, null],
   "measured": true,
-  "point_counts": [
-    4,
-    4,
-    0,
-    12,
-    6
-  ],
-  "sketch_ids": [
-    26,
-    33,
-    41,
-    48,
-    55
-  ],
-  "sketch_names": [
-    "Sketch1",
-    "Sketch2",
-    "Sketch3",
-    "Sketch4",
-    "Sketch5"
-  ],
+  "point_counts": [4, 4, 0, 12, 6],
+  "sketch_ids": [26, 33, 41, 48, 55],
+  "sketch_names": ["Sketch1", "Sketch2", "Sketch3", "Sketch4", "Sketch5"],
   "spare_equations": [],
   "spare_plane_frames": [],
   "spare_plane_ids": [],
   "spare_plane_names": [],
   "stream_bytes": 32485,
-  "swept_arc_counts": [
-    1,
-    0,
-    0,
-    0,
-    0
-  ]
+  "swept_arc_counts": [1, 0, 0, 0, 0]
 }

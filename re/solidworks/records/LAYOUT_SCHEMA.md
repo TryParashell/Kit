@@ -44,13 +44,13 @@ A class body is a sequence of constant byte runs separated by child objects, in 
 
 A class with no children has a single run, keyed `leaf`.
 
-| key | meaning |
-|---|---|
-| `lead` | bytes from the end of the object's own tag to the start of child 0 |
-| `<i>` | bytes from the end of child `i` to the start of child `i+1`, or to the end of the body for the last child |
-| `leaf` | the whole body, for a class that never has children |
-| `tail` | bytes from the end of the last child the segmenter is allowed to walk to whatever follows it, for a class whose child count is not resolved; see `repeat_prefix` |
-| `<group name>` | the run key a class driven by `groups` reports, naming the group that failed rather than a slot index; see `groups` |
+| key            | meaning                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lead`         | bytes from the end of the object's own tag to the start of child 0                                                                                               |
+| `<i>`          | bytes from the end of child `i` to the start of child `i+1`, or to the end of the body for the last child                                                        |
+| `leaf`         | the whole body, for a class that never has children                                                                                                              |
+| `tail`         | bytes from the end of the last child the segmenter is allowed to walk to whatever follows it, for a class whose child count is not resolved; see `repeat_prefix` |
+| `<group name>` | the run key a class driven by `groups` reports, naming the group that failed rather than a slot index; see `groups`                                              |
 
 ## Schema
 
@@ -90,7 +90,7 @@ A class with no children has a single run, keyed `leaf`.
 ### `confidence`
 
 The vocabulary of `SERIALIZE.md`, unchanged: **confirmed** = read out of the decompiled
-`Serialize` *and* the byte arithmetic reproduces a real traced span, a real corpus record or a
+`Serialize` _and_ the byte arithmetic reproduces a real traced span, a real corpus record or a
 measured volume; **partial** = read out of the decompiler but nothing available exercises it;
 **not found** = not recovered.
 
@@ -122,11 +122,11 @@ is by identity and holds at any index.
 
 Three constraints keep it sound:
 
-* A slot is bound only when **every** traced occupant of it resolves to the same class. A slot with
+- A slot is bound only when **every** traced occupant of it resolves to the same class. A slot with
   two different resolved occupants stays `"*"`.
-* A slot at or past a repeated template is left alone, because rewriting it would move
+- A slot at or past a repeated template is left alone, because rewriting it would move
   `template_slot` and change the child count arithmetic.
-* A `"*"` slot binds nothing. An unknown below-base index in a polymorphic slot is still refused
+- A `"*"` slot binds nothing. An unknown below-base index in a polymorphic slot is still refused
   with `no layout entry recorded for this class`, because nothing names what it holds.
 
 ## Deriving the map base
@@ -198,7 +198,7 @@ the number of declared child slots.
 ### `groups`
 
 `child_slots` plus `repeat_count` covers a class whose body is a fixed slot list, optionally with
-**one** repeated template at the end. It cannot express a body that is a *chain* of independent
+**one** repeated template at the end. It cannot express a body that is a _chain_ of independent
 counted loops, each with its own count, its own multi-child element and its own trailing filler.
 `sgSketch` is that shape, and `groups` records it.
 
@@ -237,15 +237,15 @@ A class with `groups` has no `child_slots`, no `repeat_count` and no `repeat_pre
 chain is the whole child list. It still carries a `lead` run, because the lead is read before the
 first group opens and is often where the first count sits.
 
-| key | meaning |
-|---|---|
-| `name` | the group's identifier; it is the run key the segmenter reports when a group fails |
-| `element` | one run length per child of a single iteration, in read order; the run is the bytes from the end of that child to the start of the next |
-| `slots` | the class expected in each element child, exactly as `child_slots` does it, one entry per `element` entry; `"*"` for a polymorphic slot |
-| `count` | `back` bytes ahead of the group's first element sits a `width` byte little-endian count of iterations |
-| `repeat` | a constant iteration count, for a group whose children are unconditional rather than counted |
-| `trailer` | bytes consumed after the last iteration, before the next group's first element |
-| `element_by_version` | per document version `element` overrides, keyed exactly like `runs_by_version` |
+| key                  | meaning                                                                                                                                 |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`               | the group's identifier; it is the run key the segmenter reports when a group fails                                                      |
+| `element`            | one run length per child of a single iteration, in read order; the run is the bytes from the end of that child to the start of the next |
+| `slots`              | the class expected in each element child, exactly as `child_slots` does it, one entry per `element` entry; `"*"` for a polymorphic slot |
+| `count`              | `back` bytes ahead of the group's first element sits a `width` byte little-endian count of iterations                                   |
+| `repeat`             | a constant iteration count, for a group whose children are unconditional rather than counted                                            |
+| `trailer`            | bytes consumed after the last iteration, before the next group's first element                                                          |
+| `element_by_version` | per document version `element` overrides, keyed exactly like `runs_by_version`                                                          |
 
 The walk is:
 
@@ -274,7 +274,7 @@ traces show: the origin sketch of every traced part carries one entity and no po
 after its last entity child measures `87 + 4 + 13` — the entity element's own run, the entity
 group's trailer, and the empty point group's trailer.
 
-Because a group with a zero count leaves no tag behind, a count field is only *witnessed* by the
+Because a group with a zero count leaves no tag behind, a count field is only _witnessed_ by the
 instances whose count is non-zero. `sgSketch` has six groups and the traces exercise two distinct
 counts for four of them, so those four `back` offsets are pinned by a real difference; the values
 themselves are recorded in each group's `note`.
@@ -339,12 +339,12 @@ parts but is an optional XML side-car rather than part of the container's own st
 
 One entry per run that is not a constant. `rule` is one of:
 
-| rule | body |
-|---|---|
-| `string` | `ff fe ff <u8 units>` then `units` UTF-16LE code units, or `ff fe ff ff <u16 units>` for `units >= 255` |
-| `count` | a `u16`/`u32` at `at`, then `stride` bytes per element |
-| `conditional` | present only when the field named by `predicate` holds one of `values` |
-| `opaque` | length known only from a trace; the segmenter must refuse rather than guess |
+| rule          | body                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------- |
+| `string`      | `ff fe ff <u8 units>` then `units` UTF-16LE code units, or `ff fe ff ff <u16 units>` for `units >= 255` |
+| `count`       | a `u16`/`u32` at `at`, then `stride` bytes per element                                                  |
+| `conditional` | present only when the field named by `predicate` holds one of `values`                                  |
+| `opaque`      | length known only from a trace; the segmenter must refuse rather than guess                             |
 
 `opaque` is legitimate and must be used rather than a guess. A wrong length silently mis-segments
 the whole remainder of the stream.
@@ -353,12 +353,12 @@ the whole remainder of the stream.
 
 Only fields that are actually needed to author or to decode. Each carries a `role`:
 
-| role | meaning | writer behaviour |
-|---|---|---|
-| `authored` | a real user parameter | write it |
-| `derived` | a cache recomputed by the reader | leave stale or absent, **never** synthesise |
-| `constant` | the same in every observed instance | write the recorded literal |
-| `uninitialised` | vendor memory the application serialises without setting | write the recorded literal, and say so |
+| role            | meaning                                                  | writer behaviour                            |
+| --------------- | -------------------------------------------------------- | ------------------------------------------- |
+| `authored`      | a real user parameter                                    | write it                                    |
+| `derived`       | a cache recomputed by the reader                         | leave stale or absent, **never** synthesise |
+| `constant`      | the same in every observed instance                      | write the recorded literal                  |
+| `uninitialised` | vendor memory the application serialises without setting | write the recorded literal, and say so      |
 
 The `derived` and `uninitialised` roles are load-bearing. `re/solidworks/README.md` records that
 writing derived depth copies with a plausible-but-wrong sign rule produced zero bodies, a crash,
