@@ -191,8 +191,11 @@ errors or warnings, one body, `Sketch1`, `Boss-Extrude1`, volume 785.39816339744
 
 An independently generated 8 mm radius by 12 mm high FCStd also opened with one body, volume
 2,412.74315795696 mm³, surface area 1,005.3096491487335 mm², and centre of mass `(0, 0, 6)` mm.
-An off-origin generic circle was observed rebuilding at the origin; that case now fails closed and
-is not reported as lossless. A reverse-direction oracle also proved that the reversed circular boss
-uses a distinct 12,700-byte `ResolvedFeatures` history and 25,190-byte `Config-0`; setting only the
-high feature flag left `ReverseDirection` false and the body unchanged after rebuild. Reversed and
-non-front circular pads therefore remain fail-closed until those longer typed programs are closed.
+An off-origin generic circle was observed rebuilding at the origin; that case still fails closed
+and is not reported as lossless. A reverse-direction oracle proved that the high feature flag alone
+is insufficient, then complete field tracing recovered the entire coupled history. After saved
+path and document-name metadata are canonicalized, both reverse streams retain the normal 12,514-
+and 25,158-byte widths with zero opaque or donor spans. The generated negative-Z body opened and
+rebuilt without warnings, and independent diameter and depth edits remained parametric. Strict
+origin-centred Front-plane reversed blind circles are now supported; off-origin and non-front
+variants remain fail-closed.

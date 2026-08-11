@@ -681,10 +681,18 @@ Oracle minimization established two distinct gates:
 3. all 29 typed circle overrides load without warnings and permit independent diameter and depth
    rebuilds with one body and exact measured mass properties.
 
-The reverse-direction circle oracle has a 25,190-byte configuration stream, 32 bytes longer than
-the normal-direction specialization. Because the corresponding resolved history also grows by 186
-bytes, neither change is represented as a one-byte direction toggle; reversed circular output stays
-outside the supported gate until both longer streams have complete typed ownership.
+The raw reverse-direction oracle has a 25,190-byte configuration stream, but its apparent 32-byte
+growth is only the saved document-name string. Canonicalizing that metadata restores the same
+25,158-byte configuration width as the normal-direction specialization. The reverse program owns
+all 4,345 typed operations and specializes the recovered negative-depth bounds, feature state,
+cache identities, and direction semantics. Its paired canonical resolved program is 12,514 bytes;
+neither program contains a saved path, filename, opaque span, or donor block.
+
+The canonical reverse pair opens and rebuilds without warnings. Driving the sketch diameter from
+10 mm to 16 mm and the boss depth from 10 mm to 12 mm independently rebuilt one negative-Z body at
+the exact measured volumes recorded in `CIRCLE_REVERSE.md`. Reversed origin-centred Front-plane
+circular blind bosses are therefore inside the strict production gate; off-origin and non-front
+variants still fail closed.
 
 This is why the session-valued fields remain explicit typed semantics even though some do not vary
 with source radius or depth. Removing them is a measured parametric failure, not a harmless

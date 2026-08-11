@@ -441,12 +441,18 @@ decodes to normal blind `(0, 0)`. Patching the guessed offsets caused determinis
 `OpenDoc6`; leaving the already-correct typed end specification intact restores byte-identical
 default emission and vendor loading.
 
-A separately authored reversed circular boss expands this stream from 12,514 to 12,700 bytes and
-its `Config-0` from 25,158 to 25,190 bytes. The feature-tree flags change from `0x40000140` to
-`0xc0000140`, but applying that flag alone to a first-principles file leaves the live
-`ReverseDirection` property false and rebuilds the original positive-direction body. The current
-writer consequently refuses reversed circular bosses instead of treating that flag as a semantic
-direction field.
+A separately authored reversed circular boss initially appeared to expand this stream from 12,514
+to 12,700 bytes and its `Config-0` from 25,158 to 25,190 bytes. Complete field alignment proved that
+all 186 resolved bytes and all 32 configuration bytes were saved absolute-path and document-name
+strings, not direction grammar. Canonicalizing those metadata fields returns both streams to their
+normal widths while preserving every true reverse field.
+
+The feature-tree flags do change from `0x40000140` to `0xc0000140`, but applying that flag alone
+leaves the live `ReverseDirection` property false and rebuilds the positive-direction body. The
+dedicated reverse program therefore emits the complete nineteen-field resolved change set plus the
+eleven-field coupled configuration change set. SOLIDWORKS opened and rebuilt the canonical pair
+without warnings, and independent diameter and depth edits retained one negative-Z body. The
+writer accepts only the origin-centred Front-plane blind family proved by that oracle.
 
 The generated 5 mm radius by 10 mm depth part opens with one body and exposes both
 `D1@Sketch1 = 10 mm` and `D1@Boss-Extrude1 = 10 mm`. Driving the diameter to 16 mm rebuilds to

@@ -76,6 +76,10 @@ from convert.adapters.solidworks.resolved_revolve_pin_program import (
     FieldOwners as RevolvePinOwners,
     ResolvedOps as RevolvePinOps,
 )
+from convert.adapters.solidworks.revolve_pin_envelope import (
+    BuildEnvelope as BuildRevolvePinEnvelope,
+    KPinPointsMm,
+)
 from convert.parasolid import _parasolid_header, _scan_partition_records
 from interchange import (
     BooleanOperation,
@@ -2129,18 +2133,20 @@ def test_freecad_full_revolution_writes_editable_native_revolved_boss() -> None:
         assert TransferData[CapabilityValue] == "native"
 
 
-# the recovered pin stream stays fail closed until its coupled envelope is typed
+# the recovered pin family writes its exact typed stream and coupled editable envelope
 @pytest.mark.skipif(
     not KFreeCadRevPin.is_file(),
     reason="top plane pin revolution corpus unavailable",
 )
-def test_FreeCadPinRevolutionRequiresRecoveredCoupledEnvelope(
+def test_FreeCadPinRevolutionWritesRecoveredCoupledEnvelope(
     tmp_path: Path,
 ) -> None:
     SourceData = read_freecad(KFreeCadRevPin)
     TargetPath = tmp_path / "FreeCadPinRevolution.SLDPRT"
     ResultData = write_document(SourceData, TargetPath, allow_carrier=True)
+    ArchiveData = SldprtArchive.from_bytes(TargetPath.read_bytes())
     ProgramData = EncodeRevolvePinProgram()
+    EnvelopeData = BuildRevolvePinEnvelope()
     assert len(ProgramData) == 12337
     assert hashlib.sha256(ProgramData).hexdigest() == (
         "e8a72dfd4796bda2a408ab8b629e9f12dc4ae225c8a1e0cc08f3c09b02ff68bf"
@@ -2148,10 +2154,48 @@ def test_FreeCadPinRevolutionRequiresRecoveredCoupledEnvelope(
     assert len(RevolvePinOps) == 3014
     assert len(RevolvePinOwners) == 503
     assert sum(ItemData[1] for ItemData in RevolvePinOps) == len(ProgramData)
-    assert not HasVendorPartEncoding(SourceData)
-    assert ResultData.application_usable is False
-    assert ResultData.vendor_loadable is False
-    assert ResultData.near_lossless is False
+    assert HasVendorPartEncoding(SourceData)
+    assert ResultData.application_usable is True
+    assert ResultData.vendor_loadable is True
+    assert ResultData.near_lossless is True
+    assert KIT_RESOLVED_STREAM not in ArchiveData.streams
+    assert ArchiveData.require(RESOLVED_FEATURES_STREAM) == ProgramData
+    assert ArchiveData.require(CONFIGURATION_STREAM) == EnvelopeData.Config0Payload
+    assert (
+        ArchiveData.require("Contents/Config-0-ModelHeader")
+        == EnvelopeData.HeaderPayload
+    )
+    assert ArchiveData.require("Header2") == EnvelopeData.HeaderPayload
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ProgramData,
+        EnvelopeData.Config0Payload,
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert len(NativeData.sketches) == 1
+    assert NativeData.sketches[0].support_plane_id == 3
+    assert len(NativeData.sketches[0].profiles) == 1
+    assert NativeData.sketches[0].profiles[0].kind == "polyline"
+    assert NativeData.sketches[0].profiles[0].coordinates == pytest.approx(
+        tuple(ValueData for PointData in KPinPointsMm for ValueData in PointData)
+    )
+    assert len(NativeData.operations) == 1
+    assert NativeData.operations[0].object_id == 31
+    assert NativeData.operations[0].kind == "revolve_join"
+    assert NativeData.operations[0].angle_degrees == pytest.approx(360.0)
+    assert native_axis_bindings(NativeData) == frozenset({(31, 26, "V_Axis")})
+    TransferData = {
+        ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
+    }
+    for CapabilityValue in (
+        Capability.BREP,
+        Capability.PARAMETERS,
+        Capability.PARAMETRIC_HISTORY,
+        Capability.EDITABLE_SKETCHES,
+        Capability.BODY_STRUCTURE,
+        Capability.SELECTIONS,
+    ):
+        assert TransferData[CapabilityValue] == "native"
 
 
 # circle pads use the oracle-proven first-principles circular feature program
