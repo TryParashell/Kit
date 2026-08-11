@@ -8,13 +8,26 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import hashlib
 import math
 from pathlib import Path
 
 import pytest
 
+from convert import write_document
+from convert.adapters.freecad import read_freecad
+from convert.adapters.solidworks import SldprtArchive
 from convert.adapters.solidworks.container import SldprtFormatError
+from convert.adapters.solidworks.format import (
+    CONFIGURATION_STREAM,
+    KEYWORDS_STREAM,
+    RESOLVED_FEATURES_STREAM,
+)
+from convert.adapters.solidworks.native import (
+    HasVendorPartEncoding,
+    decode_native_model,
+)
 from convert.adapters.solidworks.resolved_polyline6_program import (
     EncodeProgram,
     KDepthOffset,
@@ -51,6 +64,9 @@ KDonorPoints = (
     (15.0, 25.0),
     (0.0, 25.0),
 )
+
+# the controlled fcstd exercises public first principles dispatch and readback
+KFreeCadPolyline = KRepoRoot / ".rescratch" / "gates" / "fcstd" / "gate_polyline6.FCStd"
 
 
 # complete interval ownership prevents hidden vendor spans entering resolved output
@@ -131,3 +147,80 @@ def test_polyline6_parameter_offsets_are_native_fields() -> None:
         0.025,
     )
     assert FieldValues[KDepthOffset] == 0.008
+
+
+# the public writer selects the live proven editable six line pad family
+@pytest.mark.skipif(
+    not KFreeCadPolyline.is_file(),
+    reason="six line FreeCAD corpus unavailable",
+)
+def test_FreeCadPolylineSixWritesNativeParametricSolidWorksPart(
+    tmp_path: Path,
+) -> None:
+    SourceData = read_freecad(KFreeCadPolyline)
+    TargetPath = tmp_path / "FreeCadPolylineSix.SLDPRT"
+    ResultData = write_document(SourceData, TargetPath, allow_carrier=True)
+    ArchiveData = SldprtArchive.from_bytes(TargetPath.read_bytes())
+    ResolvedData = ArchiveData.require(RESOLVED_FEATURES_STREAM)
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ResolvedData,
+        ArchiveData.require(CONFIGURATION_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert HasVendorPartEncoding(SourceData)
+    assert ResultData.vendor_loadable is True
+    assert ResultData.application_usable is True
+    assert ResultData.near_lossless is True
+    assert len(ResolvedData) == 12283
+    assert hashlib.sha256(ResolvedData).hexdigest() == KGateDigest
+    assert tuple(
+        (ItemData.kind, ItemData.coordinates)
+        for ItemData in NativeData.sketches[0].profiles
+    ) == (
+        (
+            "polyline",
+            (
+                -20.0,
+                -20.0,
+                20.0,
+                -20.0,
+                20.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                20.0,
+                -20.0,
+                20.0,
+            ),
+        ),
+    )
+    assert len(NativeData.operations) == 1
+    assert NativeData.operations[0].object_id == 32
+    assert NativeData.operations[0].profile_id == 26
+    assert NativeData.operations[0].direction_code == 0
+    assert NativeData.operations[0].termination_code == 0
+    assert NativeData.operations[0].length_mm == pytest.approx(10.0)
+
+
+# segment count changes remain outside the fixed six edge native grammar
+@pytest.mark.skipif(
+    not KFreeCadPolyline.is_file(),
+    reason="six line FreeCAD corpus unavailable",
+)
+def test_FreeCadPolylineSixRejectsOtherSegmentCounts() -> None:
+    SourceData = read_freecad(KFreeCadPolyline)
+    SketchData = SourceData.sketches[0]
+    ProfileData = SketchData.closed_profile_entity_ids[0]
+    FiveLineData = replace(
+        SourceData,
+        sketches=(
+            replace(
+                SketchData,
+                entities=SketchData.entities[:-1],
+                closed_profile_entity_ids=(ProfileData[:-1],),
+            ),
+        ),
+    )
+    assert not HasVendorPartEncoding(FiveLineData)

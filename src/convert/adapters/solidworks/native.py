@@ -116,9 +116,16 @@ from .resolved_circle_program import EncodeProgram as EncodeCircleProgram
 from .resolved_circle_reverse_program import (
     EncodeProgram as EncodeReverseCircleProgram,
 )
+from .resolved_polyline6_program import (
+    EncodeProgram as EncodePolylineSixProgram,
+    PadFieldMap as PolylineSixFieldMap,
+)
 from .resolved_right_program import EncodeProgram as EncodeRightProgram
 from .resolved_revolve_program import EncodeProgram as EncodeRevolveProgram
+from .resolved_revolve_pin_program import EncodeProgram as EncodePinRevolveProgram
 from .resolved_top_program import EncodeProgram as EncodeTopProgram
+from .revolve_pin_envelope import BuildEnvelope as BuildPinEnvelope
+from .revolve_pin_envelope import KPinPointsMm
 
 _RADIANS_TO_DEGREES = 180.0 / math.pi
 
@@ -531,6 +538,7 @@ class _VendorResolved:
     cmgr_parent_tree_id: int | None = None
     annotation_view_variant: str = "default"
     Config0Payload: bytes | None = None
+    HeaderPayload: bytes | None = None
 
 
 _BASE_OBJECTS = (
@@ -957,6 +965,9 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
         EnvelopeStreams[RESOLVED_FEATURES_STREAM] = VendorResolved
     if VendorData is not None and VendorData.Config0Payload is not None:
         EnvelopeStreams[CONFIGURATION_STREAM] = VendorData.Config0Payload
+    if VendorData is not None and VendorData.HeaderPayload is not None:
+        EnvelopeStreams["Contents/Config-0-ModelHeader"] = VendorData.HeaderPayload
+        EnvelopeStreams["Header2"] = VendorData.HeaderPayload
     configuration_data = EnvelopeStreams.get(CONFIGURATION_STREAM, b"")
     parsed = decode_native_model(
         ProofKeywords,
@@ -1135,6 +1146,7 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
     )
     BoundsValue = _write_rectangle_bounds(SketchObject)
     CircleValue = _write_circle_profile(SketchObject)
+    PolylineValue = PolySixPoints(SketchObject)
     EndCodes = ExtrusionEditCodes(PadObject.payload)
     if (
         SketchObject.class_name != "moProfileFeature_c"
@@ -1142,7 +1154,11 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
         or SketchObject.name != "Sketch1"
         or PadObject.class_name != "moExtrusion_c"
         or PadObject.name != "Boss-Extrude1"
-        or (BoundsValue is None) == (CircleValue is None)
+        or sum(
+            ItemValue is not None
+            for ItemValue in (BoundsValue, CircleValue, PolylineValue)
+        )
+        != 1
         or EndCodes is None
         or len(PadObject.dimensions) != 1
     ):
@@ -1197,10 +1213,9 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
                 else None
             ),
         )
-    else:
+    elif CircleValue is not None:
         if (
-            CircleValue is None
-            or EndCodes not in {(0, 0), (1, 0)}
+            EndCodes not in {(0, 0), (1, 0)}
             or PlaneObjectId != 2
             or PadObject.object_id != 33
         ):
@@ -1265,10 +1280,30 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
             update_depth_copies=not IsReverseCircle,
             SketchDimensionsMm=(RadiusValue * 2.0,),
         )
+    else:
+        if (
+            PolylineValue is None
+            or EndCodes != (0, 0)
+            or PlaneObjectId != 2
+            or PadObject.object_id != 32
+            or SketchObject.dimensions
+        ):
+            return None
+        try:
+            ProgramData = EncodePolylineSixProgram(
+                PolylineSixFieldMap(PolylineValue, DepthValue)
+            )
+        except SldprtFormatError:
+            return None
+        HeaderStamps = _FRONT_BOSS_HEADER_STAMPS
     return _VendorResolved(
-        patch_features(
-            ProgramData,
-            {0: EditData},
+        (
+            ProgramData
+            if PolylineValue is not None
+            else patch_features(
+                ProgramData,
+                {0: EditData},
+            )
         ),
         HeaderStamps,
         HeaderBounds=HeaderBoundsData,
@@ -1290,12 +1325,16 @@ def BuildSingleRevolutionVendorTree(
         else 0
     )
     BoundsValue = _write_rectangle_bounds(SketchObject)
+    PinPoints = PolySixPoints(SketchObject)
+    IsPinData = IsPinProfile(PinPoints)
     if (
         SketchObject.class_name != "moProfileFeature_c"
         or SketchObject.object_id != 26
         or SketchObject.name != "Sketch1"
-        or PlaneObjectId != 2
-        or BoundsValue is None
+        or not (
+            (PlaneObjectId == 2 and BoundsValue is not None)
+            or (PlaneObjectId == 3 and IsPinData and not SketchObject.dimensions)
+        )
         or RevolveObject.class_name != "moRevolution_c"
         or RevolveObject.object_id != 31
         or RevolveObject.name != "Revolve1"
@@ -1310,6 +1349,18 @@ def BuildSingleRevolutionVendorTree(
         rel_tol=0.0,
         abs_tol=1.0e-10,
     ):
+        return None
+    if IsPinData:
+        EnvelopeData = BuildPinEnvelope()
+        return _VendorResolved(
+            EncodePinRevolveProgram(),
+            EnvelopeData.HeaderStamps,
+            HeaderBounds=EnvelopeData.HeaderBounds,
+            HeaderCreation=EnvelopeData.HeaderCreation,
+            Config0Payload=EnvelopeData.Config0Payload,
+            HeaderPayload=EnvelopeData.HeaderPayload,
+        )
+    if BoundsValue is None:
         return None
     return _VendorResolved(
         patch_features(
@@ -3141,6 +3192,7 @@ def _CanonicalSingleRevolutionObjects(
     )
     SketchObject = replace(SketchObject, payload=SketchPayload)
     BoundsValue = _write_rectangle_bounds(SketchObject)
+    PinPoints = PolySixPoints(SketchObject)
     AngleDimension = _FreeCadSingleRevolutionDimension(
         DocumentData,
         SourceSketch,
@@ -3151,13 +3203,22 @@ def _CanonicalSingleRevolutionObjects(
         if len(SketchObject.payload) >= 4
         else 0
     )
+    IsPinData = (
+        PlaneObjectId == 3
+        and IsPinProfile(PinPoints)
+        and not SketchObject.dimensions
+        and HasPolySix(SourceSketch, PinPoints)
+    )
+    IsRectangleData = (
+        PlaneObjectId == 2
+        and BoundsValue is not None
+        and HasRectDims(SketchObject, BoundsValue)
+        and HasCanonicalSketchGeometry(SourceSketch, BoundsValue, None)
+    )
     if (
-        PlaneObjectId != 2
-        or BoundsValue is None
-        or SketchObject.class_name != "moProfileFeature_c"
-        or not HasRectDims(SketchObject, BoundsValue)
+        SketchObject.class_name != "moProfileFeature_c"
+        or not (IsRectangleData or IsPinData)
         or SourceSketch.suppressed
-        or not HasCanonicalSketchGeometry(SourceSketch, BoundsValue, None)
         or len(SourceSketch.closed_profile_entity_ids) != 1
         or set(SourceSketch.closed_profile_entity_ids[0])
         != {ItemData.id for ItemData in SourceSketch.entities}
@@ -3827,20 +3888,33 @@ def _CanonicalSingleBossObjects(
         extrusion = replace(extrusion, payload=_extrusion_payload(NormalizedFeature))
     bounds = _write_rectangle_bounds(sketch)
     circle = _write_circle_profile(sketch)
+    PolylineData = PolySixPoints(sketch)
+    HasProfileDimensions = (
+        HasRectDims(sketch, bounds)
+        if bounds is not None
+        else (
+            HasCircleDims(sketch, circle)
+            if circle is not None
+            else PolylineData is not None and not sketch.dimensions
+        )
+    )
+    HasSourceGeometry = source_sketch is not None and (
+        HasCanonicalSketchGeometry(source_sketch, bounds, circle)
+        if bounds is not None or circle is not None
+        else HasPolySix(source_sketch, PolylineData)
+    )
     if (
         len(sketch.payload) < 4
         or struct.unpack_from("<I", sketch.payload)[0] not in {2, 3, 4}
         or sketch.class_name != "moProfileFeature_c"
-        or not (
-            HasRectDims(sketch, bounds)
-            if bounds is not None
-            else HasCircleDims(sketch, circle)
-        )
+        or sum(ItemValue is not None for ItemValue in (bounds, circle, PolylineData))
+        != 1
+        or not HasProfileDimensions
         or extrusion.class_name != "moExtrusion_c"
         or ExtrusionEditCodes(extrusion.payload) is None
         or source_sketch is None
         or source_sketch.suppressed
-        or not HasCanonicalSketchGeometry(source_sketch, bounds, circle)
+        or not HasSourceGeometry
         or len(source_sketch.closed_profile_entity_ids) != 1
         or set(source_sketch.closed_profile_entity_ids[0])
         != {item.id for item in source_sketch.entities}
@@ -4454,6 +4528,27 @@ def HasCanonicalSketchGeometry(
         SketchData.entities[0].geometry,
         CircleGeometry,
     )
+
+
+# strict source topology keeps six line pad dispatch inside its traced family
+def HasPolySix(
+    SketchData: Sketch,
+    PointsData: tuple[tuple[float, float], ...] | None,
+) -> bool:
+    if PointsData is None or len(PointsData) != 6 or len(SketchData.entities) != 6:
+        return False
+    if any(ItemData.construction or ItemData.fixed for ItemData in SketchData.entities):
+        return False
+    if not all(
+        isinstance(ItemData.geometry, LineGeometry) for ItemData in SketchData.entities
+    ):
+        return False
+    LineData = tuple(
+        ItemData.geometry
+        for ItemData in SketchData.entities
+        if isinstance(ItemData.geometry, LineGeometry)
+    )
+    return LineLoopPoints(LineData) is not None
 
 
 # four-stage FreeCAD validation proves all chained cuts and every inactive default
@@ -6557,6 +6652,56 @@ def _write_circle_profile(
     return CenterData[0], CenterData[1], RadiusValue
 
 
+# six point recovery preserves source vertex order for the typed pad program
+def PolySixPoints(
+    SketchObject: _WriteObject,
+) -> tuple[tuple[float, float], ...] | None:
+    if SketchObject.kind != "Sketch" or not SketchObject.payload:
+        return None
+    MarkersData = list(
+        _parse_markers(SketchObject.payload, 0, len(SketchObject.payload))
+    )
+    ProfilesData, _, _ = _profiles(MarkersData, ())
+    PolylineData = tuple(
+        ItemData for ItemData in ProfilesData if ItemData.kind == "polyline"
+    )
+    if len(PolylineData) != 1 or len(PolylineData[0].coordinates) != 12:
+        return None
+    CoordinateData = PolylineData[0].coordinates
+    PointsData = tuple(
+        (CoordinateData[ItemIndex], CoordinateData[ItemIndex + 1])
+        for ItemIndex in range(0, len(CoordinateData), 2)
+    )
+    if not all(
+        math.isfinite(ValueData) for PointData in PointsData for ValueData in PointData
+    ):
+        return None
+    return PointsData
+
+
+# exact pin geometry keeps the recovered envelope tied to its measured topology
+def IsPinProfile(
+    PointsData: tuple[tuple[float, float], ...] | None,
+) -> bool:
+    return (
+        PointsData is not None
+        and len(PointsData) == len(KPinPointsMm)
+        and all(
+            math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-10)
+            for ActualPoint, ExpectedPoint in zip(
+                PointsData,
+                KPinPointsMm,
+                strict=True,
+            )
+            for ActualValue, ExpectedValue in zip(
+                ActualPoint,
+                ExpectedPoint,
+                strict=True,
+            )
+        )
+    )
+
+
 def _is_native_system_feature(feature: FeatureStep) -> bool:
     native_id = feature.attributes.get("native_object_id")
     return (
@@ -6839,6 +6984,28 @@ def _orthonormal(vectors: tuple[tuple[float, float, float], ...]) -> bool:
     )
 
 
+# connected line chains share one point roster in native sketch records
+def LineLoopPoints(
+    LinesData: tuple[LineGeometry, ...],
+) -> tuple[tuple[float, float], ...] | None:
+    if len(LinesData) < 3:
+        return None
+    StartData = tuple((ItemData.start.x, ItemData.start.y) for ItemData in LinesData)
+    EndData = tuple((ItemData.end.x, ItemData.end.y) for ItemData in LinesData)
+    if not all(
+        math.isfinite(ValueData)
+        for PointData in (*StartData, *EndData)
+        for ValueData in PointData
+    ):
+        return None
+    if any(
+        not _same_point(EndData[ItemIndex], StartData[(ItemIndex + 1) % len(StartData)])
+        for ItemIndex in range(len(StartData))
+    ):
+        return None
+    return StartData
+
+
 def _sketch_payload(
     sketch: Sketch, object_id: int, object_ids: dict[str, int]
 ) -> tuple[bytes, tuple[_WriteDimension, ...]]:
@@ -6870,6 +7037,31 @@ def _sketch_payload(
                     local_id += 1
                 for start, end in ((0, 1), (1, 2), (2, 3), (3, 0)):
                     payload.extend(_line_marker(start, end, local_id))
+                    local_id += 1
+                consumed.update(profile)
+                continue
+        if len(selected) == 6 and all(
+            entity is not None and isinstance(entity.geometry, LineGeometry)
+            for entity in selected
+        ):
+            LineData = tuple(
+                entity.geometry for entity in selected if entity is not None
+            )
+            PointData = LineLoopPoints(LineData)
+            if PointData is not None:
+                for PointValue in PointData:
+                    payload.extend(
+                        _coordinate_marker(PointValue, local_id, _POINT_LOCUS)
+                    )
+                    local_id += 1
+                for PointIndex in range(len(PointData)):
+                    payload.extend(
+                        _line_marker(
+                            PointIndex,
+                            (PointIndex + 1) % len(PointData),
+                            local_id,
+                        )
+                    )
                     local_id += 1
                 consumed.update(profile)
                 continue
@@ -8177,6 +8369,7 @@ def HasPadProof(
     )
     BoundsValue = _write_rectangle_bounds(SketchObject)
     CircleValue = _write_circle_profile(SketchObject)
+    PolylineValue = PolySixPoints(SketchObject)
     EndCodes = ExtrusionEditCodes(PadObject.payload)
     IsDimensionedBox = (
         BoundsValue is not None
@@ -8185,7 +8378,11 @@ def HasPadProof(
     )
     ExpectedFeatureId = 34 if IsDimensionedBox else (33 if CircleValue else 32)
     if (
-        (BoundsValue is None) == (CircleValue is None)
+        sum(
+            ItemValue is not None
+            for ItemValue in (BoundsValue, CircleValue, PolylineValue)
+        )
+        != 1
         or EndCodes is None
         or SketchObject.object_id != 26
         or SketchObject.name != "Sketch1"
@@ -8198,8 +8395,24 @@ def HasPadProof(
         return False
     NativeSketch = ParsedModel.sketches[0]
     NativePad = ParsedModel.operations[0]
-    ExpectedProfile = BoundsValue if BoundsValue is not None else CircleValue
-    ExpectedKind = "rectangle" if BoundsValue is not None else "circle"
+    ExpectedProfile = (
+        BoundsValue
+        if BoundsValue is not None
+        else (
+            CircleValue
+            if CircleValue is not None
+            else tuple(
+                CoordinateValue
+                for PointData in PolylineValue or ()
+                for CoordinateValue in PointData
+            )
+        )
+    )
+    ExpectedKind = (
+        "rectangle"
+        if BoundsValue is not None
+        else "circle" if CircleValue is not None else "polyline"
+    )
     ProfilesValue = tuple(
         ProfileData
         for ProfileData in NativeSketch.profiles
@@ -8237,7 +8450,7 @@ def HasPadProof(
             *(("distance",) * len(ExpectedDims)),
         )
         if BoundsValue is not None
-        else ("diameter",)
+        else ("diameter",) if CircleValue is not None else ()
     )
     if (
         NativeSketch.object_id != 26
@@ -8260,7 +8473,8 @@ def HasPadProof(
             abs_tol=1.0e-10,
         )
         or (
-            EndCodes == (0, 0)
+            PolylineValue is None
+            and EndCodes == (0, 0)
             and any(
                 CopyData.sign != CopySign
                 or not math.isclose(
@@ -8300,8 +8514,10 @@ def HasSingleRevolutionProof(
         return False
     SketchObject, RevolveObject = AuthoredObjs
     BoundsValue = _write_rectangle_bounds(SketchObject)
+    PinPoints = PolySixPoints(SketchObject)
+    IsPinData = IsPinProfile(PinPoints)
     if (
-        BoundsValue is None
+        not (BoundsValue is not None or IsPinData)
         or SketchObject.object_id != 26
         or SketchObject.name != "Sketch1"
         or RevolveObject.object_id != 31
@@ -8315,25 +8531,36 @@ def HasSingleRevolutionProof(
         (ItemData for ItemData in ParsedModel.features if ItemData.object_id == 31),
         None,
     )
+    ProfileKind = "polyline" if IsPinData else "rectangle"
+    ExpectedCoords = (
+        tuple(ValueData for PointData in (PinPoints or ()) for ValueData in PointData)
+        if IsPinData
+        else BoundsValue
+    )
+    ExpectedPlaneId = 3 if IsPinData else 2
+    ExpectedConstraints = (
+        () if IsPinData else ("horizontal", "vertical", "horizontal", "vertical")
+    )
     ProfileData = tuple(
-        ItemData for ItemData in NativeSketch.profiles if ItemData.kind == "rectangle"
+        ItemData for ItemData in NativeSketch.profiles if ItemData.kind == ProfileKind
     )
     DimensionData = RevolveObject.dimensions[0]
     if (
         NativeSketch.object_id != 26
-        or NativeSketch.support_plane_id != 2
+        or NativeSketch.support_plane_id != ExpectedPlaneId
         or len(ProfileData) != 1
-        or len(ProfileData[0].coordinates) != len(BoundsValue)
+        or ExpectedCoords is None
+        or len(ProfileData[0].coordinates) != len(ExpectedCoords)
         or any(
             not math.isclose(ActualValue, ExpectedValue, abs_tol=1.0e-10)
             for ActualValue, ExpectedValue in zip(
                 ProfileData[0].coordinates,
-                BoundsValue,
+                ExpectedCoords,
                 strict=True,
             )
         )
         or tuple(ItemData.kind for ItemData in NativeSketch.constraints)
-        != ("horizontal", "vertical", "horizontal", "vertical")
+        != ExpectedConstraints
         or NativeRevolve.object_id != 31
         or NativeRevolve.name != "Revolve1"
         or NativeRevolve.kind != "revolve_join"
@@ -11703,11 +11930,18 @@ def _profiles(
             linked_markers | structural_rectangle_markers,
         )
     )
+    StructuralPolylines, StructuralPolylineMarkers = PolyProfiles(
+        markers,
+        linked_markers | structural_rectangle_markers | structural_markers,
+    )
     remaining_markers = [
         marker
         for marker in markers
         if marker.offset
-        not in linked_markers | structural_rectangle_markers | structural_markers
+        not in linked_markers
+        | structural_rectangle_markers
+        | structural_markers
+        | StructuralPolylineMarkers
     ]
     circle_profiles, circle_dimensions = _circle_profiles(remaining_markers, dimensions)
     circle_dimensions.update(structural_dimensions)
@@ -11812,9 +12046,13 @@ def _profiles(
         *circle_profiles,
         *linked_rectangles,
         *structural_rectangles,
+        *StructuralPolylines,
     ]
     used: set[int] = (
-        linked_markers | structural_rectangle_markers | structural_markers
+        linked_markers
+        | structural_rectangle_markers
+        | structural_markers
+        | StructuralPolylineMarkers
     ) | {offset for profile in circle_profiles for offset in profile.marker_offsets}
     for index, rectangle in enumerate(selected):
         if any(
@@ -11933,6 +12171,112 @@ def _structural_rectangle_profiles(
             )
         )
     return tuple(profiles), used
+
+
+# connected six edge components reconstruct one ordered native polyline profile
+def PolyProfiles(
+    MarkersData: list[NativeMarker],
+    ExcludedOffsets: set[int],
+) -> tuple[tuple[NativeProfile, ...], set[int]]:
+    EdgeData = tuple(
+        MarkerData
+        for MarkerData in MarkersData
+        if MarkerData.offset not in ExcludedOffsets
+        and MarkerData.profile_role == 1
+        and MarkerData.native_kind in {0, 1, 2}
+        and MarkerData.coordinates_mm is None
+        and MarkerData.endpoint_indices is not None
+        and MarkerData.endpoint_indices[0] != MarkerData.endpoint_indices[1]
+        and all(
+            0 <= EndpointIndex < len(MarkersData)
+            and MarkersData[EndpointIndex].coordinates_mm is not None
+            for EndpointIndex in MarkerData.endpoint_indices
+        )
+    )
+    RemainingIndexes = set(range(len(EdgeData)))
+    ProfileData: list[NativeProfile] = []
+    UsedOffsets: set[int] = set()
+    while RemainingIndexes:
+        ComponentIndexes = {RemainingIndexes.pop()}
+        VertexIndexes = set(
+            EdgeData[next(iter(ComponentIndexes))].endpoint_indices or ()
+        )
+        ChangedValue = True
+        while ChangedValue:
+            ChangedValue = False
+            for EdgeIndex in tuple(RemainingIndexes):
+                EndpointIndexes = set(EdgeData[EdgeIndex].endpoint_indices or ())
+                if VertexIndexes & EndpointIndexes:
+                    RemainingIndexes.remove(EdgeIndex)
+                    ComponentIndexes.add(EdgeIndex)
+                    VertexIndexes.update(EndpointIndexes)
+                    ChangedValue = True
+        if len(ComponentIndexes) != 6 or len(VertexIndexes) != 6:
+            continue
+        AdjacencyData: dict[int, list[tuple[int, int]]] = {
+            VertexIndex: [] for VertexIndex in VertexIndexes
+        }
+        for EdgeIndex in ComponentIndexes:
+            StartIndex, EndIndex = EdgeData[EdgeIndex].endpoint_indices or (-1, -1)
+            AdjacencyData[StartIndex].append((EdgeIndex, EndIndex))
+            AdjacencyData[EndIndex].append((EdgeIndex, StartIndex))
+        if any(len(ValueData) != 2 for ValueData in AdjacencyData.values()):
+            continue
+        FirstEdgeIndex = min(
+            ComponentIndexes,
+            key=lambda EdgeIndex: EdgeData[EdgeIndex].offset,
+        )
+        StartIndex, CurrentIndex = EdgeData[FirstEdgeIndex].endpoint_indices or (
+            -1,
+            -1,
+        )
+        OrderedVertices = [StartIndex]
+        OrderedEdges = [FirstEdgeIndex]
+        UsedEdges = {FirstEdgeIndex}
+        while CurrentIndex != StartIndex and len(OrderedVertices) <= len(VertexIndexes):
+            OrderedVertices.append(CurrentIndex)
+            CandidateData = tuple(
+                ItemData
+                for ItemData in AdjacencyData[CurrentIndex]
+                if ItemData[0] not in UsedEdges
+            )
+            if len(CandidateData) != 1:
+                break
+            NextEdgeIndex, CurrentIndex = CandidateData[0]
+            UsedEdges.add(NextEdgeIndex)
+            OrderedEdges.append(NextEdgeIndex)
+        if (
+            CurrentIndex != StartIndex
+            or UsedEdges != ComponentIndexes
+            or len(OrderedVertices) != 6
+        ):
+            continue
+        OrderedPoints = tuple(
+            MarkersData[VertexIndex].coordinates_mm for VertexIndex in OrderedVertices
+        )
+        if any(PointData is None for PointData in OrderedPoints):
+            continue
+        ResolvedPoints = tuple(
+            PointData for PointData in OrderedPoints if PointData is not None
+        )
+        if len(set(ResolvedPoints)) != 6:
+            continue
+        MarkerOffsets = tuple(
+            EdgeData[EdgeIndex].offset for EdgeIndex in OrderedEdges
+        ) + tuple(MarkersData[VertexIndex].offset for VertexIndex in OrderedVertices)
+        UsedOffsets.update(MarkerOffsets)
+        ProfileData.append(
+            NativeProfile(
+                "polyline",
+                tuple(
+                    CoordinateValue
+                    for PointData in ResolvedPoints
+                    for CoordinateValue in PointData
+                ),
+                MarkerOffsets,
+            )
+        )
+    return tuple(ProfileData), UsedOffsets
 
 
 def _structural_circle_profiles(
