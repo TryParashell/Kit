@@ -17,8 +17,11 @@ import pytest
 from convert.adapters.solidworks.container import SldprtFormatError
 from convert.adapters.solidworks.resolved_polyline6_program import (
     EncodeProgram,
+    KDepthOffset,
     KFieldOwners,
+    KPointOffsets,
     KResolvedOps,
+    PadFieldMap,
 )
 
 
@@ -39,25 +42,6 @@ KDonorStream = (
 # the pinned gate digest makes unreviewed field drift fail immediately
 KGateDigest = "b973bd5326bbdb65b8e8b5e8345e0bdbdef20d345bf70d9f7562e5a74077bfb4"
 
-# six unique vertices drive the closed line chain without duplicated endpoints
-KPointOffsets = (
-    6119,
-    6127,
-    6297,
-    6305,
-    6924,
-    6932,
-    7086,
-    7094,
-    7248,
-    7256,
-    7410,
-    7418,
-)
-
-# the extrusion parameter remains independent from sketch geometry
-KDepthOffset = 11090
-
 # the donor polygon supplies an independent exact parameterization witness
 KDonorPoints = (
     (0.0, 0.0),
@@ -67,25 +51,6 @@ KDonorPoints = (
     (15.0, 25.0),
     (0.0, 25.0),
 )
-
-
-# callers need one validated mapping from source millimetres into native metres
-def PolyOverrides(
-    PointsMm: tuple[tuple[float, float], ...], DepthMm: float
-) -> dict[int, float]:
-    if len(PointsMm) != 6:
-        raise ValueError("polyline program requires exactly six vertices")
-    PointValues = tuple(Coordinate for PointPair in PointsMm for Coordinate in PointPair)
-    if not all(math.isfinite(ValueItem) for ValueItem in PointValues):
-        raise ValueError("polyline vertices must be finite")
-    if not math.isfinite(DepthMm) or DepthMm <= 0.0:
-        raise ValueError("polyline depth must be finite and positive")
-    FieldValues = {
-        OffsetPos: ValueMeters / 1000.0
-        for OffsetPos, ValueMeters in zip(KPointOffsets, PointValues, strict=True)
-    }
-    FieldValues[KDepthOffset] = DepthMm / 1000.0
-    return FieldValues
 
 
 # complete interval ownership prevents hidden vendor spans entering resolved output
@@ -120,7 +85,7 @@ def test_polyline6_program_closes_every_typed_field() -> None:
 # an independent polygon proves semantic overrides reproduce native bytes exactly
 def test_polyline6_program_reproduces_controlled_oracle() -> None:
     OracleData = KDonorStream.read_bytes()
-    ProgramData = EncodeProgram(PolyOverrides(KDonorPoints, 8.0))
+    ProgramData = EncodeProgram(PadFieldMap(KDonorPoints, 8.0))
     assert ProgramData == OracleData
 
 
@@ -132,9 +97,37 @@ def test_polyline6_program_rejects_variable_width_overrides() -> None:
 
 # malformed source parameters must fail before any target bytes are emitted
 def test_polyline6_parameter_validation_is_strict() -> None:
-    with pytest.raises(ValueError, match="exactly six"):
-        PolyOverrides(KDonorPoints[:5], 8.0)
-    with pytest.raises(ValueError, match="finite"):
-        PolyOverrides((*KDonorPoints[:5], (math.inf, 25.0)), 8.0)
-    with pytest.raises(ValueError, match="positive"):
-        PolyOverrides(KDonorPoints, 0.0)
+    with pytest.raises(SldprtFormatError, match="exactly six"):
+        PadFieldMap(KDonorPoints[:5], 8.0)
+    with pytest.raises(SldprtFormatError, match="finite"):
+        PadFieldMap((*KDonorPoints[:5], (math.inf, 25.0)), 8.0)
+    with pytest.raises(SldprtFormatError, match="unique"):
+        PadFieldMap((*KDonorPoints[:5], KDonorPoints[0]), 8.0)
+    with pytest.raises(SldprtFormatError, match="intersect"):
+        PadFieldMap(
+            ((0.0, 0.0), (2.0, 2.0), (0.0, 2.0), (2.0, 0.0), (3.0, 0.0), (3.0, 3.0)),
+            8.0,
+        )
+    with pytest.raises(SldprtFormatError, match="positive"):
+        PadFieldMap(KDonorPoints, 0.0)
+
+
+# semantic field helpers keep geometry and extrusion parameters independently addressable
+def test_polyline6_parameter_offsets_are_native_fields() -> None:
+    FieldValues = PadFieldMap(KDonorPoints, 8.0)
+    assert tuple(FieldValues) == (*KPointOffsets, KDepthOffset)
+    assert tuple(FieldValues[OffsetPos] for OffsetPos in KPointOffsets) == (
+        0.0,
+        0.0,
+        0.04,
+        0.0,
+        0.04,
+        0.01,
+        0.015,
+        0.01,
+        0.015,
+        0.025,
+        0.0,
+        0.025,
+    )
+    assert FieldValues[KDepthOffset] == 0.008
