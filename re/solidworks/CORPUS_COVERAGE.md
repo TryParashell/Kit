@@ -29,17 +29,17 @@ The 2026-08-11 recursive result is:
 | ------------------------ | ----: |
 | FCStd files              |   165 |
 | parser or writer errors  |     0 |
-| vendor-loadable contract |    40 |
-| application-usable       |    40 |
-| near-lossless            |    40 |
+| vendor-loadable contract |    44 |
+| application-usable       |    44 |
+| near-lossless            |    44 |
 | vendor-only              |     0 |
-| unsupported              |   125 |
+| unsupported              |   121 |
 
-The command returns nonzero because 125 sources remain unsupported. Each accepted part traverses
+The command returns nonzero because 121 sources remain unsupported. Each accepted part traverses
 the public `write_document` path and the resulting compound file is read back with `SldprtArchive`.
-The increase from 38 of 163 to 40 of 165 is exactly the two controlled standalone cylinder sources;
-the unsupported count and unsupported-family census are unchanged.
-This is a production-path structural proof, not a claim that all 40 files were individually opened
+The increase from 40 to 44 is the exact six-line polyline pad, full stepped-pin revolution,
+90-degree stepped-pin revolution, and rectangular boss/two-cut chain ending in a circle. This is a
+production-path structural proof, not a claim that all 44 files were individually opened
 in SOLIDWORKS. Vendor-application oracle measurements remain separately recorded in
 `archive/MULTISTREAM.md`.
 
@@ -55,8 +55,11 @@ dimensions, feature ordering, and body-producing operations:
 - exact standalone origin-aligned `Part::Cylinder` solids lowered to a diameter-driven circle with
   an independently editable blind-boss height;
 - blind and through-all pockets, including two- and three-pocket chains;
+- the exact three-stage rectangular boss, rectangular pocket, and circular pocket chain;
 - pad followed by a second pad;
-- full rectangular revolution and pad followed by a groove;
+- full rectangular revolution, exact full and 90-degree stepped-pin revolutions, and pad followed
+  by a groove;
+- the exact connected six-line Front-plane blind pad;
 - pad followed by fillet, chamfer, or shell;
 - pad followed by linear pattern; and
 - pad followed by circular pattern, including occurrence count, total angle, and reverse direction.
@@ -76,18 +79,15 @@ unrecovered source feature family.
 
 ## Controlled feature campaign
 
-Of the 25 focused FCStd inputs under `.rescratch/sw/fcstd`, 20 reach the native vendor-loadable and
-application-usable path. These five fail closed:
+Of the 25 focused FCStd inputs under `.rescratch/sw/fcstd`, 22 reach the native vendor-loadable and
+application-usable path. These three fail closed:
 
 - `.rescratch/sw/fcstd/kit_boss_disjoint_revolve.FCStd`;
 - `.rescratch/sw/fcstd/kit_revolve_pin_front.FCStd`;
-- `.rescratch/sw/fcstd/kit_revolve_pin_top.FCStd`;
-- `.rescratch/sw/fcstd/kit_revolve_pin_top_90.FCStd`; and
 - `.rescratch/sw/fcstd/kit_revolve_pin_top_midplane.FCStd`.
 
-They require one or more unrecovered semantics: a non-rectangular six-segment pin profile, a
-non-front revolution plane, a partial revolution, a mid-plane revolution, or a disjoint
-pad-plus-revolution body history.
+They require one or more unrecovered semantics: a Front-plane stepped pin, a mid-plane revolution,
+or a disjoint pad-plus-revolution body history.
 
 ## Unsupported families in the full corpus
 
@@ -117,11 +117,11 @@ FreeCAD type identifier.
 | `PartDesign::AdditiveBox`    |         1 |
 | `PartDesign::AdditiveSphere` |         1 |
 | `PartDesign::LinearPattern`  |         2 |
-| `PartDesign::Pad`            |        18 |
+| `PartDesign::Pad`            |        16 |
 | `PartDesign::Plane`          |         2 |
-| `PartDesign::Pocket`         |        10 |
+| `PartDesign::Pocket`         |         9 |
 | `PartDesign::PolarPattern`   |         2 |
-| `PartDesign::Revolution`     |        22 |
+| `PartDesign::Revolution`     |        20 |
 | `Path::FeaturePython`        |         4 |
 | `extrusion`                  |        42 |
 | `fillet`                     |        21 |

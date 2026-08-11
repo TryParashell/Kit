@@ -2254,7 +2254,7 @@ def BuildThreeFeatureVendorTree(
                 strict=True,
             )
         )
-        or EndCodes != ((1, 0), (1, 0), (1, 0))
+        or EndCodes != ((1, 0), (0, 0), (0, 0))
     ):
         return None
     EditData: dict[int, FeatureEdit] = {}
@@ -2268,7 +2268,7 @@ def BuildThreeFeatureVendorTree(
                 rectangle_corners_mm(*BoundsValue) if BoundsValue is not None else None
             ),
             depth_mm=DepthValue,
-            reversed=bool(CodesValue[0]),
+            reversed=(True if IsCircleData else bool(CodesValue[0])),
             end_condition_code=CodesValue[1],
             update_depth_copies=True,
             radii_mm=((CircleValue[2],) if CircleValue is not None else None),
@@ -9749,6 +9749,11 @@ def HasCutChainProof(
         return False
     SketchIds = (26, 33, 41, 48)[:FeatureCount]
     FeatureIds = (32, 40, 47, 54)[:FeatureCount]
+    ChainSketches = AuthoredObjs[0::2]
+    HasCircleData = IsCircleChain(
+        tuple(_write_rectangle_bounds(ItemData) for ItemData in ChainSketches),
+        tuple(_write_circle_profile(ItemData) for ItemData in ChainSketches),
+    )
     ExpectedData = tuple(
         (
             AuthoredObjs[FeatureIndex * 2],
@@ -9810,7 +9815,7 @@ def HasCutChainProof(
                 *(("distance",) * len(ExpectedDims)),
             )
             if BoundsValue is not None
-            else ("diameter",)
+            else ("radius", "distance", "distance")
         )
         DepthValue = FeatureObject.dimensions[0].value_mm
         if (
@@ -9838,7 +9843,7 @@ def HasCutChainProof(
             or NativeFeature.name != FeatureName
             or NativeFeature.profile_id != SketchObjectId
             or NativeFeature.kind not in FeatureKinds
-            or NativeFeature.direction_code != EndCodes[0]
+            or NativeFeature.direction_code != (1 if HasCircleData else EndCodes[0])
             or NativeFeature.termination_code != EndCodes[1]
             or NativeFeature.length_mm is None
             or not math.isclose(
