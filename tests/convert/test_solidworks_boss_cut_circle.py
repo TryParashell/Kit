@@ -14,7 +14,13 @@ import struct
 
 import pytest
 
-from convert.adapters.solidworks.container import SldprtFormatError
+from convert import write_document
+from convert.adapters.freecad import read_freecad
+from convert.adapters.solidworks.container import SldprtArchive, SldprtFormatError
+from convert.adapters.solidworks.format import (
+    KIT_RESOLVED_STREAM,
+    RESOLVED_FEATURES_STREAM,
+)
 from convert.adapters.solidworks.resolved import (
     BOSS_KIND,
     CUT_KIND,
@@ -44,8 +50,46 @@ KOracleStream = (
     / "resolved.bin"
 )
 
+# the strict source gate exercises public FreeCAD lowering without a carrier
+KSourcePath = (
+    KRepoRoot / ".rescratch" / "gates" / "fcstd" / "gate_boss_cut_circle.FCStd"
+)
+
 # the pinned digest makes unreviewed field drift fail immediately
 KProgramDigest = "ea2e72fee693b357d6ccea3aac0f9a64a428f5b851aff0d77faf422491d939a6"
+
+
+# public selection must preserve the typed family and its load critical directions
+@pytest.mark.skipif(
+    not KSourcePath.is_file(),
+    reason="boss plus rectangular and circular blind-cut corpus unavailable",
+)
+def test_boss_cut_circle_public_writer_selects_typed_program(
+    tmp_path: Path,
+) -> None:
+    SourceData = read_freecad(KSourcePath)
+    TargetPath = tmp_path / "BossCutCirclePublic.SLDPRT"
+    ResultData = write_document(SourceData, TargetPath, allow_carrier=False)
+    ArchiveData = SldprtArchive.open(TargetPath)
+    FeatureData = locate_features(ArchiveData.require(RESOLVED_FEATURES_STREAM))
+    assert ResultData.vendor_loadable is True
+    assert ResultData.application_usable is True
+    assert ResultData.near_lossless is True
+    assert ResultData.metadata["runtime"] == "python-stdlib"
+    assert KIT_RESOLVED_STREAM not in ArchiveData.streams
+    assert tuple(ItemData.name for ItemData in FeatureData) == (
+        "Boss-Extrude1",
+        "Cut-Extrude1",
+        "Cut-Extrude2",
+    )
+    assert tuple(ItemData.depth_mm for ItemData in FeatureData) == pytest.approx(
+        (15.0, 5.0, 9.0)
+    )
+    assert tuple(ItemData.reversed for ItemData in FeatureData) == (True, False, False)
+    assert FeatureData[0].bounds_mm == pytest.approx((-30.0, -20.0, 30.0, 20.0))
+    assert FeatureData[1].bounds_mm == pytest.approx((-24.0, -4.0, 24.0, 4.0))
+    assert FeatureData[2].arcs[0].centre_mm == pytest.approx((0.0, 12.0))
+    assert FeatureData[2].arcs[0].radius_mm == pytest.approx(6.0)
 
 
 # complete interval ownership prevents hidden vendor spans entering resolved output
@@ -119,13 +163,13 @@ def test_boss_cut_circle_program_accepts_semantic_feature_edits() -> None:
             1: FeatureEdit(
                 corners_mm=rectangle_corners_mm(-24.0, -4.0, 24.0, 4.0),
                 depth_mm=5.0,
-                reversed=True,
+                reversed=False,
                 end_condition_code=0,
                 update_depth_copies=True,
             ),
             2: FeatureEdit(
                 depth_mm=9.0,
-                reversed=True,
+                reversed=False,
                 end_condition_code=0,
                 update_depth_copies=True,
                 radii_mm=(6.0,),
@@ -139,7 +183,7 @@ def test_boss_cut_circle_program_accepts_semantic_feature_edits() -> None:
     assert tuple(ItemData.depth_mm for ItemData in FeatureData) == pytest.approx(
         (15.0, 5.0, 9.0)
     )
-    assert all(ItemData.reversed is True for ItemData in FeatureData)
+    assert tuple(ItemData.reversed for ItemData in FeatureData) == (True, False, False)
     assert all(ItemData.end_condition_code == 0 for ItemData in FeatureData)
     CircleData = FeatureData[2].arcs[0]
     assert CircleData.centre_mm == pytest.approx((0.0, 12.0))

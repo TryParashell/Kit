@@ -215,7 +215,7 @@ def WriteSysFolder(
         Writer.PutValues("<i", 0)
 
 
-# history placeholders keep feature identifiers stable before authored nodes
+# history records keep feature identifiers stable before authored nodes
 def WriteHistItem(
     Writer: ResolveWriter,
     FeatureIdent: int,

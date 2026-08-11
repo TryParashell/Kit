@@ -62,8 +62,9 @@ SKETCH_PARENTS = ("sgSketch", "moSketchRegion_c", "sgCircleDim", "sgLLDist", "nu
 RESOLVED_BASES = {"boss1": 109, "boss2": 110, "boss3": 111}
 
 
+# distinct type lets callers separate inference failures from malformed input
 class ResolveError(RuntimeError):
-    pass
+    __slots__ = ()
 
 
 def load_trace(label):

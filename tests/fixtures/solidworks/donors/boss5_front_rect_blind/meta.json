@@ -1,11 +1,5 @@
 {
-  "arc_counts": [
-    0,
-    0,
-    0,
-    0,
-    0
-  ],
+  "arc_counts": [0, 0, 0, 0, 0],
   "axis_directions": [],
   "container_streams": [
     {
@@ -29,21 +23,9 @@
       "name": "Header2"
     }
   ],
-  "depth_present": [
-    true,
-    true,
-    true,
-    true,
-    true
-  ],
+  "depth_present": [true, true, true, true, true],
   "donor_id": "boss5_front_rect_blind",
-  "feature_ids": [
-    32,
-    40,
-    47,
-    54,
-    61
-  ],
+  "feature_ids": [32, 40, 47, 54, 61],
   "feature_names": [
     "Boss-Extrude1",
     "Boss-Extrude2",
@@ -52,60 +34,17 @@
     "Boss-Extrude5"
   ],
   "features": [
-    [
-      "boss",
-      "rectangle",
-      "front",
-      "blind"
-    ],
-    [
-      "boss",
-      "rectangle",
-      "front",
-      "blind"
-    ],
-    [
-      "boss",
-      "rectangle",
-      "front",
-      "blind"
-    ],
-    [
-      "boss",
-      "rectangle",
-      "front",
-      "blind"
-    ],
-    [
-      "boss",
-      "rectangle",
-      "front",
-      "blind"
-    ]
+    ["boss", "rectangle", "front", "blind"],
+    ["boss", "rectangle", "front", "blind"],
+    ["boss", "rectangle", "front", "blind"],
+    ["boss", "rectangle", "front", "blind"],
+    ["boss", "rectangle", "front", "blind"]
   ],
   "inherited_directions": [],
   "measured": true,
-  "point_counts": [
-    4,
-    4,
-    4,
-    4,
-    4
-  ],
-  "sketch_ids": [
-    26,
-    33,
-    41,
-    48,
-    55
-  ],
-  "sketch_names": [
-    "Sketch1",
-    "Sketch2",
-    "Sketch3",
-    "Sketch4",
-    "Sketch5"
-  ],
+  "point_counts": [4, 4, 4, 4, 4],
+  "sketch_ids": [26, 33, 41, 48, 55],
+  "sketch_names": ["Sketch1", "Sketch2", "Sketch3", "Sketch4", "Sketch5"],
   "spare_equations": [],
   "spare_plane_frames": [],
   "spare_plane_ids": [],

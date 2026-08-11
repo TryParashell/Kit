@@ -1,8 +1,5 @@
 {
-  "arc_counts": [
-    0,
-    0
-  ],
+  "arc_counts": [0, 0],
   "axis_directions": [],
   "container_streams": [
     {
@@ -26,47 +23,19 @@
       "name": "Header2"
     }
   ],
-  "depth_present": [
-    true,
-    false
-  ],
+  "depth_present": [true, false],
   "donor_id": "poly12_cut_through",
-  "feature_ids": [
-    32,
-    40
-  ],
-  "feature_names": [
-    "Boss-Extrude1",
-    "Cut-Extrude1"
-  ],
+  "feature_ids": [32, 40],
+  "feature_names": ["Boss-Extrude1", "Cut-Extrude1"],
   "features": [
-    [
-      "boss",
-      "rectangle",
-      "front",
-      "blind"
-    ],
-    [
-      "cut",
-      "polyline-12",
-      "front",
-      "through-all"
-    ]
+    ["boss", "rectangle", "front", "blind"],
+    ["cut", "polyline-12", "front", "through-all"]
   ],
   "inherited_directions": [],
   "measured": false,
-  "point_counts": [
-    4,
-    12
-  ],
-  "sketch_ids": [
-    26,
-    33
-  ],
-  "sketch_names": [
-    "Sketch1",
-    "Sketch2"
-  ],
+  "point_counts": [4, 12],
+  "sketch_ids": [26, 33],
+  "sketch_names": ["Sketch1", "Sketch2"],
   "spare_equations": [],
   "spare_plane_frames": [],
   "spare_plane_ids": [],

@@ -1,15 +1,6 @@
 {
-  "arc_counts": [
-    0,
-    0
-  ],
-  "axis_directions": [
-    null,
-    [
-      1.0,
-      0.0
-    ]
-  ],
+  "arc_counts": [0, 0],
+  "axis_directions": [null, [1.0, 0.0]],
   "container_streams": [
     {
       "file": "Contents__CMgr.bin",
@@ -32,47 +23,19 @@
       "name": "Header2"
     }
   ],
-  "depth_present": [
-    true,
-    false
-  ],
+  "depth_present": [true, false],
   "donor_id": "boss_revcut",
-  "feature_ids": [
-    32,
-    39
-  ],
-  "feature_names": [
-    "Boss-Extrude1",
-    "Cut-Revolve1"
-  ],
+  "feature_ids": [32, 39],
+  "feature_names": ["Boss-Extrude1", "Cut-Revolve1"],
   "features": [
-    [
-      "boss",
-      "rectangle",
-      "front",
-      "blind"
-    ],
-    [
-      "revolve-cut",
-      "rectangle",
-      "front-sketch-axis",
-      "full-revolution"
-    ]
+    ["boss", "rectangle", "front", "blind"],
+    ["revolve-cut", "rectangle", "front-sketch-axis", "full-revolution"]
   ],
   "inherited_directions": [],
   "measured": true,
-  "point_counts": [
-    4,
-    4
-  ],
-  "sketch_ids": [
-    26,
-    33
-  ],
-  "sketch_names": [
-    "Sketch1",
-    "Sketch2"
-  ],
+  "point_counts": [4, 4],
+  "sketch_ids": [26, 33],
+  "sketch_names": ["Sketch1", "Sketch2"],
   "spare_equations": [],
   "spare_plane_frames": [],
   "spare_plane_ids": [],

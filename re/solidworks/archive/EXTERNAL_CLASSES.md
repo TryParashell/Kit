@@ -26,12 +26,12 @@ bytes of the nine traced parts.
 
 ## 1. Result
 
-| slot | class | index observed | occurrences over 9 traces | confidence |
-|---|---|---|---|---|
-| node name record | **`moNodeName_c`** | 4 in all nine traces | 216 | confirmed |
-| owning component | **`moUnitComponent_c`** | 43 (8 traces), 45 (`vendor_cojinete`) | 62 | confirmed |
-| object list | **`suObList`** | 82 / 83 / 84 / 85 | 66 | confirmed |
-| rollback mark | **`moPMarkRecord_c`** | 102 / 103 / 104 / 106 | 13 | confirmed |
+| slot             | class                   | index observed                        | occurrences over 9 traces | confidence |
+| ---------------- | ----------------------- | ------------------------------------- | ------------------------- | ---------- |
+| node name record | **`moNodeName_c`**      | 4 in all nine traces                  | 216                       | confirmed  |
+| owning component | **`moUnitComponent_c`** | 43 (8 traces), 45 (`vendor_cojinete`) | 62                        | confirmed  |
+| object list      | **`suObList`**          | 82 / 83 / 84 / 85                     | 66                        | confirmed  |
+| rollback mark    | **`moPMarkRecord_c`**   | 102 / 103 / 104 / 106                 | 13                        | confirmed  |
 
 `confirmed` is used in the sense the rest of `re/` uses it: the class is read out of the
 decompiled code **and** the byte arithmetic reproduces a real traced object span exactly. Section
@@ -55,11 +55,11 @@ The pre-`base` portion of the map is the class-and-object map of **`Contents/Con
 (`re/data/segments/nodediff_Contents_Config_0.json`, the `boss1..boss3_front_rect_blind` family)
 from counter 4 with the `+2 / +1 / 0 / 0` increment rule of `SEGMENTATION.md` §3 gives:
 
-| part | `Config-0` nodes | final counter after `Config-0` | traced `ResolvedFeatures` base | `moNodeName_c` | `moUnitComponent_c` | `suObList` | `moPMarkRecord_c` |
-|---|---|---|---|---|---|---|---|
-| `boss1` (1 feature) | 123 | **109** | **109** | 4 | 43 | 82 | 102 |
-| `boss2` (2 features) | 126 | **110** | **110** | 4 | 43 | 83 | 103 |
-| `boss3` (3 features) | 129 | **111** | **111** | 4 | 43 | 84 | 104 |
+| part                 | `Config-0` nodes | final counter after `Config-0` | traced `ResolvedFeatures` base | `moNodeName_c` | `moUnitComponent_c` | `suObList` | `moPMarkRecord_c` |
+| -------------------- | ---------------- | ------------------------------ | ------------------------------ | -------------- | ------------------- | ---------- | ----------------- |
+| `boss1` (1 feature)  | 123              | **109**                        | **109**                        | 4              | 43                  | 82         | 102               |
+| `boss2` (2 features) | 126              | **110**                        | **110**                        | 4              | 43                  | 83         | 103               |
+| `boss3` (3 features) | 129              | **111**                        | **111**                        | 4              | 43                  | 84         | 104               |
 
 The final counter of `Config-0` equals the `ResolvedFeatures` base exactly, for all three
 feature counts, with no fitted constant. That is the proof that the two streams share one index
@@ -69,14 +69,14 @@ space, and it also reproduces the four external indices of the 1-, 2- and 3-feat
 
 The mechanism behind the drift is the per-feature growth `MULTISTREAM.md` §3 measured in
 `Config-0`: three nodes are inserted per feature (`null`, `null`, `classref moAtom_c`), worth
-`0 + 0 + 1` counter units. So every class `Config-0` defines *after* that insertion point shifts
-by **+1 per feature** and every class defined *before* it does not:
+`0 + 0 + 1` counter units. So every class `Config-0` defines _after_ that insertion point shifts
+by **+1 per feature** and every class defined _before_ it does not:
 
-* `moNodeName_c` is the **first** class definition of `Config-0`, at counter 4 — constant in
+- `moNodeName_c` is the **first** class definition of `Config-0`, at counter 4 — constant in
   every part observed, which is why index 4 never moves.
-* `moUnitComponent_c` (definition 20) and everything up to `moAtom_c` sit before the insertion
+- `moUnitComponent_c` (definition 20) and everything up to `moAtom_c` sit before the insertion
   point — constant at 43 across eight traces.
-* `suObList` (definition 32) and `moPMarkRecord_c` (definition 37) sit after it — 82→83→84 and
+- `suObList` (definition 32) and `moPMarkRecord_c` (definition 37) sit after it — 82→83→84 and
   102→103→104.
 
 `vendor_cojinete` breaks the arithmetic that would tempt you to write `base - 27`: its indices
@@ -85,9 +85,9 @@ are 4, **45**, **85**, **106** at `base` 111. Its `Config-0` has 39 class defini
 elsewhere and the shifts (+0, +2, +3, +4) are not uniform. `vendor_ring` is a third pattern
 again: 4, 43, **83**, **104** at `base` 111.
 
-**Rule for the static segmenter:** resolve these indices by *name*, by segmenting
+**Rule for the static segmenter:** resolve these indices by _name_, by segmenting
 `Contents/Config-0` first and continuing its map into `ResolvedFeatures`. Do not hardcode 4, 43,
-82, 102 and do not compute them from `base`. The class-definition *order* inside `Config-0` was
+82, 102 and do not compute them from `base`. The class-definition _order_ inside `Config-0` was
 compared in full for `BASELINE_40x20x10` and both V8 vendor parts and is identical in all three,
 so in those parts the four classes are the 1st, 20th, 32nd and 37th definitions of that stream
 (`COJINETE INFERIOR` omits `moCThreadRefMgr_c`, which sits after all four). The ordinals look
@@ -104,7 +104,7 @@ definition of `Config-0` is `moNodeName_c` in every part scanned.
 Three independent chains, run against the same nine recorded segmentations.
 
 **Chain A — the parent's decompiled `Serialize` names the child.** Every external class
-reference row carries `parent` and `depth`. The parent is an in-stream object and *is* named, so
+reference row carries `parent` and `depth`. The parent is an in-stream object and _is_ named, so
 `serialize_map.json` gives its `Serialize` address and the decompiled body says which class it
 constructs at that position. The child order in the code has to line up with the child order in
 the segmentation, and it does in all four cases.
@@ -117,14 +117,14 @@ it uses only the traced node sequence, the published increment rule, and the tra
 stream of the same document defined. Scanning every stream of 108 parts for `ff ff 01 00 <len>
 <name>` definitions gives a hard presence test:
 
-| class | defined by name in |
-|---|---|
-| `moNodeName_c` | 108 / 108 parts |
-| `moUnitComponent_c` | 108 / 108 parts |
-| `suObList` | 108 / 108 parts |
-| `moPMarkRecord_c` | 108 / 108 parts |
-| `moComponent_c` | **0 / 108 parts** |
-| `moAsmFeatData_c` | **0 / 108 parts** |
+| class               | defined by name in |
+| ------------------- | ------------------ |
+| `moNodeName_c`      | 108 / 108 parts    |
+| `moUnitComponent_c` | 108 / 108 parts    |
+| `suObList`          | 108 / 108 parts    |
+| `moPMarkRecord_c`   | 108 / 108 parts    |
+| `moComponent_c`     | **0 / 108 parts**  |
+| `moAsmFeatData_c`   | **0 / 108 parts**  |
 
 The four answers are universally present; the two base-class / wrong-hypothesis candidates that
 the decompiled code mentions at those call sites are universally absent. This chain cannot pick a
@@ -134,17 +134,17 @@ class on its own, but it eliminates candidates decisively, and it is what settle
 path from the segmentation JSON and re-extracted with `streamlib.load_donor`. Every one is
 byte-exact against the traced `stream_length`:
 
-| trace | part | stream bytes |
-|---|---|---|
-| `baseline` | `BASELINE_40x20x10.SLDPRT` | 11075 |
-| `circle` | `CIRCLE_r10.SLDPRT` | 10556 |
-| `planetop` | `PLANE_TOP.SLDPRT` | 11075 |
-| `twopad` | `TWOPAD_d5.SLDPRT` | 19390 |
-| `cutbase` | `CUTBASE_cd5.SLDPRT` | 16579 |
-| `padplane` | `PADPLANE_rev_d5.SLDPRT` | 16581 |
-| `three` | `THREEFEATURE_pad_cut_pad.SLDPRT` | 24805 |
-| `vendor_ring` | `Piston Ring KF.SLDPRT` | 25998 |
-| `vendor_cojinete` | `COJINETE INFERIOR.SLDPRT` | 17601 |
+| trace             | part                              | stream bytes |
+| ----------------- | --------------------------------- | ------------ |
+| `baseline`        | `BASELINE_40x20x10.SLDPRT`        | 11075        |
+| `circle`          | `CIRCLE_r10.SLDPRT`               | 10556        |
+| `planetop`        | `PLANE_TOP.SLDPRT`                | 11075        |
+| `twopad`          | `TWOPAD_d5.SLDPRT`                | 19390        |
+| `cutbase`         | `CUTBASE_cd5.SLDPRT`              | 16579        |
+| `padplane`        | `PADPLANE_rev_d5.SLDPRT`          | 16581        |
+| `three`           | `THREEFEATURE_pad_cut_pad.SLDPRT` | 24805        |
+| `vendor_ring`     | `Piston Ring KF.SLDPRT`           | 25998        |
+| `vendor_cojinete` | `COJINETE INFERIOR.SLDPRT`        | 17601        |
 
 So no fixture substitution was needed and no approximate match was used. `tests/fixtures/solidworks/donors/boss1_front_rect_blind/resolved.bin` is 11073 bytes against `baseline`'s
 11075 and is **not** the same part; it was not used. The `boss1..boss3` fixtures do back the
@@ -152,7 +152,7 @@ So no fixture substitution was needed and no approximate match was used. `tests/
 
 ### One caveat about lengths that has to be stated
 
-A segmentation row's `length` is the distance to the *next* `ReadObject` event, not the object's
+A segmentation row's `length` is the distance to the _next_ `ReadObject` event, not the object's
 own body length. When an object is the last read of its parent's frame, every raw byte the
 ancestors read afterwards is absorbed into that row. So the traced spans are exact object
 boundaries — the tiling and re-emit proofs in `SEGMENTATION.md` depend on that — but they are an
@@ -162,7 +162,7 @@ This is what made `suObList` look like three different classes at first: the sam
 appears with spans of 4, 63 and 174 bytes. The 4-byte spans are lists followed immediately by
 their elements; the 63- and 174-byte spans are empty lists that happen to be the last read of
 their frame. Both shapes agree once the absorption is accounted for, and the tables below quote
-*own body* lengths derived from the decompiled `Serialize`, separately from the traced spans.
+_own body_ lengths derived from the decompiled `Serialize`, separately from the traced spans.
 
 ---
 
@@ -185,7 +185,7 @@ Byte check, all 216 instances across all nine traces: the two bytes after the ta
 `ff fe ff` wide-string marker, the following byte is the character count, and the
 `2·cch` bytes after that decode as UTF-16LE. Own bodies run 8–52 bytes. Traced spans run 30–78
 bytes; the difference is a constant 20 or 24 bytes of node scalars that `moNode_c::Serialize`
-reads *after* the child returns (`u32`, `u32` flags, `u32` id, `u32`, empty `CString`, `u32`),
+reads _after_ the child returns (`u32`, `u32` flags, `u32` id, `u32`, empty `CString`, `u32`),
 which is the absorption effect of §3.
 
 Worked example, `BASELINE_40x20x10` segment 1 at offset 30, span 46:
@@ -227,7 +227,7 @@ LAB_4c279dae:
 ```
 
 Byte check, all 62 instances: the traced span is **exactly 2 bytes** — tag only, zero own body —
-and the next segment is always a nested object one level deeper, always an *object reference*
+and the next segment is always a nested object one level deeper, always an _object reference_
 (the document object, already in the map from `Config-0`). That is the single nested read of
 `moComponent_c::Serialize` and nothing else.
 
@@ -350,7 +350,7 @@ part document.
    `boss1..boss3_front_rect_blind`. That is enough to prove the continuation (the final counter
    matches the base for three different feature counts) and enough to reproduce the indices of
    the seven corpus traces, but the two V8 vendor parts' indices (45 / 85 / 106 and 83 / 104) are
-   *explained* by the model rather than *recomputed* from it, because no `Config-0` segmentation
+   _explained_ by the model rather than _recomputed_ from it, because no `Config-0` segmentation
    exists for those parts. Their slot assignment rests on Chain A and the byte signatures, which
    are unambiguous per class — `extclass_resolve.py` refuses to emit if any index matches more
    than one signature — but the numeric index is not independently re-derived. One
@@ -362,16 +362,16 @@ part document.
    the 40 classes `Config-0` defines.
 3. **`suObList` element typing.** The count-then-elements shape is confirmed here, but
    `MULTISTREAM.md` §3 records an `suObList` in `CMgr` whose body is `u16 0, u32 count` followed
-   by *inline* 12-byte entries rather than nested objects. Both are the same class name. Which
+   by _inline_ 12-byte entries rather than nested objects. Both are the same class name. Which
    shape a given `suObList` takes is presumably decided by the owner, and that is not
    characterised. `suObList::Serialize` itself lives in `sldmfcu.dll` and was not decompiled for
    this work.
 4. **Whether four is the whole set.** Four distinct external class indices is what the nine
    recorded segmentations contain. A part using features outside this corpus — patterns, fillets,
    sheet metal, configurations beyond `Config-0` — may reference further `Config-0` classes that
-   never appear here. The four are the complete set *for these nine parts*.
+   never appear here. The four are the complete set _for these nine parts_.
 5. **Object references below `base` are not covered.** `SEGMENTATION.md` §3 counts 6, 12 and 14
-   external *object* references alongside the class references. Those are individual objects from
+   external _object_ references alongside the class references. Those are individual objects from
    `Config-0`, not classes; naming them is a different question and is untouched here.
 
 ---
