@@ -71,6 +71,11 @@ from convert.adapters.solidworks.native import (
     native_axis_bindings,
 )
 from convert.adapters.solidworks.resolved import BLIND_END_CONDITION, locate_features
+from convert.adapters.solidworks.resolved_revolve_pin_program import (
+    EncodeProgram as EncodeRevolvePinProgram,
+    FieldOwners as RevolvePinOwners,
+    ResolvedOps as RevolvePinOps,
+)
 from convert.parasolid import _parasolid_header, _scan_partition_records
 from interchange import (
     BooleanOperation,
@@ -137,6 +142,15 @@ FreeCadBoxCorpus = (
 # this oracle fixture exercises exact freecad cylinder lowering when research data is present
 KFreeCadCylCorpus = (
     Path(__file__).parents[2] / ".rescratch" / "fcstd" / "cylinder_r5_h10.FCStd"
+)
+
+# this oracle fixture exercises the traced six segment top plane revolution family
+KFreeCadRevPin = (
+    Path(__file__).parents[2]
+    / ".rescratch"
+    / "sw"
+    / "fcstd"
+    / "kit_revolve_pin_top.FCStd"
 )
 
 
@@ -2115,6 +2129,31 @@ def test_freecad_full_revolution_writes_editable_native_revolved_boss() -> None:
         assert TransferData[CapabilityValue] == "native"
 
 
+# the recovered pin stream stays fail closed until its coupled envelope is typed
+@pytest.mark.skipif(
+    not KFreeCadRevPin.is_file(),
+    reason="top plane pin revolution corpus unavailable",
+)
+def test_FreeCadPinRevolutionRequiresRecoveredCoupledEnvelope(
+    tmp_path: Path,
+) -> None:
+    SourceData = read_freecad(KFreeCadRevPin)
+    TargetPath = tmp_path / "FreeCadPinRevolution.SLDPRT"
+    ResultData = write_document(SourceData, TargetPath, allow_carrier=True)
+    ProgramData = EncodeRevolvePinProgram()
+    assert len(ProgramData) == 12337
+    assert hashlib.sha256(ProgramData).hexdigest() == (
+        "e8a72dfd4796bda2a408ab8b629e9f12dc4ae225c8a1e0cc08f3c09b02ff68bf"
+    )
+    assert len(RevolvePinOps) == 3014
+    assert len(RevolvePinOwners) == 503
+    assert sum(ItemData[1] for ItemData in RevolvePinOps) == len(ProgramData)
+    assert not HasVendorPartEncoding(SourceData)
+    assert ResultData.application_usable is False
+    assert ResultData.vendor_loadable is False
+    assert ResultData.near_lossless is False
+
+
 # circle pads use the oracle-proven first-principles circular feature program
 def test_freecad_circle_pad_writes_native_editable_feature() -> None:
     CenterData = Vector2(0.0, 0.0)
@@ -2177,6 +2216,93 @@ def test_freecad_circle_pad_writes_native_editable_feature() -> None:
     OffsetResult = write_sldprt(OffsetSource, BytesIO())
     assert OffsetResult.application_usable is False
     assert OffsetResult.vendor_loadable is False
+
+
+# reversed circles select their dedicated typed resolved and configuration programs
+def test_FreeCadReverseCirclePadWritesNativeEditableFeature() -> None:
+    CenterData = Vector2(0.0, 0.0)
+    SourceData = _freecad_rectangle_pad_document(depth=10.0)
+    SourceSketch = SourceData.sketches[0]
+    CircleEntity = SketchEntity(
+        "freecad:circle:reverse",
+        GeometryKind.CIRCLE,
+        CircleGeometry(CenterData, 5.0),
+    )
+    CircleSketch = replace(
+        SourceSketch,
+        entities=(CircleEntity,),
+        closed_profile_entity_ids=((CircleEntity.id,),),
+    )
+    SourceData = _FreeCADDirectionVariant(
+        replace(SourceData, sketches=(CircleSketch,)),
+        "reversed",
+    )
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    ResolvedData = ArchiveData.require(RESOLVED_FEATURES_STREAM)
+    ConfigurationData = ArchiveData.require(CONFIGURATION_STREAM)
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ResolvedData,
+        ConfigurationData,
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert HasVendorPartEncoding(SourceData)
+    assert ResultData.application_usable is True
+    assert ResultData.vendor_loadable is True
+    assert ResultData.near_lossless is True
+    assert len(ResolvedData) == 12514
+    assert hashlib.sha256(ResolvedData).hexdigest() == (
+        "b9735d3134c944dc8e66e64d62aa84c117edcf06a17e5d69601e552b9150655d"
+    )
+    assert len(ConfigurationData) == 25158
+    assert hashlib.sha256(ConfigurationData).hexdigest() == (
+        "fc1cb072c15c9f334bab288234353e3dc27db5aa83abd61c6fdd95364ac276a8"
+    )
+    assert NativeData.sketches[0].profiles[0].coordinates == pytest.approx(
+        (0.0, 0.0, 5.0)
+    )
+    assert NativeData.operations[0].object_id == 33
+    assert NativeData.operations[0].direction_code == 1
+    assert NativeData.operations[0].termination_code == 0
+    assert NativeData.operations[0].length_mm == pytest.approx(10.0)
+    VariableSource = _freecad_rectangle_pad_document(depth=12.0)
+    VariableSketch = VariableSource.sketches[0]
+    VariableCircle = SketchEntity(
+        "freecad:circle:reverse:variable",
+        GeometryKind.CIRCLE,
+        CircleGeometry(CenterData, 8.0),
+    )
+    VariableSource = _FreeCADDirectionVariant(
+        replace(
+            VariableSource,
+            sketches=(
+                replace(
+                    VariableSketch,
+                    entities=(VariableCircle,),
+                    closed_profile_entity_ids=((VariableCircle.id,),),
+                ),
+            ),
+        ),
+        "reversed",
+    )
+    VariableOutput = BytesIO()
+    VariableResult = write_sldprt(VariableSource, VariableOutput)
+    VariableArchive = SldprtArchive.from_bytes(VariableOutput.getvalue())
+    VariableNative = decode_native_model(
+        VariableArchive.require(KEYWORDS_STREAM),
+        VariableArchive.require(RESOLVED_FEATURES_STREAM),
+        VariableArchive.require(CONFIGURATION_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert VariableResult.vendor_loadable is True
+    assert VariableResult.near_lossless is True
+    assert VariableNative.sketches[0].profiles[0].coordinates == pytest.approx(
+        (0.0, 0.0, 8.0)
+    )
+    assert VariableNative.operations[0].direction_code == 1
+    assert VariableNative.operations[0].length_mm == pytest.approx(12.0)
 
 
 # source XZ coordinates and direction are normalized into the SOLIDWORKS Top basis

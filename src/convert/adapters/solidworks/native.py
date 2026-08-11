@@ -59,6 +59,9 @@ from .cmgr import (
 )
 from .config0 import encode_config0_stream
 from .config0_box_program import EncodeProgram as EncodeBoxConfigProgram
+from .config0_circle_reverse_program import (
+    EncodeProgram as EncodeReverseCircleConfigProgram,
+)
 from .container import SldprtFormatError
 from .definition import encode_definition_stream
 from .format import (
@@ -110,6 +113,9 @@ from .resolved_bossrevcut_program import EncodeProgram as EncodeBossRevCutProgra
 from .resolved_bossshell_program import EncodeProgram as EncodeBossShellProgram
 from .resolved_box_program import EncodeProgram as EncodeBoxProgram
 from .resolved_circle_program import EncodeProgram as EncodeCircleProgram
+from .resolved_circle_reverse_program import (
+    EncodeProgram as EncodeReverseCircleProgram,
+)
 from .resolved_right_program import EncodeProgram as EncodeRightProgram
 from .resolved_revolve_program import EncodeProgram as EncodeRevolveProgram
 from .resolved_top_program import EncodeProgram as EncodeTopProgram
@@ -1041,6 +1047,62 @@ def EncodeCircCfg(
     )
 
 
+# reverse circles specialize the traced negative depth bounding volume
+def EncodeReverseCircCfg(
+    CenterX: float,
+    CenterY: float,
+    RadiusValue: float,
+    DepthValue: float,
+) -> bytes:
+    if (
+        not all(
+            math.isfinite(ItemValue)
+            for ItemValue in (CenterX, CenterY, RadiusValue, DepthValue)
+        )
+        or min(RadiusValue, DepthValue) <= 0.0
+    ):
+        raise SldprtFormatError(
+            "reverse circle configuration requires finite positive radius and depth"
+        )
+    CenterXMetres = CenterX / _MILLIMETRES
+    CenterYMetres = CenterY / _MILLIMETRES
+    RadiusMetres = RadiusValue / _MILLIMETRES
+    DepthMetres = DepthValue / _MILLIMETRES
+    CenterZMetres = -DepthMetres / 2.0
+    return EncodeReverseCircleConfigProgram(
+        {
+            824: RadiusValue,
+            2376: CenterXMetres,
+            2384: CenterYMetres,
+            2392: CenterZMetres,
+            2400: CenterXMetres + RadiusMetres,
+            2408: CenterYMetres + RadiusMetres,
+            2416: 0.0,
+            2424: CenterXMetres - RadiusMetres,
+            2432: CenterYMetres - RadiusMetres,
+            2440: -DepthMetres,
+            2448: math.sqrt(RadiusMetres**2 * 2.0 + CenterZMetres**2),
+        }
+    )
+
+
+# reverse depth copies preserve their traced native orientation during specialization
+def EncodeReverseCircleResolved(DepthValue: float) -> bytes:
+    if not math.isfinite(DepthValue) or DepthValue <= 0.0:
+        raise SldprtFormatError("reverse circle depth must be finite and positive")
+    DepthMetres = DepthValue / _MILLIMETRES
+    return EncodeReverseCircleProgram(
+        {
+            11343: DepthMetres,
+            11415: -DepthMetres,
+            11741: DepthMetres,
+            11765: DepthMetres,
+            11903: DepthMetres,
+            11927: DepthMetres,
+        }
+    )
+
+
 # recovered native programs select only feature histories proved editable in SOLIDWORKS
 def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved | None:
     if len(AuthoredObjs) == 8:
@@ -1138,7 +1200,7 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
     else:
         if (
             CircleValue is None
-            or EndCodes != (0, 0)
+            or EndCodes not in {(0, 0), (1, 0)}
             or PlaneObjectId != 2
             or PadObject.object_id != 33
         ):
@@ -1156,37 +1218,51 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
             abs_tol=1.0e-10,
         ):
             return None
-        ProgramData = EncodeCircleProgram()
+        IsReverseCircle = DirectionCode == 1
+        ProgramData = (
+            EncodeReverseCircleResolved(DepthValue)
+            if IsReverseCircle
+            else EncodeCircleProgram()
+        )
         HeaderStamps = _CIRCLE_BOSS_HEADER_STAMPS
         CenterXMetres = CenterX / _MILLIMETRES
         CenterYMetres = CenterY / _MILLIMETRES
         RadiusMetres = RadiusValue / _MILLIMETRES
         DepthMetres = DepthValue / _MILLIMETRES
-        CenterZMetres = DepthMetres / 2.0
+        CenterZMetres = DepthMetres * (-0.5 if IsReverseCircle else 0.5)
         HeaderBoundsData = (
             CenterXMetres,
             CenterYMetres,
             CenterZMetres,
             CenterXMetres + RadiusMetres,
             CenterYMetres + RadiusMetres,
-            DepthMetres,
+            0.0 if IsReverseCircle else DepthMetres,
             CenterXMetres - RadiusMetres,
             CenterYMetres - RadiusMetres,
-            0.0,
+            -DepthMetres if IsReverseCircle else 0.0,
             math.sqrt(RadiusMetres**2 * 2.0 + CenterZMetres**2),
         )
         HeaderCreationData = HeaderStamps[0][0] - 1
-        Config0Data = EncodeCircCfg(
-            CenterX,
-            CenterY,
-            RadiusValue,
-            DepthValue,
+        Config0Data = (
+            EncodeReverseCircCfg(
+                CenterX,
+                CenterY,
+                RadiusValue,
+                DepthValue,
+            )
+            if IsReverseCircle
+            else EncodeCircCfg(
+                CenterX,
+                CenterY,
+                RadiusValue,
+                DepthValue,
+            )
         )
         EditData = FeatureEdit(
             radii_mm=(RadiusValue,),
             arc_centres_mm=((CenterX, CenterY),),
             depth_mm=DepthValue,
-            update_depth_copies=True,
+            update_depth_copies=not IsReverseCircle,
             SketchDimensionsMm=(RadiusValue * 2.0,),
         )
     return _VendorResolved(

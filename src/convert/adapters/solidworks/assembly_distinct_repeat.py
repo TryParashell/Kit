@@ -14,7 +14,7 @@ from types import MappingProxyType
 from typing import Any
 
 from .assembly_distinct5_programs import EncodeField, StreamPrograms
-from .assembly_repeat import RepeatItem, _OccurHash
+from .assembly_repeat import RepeatItem, _IsIdentityBasis, _OccurHash
 from .container import SldprtFormatError
 
 
@@ -102,11 +102,18 @@ def _EmitOps(
     Operations: Sequence[tuple[int, int, int, str, Any]],
     Overrides: Mapping[int, Any],
     BasePos: int = 0,
+    BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
     OutputData = bytearray()
+    BasisMap = BasisValues or {}
     for StartPos, _FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
         FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
         OutputData.extend(EncodeField(KindName, FieldValue))
+        BasisValue = BasisMap.get(StartPos - BasePos)
+        if BasisValue is not None:
+            if KindName != "primitive:uchar" or FieldValue != 1:
+                raise SldprtFormatError("assembly transform basis marker is invalid")
+            OutputData.extend(EncodeField("direct:9d", BasisValue))
     return bytes(OutputData)
 
 
@@ -198,12 +205,15 @@ def _EncodeConfig(
     CoreItems: tuple[RepeatItem, ...],
 ) -> bytes:
     ItemCount = len(CoreItems)
+    BasisCount = sum(
+        not _IsIdentityBasis(ItemValue.BasisVals) for ItemValue in CoreItems
+    )
     BaseShift = ItemCount - TracedCount
     InsertPos, UnitWidth = InsertSpecs["Contents/Config-0"]
     PrefixData = _EmitOps(
         _SliceOps("Contents/Config-0", 0, InsertPos),
         {
-            18: 2218 + (UnitWidth * ItemCount),
+            18: 2218 + (UnitWidth * ItemCount) + (72 * BasisCount),
             48: ModelName,
             88: ItemCount,
             109: 9 + BaseShift,
@@ -214,7 +224,16 @@ def _EncodeConfig(
             584: 16 + BaseShift,
             586: CoreItems[0].OccurName,
             606: 12 + BaseShift,
+            276: CoreItems[0].TransX,
+            284: CoreItems[0].TransY,
+            292: CoreItems[0].TransZ,
+            **({275: 1} if not _IsIdentityBasis(CoreItems[0].BasisVals) else {}),
         },
+        BasisValues=(
+            {275: CoreItems[0].BasisVals}
+            if not _IsIdentityBasis(CoreItems[0].BasisVals)
+            else None
+        ),
     )
     UnitData = bytearray()
     for ItemIndex, ItemValue in enumerate(CoreItems[1:], 2):
@@ -239,7 +258,7 @@ def _EncodeConfig(
                     153: HashValue,
                     169: ItemValue.TransX,
                     177: ItemValue.TransY,
-                    185: ItemValue.TransZ - 0.005,
+                    185: ItemValue.TransZ,
                     283: 3 + ItemIndex,
                     293: ItemValue.ConfigName,
                     341: 14 + ItemIndex,
@@ -250,8 +269,14 @@ def _EncodeConfig(
                     418: 16 + BaseShift,
                     420: ItemValue.OccurName,
                     440: 12 + (4 * ItemIndex) + BaseShift,
+                    **({168: 1} if not _IsIdentityBasis(ItemValue.BasisVals) else {}),
                 },
                 UnitStart,
+                (
+                    {168: ItemValue.BasisVals}
+                    if not _IsIdentityBasis(ItemValue.BasisVals)
+                    else None
+                ),
             )
         )
     SuffixStart = InsertPos + ((TracedCount - 1) * UnitWidth)

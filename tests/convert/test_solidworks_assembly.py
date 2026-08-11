@@ -27,13 +27,7 @@ from convert.adapters.solidworks.adapter import (
     _neutral_mate_kind,
     _neutral_mate_value,
 )
-from convert.adapters.freecad import read_freecad
 from convert.adapters.solidworks.assembly import (
-    MATE_LOSS_ENTITY_FRAME,
-    MATE_LOSS_EXPRESSION,
-    MATE_LOSS_GROUP_MEMBERSHIP,
-    MATE_LOSS_REASONS,
-    MATE_LOSS_VALUE_MISSING,
     MATE_VALUE_SEMANTICS,
     NATIVE_MATE_ALIGNMENTS,
     NATIVE_MATE_ALIGNMENT_BY_CODE,
@@ -53,31 +47,147 @@ from convert.adapters.solidworks.assembly import (
     _mate_alignment,
     _mate_entities,
     _mate_kind,
+    _native_feature_id,
     decode_mate_list,
     decode_native_assembly,
-    encode_native_assembly,
 )
+from convert.adapters.solidworks.assembly_core import AsmCoreItem, EncodeAsmCore
 from interchange import (
-    AssemblyData,
     Capability,
-    ComponentDefinition,
     ComponentInstance,
     ComponentKind,
-    Configuration,
     MateAlignment,
-    MateConstraint,
-    MateEntity,
     MateEntityKind,
-    MateGroup,
     MateKind,
-    Matrix4,
-    ParameterValue,
     ValueKind,
 )
 
 RANDOM = Path(__file__).resolve().parents[2] / "examples" / "Random"
 ASSEMBLY = RANDOM / "V8_engine.SLDASM"
 CONROD = RANDOM / "Pistons" / "Conrod.SLDASM"
+
+
+# mixed transform tests need repeated and distinct native component paths
+def MixedCoreItems() -> tuple[AsmCoreItem, ...]:
+    QuarterTurn = (0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+    HalfTurn = (-1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0)
+    return (
+        AsmCoreItem(
+            "unit_1-1",
+            "C:\\generated\\unit_1.SLDPRT",
+            0.01,
+            0.02,
+            0.03,
+            FileStamp=123456,
+            BasisVals=QuarterTurn,
+        ),
+        AsmCoreItem(
+            "unit_1-2",
+            "C:\\generated\\unit_1.SLDPRT",
+            0.04,
+            0.05,
+            0.06,
+            FileStamp=123456,
+        ),
+        AsmCoreItem(
+            "unit_2-1",
+            "C:\\generated\\unit_2.SLDPRT",
+            0.07,
+            0.08,
+            0.09,
+            FileStamp=123456,
+            BasisVals=HalfTurn,
+        ),
+    )
+
+
+# rotated occurrences must persist their complete affine transform records
+def test_mixed_core_writes_typed_rotation_bases_and_exact_translations() -> None:
+    RotatedItems = MixedCoreItems()
+    IdentityVals = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    IdentityItems = tuple(
+        replace(ItemValue, BasisVals=IdentityVals) for ItemValue in RotatedItems
+    )
+    RotatedData = EncodeAsmCore("RotatedMixed", "Default", RotatedItems)[
+        "Contents/Config-0"
+    ]
+    IdentityData = EncodeAsmCore("RotatedMixed", "Default", IdentityItems)[
+        "Contents/Config-0"
+    ]
+    assert len(RotatedData) - len(IdentityData) == 144
+    assert struct.unpack_from("<i", RotatedData, 18)[0] == (
+        struct.unpack_from("<i", IdentityData, 18)[0] + 144
+    )
+    for ItemValue in RotatedItems:
+        HasBasis = ItemValue.BasisVals != IdentityVals
+        ExpectedData = bytearray((int(HasBasis),))
+        if HasBasis:
+            ExpectedData.extend(struct.pack("<9d", *ItemValue.BasisVals))
+        ExpectedData.extend(
+            struct.pack(
+                "<4dB",
+                ItemValue.TransX,
+                ItemValue.TransY,
+                ItemValue.TransZ,
+                1.0,
+                0,
+            )
+        )
+        assert bytes(ExpectedData) in RotatedData
+
+
+# static transform routes cover every traced one two and three occurrence core
+def StaticCoreSets() -> tuple[tuple[AsmCoreItem, ...], ...]:
+    PathSets = (
+        ("unit_a.SLDPRT",),
+        ("unit_a.SLDPRT", "unit_a.SLDPRT"),
+        ("unit_a.SLDPRT", "unit_b.SLDPRT"),
+        ("unit_a.SLDPRT", "unit_a.SLDPRT", "unit_a.SLDPRT"),
+    )
+    return tuple(
+        tuple(
+            AsmCoreItem(
+                f"unit_{ItemIndex + 1}-1",
+                f"C:\\generated\\{PathName}",
+                0.111 + ItemIndex,
+                0.222 + ItemIndex,
+                0.333 + ItemIndex,
+            )
+            for ItemIndex, PathName in enumerate(PathNames)
+        )
+        for PathNames in PathSets
+    )
+
+
+# static typed programs replace every incidental template translation
+@pytest.mark.parametrize("CoreItems", StaticCoreSets())
+def test_static_core_writes_exact_translations(
+    CoreItems: tuple[AsmCoreItem, ...],
+) -> None:
+    ConfigData = EncodeAsmCore("StaticCore", "Default", CoreItems)["Contents/Config-0"]
+    for ItemValue in CoreItems:
+        for TransValue in (ItemValue.TransX, ItemValue.TransY, ItemValue.TransZ):
+            assert struct.pack("<d", TransValue) in ConfigData
+
+
+# untraced static bases must stop at the direct binary encoder boundary
+@pytest.mark.parametrize("CoreItems", StaticCoreSets())
+def test_static_core_rejects_nonidentity_basis(
+    CoreItems: tuple[AsmCoreItem, ...],
+) -> None:
+    QuarterTurn = (0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+    RotatedItems = (replace(CoreItems[0], BasisVals=QuarterTurn), *CoreItems[1:])
+    with pytest.raises(ValueError, match="requires identity component bases"):
+        EncodeAsmCore("StaticCore", "Default", RotatedItems)
+
+
+# occurrence feature identifiers are sequence keys rather than fixation flags
+def test_native_feature_ids_do_not_infer_fixed_state() -> None:
+    FixedItem = ComponentInstance("item", "Unit-1", "unit", "root", fixed=True)
+    FloatItem = replace(FixedItem, fixed=False)
+    assert _native_feature_id(FixedItem, 0) == 24
+    assert _native_feature_id(FloatItem, 0) == 24
+    assert _native_feature_id(FloatItem, 1) == 25
 
 
 @pytest.fixture(scope="module")
@@ -424,11 +534,13 @@ def test_massive_assembly_recovers_exact_transforms_and_state(document) -> None:
     assert piston.transform.values[3] == pytest.approx(-1.209188127289168e-15)
     assert piston.transform.values[7] == pytest.approx(79.99530923564972)
     assert piston.transform.values[11] == pytest.approx(-79.99530923564954)
-    assert next(
+    FeatureItem = next(
         instance
         for instance in assembly.instances
         if instance.id == "sldasm:instance:211"
-    ).fixed
+    )
+    assert FeatureItem.attributes["native_feature_id"] == 24
+    assert not FeatureItem.fixed
     assert all(not instance.suppressed for instance in assembly.instances)
 
 

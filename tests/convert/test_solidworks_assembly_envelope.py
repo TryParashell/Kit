@@ -143,6 +143,27 @@ def test_generated_assembly_header_is_the_coupled_native_history_header() -> Non
     assert "Piston-1".encode("utf-16le") in generated.streams["Header2"]
 
 
+# unsupported fixed state must fail before vendor loadability is claimed
+def test_fixed_component_fails_closed() -> None:
+    SourceData = assembly_document()
+    AssemblyValue = SourceData.assembly
+    FixedData = replace(
+        SourceData,
+        assembly=replace(
+            AssemblyValue,
+            instances=(
+                replace(AssemblyValue.instances[0], fixed=True),
+                *AssemblyValue.instances[1:],
+            ),
+        ),
+    )
+    GeneratedData = _generated_streams(FixedData)
+    assert GeneratedData.vendor_loadable is False
+    assert GeneratedData.application_usable is False
+    assert GeneratedData.compatibility == "kit-neutral-only"
+    assert "component_structure_incomplete:1" in GeneratedData.unexpressed
+
+
 def test_assembly_envelope_reports_incomplete_for_unencodable_object_names() -> None:
     source = assembly_document()
     envelope = encode_native_assembly_envelope(source, "Engine", ("Piston-1",), ("",))
@@ -253,6 +274,83 @@ def test_repeated_component_core_writes_the_actual_definition_count() -> None:
     assert StreamsMap["Contents/Definition"][3479:3483] == struct.pack(
         "<i", len(CoreItems)
     )
+
+
+# rotation recurrence preserves every component transform field
+def test_recurrence_cores_write_translation_and_rotation_values() -> None:
+    BasisVals = (0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+    RouteItems = (
+        tuple(
+            AsmCoreItem(
+                f"repeat-1-{ItemIndex}",
+                "C:\\generated\\repeat.SLDPRT",
+                0.123 if ItemIndex == 1 else 0.456 + ItemIndex,
+                0.234 if ItemIndex == 1 else 0.567 + ItemIndex,
+                0.345 if ItemIndex == 1 else 0.678 + ItemIndex,
+            )
+            for ItemIndex in range(1, 5)
+        ),
+        tuple(
+            AsmCoreItem(
+                f"distinct-{ItemIndex}-1",
+                f"C:\\generated\\distinct-{ItemIndex}.SLDPRT",
+                0.123 if ItemIndex == 1 else 0.456 + ItemIndex,
+                0.234 if ItemIndex == 1 else 0.567 + ItemIndex,
+                0.345 if ItemIndex == 1 else 0.678 + ItemIndex,
+                FileStamp=2000 + ItemIndex,
+            )
+            for ItemIndex in range(1, 4)
+        ),
+        (
+            AsmCoreItem(
+                "hybrid-1-1",
+                "C:\\generated\\hybrid-1.SLDPRT",
+                0.123,
+                0.234,
+                0.345,
+                FileStamp=3001,
+            ),
+            AsmCoreItem(
+                "hybrid-1-2",
+                "C:\\generated\\hybrid-1.SLDPRT",
+                2.456,
+                2.567,
+                2.678,
+                FileStamp=3001,
+            ),
+            AsmCoreItem(
+                "hybrid-2-1",
+                "C:\\generated\\hybrid-2.SLDPRT",
+                3.456,
+                3.567,
+                3.678,
+                FileStamp=3002,
+            ),
+            AsmCoreItem(
+                "hybrid-3-1",
+                "C:\\generated\\hybrid-3.SLDPRT",
+                4.456,
+                4.567,
+                4.678,
+                FileStamp=3003,
+            ),
+        ),
+    )
+    for RouteIndex, CoreItems in enumerate(RouteItems, 1):
+        RotatedItems = (replace(CoreItems[0], BasisVals=BasisVals), *CoreItems[1:])
+        PlainConfig = EncodeAsmCore(
+            f"TransformRoute{RouteIndex}", "Default", CoreItems
+        )["Contents/Config-0"]
+        RotatedConfig = EncodeAsmCore(
+            f"TransformRoute{RouteIndex}", "Default", RotatedItems
+        )["Contents/Config-0"]
+        assert len(RotatedConfig) == len(PlainConfig) + 72
+        assert struct.unpack_from("<I", RotatedConfig, 18)[0] == (
+            struct.unpack_from("<I", PlainConfig, 18)[0] + 72
+        )
+        assert struct.pack("<9d", *BasisVals) in RotatedConfig
+        for ExpectedValue in (0.123, 0.234, 0.345):
+            assert struct.pack("<d", ExpectedValue) in RotatedConfig
 
 
 # mixed component paths verify independent occurrence and unique-file growth
