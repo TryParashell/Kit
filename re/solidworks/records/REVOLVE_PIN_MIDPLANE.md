@@ -89,3 +89,21 @@ properties, expose `Sketch1`, `Revolve1`, and both native angular structures,
 and respond to an independent `D1@Revolve1` edit while preserving the symmetric
 two-end state. CAD software and COM automation remain oracle-only and never
 participate in runtime conversion.
+
+## Current verification state
+
+The family-local oracle author and bounded trace harness are prepared under
+`.rescratch/revolve_pin_midplane/`. Both scripts compile successfully without
+executing their imports. The trace harness enforces unique stream-length guards,
+authors the exact comparison part, performs one combined object trace for
+ResolvedFeatures and Config-0, performs separate primitive traces for the two
+streams, records complete tiling and counter evidence, and sweeps every tracked
+SOLIDWORKS and debugger process in a `finally` block.
+
+The sandbox did not grant executable permission for the external Python and
+SOLIDWORKS oracle process. The escalation was interrupted before the author or
+debugger started, no oracle output or trace artifact was created, and a
+subsequent process query found no SOLIDWORKS, cdb, crash-handler, or helper
+process. The exact stream programs and target-application gate therefore remain
+unexecuted. No production serializer or dispatch was added, and the public
+writer remains fail-closed for this source family.
