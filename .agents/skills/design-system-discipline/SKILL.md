@@ -31,7 +31,7 @@ FORBIDDEN:
 </button>
 ```
 
-No hand-rolled buttons, inputs, cards, or tables when a system component exist s. Variant/size props express intent; arbitrary one-off class soup is entropy and is rejected.
+No hand-rolled buttons, inputs, cards, or tables when a system component exists. Variant/size props express intent; arbitrary one-off class soup is entropy and is rejected.
 
 ## Rule 2: Shared Layout Components. Pages Don't Invent Structure.
 
