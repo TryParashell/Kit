@@ -10,23 +10,23 @@ to you under it immediately and permanently.
 
 # `Contents/Config-0-ResolvedFeatures` — segmentation, header semantics, and the field-program debt
 
-Status: **partial**. The stream's tag framing, its 6-byte header, its tree-node name records and its
-per-feature authored fields are decoded and gated against vendor bytes. The historical 9653-byte
+Status: **partial by feature-family coverage, closed for the shipped programs**. The stream's tag
+framing, 6-byte header, tree-node records, result-body graph, and the typed fields used by every
+shipped native program are decoded and emitted without donor spans. The historical 9653-byte
 invariant census came from the old 265-object under-walk; the current 321-object grammar assigns
 291 more bytes to object framing and leaves 9362 invariant run bytes. Neither number is an opaque
-payload: the former 9.6 KB `moICE_c` wall is a conditional
-15/60/64-child result-body graph with counted face, entity and chooser collections. The static
-archive walker now reaches **18761 objects** across 32 independent donor streams, and **17 streams**
-segment, tile and re-emit byte for byte. That is archive verification, not application acceptance
-or donor-free synthesis. A primitive-reader trace now accounts for all **11075 bytes** without
-classifying any unknown byte block: 9876 bytes are consumed by typed archive reads, 1161 are class
-name or CString payload text, and the remaining 38 are four counted arrays and one depth scalar.
-This is complete wire accounting, not yet a constructor from arbitrary FCStd feature graphs.
-**No current Kit-generated part with a body opens.** A candidate built from Kit's 25 streams plus
-the exact vendor resolved stream reached SOLIDWORKS' rebuild prompt but closed after rebuild; the
-same container with the stream deleted opened with **0 bodies, no mass and 12 document-state
-folders**. This is an identity-coupling failure between the resolved graph and Kit's independently
-allocated records, not evidence that the resolved bytes remain untyped.
+payload: the former 9.6 KB `moICE_c` wall is a conditional 15/60/64-child result-body graph with
+counted face, entity, and chooser collections. The static archive walker reaches **18761 objects**
+across 32 independent research streams, and **17 streams** segment, tile, and re-emit byte for byte.
+A primitive-reader trace accounts for all **11075 bytes** of the rectangular reference without an
+unknown block: 9876 bytes are typed archive reads, 1161 are class-name or CString text, and the
+remaining 38 are counted arrays and one depth scalar.
+
+The earlier identity-coupling failure is resolved for the recovered native constructors. Current
+Kit-generated boxes, cylinders, rectangular and circular pads, pocket chains, revolutions, grooves,
+fillets, chamfers, shells, and patterns load and rebuild through their live SOLIDWORKS oracle gates.
+This does not make the stream a constructor for arbitrary FCStd graphs; unsupported histories still
+fail closed.
 
 `Contents/Config-0-LWDATA` and `Contents/DisplayLists` are not blockers. In the measured
 `para417_e2e` matrix, deleting either stream or replacing it with four zero bytes preserved the
@@ -191,17 +191,17 @@ bytes. It re-emits the five fully bounded modern traces byte for byte; the multi
 explicit guarded tails, and the two older vendor traces retain their separately documented later
 tail ownership.
 
-| trace              | objects | gap-free tiling | current boundary status       |
-| ------------------ | ------: | --------------- | ----------------------------- |
-| `baseline`         |     321 | yes             | exact                          |
-| `circle`           |     285 | yes             | exact                          |
-| `cutbase`          |     536 | yes             | exact                          |
-| `padplane`         |     536 | yes             | exact                          |
-| `planetop`         |     321 | yes             | exact                          |
-| `twopad`           |     400 | yes             | explicit guarded sketch tail  |
-| `three`            |     615 | yes             | explicit guarded sketch tail  |
-| `vendor_cojinete`  |     573 | yes             | older generation later tail   |
-| `vendor_ring`      |     916 | yes             | older generation later tails  |
+| trace             | objects | gap-free tiling | current boundary status      |
+| ----------------- | ------: | --------------- | ---------------------------- |
+| `baseline`        |     321 | yes             | exact                        |
+| `circle`          |     285 | yes             | exact                        |
+| `cutbase`         |     536 | yes             | exact                        |
+| `padplane`        |     536 | yes             | exact                        |
+| `planetop`        |     321 | yes             | exact                        |
+| `twopad`          |     400 | yes             | explicit guarded sketch tail |
+| `three`           |     615 | yes             | explicit guarded sketch tail |
+| `vendor_cojinete` |     573 | yes             | older generation later tail  |
+| `vendor_ring`     |     916 | yes             | older generation later tails |
 
 The earlier 265-object count was an under-walk that stopped before the recovered result-body graph.
 
@@ -293,15 +293,15 @@ Wrapper calls intentionally overlap: for example `AR_get_short` delegates to `AR
 2939 positions and 489 semantic `(type, return-site)` programs. Their byte union is **9876 bytes**.
 The 1199 bytes outside that union split exactly as follows:
 
-| bytes | encoding path | recovered meaning |
-| ----: | ------------- | ----------------- |
-|  1161 | direct class-name and CString buffers | text payload read after the archive length primitive |
-|     4 | stream prologue | `u32` Config-0 continuation base 109 |
-|    16 | `moSketchChain_c` counted array | four `u32` entity indices 1, 2, 3, 4 |
-|     4 | `moSketchChain_c` counted array | one `u32` zero entry |
-|     4 | enclosing chooser array after `moBBoxCenterData_c` | one `u32` zero entry |
-|     2 | display-dimension sequence | one `u16` zero entry |
-|     8 | extrusion depth copy | `f64` 0.01 metres |
+| bytes | encoding path                                      | recovered meaning                                    |
+| ----: | -------------------------------------------------- | ---------------------------------------------------- |
+|  1161 | direct class-name and CString buffers              | text payload read after the archive length primitive |
+|     4 | stream prologue                                    | `u32` Config-0 continuation base 109                 |
+|    16 | `moSketchChain_c` counted array                    | four `u32` entity indices 1, 2, 3, 4                 |
+|     4 | `moSketchChain_c` counted array                    | one `u32` zero entry                                 |
+|     4 | enclosing chooser array after `moBBoxCenterData_c` | one `u32` zero entry                                 |
+|     2 | display-dimension sequence                         | one `u16` zero entry                                 |
+|     8 | extrusion depth copy                               | `f64` 0.01 metres                                    |
 
 The counted-array prefixes are typed `u16` reads in the 9876-byte set; only their bulk elements use
 the direct buffer path. Consequently there is no residual byte span in the 11075-byte stream. The
@@ -418,3 +418,37 @@ the visible application under cdb and use no SOLIDWORKS COM API.
 
 The fixture harness prints the per-donor blockers; the object total is the sum of `object_count`
 over its `donors` array and must be at least 18761, with at least 17 byte-identical round trips.
+
+## 10. Dimensioned circle program
+
+The diameter-driven circular boss was traced independently from the older undimensioned circle
+sample. Its resolved stream is 12,514 bytes and closes as 338 objects, 49 class definitions, 2,873
+typed field operations, and 538 serializer-owner callsites, with no missing interval and no opaque
+or donor span. `EncodeProgram()` reproduces the complete reference stream byte for byte.
+
+The recovered identities differ materially from the older circular program:
+
+- `Sketch1` is object 26 and `Boss-Extrude1` is object 33;
+- sketch `D1` is a driving diameter scalar at byte 7057;
+- the boss depth scalar is at byte 11343 with five coupled copies;
+- the geometric circle starts at 17 degrees in the stored sketch record; and
+- the circle record serializes its centre point before its on-curve marker, the opposite order from
+  the older circular sample.
+
+The generic locator previously interpreted bytes 10519 and 10525 as direction and end-condition
+flags. In this program those values are `0x0b` and `0x64`, while the typed end-specification still
+decodes to normal blind `(0, 0)`. Patching the guessed offsets caused deterministic process death in
+`OpenDoc6`; leaving the already-correct typed end specification intact restores byte-identical
+default emission and vendor loading.
+
+A separately authored reversed circular boss expands this stream from 12,514 to 12,700 bytes and
+its `Config-0` from 25,158 to 25,190 bytes. The feature-tree flags change from `0x40000140` to
+`0xc0000140`, but applying that flag alone to a first-principles file leaves the live
+`ReverseDirection` property false and rebuilds the original positive-direction body. The current
+writer consequently refuses reversed circular bosses instead of treating that flag as a semantic
+direction field.
+
+The generated 5 mm radius by 10 mm depth part opens with one body and exposes both
+`D1@Sketch1 = 10 mm` and `D1@Boss-Extrude1 = 10 mm`. Driving the diameter to 16 mm rebuilds to
+2,010.619298297468 mm³, and driving the depth to 12 mm rebuilds to 942.477796076938 mm³. These are
+live application measurements, not decoder inferences.

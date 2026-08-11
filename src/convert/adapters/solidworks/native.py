@@ -24,8 +24,10 @@ from interchange import (
     CadDocument,
     Capability,
     ChamferFeature,
+    CircleCurve,
     CircleGeometry,
     CircularPatternFeature,
+    CylinderSurface,
     ExtrusionEndCondition,
     ExtrusionFeature,
     FeatureKind,
@@ -582,7 +584,7 @@ _TOP_BOSS_HEADER_STAMPS = ((1785840649, 1785840649), (1785840649,))
 # the right-plane boss program carries distinct feature-action identities
 _RIGHT_BOSS_HEADER_STAMPS = ((1785840740, 1785840741), (1785840741,))
 # the circular boss program carries these feature-action identities
-_CIRCLE_BOSS_HEADER_STAMPS = ((1785797012, 1785797012), (1785797012,))
+_CIRCLE_BOSS_HEADER_STAMPS = ((1786472138, 1786472138), (1786472138,))
 # the blind boss-cut program carries four coupled feature-action identities
 _BOSS_CUT_HEADER_STAMPS = (
     (1785839433, 1785839433),
@@ -982,6 +984,63 @@ def encode_native_part(document: CadDocument, model_name: str) -> NativePartStre
     )
 
 
+# dimensioned circles specialize the closed typed config program with exact cache semantics
+def EncodeCircCfg(
+    CenterX: float,
+    CenterY: float,
+    RadiusValue: float,
+    DepthValue: float,
+) -> bytes:
+    if (
+        not all(
+            math.isfinite(ItemValue)
+            for ItemValue in (CenterX, CenterY, RadiusValue, DepthValue)
+        )
+        or min(RadiusValue, DepthValue) <= 0.0
+    ):
+        raise SldprtFormatError(
+            "circle configuration requires finite positive radius and depth"
+        )
+    CenterXMetres = CenterX / _MILLIMETRES
+    CenterYMetres = CenterY / _MILLIMETRES
+    RadiusMetres = RadiusValue / _MILLIMETRES
+    DepthMetres = DepthValue / _MILLIMETRES
+    CenterZMetres = DepthMetres / 2.0
+    return EncodeBoxConfigProgram(
+        {
+            70: 33056,
+            222: 4,
+            824: RadiusValue,
+            2316: 1771999328,
+            2320: 31271357,
+            2376: CenterXMetres,
+            2384: CenterYMetres,
+            2392: CenterZMetres,
+            2400: CenterXMetres + RadiusMetres,
+            2408: CenterYMetres + RadiusMetres,
+            2416: DepthMetres,
+            2424: CenterXMetres - RadiusMetres,
+            2432: CenterYMetres - RadiusMetres,
+            2448: math.sqrt(RadiusMetres**2 * 2.0 + CenterZMetres**2),
+            2596: 103,
+            2914: 33,
+            2918: 33,
+            2942: 600,
+            2950: 600,
+            4219: 0.0,
+            21879: 115,
+            21888: 18000,
+            21892: 2025268,
+            21964: 31271357,
+            21968: 1770659972,
+            24057: 10,
+            24095: 0,
+            24220: 31271357,
+            24224: 1710964613,
+        }
+    )
+
+
 # recovered native programs select only feature histories proved editable in SOLIDWORKS
 def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved | None:
     if len(AuthoredObjs) == 8:
@@ -1031,6 +1090,9 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
         return None
     DirectionCode, TerminationCode = EndCodes
     IsDimensionedBox = False
+    HeaderBoundsData = None
+    HeaderCreationData = None
+    Config0Data = None
     if BoundsValue is not None:
         IsDimensionedBox = (
             PadObject.properties
@@ -1060,6 +1122,7 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
         if ProgramValue is None:
             return None
         ProgramData, HeaderStamps = ProgramValue
+        Config0Data = EncodeBoxConfigProgram() if IsDimensionedBox else None
         EditData = FeatureEdit(
             corners_mm=rectangle_corners_mm(*BoundsValue),
             depth_mm=DepthValue,
@@ -1077,19 +1140,54 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
             CircleValue is None
             or EndCodes != (0, 0)
             or PlaneObjectId != 2
-            or PadObject.object_id != 32
+            or PadObject.object_id != 33
         ):
             return None
         CenterX, CenterY, RadiusValue = CircleValue
+        if not math.isclose(
+            CenterX,
+            0.0,
+            rel_tol=0.0,
+            abs_tol=1.0e-10,
+        ) or not math.isclose(
+            CenterY,
+            0.0,
+            rel_tol=0.0,
+            abs_tol=1.0e-10,
+        ):
+            return None
         ProgramData = EncodeCircleProgram()
         HeaderStamps = _CIRCLE_BOSS_HEADER_STAMPS
+        CenterXMetres = CenterX / _MILLIMETRES
+        CenterYMetres = CenterY / _MILLIMETRES
+        RadiusMetres = RadiusValue / _MILLIMETRES
+        DepthMetres = DepthValue / _MILLIMETRES
+        CenterZMetres = DepthMetres / 2.0
+        HeaderBoundsData = (
+            CenterXMetres,
+            CenterYMetres,
+            CenterZMetres,
+            CenterXMetres + RadiusMetres,
+            CenterYMetres + RadiusMetres,
+            DepthMetres,
+            CenterXMetres - RadiusMetres,
+            CenterYMetres - RadiusMetres,
+            0.0,
+            math.sqrt(RadiusMetres**2 * 2.0 + CenterZMetres**2),
+        )
+        HeaderCreationData = HeaderStamps[0][0] - 1
+        Config0Data = EncodeCircCfg(
+            CenterX,
+            CenterY,
+            RadiusValue,
+            DepthValue,
+        )
         EditData = FeatureEdit(
             radii_mm=(RadiusValue,),
             arc_centres_mm=((CenterX, CenterY),),
             depth_mm=DepthValue,
-            reversed=False,
-            end_condition_code=0,
             update_depth_copies=True,
+            SketchDimensionsMm=(RadiusValue * 2.0,),
         )
     return _VendorResolved(
         patch_features(
@@ -1097,7 +1195,9 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> _VendorResolved |
             {0: EditData},
         ),
         HeaderStamps,
-        Config0Payload=(EncodeBoxConfigProgram() if IsDimensionedBox else None),
+        HeaderBounds=HeaderBoundsData,
+        HeaderCreation=HeaderCreationData,
+        Config0Payload=Config0Data,
     )
 
 
@@ -2285,6 +2385,127 @@ def _HasFreeCadBoxBrep(
     )
 
 
+# primitive cylinders need topology proof before feature history can replace their source boundary representation
+def HasCadCylBrep(
+    DocumentData: CadDocument,
+    RadiusValue: float,
+    HeightValue: float,
+) -> bool:
+    BrepData = DocumentData.brep
+    if (
+        BrepData is None
+        or len(BrepData.vertices) != 2
+        or len(BrepData.curves) != 3
+        or len(BrepData.edges) != 3
+        or len(BrepData.loops) != 3
+        or len(BrepData.surfaces) != 3
+        or len(BrepData.faces) != 3
+        or len(BrepData.regions) != 1
+        or len(BrepData.bodies) != 1
+        or not BrepData.regions[0].solid
+    ):
+        return False
+    CircleData = tuple(
+        ItemData for ItemData in BrepData.curves if isinstance(ItemData, CircleCurve)
+    )
+    LineData = tuple(
+        ItemData for ItemData in BrepData.curves if isinstance(ItemData, LineCurve)
+    )
+    CylinderData = tuple(
+        ItemData
+        for ItemData in BrepData.surfaces
+        if isinstance(ItemData, CylinderSurface)
+    )
+    PlaneData = tuple(
+        ItemData for ItemData in BrepData.surfaces if isinstance(ItemData, PlaneSurface)
+    )
+    if (
+        len(CircleData) != 2
+        or len(LineData) != 1
+        or len(CylinderData) != 1
+        or len(PlaneData) != 2
+    ):
+        return False
+    CircleHeights = sorted(ItemData.center.z for ItemData in CircleData)
+    PlaneHeights = sorted(ItemData.origin.z for ItemData in PlaneData)
+    ExpectedHeights = (0.0, HeightValue)
+    if not all(
+        math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-9)
+        for ActualValue, ExpectedValue in zip(
+            CircleHeights,
+            ExpectedHeights,
+            strict=True,
+        )
+    ) or not all(
+        math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-9)
+        for ActualValue, ExpectedValue in zip(
+            PlaneHeights,
+            ExpectedHeights,
+            strict=True,
+        )
+    ):
+        return False
+    if any(
+        not math.isclose(ItemData.center.x, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(ItemData.center.y, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(
+            ItemData.radius,
+            RadiusValue,
+            rel_tol=0.0,
+            abs_tol=1.0e-9,
+        )
+        or not math.isclose(abs(ItemData.axis.z), 1.0, abs_tol=1.0e-9)
+        or not math.isclose(ItemData.axis.x, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(ItemData.axis.y, 0.0, abs_tol=1.0e-9)
+        for ItemData in CircleData
+    ):
+        return False
+    LineValue = LineData[0]
+    CylinderValue = CylinderData[0]
+    if (
+        not math.isclose(
+            math.hypot(LineValue.origin.x, LineValue.origin.y),
+            RadiusValue,
+            rel_tol=0.0,
+            abs_tol=1.0e-9,
+        )
+        or not math.isclose(LineValue.origin.z, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(LineValue.direction.x, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(LineValue.direction.y, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(abs(LineValue.direction.z), 1.0, abs_tol=1.0e-9)
+        or not math.isclose(CylinderValue.origin.x, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(CylinderValue.origin.y, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(CylinderValue.origin.z, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(
+            CylinderValue.radius,
+            RadiusValue,
+            rel_tol=0.0,
+            abs_tol=1.0e-9,
+        )
+        or not math.isclose(CylinderValue.axis.x, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(CylinderValue.axis.y, 0.0, abs_tol=1.0e-9)
+        or not math.isclose(abs(CylinderValue.axis.z), 1.0, abs_tol=1.0e-9)
+    ):
+        return False
+    VertexHeights = sorted(ItemData.point.z for ItemData in BrepData.vertices)
+    return all(
+        math.isclose(
+            math.hypot(ItemData.point.x, ItemData.point.y),
+            RadiusValue,
+            rel_tol=0.0,
+            abs_tol=1.0e-9,
+        )
+        for ItemData in BrepData.vertices
+    ) and all(
+        math.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1.0e-9)
+        for ActualValue, ExpectedValue in zip(
+            VertexHeights,
+            ExpectedHeights,
+            strict=True,
+        )
+    )
+
+
 # exact freecad boxes lower to one dimensioned rectangle and one blind boss
 def _FreeCadBoxObjects(
     DocumentData: CadDocument,
@@ -2458,6 +2679,155 @@ def _FreeCadBoxObjects(
     )
 
 
+# exact freecad cylinders lower to one radius driven circle and one blind boss
+def BuildCadCylObjs(
+    DocumentData: CadDocument,
+    ObjectIds: dict[str, int],
+) -> tuple[_WriteObject, ...] | None:
+    TimelineData = tuple(
+        FeatureData
+        for FeatureData in sorted(
+            DocumentData.feature_timeline,
+            key=lambda FeatureData: FeatureData.order,
+        )
+        if not _is_native_system_feature(FeatureData)
+    )
+    if len(TimelineData) != 1:
+        return None
+    FeatureData = TimelineData[0]
+    DefinitionData = FeatureData.definition
+    if (
+        DocumentData.source.format_id.casefold() != "freecad.fcstd"
+        or DocumentData.assembly is not None
+        or DocumentData.support_planes
+        or DocumentData.sketches
+        or DocumentData.selections
+        or len(DocumentData.bodies) != 1
+        or DocumentData.bodies[0].final_feature_id != FeatureData.id
+        or len(DocumentData.configurations) != 1
+        or DocumentData.configurations[0].name.casefold() != "default"
+        or not DocumentData.configurations[0].active
+        or DocumentData.configurations[0].parent_id is not None
+        or DocumentData.configurations[0].overrides
+        or DocumentData.configurations[0].suppressed_feature_ids
+        or FeatureData.order != 0
+        or FeatureData.input_feature_ids
+        or FeatureData.sketch_id is not None
+        or FeatureData.selection_ids
+        or FeatureData.configuration_states
+        or FeatureData.suppressed
+        or str(FeatureData.kind).casefold() != FeatureKind.PRIMITIVE.value
+        or FeatureData.operation is not None
+        or not isinstance(DefinitionData, NativeFeatureDefinition)
+        or DefinitionData.format_id.casefold() != "freecad.fcstd"
+        or DefinitionData.type_id != "Part::Cylinder"
+        or FeatureData.provenance is None
+        or any(ItemData.expression is not None for ItemData in DocumentData.parameters)
+    ):
+        return None
+    PathData: dict[str, Parameter] = {}
+    for ItemData in DocumentData.parameters:
+        if ItemData.owner_id != FeatureData.id:
+            return None
+        PathValue = ItemData.attributes.get("freecad_path")
+        if not isinstance(PathValue, str) or not PathValue or PathValue in PathData:
+            return None
+        PathData[PathValue] = ItemData
+    ExpectedData = {
+        "Angle": (ValueKind.ANGLE, 360.0),
+        "FirstAngle": (ValueKind.ANGLE, 0.0),
+        "SecondAngle": (ValueKind.ANGLE, 0.0),
+        "Height": (ValueKind.LENGTH, None),
+        "Radius": (ValueKind.LENGTH, None),
+        "MapMode": (ValueKind.INTEGER, 0),
+        "MapPathParameter": (ValueKind.NUMBER, 0.0),
+        "MapReversed": (ValueKind.BOOLEAN, False),
+        "Visibility": (ValueKind.BOOLEAN, True),
+    }
+    if not set(ExpectedData) <= set(PathData) or any(
+        not _freecad_parameter_matches(PathData[PathName], KindData, ValueData)
+        for PathName, (KindData, ValueData) in ExpectedData.items()
+        if ValueData is not None
+    ):
+        return None
+    RadiusData = _parameter_dimension(PathData["Radius"])
+    HeightData = _parameter_dimension(PathData["Height"])
+    if RadiusData is None or HeightData is None:
+        return None
+    RadiusValue = RadiusData.value_mm
+    HeightValue = HeightData.value_mm
+    if (
+        not math.isfinite(RadiusValue)
+        or RadiusValue <= 0.0
+        or not math.isfinite(HeightValue)
+        or HeightValue <= 0.0
+        or not _IsFreeCadIdentityPlacement(DefinitionData.object_data, "Placement")
+        or not _IsFreeCadIdentityPlacement(
+            DefinitionData.object_data,
+            "AttachmentOffset",
+        )
+        or not HasCadCylBrep(DocumentData, RadiusValue, HeightValue)
+    ):
+        return None
+    SketchPayload = bytearray(_plane_reference(2))
+    SketchPayload.extend(_coordinate_marker((0.0, 0.0), 1, _CIRCLE_LOCUS))
+    SketchPayload.extend(_coordinate_marker((RadiusValue, 0.0), 2, _POINT_LOCUS))
+    SketchSourceId = f"{FeatureData.id}:cylinder-profile"
+    ObjectIds[f"sketch:{SketchSourceId}"] = 26
+    ObjectIds[f"feature:{FeatureData.id}"] = 33
+    ExtrusionData = replace(
+        FeatureData,
+        kind=FeatureKind.EXTRUSION,
+        sketch_id=SketchSourceId,
+        operation=BooleanOperation.CREATE,
+        definition=ExtrusionFeature(
+            ParameterValue(HeightValue, ValueKind.LENGTH, "mm"),
+        ),
+    )
+    return (
+        _WriteObject(
+            SketchSourceId,
+            26,
+            "Sketch1",
+            "Sketch",
+            "Sketch",
+            "moProfileFeature_c",
+            (("Dissectable", "true"),),
+            (
+                replace(
+                    RadiusData,
+                    name="D1",
+                    value_mm=RadiusValue * 2.0,
+                    text="<MOD-DIAM>" + format(RadiusValue * 2.0, ".15g"),
+                ),
+            ),
+            bytes(SketchPayload),
+        ),
+        _WriteObject(
+            FeatureData.id,
+            33,
+            "Boss-Extrude1",
+            "Extrusion",
+            "Extrusion",
+            "moExtrusion_c",
+            (
+                ("Dissectable", "true"),
+                ("DissectableChildren", "26"),
+                ("DissectableRoot", "true"),
+                ("KitPrimitive", "Cylinder"),
+            ),
+            (
+                replace(
+                    HeightData,
+                    name="D1",
+                    text=format(HeightValue, ".15g"),
+                ),
+            ),
+            _extrusion_payload(ExtrusionData),
+        ),
+    )
+
+
 def _write_objects(
     document: CadDocument, object_ids: dict[str, int]
 ) -> tuple[_WriteObject, ...]:
@@ -2465,6 +2835,9 @@ def _write_objects(
     BoxObjects = _FreeCadBoxObjects(document, object_ids)
     if BoxObjects is not None:
         return BoxObjects
+    CylinderObjects = BuildCadCylObjs(document, object_ids)
+    if CylinderObjects is not None:
+        return CylinderObjects
     result: list[_WriteObject] = []
     for plane in document.support_planes:
         object_id = object_ids[f"plane:{plane.id}"]
@@ -3426,13 +3799,28 @@ def _CanonicalSingleBossObjects(
         name="D1",
         text=format(source_dimension.value_mm, ".15g"),
     )
+    if circle is not None:
+        CircleDimension = sketch.dimensions[0]
+        DiameterValue = circle[2] * 2.0
+        sketch = replace(
+            sketch,
+            dimensions=(
+                replace(
+                    CircleDimension,
+                    name="D1",
+                    value_mm=DiameterValue,
+                    text="<MOD-DIAM>" + format(DiameterValue, ".15g"),
+                ),
+            ),
+        )
+    FeatureObjectId = 33 if circle is not None else 32
     object_ids[f"sketch:{sketch.source_id}"] = 26
-    object_ids[f"feature:{extrusion.source_id}"] = 32
+    object_ids[f"feature:{extrusion.source_id}"] = FeatureObjectId
     return (
         replace(sketch, object_id=26, name="Sketch1"),
         replace(
             extrusion,
-            object_id=32,
+            object_id=FeatureObjectId,
             name="Boss-Extrude1",
             dimensions=(dimension,),
         ),
@@ -7719,7 +8107,7 @@ def HasPadProof(
         and ("KitPrimitive", "Box") in PadObject.properties
         and len(SketchObject.dimensions) == 2
     )
-    ExpectedFeatureId = 34 if IsDimensionedBox else 32
+    ExpectedFeatureId = 34 if IsDimensionedBox else (33 if CircleValue else 32)
     if (
         (BoundsValue is None) == (CircleValue is None)
         or EndCodes is None
@@ -7773,10 +8161,7 @@ def HasPadProof(
             *(("distance",) * len(ExpectedDims)),
         )
         if BoundsValue is not None
-        else (
-            "radius",
-            *(("distance",) * (len(NativeSketch.constraints) - 1)),
-        )
+        else ("diameter",)
     )
     if (
         NativeSketch.object_id != 26
@@ -11556,6 +11941,7 @@ def _structural_circle_profiles(
     return tuple(profiles), used, normalized
 
 
+# dimensioned circles reverse marker order so both encodings need one decoder
 def _circle_profiles(
     markers: list[NativeMarker], dimensions: tuple[NativeDimension, ...]
 ) -> tuple[tuple[NativeProfile, ...], dict[int, str]]:
@@ -11573,44 +11959,89 @@ def _circle_profiles(
             list[tuple[NativeMarker, NativeMarker, str, float | None]],
         ],
     ] = {}
-    for center in centers:
-        following = next(
+    for CircleMarker in centers:
+        FollowingMarker = next(
             (
                 marker
                 for marker in markers
-                if marker.offset > center.offset
+                if marker.offset > CircleMarker.offset
                 and marker.coordinates_mm is not None
-                and not _same_point(marker.coordinates_mm, center.coordinates_mm)
+                and not _same_point(
+                    marker.coordinates_mm,
+                    CircleMarker.coordinates_mm,
+                )
             ),
             None,
         )
-        if following is None:
-            continue
-        radius = _marker_radius_mm(center, following)
-        if radius is None:
-            continue
-        start_angle = _marker_start_angle_degrees(center, following)
-        for index, dimension in enumerate(dimensions):
-            semantic = None
-            normalized_radius = radius
-            if math.isclose(dimension.value_mm, radius, rel_tol=1e-7, abs_tol=1e-7):
-                semantic = "radius"
-                normalized_radius = dimension.value_mm
-            elif math.isclose(
-                dimension.value_mm, radius * 2.0, rel_tol=1e-7, abs_tol=1e-7
-            ):
-                semantic = "diameter"
-                normalized_radius = dimension.value_mm / 2.0
-            if semantic is None:
+        PrecedingMarker = next(
+            (
+                marker
+                for marker in reversed(markers)
+                if marker.offset < CircleMarker.offset
+                and marker.coordinates_mm is not None
+                and not _same_point(
+                    marker.coordinates_mm,
+                    CircleMarker.coordinates_mm,
+                )
+            ),
+            None,
+        )
+        CandidatePairs = tuple(
+            ItemData
+            for ItemData in (
+                (
+                    (
+                        CircleMarker,
+                        FollowingMarker,
+                    )
+                    if FollowingMarker is not None
+                    else None
+                ),
+                (
+                    (
+                        PrecedingMarker,
+                        CircleMarker,
+                    )
+                    if PrecedingMarker is not None and FollowingMarker is None
+                    else None
+                ),
+            )
+            if ItemData is not None
+        )
+        for CenterMarker, RimMarker in CandidatePairs:
+            RadiusValue = _marker_radius_mm(CenterMarker, RimMarker)
+            if RadiusValue is None:
                 continue
-            geometry = (
-                center.coordinates_mm[0],
-                center.coordinates_mm[1],
-                normalized_radius,
-            )
-            candidates.setdefault(index, {}).setdefault(geometry, []).append(
-                (center, following, semantic, start_angle)
-            )
+            StartAngle = _marker_start_angle_degrees(CenterMarker, RimMarker)
+            for index, dimension in enumerate(dimensions):
+                semantic = None
+                normalized_radius = RadiusValue
+                if math.isclose(
+                    dimension.value_mm,
+                    RadiusValue,
+                    rel_tol=1e-7,
+                    abs_tol=1e-7,
+                ):
+                    semantic = "radius"
+                    normalized_radius = dimension.value_mm
+                elif math.isclose(
+                    dimension.value_mm,
+                    RadiusValue * 2.0,
+                    rel_tol=1e-7,
+                    abs_tol=1e-7,
+                ):
+                    semantic = "diameter"
+                    normalized_radius = dimension.value_mm / 2.0
+                if semantic is None:
+                    continue
+                geometry = (
+                    CenterMarker.coordinates_mm[0],
+                    CenterMarker.coordinates_mm[1],
+                    normalized_radius,
+                )
+                candidates.setdefault(index, {}).setdefault(geometry, []).append(
+                    (CenterMarker, RimMarker, semantic, StartAngle)
+                )
     result: list[NativeProfile] = []
     geometries: set[tuple[float, float, float]] = set()
     normalized: dict[int, str] = {}

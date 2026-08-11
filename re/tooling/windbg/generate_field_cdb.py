@@ -54,16 +54,21 @@ def GenerateScript(StreamBytes: int) -> str:
         ".symopt-0x20000",
         ".exepath+ C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS",
         ".reload /f swccu.dll",
+        "sxi 80090016",
+        "sxi 80290410",
+        "sxi e06d7363",
+        "sxi e0434352",
+        "sxi 04242420",
     ]
     for TypeName, EntryPoint in FieldBreakpoints:
         LinesData.append(
-            f'bp swccu+{EntryPoint} ".if '
+            f'bu swccu+{EntryPoint} ".if '
             f"((poi(@rcx+0x40)-poi(@rcx+0x48))=={GuardText}) "
             '{ .printf \\"F ' + TypeName + ' %x %p %y %p %p\\\\n\\", '
             "poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), "
             '@rdx, @rsp }; gc"'
         )
-    LinesData.extend(("bl", "g", "q"))
+    LinesData.extend(("bl", "g"))
     return "\n".join(LinesData) + "\n"
 
 

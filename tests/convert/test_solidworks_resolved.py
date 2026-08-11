@@ -537,7 +537,7 @@ def test_first_principles_single_pad_programs_cover_distinct_topologies() -> Non
     RightData = EncodeRightProgram()
     assert (len(BaselineData), len(CircleData), len(TopData), len(RightData)) == (
         11075,
-        10556,
+        12514,
         11075,
         11147,
     )

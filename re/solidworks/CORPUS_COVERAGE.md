@@ -27,17 +27,19 @@ The 2026-08-11 recursive result is:
 
 | measurement              | count |
 | ------------------------ | ----: |
-| FCStd files              |   163 |
+| FCStd files              |   165 |
 | parser or writer errors  |     0 |
-| vendor-loadable contract |    38 |
-| application-usable       |    38 |
-| near-lossless            |    38 |
+| vendor-loadable contract |    40 |
+| application-usable       |    40 |
+| near-lossless            |    40 |
 | vendor-only              |     0 |
 | unsupported              |   125 |
 
 The command returns nonzero because 125 sources remain unsupported. Each accepted part traverses
 the public `write_document` path and the resulting compound file is read back with `SldprtArchive`.
-This is a production-path structural proof, not a claim that all 35 files were individually opened
+The increase from 38 of 163 to 40 of 165 is exactly the two controlled standalone cylinder sources;
+the unsupported count and unsupported-family census are unchanged.
+This is a production-path structural proof, not a claim that all 40 files were individually opened
 in SOLIDWORKS. Vendor-application oracle measurements remain separately recorded in
 `archive/MULTISTREAM.md`.
 
@@ -50,6 +52,8 @@ dimensions, feature ordering, and body-producing operations:
   sketch-plane variants where the recovered grammar supports them;
 - exact standalone `Part::Box` solids lowered to an origin-based rectangle with independently
   editable length and width dimensions plus an editable blind-boss height;
+- exact standalone origin-aligned `Part::Cylinder` solids lowered to a diameter-driven circle with
+  an independently editable blind-boss height;
 - blind and through-all pockets, including two- and three-pocket chains;
 - pad followed by a second pad;
 - full rectangular revolution and pad followed by a groove;
@@ -126,7 +130,9 @@ FreeCAD type identifier.
 
 `PartDesign::Pad`, `Pocket`, `Revolution`, `LinearPattern`, and `PolarPattern` in this table are
 outside the exact profile, plane, termination, dependency, or operation sequences listed in the
-recovered section; their type name alone is not sufficient for acceptance.
+recovered section; their type name alone is not sufficient for acceptance. The three
+`Part::Cylinder` rows are likewise cylinders embedded in unrecovered multi-object histories, not
+standalone primitives satisfying the exact cylinder gate.
 
 ## Assembly corpus result
 
@@ -165,3 +171,28 @@ centre of mass `(5, 5, 5)` mm. Independent live parameter drives on that generat
 The box-specific 14,855-byte `ResolvedFeatures` program contains 3,522 typed operations, and its
 25,158-byte `Config-0` program contains 4,345 typed operations. Both tile their reference streams
 exactly and contain zero opaque or donor byte spans.
+
+## Native cylinder oracle
+
+The standalone cylinder path is backed by a separately authored, diameter-dimensioned circle
+program. Its 12,514-byte `ResolvedFeatures` stream contains 338 objects, 49 class definitions,
+2,873 typed operations, 538 serializer owners, zero missing fields, and zero opaque or donor spans.
+The matching 25,158-byte `Config-0` stream reuses the closed 4,345-operation field program and
+specializes 29 typed fields for the circle's identities, bounds, cache metadata, radius, and depth.
+
+A generated 5 mm radius by 10 mm high cylinder opened and rebuilt in SOLIDWORKS 2025 with zero load
+errors or warnings, one body, `Sketch1`, `Boss-Extrude1`, volume 785.3981633974485 mm³, surface area
+471.238898038469 mm², and centre of mass `(0, 0, 5)` mm. Independent live edits produced:
+
+| parameter          | value |         volume mm³ |  surface area mm² | centre of mass mm |
+| ------------------ | ----: | -----------------: | ----------------: | ----------------- |
+| `D1@Sketch1`       | 16 mm | 2,010.619298297468 | 904.7786842338604 | `(0, 0, 5)`       |
+| `D1@Boss-Extrude1` | 12 mm |   942.477796076938 | 534.0707511102650 | `(0, 0, 6)`       |
+
+An independently generated 8 mm radius by 12 mm high FCStd also opened with one body, volume
+2,412.74315795696 mm³, surface area 1,005.3096491487335 mm², and centre of mass `(0, 0, 6)` mm.
+An off-origin generic circle was observed rebuilding at the origin; that case now fails closed and
+is not reported as lossless. A reverse-direction oracle also proved that the reversed circular boss
+uses a distinct 12,700-byte `ResolvedFeatures` history and 25,190-byte `Config-0`; setting only the
+high feature flag left `ReverseDirection` false and the body unchanged after rebuild. Reversed and
+non-front circular pads therefore remain fail-closed until those longer typed programs are closed.
