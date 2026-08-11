@@ -1,5 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -11,7 +20,9 @@ CDB = Path(r"C:\Users\odin\AppData\Local\Microsoft\WindowsApps\cdbX64.exe")
 SLDWORKS = Path(r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SLDWORKS.exe")
 SOLIDWORKS_DIR = SLDWORKS.parent
 
+# tracked helper processes must be closed between isolated debugger sessions
 PROCESSES = (
+    "cdb.exe",
     "cdbX64.exe",
     "SLDWORKS.exe",
     "sldworks_util.exe",
@@ -41,6 +52,7 @@ def sweep(settle: float = 4.0) -> None:
     time.sleep(settle)
 
 
+# modal prompts must close automatically so unattended oracle traces reach deterministic completion
 def _watch_dialogs(stop: threading.Event) -> None:
     import ctypes
     import ctypes.wintypes as wintypes
@@ -79,15 +91,14 @@ def _watch_dialogs(stop: threading.Event) -> None:
                 dialogs.append(handle)
             return True
 
-        try:
+        with contextlib.suppress(OSError):
             user32.EnumWindows(prototype(top), 0)
             for dialog in dialogs:
                 press(dialog)
-        except OSError:
-            pass
         stop.wait(0.75)
 
 
+# debugger sessions need bounded cleanup so failed traces cannot poison later oracle runs
 def run(
     script: Path,
     log: Path,
@@ -142,10 +153,8 @@ def run(
                 break
     finally:
         stop.set()
-        try:
+        with contextlib.suppress(OSError):
             process.terminate()
-        except OSError:
-            pass
         time.sleep(1.0)
         sweep()
     return RunResult(

@@ -752,9 +752,28 @@ def patch_features(data: bytes | bytearray, edits: Mapping[int, FeatureEdit]) ->
                 struct.pack_into("<d", output, point.offset + 8, y / _METRES)
         if edit.radii_mm is not None:
             for arc, radius_mm in zip(feature.arcs, edit.radii_mm, strict=True):
+                if math.isclose(
+                    radius_mm,
+                    arc.radius_mm,
+                    rel_tol=0.0,
+                    abs_tol=1.0e-12,
+                ):
+                    continue
                 _write_arc_radius(output, arc, radius_mm)
         if edit.arc_centres_mm is not None:
             for arc, (x, y) in zip(feature.arcs, edit.arc_centres_mm, strict=True):
+                if math.isclose(
+                    x,
+                    arc.centre_x_mm,
+                    rel_tol=0.0,
+                    abs_tol=1.0e-12,
+                ) and math.isclose(
+                    y,
+                    arc.centre_y_mm,
+                    rel_tol=0.0,
+                    abs_tol=1.0e-12,
+                ):
+                    continue
                 DeltaX = (x - arc.centre_x_mm) / _METRES
                 DeltaY = (y - arc.centre_y_mm) / _METRES
                 RimX, RimY = struct.unpack_from("<2d", output, arc.point_offset)

@@ -134,6 +134,11 @@ FreeCadBoxCorpus = (
     / "box.FCStd"
 )
 
+# this oracle fixture exercises exact freecad cylinder lowering when research data is present
+KFreeCadCylCorpus = (
+    Path(__file__).parents[2] / ".rescratch" / "fcstd" / "cylinder_r5_h10.FCStd"
+)
+
 
 def _freecad_rectangle_pad_document(
     bounds: tuple[float, float, float, float] = (-30.0, -15.0, 30.0, 15.0),
@@ -1463,6 +1468,50 @@ def test_FreeCadBoxWritesNativeParametricSolidWorksPart(tmp_path: Path) -> None:
     assert not HasVendorPartEncoding(MismatchedSource)
 
 
+# exact cylinder lowering exposes diameter and depth as editable native dimensions
+@pytest.mark.skipif(
+    not KFreeCadCylCorpus.is_file(),
+    reason="cylinder corpus unavailable",
+)
+def test_FreeCadCylinderWritesNativeParametricSolidWorksPart(
+    tmp_path: Path,
+) -> None:
+    SourceData = read_freecad(KFreeCadCylCorpus)
+    TargetPath = tmp_path / "FreeCadCylinder.SLDPRT"
+    ResultData = write_document(SourceData, TargetPath, allow_carrier=True)
+    ArchiveData = SldprtArchive.from_bytes(TargetPath.read_bytes())
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        ArchiveData.require(CONFIGURATION_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.application_usable is True
+    assert ResultData.vendor_loadable is True
+    assert ResultData.near_lossless is True
+    assert ResultData.requirements == ()
+    assert len(NativeData.sketches) == 1
+    assert NativeData.sketches[0].object_id == 26
+    assert NativeData.sketches[0].profiles[0].coordinates == pytest.approx(
+        (0.0, 0.0, 5.0)
+    )
+    assert tuple(
+        (ItemData.name, ItemData.value_mm, ItemData.kind, ItemData.native_role)
+        for ItemData in NativeData.sketches[0].dimensions
+    ) == (
+        ("D1", 10.0, "diameter", "driving"),
+    )
+    assert tuple(ItemData.kind for ItemData in NativeData.sketches[0].constraints) == (
+        "diameter",
+    )
+    assert len(NativeData.operations) == 1
+    assert NativeData.operations[0].object_id == 33
+    assert NativeData.operations[0].name == "Boss-Extrude1"
+    assert NativeData.operations[0].profile_id == 26
+    assert NativeData.operations[0].length_mm == pytest.approx(10.0)
+    assert NativeData.operations[0].termination_code == BLIND_END_CONDITION
+
+
 # exact preflight agrees with the writer without serializing unsupported histories
 def test_vendor_part_preflight_rejects_an_unrecovered_feature_family() -> None:
     SourceData = _freecad_rectangle_pad_document()
@@ -2066,11 +2115,9 @@ def test_freecad_full_revolution_writes_editable_native_revolved_boss() -> None:
         assert TransferData[CapabilityValue] == "native"
 
 
-@pytest.mark.parametrize("CenterData", (Vector2(0.0, 0.0), Vector2(3.0, -2.0)))
 # circle pads use the oracle-proven first-principles circular feature program
-def test_freecad_circle_pad_writes_native_editable_feature(
-    CenterData: Vector2,
-) -> None:
+def test_freecad_circle_pad_writes_native_editable_feature() -> None:
+    CenterData = Vector2(0.0, 0.0)
     SourceData = _freecad_rectangle_pad_document(depth=14.0)
     SourceSketch = SourceData.sketches[0]
     CircleEntity = SketchEntity(
@@ -2092,14 +2139,44 @@ def test_freecad_circle_pad_writes_native_editable_feature(
         ArchiveData.require(RESOLVED_FEATURES_STREAM),
         resolved_stream=RESOLVED_FEATURES_STREAM,
     )
+    assert ResultData.application_usable is True
     assert ResultData.vendor_loadable is True
+    assert ResultData.near_lossless is True
     assert len(NativeData.sketches) == 1
+    assert NativeData.sketches[0].object_id == 26
     assert len(NativeData.sketches[0].profiles) == 1
     assert NativeData.sketches[0].profiles[0].kind == "circle"
     assert NativeData.sketches[0].profiles[0].coordinates == pytest.approx(
         (CenterData.x, CenterData.y, 18.0)
     )
+    assert tuple(
+        (ItemData.name, ItemData.value_mm, ItemData.kind, ItemData.native_role)
+        for ItemData in NativeData.sketches[0].dimensions
+    ) == (
+        ("D1", 36.0, "diameter", "driving"),
+    )
+    assert tuple(ItemData.kind for ItemData in NativeData.sketches[0].constraints) == (
+        "diameter",
+    )
+    assert NativeData.operations[0].object_id == 33
     assert NativeData.operations[0].length_mm == pytest.approx(14.0)
+    OffsetEntity = replace(
+        CircleEntity,
+        geometry=CircleGeometry(Vector2(3.0, -2.0), 18.0),
+    )
+    OffsetSource = replace(
+        SourceData,
+        sketches=(
+            replace(
+                CircleSketch,
+                entities=(OffsetEntity,),
+                closed_profile_entity_ids=((OffsetEntity.id,),),
+            ),
+        ),
+    )
+    OffsetResult = write_sldprt(OffsetSource, BytesIO())
+    assert OffsetResult.application_usable is False
+    assert OffsetResult.vendor_loadable is False
 
 
 # source XZ coordinates and direction are normalized into the SOLIDWORKS Top basis

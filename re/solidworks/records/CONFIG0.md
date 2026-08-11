@@ -657,3 +657,35 @@ the only feature-dependent content, the region reconstruction and its node tilin
 and the 62-byte `moUserUnits_c` block inside each, that every declared field names its owning class,
 that every opaque byte sits in a named span summing to the split's opaque figure, and the
 declared-versus-opaque accounting with `opaque <= 5118` so the debt can only shrink.
+
+## 9. Dimensioned circle specialization
+
+The 12,514-byte diameter-driven circle resolved program requires the 25,158-byte single-length-unit
+configuration shape already closed by `config0_box_program.py`. Its controlled `r5 h10` stream
+differs from that typed baseline in 30 fields, one of which is only the five-character part name.
+Production preserves `Part1` and specializes the remaining 29 typed fields rather than retaining a
+recorded byte range.
+
+The geometry-dependent fields are radius in millimetres plus centre, extrema, depth, and bounding
+sphere radius in metres. The other fields carry the recovered diameter-profile flags, object 33
+feature identities, field-program generation values, and the session records coupled to this
+resolved program. Every override is encoded by the existing primitive writer at its traced field
+offset; no raw block or vendor file is packaged.
+
+Oracle minimization established two distinct gates:
+
+1. generic `Config-0` plus the dimensioned-circle resolved stream kills SOLIDWORKS during
+   `OpenDoc6`;
+2. geometry-only overrides load and permit diameter edits, but the boss history collapses when its
+   depth changes; and
+3. all 29 typed circle overrides load without warnings and permit independent diameter and depth
+   rebuilds with one body and exact measured mass properties.
+
+The reverse-direction circle oracle has a 25,190-byte configuration stream, 32 bytes longer than
+the normal-direction specialization. Because the corresponding resolved history also grows by 186
+bytes, neither change is represented as a one-byte direction toggle; reversed circular output stays
+outside the supported gate until both longer streams have complete typed ownership.
+
+This is why the session-valued fields remain explicit typed semantics even though some do not vary
+with source radius or depth. Removing them is a measured parametric failure, not a harmless
+normalization.
