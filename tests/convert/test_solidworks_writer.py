@@ -64,29 +64,39 @@ from convert.adapters.solidworks.format import (
 )
 from convert.adapters.solidworks.native import (
     VENDOR_UNLOADABLE_NOTES,
+    decode_native_model_header,
     encode_native_part,
+    native_axis_bindings,
 )
-from convert.adapters.solidworks.resolved import BLIND_END_CONDITION
+from convert.adapters.solidworks.resolved import BLIND_END_CONDITION, locate_features
 from convert.parasolid import _parasolid_header, _scan_partition_records
 from interchange import (
     BooleanOperation,
     BrepPayload,
     CadDocument,
     Capability,
+    CircleGeometry,
     Configuration,
     Diagnostic,
+    ExtrusionEndCondition,
     ExtrusionFeature,
+    FeatureKind,
     GeometryKind,
     LineGeometry,
     MateAlignment,
     Matrix4,
+    NativeFeatureDefinition,
     NativeSurface,
     Parameter,
     ParameterValue,
     PayloadRole,
+    Provenance,
+    Selection,
+    SelectionPathElement,
     Severity,
     Sketch,
     SketchEntity,
+    Transform,
     ValueKind,
     Vector2,
     Vector3,
@@ -210,6 +220,368 @@ def _freecad_rectangle_pad_document(
                 Capability.ROUNDTRIP_METADATA,
             }
         ),
+    )
+
+
+# a synthetic FreeCAD pad-pocket history exercises canonical ids without local corpus files
+def _FreeCADPadPocketDocument(*, ThroughAll: bool = False) -> CadDocument:
+    SourceData = _freecad_rectangle_pad_document(
+        bounds=(-30.0, -20.0, 30.0, 20.0),
+        depth=15.0,
+    )
+    FeatureOne = SourceData.feature_timeline[0]
+    SketchTemplate = SourceData.sketches[0]
+    PocketPoints = (
+        Vector2(-10.0, -8.0),
+        Vector2(10.0, -8.0),
+        Vector2(10.0, 8.0),
+        Vector2(-10.0, 8.0),
+    )
+    PocketEntities = tuple(
+        SketchEntity(
+            f"freecad:pocket-edge:{IndexValue}",
+            GeometryKind.LINE,
+            LineGeometry(PocketPoints[IndexValue], PocketPoints[(IndexValue + 1) % 4]),
+        )
+        for IndexValue in range(4)
+    )
+    SketchTwo = replace(
+        SketchTemplate,
+        id="freecad:sketch:Sketch001",
+        name="Sketch001",
+        entities=PocketEntities,
+        parameter_ids=(),
+        closed_profile_entity_ids=(tuple(ItemData.id for ItemData in PocketEntities),),
+    )
+    FeatureTwo = replace(
+        FeatureOne,
+        id="freecad:feature:Pocket",
+        name="Pocket",
+        order=1,
+        operation=BooleanOperation.CUT,
+        sketch_id=SketchTwo.id,
+        input_feature_ids=(FeatureOne.id,),
+        definition=ExtrusionFeature(
+            ParameterValue(5.0 if ThroughAll else 6.0, ValueKind.LENGTH, "mm"),
+            end_condition=(
+                ExtrusionEndCondition.THROUGH_ALL
+                if ThroughAll
+                else ExtrusionEndCondition.BLIND
+            ),
+            reversed=True,
+            direction=Vector3(0.0, 0.0, -1.0),
+            second_length=ParameterValue(5.0, ValueKind.LENGTH, "mm"),
+            offset=ParameterValue(0.0, ValueKind.LENGTH, "mm"),
+            second_offset=ParameterValue(0.0, ValueKind.LENGTH, "mm"),
+            draft_angle=ParameterValue(0.0, ValueKind.ANGLE, "deg"),
+            second_draft_angle=ParameterValue(0.0, ValueKind.ANGLE, "deg"),
+        ),
+        attributes=frozen_mapping({"freecad": {"type_id": "PartDesign::Pocket"}}),
+    )
+    FirstParameters = tuple(
+        replace(
+            ItemData,
+            value=(
+                ParameterValue(False, ValueKind.BOOLEAN)
+                if ItemData.attributes.get("freecad_path") == "Visibility"
+                else ItemData.value
+            ),
+        )
+        for ItemData in SourceData.parameters
+    )
+    PocketValues = {
+        "Label": ParameterValue("Pocket", ValueKind.STRING),
+        "Length": ParameterValue(
+            5.0 if ThroughAll else 6.0,
+            ValueKind.LENGTH,
+            "mm",
+        ),
+        "Length2": ParameterValue(5.0, ValueKind.LENGTH, "mm"),
+        "Reversed": ParameterValue(True, ValueKind.BOOLEAN),
+        "Type": ParameterValue(1 if ThroughAll else 0, ValueKind.INTEGER),
+        "Visibility": ParameterValue(True, ValueKind.BOOLEAN),
+    }
+    SecondParameters = tuple(
+        replace(
+            ItemData,
+            id=f"freecad:parameter:Pocket:{ItemData.attributes['freecad_path']}",
+            name=f"Pocket.{ItemData.attributes['freecad_path']}",
+            value=PocketValues.get(
+                str(ItemData.attributes["freecad_path"]), ItemData.value
+            ),
+            owner_id=FeatureTwo.id,
+        )
+        for ItemData in SourceData.parameters
+    )
+    FeatureTwo = replace(
+        FeatureTwo,
+        parameter_ids=tuple(ItemData.id for ItemData in SecondParameters),
+    )
+    return replace(
+        SourceData,
+        parameters=(*FirstParameters, *SecondParameters),
+        sketches=(SketchTemplate, SketchTwo),
+        feature_timeline=(FeatureOne, FeatureTwo),
+        bodies=(replace(SourceData.bodies[0], final_feature_id=FeatureTwo.id),),
+    )
+
+
+# a synthetic three-stage FreeCAD history exercises the connected native CMgr graph
+def _FreeCADPadTwoPocketDocument() -> CadDocument:
+    SourceData = _FreeCADPadPocketDocument()
+    FeatureTwo = SourceData.feature_timeline[1]
+    SketchTemplate = SourceData.sketches[1]
+    PocketPoints = (
+        Vector2(15.0, -5.0),
+        Vector2(25.0, -5.0),
+        Vector2(25.0, 5.0),
+        Vector2(15.0, 5.0),
+    )
+    PocketEntities = tuple(
+        SketchEntity(
+            f"freecad:pocket-two-edge:{IndexValue}",
+            GeometryKind.LINE,
+            LineGeometry(
+                PocketPoints[IndexValue],
+                PocketPoints[(IndexValue + 1) % 4],
+            ),
+        )
+        for IndexValue in range(4)
+    )
+    SketchThree = replace(
+        SketchTemplate,
+        id="freecad:sketch:Sketch002",
+        name="Sketch002",
+        entities=PocketEntities,
+        parameter_ids=(),
+        closed_profile_entity_ids=(tuple(ItemData.id for ItemData in PocketEntities),),
+    )
+    assert isinstance(FeatureTwo.definition, ExtrusionFeature)
+    FeatureThree = replace(
+        FeatureTwo,
+        id="freecad:feature:Pocket001",
+        name="Pocket001",
+        order=2,
+        sketch_id=SketchThree.id,
+        input_feature_ids=(FeatureTwo.id,),
+        definition=replace(
+            FeatureTwo.definition,
+            length=ParameterValue(5.0, ValueKind.LENGTH, "mm"),
+        ),
+    )
+    ParametersOneTwo = tuple(
+        replace(
+            ItemData,
+            value=(
+                ParameterValue(False, ValueKind.BOOLEAN)
+                if ItemData.owner_id == FeatureTwo.id
+                and ItemData.attributes.get("freecad_path") == "Visibility"
+                else ItemData.value
+            ),
+        )
+        for ItemData in SourceData.parameters
+    )
+    PocketValues = {
+        "Label": ParameterValue("Pocket001", ValueKind.STRING),
+        "Length": ParameterValue(5.0, ValueKind.LENGTH, "mm"),
+        "Visibility": ParameterValue(True, ValueKind.BOOLEAN),
+    }
+    ParametersThree = tuple(
+        replace(
+            ItemData,
+            id=(
+                "freecad:parameter:Pocket001:" f"{ItemData.attributes['freecad_path']}"
+            ),
+            name=f"Pocket001.{ItemData.attributes['freecad_path']}",
+            value=PocketValues.get(
+                str(ItemData.attributes["freecad_path"]),
+                ItemData.value,
+            ),
+            owner_id=FeatureThree.id,
+        )
+        for ItemData in SourceData.parameters
+        if ItemData.owner_id == FeatureTwo.id
+    )
+    FeatureThree = replace(
+        FeatureThree,
+        parameter_ids=tuple(ItemData.id for ItemData in ParametersThree),
+    )
+    return replace(
+        SourceData,
+        parameters=(*ParametersOneTwo, *ParametersThree),
+        sketches=(*SourceData.sketches, SketchThree),
+        feature_timeline=(*SourceData.feature_timeline, FeatureThree),
+        bodies=(replace(SourceData.bodies[0], final_feature_id=FeatureThree.id),),
+    )
+
+
+# a four-stage FreeCAD history exercises every recovered predecessor edge
+def _FreeCADPadThreePocketDocument() -> CadDocument:
+    SourceData = _FreeCADPadTwoPocketDocument()
+    FeatureThree = SourceData.feature_timeline[2]
+    SketchTemplate = SourceData.sketches[2]
+    PocketPoints = (
+        Vector2(-25.0, -4.0),
+        Vector2(-17.0, -4.0),
+        Vector2(-17.0, 4.0),
+        Vector2(-25.0, 4.0),
+    )
+    PocketEntities = tuple(
+        SketchEntity(
+            f"freecad:pocket-three-edge:{IndexValue}",
+            GeometryKind.LINE,
+            LineGeometry(
+                PocketPoints[IndexValue],
+                PocketPoints[(IndexValue + 1) % 4],
+            ),
+        )
+        for IndexValue in range(4)
+    )
+    SketchFour = replace(
+        SketchTemplate,
+        id="freecad:sketch:Sketch003",
+        name="Sketch003",
+        entities=PocketEntities,
+        parameter_ids=(),
+        closed_profile_entity_ids=(tuple(ItemData.id for ItemData in PocketEntities),),
+    )
+    assert isinstance(FeatureThree.definition, ExtrusionFeature)
+    FeatureFour = replace(
+        FeatureThree,
+        id="freecad:feature:Pocket002",
+        name="Pocket002",
+        order=3,
+        sketch_id=SketchFour.id,
+        input_feature_ids=(FeatureThree.id,),
+        definition=replace(
+            FeatureThree.definition,
+            length=ParameterValue(4.0, ValueKind.LENGTH, "mm"),
+        ),
+    )
+    ParametersFirstThree = tuple(
+        replace(
+            ItemData,
+            value=(
+                ParameterValue(False, ValueKind.BOOLEAN)
+                if ItemData.owner_id == FeatureThree.id
+                and ItemData.attributes.get("freecad_path") == "Visibility"
+                else ItemData.value
+            ),
+        )
+        for ItemData in SourceData.parameters
+    )
+    PocketValues = {
+        "Label": ParameterValue("Pocket002", ValueKind.STRING),
+        "Length": ParameterValue(4.0, ValueKind.LENGTH, "mm"),
+        "Visibility": ParameterValue(True, ValueKind.BOOLEAN),
+    }
+    ParametersFour = tuple(
+        replace(
+            ItemData,
+            id=(
+                "freecad:parameter:Pocket002:" f"{ItemData.attributes['freecad_path']}"
+            ),
+            name=f"Pocket002.{ItemData.attributes['freecad_path']}",
+            value=PocketValues.get(
+                str(ItemData.attributes["freecad_path"]),
+                ItemData.value,
+            ),
+            owner_id=FeatureFour.id,
+        )
+        for ItemData in SourceData.parameters
+        if ItemData.owner_id == FeatureThree.id
+    )
+    FeatureFour = replace(
+        FeatureFour,
+        parameter_ids=tuple(ItemData.id for ItemData in ParametersFour),
+    )
+    return replace(
+        SourceData,
+        parameters=(*ParametersFirstThree, *ParametersFour),
+        sketches=(*SourceData.sketches, SketchFour),
+        feature_timeline=(*SourceData.feature_timeline, FeatureFour),
+        bodies=(replace(SourceData.bodies[0], final_feature_id=FeatureFour.id),),
+    )
+
+
+# a synthetic FreeCAD full revolution exercises the recovered angular feature tree
+def _FreeCADRectangleRevolutionDocument() -> CadDocument:
+    SourceData = _freecad_rectangle_pad_document(
+        bounds=(6.0, -9.0, 18.0, 9.0),
+    )
+    SourceFeature = SourceData.feature_timeline[0]
+    SelectionData = Selection(
+        "freecad:selection:Revolution:ReferenceAxis:0",
+        "Revolution.ReferenceAxis.V_Axis",
+        (
+            SelectionPathElement(
+                "native",
+                SourceData.sketches[0].name,
+                "V_Axis",
+            ),
+        ),
+        provenance=Provenance(
+            "freecad.fcstd",
+            "Revolution.ReferenceAxis.V_Axis",
+        ),
+        attributes=frozen_mapping(
+            {
+                "freecad_object": "Revolution",
+                "freecad_property": "ReferenceAxis",
+                "freecad_target": SourceData.sketches[0].name,
+                "freecad_subelement": "V_Axis",
+            }
+        ),
+    )
+    FeatureData = replace(
+        SourceFeature,
+        name="Revolution",
+        kind=FeatureKind.REVOLUTION,
+        operation=BooleanOperation.CREATE,
+        definition=NativeFeatureDefinition(
+            "freecad.fcstd",
+            "PartDesign::Revolution",
+        ),
+        selection_ids=(SelectionData.id,),
+        provenance=Provenance("freecad.fcstd", "Revolution"),
+        attributes=frozen_mapping({"freecad": {"type_id": "PartDesign::Revolution"}}),
+    )
+    ValuesData = (
+        ("AllowMultiFace", True, ValueKind.BOOLEAN, ""),
+        ("Angle", 360.0, ValueKind.ANGLE, "deg"),
+        ("Angle2", 0.0, ValueKind.ANGLE, "deg"),
+        ("FuseOrder", 0, ValueKind.INTEGER, ""),
+        ("FuzzyTolerance", -1.0, ValueKind.NUMBER, ""),
+        ("Label", "Revolution", ValueKind.STRING, ""),
+        ("Label2", "", ValueKind.STRING, ""),
+        ("Midplane", False, ValueKind.BOOLEAN, ""),
+        ("Refine", True, ValueKind.BOOLEAN, ""),
+        ("Reversed", False, ValueKind.BOOLEAN, ""),
+        ("Suppressed", False, ValueKind.BOOLEAN, ""),
+        ("Type", 0, ValueKind.INTEGER, ""),
+        ("Visibility", True, ValueKind.BOOLEAN, ""),
+    )
+    ParametersData = tuple(
+        Parameter(
+            f"freecad:parameter:Revolution:{PathValue}",
+            f"Revolution.{PathValue}",
+            ParameterValue(ValueData, KindData, UnitData),
+            owner_id=FeatureData.id,
+            attributes=frozen_mapping({"freecad_path": PathValue}),
+        )
+        for PathValue, ValueData, KindData, UnitData in ValuesData
+    )
+    FeatureData = replace(
+        FeatureData,
+        parameter_ids=tuple(ItemData.id for ItemData in ParametersData),
+    )
+    return replace(
+        SourceData,
+        parameters=ParametersData,
+        selections=(SelectionData,),
+        feature_timeline=(FeatureData,),
+        bodies=(replace(SourceData.bodies[0], final_feature_id=FeatureData.id),),
+        capabilities=SourceData.capabilities | {Capability.SELECTIONS},
     )
 
 
@@ -908,9 +1280,578 @@ def test_freecad_rectangle_pad_writes_native_parametric_solidworks_part(
     assert replay_result.vendor_loadable is True
 
 
+# direction variant construction keeps unit and live-oracle fixtures identical
+def _FreeCADDirectionVariant(SourceData: CadDocument, VariantName: str) -> CadDocument:
+    FeatureData = SourceData.feature_timeline[0]
+    DefinitionData = replace(
+        FeatureData.definition,
+        reversed=VariantName == "reversed",
+        symmetric=VariantName == "midplane",
+    )
+    ParametersData = tuple(
+        (
+            replace(
+                ItemData,
+                value=ParameterValue(
+                    (
+                        2
+                        if ItemData.attributes.get("freecad_path") == "SideType"
+                        and VariantName == "midplane"
+                        else (
+                            0
+                            if ItemData.attributes.get("freecad_path") == "SideType"
+                            else VariantName
+                            == ItemData.attributes.get("freecad_path", "").casefold()
+                        )
+                    ),
+                    (
+                        ValueKind.INTEGER
+                        if ItemData.attributes.get("freecad_path") == "SideType"
+                        else ValueKind.BOOLEAN
+                    ),
+                ),
+            )
+            if ItemData.attributes.get("freecad_path")
+            in {"Midplane", "Reversed", "SideType"}
+            else ItemData
+        )
+        for ItemData in SourceData.parameters
+    )
+    return replace(
+        SourceData,
+        parameters=ParametersData,
+        feature_timeline=(replace(FeatureData, definition=DefinitionData),),
+    )
+
+
+@pytest.mark.parametrize(
+    ("VariantName", "DirectionCode", "TerminationCode"),
+    (("reversed", 1, 0), ("midplane", 0, 6)),
+)
+# direction variants prove source semantics reach the native editable operation record
+def test_freecad_rectangle_pad_writes_native_direction_variants(
+    VariantName: str,
+    DirectionCode: int,
+    TerminationCode: int,
+) -> None:
+    SourceData = _FreeCADDirectionVariant(
+        _freecad_rectangle_pad_document(depth=18.0),
+        VariantName,
+    )
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    OperationData = NativeData.operations[0]
+    assert ResultData.vendor_loadable is True
+    assert OperationData.direction_code == DirectionCode
+    assert OperationData.termination_code == TerminationCode
+    assert OperationData.length_mm == pytest.approx(18.0)
+    assert OperationData.depth_copies[0].value_mm == pytest.approx(18.0)
+
+
+# pad-pocket writes preserve both source profiles and the dependency-ordered native tree
+def test_freecad_pad_pocket_writes_two_editable_native_features() -> None:
+    SourceData = _FreeCADPadPocketDocument()
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    FeatureData = locate_features(ArchiveData.require(RESOLVED_FEATURES_STREAM))
+    assert ResultData.vendor_loadable is True
+    assert KIT_RESOLVED_STREAM not in ArchiveData.streams
+    ConfigurationData = ArchiveData.require(CONFIGURATION_STREAM)
+    assert len(ConfigurationData) == 25300
+    AtomDefinition = b"\xff\xff\x01\x00\x08\x00moAtom_c"
+    AtomPos = ConfigurationData.index(AtomDefinition)
+    assert struct.unpack_from("<II", ConfigurationData, AtomPos - 8) == (102, 2)
+    HeaderData = ArchiveData.require("Contents/Config-0-ModelHeader")
+    CStringName = b"moCStringHandle_c"
+    CStringEnd = HeaderData.index(CStringName) + len(CStringName)
+    assert HeaderData[CStringEnd + 4 : CStringEnd + 6] == struct.pack("<H", 0x804B)
+    assert bytes.fromhex("f65a1a69") + struct.pack("<IHI", 41, 0, 110) in HeaderData
+    assert [
+        (
+            ItemData.feature_id,
+            ItemData.name,
+            ItemData.kind,
+            ItemData.sketch_id,
+            ItemData.reversed,
+            ItemData.depth_mm,
+            ItemData.bounds_mm,
+        )
+        for ItemData in FeatureData
+    ] == [
+        (
+            32,
+            "Boss-Extrude1",
+            "boss",
+            26,
+            False,
+            pytest.approx(15.0),
+            pytest.approx((-30.0, -20.0, 30.0, 20.0)),
+        ),
+        (
+            40,
+            "Cut-Extrude1",
+            "cut",
+            33,
+            True,
+            pytest.approx(6.0),
+            pytest.approx((-10.0, -8.0, 10.0, 8.0)),
+        ),
+    ]
+    assert ResultData.application_usable is True
+    assert ResultData.metadata["native_brep"] == "feature-rebuilt"
+    assert ResultData.metadata["native_geometry"] is True
+    TransferData = {
+        ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
+    }
+    for CapabilityValue in (
+        Capability.PARAMETERS,
+        Capability.PARAMETRIC_HISTORY,
+        Capability.EDITABLE_SKETCHES,
+        Capability.BODY_STRUCTURE,
+    ):
+        assert TransferData[CapabilityValue] == "native"
+
+
+# through-all cuts preserve their depthless native end specification and feature tree
+def test_freecad_pad_through_all_pocket_writes_depthless_native_cut() -> None:
+    SourceData = _FreeCADPadPocketDocument(ThroughAll=True)
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    FeatureData = locate_features(ArchiveData.require(RESOLVED_FEATURES_STREAM))
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.vendor_loadable is True
+    assert ResultData.application_usable is True
+    assert ResultData.metadata["native_brep"] == "feature-rebuilt"
+    assert ResultData.metadata["native_geometry"] is True
+    assert len(ArchiveData.require(RESOLVED_FEATURES_STREAM)) == 14693
+    assert [ItemData.depth_mm for ItemData in FeatureData] == [
+        pytest.approx(15.0),
+        None,
+    ]
+    assert [ItemData.termination_code for ItemData in NativeData.operations] == [0, 1]
+    assert [ItemData.direction_code for ItemData in NativeData.operations] == [0, 1]
+    assert [ItemData.length_mm for ItemData in NativeData.operations] == [
+        pytest.approx(15.0),
+        None,
+    ]
+    TransferData = {
+        ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
+    }
+    for CapabilityValue in (
+        Capability.PARAMETERS,
+        Capability.PARAMETRIC_HISTORY,
+        Capability.EDITABLE_SKETCHES,
+        Capability.BODY_STRUCTURE,
+    ):
+        assert TransferData[CapabilityValue] == "native"
+
+
+# chained pockets preserve all three editable profiles and depth parameters
+def test_freecad_pad_two_pockets_writes_three_editable_native_features() -> None:
+    SourceData = _FreeCADPadTwoPocketDocument()
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    FeatureData = locate_features(ArchiveData.require(RESOLVED_FEATURES_STREAM))
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        ArchiveData.require(CONFIGURATION_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.vendor_loadable is True
+    assert ResultData.application_usable is True
+    assert ResultData.metadata["native_brep"] == "feature-rebuilt"
+    assert KIT_RESOLVED_STREAM not in ArchiveData.streams
+    assert len(ArchiveData.require(RESOLVED_FEATURES_STREAM)) == 21780
+    assert [
+        (
+            ItemData.feature_id,
+            ItemData.name,
+            ItemData.kind,
+            ItemData.sketch_id,
+            ItemData.depth_mm,
+            ItemData.bounds_mm,
+        )
+        for ItemData in FeatureData
+    ] == [
+        (
+            32,
+            "Boss-Extrude1",
+            "boss",
+            26,
+            pytest.approx(15.0),
+            pytest.approx((-30.0, -20.0, 30.0, 20.0)),
+        ),
+        (
+            40,
+            "Cut-Extrude1",
+            "cut",
+            33,
+            pytest.approx(6.0),
+            pytest.approx((-10.0, -8.0, 10.0, 8.0)),
+        ),
+        (
+            47,
+            "Cut-Extrude2",
+            "cut",
+            41,
+            pytest.approx(5.0),
+            pytest.approx((15.0, -5.0, 25.0, 5.0)),
+        ),
+    ]
+    assert [ItemData.object_id for ItemData in NativeData.operations] == [32, 40, 47]
+    assert [ItemData.length_mm for ItemData in NativeData.operations] == [
+        pytest.approx(15.0),
+        pytest.approx(6.0),
+        pytest.approx(5.0),
+    ]
+    ManagerData = ArchiveData.require(CONFIGURATION_MANAGER_STREAM)
+    assert struct.pack("<IIIII", 2, 103, 102, 102, 101) in ManagerData
+    ConfigurationData = ArchiveData.require(CONFIGURATION_STREAM)
+    AtomDefinition = b"\xff\xff\x01\x00\x08\x00moAtom_c"
+    AtomPos = ConfigurationData.index(AtomDefinition)
+    assert struct.unpack_from("<II", ConfigurationData, AtomPos - 8) == (103, 3)
+    TransferData = {
+        ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
+    }
+    for CapabilityValue in (
+        Capability.BREP,
+        Capability.PARAMETERS,
+        Capability.PARAMETRIC_HISTORY,
+        Capability.EDITABLE_SKETCHES,
+        Capability.BODY_STRUCTURE,
+    ):
+        assert TransferData[CapabilityValue] == "native"
+
+
+# four-stage histories preserve every profile, depth, and predecessor edge
+def test_freecad_pad_three_pockets_writes_four_editable_native_features() -> None:
+    SourceData = _FreeCADPadThreePocketDocument()
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    FeatureData = locate_features(ArchiveData.require(RESOLVED_FEATURES_STREAM))
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        ArchiveData.require(CONFIGURATION_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.vendor_loadable is True
+    assert ResultData.application_usable is True
+    assert ResultData.metadata["native_brep"] == "feature-rebuilt"
+    assert KIT_RESOLVED_STREAM not in ArchiveData.streams
+    assert len(ArchiveData.require(RESOLVED_FEATURES_STREAM)) == 27092
+    assert [
+        (
+            ItemData.feature_id,
+            ItemData.name,
+            ItemData.kind,
+            ItemData.sketch_id,
+            ItemData.depth_mm,
+            ItemData.bounds_mm,
+        )
+        for ItemData in FeatureData
+    ] == [
+        (
+            32,
+            "Boss-Extrude1",
+            "boss",
+            26,
+            pytest.approx(15.0),
+            pytest.approx((-30.0, -20.0, 30.0, 20.0)),
+        ),
+        (
+            40,
+            "Cut-Extrude1",
+            "cut",
+            33,
+            pytest.approx(6.0),
+            pytest.approx((-10.0, -8.0, 10.0, 8.0)),
+        ),
+        (
+            47,
+            "Cut-Extrude2",
+            "cut",
+            41,
+            pytest.approx(5.0),
+            pytest.approx((15.0, -5.0, 25.0, 5.0)),
+        ),
+        (
+            54,
+            "Cut-Extrude3",
+            "cut",
+            48,
+            pytest.approx(4.0),
+            pytest.approx((-25.0, -4.0, -17.0, 4.0)),
+        ),
+    ]
+    assert [ItemData.object_id for ItemData in NativeData.operations] == [
+        32,
+        40,
+        47,
+        54,
+    ]
+    assert [ItemData.length_mm for ItemData in NativeData.operations] == [
+        pytest.approx(15.0),
+        pytest.approx(6.0),
+        pytest.approx(5.0),
+        pytest.approx(4.0),
+    ]
+    ManagerData = ArchiveData.require(CONFIGURATION_MANAGER_STREAM)
+    assert (
+        struct.pack(
+            "<IIIIIII",
+            3,
+            104,
+            103,
+            103,
+            102,
+            102,
+            101,
+        )
+        in ManagerData
+    )
+    ConfigurationData = ArchiveData.require(CONFIGURATION_STREAM)
+    AtomDefinition = b"\xff\xff\x01\x00\x08\x00moAtom_c"
+    AtomPos = ConfigurationData.index(AtomDefinition)
+    assert struct.unpack_from("<II", ConfigurationData, AtomPos - 8) == (104, 4)
+    TransferData = {
+        ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
+    }
+    for CapabilityValue in (
+        Capability.BREP,
+        Capability.PARAMETERS,
+        Capability.PARAMETRIC_HISTORY,
+        Capability.EDITABLE_SKETCHES,
+        Capability.BODY_STRUCTURE,
+    ):
+        assert TransferData[CapabilityValue] == "native"
+
+
+# full revolutions preserve the editable profile, angle, and sketch-axis binding
+def test_freecad_full_revolution_writes_editable_native_revolved_boss() -> None:
+    SourceData = _FreeCADRectangleRevolutionDocument()
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    FeatureData = locate_features(ArchiveData.require(RESOLVED_FEATURES_STREAM))
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        ArchiveData.require(CONFIGURATION_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.vendor_loadable is True
+    assert ResultData.application_usable is True
+    assert ResultData.metadata["native_brep"] == "feature-rebuilt"
+    assert KIT_RESOLVED_STREAM not in ArchiveData.streams
+    assert len(ArchiveData.require(RESOLVED_FEATURES_STREAM)) == 12135
+    assert len(FeatureData) == 1
+    assert FeatureData[0].feature_id == 31
+    assert FeatureData[0].name == "Revolve1"
+    assert FeatureData[0].kind == "revolve"
+    assert FeatureData[0].sketch_id == 26
+    assert FeatureData[0].angle_radians == pytest.approx(2.0 * 3.141592653589793)
+    assert FeatureData[0].bounds_mm == pytest.approx((6.0, -9.0, 18.0, 9.0))
+    assert len(NativeData.operations) == 1
+    assert NativeData.operations[0].object_id == 31
+    assert NativeData.operations[0].kind == "revolve_join"
+    assert NativeData.operations[0].angle_degrees == pytest.approx(360.0)
+    assert native_axis_bindings(NativeData) == frozenset({(31, 26, "V_Axis")})
+    HeaderData = ArchiveData.require("Contents/Config-0-ModelHeader")
+    DecodedHeader = decode_native_model_header(HeaderData)
+    assert DecodedHeader.objects[-2:] == ((26, "Sketch1"), (31, "Revolve1"))
+    CreationStamp = struct.unpack_from("<I", ArchiveData.require("ModelStamps"))[0]
+    SerializedCreated = b"\xff\xfe\xff\x07" + "Created".encode("utf-16le")
+    SerializedModified = b"\xff\xfe\xff\x08" + "Modified".encode("utf-16le")
+    SerializedSketch = b"\xff\xfe\xff\x07" + "Sketch1".encode("utf-16le")
+    SerializedRevolve = b"\xff\xfe\xff\x08" + "Revolve1".encode("utf-16le")
+    assert (
+        bytes.fromhex("088002000a80")
+        + struct.pack("<I", 0)
+        + b"\0\0"
+        + struct.pack("<I", CreationStamp + 1)
+        + SerializedCreated
+        + bytes.fromhex("0a80")
+        + struct.pack("<I", 1)
+        + b"\0\0"
+        + struct.pack("<I", CreationStamp + 2)
+        + SerializedModified
+        + struct.pack("<I", 26)
+        + SerializedSketch
+        in HeaderData
+    )
+    assert (
+        bytes.fromhex("088001000a80")
+        + struct.pack("<I", 0)
+        + b"\0\0"
+        + struct.pack("<I", CreationStamp + 2)
+        + SerializedCreated
+        + struct.pack("<I", 31)
+        + SerializedRevolve
+        in HeaderData
+    )
+    ConfigurationData = ArchiveData.require(CONFIGURATION_STREAM)
+    AtomDefinition = b"\xff\xff\x01\x00\x08\x00moAtom_c"
+    AtomPos = ConfigurationData.index(AtomDefinition)
+    assert struct.unpack_from("<II", ConfigurationData, AtomPos - 8) == (101, 1)
+    TransferData = {
+        ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
+    }
+    for CapabilityValue in (
+        Capability.BREP,
+        Capability.PARAMETERS,
+        Capability.PARAMETRIC_HISTORY,
+        Capability.EDITABLE_SKETCHES,
+        Capability.BODY_STRUCTURE,
+        Capability.SELECTIONS,
+    ):
+        assert TransferData[CapabilityValue] == "native"
+
+
+@pytest.mark.parametrize("CenterData", (Vector2(0.0, 0.0), Vector2(3.0, -2.0)))
+# circle pads use the oracle-proven first-principles circular feature program
+def test_freecad_circle_pad_writes_native_editable_feature(
+    CenterData: Vector2,
+) -> None:
+    SourceData = _freecad_rectangle_pad_document(depth=14.0)
+    SourceSketch = SourceData.sketches[0]
+    CircleEntity = SketchEntity(
+        "freecad:circle:0",
+        GeometryKind.CIRCLE,
+        CircleGeometry(CenterData, 18.0),
+    )
+    CircleSketch = replace(
+        SourceSketch,
+        entities=(CircleEntity,),
+        closed_profile_entity_ids=((CircleEntity.id,),),
+    )
+    SourceData = replace(SourceData, sketches=(CircleSketch,))
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.vendor_loadable is True
+    assert len(NativeData.sketches) == 1
+    assert len(NativeData.sketches[0].profiles) == 1
+    assert NativeData.sketches[0].profiles[0].kind == "circle"
+    assert NativeData.sketches[0].profiles[0].coordinates == pytest.approx(
+        (CenterData.x, CenterData.y, 18.0)
+    )
+    assert NativeData.operations[0].length_mm == pytest.approx(14.0)
+
+
+# source XZ coordinates and direction are normalized into the SOLIDWORKS Top basis
+def test_freecad_top_plane_pad_writes_native_editable_feature() -> None:
+    SourceData = _freecad_rectangle_pad_document(
+        bounds=(-17.0, -8.0, 29.0, 12.0),
+        depth=13.0,
+    )
+    SourcePlane = replace(
+        SourceData.support_planes[0],
+        transform=Transform(
+            x_axis=Vector3(1.0, 0.0, 0.0),
+            y_axis=Vector3(0.0, 0.0, 1.0),
+            z_axis=Vector3(0.0, -1.0, 0.0),
+        ),
+    )
+    SourceFeature = SourceData.feature_timeline[0]
+    assert isinstance(SourceFeature.definition, ExtrusionFeature)
+    SourceFeature = replace(
+        SourceFeature,
+        definition=replace(
+            SourceFeature.definition,
+            direction=Vector3(0.0, -1.0, 0.0),
+        ),
+    )
+    SourceData = replace(
+        SourceData,
+        support_planes=(SourcePlane,),
+        feature_timeline=(SourceFeature,),
+    )
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.vendor_loadable is True
+    assert NativeData.sketches[0].support_plane_id == 3
+    assert NativeData.sketches[0].profiles[0].coordinates == pytest.approx(
+        (-17.0, -12.0, 29.0, 8.0)
+    )
+    assert NativeData.operations[0].direction_code == 1
+    assert NativeData.operations[0].length_mm == pytest.approx(13.0)
+
+
+# source YZ coordinates are rotated into the SOLIDWORKS Right-plane sketch basis
+def test_freecad_right_plane_pad_writes_native_editable_feature() -> None:
+    SourceData = _freecad_rectangle_pad_document(
+        bounds=(-17.0, -8.0, 29.0, 12.0),
+        depth=7.0,
+    )
+    SourcePlane = replace(
+        SourceData.support_planes[0],
+        transform=Transform(
+            x_axis=Vector3(0.0, 1.0, 0.0),
+            y_axis=Vector3(0.0, 0.0, 1.0),
+            z_axis=Vector3(1.0, 0.0, 0.0),
+        ),
+    )
+    SourceFeature = SourceData.feature_timeline[0]
+    assert isinstance(SourceFeature.definition, ExtrusionFeature)
+    SourceFeature = replace(
+        SourceFeature,
+        definition=replace(
+            SourceFeature.definition,
+            direction=Vector3(1.0, 0.0, 0.0),
+        ),
+    )
+    SourceData = replace(
+        SourceData,
+        support_planes=(SourcePlane,),
+        feature_timeline=(SourceFeature,),
+    )
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ArchiveData.require(RESOLVED_FEATURES_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.vendor_loadable is True
+    assert NativeData.sketches[0].support_plane_id == 4
+    assert NativeData.sketches[0].profiles[0].coordinates == pytest.approx(
+        (-12.0, -17.0, 8.0, 29.0)
+    )
+    assert NativeData.operations[0].direction_code == 0
+    assert NativeData.operations[0].length_mm == pytest.approx(7.0)
+
+
 @pytest.mark.parametrize(
     "variant",
-    ("foreign", "reversed", "midplane", "construction", "open", "taper"),
+    ("foreign", "construction", "open", "taper"),
 )
 def test_freecad_rectangle_pad_native_gate_rejects_non_equivalent_models(
     variant: str,
@@ -918,29 +1859,8 @@ def test_freecad_rectangle_pad_native_gate_rejects_non_equivalent_models(
     source = _freecad_rectangle_pad_document()
     feature = source.feature_timeline[0]
     sketch = source.sketches[0]
-    parameters = source.parameters
     if variant == "foreign":
         source = replace(source, source=replace(source.source, format_id="test"))
-    elif variant == "reversed":
-        source = replace(
-            source,
-            feature_timeline=(
-                replace(feature, definition=replace(feature.definition, reversed=True)),
-            ),
-        )
-    elif variant == "midplane":
-        parameters = tuple(
-            (
-                replace(
-                    item,
-                    value=ParameterValue(True, ValueKind.BOOLEAN),
-                )
-                if item.attributes.get("freecad_path") == "Midplane"
-                else item
-            )
-            for item in parameters
-        )
-        source = replace(source, parameters=parameters)
     elif variant == "construction":
         entities = (
             replace(sketch.entities[0], construction=True),

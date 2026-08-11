@@ -520,6 +520,7 @@ def _write_path_staged(
             staged_destination = staging / final.name
             OptionValues = dict(options.values)
             OptionValues["final_destination"] = str(final)
+            OptionValues["final_overwrite"] = options.overwrite
             result = _checked_write(
                 document,
                 adapter,

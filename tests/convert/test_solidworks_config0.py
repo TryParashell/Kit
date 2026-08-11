@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import struct
 
 import pytest
 
@@ -21,7 +22,6 @@ from convert.adapters.solidworks.config0 import (
     PER_FEATURE_ATOM_BYTES,
     REFERENCE_ATOM_ID,
     REFERENCE_LENGTH,
-    REFERENCE_PART_NAME,
     REFERENCE_SHA256,
     REFERENCE_TREE_ID,
     SINGLE_LENGTH_UNIT_LENGTH,
@@ -32,6 +32,7 @@ from convert.adapters.solidworks.config0_program import (
     ConfigOps,
     FieldOwners,
     ReferenceLength,
+    ShiftMapReference,
 )
 from convert.adapters.solidworks.container import SldprtFormatError
 
@@ -95,6 +96,20 @@ def test_each_further_feature_adds_one_measured_atom(FeatureCount: int) -> None:
     StreamData = encode_config0_stream(atoms=_atoms(FeatureCount))
     assert len(StreamData) == REFERENCE_LENGTH + PER_FEATURE_BYTES * (FeatureCount - 1)
     assert PER_FEATURE_ATOM_BYTES == PER_FEATURE_BYTES
+    AtomDefinition = b"\xff\xff\x01\x00\x08\x00moAtom_c"
+    AtomPos = StreamData.index(AtomDefinition)
+    assert struct.unpack_from("<II", StreamData, AtomPos - 8) == (
+        100 + FeatureCount,
+        FeatureCount,
+    )
+
+
+# later map targets advance once per inserted atom while pre-atom targets stay fixed
+def test_dynamic_atoms_renumber_only_post_atom_map_references() -> None:
+    assert ShiftMapReference("classref", 57, 1) == 57
+    assert ShiftMapReference("classref", 58, 1) == 59
+    assert ShiftMapReference("objectref", 58, 1) == 58
+    assert ShiftMapReference("objectref", 59, 1) == 60
 
 
 # the single-length-unit variant omits exactly its recovered typed node

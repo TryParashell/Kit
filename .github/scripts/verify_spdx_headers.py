@@ -218,6 +218,7 @@ def check_file(path: pathlib.Path, canonical: list[str]) -> tuple[bool, str]:
         candidates.append(render_block_style(canonical))
     elif style == "unknown":
         candidates.append(render_line_style(canonical, "#"))
+        candidates.append(render_line_style(canonical, "$$"))
         candidates.append(render_block_style(canonical))
     else:
         candidates.append(render_line_style(canonical, style))

@@ -79,6 +79,7 @@ class RepeatItem:
         "TransY",
         "TransZ",
         "ConfigName",
+        "FileStamp",
     )
 
     # immutable initialization keeps one occurrence coherent across all streams
@@ -90,6 +91,7 @@ class RepeatItem:
         TransY: float = 0.0,
         TransZ: float = 0.0,
         ConfigName: str = "Default",
+        FileStamp: int = 0,
     ) -> None:
         self.OccurName = OccurName
         self.CompPath = CompPath
@@ -97,6 +99,7 @@ class RepeatItem:
         self.TransY = TransY
         self.TransZ = TransZ
         self.ConfigName = ConfigName
+        self.FileStamp = FileStamp
 
 
 # one operation tuple retains its typed serializer owner and native field value
@@ -345,6 +348,7 @@ def _EncodeHeader(
             4: 24 + ItemCount,
             75: CompPath,
             259: CompStem,
+            **({324: CoreItems[0].FileStamp} if CoreItems[0].FileStamp > 0 else {}),
             346: ItemCount,
             378: 103 + (2 * ItemCount),
             392: ModelName,
@@ -370,7 +374,9 @@ def EncodeRepCore(
         "Contents/CMgr": _EncodeCMgr(ModelName, ConfigName, CoreItems),
         "Contents/Config-0": _EncodeConfig(ModelName, ConfigName, CoreItems),
         "Contents/Config-0-ResolvedFeatures": _EncodeResolved(CoreItems),
-        "Contents/Definition": _EmitOps(StreamPrograms["Contents/Definition"], {}),
+        "Contents/Definition": _EmitOps(
+            StreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
+        ),
         "Contents/Config-0-ModelHeader": _EncodeHeader(
             ModelName, ConfigName, CoreItems
         ),

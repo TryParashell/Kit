@@ -44,6 +44,7 @@ from convert.adapters.solidworks.resolved import (
     SWEEP_SINGLE_PROFILE_FLAGS,
     TREE_NODE_FLAGS,
     FeatureEdit,
+    PatchSketchPlane,
     circle_circumference_point_mm,
     circle_radius_mm,
     class_records,
@@ -58,8 +59,37 @@ from convert.adapters.solidworks.resolved import (
     rectangle_corners_mm,
     sketch_arcs,
     sketch_coordinates,
+    sketch_plane_object_id,
     sketch_points,
     tree_nodes,
+)
+from convert.adapters.solidworks.resolved_program import EncodeProgram
+from convert.adapters.solidworks.resolved_circle_program import (
+    EncodeProgram as EncodeCircleProgram,
+)
+from convert.adapters.solidworks.resolved_bosscut_program import (
+    EncodeProgram as EncodeBossCutProgram,
+)
+from convert.adapters.solidworks.resolved_bosscutcut_program import (
+    EncodeProgram as EncodeBossCutCutProgram,
+)
+from convert.adapters.solidworks.resolved_bosscutcutcut_program import (
+    EncodeProgram as EncodeBossCutCutCutProgram,
+)
+from convert.adapters.solidworks.resolved_bosscutthrough_program import (
+    EncodeProgram as EncodeBossCutThroughProgram,
+)
+from convert.adapters.solidworks.resolved_cutbase_program import (
+    EncodeProgram as EncodeCutBaseProgram,
+)
+from convert.adapters.solidworks.resolved_right_program import (
+    EncodeProgram as EncodeRightProgram,
+)
+from convert.adapters.solidworks.resolved_revolve_program import (
+    EncodeProgram as EncodeRevolveProgram,
+)
+from convert.adapters.solidworks.resolved_top_program import (
+    EncodeProgram as EncodeTopProgram,
 )
 
 CORPUS = Path(__file__).resolve().parents[2] / ".rescratch" / "corpus2"
@@ -431,6 +461,96 @@ def test_patch_features_rejects_edits_the_stream_cannot_hold() -> None:
             patch_features(resolved, edits)
 
 
+@pytest.mark.parametrize("PlaneObjectId", (2, 3, 4))
+# principal-plane patches preserve the coupled support identifier and axis code
+def test_patch_sketch_plane_rewrites_the_principal_plane_reference(
+    PlaneObjectId: int,
+) -> None:
+    PatchedData = PatchSketchPlane(EncodeProgram(), PlaneObjectId)
+    assert sketch_plane_object_id(PatchedData) == PlaneObjectId
+
+
+# typed field programs remain complete, parseable, and free of opaque byte spans
+def test_first_principles_single_pad_programs_cover_distinct_topologies() -> None:
+    BaselineData = EncodeProgram()
+    CircleData = EncodeCircleProgram()
+    TopData = EncodeTopProgram()
+    RightData = EncodeRightProgram()
+    assert (len(BaselineData), len(CircleData), len(TopData), len(RightData)) == (
+        11075,
+        10556,
+        11075,
+        11147,
+    )
+    assert len(locate_features(BaselineData)) == 1
+    assert len(locate_features(CircleData)[0].arcs) == 1
+    assert sketch_plane_object_id(TopData) == 3
+    assert sketch_plane_object_id(RightData) == 4
+
+
+# the typed pad-pocket program retains both editable feature layouts without donor spans
+def test_first_principles_pad_pocket_program_covers_both_operations() -> None:
+    for ProgramData, ExpectedLength in (
+        (EncodeCutBaseProgram(), 16579),
+        (EncodeBossCutProgram(), 16472),
+        (EncodeBossCutThroughProgram(), 14693),
+    ):
+        FeatureData = locate_features(ProgramData)
+        assert len(ProgramData) == ExpectedLength
+        assert [ItemData.kind for ItemData in FeatureData] == [BOSS_KIND, CUT_KIND]
+        assert [ItemData.feature_id for ItemData in FeatureData] == [32, 40]
+        assert [ItemData.sketch_id for ItemData in FeatureData] == [26, 33]
+        assert [len(ItemData.points) for ItemData in FeatureData] == [4, 4]
+    ThroughData = locate_features(EncodeBossCutThroughProgram())
+    assert ThroughData[0].depth_mm == pytest.approx(15.0)
+    assert ThroughData[1].depth_mm is None
+    assert ThroughData[1].depth_offset is None
+
+
+# the typed three-operation program preserves the full boss-cut-cut native tree
+def test_first_principles_boss_cut_cut_program_covers_three_operations() -> None:
+    ProgramData = EncodeBossCutCutProgram()
+    FeatureData = locate_features(ProgramData)
+    assert len(ProgramData) == 21780
+    assert [ItemData.kind for ItemData in FeatureData] == [
+        BOSS_KIND,
+        CUT_KIND,
+        CUT_KIND,
+    ]
+    assert [ItemData.feature_id for ItemData in FeatureData] == [32, 40, 47]
+    assert [ItemData.sketch_id for ItemData in FeatureData] == [26, 33, 41]
+    assert [len(ItemData.points) for ItemData in FeatureData] == [4, 4, 4]
+
+
+# the typed four-operation program preserves the complete three-cut native tree
+def test_first_principles_boss_cut_cut_cut_program_covers_four_operations() -> None:
+    ProgramData = EncodeBossCutCutCutProgram()
+    FeatureData = locate_features(ProgramData)
+    assert len(ProgramData) == 27092
+    assert [ItemData.kind for ItemData in FeatureData] == [
+        BOSS_KIND,
+        CUT_KIND,
+        CUT_KIND,
+        CUT_KIND,
+    ]
+    assert [ItemData.feature_id for ItemData in FeatureData] == [32, 40, 47, 54]
+    assert [ItemData.sketch_id for ItemData in FeatureData] == [26, 33, 41, 48]
+    assert [len(ItemData.points) for ItemData in FeatureData] == [4, 4, 4, 4]
+
+
+# the typed revolution program retains its complete profile and angular parameter
+def test_first_principles_revolution_program_covers_full_revolved_boss() -> None:
+    ProgramData = EncodeRevolveProgram()
+    FeatureData = locate_features(ProgramData)
+    assert len(ProgramData) == 12135
+    assert len(FeatureData) == 1
+    assert FeatureData[0].kind == "revolve"
+    assert FeatureData[0].feature_id == 31
+    assert FeatureData[0].sketch_id == 26
+    assert len(FeatureData[0].points) == 4
+    assert FeatureData[0].angle_radians == pytest.approx(2.0 * math.pi)
+
+
 @corpus_parts
 @pytest.mark.parametrize("name", sorted(CORPUS_FEATURES))
 def test_corpus_parts_locate_every_feature_with_its_measured_parameters(
@@ -724,13 +844,27 @@ def test_patch_features_rewrites_the_radii_of_a_circular_profile() -> None:
     resolved = _authored_resolved_stream("BIELA")
     features = locate_features(resolved)
     circular = next(feature for feature in features if feature.feature_id == 214)
+    ExpectedCentres = ((3.0, -2.0), (7.5, 4.0))
     patched = patch_features(
-        resolved, {circular.ordinal: FeatureEdit(radii_mm=(6.0, 6.5), depth_mm=44.0)}
+        resolved,
+        {
+            circular.ordinal: FeatureEdit(
+                radii_mm=(6.0, 6.5),
+                arc_centres_mm=ExpectedCentres,
+                depth_mm=44.0,
+            )
+        },
     )
     assert len(patched) == len(resolved)
     relocated = locate_features(patched)[circular.ordinal]
     assert relocated.feature_id == 214
     assert relocated.radii_mm == (pytest.approx(6.0), pytest.approx(6.5))
+    for ArcData, ExpectedCentre in zip(
+        relocated.arcs,
+        ExpectedCentres,
+        strict=True,
+    ):
+        assert ArcData.centre_mm == pytest.approx(ExpectedCentre)
     assert relocated.depth_mm == pytest.approx(44.0)
     assert relocated.bounds_mm is not None
     rejected = (

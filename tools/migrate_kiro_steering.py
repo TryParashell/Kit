@@ -22,6 +22,7 @@ SOURCE_DIR = ROOT / ".kiro" / "steering"
 TARGET_DIR = ROOT / ".agents" / "skills"
 LICENSE = "LicenseRef-PolyForm-Strict-1.0.0"
 
+# agents need task specific triggers before loading detailed steering instructions
 DESCRIPTIONS = {
     "chats": "Apply the concise chat-response policy. Use when preparing any user-facing response, progress update, or completion summary.",
     "code-formatting": "Format and verify edited Python, TypeScript, JavaScript, JSON, CSS, or Markdown files. Use after changing code or related text files.",
@@ -38,6 +39,7 @@ DESCRIPTIONS = {
     "lossless-translation": "Hold every format translation to lossless, vendor loadable, application usable, and parametric output verified in the target application. Use when converting between CAD formats or reporting translation results.",
     "mcp-tool-doc-pages": "Document agent-facing MCP tools with standalone Mintlify pages. Use when creating or changing MCP tools or their documentation.",
     "naming-convention": "Apply the PascalCase identifier casing and length ranges. Use when naming or renaming classes, functions, methods, variables, globals, or constants.",
+    "no-cad-runtime": "Keep CAD applications and vendor automation out of production runtime paths. Use when implementing, testing, or reviewing CAD parsing, conversion, or writing workflows.",
     "no-donor-blocks": "Never ship vendor bytes; reverse engineer proprietary binary formats until they can be emitted from first principles. Use when reading or writing SOLIDWORKS, CATIA, Parasolid, or any proprietary CAD format.",
     "no-stubs": "Deliver complete implementations with no stubs, placeholders, or incomplete code. Use for all code changes and bug fixes.",
     "no-unrequested-styling": "Limit UI changes to the requested scope. Use when changing pages, visual styling, layout, or components.",

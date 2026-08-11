@@ -8,17 +8,25 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
 from typing import Any
 
-from .assembly_distinct5_programs import EncodeField, StreamPrograms
+from .assembly_distinct_repeat import (
+    ConfigShift1 as ConfigShiftUnique,
+    ConfigShift5 as ConfigShiftMap,
+    ResolvedShift1 as ResolvedShiftUnique,
+    ResolvedShift5 as ResolvedShiftMap,
+    ResolvedShift9 as ResolvedShiftLink,
+)
+from .assembly_hybrid5_programs import EncodeField, StreamPrograms
 from .assembly_repeat import RepeatItem, _OccurHash
 from .container import SldprtFormatError
 
 
-# recovered boundaries separate stable fields from unique component records
+# recovered boundaries separate stable fields from hybrid occurrence records
 InsertSpecs = MappingProxyType(
     {
         "Contents/CMgr": (1720, 378),
@@ -28,73 +36,26 @@ InsertSpecs = MappingProxyType(
     }
 )
 
-# five traced component files provide four canonical record templates
+# five traced occurrences isolate occurrence growth from file-class growth
 TracedCount = 5
 
-# config suffix targets advance five map entries per unique component file
-ConfigShift5 = frozenset(
-    {
-        297,
-        3337,
-        4283,
-        4781,
-        5287,
-        5789,
-        6303,
-        6841,
-        7799,
-        20327,
-        20648,
-        21270,
-        21410,
-        21620,
-        21830,
-        22042,
-        22250,
-        22464,
-        22684,
-        22904,
-        23336,
-        23346,
-        23418,
-    }
-)
+# three traced component files anchor the independent unique-file dimension
+TracedUnique = 3
 
-# config class targets advance once for each new external component class
-ConfigShift1 = frozenset({19623, 19715, 20008, 20329, 20650})
-
-# resolved suffix links span both five-entry base and four-entry occurrence maps
-ResolvedShift9 = frozenset({1115, 1310, 1344, 2424, 2747, 2990, 3317})
-
-# resolved suffix links into the configuration base advance five entries
-ResolvedShift5 = frozenset({1493, 4069, 4243, 4330})
-
-# resolved component-class links advance once per unique external file
-ResolvedShift1 = frozenset(
-    {
-        28,
-        241,
-        439,
-        658,
-        864,
-        948,
-        1117,
-        1520,
-        1710,
-        1903,
-        2426,
-        2992,
-        3590,
-        4512,
-    }
-)
-
-# header offsets divide occurrence stamps, external files, and the stable tail
+# header boundaries isolate occurrences, the first file, repeated files, and tail
 HeaderExtStart = 1960
-HeaderExtWidth = 286
-HeaderFileStart = 2246
-HeaderFileWidth = 215
-HeaderTailStart = 3106
+
+# the first file record includes the external-object list framing
+HeaderExtWidth = 300
+
+# subsequent file records share one fixed typed field sequence
+HeaderFileStart = 2260
+
+# equal-width oracle paths expose the physical repeated-file record boundary
+HeaderFileWidth = 229
+
+# the stable header tail follows the two traced subsequent file records
+HeaderTailStart = 2718
 
 
 # operation emission preserves typed ownership while applying semantic values
@@ -110,7 +71,7 @@ def _EmitOps(
     return bytes(OutputData)
 
 
-# logical slicing remains stable when semantic strings change byte width
+# logical slicing remains stable when semantic strings change physical width
 def _SliceOps(
     StreamName: str,
     StartPos: int,
@@ -128,7 +89,7 @@ def _PathKey(PathValue: str) -> str:
     return str(PureWindowsPath(PathValue)).casefold()
 
 
-# first occurrences define the external-file record order independently
+# first occurrences define unique component-file ordering independently
 def _UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
     SeenPaths: set[str] = set()
     UniqueItems: list[RepeatItem] = []
@@ -141,7 +102,17 @@ def _UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
     return tuple(UniqueItems)
 
 
-# distinct configuration-manager records enumerate every component occurrence
+# path ordinals reconnect every occurrence to its unique external file
+def _PathIndex(UniqueItems: tuple[RepeatItem, ...]) -> Mapping[str, int]:
+    return MappingProxyType(
+        {
+            _PathKey(ItemValue.CompPath): ItemIndex
+            for ItemIndex, ItemValue in enumerate(UniqueItems, 1)
+        }
+    )
+
+
+# hybrid configuration-manager records enumerate every component occurrence
 def _EncodeCMgr(
     ModelName: str,
     ConfigName: str,
@@ -161,8 +132,8 @@ def _EncodeCMgr(
             1241: DisplayName,
             1464: ModelName,
             1515: CoreItems[0].OccurName,
-            1617: ConfigName,
-            1655: ConfigName,
+            1617: CoreItems[0].ConfigName,
+            1655: CoreItems[0].ConfigName,
         },
     )
     UnitData = bytearray()
@@ -191,14 +162,19 @@ def _EncodeCMgr(
     return PrefixData + bytes(UnitData) + SuffixData
 
 
-# distinct configuration records bind paths, identities, and placements
+# hybrid configuration records bind occurrence maps to unique file classes
 def _EncodeConfig(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
+    UniqueItems: tuple[RepeatItem, ...],
 ) -> bytes:
     ItemCount = len(CoreItems)
-    BaseShift = ItemCount - TracedCount
+    UniqueCount = len(UniqueItems)
+    OccurShift = ItemCount - TracedCount
+    UniqueShift = UniqueCount - TracedUnique
+    MapShift = (4 * OccurShift) + UniqueShift
+    PathIndex = _PathIndex(UniqueItems)
     InsertPos, UnitWidth = InsertSpecs["Contents/Config-0"]
     PrefixData = _EmitOps(
         _SliceOps("Contents/Config-0", 0, InsertPos),
@@ -206,14 +182,14 @@ def _EncodeConfig(
             18: 2218 + (UnitWidth * ItemCount),
             48: ModelName,
             88: ItemCount,
-            109: 9 + BaseShift,
+            109: 4 + UniqueCount,
             111: CoreItems[0].OccurName,
             400: ConfigName,
-            533: 16 + BaseShift,
+            533: 11 + UniqueCount,
             535: ModelName,
-            584: 16 + BaseShift,
+            584: 11 + UniqueCount,
             586: CoreItems[0].OccurName,
-            606: 12 + BaseShift,
+            606: 7 + UniqueCount,
         },
     )
     UnitData = bytearray()
@@ -228,28 +204,29 @@ def _EncodeConfig(
             if ItemIndex <= TracedCount
             else _OccurHash(ItemValue.OccurName)
         )
+        FileIndex = PathIndex[_PathKey(ItemValue.CompPath)]
         UnitData.extend(
             _EmitOps(
                 UnitOps,
                 {
-                    0: 11 + BaseShift,
-                    2: 9 + BaseShift,
+                    0: 6 + UniqueCount,
+                    2: 4 + UniqueCount,
                     4: ItemValue.OccurName,
                     32: 23 + ItemIndex,
                     153: HashValue,
                     169: ItemValue.TransX,
                     177: ItemValue.TransY,
                     185: ItemValue.TransZ - 0.005,
-                    283: 3 + ItemIndex,
+                    283: 3 + FileIndex,
                     293: ItemValue.ConfigName,
                     341: 14 + ItemIndex,
-                    379: 14 + BaseShift,
-                    381: 17 + BaseShift,
-                    383: 18 + BaseShift,
+                    379: 9 + UniqueCount,
+                    381: 12 + UniqueCount,
+                    383: 13 + UniqueCount,
                     414: 23 + ItemIndex,
-                    418: 16 + BaseShift,
+                    418: 11 + UniqueCount,
                     420: ItemValue.OccurName,
-                    440: 12 + (4 * ItemIndex) + BaseShift,
+                    440: 7 + (4 * ItemIndex) + UniqueCount,
                 },
                 UnitStart,
             )
@@ -259,29 +236,36 @@ def _EncodeConfig(
     SuffixOverrides: dict[int, Any] = {}
     for StartPos, _Width, _Owner, _Kind, DefaultValue in SuffixOps:
         RelativePos = StartPos - SuffixStart
-        if RelativePos in ConfigShift5:
-            SuffixOverrides[RelativePos] = DefaultValue + (5 * BaseShift)
-        elif RelativePos in ConfigShift1:
-            SuffixOverrides[RelativePos] = DefaultValue + BaseShift
+        if RelativePos in ConfigShiftMap:
+            SuffixOverrides[RelativePos] = DefaultValue + MapShift
+        elif RelativePos in ConfigShiftUnique:
+            SuffixOverrides[RelativePos] = DefaultValue + UniqueShift
     SuffixOverrides[23442] = ItemCount
     SuffixData = _EmitOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
 
 
-# resolved records reconnect every inserted occurrence to shifted feature maps
-def _EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
+# resolved records reconnect occurrence maps and unique component classes
+def _EncodeResolved(
+    CoreItems: tuple[RepeatItem, ...],
+    UniqueItems: tuple[RepeatItem, ...],
+) -> bytes:
     ItemCount = len(CoreItems)
-    BaseShift = ItemCount - TracedCount
+    UniqueCount = len(UniqueItems)
+    OccurShift = ItemCount - TracedCount
+    UniqueShift = UniqueCount - TracedUnique
+    MapShift = (4 * OccurShift) + UniqueShift
+    LinkShift = (8 * OccurShift) + UniqueShift
     InsertPos, UnitWidth = InsertSpecs["Contents/Config-0-ResolvedFeatures"]
     PrefixData = _EmitOps(
         _SliceOps("Contents/Config-0-ResolvedFeatures", 0, InsertPos),
         {
-            0: 96 + (5 * ItemCount),
-            30: 9 + BaseShift,
-            227: 9 + BaseShift,
-            433: 9 + BaseShift,
+            0: 96 + (4 * ItemCount) + UniqueCount,
+            30: 4 + UniqueCount,
+            227: 4 + UniqueCount,
+            433: 4 + UniqueCount,
             604: ItemCount,
-            737: 15 + BaseShift,
+            737: 10 + UniqueCount,
             739: 20 + (13 * ItemCount),
         },
     )
@@ -295,7 +279,7 @@ def _EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
             UnitStart + UnitWidth,
         )
         RefValues = {
-            StartPos - UnitStart: DefaultValue + (5 * BaseShift)
+            StartPos - UnitStart: DefaultValue + MapShift
             for StartPos, _Width, _Owner, KindName, DefaultValue in UnitOps
             if KindName == "classref"
         }
@@ -304,8 +288,8 @@ def _EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
                 UnitOps,
                 {
                     **RefValues,
-                    38: 14 + (4 * ItemIndex) + BaseShift,
-                    40: 33 + (13 * (ItemCount - ItemIndex)),
+                    38: 9 + (4 * ItemIndex) + UniqueCount,
+                    40: 32 + (13 * (ItemCount - ItemIndex)) + (ItemIndex % 2),
                 },
                 UnitStart,
             )
@@ -315,26 +299,26 @@ def _EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
     SuffixOverrides: dict[int, Any] = {}
     for StartPos, _Width, _Owner, _Kind, DefaultValue in SuffixOps:
         RelativePos = StartPos - SuffixStart
-        if RelativePos in ResolvedShift9:
-            SuffixOverrides[RelativePos] = DefaultValue + (9 * BaseShift)
-        elif RelativePos in ResolvedShift5:
-            SuffixOverrides[RelativePos] = DefaultValue + (5 * BaseShift)
-        elif RelativePos in ResolvedShift1:
-            SuffixOverrides[RelativePos] = DefaultValue + BaseShift
+        if RelativePos in ResolvedShiftLink:
+            SuffixOverrides[RelativePos] = DefaultValue + LinkShift
+        elif RelativePos in ResolvedShiftMap:
+            SuffixOverrides[RelativePos] = DefaultValue + MapShift
+        elif RelativePos in ResolvedShiftUnique:
+            SuffixOverrides[RelativePos] = DefaultValue + UniqueShift
     SuffixData = _EmitOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
 
 
-# model-header records enumerate occurrences and their independent part files
+# model-header records separate occurrence stamps from unique component files
 def _EncodeHeader(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
+    UniqueItems: tuple[RepeatItem, ...],
 ) -> bytes:
     ItemCount = len(CoreItems)
-    UniqueItems = _UniqueItems(CoreItems)
     UniqueCount = len(UniqueItems)
-    BaseShift = ItemCount - TracedCount
+    PathCounts = Counter(_PathKey(ItemValue.CompPath) for ItemValue in CoreItems)
     InsertPos, UnitWidth = InsertSpecs["Contents/Config-0-ModelHeader"]
     PrefixData = _EmitOps(
         _SliceOps("Contents/Config-0-ModelHeader", 0, InsertPos),
@@ -365,11 +349,12 @@ def _EncodeHeader(
         4: 24 + ItemCount,
         31: UniqueCount,
         75: FirstItem.CompPath,
-        211: 74 + (2 * BaseShift),
-        213: FirstStem,
+        225: 64 + (2 * ItemCount),
+        227: FirstStem,
+        268: PathCounts[_PathKey(FirstItem.CompPath)],
     }
     if FirstItem.FileStamp > 0:
-        ExtOverrides[232] = FirstItem.FileStamp
+        ExtOverrides[246] = FirstItem.FileStamp
     ExtPrefix = _EmitOps(
         _SliceOps(
             "Contents/Config-0-ModelHeader",
@@ -381,19 +366,20 @@ def _EncodeHeader(
     )
     FileData = bytearray()
     for FileIndex, ItemValue in enumerate(UniqueItems[1:], 2):
-        TemplateIndex = min(FileIndex, TracedCount)
+        TemplateIndex = min(FileIndex, TracedUnique)
         FileStart = HeaderFileStart + ((TemplateIndex - 2) * HeaderFileWidth)
         FileStem = PureWindowsPath(ItemValue.CompPath).stem
         FileOverrides = {
-            0: 72 + (2 * BaseShift),
-            2: 74 + (2 * BaseShift),
+            0: 62 + (2 * ItemCount),
+            2: 64 + (2 * ItemCount),
             4: ItemValue.CompPath,
-            140: 74 + (2 * BaseShift),
-            142: FileStem,
-            191: FileIndex - 1,
+            154: 64 + (2 * ItemCount),
+            156: FileStem,
+            197: PathCounts[_PathKey(ItemValue.CompPath)],
+            205: FileIndex - 1,
         }
         if ItemValue.FileStamp > 0:
-            FileOverrides[161] = ItemValue.FileStamp
+            FileOverrides[175] = ItemValue.FileStamp
         FileData.extend(
             _EmitOps(
                 _SliceOps(
@@ -409,9 +395,9 @@ def _EncodeHeader(
         _SliceOps("Contents/Config-0-ModelHeader", HeaderTailStart),
         {
             0: 103 + (2 * ItemCount),
-            4: 72 + (2 * BaseShift),
-            6: 74 + (2 * BaseShift),
-            12: 74 + (2 * BaseShift),
+            4: 62 + (2 * ItemCount),
+            6: 64 + (2 * ItemCount),
+            12: 64 + (2 * ItemCount),
             14: ModelName,
             67: ConfigName,
             131: ItemCount,
@@ -421,26 +407,37 @@ def _EncodeHeader(
     return PrefixData + bytes(OccurData) + ExtPrefix + bytes(FileData) + TailData
 
 
-# canonical distinct-path programs scale independent component files without donors
-def EncodePathCore(
+# canonical hybrid programs scale repeated paths with distinct internal identities
+def EncodeHybCore(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
 ) -> Mapping[str, bytes]:
     if len(CoreItems) < 3:
-        raise SldprtFormatError("distinct assembly history requires three components")
-    CompPaths = tuple(ItemValue.CompPath for ItemValue in CoreItems)
-    if any(not PureWindowsPath(ItemPath).stem for ItemPath in CompPaths):
-        raise SldprtFormatError("distinct assembly component path has no stem")
+        raise SldprtFormatError("hybrid assembly history requires three occurrences")
+    if any(
+        not ItemValue.OccurName
+        or not ItemValue.ConfigName
+        or not PureWindowsPath(ItemValue.CompPath).stem
+        for ItemValue in CoreItems
+    ):
+        raise SldprtFormatError("hybrid assembly fields cannot be empty")
+    UniqueItems = _UniqueItems(CoreItems)
+    if len(UniqueItems) < 2 or len(UniqueItems) == len(CoreItems):
+        raise SldprtFormatError(
+            "hybrid assembly history requires shared and distinct component files"
+        )
     StreamsMap = {
         "Contents/CMgr": _EncodeCMgr(ModelName, ConfigName, CoreItems),
-        "Contents/Config-0": _EncodeConfig(ModelName, ConfigName, CoreItems),
-        "Contents/Config-0-ResolvedFeatures": _EncodeResolved(CoreItems),
+        "Contents/Config-0": _EncodeConfig(
+            ModelName, ConfigName, CoreItems, UniqueItems
+        ),
+        "Contents/Config-0-ResolvedFeatures": _EncodeResolved(CoreItems, UniqueItems),
         "Contents/Definition": _EmitOps(
             StreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
         ),
         "Contents/Config-0-ModelHeader": _EncodeHeader(
-            ModelName, ConfigName, CoreItems
+            ModelName, ConfigName, CoreItems, UniqueItems
         ),
     }
     return MappingProxyType(StreamsMap)

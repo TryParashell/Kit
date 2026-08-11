@@ -129,7 +129,20 @@ def test_ascii_brep_decoder_rejects_non_unit_line_direction() -> None:
     assert decode_ascii_brep(malformed) is None
 
 
-def test_ascii_brep_decoder_rejects_left_handed_plane_frame() -> None:
+def test_ascii_brep_decoder_accepts_indirect_plane_frame() -> None:
+    data = triangle_mesh_brep(
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+        ((0, 1, 2),),
+    )
+    indirect = _replace_geometry_line(
+        data,
+        b"Surfaces ",
+        b"1 0 0 0 0 0 1 1 0 0 0 -1 0 ",
+    )
+    assert decode_ascii_brep(indirect) is not None
+
+
+def test_ascii_brep_decoder_rejects_nonorthogonal_plane_frame() -> None:
     data = triangle_mesh_brep(
         ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
         ((0, 1, 2),),
@@ -137,7 +150,7 @@ def test_ascii_brep_decoder_rejects_left_handed_plane_frame() -> None:
     malformed = _replace_geometry_line(
         data,
         b"Surfaces ",
-        b"1 0 0 0 0 0 1 1 0 0 0 -1 0 ",
+        b"1 0 0 0 0 0 1 1 0 0 1 0 0 ",
     )
     assert decode_ascii_brep(malformed) is None
 
@@ -150,7 +163,7 @@ def test_ascii_brep_decoder_rejects_unsupported_curve_family() -> None:
     malformed = _replace_geometry_line(
         data,
         b"Curves ",
-        b"2 0 0 0 0 0 1 1 0 0 0 1 0 1 ",
+        b"3 0 0 0 0 0 1 1 0 0 0 1 0 2 1 ",
     )
     assert decode_ascii_brep(malformed) is None
 
@@ -205,6 +218,35 @@ def test_ascii_brep_decoder_applies_location_translation() -> None:
         (11.0, -7.0, 5.0),
         (13.0, -7.0, 5.0),
         (11.0, -4.0, 5.0),
+    }
+
+
+# nested placements use OpenCascade's child-before-parent composition convention
+def test_ascii_brep_decoder_composes_nested_locations_in_native_order() -> None:
+    DataValue = triangle_mesh_brep(
+        ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0)),
+        ((0, 1, 2),),
+    )
+    DataValue = DataValue.replace(
+        b"Locations 0\n",
+        b"Locations 2\n"
+        b"1\n0 -1 0 0\n1 0 0 0\n0 0 1 0\n"
+        b"1\n1 0 0 10\n0 1 0 0\n0 0 1 0\n",
+        1,
+    )
+    DataValue = DataValue.replace(b"+2 0 *", b"+2 2 *", 1)
+    HeadData, MarkerData, TailData = DataValue.rpartition(b"+1 0")
+    assert MarkerData
+    DecodedData = decode_ascii_brep(HeadData + b"+1 1" + TailData)
+    assert DecodedData is not None
+    assert DecodedData.validate() == ()
+    assert {
+        (VertexData.point.x, VertexData.point.y, VertexData.point.z)
+        for VertexData in DecodedData.vertices
+    } == {
+        (10.0, 0.0, 0.0),
+        (10.0, 2.0, 0.0),
+        (7.0, 0.0, 0.0),
     }
 
 

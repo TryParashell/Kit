@@ -31,14 +31,13 @@ Kit by Parashell is a source-available CAD interchange SDK for translating geome
 5. Creo
 6. AutoCAD
 
-## Formats
+## Supported formats
 
 | CAD             | suffixes                  |
 | --------------- | ------------------------- |
 | SOLIDWORKS      | `.SLDPRT`, `.SLDASM`      |
 | FreeCAD         | `.FCStd`                  |
 | CATIA           | `.CATPart`, `.CATProduct` |
-| Kit interchange | `.json`                   |
 
 Kit reads and writes these formats natively, without requiring CAD software to be installed.
 

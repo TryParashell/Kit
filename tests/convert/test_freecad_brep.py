@@ -52,6 +52,7 @@ from interchange import (
     Configuration,
     CylinderSurface,
     EllipseCurve,
+    LineCurve,
     LinePcurve,
     Mesh,
     NativeCurve,
@@ -241,6 +242,23 @@ def test_periodic_cylinder_band_serializes_with_exact_seam_topology() -> None:
     assert b"Curves 3\n" in encoded
     assert b"TShapes 8\n" in encoded
     assert b"3  3 4 CN 1 0 0 20\n" in encoded
+
+
+# analytic periodic bodies must survive the same first-principles reader/writer path
+def test_periodic_cylinder_band_decodes_as_typed_analytic_brep() -> None:
+    EncodedData = brep_model_brep(_cylinder_band_brep())
+    DecodedData = decode_ascii_brep(EncodedData, id_prefix="cylinder-proof")
+    assert DecodedData is not None
+    assert not DecodedData.validate()
+    assert tuple(type(ItemData) for ItemData in DecodedData.curves) == (
+        CircleCurve,
+        CircleCurve,
+        LineCurve,
+    )
+    assert tuple(type(ItemData) for ItemData in DecodedData.surfaces) == (
+        CylinderSurface,
+    )
+    assert len(DecodedData.bodies) == 1
 
 
 def test_supplied_solidworks_breps_pass_only_the_proven_native_gate() -> None:

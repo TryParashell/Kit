@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import hashlib
+import struct
 
 import pytest
 
@@ -60,6 +61,78 @@ def test_three_feature_default_matches_the_measured_digest():
 def test_stream_follows_the_measured_per_feature_size_law(features):
     stream = encode_cmgr_stream(feature_tree_ids=tree_ids_for(features))
     assert len(stream) == ONE_FEATURE_BYTES + PER_FEATURE_BYTES * (features - 1)
+
+
+# a dependent second operation carries typed predecessor child objects and table endpoints
+def test_connected_two_feature_history_uses_the_recovered_link_graph() -> None:
+    StreamData = encode_cmgr_stream(feature_tree_ids=(32, 40), connected_history=True)
+    assert len(StreamData) == 2059
+    assert struct.pack("<III", 1, 102, 101) in StreamData
+    assert struct.pack("<III", 40, 110, 105) in StreamData
+    assert (
+        struct.pack("<HI", 0, 2)
+        + struct.pack("<III", 40, 0x01DD2399, 0x10000001)
+        + struct.pack("<III", 32, 0x01DD2399, 0x10000000)
+    ) in StreamData
+
+
+# three-operation histories retain both predecessor edges and the rotated stamp list
+def test_connected_three_feature_history_uses_the_recovered_link_graph() -> None:
+    StreamData = encode_cmgr_stream(
+        feature_tree_ids=(32, 40, 47),
+        connected_history=True,
+    )
+    assert len(StreamData) == 2173
+    assert struct.pack("<IIIII", 2, 103, 102, 102, 101) in StreamData
+    assert struct.pack("<IIIII", 2, 102, 101, 103, 102) in StreamData
+    assert (
+        struct.pack("<HI", 0, 3)
+        + struct.pack("<III", 40, 0x01DD2399, 0x10000001)
+        + struct.pack("<III", 47, 0x01DD2399, 0x10000002)
+        + struct.pack("<III", 32, 0x01DD2399, 0x10000000)
+    ) in StreamData
+
+
+# four-operation histories carry all three predecessor edges and native stamp order
+def test_connected_four_feature_history_uses_the_recovered_link_graph() -> None:
+    StreamData = encode_cmgr_stream(
+        feature_tree_ids=(32, 40, 47, 54),
+        connected_history=True,
+    )
+    assert len(StreamData) == 2299
+    assert (
+        struct.pack(
+            "<IIIIIII",
+            3,
+            104,
+            103,
+            103,
+            102,
+            102,
+            101,
+        )
+        in StreamData
+    )
+    assert (
+        struct.pack(
+            "<IIIIIII",
+            3,
+            102,
+            101,
+            103,
+            102,
+            104,
+            103,
+        )
+        in StreamData
+    )
+    assert (
+        struct.pack("<HI", 0, 4)
+        + struct.pack("<III", 54, 0x01DD2399, 0x10000003)
+        + struct.pack("<III", 40, 0x01DD2399, 0x10000001)
+        + struct.pack("<III", 47, 0x01DD2399, 0x10000002)
+        + struct.pack("<III", 32, 0x01DD2399, 0x10000000)
+    ) in StreamData
 
 
 def test_declared_and_opaque_bytes_tile_the_stream():

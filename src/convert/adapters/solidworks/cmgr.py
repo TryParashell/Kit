@@ -232,6 +232,7 @@ class CMgrParameters:
     build: int
     session_counter: int
     display_geometry_cache: bytes
+    connected_history: bool
 
     def validate(self) -> None:
         if not self.atom_ids:
@@ -253,6 +254,10 @@ class CMgrParameters:
             raise SldprtFormatError(
                 f"the recovered Contents/CMgr tables describe generation "
                 f"{DOCUMENT_GENERATION}, not {self.generation}"
+            )
+        if self.connected_history and len(self.link_atom_ids) not in {2, 3, 4}:
+            raise SldprtFormatError(
+                "the recovered connected-history CMgr shape requires two to four atoms"
             )
 
 
@@ -398,6 +403,25 @@ def _atom_table(atom_ids: tuple[int, ...]) -> bytes:
     return bytes(out)
 
 
+# connected histories carry the forward and reverse atom endpoints in the table tail
+def _ConnectedAtomTable(AtomIds: tuple[int, ...]) -> bytes:
+    if len(AtomIds) not in {2, 3, 4}:
+        raise SldprtFormatError(
+            "the recovered connected-history atom table requires two to four atoms"
+        )
+    OutputData = bytearray(_table(ATOM_TABLE_HEAD))
+    OutputData += _pack("u32", len(AtomIds))
+    for AtomId in AtomIds:
+        OutputData += _pack("u32", AtomId) + _pack("u32", 0)
+    OutputData += bytes(4)
+    OutputData += _pack("u32", len(AtomIds) - 1)
+    for AtomIndex in range(len(AtomIds) - 1, 0, -1):
+        OutputData += _pack("u32", AtomIds[AtomIndex])
+        OutputData += _pack("u32", AtomIds[AtomIndex - 1])
+    OutputData += bytes(22)
+    return bytes(OutputData)
+
+
 def _link_head(atom_ids: tuple[int, ...]) -> bytes:
     return (
         _pack("u32", 0)
@@ -412,6 +436,160 @@ def _link_body(atom_id: int, tree_id: int, next_id: int | None) -> bytes:
     if next_id is None:
         return head + bytes(34) + _pack("u32", LINK_TERMINATOR) + bytes(8)
     return head + bytes(18) + _pack("u32", next_id)
+
+
+# connected two-operation histories serialize predecessor links as child archive objects
+def _ConnectedLinkParts(
+    AtomIds: tuple[int, ...], TreeIds: tuple[int, ...]
+) -> tuple[tuple[bytes, tuple[bytes, ...]], ...]:
+    if len(AtomIds) == 3 and len(TreeIds) == 3:
+        FirstAtom, SecondAtom, ThirdAtom = AtomIds
+        FirstTree, SecondTree, ThirdTree = TreeIds
+        FirstHead = (
+            _pack("u32", FirstAtom) + _pack("u16", LINK_FLAG) + _pack("u32", FirstTree)
+        )
+        SecondHead = (
+            _pack("u32", SecondAtom)
+            + _pack("u16", LINK_FLAG)
+            + _pack("u32", SecondTree)
+        )
+        ThirdHead = (
+            _pack("u32", ThirdAtom) + _pack("u16", LINK_FLAG) + _pack("u32", ThirdTree)
+        )
+        return (
+            (
+                FirstHead + bytes(6) + _pack("u32", 1) + _pack("u32", SecondAtom),
+                (
+                    _pack("u32", 0) + _pack("u32", 2) + _pack("u32", SecondAtom),
+                    _pack("u32", ThirdAtom),
+                    _pack("u32", SecondAtom),
+                ),
+            ),
+            (
+                SecondHead + bytes(2) + _pack("u32", 1) + _pack("u32", FirstAtom),
+                (
+                    _pack("u32", 1) + _pack("u32", ThirdAtom),
+                    _pack("u32", 1) + _pack("u32", FirstAtom),
+                    _pack("u32", 1) + _pack("u32", ThirdAtom),
+                    _pack("u32", ThirdAtom),
+                ),
+            ),
+            (
+                ThirdHead + bytes(2) + _pack("u32", 1) + _pack("u32", SecondAtom),
+                (
+                    _pack("u32", 0) + _pack("u32", 2) + _pack("u32", FirstAtom),
+                    _pack("u32", SecondAtom),
+                    bytes(16)
+                    + _pack("u32", 2)
+                    + _pack("u32", SecondAtom)
+                    + _pack("u32", FirstAtom)
+                    + _pack("u32", ThirdAtom)
+                    + _pack("u32", SecondAtom)
+                    + _pack("u32", LINK_TERMINATOR)
+                    + bytes(8),
+                ),
+            ),
+        )
+    if len(AtomIds) != 2 or len(TreeIds) != 2:
+        raise SldprtFormatError(
+            "the recovered connected-history link graph requires two or three atoms"
+        )
+    FirstAtom, SecondAtom = AtomIds
+    FirstTree, SecondTree = TreeIds
+    FirstHead = (
+        _pack("u32", FirstAtom) + _pack("u16", LINK_FLAG) + _pack("u32", FirstTree)
+    )
+    SecondHead = (
+        _pack("u32", SecondAtom) + _pack("u16", LINK_FLAG) + _pack("u32", SecondTree)
+    )
+    return (
+        (
+            FirstHead + bytes(6) + _pack("u32", 1) + _pack("u32", SecondAtom),
+            (
+                _pack("u32", 0) + _pack("u32", 1) + _pack("u32", SecondAtom),
+                _pack("u32", SecondAtom),
+            ),
+        ),
+        (
+            SecondHead + bytes(2) + _pack("u32", 1) + _pack("u32", FirstAtom),
+            (
+                _pack("u32", 0) + _pack("u32", 1) + _pack("u32", FirstAtom),
+                bytes(16)
+                + _pack("u32", 1)
+                + _pack("u32", SecondAtom)
+                + _pack("u32", FirstAtom)
+                + _pack("u32", LINK_TERMINATOR)
+                + bytes(8),
+            ),
+        ),
+    )
+
+
+# the four-operation link graph records every forward and predecessor adjacency
+def _ConnectedFourLinkParts(
+    AtomIds: tuple[int, ...], TreeIds: tuple[int, ...]
+) -> tuple[tuple[bytes, tuple[bytes, ...]], ...]:
+    if len(AtomIds) != 4 or len(TreeIds) != 4:
+        raise SldprtFormatError(
+            "the recovered four-operation link graph requires four atoms"
+        )
+    FirstAtom, SecondAtom, ThirdAtom, FourthAtom = AtomIds
+    HeadsData = tuple(
+        _pack("u32", AtomId) + _pack("u16", LINK_FLAG) + _pack("u32", TreeId)
+        for AtomId, TreeId in zip(AtomIds, TreeIds, strict=True)
+    )
+    EdgeData = (
+        bytes(16)
+        + _pack("u32", 3)
+        + _pack("u32", SecondAtom)
+        + _pack("u32", FirstAtom)
+        + _pack("u32", ThirdAtom)
+        + _pack("u32", SecondAtom)
+        + _pack("u32", FourthAtom)
+        + _pack("u32", ThirdAtom)
+        + _pack("u32", LINK_TERMINATOR)
+        + bytes(8)
+    )
+    return (
+        (
+            HeadsData[0] + bytes(6) + _pack("u32", 1) + _pack("u32", SecondAtom),
+            (
+                _pack("u32", 0) + _pack("u32", 3) + _pack("u32", SecondAtom),
+                _pack("u32", ThirdAtom),
+                _pack("u32", FourthAtom),
+                _pack("u32", SecondAtom),
+            ),
+        ),
+        (
+            HeadsData[1] + bytes(2) + _pack("u32", 1) + _pack("u32", FirstAtom),
+            (
+                _pack("u32", 1) + _pack("u32", ThirdAtom),
+                _pack("u32", 1) + _pack("u32", FirstAtom),
+                _pack("u32", 2) + _pack("u32", ThirdAtom),
+                _pack("u32", FourthAtom),
+                _pack("u32", ThirdAtom),
+            ),
+        ),
+        (
+            HeadsData[2] + bytes(2) + _pack("u32", 1) + _pack("u32", SecondAtom),
+            (
+                _pack("u32", 1) + _pack("u32", FourthAtom),
+                _pack("u32", 2) + _pack("u32", FirstAtom),
+                _pack("u32", SecondAtom),
+                _pack("u32", 1) + _pack("u32", FourthAtom),
+                _pack("u32", FourthAtom),
+            ),
+        ),
+        (
+            HeadsData[3] + bytes(2) + _pack("u32", 1) + _pack("u32", ThirdAtom),
+            (
+                _pack("u32", 0) + _pack("u32", 3) + _pack("u32", FirstAtom),
+                _pack("u32", SecondAtom),
+                _pack("u32", ThirdAtom),
+                EdgeData,
+            ),
+        ),
+    )
 
 
 def _reverse_table(atom_ids: tuple[int, ...]) -> bytes:
@@ -498,17 +676,37 @@ def build_model(params: CMgrParameters) -> Model:
     null(_table(VIEW_STYLE))
     null(_display_state_full(params))
     null(_atom_head(params.atom_head_count, params.generation))
-    null(_atom_table(params.atom_ids))
+    null(
+        _ConnectedAtomTable(params.atom_ids)
+        if params.connected_history
+        else _atom_table(params.atom_ids)
+    )
     null(_link_head(params.link_atom_ids))
-    total = len(params.link_atom_ids)
     link = -1
-    for position, atom in enumerate(params.link_atom_ids):
-        following = params.link_atom_ids[position + 1] if position + 1 < total else None
-        body = _link_body(atom, params.link_tree_ids[position], following)
-        if position == 0:
-            link = definition(LINK_CLASS, body)
-        else:
-            classref(link, body)
+    if params.connected_history:
+        LinkParts = (
+            _ConnectedFourLinkParts(params.link_atom_ids, params.link_tree_ids)
+            if len(params.link_atom_ids) == 4
+            else _ConnectedLinkParts(params.link_atom_ids, params.link_tree_ids)
+        )
+        for position, (body, child_bodies) in enumerate(LinkParts):
+            if position == 0:
+                link = definition(LINK_CLASS, body)
+            else:
+                classref(link, body)
+            for child_body in child_bodies:
+                null(child_body)
+    else:
+        total = len(params.link_atom_ids)
+        for position, atom in enumerate(params.link_atom_ids):
+            following = (
+                params.link_atom_ids[position + 1] if position + 1 < total else None
+            )
+            body = _link_body(atom, params.link_tree_ids[position], following)
+            if position == 0:
+                link = definition(LINK_CLASS, body)
+            else:
+                classref(link, body)
     null(_pack("u32", 0) + _pack("u32", 1) + _pack("u32", 0xFFFFFFFF))
     null(b"")
     null(bytes(36))
@@ -567,6 +765,7 @@ def encode_cmgr_stream(
     generation: int = DOCUMENT_GENERATION,
     build: int = DOCUMENT_BUILD,
     display_geometry_cache: bytes = DISPLAY_GEOMETRY_CACHE_DEFAULT,
+    connected_history: bool = False,
 ) -> bytes:
     trees = tuple(feature_tree_ids)
     if not trees:
@@ -594,6 +793,26 @@ def encode_cmgr_stream(
             for index, tree_id in enumerate(trees)
         )
     )
+    if connected_history and feature_stamps is None:
+        StampOrders = {
+            2: (1, 0),
+            3: (1, 2, 0),
+            4: (3, 1, 2, 0),
+        }
+        resolved_stamps = tuple(
+            resolved_stamps[IndexValue]
+            for IndexValue in StampOrders[len(resolved_stamps)]
+        )
+    ResolvedNextIdA = (
+        FIRST_ATOM_ID + 1 + 4 * len(resolved_atoms)
+        if connected_history and next_id_a == 0
+        else next_id_a
+    )
+    ResolvedNextIdB = (
+        FIRST_ATOM_ID + 2 * len(resolved_atoms)
+        if connected_history and next_id_b == 0
+        else next_id_b
+    )
     params = CMgrParameters(
         configuration_name=configuration_name,
         part_name=part_name,
@@ -606,17 +825,20 @@ def encode_cmgr_stream(
         display_stamp=document_stamp if display_stamp is None else display_stamp,
         view_stamp=document_stamp if view_stamp is None else view_stamp,
         max_tree_id=max(trees) if max_tree_id is None else max_tree_id,
-        next_id_a=next_id_a,
-        next_id_b=next_id_b,
+        next_id_a=ResolvedNextIdA,
+        next_id_b=ResolvedNextIdB,
         render_style=render_style,
         atom_head_count=(
-            len(resolved_atoms) if atom_head_count is None else atom_head_count
+            (1 if connected_history else len(resolved_atoms))
+            if atom_head_count is None
+            else atom_head_count
         ),
         chord_ratio=chord_ratio,
         generation=generation,
         build=build,
         session_counter=session_counter,
         display_geometry_cache=bytes(display_geometry_cache),
+        connected_history=connected_history,
     )
     return build_model(params).emit()
 

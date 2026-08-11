@@ -21,6 +21,7 @@ from convert.adapters.solidworks.adapter import (
     write_sldprt,
 )
 from convert.adapters.solidworks.assembly_core import AsmCoreItem, EncodeAsmCore
+from convert.adapters.solidworks.archive import encode_string
 from convert.adapters.solidworks.assembly import (
     MATE_ADVISORY_LOSS_REASONS,
     MATE_BLOCKING_LOSS_REASONS,
@@ -232,15 +233,135 @@ def test_distinct_component_core_scales_without_opaque_payloads() -> None:
         assert ItemValue.OccurName.encode("utf-16le") in HeaderData
         assert ItemValue.CompPath.encode("utf-16le") in HeaderData
     assert struct.pack("<d", 0.25) in StreamsMap["Contents/Config-0"]
+    assert StreamsMap["Contents/Definition"][3479:3483] == struct.pack(
+        "<i", len(CoreItems)
+    )
+
+
+# same-file recurrence must replace the traced definition count semantically
+def test_repeated_component_core_writes_the_actual_definition_count() -> None:
+    CoreItems = tuple(
+        AsmCoreItem(
+            f"unit_1-{ItemIndex}",
+            "C:\\generated\\unit_1.SLDPRT",
+            (ItemIndex - 1) * 0.05,
+            FileStamp=1001,
+        )
+        for ItemIndex in range(1, 7)
+    )
+    StreamsMap = EncodeAsmCore("SixRepeated", "Default", CoreItems)
+    assert StreamsMap["Contents/Definition"][3479:3483] == struct.pack(
+        "<i", len(CoreItems)
+    )
+
+
+# mixed component paths verify independent occurrence and unique-file growth
+def test_mixed_component_core_scales_without_opaque_payloads() -> None:
+    PathNumbers = (1, 1, 2, 2, 3, 3, 4)
+    OccurNumbers = (1, 2, 1, 2, 1, 2, 1)
+    CoreItems = tuple(
+        AsmCoreItem(
+            f"unit_{PathNumber}-{OccurNumber}",
+            f"C:\\generated\\unit_{PathNumber}.SLDPRT",
+            (ItemIndex - 1) * 0.05,
+            FileStamp=1000 + PathNumber,
+        )
+        for ItemIndex, (PathNumber, OccurNumber) in enumerate(
+            zip(PathNumbers, OccurNumbers, strict=True), 1
+        )
+    )
+    StreamsMap = EncodeAsmCore("SevenMixed", "Default", CoreItems)
+    SixStreams = EncodeAsmCore("SevenMixed", "Default", CoreItems[:-1])
+    HeaderData = StreamsMap["Contents/Config-0-ModelHeader"]
+    assert len(StreamsMap["Contents/CMgr"]) - len(SixStreams["Contents/CMgr"]) == 378
+    assert (
+        len(StreamsMap["Contents/Config-0"]) - len(SixStreams["Contents/Config-0"])
+        == 502
+    )
+    assert (
+        len(StreamsMap["Contents/Config-0-ResolvedFeatures"])
+        - len(SixStreams["Contents/Config-0-ResolvedFeatures"])
+        == 56
+    )
+    AddedFile = "C:\\generated\\unit_4.SLDPRT"
+    assert len(HeaderData) - len(SixStreams["Contents/Config-0-ModelHeader"]) == (
+        58 + 79 + len(encode_string(AddedFile))
+    )
+    for ItemValue in CoreItems:
+        assert ItemValue.OccurName.encode("utf-16le") in HeaderData
+    for PathNumber in set(PathNumbers):
+        PathData = f"C:\\generated\\unit_{PathNumber}.SLDPRT".encode("utf-16le")
+        assert HeaderData.count(PathData) == 1
+        assert struct.pack("<I", 1000 + PathNumber) in HeaderData
+    assert struct.pack("<d", 0.3) in StreamsMap["Contents/Config-0"]
+    assert StreamsMap["Contents/Definition"][3479:3483] == struct.pack(
+        "<i", len(CoreItems)
+    )
+
+
+# shared internal identities preserve the recovered degenerate mixed-file grammar
+def test_shared_identity_mixed_core_uses_the_typed_vendor_recurrence() -> None:
+    CoreItems = tuple(
+        AsmCoreItem(
+            f"unit_{ItemIndex // 2 + 1}-{ItemIndex % 2 + 1}",
+            f"C:\\generated\\unit_{ItemIndex // 2 + 1}.SLDPRT",
+            ItemIndex * 0.05,
+            FileStamp=123456,
+        )
+        for ItemIndex in range(6)
+    )
+    SevenItems = (
+        *CoreItems,
+        AsmCoreItem(
+            "unit_4-1",
+            "C:\\generated\\unit_4.SLDPRT",
+            0.3,
+            FileStamp=123456,
+        ),
+    )
+    SixStreams = EncodeAsmCore("SharedIdentity", "Default", CoreItems)
+    SevenStreams = EncodeAsmCore("SharedIdentity", "Default", SevenItems)
+    assert (
+        len(SevenStreams["Contents/Config-0"]) - len(SixStreams["Contents/Config-0"])
+        == 422
+    )
+    assert SixStreams["Contents/Definition"][3479:3483] == struct.pack(
+        "<i", len(CoreItems)
+    )
+    assert SevenStreams["Contents/Definition"][3479:3483] == struct.pack(
+        "<i", len(SevenItems)
+    )
 
 
 # public staged writes must serialize final sibling paths into native headers
 def test_public_assembly_bundle_has_no_staging_paths(tmp_path) -> None:
     OutputPath = tmp_path / "final" / "Engine.SLDASM"
     write_document(assembly_document(), OutputPath)
-    HeaderData = SldprtArchive.open(OutputPath).streams["Contents/Config-0-ModelHeader"]
+    HeaderData = b"".join(
+        SldprtArchive.open(PathValue).streams["Contents/Config-0-ModelHeader"]
+        for PathValue in OutputPath.parent.iterdir()
+        if PathValue.suffix.casefold() == ".sldasm"
+    )
     assert ".kit-".encode("utf-16le") not in HeaderData
     assert str(OutputPath.parent.resolve()).encode("utf-16le") in HeaderData
+    MemberPath = next(
+        PathValue
+        for PathValue in OutputPath.parent.iterdir()
+        if PathValue != OutputPath
+    )
+    MemberPath.write_bytes(b"stale")
+    write_document(assembly_document(), OutputPath, overwrite=True)
+    assert MemberPath.read_bytes() != b"stale"
+    HeaderData = b"".join(
+        SldprtArchive.open(PathValue).streams["Contents/Config-0-ModelHeader"]
+        for PathValue in OutputPath.parent.iterdir()
+        if PathValue.suffix.casefold() == ".sldasm"
+    )
+    for MemberPath in OutputPath.parent.iterdir():
+        if MemberPath == OutputPath:
+            continue
+        StampData = SldprtArchive.open(MemberPath).streams["ModelStamps"]
+        assert StampData[:4] in HeaderData
 
 
 def test_incomplete_component_structure_withholds_vendor_loadable() -> None:

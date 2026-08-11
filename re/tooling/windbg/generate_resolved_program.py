@@ -49,15 +49,17 @@ PrimitiveFormats = {
     "uint64": "Q",
 }
 
-# direct reads are named because these arrays bypass primitive archive helpers
-DirectFields = (
-    (0, "I", "archive continuation base"),
-    (7772, "4i", "first sketch chain entity indices"),
-    (7790, "i", "second sketch chain entity index"),
-    (8925, "i", "per body chooser index"),
-    (9626, "H", "display dimension index"),
-    (10466, "d", "extrusion depth scalar"),
+# recovered class names anchor direct fields that bypass primitive archive helpers
+SketchChainClassName = "moSketchChain_c"
+BoundingBoxClassName = "moBBoxCenterData_c"
+# linear and angular display dimensions share the recovered direct-index layout
+DisplayDimensionClassNames = frozenset(
+    {"moDisplayDistanceDim_c", "moDisplayAngularDim_c"}
 )
+
+# payload-relative direct offsets survive both class definitions and compact class references
+BoundingBoxIndexPayloadOffset = 46
+DisplayDimensionIndexPayloadOffset = 526
 
 
 # command arguments keep program generation reproducible across workstations
@@ -168,13 +170,112 @@ def AddStructures(
         )
 
 
+# matching class segments provide structural anchors instead of donor offsets
+def ClassSegments(
+    Segments: tuple[dict[str, Any], ...],
+    ClassName: str,
+) -> tuple[dict[str, Any], ...]:
+    MatchesList = tuple(
+        Segment for Segment in Segments if Segment.get("class_name") == ClassName
+    )
+    if not MatchesList:
+        raise ValueError(f"resolved field program expected {ClassName} segments")
+    return MatchesList
+
+
+# direct field discovery derives typed locations from class and feature structure
+def DirectFields(
+    StreamData: bytes,
+    Segments: tuple[dict[str, Any], ...],
+) -> tuple[tuple[int, str, str], ...]:
+    SketchSegments = ClassSegments(Segments, SketchChainClassName)
+    BoundingSegments = ClassSegments(Segments, BoundingBoxClassName)
+    DisplaySegments = tuple(
+        Segment
+        for Segment in Segments
+        if Segment.get("class_name") in DisplayDimensionClassNames
+    )
+    if not DisplaySegments:
+        raise ValueError(
+            "resolved field program expected a supported display dimension segment"
+        )
+    DirectList: list[tuple[int, str, str]] = [(0, "I", "archive continuation base")]
+    for SketchIndex, SketchSegment in enumerate(SketchSegments, start=1):
+        SketchStart = int(SketchSegment["offset"]) + int(SketchSegment["header"])
+        FirstCount = struct.unpack_from("<H", StreamData, SketchStart)[0]
+        FirstStart = SketchStart + 2
+        SecondCountOffset = FirstStart + FirstCount * 4
+        SecondCount = struct.unpack_from("<H", StreamData, SecondCountOffset)[0]
+        SecondStart = SecondCountOffset + 2
+        if FirstCount < 1 or SecondCount < 1:
+            raise ValueError(
+                "resolved field program direct layout requires populated sketch "
+                f"chains at sketch {SketchIndex}"
+            )
+        DirectList.extend(
+            (
+                (
+                    FirstStart,
+                    f"{FirstCount}i",
+                    f"sketch {SketchIndex} first chain entity indices",
+                ),
+                (
+                    SecondStart,
+                    f"{SecondCount}i",
+                    f"sketch {SketchIndex} second chain entity indices",
+                ),
+            )
+        )
+    for BoxIndex, BoundingSegment in enumerate(BoundingSegments, start=1):
+        DirectList.append(
+            (
+                int(BoundingSegment["offset"])
+                + int(BoundingSegment["header"])
+                + BoundingBoxIndexPayloadOffset,
+                "i",
+                f"bounding box {BoxIndex} per body chooser index",
+            )
+        )
+    for DimensionIndex, DisplaySegment in enumerate(DisplaySegments, start=1):
+        DisplayChildren = tuple(
+            Segment
+            for Segment in Segments
+            if Segment.get("parent") == DisplaySegment.get("index")
+            and Segment.get("kind") == "null"
+            and int(Segment["end"]) - int(Segment["offset"]) == 42
+        )
+        if len(DisplayChildren) != 1:
+            raise ValueError(
+                "resolved field program direct layout requires one derived scalar "
+                f"at display dimension {DimensionIndex}"
+            )
+        DirectList.extend(
+            (
+                (
+                    int(DisplaySegment["offset"])
+                    + int(DisplaySegment["header"])
+                    + DisplayDimensionIndexPayloadOffset,
+                    "H",
+                    f"display dimension {DimensionIndex} index",
+                ),
+                (
+                    int(DisplayChildren[0]["offset"]) + 30,
+                    "d",
+                    f"display dimension {DimensionIndex} derived scalar",
+                ),
+            )
+        )
+    return tuple(DirectList)
+
+
 # direct arrays remain typed and named instead of becoming residual byte spans
 def AddDirectFields(
     Operations: list[tuple[int, int, str, str, Any]],
     Covered: set[int],
     StreamData: bytes,
+    Segments: tuple[dict[str, Any], ...],
 ) -> None:
-    for StartPos, FormatText, OwnerText in DirectFields:
+    for StartPos, FormatText, OwnerText in DirectFields(StreamData, Segments):
         FieldWidth = struct.calcsize("<" + FormatText)
         ValuesList = struct.unpack_from("<" + FormatText, StreamData, StartPos)
         FieldValue: Any = ValuesList[0] if len(ValuesList) == 1 else ValuesList
@@ -198,7 +299,11 @@ def AddPrimitives(
 ) -> None:
     for TypeName, StartPos, OwnerText in RowsList:
         FieldWidth = PrimitiveWidths[TypeName]
-        if HasOverlap(Covered, StartPos, FieldWidth):
+        if (
+            StartPos < 0
+            or StartPos + FieldWidth > len(StreamData)
+            or HasOverlap(Covered, StartPos, FieldWidth)
+        ):
             continue
         FormatText = PrimitiveFormats[TypeName]
         FieldValue = struct.unpack_from("<" + FormatText, StreamData, StartPos)[0]
@@ -322,7 +427,7 @@ def RunMain() -> int:
     Operations: list[tuple[int, int, str, str, Any]] = []
     Covered: set[int] = set()
     AddStructures(Operations, Covered, StreamData, Segments, RowsList)
-    AddDirectFields(Operations, Covered, StreamData)
+    AddDirectFields(Operations, Covered, StreamData, Segments)
     AddPrimitives(Operations, Covered, StreamData, RowsList)
     Missing = sorted(set(range(len(StreamData))) - Covered)
     if Missing:
