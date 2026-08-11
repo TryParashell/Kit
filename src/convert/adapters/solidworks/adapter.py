@@ -1958,17 +1958,24 @@ def _generated_streams(
         )
         streams.update(envelope.streams)
         streams[COMPONENT_TREE_STREAM] = encoding.component_tree
-        streams.update(
-            AsmCoreStreams(
-                portable.assembly,
-                encoding,
-                AssemblyName,
-                BundleStamps,
+        try:
+            streams.update(
+                AsmCoreStreams(
+                    portable.assembly,
+                    encoding,
+                    AssemblyName,
+                    BundleStamps,
+                )
             )
-        )
+            CoreError = ""
+        except SldprtFormatError as ErrorData:
+            CoreError = str(ErrorData)
         streams.update(encoding.mate_streams)
         assembly_envelope_complete = envelope.envelope_complete
-        assembly_notes = _generated_assembly_notes(encoding, envelope, streams)
+        assembly_notes = (
+            *_generated_assembly_notes(encoding, envelope, streams),
+            *((f"native_assembly_core_declined:{CoreError}",) if CoreError else ()),
+        )
     if part_partition is not None:
         payload = part_partition
         native_brep = "generated"
@@ -2128,7 +2135,28 @@ def _generated_occurrence_labels(assembly: AssemblyData) -> tuple[str, ...]:
     return tuple(labels)
 
 
-# native history binds every direct occurrence to its path and translation
+# projective component frames cannot fit the native affine transform record
+def HasAffineFrame(MatrixValues: tuple[float, ...]) -> bool:
+    return (
+        len(MatrixValues) == 16
+        and all(math.isfinite(MatrixValue) for MatrixValue in MatrixValues)
+        and all(
+            math.isclose(
+                MatrixValues[ValueIndex],
+                ExpectedValue,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            )
+            for ValueIndex, ExpectedValue in zip(
+                (12, 13, 14, 15),
+                (0.0, 0.0, 0.0, 1.0),
+                strict=True,
+            )
+        )
+    )
+
+
+# native history binds every direct occurrence to its path and affine frame
 def AsmCoreStreams(
     AssemblyValue: AssemblyData,
     EncodingValue: NativeAssemblyEncoding,
@@ -2181,6 +2209,10 @@ def AsmCoreStreams(
         if not ConfigName:
             ConfigName = "Default"
         MatrixValues = InstanceItem.transform.values
+        if not HasAffineFrame(MatrixValues):
+            raise SldprtFormatError(
+                "native assembly history requires an affine component transform"
+            )
         CoreItems.append(
             AsmCoreItem(
                 OccurNames[InstanceIndex],
@@ -2190,6 +2222,17 @@ def AsmCoreStreams(
                 MatrixValues[11] / 1000.0,
                 InstanceConfig or "Default",
                 StampMap.get(str(PureWindowsPath(CompPath)).casefold(), 0),
+                (
+                    MatrixValues[0],
+                    MatrixValues[4],
+                    MatrixValues[8],
+                    MatrixValues[1],
+                    MatrixValues[5],
+                    MatrixValues[9],
+                    MatrixValues[2],
+                    MatrixValues[6],
+                    MatrixValues[10],
+                ),
             )
         )
     return EncodeAsmCore(ModelName, ConfigName, tuple(CoreItems))
@@ -2452,7 +2495,6 @@ def _generated_assembly_structure_matches(
             or target.hidden != source.hidden
             or target.flexible != source.flexible
             or target.exclude_from_bom != source.exclude_from_bom
-            or (target.feature_id == 24) != source.fixed
         ):
             return False
     native_by_owner: defaultdict[int, list[NativeAssemblyOccurrence]] = defaultdict(
@@ -4601,7 +4643,7 @@ def _assembly_instances(
             configuration_id=str(occurrence.configuration_id),
             suppressed=occurrence.suppressed,
             hidden=occurrence.hidden,
-            fixed=occurrence.feature_id == 24,
+            fixed=False,
             flexible=occurrence.flexible,
             exclude_from_bom=occurrence.exclude_from_bom,
             provenance=Provenance(

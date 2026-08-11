@@ -959,12 +959,15 @@ def encode_native_assembly(
         xml_declaration=True,
         short_empty_elements=True,
     )
-    structure_complete = all(
-        _definition_supported(definition) for definition in definitions
-    ) and all(
-        instance.definition_id in definition_by_id
-        and instance.owner_definition_id in definition_by_id
-        for instance in instances
+    structure_complete = (
+        all(_definition_supported(definition) for definition in definitions)
+        and all(
+            instance.definition_id in definition_by_id
+            and instance.owner_definition_id in definition_by_id
+            for instance in instances
+        )
+        and HasCoreState(assembly)
+        and HasCoreBasis(assembly)
     )
     return NativeAssemblyEncoding(
         component_tree=component_tree,
@@ -978,6 +981,48 @@ def encode_native_assembly(
         generated_mate_losses=mates.losses,
         unsupported_mate_reasons=mates.unsupported_reasons,
     )
+
+
+# binary assembly programs only preserve the controlled component state family
+def HasCoreState(assembly: AssemblyData) -> bool:
+    DirectItems = assembly.children(assembly.root_definition_id)
+    return bool(DirectItems) and all(
+        not InstanceItem.fixed
+        and not InstanceItem.suppressed
+        and not InstanceItem.hidden
+        and not InstanceItem.flexible
+        and not InstanceItem.exclude_from_bom
+        and not bool(InstanceItem.attributes.get("virtual", False))
+        and not bool(InstanceItem.attributes.get("zone", False))
+        for InstanceItem in DirectItems
+    )
+
+
+# small static programs must decline rotations their traced grammar lacks
+def HasCoreBasis(assembly: AssemblyData) -> bool:
+    DirectItems = assembly.children(assembly.root_definition_id)
+    IdentityVals = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    HasRotated = any(
+        (
+            MatrixValues[0],
+            MatrixValues[4],
+            MatrixValues[8],
+            MatrixValues[1],
+            MatrixValues[5],
+            MatrixValues[9],
+            MatrixValues[2],
+            MatrixValues[6],
+            MatrixValues[10],
+        )
+        != IdentityVals
+        for MatrixValues in (
+            InstanceItem.transform.values for InstanceItem in DirectItems
+        )
+    )
+    if not HasRotated:
+        return True
+    UniqueDefs = {InstanceItem.definition_id for InstanceItem in DirectItems}
+    return len(DirectItems) >= 4 or (len(DirectItems) >= 3 and len(UniqueDefs) > 1)
 
 
 def _definition_supported(definition: ComponentDefinition) -> bool:
@@ -1148,11 +1193,12 @@ def _instance_base_name(instance: ComponentInstance, reference_number: int) -> s
     )
 
 
+# occurrence feature keys follow traced document order independently of fixation state
 def _native_feature_id(instance: ComponentInstance, index: int) -> int:
     value = _positive_integer(instance.attributes.get("native_feature_id"))
     if value is not None:
         return value
-    return 24 if instance.fixed else 25 + index
+    return 24 + index
 
 
 def _native_matrix(matrix: Matrix4) -> tuple[float, ...]:

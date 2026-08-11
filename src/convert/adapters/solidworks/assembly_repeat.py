@@ -80,6 +80,7 @@ class RepeatItem:
         "TransZ",
         "ConfigName",
         "FileStamp",
+        "BasisVals",
     )
 
     # immutable initialization keeps one occurrence coherent across all streams
@@ -92,7 +93,20 @@ class RepeatItem:
         TransZ: float = 0.0,
         ConfigName: str = "Default",
         FileStamp: int = 0,
+        BasisVals: tuple[float, ...] = (
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ),
     ) -> None:
+        if len(BasisVals) != 9:
+            raise SldprtFormatError("assembly transform basis requires nine values")
         self.OccurName = OccurName
         self.CompPath = CompPath
         self.TransX = TransX
@@ -100,6 +114,12 @@ class RepeatItem:
         self.TransZ = TransZ
         self.ConfigName = ConfigName
         self.FileStamp = FileStamp
+        self.BasisVals = BasisVals
+
+
+# identity transforms retain the compact native mgXform representation
+def _IsIdentityBasis(BasisVals: tuple[float, ...]) -> bool:
+    return BasisVals == (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 
 
 # one operation tuple retains its typed serializer owner and native field value
@@ -107,11 +127,18 @@ def _EmitOps(
     Operations: Sequence[tuple[int, int, int, str, Any]],
     Overrides: Mapping[int, Any],
     BasePos: int = 0,
+    BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
     OutputData = bytearray()
+    BasisMap = BasisValues or {}
     for StartPos, _FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
         FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
         OutputData.extend(EncodeField(KindName, FieldValue))
+        BasisValue = BasisMap.get(StartPos - BasePos)
+        if BasisValue is not None:
+            if KindName != "primitive:uchar" or FieldValue != 1:
+                raise SldprtFormatError("assembly transform basis marker is invalid")
+            OutputData.extend(EncodeField("direct:9d", BasisValue))
     return bytes(OutputData)
 
 
@@ -194,6 +221,9 @@ def _EncodeConfig(
     CoreItems: tuple[RepeatItem, ...],
 ) -> bytes:
     ItemCount = len(CoreItems)
+    BasisCount = sum(
+        not _IsIdentityBasis(ItemValue.BasisVals) for ItemValue in CoreItems
+    )
     InsertPos, UnitWidth = InsertSpecs["Contents/Config-0"]
     PrefixData = _EmitOps(
         _SliceOps("Contents/Config-0", 0, InsertPos),
@@ -203,9 +233,18 @@ def _EncodeConfig(
             0x01BE: ConfigName,
             0x0245: ModelName,
             0x0278: CoreItems[0].OccurName,
-            18: 2218 + (UnitWidth * ItemCount),
+            322: CoreItems[0].TransX,
+            330: CoreItems[0].TransY,
+            338: CoreItems[0].TransZ,
+            18: 2218 + (UnitWidth * ItemCount) + (72 * BasisCount),
             88: ItemCount,
+            **({321: 1} if not _IsIdentityBasis(CoreItems[0].BasisVals) else {}),
         },
+        BasisValues=(
+            {321: CoreItems[0].BasisVals}
+            if not _IsIdentityBasis(CoreItems[0].BasisVals)
+            else None
+        ),
     )
     UnitData = bytearray()
     for ItemIndex, ItemValue in enumerate(CoreItems[1:], 2):
@@ -228,14 +267,20 @@ def _EncodeConfig(
                     199: HashValue,
                     215: ItemValue.TransX,
                     223: ItemValue.TransY,
-                    231: ItemValue.TransZ - 0.005,
+                    231: ItemValue.TransZ,
                     387: 14 + ItemIndex,
                     460: 23 + ItemIndex,
                     466: ItemValue.OccurName,
                     532: 8 + (4 * ItemIndex),
                     339: ItemValue.ConfigName,
+                    **({214: 1} if not _IsIdentityBasis(ItemValue.BasisVals) else {}),
                 },
                 UnitStart,
+                (
+                    {214: ItemValue.BasisVals}
+                    if not _IsIdentityBasis(ItemValue.BasisVals)
+                    else None
+                ),
             )
         )
     SuffixStart = InsertPos + ((TracedCount - 1) * UnitWidth)

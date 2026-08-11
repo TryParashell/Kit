@@ -51,6 +51,17 @@ class AsmCoreItem:
     TransZ: float = 0.0
     ConfigName: str = "Default"
     FileStamp: int = 0
+    BasisVals: tuple[float, ...] = (
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    )
 
 
 # native strings use one semantic component occurrence across coupled streams
@@ -95,6 +106,7 @@ def EncodeAsmCore(
                         ItemValue.TransZ,
                         ItemValue.ConfigName,
                         ItemValue.FileStamp,
+                        ItemValue.BasisVals,
                     )
                     for ItemValue in CoreItems
                 ),
@@ -117,6 +129,7 @@ def EncodeAsmCore(
                         ItemValue.TransZ,
                         ItemValue.ConfigName,
                         ItemValue.FileStamp,
+                        ItemValue.BasisVals,
                     )
                     for ItemValue in CoreItems
                 ),
@@ -139,6 +152,7 @@ def EncodeAsmCore(
                         ItemValue.TransZ,
                         ItemValue.ConfigName,
                         ItemValue.FileStamp,
+                        ItemValue.BasisVals,
                     )
                     for ItemValue in CoreItems
                 ),
@@ -161,6 +175,7 @@ def EncodeAsmCore(
                         ItemValue.TransZ,
                         ItemValue.ConfigName,
                         ItemValue.FileStamp,
+                        ItemValue.BasisVals,
                     )
                     for ItemValue in CoreItems
                 ),
@@ -169,6 +184,11 @@ def EncodeAsmCore(
         StreamsMap["Header2"] = StreamsMap["Contents/Config-0-ModelHeader"]
         StreamsMap["Contents/Config-0-MatesList"] = struct.pack("<IH", 170, 0)
         return MappingProxyType(StreamsMap)
+    IdentityVals = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    if any(tuple(ItemValue.BasisVals) != IdentityVals for ItemValue in CoreItems):
+        raise SldprtFormatError(
+            "static native assembly history requires identity component bases"
+        )
     if len(CoreItems) == 3:
         SecondItem, ThirdItem = CoreItems[1:]
         if any(ItemValue.CompPath != CompPath for ItemValue in CoreItems):
@@ -201,14 +221,23 @@ def EncodeAsmCore(
                 {
                     0x0030: ModelName,
                     0x006B: OccurName,
+                    0x013E: CoreItems[0].TransX,
+                    0x0146: CoreItems[0].TransY,
+                    0x014E: CoreItems[0].TransZ,
                     0x01BA: ConfigName,
                     0x023B: AsmPath,
                     0x02C5: ModelName,
                     0x02F4: OccurName,
                     0x0378: SecondItem.OccurName,
+                    0x044B: SecondItem.TransX,
+                    0x0453: SecondItem.TransY,
+                    0x045B: SecondItem.TransZ,
                     0x04C7: SecondItem.ConfigName,
                     0x0546: SecondItem.OccurName,
                     0x05CA: ThirdItem.OccurName,
+                    0x069D: ThirdItem.TransX,
+                    0x06A5: ThirdItem.TransY,
+                    0x06AD: ThirdItem.TransZ,
                     0x0719: ThirdItem.ConfigName,
                     0x0798: ThirdItem.OccurName,
                 },
@@ -272,11 +301,17 @@ def EncodeAsmCore(
                     {
                         0x0030: ModelName,
                         0x006B: OccurName,
+                        0x013E: CoreItems[0].TransX,
+                        0x0146: CoreItems[0].TransY,
+                        0x014E: CoreItems[0].TransZ,
                         0x01BA: ConfigName,
                         0x023B: AsmPath,
                         0x02C5: ModelName,
                         0x02F4: OccurName,
                         0x0378: SecondItem.OccurName,
+                        0x043B: SecondItem.TransX,
+                        0x0443: SecondItem.TransY,
+                        0x044B: SecondItem.TransZ,
                         0x04B7: SecondItem.ConfigName,
                         0x0536: SecondItem.OccurName,
                     },
@@ -333,10 +368,16 @@ def EncodeAsmCore(
                 {
                     0x0030: ModelName,
                     0x006F: OccurName,
+                    0x0142: CoreItems[0].TransX,
+                    0x014A: CoreItems[0].TransY,
+                    0x0152: CoreItems[0].TransZ,
                     0x01BE: ConfigName,
                     0x0245: ModelName,
                     0x0278: OccurName,
                     0x02FC: SecondItem.OccurName,
+                    0x03CF: SecondItem.TransX,
+                    0x03D7: SecondItem.TransY,
+                    0x03DF: SecondItem.TransZ,
                     0x044B: SecondItem.ConfigName,
                     0x04CA: SecondItem.OccurName,
                 },
@@ -383,6 +424,9 @@ def EncodeAsmCore(
             {
                 0x0030: ModelName,
                 0x006F: OccurName,
+                0x0142: CoreItems[0].TransX,
+                0x014A: CoreItems[0].TransY,
+                0x0152: CoreItems[0].TransZ,
                 0x01BE: ConfigName,
                 0x0245: ModelName,
                 0x0278: OccurName,

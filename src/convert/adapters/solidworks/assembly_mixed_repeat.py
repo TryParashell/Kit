@@ -106,12 +106,43 @@ def _EmitOps(
     Operations: Sequence[tuple[int, int, int, str, Any]],
     Overrides: Mapping[int, Any],
     BasePos: int = 0,
+    XformPos: int | None = None,
+    XformItem: Any | None = None,
 ) -> bytes:
     OutputData = bytearray()
     for StartPos, _FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
+        RelativePos = StartPos - BasePos
+        if XformPos is not None and XformItem is not None:
+            if RelativePos == XformPos:
+                OutputData.extend(EncodeXform(XformItem))
+                continue
+            if XformPos < RelativePos <= XformPos + 33:
+                continue
         FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
         OutputData.extend(EncodeField(KindName, FieldValue))
     return bytes(OutputData)
+
+
+# native transform records need an explicit basis only for rotated occurrences
+def EncodeXform(ItemValue: Any) -> bytes:
+    BasisVals = tuple(ItemValue.BasisVals)
+    if len(BasisVals) != 9:
+        raise SldprtFormatError("native assembly basis requires nine values")
+    HasBasis = BasisVals != (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    OutputData = bytearray(EncodeField("primitive:uchar", int(HasBasis)))
+    if HasBasis:
+        for BasisValue in BasisVals:
+            OutputData.extend(EncodeField("primitive:double", BasisValue))
+    for TransValue in (ItemValue.TransX, ItemValue.TransY, ItemValue.TransZ, 1.0):
+        OutputData.extend(EncodeField("primitive:double", TransValue))
+    OutputData.extend(EncodeField("primitive:uchar", 0))
+    return bytes(OutputData)
+
+
+# rotated occurrence count drives the enclosing serialized byte length
+def CountBasis(CoreItems: tuple[RepeatItem, ...]) -> int:
+    IdentityVals = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    return sum(tuple(ItemValue.BasisVals) != IdentityVals for ItemValue in CoreItems)
 
 
 # logical slicing remains stable when variable strings alter physical widths
@@ -221,7 +252,7 @@ def _EncodeConfig(
     PrefixData = _EmitOps(
         _SliceOps("Contents/Config-0", 0, InsertPos),
         {
-            18: 2058 + (UnitWidth * ItemCount),
+            18: 2058 + (UnitWidth * ItemCount) + (72 * CountBasis(CoreItems)),
             48: ModelName,
             88: ItemCount,
             109: 4 + UniqueCount,
@@ -233,6 +264,8 @@ def _EncodeConfig(
             506: CoreItems[0].OccurName,
             526: 7 + UniqueCount,
         },
+        XformPos=275,
+        XformItem=CoreItems[0],
     )
     UnitData = bytearray()
     for ItemIndex, ItemValue in enumerate(CoreItems[1:], 2):
@@ -256,9 +289,6 @@ def _EncodeConfig(
                     4: ItemValue.OccurName,
                     32: 23 + ItemIndex,
                     153: HashValue,
-                    169: ItemValue.TransX,
-                    177: ItemValue.TransY,
-                    185: ItemValue.TransZ - 0.005,
                     203: 3 + FileIndex,
                     213: ItemValue.ConfigName,
                     261: 14 + ItemIndex,
@@ -271,6 +301,8 @@ def _EncodeConfig(
                     360: 7 + (4 * ItemIndex) + UniqueCount,
                 },
                 UnitStart,
+                168,
+                ItemValue,
             )
         )
     SuffixStart = InsertPos + ((TracedCount - 1) * UnitWidth)
