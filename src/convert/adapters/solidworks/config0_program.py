@@ -5502,9 +5502,12 @@ PrimitiveFormats = {
 
 # recovered boundaries isolate the only two variable-sized record regions
 ReferenceLength = 25214
+PartRecordLengthOffset = 0xE
 PartNameOffset = 0x2C
+ReferencePartName = "Part70"
 SecondUnitStart = 0x34A
 SecondUnitEnd = 0x38C
+AtomHeadOffsets = (0xB24, 0xB28)
 AtomStart = 0xB3A
 AtomEnd = 0xB9C
 HighWaterOffsets = (0x6085, 0x6089)
@@ -5578,6 +5581,17 @@ def EncodeAtom(
     return bytes(OutputData)
 
 
+# inserted atom class references shift every archive-map target defined after moAtom_c
+def ShiftMapReference(KindName: str, FieldValue: Any, MapShift: int) -> Any:
+    if MapShift <= 0:
+        return FieldValue
+    if KindName == "classref" and int(FieldValue) > AtomClassIndex:
+        return int(FieldValue) + MapShift
+    if KindName == "objectref" and int(FieldValue) > AtomClassIndex + 1:
+        return int(FieldValue) + MapShift
+    return FieldValue
+
+
 # dynamic configuration generation replays every typed field in original order
 def EncodeProgram(
     PartName: str = "Part70",
@@ -5590,14 +5604,27 @@ def EncodeProgram(
 ) -> bytes:
     if not Atoms:
         raise SldprtFormatError("Contents/Config-0 needs at least one atom record")
+    if any(
+        not 0 <= AtomId <= 0xFFFFFFFF or not 0 <= TreeId <= 0xFFFFFFFF
+        for AtomId, TreeId in Atoms
+    ):
+        raise SldprtFormatError("Config-0 atom identifiers must fit in 32 bits")
     if Generation != 18000:
         raise SldprtFormatError(
             f"Contents/Config-0 fields are recovered at generation 18000, {Generation} was requested"
         )
     FieldOverrides = dict(Overrides or {})
+    FieldOverrides[PartRecordLengthOffset] = (
+        ConfigOps[1][4]
+        + len(encode_string(PartName))
+        - len(encode_string(ReferencePartName))
+    )
     FieldOverrides[PartNameOffset] = PartName
+    FieldOverrides[AtomHeadOffsets[0]] = max(AtomId for AtomId, _TreeId in Atoms)
+    FieldOverrides[AtomHeadOffsets[1]] = len(Atoms)
     FieldOverrides[HighWaterOffsets[0]] = HighWater[0]
     FieldOverrides[HighWaterOffsets[1]] = HighWater[1]
+    MapShift = len(Atoms) - 1
     OutputData = bytearray()
     SourceCursor = 0
     AtomsWritten = False
@@ -5623,6 +5650,8 @@ def EncodeProgram(
                 AtomsWritten = True
             continue
         FieldValue = FieldOverrides.get(StartPos, DefaultValue)
+        if StartPos >= AtomEnd:
+            FieldValue = ShiftMapReference(KindName, FieldValue, MapShift)
         FieldData = EncodeField(KindName, FieldValue)
         if StartPos != PartNameOffset and len(FieldData) != FieldWidth:
             raise SldprtFormatError(f"Config-0 field width changed at {StartPos}")

@@ -50,6 +50,7 @@ Each skill is generated from the identically named source file in
 | GitHub Actions or runner configuration                         | `pin-dependencies`                                                                                                                                |
 | `pixi.toml`                                                    | `pixi-lockfiles`                                                                                                                                  |
 | MCP tool definitions or their Mintlify documentation           | `compact-tool-descriptions`, `mcp-tool-doc-pages`                                                                                                 |
+| CAD parsing, conversion, writing, or translation verification  | `no-cad-runtime`, `no-donor-blocks`, `lossless-translation`                                                                                       |
 | React, Next.js, UI components, pages, styles, or layouts       | `frontend-stack`, `component-architecture`, `design-system-discipline`, `layout-system`, `no-unrequested-styling`, `react-doctor`, `shadcn-pages` |
 | Public landing or marketing page metadata                      | `page-title-separator`                                                                                                                            |
 | HostControl services or contracts                              | `hostcontrol-contract`                                                                                                                            |

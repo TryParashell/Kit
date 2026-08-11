@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
@@ -237,14 +238,10 @@ def _EncodeConfig(
     for ItemIndex, ItemValue in enumerate(CoreItems[1:], 2):
         TemplateIndex = min(ItemIndex, TracedCount)
         UnitStart = InsertPos + ((TemplateIndex - 2) * UnitWidth)
-        UnitOps = _SliceOps(
-            "Contents/Config-0", UnitStart, UnitStart + UnitWidth
-        )
+        UnitOps = _SliceOps("Contents/Config-0", UnitStart, UnitStart + UnitWidth)
         HashValue = (
             next(
-                Operation[4]
-                for Operation in UnitOps
-                if Operation[0] - UnitStart == 153
+                Operation[4] for Operation in UnitOps if Operation[0] - UnitStart == 153
             )
             if ItemIndex <= TracedCount
             else _OccurHash(ItemValue.OccurName)
@@ -335,12 +332,7 @@ def _EncodeResolved(
                 {
                     **RefValues,
                     38: 9 + (4 * ItemIndex) + UniqueCount,
-                    40: (
-                        40
-                        + (18 * ItemCount)
-                        - (10 * UniqueCount)
-                        - (13 * ItemIndex)
-                    ),
+                    40: (40 + (18 * ItemCount) - (10 * UniqueCount) - (13 * ItemIndex)),
                 },
                 UnitStart,
             )
@@ -369,6 +361,7 @@ def _EncodeHeader(
 ) -> bytes:
     ItemCount = len(CoreItems)
     UniqueCount = len(UniqueItems)
+    PathCounts = Counter(_PathKey(ItemValue.CompPath) for ItemValue in CoreItems)
     InsertPos, UnitWidth = InsertSpecs["Contents/Config-0-ModelHeader"]
     PrefixData = _EmitOps(
         _SliceOps("Contents/Config-0-ModelHeader", 0, InsertPos),
@@ -395,19 +388,23 @@ def _EncodeHeader(
         )
     FirstItem = UniqueItems[0]
     FirstStem = PureWindowsPath(FirstItem.CompPath).stem
+    ExtOverrides = {
+        4: 24 + ItemCount,
+        31: UniqueCount,
+        75: FirstItem.CompPath,
+        211: 64 + (2 * ItemCount),
+        213: FirstStem,
+        254: PathCounts[_PathKey(FirstItem.CompPath)],
+    }
+    if FirstItem.FileStamp > 0:
+        ExtOverrides[232] = FirstItem.FileStamp
     ExtPrefix = _EmitOps(
         _SliceOps(
             "Contents/Config-0-ModelHeader",
             HeaderExtStart,
             HeaderExtStart + HeaderExtWidth,
         ),
-        {
-            4: 24 + ItemCount,
-            31: UniqueCount,
-            75: FirstItem.CompPath,
-            211: 64 + (2 * ItemCount),
-            213: FirstStem,
-        },
+        ExtOverrides,
         HeaderExtStart,
     )
     FileData = bytearray()
@@ -415,6 +412,17 @@ def _EncodeHeader(
         TemplateIndex = min(FileIndex, TracedUnique)
         FileStart = HeaderFileStart + ((TemplateIndex - 2) * HeaderFileWidth)
         FileStem = PureWindowsPath(ItemValue.CompPath).stem
+        FileOverrides = {
+            0: 62 + (2 * ItemCount),
+            2: 64 + (2 * ItemCount),
+            4: ItemValue.CompPath,
+            140: 64 + (2 * ItemCount),
+            142: FileStem,
+            183: PathCounts[_PathKey(ItemValue.CompPath)],
+            191: FileIndex - 1,
+        }
+        if ItemValue.FileStamp > 0:
+            FileOverrides[161] = ItemValue.FileStamp
         FileData.extend(
             _EmitOps(
                 _SliceOps(
@@ -422,14 +430,7 @@ def _EncodeHeader(
                     FileStart,
                     FileStart + HeaderFileWidth,
                 ),
-                {
-                    0: 62 + (2 * ItemCount),
-                    2: 64 + (2 * ItemCount),
-                    4: ItemValue.CompPath,
-                    140: 64 + (2 * ItemCount),
-                    142: FileStem,
-                    191: FileIndex - 1,
-                },
+                FileOverrides,
                 FileStart,
             )
         )
@@ -472,10 +473,10 @@ def EncodeMixCore(
     StreamsMap = {
         "Contents/CMgr": _EncodeCMgr(ModelName, ConfigName, CoreItems),
         "Contents/Config-0": _EncodeConfig(ModelName, CoreItems, UniqueItems),
-        "Contents/Config-0-ResolvedFeatures": _EncodeResolved(
-            CoreItems, UniqueItems
+        "Contents/Config-0-ResolvedFeatures": _EncodeResolved(CoreItems, UniqueItems),
+        "Contents/Definition": _EmitOps(
+            StreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
         ),
-        "Contents/Definition": _EmitOps(StreamPrograms["Contents/Definition"], {}),
         "Contents/Config-0-ModelHeader": _EncodeHeader(
             ModelName, ConfigName, CoreItems, UniqueItems
         ),

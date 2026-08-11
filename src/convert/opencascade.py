@@ -18,6 +18,7 @@ from typing import Any, Mapping
 from interchange import (
     BrepBody,
     BrepCoedge,
+    BrepCurve,
     BrepEdge,
     BrepFace,
     BrepFaceUse,
@@ -26,7 +27,10 @@ from interchange import (
     BrepRegion,
     BrepShell,
     BrepShellUse,
+    BrepSurface,
     BrepVertex,
+    CircleCurve,
+    CylinderSurface,
     LineCurve,
     PlaneSurface,
     Vector3,
@@ -167,19 +171,23 @@ class _VertexData:
     point: Vector3
 
 
+# edge records retain curve placements until topology placements are composed
 @dataclass(frozen=True, slots=True)
 class _EdgeData:
     tolerance: float
     curve: int
     first: float
     last: float
+    location: int = 0
 
 
+# face records retain surface placements until topology placements are composed
 @dataclass(frozen=True, slots=True)
 class _FaceData:
     natural: bool
     tolerance: float
     surface: int
+    location: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,8 +222,10 @@ def _unit(value: Vector3) -> bool:
     return isclose(_length(value), 1.0, rel_tol=1e-10, abs_tol=1e-10)
 
 
-def _frame(normal: Vector3, x_direction: Vector3, y_direction: Vector3) -> bool:
+# analytic axes may use either direct or indirect OpenCascade parameter frames
+def _IsFrame(normal: Vector3, x_direction: Vector3, y_direction: Vector3) -> bool:
     expected_y = _cross(normal, x_direction)
+    Handedness = _dot(expected_y, y_direction)
     return (
         _unit(normal)
         and _unit(x_direction)
@@ -223,9 +233,7 @@ def _frame(normal: Vector3, x_direction: Vector3, y_direction: Vector3) -> bool:
         and isclose(_dot(normal, x_direction), 0.0, abs_tol=1e-10)
         and isclose(_dot(normal, y_direction), 0.0, abs_tol=1e-10)
         and isclose(_dot(x_direction, y_direction), 0.0, abs_tol=1e-10)
-        and isclose(expected_y.x, y_direction.x, abs_tol=1e-10)
-        and isclose(expected_y.y, y_direction.y, abs_tol=1e-10)
-        and isclose(expected_y.z, y_direction.z, abs_tol=1e-10)
+        and isclose(abs(Handedness), 1.0, rel_tol=1e-10, abs_tol=1e-10)
     )
 
 
@@ -1044,58 +1052,61 @@ def _vertex_geometry(tokens: _Tokens) -> _VertexData:
     return _VertexData(tolerance, point)
 
 
+# edge geometry binds one spatial curve while retaining auxiliary pcurves
 def _edge_geometry(
     tokens: _Tokens,
     curve_count: int,
     curve2d_count: int,
     surface_count: int,
+    location_count: int,
 ) -> _EdgeData:
     tolerance = tokens.number()
-    same_parameter = tokens.integer(0, 1)
-    same_range = tokens.integer(0, 1)
+    tokens.integer(0, 1)
+    tokens.integer(0, 1)
     degenerate = tokens.integer(0, 1)
     if tolerance < 0.0 or degenerate:
         raise _DecodeFailure("unsupported BRep edge state")
-    representations: list[tuple[int, float, float]] = []
+    representations: list[tuple[int, float, float, int]] = []
     while True:
         representation = tokens.integer(0, 7)
         if representation == 0:
             break
         if representation == 1:
             curve = tokens.integer(1, curve_count)
-            if tokens.integer(0, 0) != 0:
-                raise _DecodeFailure("unsupported BRep edge location")
-            representations.append((curve, tokens.number(), tokens.number()))
+            location = _location_index(tokens, location_count)
+            representations.append((curve, tokens.number(), tokens.number(), location))
         elif representation == 2:
             tokens.integer(1, curve2d_count)
             tokens.integer(1, surface_count)
-            if tokens.integer(0, 0) != 0:
-                raise _DecodeFailure("unsupported BRep edge location")
+            _location_index(tokens, location_count)
             tokens.number()
             tokens.number()
         elif representation == 3:
             tokens.integer(1, curve2d_count)
             _indexed_continuity(tokens, curve2d_count)
             tokens.integer(1, surface_count)
-            if tokens.integer(0, 0) != 0:
-                raise _DecodeFailure("unsupported BRep edge location")
+            _location_index(tokens, location_count)
             tokens.number()
             tokens.number()
         else:
             raise _DecodeFailure("unsupported BRep edge representation")
     if len(representations) != 1:
         raise _DecodeFailure("ambiguous BRep edge geometry")
-    curve, first, last = representations[0]
-    return _EdgeData(tolerance, curve, first, last)
+    curve, first, last, location = representations[0]
+    return _EdgeData(tolerance, curve, first, last, location)
 
 
-def _face_geometry(tokens: _Tokens, surface_count: int) -> _FaceData:
+# face geometry binds its analytic surface and reusable location
+def _face_geometry(
+    tokens: _Tokens, surface_count: int, location_count: int
+) -> _FaceData:
     natural = tokens.integer(0, 1)
     tolerance = tokens.number()
     surface = tokens.integer(1, surface_count)
-    if tolerance < 0.0 or tokens.integer(0, 0) != 0:
+    location = _location_index(tokens, location_count)
+    if tolerance < 0.0:
         raise _DecodeFailure("unsupported BRep face geometry")
-    return _FaceData(bool(natural), tolerance, surface)
+    return _FaceData(bool(natural), tolerance, surface, location)
 
 
 def _shape_records(
@@ -1120,9 +1131,10 @@ def _shape_records(
                 curve_count,
                 curve2d_count,
                 surface_count,
+                location_count,
             )
         elif kind == b"Fa":
-            geometry = _face_geometry(tokens, surface_count)
+            geometry = _face_geometry(tokens, surface_count, location_count)
         flag_token = tokens.take()
         if _FLAGS_PATTERN.fullmatch(flag_token) is None:
             raise _DecodeFailure("invalid BRep shape flags")
@@ -1146,25 +1158,35 @@ def _shape_records(
 
 # required because freecad stores reusable topology under nested shape placements
 def _ApplyLocations(
-    Curves: tuple[LineCurve, ...],
-    Surfaces: tuple[PlaneSurface, ...],
+    Curves: tuple[BrepCurve, ...],
+    Surfaces: tuple[BrepSurface, ...],
     Records: Mapping[int, _ShapeRecord],
     RootRef: _Reference,
     Locations: tuple[tuple[float, ...], ...],
     NamePrefix: str,
 ) -> tuple[
-    tuple[LineCurve, ...],
-    tuple[PlaneSurface, ...],
+    tuple[BrepCurve, ...],
+    tuple[BrepSurface, ...],
     dict[int, _ShapeRecord],
     _Reference,
 ]:
-    if not RootRef.location and not any(
-        ChildRef.location for Record in Records.values() for ChildRef in Record.children
+    if (
+        not RootRef.location
+        and not any(
+            ChildRef.location
+            for Record in Records.values()
+            for ChildRef in Record.children
+        )
+        and not any(
+            isinstance(Record.geometry, (_EdgeData, _FaceData))
+            and Record.geometry.location
+            for Record in Records.values()
+        )
     ):
         return Curves, Surfaces, dict(Records), RootRef
 
-    PlacedCurves: list[LineCurve] = []
-    PlacedSurfaces: list[PlaneSurface] = []
+    PlacedCurves: list[BrepCurve] = []
+    PlacedSurfaces: list[BrepSurface] = []
     PlacedRecords: dict[int, _ShapeRecord] = {}
     RecordCache: dict[tuple[int, tuple[float, ...]], int] = {}
     CurveCache: dict[tuple[int, tuple[float, ...]], int] = {}
@@ -1178,15 +1200,27 @@ def _ApplyLocations(
             return CachedIndex
         BaseCurve = Curves[CurveIndex - 1]
         PlacedIndex = len(PlacedCurves) + 1
-        PlacedCurves.append(
-            LineCurve(
+        if isinstance(BaseCurve, LineCurve):
+            PlacedCurve: BrepCurve = LineCurve(
                 f"{NamePrefix}:curve:{PlacedIndex}",
                 _location_point(Location, BaseCurve.origin),
                 _location_direction(Location, BaseCurve.direction),
                 provenance=BaseCurve.provenance,
                 attributes=BaseCurve.attributes,
             )
-        )
+        elif isinstance(BaseCurve, CircleCurve):
+            PlacedCurve = CircleCurve(
+                f"{NamePrefix}:curve:{PlacedIndex}",
+                _location_point(Location, BaseCurve.center),
+                _location_direction(Location, BaseCurve.axis),
+                _location_direction(Location, BaseCurve.reference_direction),
+                BaseCurve.radius * _location_scale(Location),
+                provenance=BaseCurve.provenance,
+                attributes=BaseCurve.attributes,
+            )
+        else:
+            raise _DecodeFailure("unsupported located BRep curve")
+        PlacedCurves.append(PlacedCurve)
         CurveCache[CurveKey] = PlacedIndex
         return PlacedIndex
 
@@ -1198,8 +1232,8 @@ def _ApplyLocations(
             return CachedIndex
         BaseSurface = Surfaces[SurfaceIndex - 1]
         PlacedIndex = len(PlacedSurfaces) + 1
-        PlacedSurfaces.append(
-            PlaneSurface(
+        if isinstance(BaseSurface, PlaneSurface):
+            PlacedSurface: BrepSurface = PlaneSurface(
                 f"{NamePrefix}:surface:{PlacedIndex}",
                 _location_point(Location, BaseSurface.origin),
                 _location_direction(Location, BaseSurface.normal),
@@ -1207,7 +1241,19 @@ def _ApplyLocations(
                 provenance=BaseSurface.provenance,
                 attributes=BaseSurface.attributes,
             )
-        )
+        elif isinstance(BaseSurface, CylinderSurface):
+            PlacedSurface = CylinderSurface(
+                f"{NamePrefix}:surface:{PlacedIndex}",
+                _location_point(Location, BaseSurface.origin),
+                _location_direction(Location, BaseSurface.axis),
+                _location_direction(Location, BaseSurface.reference_direction),
+                BaseSurface.radius * _location_scale(Location),
+                provenance=BaseSurface.provenance,
+                attributes=BaseSurface.attributes,
+            )
+        else:
+            raise _DecodeFailure("unsupported located BRep surface")
+        PlacedSurfaces.append(PlacedSurface)
         SurfaceCache[SurfaceKey] = PlacedIndex
         return PlacedIndex
 
@@ -1227,7 +1273,7 @@ def _ApplyLocations(
                 if not ChildRef.location
                 else Locations[ChildRef.location - 1]
             )
-            ChildMatrix = _location_product(Location, ChildLoc)
+            ChildMatrix = _location_product(ChildLoc, Location)
             ChildRecord = PlaceRecord(ChildRef.record, ChildMatrix)
             ChildRefs.append(_Reference(ChildRef.orientation, ChildRecord))
         ScaleValue = _location_scale(Location)
@@ -1238,17 +1284,34 @@ def _ApplyLocations(
                 _location_point(Location, Geometry.point),
             )
         elif isinstance(Geometry, _EdgeData):
+            SourceCurve = Curves[Geometry.curve - 1]
+            GeometryLoc = (
+                _IDENTITY_LOCATION
+                if not Geometry.location
+                else Locations[Geometry.location - 1]
+            )
+            CurveLoc = _location_product(GeometryLoc, Location)
+            ParameterScale = (
+                _location_scale(CurveLoc) if isinstance(SourceCurve, LineCurve) else 1.0
+            )
             Geometry = _EdgeData(
                 Geometry.tolerance * ScaleValue,
-                PlaceCurve(Geometry.curve, Location),
-                Geometry.first * ScaleValue,
-                Geometry.last * ScaleValue,
+                PlaceCurve(Geometry.curve, CurveLoc),
+                Geometry.first * ParameterScale,
+                Geometry.last * ParameterScale,
             )
         elif isinstance(Geometry, _FaceData):
+            GeometryLoc = (
+                _IDENTITY_LOCATION
+                if not Geometry.location
+                else Locations[Geometry.location - 1]
+            )
             Geometry = _FaceData(
                 Geometry.natural,
                 Geometry.tolerance * ScaleValue,
-                PlaceSurface(Geometry.surface, Location),
+                PlaceSurface(
+                    Geometry.surface, _location_product(GeometryLoc, Location)
+                ),
             )
         PlacedIndex = len(PlacedRecords) + 1
         PlacedRecords[PlacedIndex] = _ShapeRecord(
@@ -1288,37 +1351,52 @@ def _compose(outer: str, inner: str) -> str:
     raise _DecodeFailure("unsupported BRep topology orientation")
 
 
-def _ordered_wire_uses(
+# Eulerian ordering handles seam edges that occur in both directions in one wire
+def _OrderWireUses(
     uses: list[_Reference], edge_vertices: Mapping[int, tuple[int, int]]
 ) -> list[_Reference]:
-    def endpoints(reference: _Reference) -> tuple[int, int]:
+    # oriented endpoints expose the directed multigraph consumed by Hierholzer's walk
+    def Endpoints(reference: _Reference) -> tuple[int, int]:
         start, end = edge_vertices[reference.record]
         return (end, start) if reference.orientation == "-" else (start, end)
 
-    for first_index in range(len(uses)):
-        ordered = [uses[first_index]]
-        remaining = uses[:first_index] + uses[first_index + 1 :]
-        while remaining:
-            end = endpoints(ordered[-1])[1]
-            match = next(
-                (
-                    index
-                    for index, reference in enumerate(remaining)
-                    if endpoints(reference)[0] == end
-                ),
-                None,
-            )
-            if match is None:
-                break
-            ordered.append(remaining.pop(match))
-        if not remaining and endpoints(ordered[-1])[1] == endpoints(ordered[0])[0]:
-            return ordered
-    raise _DecodeFailure("BRep wire is disconnected or open")
+    if not uses:
+        raise _DecodeFailure("BRep wire is disconnected or open")
+    Adjacency: dict[int, list[tuple[_Reference, int]]] = {}
+    for Use in reversed(uses):
+        StartVertex, EndVertex = Endpoints(Use)
+        Adjacency.setdefault(StartVertex, []).append((Use, EndVertex))
+    StartVertex = Endpoints(uses[0])[0]
+    VertexStack = [StartVertex]
+    EdgeStack: list[_Reference] = []
+    Circuit: list[_Reference] = []
+    while VertexStack:
+        Outgoing = Adjacency.get(VertexStack[-1])
+        if Outgoing:
+            Use, EndVertex = Outgoing.pop()
+            EdgeStack.append(Use)
+            VertexStack.append(EndVertex)
+            continue
+        VertexStack.pop()
+        if EdgeStack:
+            Circuit.append(EdgeStack.pop())
+    Circuit.reverse()
+    if (
+        len(Circuit) != len(uses)
+        or Endpoints(Circuit[0])[0] != Endpoints(Circuit[-1])[1]
+        or any(
+            Endpoints(LeftUse)[1] != Endpoints(RightUse)[0]
+            for LeftUse, RightUse in zip(Circuit, Circuit[1:])
+        )
+    ):
+        raise _DecodeFailure("BRep wire is disconnected or open")
+    return Circuit
 
 
+# parsed analytic records become the format-neutral BREP topology graph
 def _model(
-    curves: tuple[LineCurve, ...],
-    surfaces: tuple[PlaneSurface, ...],
+    curves: tuple[BrepCurve, ...],
+    surfaces: tuple[BrepSurface, ...],
     records: Mapping[int, _ShapeRecord],
     root: _Reference,
     id_prefix: str,
@@ -1374,47 +1452,53 @@ def _model(
         if record.kind != b"Fa":
             continue
         geometry = record.geometry
-        if (
-            not isinstance(geometry, _FaceData)
-            or len(record.children) != 1
-            or record.children[0].orientation not in {"+", "-"}
-        ):
+        if not isinstance(geometry, _FaceData) or not record.children:
             raise _DecodeFailure("ambiguous BRep face boundary")
-        wire_reference = record.children[0]
-        wire = records[wire_reference.record]
-        if wire.kind != b"Wi" or not wire.children:
-            raise _DecodeFailure("BRep face references an invalid wire")
-        uses = list(wire.children)
-        if wire_reference.orientation == "-":
-            uses = [
-                _Reference(_opposite(use.orientation), use.record)
-                for use in reversed(uses)
-            ]
-        uses = _ordered_wire_uses(uses, edge_vertices)
-        coedge_ids: list[str] = []
-        for index, use in enumerate(uses, 1):
-            if use.orientation not in {"+", "-"}:
-                raise _DecodeFailure("unsupported BRep coedge orientation")
-            if records[use.record].kind != b"Ed":
-                raise _DecodeFailure("BRep wire references a non-edge")
-            identifier = f"{id_prefix}:coedge:{number}:{index}"
-            coedges.append(
-                BrepCoedge(
-                    identifier,
-                    edge_ids[use.record],
-                    reversed=use.orientation == "-",
+        loop_ids: list[str] = []
+        for wire_index, wire_reference in enumerate(record.children, 1):
+            if wire_reference.orientation not in {"+", "-"}:
+                raise _DecodeFailure("unsupported BRep wire orientation")
+            wire = records[wire_reference.record]
+            if wire.kind != b"Wi" or not wire.children:
+                raise _DecodeFailure("BRep face references an invalid wire")
+            uses = list(wire.children)
+            if wire_reference.orientation == "-":
+                uses = [
+                    _Reference(_opposite(use.orientation), use.record)
+                    for use in reversed(uses)
+                ]
+            uses = _OrderWireUses(uses, edge_vertices)
+            coedge_ids: list[str] = []
+            for use_index, use in enumerate(uses, 1):
+                if use.orientation not in {"+", "-"}:
+                    raise _DecodeFailure("unsupported BRep coedge orientation")
+                if records[use.record].kind != b"Ed":
+                    raise _DecodeFailure("BRep wire references a non-edge")
+                suffix = (
+                    f"{wire_index}:{use_index}"
+                    if len(record.children) > 1
+                    else str(use_index)
                 )
-            )
-            coedge_ids.append(identifier)
-        loop_id = f"{id_prefix}:loop:{number}"
-        loops.append(BrepLoop(loop_id, tuple(coedge_ids), True))
+                identifier = f"{id_prefix}:coedge:{number}:{suffix}"
+                coedges.append(
+                    BrepCoedge(
+                        identifier,
+                        edge_ids[use.record],
+                        reversed=use.orientation == "-",
+                    )
+                )
+                coedge_ids.append(identifier)
+            suffix = f":{wire_index}" if len(record.children) > 1 else ""
+            loop_id = f"{id_prefix}:loop:{number}{suffix}"
+            loops.append(BrepLoop(loop_id, tuple(coedge_ids), wire_index == 1))
+            loop_ids.append(loop_id)
         face_id = f"{id_prefix}:face:{number}"
         face_ids[number] = face_id
         faces.append(
             BrepFace(
                 face_id,
                 f"{id_prefix}:surface:{geometry.surface}",
-                (loop_id,),
+                tuple(loop_ids),
                 True,
                 geometry.tolerance,
                 attributes={"natural_restriction": geometry.natural},
@@ -1562,6 +1646,7 @@ def _model(
     return result
 
 
+# strict decoding returns typed geometry only when every byte and topology link is proved
 def decode_ascii_brep(
     data: bytes,
     *,
@@ -1594,49 +1679,84 @@ def decode_ascii_brep(
         locations = _model_locations(tokens)
         curve2d_count = _curves(tokens, b"Curve2ds", 2)
         curve_count = _count(tokens, b"Curves", _MAX_GEOMETRY)
-        curves: list[LineCurve] = []
+        curves: list[BrepCurve] = []
         for index in range(1, curve_count + 1):
-            if tokens.integer(1, 9) != 1:
+            kind = tokens.integer(1, 9)
+            if kind not in {1, 2}:
                 raise _DecodeFailure("unsupported BRep curve type")
             origin = _vector(tokens)
-            direction = _vector(tokens)
-            if not _unit(direction):
-                raise _DecodeFailure("invalid BRep line direction")
+            axis = _vector(tokens)
+            if kind == 1:
+                if not _unit(axis):
+                    raise _DecodeFailure("invalid BRep line direction")
+                curves.append(
+                    LineCurve(
+                        f"{id_prefix}:curve:{index}",
+                        origin,
+                        axis,
+                        attributes={"opencascade_index": index},
+                    )
+                )
+                continue
+            x_direction = _vector(tokens)
+            y_direction = _vector(tokens)
+            radius = tokens.number()
+            if not _IsFrame(axis, x_direction, y_direction) or radius <= 0.0:
+                raise _DecodeFailure("invalid BRep circle")
             curves.append(
-                LineCurve(
+                CircleCurve(
                     f"{id_prefix}:curve:{index}",
                     origin,
-                    direction,
+                    axis,
+                    x_direction,
+                    radius,
                     attributes={"opencascade_index": index},
                 )
             )
         _zero_table(tokens, b"Polygon3D")
         _zero_table(tokens, b"PolygonOnTriangulations")
         surface_count = _count(tokens, b"Surfaces", _MAX_GEOMETRY)
-        surfaces: list[PlaneSurface] = []
+        surfaces: list[BrepSurface] = []
         for index in range(1, surface_count + 1):
-            if tokens.integer(1, 11) != 1:
+            kind = tokens.integer(1, 11)
+            if kind not in {1, 2}:
                 raise _DecodeFailure("unsupported BRep surface type")
             origin = _vector(tokens)
             normal = _vector(tokens)
             x_direction = _vector(tokens)
             y_direction = _vector(tokens)
-            if not _frame(normal, x_direction, y_direction):
+            if not _IsFrame(normal, x_direction, y_direction):
                 raise _DecodeFailure("invalid BRep surface frame")
+            properties = {
+                "opencascade_index": index,
+                "reference_y": (
+                    y_direction.x,
+                    y_direction.y,
+                    y_direction.z,
+                ),
+            }
+            if kind == 1:
+                surfaces.append(
+                    PlaneSurface(
+                        f"{id_prefix}:surface:{index}",
+                        origin,
+                        normal,
+                        x_direction,
+                        attributes=properties,
+                    )
+                )
+                continue
+            radius = tokens.number()
+            if radius <= 0.0:
+                raise _DecodeFailure("invalid BRep cylinder")
             surfaces.append(
-                PlaneSurface(
+                CylinderSurface(
                     f"{id_prefix}:surface:{index}",
                     origin,
                     normal,
                     x_direction,
-                    attributes={
-                        "opencascade_index": index,
-                        "reference_y": (
-                            y_direction.x,
-                            y_direction.y,
-                            y_direction.z,
-                        ),
-                    },
+                    radius,
+                    attributes=properties,
                 )
             )
         _zero_table(tokens, b"Triangulations")

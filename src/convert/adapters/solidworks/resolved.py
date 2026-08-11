@@ -740,13 +740,18 @@ def patch_features(data: bytes | bytearray, edits: Mapping[int, FeatureEdit]) ->
             for point, (x, y) in zip(feature.points, edit.corners_mm, strict=True):
                 struct.pack_into("<d", output, point.offset, x / _METRES)
                 struct.pack_into("<d", output, point.offset + 8, y / _METRES)
-        if edit.arc_centres_mm is not None:
-            for arc, (x, y) in zip(feature.arcs, edit.arc_centres_mm, strict=True):
-                struct.pack_into("<d", output, arc.centre_offset, x / _METRES)
-                struct.pack_into("<d", output, arc.centre_offset + 8, y / _METRES)
         if edit.radii_mm is not None:
             for arc, radius_mm in zip(feature.arcs, edit.radii_mm, strict=True):
                 _write_arc_radius(output, arc, radius_mm)
+        if edit.arc_centres_mm is not None:
+            for arc, (x, y) in zip(feature.arcs, edit.arc_centres_mm, strict=True):
+                DeltaX = (x - arc.centre_x_mm) / _METRES
+                DeltaY = (y - arc.centre_y_mm) / _METRES
+                RimX, RimY = struct.unpack_from("<2d", output, arc.point_offset)
+                struct.pack_into("<d", output, arc.centre_offset, x / _METRES)
+                struct.pack_into("<d", output, arc.centre_offset + 8, y / _METRES)
+                struct.pack_into("<d", output, arc.point_offset, RimX + DeltaX)
+                struct.pack_into("<d", output, arc.point_offset + 8, RimY + DeltaY)
         if edit.swept_arc_centres_mm is not None:
             for arc, centre in zip(
                 feature.swept_arcs, edit.swept_arc_centres_mm, strict=True
@@ -845,6 +850,56 @@ def sketch_plane_object_id(data: bytes | bytearray) -> int | None:
             return candidate
     return None
 
+
+# principal-plane edits keep the paired plane identifier and axis code consistent
+def PatchSketchPlane(data: bytes | bytearray, PlaneObjectId: int) -> bytes:
+    if PlaneObjectId not in {2, 3, 4}:
+        raise SldprtFormatError("sketch support requires a principal plane object id")
+    OutputData = bytearray(data)
+    ChainOffset = first_class_offset(class_records(OutputData), SKETCH_CHAIN_CLASS)
+    if ChainOffset is None:
+        raise SldprtFormatError("resolved feature stream has no sketch chain")
+    PlaneOffset = None
+    for OffsetValue in range(
+        ChainOffset,
+        min(ChainOffset + 320, len(OutputData) - 14),
+    ):
+        CandidateValue = struct.unpack_from("<I", OutputData, OffsetValue)[0]
+        if CandidateValue not in {2, 3, 4}:
+            continue
+        AxisValue = struct.unpack_from("<I", OutputData, OffsetValue + 10)[0]
+        if AxisValue == 5 - CandidateValue:
+            PlaneOffset = OffsetValue
+            break
+    if PlaneOffset is None:
+        raise SldprtFormatError(
+            "resolved feature stream has no principal-plane reference"
+        )
+    struct.pack_into("<I", OutputData, PlaneOffset, PlaneObjectId)
+    struct.pack_into("<I", OutputData, PlaneOffset + 10, 5 - PlaneObjectId)
+    if OutputData[PlaneOffset + 14] == 1:
+        PrincipalFrames = {
+            2: ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+            3: ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)),
+            4: ((0.0, 0.0, -1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)),
+        }
+        UAxisValue, VAxisValue, NormalValue = PrincipalFrames[PlaneObjectId]
+        MatrixRows = tuple(
+            ComponentValue
+            for AxisIndex in range(3)
+            for ComponentValue in (
+                UAxisValue[AxisIndex],
+                VAxisValue[AxisIndex],
+                NormalValue[AxisIndex],
+            )
+        )
+        struct.pack_into("<9d", OutputData, PlaneOffset + 15, *MatrixRows)
+    PatchedData = bytes(OutputData)
+    if sketch_plane_object_id(PatchedData) != PlaneObjectId:
+        raise SldprtFormatError(
+            "resolved sketch support plane did not patch consistently"
+        )
+    return PatchedData
 
 
 def _name_records(blob: bytes, marker: bytes) -> tuple[NameRecord, ...]:

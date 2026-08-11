@@ -19,6 +19,8 @@ from .assembly2_programs import EncodeProgram as EncodeProgram2
 from .assembly3_programs import EncodeProgram as EncodeProgram3
 from .assembly_distinct_programs import EncodeProgram as EncodeProgramDistinct
 from .assembly_distinct_repeat import EncodePathCore
+from .assembly_hybrid_repeat import EncodeHybCore
+from .assembly_mixed_repeat import EncodeMixCore
 from .assembly_repeat import EncodeRepCore, RepeatItem
 from .container import SldprtFormatError
 
@@ -48,6 +50,7 @@ class AsmCoreItem:
     TransY: float = 0.0
     TransZ: float = 0.0
     ConfigName: str = "Default"
+    FileStamp: int = 0
 
 
 # native strings use one semantic component occurrence across coupled streams
@@ -67,9 +70,62 @@ def EncodeAsmCore(
         raise SldprtFormatError("native assembly component path has no stem")
     DisplayName = f"<{ConfigName}>_Display State 1"
     AsmPath = str(PureWindowsPath(CompPath).parent / f"{ModelName}.SLDASM")
-    if len(CoreItems) >= 3 and any(
-        ItemValue.CompPath != CompPath for ItemValue in CoreItems
+    PathKeys = tuple(
+        str(PureWindowsPath(ItemValue.CompPath)).casefold() for ItemValue in CoreItems
+    )
+    UniqueCount = len(set(PathKeys))
+    FileStamps = {
+        ItemValue.FileStamp for ItemValue in CoreItems if ItemValue.FileStamp > 0
+    }
+    if (
+        len(CoreItems) >= 3
+        and 1 < UniqueCount < len(CoreItems)
+        and len(FileStamps) == 1
     ):
+        StreamsMap = dict(
+            EncodeMixCore(
+                ModelName,
+                ConfigName,
+                tuple(
+                    RepeatItem(
+                        ItemValue.OccurName,
+                        ItemValue.CompPath,
+                        ItemValue.TransX,
+                        ItemValue.TransY,
+                        ItemValue.TransZ,
+                        ItemValue.ConfigName,
+                        ItemValue.FileStamp,
+                    )
+                    for ItemValue in CoreItems
+                ),
+            )
+        )
+        StreamsMap["Header2"] = StreamsMap["Contents/Config-0-ModelHeader"]
+        StreamsMap["Contents/Config-0-MatesList"] = struct.pack("<IH", 170, 0)
+        return MappingProxyType(StreamsMap)
+    if len(CoreItems) >= 3 and 1 < UniqueCount < len(CoreItems):
+        StreamsMap = dict(
+            EncodeHybCore(
+                ModelName,
+                ConfigName,
+                tuple(
+                    RepeatItem(
+                        ItemValue.OccurName,
+                        ItemValue.CompPath,
+                        ItemValue.TransX,
+                        ItemValue.TransY,
+                        ItemValue.TransZ,
+                        ItemValue.ConfigName,
+                        ItemValue.FileStamp,
+                    )
+                    for ItemValue in CoreItems
+                ),
+            )
+        )
+        StreamsMap["Header2"] = StreamsMap["Contents/Config-0-ModelHeader"]
+        StreamsMap["Contents/Config-0-MatesList"] = struct.pack("<IH", 170, 0)
+        return MappingProxyType(StreamsMap)
+    if len(CoreItems) >= 3 and UniqueCount > 1:
         StreamsMap = dict(
             EncodePathCore(
                 ModelName,
@@ -82,6 +138,7 @@ def EncodeAsmCore(
                         ItemValue.TransY,
                         ItemValue.TransZ,
                         ItemValue.ConfigName,
+                        ItemValue.FileStamp,
                     )
                     for ItemValue in CoreItems
                 ),
@@ -103,6 +160,7 @@ def EncodeAsmCore(
                         ItemValue.TransY,
                         ItemValue.TransZ,
                         ItemValue.ConfigName,
+                        ItemValue.FileStamp,
                     )
                     for ItemValue in CoreItems
                 ),
@@ -171,6 +229,11 @@ def EncodeAsmCore(
                     0x0940: AsmPath,
                     0x09CA: ModelName,
                     0x09FB: ConfigName,
+                    **(
+                        {0x0902: CoreItems[0].FileStamp}
+                        if CoreItems[0].FileStamp > 0
+                        else {}
+                    ),
                 },
             ),
         }
@@ -235,6 +298,14 @@ def EncodeAsmCore(
                         0x09FB: AsmPath,
                         0x0A85: ModelName,
                         0x0AB6: ConfigName,
+                        **(
+                            {
+                                0x08AA: CoreItems[0].FileStamp,
+                                0x09BD: SecondItem.FileStamp,
+                            }
+                            if CoreItems[0].FileStamp > 0 and SecondItem.FileStamp > 0
+                            else {}
+                        ),
                     },
                 ),
             }
@@ -284,6 +355,11 @@ def EncodeAsmCore(
                     0x0859: CompStem,
                     0x08DE: ModelName,
                     0x0913: ConfigName,
+                    **(
+                        {0x089A: CoreItems[0].FileStamp}
+                        if CoreItems[0].FileStamp > 0
+                        else {}
+                    ),
                 },
             ),
         }
@@ -325,6 +401,11 @@ def EncodeAsmCore(
                 0x07F1: CompStem,
                 0x0876: ModelName,
                 0x08AB: ConfigName,
+                **(
+                    {0x0832: CoreItems[0].FileStamp}
+                    if CoreItems[0].FileStamp > 0
+                    else {}
+                ),
             },
         ),
     }

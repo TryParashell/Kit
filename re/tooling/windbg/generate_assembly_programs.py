@@ -281,9 +281,7 @@ def AddDirectFields(
 ) -> None:
     StreamShift = len(StreamData) - ReferenceLengths[StreamName]
     for StartPos, FormatText, OwnerText in DirectFields[StreamName]:
-        StartPos = FieldPosition(
-            StreamName, StartPos, OwnerText, StreamShift, Segments
-        )
+        StartPos = FieldPosition(StreamName, StartPos, OwnerText, StreamShift, Segments)
         FieldWidth = struct.calcsize("<" + FormatText)
         ValuesList = struct.unpack_from("<" + FormatText, StreamData, StartPos)
         FieldValue: Any = ValuesList[0] if len(ValuesList) == 1 else ValuesList

@@ -257,10 +257,12 @@ class _AssemblyTemplatePatch:
     divergences: tuple[str, ...]
 
 
+# assembly bundles keep final paths, bytes, and vendor document identities aligned
 @dataclass(frozen=True, slots=True)
 class _AssemblyBundle:
     names: Mapping[str, str]
     payloads: Mapping[Path, bytes]
+    StampValues: Mapping[str, int]
     complete: bool
     NativeCaps: frozenset[Capability] = frozenset()
 
@@ -734,7 +736,7 @@ class SldprtAdapter:
         diagnostics = document.diagnostics
         required = _required_capabilities(document)
         referenced_files_written = 0
-        bundle = _AssemblyBundle({}, {}, False)
+        bundle = _AssemblyBundle({}, {}, {}, False)
         portable_carrier = False
         if preserved is None:
             template = _source_template(document, path)
@@ -766,12 +768,22 @@ class SldprtAdapter:
                     else {}
                 )
             )
+            ConfiguredStamps = settings.values.get("bundle_stamps")
+            SelectedStamps = (
+                bundle.StampValues
+                if bundle.StampValues
+                else (ConfiguredStamps if isinstance(ConfiguredStamps, Mapping) else {})
+            )
+            ConfiguredName = settings.values.get("model_name")
+            SelectedName = ConfiguredName if isinstance(ConfiguredName, str) else ""
             generated = _generated_streams(
                 document,
                 template,
                 selected_bundle_names,
                 BundleComplete=(bundle.complete if bundle.names else None),
                 BundleCapabilities=bundle.NativeCaps,
+                BundleStamps=SelectedStamps,
+                ModelName=SelectedName,
             )
             if portable_carrier:
                 generated = replace(
@@ -956,7 +968,14 @@ class SldprtAdapter:
                     "vendor_loadable": vendor_loadable,
                     "application_usable": application_usable,
                     "native_geometry": native_brep
-                    in {"exact", "generated", "preserved", "patched", "template"},
+                    in {
+                        "exact",
+                        "feature-rebuilt",
+                        "generated",
+                        "preserved",
+                        "patched",
+                        "template",
+                    },
                     "native_brep": native_brep,
                     "native_history": (
                         Capability.PARAMETRIC_HISTORY not in required
@@ -1277,7 +1296,7 @@ def _assembly_bundle(
 ) -> _AssemblyBundle:
     assembly = document.assembly
     if assembly is None:
-        return _AssemblyBundle({}, {}, False)
+        return _AssemblyBundle({}, {}, {}, False)
     documents = {component.id: component.document for component in assembly.documents}
     definitions = tuple(
         definition
@@ -1286,6 +1305,7 @@ def _assembly_bundle(
     )
     names: dict[str, str] = {}
     payloads: dict[Path, bytes] = {}
+    StampValues: dict[str, int] = {}
     used = {destination.name.casefold()}
     complete = True
     BundleCaps: set[Capability] = set()
@@ -1340,12 +1360,56 @@ def _assembly_bundle(
     available_names = {
         PureWindowsPath(NameValue).name.casefold() for NameValue in names.values()
     }
-    for definition, component, candidate, target, FinalTarget in targets:
+    FinalOverwrite = (
+        settings.overwrite or settings.values.get("final_overwrite") is True
+    )
+
+    # child identities must exist before serializing their owning assembly
+    def IsTargetReady(
+        TargetValue: tuple[ComponentDefinition, CadDocument, str, Path, Path],
+    ) -> bool:
+        ComponentValue = TargetValue[1]
+        if ComponentValue.assembly is None:
+            return True
+        ChildDefs = tuple(
+            DefinitionValue
+            for DefinitionValue in ComponentValue.assembly.definitions
+            if DefinitionValue.id != ComponentValue.assembly.root_definition_id
+        )
+        for ChildValue in ChildDefs:
+            ChildName = names.get(ChildValue.document_id or ChildValue.id)
+            if not ChildName:
+                ChildName = names.get(ChildValue.id)
+            if not ChildName:
+                return False
+            ChildKey = str(PureWindowsPath(ChildName)).casefold()
+            if ChildKey not in StampValues:
+                return False
+        return True
+
+    PendingTargets = list(targets)
+    while PendingTargets:
+        ReadyIndex = next(
+            (
+                TargetIndex
+                for TargetIndex, TargetValue in enumerate(PendingTargets)
+                if IsTargetReady(TargetValue)
+            ),
+            None,
+        )
+        if ReadyIndex is None:
+            complete = False
+            ReadyIndex = 0
+        definition, component, candidate, target, FinalTarget = PendingTargets.pop(
+            ReadyIndex
+        )
         buffer = BytesIO()
         values = dict(settings.values)
         values["portable"] = False
         values["bundle_member"] = component.assembly is not None
         values["bundle_names"] = frozen_mapping(names)
+        values["bundle_stamps"] = frozen_mapping(StampValues)
+        values["model_name"] = Path(candidate).stem
         result = SldprtAdapter().write(
             component,
             buffer,
@@ -1356,9 +1420,14 @@ def _assembly_bundle(
             ),
         )
         payload = buffer.getvalue()
+        MemberArchive = SldprtArchive.from_bytes(payload)
+        StampData = MemberArchive.streams.get("ModelStamps", b"")
+        if len(StampData) >= 4:
+            StampKey = str(PureWindowsPath(FinalTarget)).casefold()
+            StampValues[StampKey] = struct.unpack_from("<I", StampData)[0]
         if FinalTarget.exists():
             if FinalTarget.read_bytes() != payload:
-                if settings.overwrite:
+                if FinalOverwrite:
                     payloads[target] = payload
                 else:
                     raise FileExistsError(FinalTarget)
@@ -1384,6 +1453,7 @@ def _assembly_bundle(
     return _AssemblyBundle(
         frozen_mapping(names),
         frozen_mapping(payloads),
+        frozen_mapping(StampValues),
         complete,
         frozenset(BundleCaps),
     )
@@ -1798,6 +1868,8 @@ def _generated_streams(
     bundle_names: Mapping[str, str] | None = None,
     BundleComplete: bool | None = None,
     BundleCapabilities: frozenset[Capability] = frozenset(),
+    BundleStamps: Mapping[str, int] | None = None,
+    ModelName: str = "",
 ) -> _GeneratedStreams:
     portable = _document_without_source(document)
     if isinstance(document.source.attributes.get("embedded_source_format_id"), str):
@@ -1819,7 +1891,7 @@ def _generated_streams(
         (item.name for item in portable.configurations if item.active),
         portable.configurations[0].name if portable.configurations else "Default",
     )
-    model_name = PureWindowsPath(portable.source.path).stem
+    model_name = ModelName or PureWindowsPath(portable.source.path).stem
     streams = {
         **_solidworks_package_streams(),
         SOLIDWORKS_STREAM: _solidworks_xml(model_name, configuration),
@@ -1886,7 +1958,14 @@ def _generated_streams(
         )
         streams.update(envelope.streams)
         streams[COMPONENT_TREE_STREAM] = encoding.component_tree
-        streams.update(AsmCoreStreams(portable.assembly, encoding, AssemblyName))
+        streams.update(
+            AsmCoreStreams(
+                portable.assembly,
+                encoding,
+                AssemblyName,
+                BundleStamps,
+            )
+        )
         streams.update(encoding.mate_streams)
         assembly_envelope_complete = envelope.envelope_complete
         assembly_notes = _generated_assembly_notes(encoding, envelope, streams)
@@ -1895,6 +1974,13 @@ def _generated_streams(
         native_brep = "generated"
     else:
         payload, native_brep = _parasolid_payload(portable, PartObjectIds)
+        if (
+            portable.assembly is None
+            and part_vendor_loadable
+            and Capability.BREP in part_capabilities
+        ):
+            payload = None
+            native_brep = "feature-rebuilt"
     if payload is not None:
         streams[PARTITION_STREAM] = payload
     NativeCaps = set(
@@ -2047,6 +2133,7 @@ def AsmCoreStreams(
     AssemblyValue: AssemblyData,
     EncodingValue: NativeAssemblyEncoding,
     ModelName: str,
+    StampValues: Mapping[str, int] | None = None,
 ) -> Mapping[str, bytes]:
     DirectItems = AssemblyValue.children(AssemblyValue.root_definition_id)
     if not DirectItems:
@@ -2057,6 +2144,7 @@ def AsmCoreStreams(
     XmlSpace = {"sw": "http://www.solidworks.com/sw2003/schema"}
     OccurNames = _generated_occurrence_labels(AssemblyValue)
     CoreItems: list[AsmCoreItem] = []
+    StampMap = StampValues or {}
     ConfigName = ""
     for InstanceItem in DirectItems:
         InstanceIndex = AssemblyValue.instances.index(InstanceItem)
@@ -2101,6 +2189,7 @@ def AsmCoreStreams(
                 MatrixValues[7] / 1000.0,
                 MatrixValues[11] / 1000.0,
                 InstanceConfig or "Default",
+                StampMap.get(str(PureWindowsPath(CompPath)).casefold(), 0),
             )
         )
     return EncodeAsmCore(ModelName, ConfigName, tuple(CoreItems))
@@ -6475,9 +6564,7 @@ def _timeline(
                 sketch_id=(
                     _sketch_id(operation.profile_id)
                     if operation is not None and operation.profile_id in sketch_by_id
-                    else _sketch_id(feature.object_id)
-                    if sketch is not None
-                    else None
+                    else _sketch_id(feature.object_id) if sketch is not None else None
                 ),
                 parameter_ids=parameter_ids,
                 operation=operation_value,
