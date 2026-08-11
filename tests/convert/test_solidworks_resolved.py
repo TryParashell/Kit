@@ -79,6 +79,9 @@ from convert.adapters.solidworks.resolved_bosscutcutcut_program import (
 from convert.adapters.solidworks.resolved_bosscutthrough_program import (
     EncodeProgram as EncodeBossCutThroughProgram,
 )
+from convert.adapters.solidworks.resolved_bossboss_program import (
+    EncodeProgram as EncodeBossBossProgram,
+)
 from convert.adapters.solidworks.resolved_cutbase_program import (
     EncodeProgram as EncodeCutBaseProgram,
 )
@@ -505,6 +508,17 @@ def test_first_principles_pad_pocket_program_covers_both_operations() -> None:
     assert ThroughData[0].depth_mm == pytest.approx(15.0)
     assert ThroughData[1].depth_mm is None
     assert ThroughData[1].depth_offset is None
+
+
+# the typed two-boss program retains both additive editable feature layouts
+def test_first_principles_pad_pad_program_covers_both_operations() -> None:
+    ProgramData = EncodeBossBossProgram()
+    FeatureData = locate_features(ProgramData)
+    assert len(ProgramData) == 16174
+    assert [ItemData.kind for ItemData in FeatureData] == [BOSS_KIND, BOSS_KIND]
+    assert [ItemData.feature_id for ItemData in FeatureData] == [32, 40]
+    assert [ItemData.sketch_id for ItemData in FeatureData] == [26, 33]
+    assert [len(ItemData.points) for ItemData in FeatureData] == [4, 4]
 
 
 # the typed three-operation program preserves the full boss-cut-cut native tree

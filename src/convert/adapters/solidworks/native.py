@@ -86,6 +86,7 @@ from .resolved_bosscutcutcut_program import (
 from .resolved_bosscutthrough_program import (
     EncodeProgram as EncodeBossCutThroughProgram,
 )
+from .resolved_bossboss_program import EncodeProgram as EncodeBossBossProgram
 from .resolved_circle_program import EncodeProgram as EncodeCircleProgram
 from .resolved_right_program import EncodeProgram as EncodeRightProgram
 from .resolved_revolve_program import EncodeProgram as EncodeRevolveProgram
@@ -565,6 +566,13 @@ _BOSS_CUT_THROUGH_HEADER_STAMPS = (
     (1785797024, 1785797024),
     (1785797025,),
 )
+# the two-boss program carries four coupled feature-action identities
+_BOSS_BOSS_HEADER_STAMPS = (
+    (1785797008, 1785797008),
+    (1785797008,),
+    (1785797009, 1785797009),
+    (1785797010,),
+)
 # the two-pocket program carries six coupled feature-action identities
 _BOSS_CUT_CUT_HEADER_STAMPS = (
     (1785839606, 1785839607),
@@ -979,9 +987,14 @@ def BuildTwoFeatureVendorTree(
         or PadObject.class_name != "moExtrusion_c"
         or PadObject.object_id != 32
         or PadObject.name != "Boss-Extrude1"
-        or CutObject.class_name != "moCut_c"
+        or CutObject.class_name not in {"moCut_c", "moExtrusion_c"}
         or CutObject.object_id != 40
-        or CutObject.name != "Cut-Extrude1"
+        or CutObject.name
+        != (
+            "Boss-Extrude2"
+            if CutObject.class_name == "moExtrusion_c"
+            else "Cut-Extrude1"
+        )
         or any(ItemData is None for ItemData in EndCodes)
         or len(PadObject.dimensions) != 1
     ):
@@ -989,7 +1002,13 @@ def BuildTwoFeatureVendorTree(
     PadCodes, CutCodes = EndCodes
     if PadCodes is None or CutCodes is None or PadCodes[1] != 0:
         return None
-    if CutCodes[1] == 0:
+    if CutObject.class_name == "moExtrusion_c":
+        if CutCodes[1] != 0 or len(CutObject.dimensions) != 1:
+            return None
+        CutDepth = CutObject.dimensions[0].value_mm
+        ProgramData = EncodeBossBossProgram()
+        HeaderStamps = _BOSS_BOSS_HEADER_STAMPS
+    elif CutCodes[1] == 0:
         if len(CutObject.dimensions) != 1:
             return None
         CutDepth: float | None = CutObject.dimensions[0].value_mm
@@ -1760,9 +1779,12 @@ def _CanonicalTwoFeatureObjects(
         (SourceSketchOne, SourceSketchTwo),
         (SourceFeatureOne, SourceFeatureTwo),
     )
+    SecondIsBoss = (
+        str(SourceFeatureTwo.operation).casefold() == BooleanOperation.JOIN.value
+    )
     if (
         FeatureOne.class_name != "moExtrusion_c"
-        or FeatureTwo.class_name != "moCut_c"
+        or FeatureTwo.class_name != ("moExtrusion_c" if SecondIsBoss else "moCut_c")
         or any(ItemData is None for ItemData in BoundsData)
         or any(
             ExtrusionEditCodes(ItemData.payload) is None
@@ -1789,7 +1811,12 @@ def _CanonicalTwoFeatureObjects(
     ):
         return ObjectsData
     TargetIds = (26, 32, 33, 40)
-    TargetNames = ("Sketch1", "Boss-Extrude1", "Sketch2", "Cut-Extrude1")
+    TargetNames = (
+        "Sketch1",
+        "Boss-Extrude1",
+        "Sketch2",
+        "Boss-Extrude2" if SecondIsBoss else "Cut-Extrude1",
+    )
     for SourceObject, TargetId in zip(
         (SketchOne, FeatureOne, SketchTwo, FeatureTwo), TargetIds, strict=True
     ):
@@ -2444,7 +2471,8 @@ def _FreeCadTwoFeatureDimensions(
         or FeatureTwo.suppressed
         or str(FeatureOne.operation).casefold()
         not in {BooleanOperation.CREATE.value, BooleanOperation.JOIN.value}
-        or str(FeatureTwo.operation).casefold() != BooleanOperation.CUT.value
+        or str(FeatureTwo.operation).casefold()
+        not in {BooleanOperation.CUT.value, BooleanOperation.JOIN.value}
         or len(DocumentData.configurations) != 1
         or DocumentData.configurations[0].name.casefold() != "default"
         or not DocumentData.configurations[0].active
@@ -2467,7 +2495,8 @@ def _FreeCadTwoFeatureDimensions(
     )
     if not isinstance(FeatureTwo.definition, ExtrusionFeature):
         return None
-    if (
+    SecondOperation = str(FeatureTwo.operation).casefold()
+    if SecondOperation == BooleanOperation.CUT.value and (
         str(FeatureTwo.definition.end_condition).casefold()
         == ExtrusionEndCondition.THROUGH_ALL.value
     ):
@@ -2483,8 +2512,12 @@ def _FreeCadTwoFeatureDimensions(
             DocumentData,
             SketchTwo,
             FeatureTwo,
-            "PartDesign::Pocket",
-            5.0,
+            (
+                "PartDesign::Pad"
+                if SecondOperation == BooleanOperation.JOIN.value
+                else "PartDesign::Pocket"
+            ),
+            10.0 if SecondOperation == BooleanOperation.JOIN.value else 5.0,
             True,
         )
         if DimensionTwo is None:
@@ -4767,9 +4800,18 @@ def HasTwoFeatureProof(
     ):
         return False
     SketchOne, FeatureOne, SketchTwo, FeatureTwo = AuthoredObjs
+    SecondIsBoss = FeatureTwo.class_name == "moExtrusion_c"
     ExpectedData = (
         (SketchOne, FeatureOne, 26, 32, "Sketch1", "Boss-Extrude1", {"boss", "join"}),
-        (SketchTwo, FeatureTwo, 33, 40, "Sketch2", "Cut-Extrude1", {"cut"}),
+        (
+            SketchTwo,
+            FeatureTwo,
+            33,
+            40,
+            "Sketch2",
+            "Boss-Extrude2" if SecondIsBoss else "Cut-Extrude1",
+            {"boss", "join"} if SecondIsBoss else {"cut"},
+        ),
     )
     ExpectedDepthSigns = (1, 1, -1, -1, 1, 1)
     for NativeSketch, NativeFeature, ExpectedValue in zip(

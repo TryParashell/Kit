@@ -224,7 +224,9 @@ def _freecad_rectangle_pad_document(
 
 
 # a synthetic FreeCAD pad-pocket history exercises canonical ids without local corpus files
-def _FreeCADPadPocketDocument(*, ThroughAll: bool = False) -> CadDocument:
+def _FreeCADPadPocketDocument(
+    *, ThroughAll: bool = False, Join: bool = False
+) -> CadDocument:
     SourceData = _freecad_rectangle_pad_document(
         bounds=(-30.0, -20.0, 30.0, 20.0),
         depth=15.0,
@@ -253,30 +255,45 @@ def _FreeCADPadPocketDocument(*, ThroughAll: bool = False) -> CadDocument:
         parameter_ids=(),
         closed_profile_entity_ids=(tuple(ItemData.id for ItemData in PocketEntities),),
     )
+    SecondName = "Pad001" if Join else "Pocket"
     FeatureTwo = replace(
         FeatureOne,
-        id="freecad:feature:Pocket",
-        name="Pocket",
+        id=f"freecad:feature:{SecondName}",
+        name=SecondName,
         order=1,
-        operation=BooleanOperation.CUT,
+        operation=BooleanOperation.JOIN if Join else BooleanOperation.CUT,
         sketch_id=SketchTwo.id,
         input_feature_ids=(FeatureOne.id,),
         definition=ExtrusionFeature(
-            ParameterValue(5.0 if ThroughAll else 6.0, ValueKind.LENGTH, "mm"),
+            ParameterValue(
+                25.0 if Join else (5.0 if ThroughAll else 6.0),
+                ValueKind.LENGTH,
+                "mm",
+            ),
             end_condition=(
                 ExtrusionEndCondition.THROUGH_ALL
                 if ThroughAll
                 else ExtrusionEndCondition.BLIND
             ),
-            reversed=True,
-            direction=Vector3(0.0, 0.0, -1.0),
-            second_length=ParameterValue(5.0, ValueKind.LENGTH, "mm"),
+            reversed=not Join,
+            direction=Vector3(0.0, 0.0, 1.0 if Join else -1.0),
+            second_length=ParameterValue(
+                10.0 if Join else 5.0,
+                ValueKind.LENGTH,
+                "mm",
+            ),
             offset=ParameterValue(0.0, ValueKind.LENGTH, "mm"),
             second_offset=ParameterValue(0.0, ValueKind.LENGTH, "mm"),
             draft_angle=ParameterValue(0.0, ValueKind.ANGLE, "deg"),
             second_draft_angle=ParameterValue(0.0, ValueKind.ANGLE, "deg"),
         ),
-        attributes=frozen_mapping({"freecad": {"type_id": "PartDesign::Pocket"}}),
+        attributes=frozen_mapping(
+            {
+                "freecad": {
+                    "type_id": "PartDesign::Pad" if Join else "PartDesign::Pocket"
+                }
+            }
+        ),
     )
     FirstParameters = tuple(
         replace(
@@ -290,22 +307,25 @@ def _FreeCADPadPocketDocument(*, ThroughAll: bool = False) -> CadDocument:
         for ItemData in SourceData.parameters
     )
     PocketValues = {
-        "Label": ParameterValue("Pocket", ValueKind.STRING),
+        "Label": ParameterValue(SecondName, ValueKind.STRING),
         "Length": ParameterValue(
-            5.0 if ThroughAll else 6.0,
+            25.0 if Join else (5.0 if ThroughAll else 6.0),
             ValueKind.LENGTH,
             "mm",
         ),
-        "Length2": ParameterValue(5.0, ValueKind.LENGTH, "mm"),
-        "Reversed": ParameterValue(True, ValueKind.BOOLEAN),
+        "Length2": ParameterValue(10.0 if Join else 5.0, ValueKind.LENGTH, "mm"),
+        "Reversed": ParameterValue(not Join, ValueKind.BOOLEAN),
         "Type": ParameterValue(1 if ThroughAll else 0, ValueKind.INTEGER),
         "Visibility": ParameterValue(True, ValueKind.BOOLEAN),
     }
     SecondParameters = tuple(
         replace(
             ItemData,
-            id=f"freecad:parameter:Pocket:{ItemData.attributes['freecad_path']}",
-            name=f"Pocket.{ItemData.attributes['freecad_path']}",
+            id=(
+                f"freecad:parameter:{SecondName}:"
+                f"{ItemData.attributes['freecad_path']}"
+            ),
+            name=f"{SecondName}.{ItemData.attributes['freecad_path']}",
             value=PocketValues.get(
                 str(ItemData.attributes["freecad_path"]), ItemData.value
             ),
@@ -1411,6 +1431,68 @@ def test_freecad_pad_pocket_writes_two_editable_native_features() -> None:
         ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
     }
     for CapabilityValue in (
+        Capability.PARAMETERS,
+        Capability.PARAMETRIC_HISTORY,
+        Capability.EDITABLE_SKETCHES,
+        Capability.BODY_STRUCTURE,
+    ):
+        assert TransferData[CapabilityValue] == "native"
+
+
+# additive pad chains preserve both editable profiles and native boss operations
+def test_freecad_pad_pad_writes_two_editable_native_bosses() -> None:
+    SourceData = _FreeCADPadPocketDocument(Join=True)
+    OutputData = BytesIO()
+    ResultData = write_sldprt(SourceData, OutputData)
+    ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
+    ResolvedData = ArchiveData.require(RESOLVED_FEATURES_STREAM)
+    FeatureData = locate_features(ResolvedData)
+    NativeData = decode_native_model(
+        ArchiveData.require(KEYWORDS_STREAM),
+        ResolvedData,
+        ArchiveData.require(CONFIGURATION_STREAM),
+        resolved_stream=RESOLVED_FEATURES_STREAM,
+    )
+    assert ResultData.vendor_loadable is True
+    assert ResultData.application_usable is True
+    assert ResultData.metadata["native_brep"] == "feature-rebuilt"
+    assert KIT_RESOLVED_STREAM not in ArchiveData.streams
+    assert len(ResolvedData) == 16174
+    assert [
+        (
+            ItemData.feature_id,
+            ItemData.name,
+            ItemData.kind,
+            ItemData.sketch_id,
+            ItemData.depth_mm,
+            ItemData.bounds_mm,
+        )
+        for ItemData in FeatureData
+    ] == [
+        (
+            32,
+            "Boss-Extrude1",
+            "boss",
+            26,
+            pytest.approx(15.0),
+            pytest.approx((-30.0, -20.0, 30.0, 20.0)),
+        ),
+        (
+            40,
+            "Boss-Extrude2",
+            "boss",
+            33,
+            pytest.approx(25.0),
+            pytest.approx((-10.0, -8.0, 10.0, 8.0)),
+        ),
+    ]
+    assert [ItemData.kind for ItemData in NativeData.operations] == ["join", "join"]
+    assert [ItemData.object_id for ItemData in NativeData.operations] == [32, 40]
+    TransferData = {
+        ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers
+    }
+    for CapabilityValue in (
+        Capability.BREP,
         Capability.PARAMETERS,
         Capability.PARAMETRIC_HISTORY,
         Capability.EDITABLE_SKETCHES,
