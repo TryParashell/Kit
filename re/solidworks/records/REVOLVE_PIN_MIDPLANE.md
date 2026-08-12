@@ -92,18 +92,38 @@ participate in runtime conversion.
 
 ## Current verification state
 
-The family-local oracle author and bounded trace harness are prepared under
-`.rescratch/revolve_pin_midplane/`. Both scripts compile successfully without
-executing their imports. The trace harness enforces unique stream-length guards,
-authors the exact comparison part, performs one combined object trace for
-ResolvedFeatures and Config-0, performs separate primitive traces for the two
-streams, records complete tiling and counter evidence, and sweeps every tracked
-SOLIDWORKS and debugger process in a `finally` block.
+The isolated oracle trace completed through the approved test boundary. The
+authored part saved with zero errors and warnings, rebuilt with one body, and
+reported volume `730.3626960943111 mm3`, surface area
+`699.0992415061602 mm2`, and centre of mass
+`(-9.963833449046765e-18, -8.766927659836491e-34, 19.83790861645004) mm`.
+Its feature tree contains `Sketch1` and `Revolve1`.
 
-The sandbox did not grant executable permission for the external Python and
-SOLIDWORKS oracle process. The escalation was interrupted before the author or
-debugger started, no oracle output or trace artifact was created, and a
-subsequent process query found no SOLIDWORKS, cdb, crash-handler, or helper
-process. The exact stream programs and target-application gate therefore remain
-unexecuted. No production serializer or dispatch was added, and the public
-writer remains fail-closed for this source family.
+The 14,065-byte ResolvedFeatures trace contains 373 archive objects, 43 class
+definitions, base map index 109, and 3,951 primitive markers. The 24,902-byte
+Config-0 trace contains 123 archive objects, 39 class definitions, base map
+index 4, and 6,300 primitive markers. Both streams tile from byte zero to their
+exact ends with no gaps, overlaps, trailing bytes, or counter mismatches. Their
+decoded object models re-emit byte identically.
+
+The generated typed programs account for all 14,065 ResolvedFeatures bytes in
+3,374 operations owned by 506 traced native call sites, and all 24,902 Config-0
+bytes in 4,297 operations owned by 1,058 call sites. Their SHA-256 digests are
+`bffc7d98b6ed899d79deff6b71772454cb94c1c45d8ace10a167022f154f179e` and
+`f2dc3d440fb6ac956155e5d300c15e83a8574311c9e58802b514af486d448341`
+respectively. The family model header is 2,305 bytes with SHA-256
+`4cb455532120074010565342eab6df3b83df1bf45ad0c25bf391664790de07ca`.
+All three typed emissions are byte identical to the authored oracle streams.
+
+The exact family stream stores `SingleEnd = 0` at offset 10,437. The synchronized
+`D1 = 2*pi` values are at offsets 11,281, 11,795, and 11,819; the synchronized
+`D2 = 0` values are at 13,033, 13,547, and 13,571. The model-header identity is
+`(1786487434, 106, 103, 1786487442)`, with sketch action stamps
+`(1786487441, 1786487442)` and revolution action stamp `1786487442`.
+
+The new serializers and coupled envelope contain no oracle path, donor block,
+or opaque byte range. The public writer remains deliberately fail-closed until
+the production dispatcher consumes this family and a freshly generated file
+passes the independent in-application `D1@Revolve1` edit and restore gate. The
+trace harness completed its final sweep, and an independent process query found
+no SOLIDWORKS, cdb, crash-handler, or helper process.

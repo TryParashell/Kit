@@ -72,7 +72,7 @@ back by exactly 72 bytes. The support-plane object also changes from 3 to 2.
 
 The six coordinate pairs remain at `(6904, 6912)`, `(7066, 7074)`,
 `(7228, 7236)`, `(7390, 7398)`, `(7552, 7560)`, and `(7714, 7722)`. The three
-full-angle copies are doubles at 11,209, 11,722, and 11,746.
+full-angle copies are doubles at 11,209, 11,723, and 11,747.
 
 Config-0 grows from 24,902 to 24,976 bytes. Inside `moAnnotationView_c`, the
 semantic view name changes from `*Front` to `*Bottom`, adding two bytes. Its

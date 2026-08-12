@@ -65,6 +65,7 @@ drifting.
 | `.kiro/steering/rationale-comments.md`        | `.agents/skills/rationale-comments/SKILL.md`        |
 | `.kiro/steering/react-doctor.md`              | `.agents/skills/react-doctor/SKILL.md`              |
 | `.kiro/steering/shadcn-pages.md`              | `.agents/skills/shadcn-pages/SKILL.md`              |
+| `.kiro/steering/split-large-definitions.md`   | `.agents/skills/split-large-definitions/SKILL.md`   |
 | `.kiro/steering/spdx-header.md`               | `.agents/skills/spdx-header/SKILL.md`               |
 | `.kiro/steering/workos-token-verification.md` | `.agents/skills/workos-token-verification/SKILL.md` |
 

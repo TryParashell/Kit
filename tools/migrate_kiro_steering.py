@@ -50,6 +50,7 @@ DESCRIPTIONS = {
     "rationale-comments": "Explain why each class, function, lambda, and module-level constant exists in a comment directly above it. Use when adding or editing Python declarations.",
     "react-doctor": "Run React Doctor and resolve introduced regressions. Use when changing React source files, components, hooks, or JSX.",
     "shadcn-pages": "Follow the shadcn UI CLI-first composition method. Use when adding UI primitives or building React and Next.js pages.",
+    "split-large-definitions": "Split substantial declarations into focused files with exact symbol imports. Use when adding or changing code structure, modules, classes, functions, variables, registries, or imports.",
     "spdx-header": "Apply the repository's required SPDX headers. Use when creating project files; Agent Skills use schema-required license frontmatter instead.",
     "workos-token-verification": "Verify WorkOS user-management JWT access tokens with the client-specific issuer. Use when changing Python backend authentication, token validation, or backend files.",
 }
