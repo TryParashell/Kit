@@ -40,22 +40,23 @@ Each skill is generated from the identically named source file in
 
 ## Skill routing
 
-| When working on…                                               | Activate these skills                                                                                                                             |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Any user-facing response or status update                      | `chats`                                                                                                                                           |
-| Any code or related text change                                | `code-formatting`, `no-stubs`, `spdx-header`                                                                                                      |
-| A reported error, stack trace, failed test, or broken behavior | `fix-errors-dont-ask`                                                                                                                             |
-| Git history or a write-capable Git operation                   | `git-never-touch-main`                                                                                                                            |
-| Python dependencies, `pyproject.toml`, `uv.lock`, or Python CI | `python-package-manager`                                                                                                                          |
-| GitHub Actions or runner configuration                         | `pin-dependencies`                                                                                                                                |
-| `pixi.toml`                                                    | `pixi-lockfiles`                                                                                                                                  |
-| MCP tool definitions or their Mintlify documentation           | `compact-tool-descriptions`, `mcp-tool-doc-pages`                                                                                                 |
-| CAD parsing, conversion, writing, or translation verification  | `no-cad-runtime`, `no-donor-blocks`, `lossless-translation`                                                                                       |
-| React, Next.js, UI components, pages, styles, or layouts       | `frontend-stack`, `component-architecture`, `design-system-discipline`, `layout-system`, `no-unrequested-styling`, `react-doctor`, `shadcn-pages` |
-| Public landing or marketing page metadata                      | `page-title-separator`                                                                                                                            |
-| HostControl services or contracts                              | `hostcontrol-contract`                                                                                                                            |
-| WorkOS token validation in `backend/**/*.py`                   | `workos-token-verification`                                                                                                                       |
-| Work that must be tracked in Linear                            | `linear-issue-tracking`                                                                                                                           |
+| When working on…                                                 | Activate these skills                                                                                                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Any user-facing response or status update                        | `chats`                                                                                                                                           |
+| Any code or related text change                                  | `code-formatting`, `no-stubs`, `spdx-header`                                                                                                      |
+| Any source-code structure, declaration, module, or import change | `split-large-definitions`                                                                                                                         |
+| A reported error, stack trace, failed test, or broken behavior   | `fix-errors-dont-ask`                                                                                                                             |
+| Git history or a write-capable Git operation                     | `git-never-touch-main`                                                                                                                            |
+| Python dependencies, `pyproject.toml`, `uv.lock`, or Python CI   | `python-package-manager`                                                                                                                          |
+| GitHub Actions or runner configuration                           | `pin-dependencies`                                                                                                                                |
+| `pixi.toml`                                                      | `pixi-lockfiles`                                                                                                                                  |
+| MCP tool definitions or their Mintlify documentation             | `compact-tool-descriptions`, `mcp-tool-doc-pages`                                                                                                 |
+| CAD parsing, conversion, writing, or translation verification    | `no-cad-runtime`, `no-donor-blocks`, `lossless-translation`                                                                                       |
+| React, Next.js, UI components, pages, styles, or layouts         | `frontend-stack`, `component-architecture`, `design-system-discipline`, `layout-system`, `no-unrequested-styling`, `react-doctor`, `shadcn-pages` |
+| Public landing or marketing page metadata                        | `page-title-separator`                                                                                                                            |
+| HostControl services or contracts                                | `hostcontrol-contract`                                                                                                                            |
+| WorkOS token validation in `backend/**/*.py`                     | `workos-token-verification`                                                                                                                       |
+| Work that must be tracked in Linear                              | `linear-issue-tracking`                                                                                                                           |
 
 ## Agent Skills SPDX exception
 

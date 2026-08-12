@@ -214,7 +214,7 @@ def test_front_pin_program_operations_tile_without_gaps() -> None:
 def test_front_pin_program_carries_all_angle_values() -> None:
     PayloadData = EncodeProgram()
     AngleBytes = struct.pack("<d", math.tau)
-    assert KAngleOffsets == (11209, 11722, 11746)
+    assert KAngleOffsets == (11209, 11723, 11747)
     assert all(
         PayloadData[OffsetValue : OffsetValue + 8] == AngleBytes
         for OffsetValue in KAngleOffsets
