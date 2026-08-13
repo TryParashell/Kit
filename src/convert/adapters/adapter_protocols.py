@@ -36,17 +36,24 @@ class ReaderProtocol(Protocol):
 
     # metadata access lets discovery validate formats before any source data is consumed
     @property
-    def GetInfo(SelfValue) -> AdapterInfo: ...
+    def GetInfo(SelfValue) -> AdapterInfo:
+        pass
 
     # probing lets registries select readers without consuming the source
-    def ProbeSource(SelfValue, SourceData: KSourceType) -> ProbeResult: ...
+    def ProbeSource(SelfValue, SourceData: KSourceType) -> ProbeResult:
+        pass
 
     # reading returns the neutral document boundary shared by independent adapters
     def ReadSource(
         SelfValue,
         SourceData: KSourceType,
         OptionsData: ReadOptions | None = None,
-    ) -> CadDocument: ...
+    ) -> CadDocument:
+        pass
+
+    locals()["info"] = locals().pop("GetInfo")
+    locals()["probe"] = locals().pop("ProbeSource")
+    locals()["read"] = locals().pop("ReadSource")
 
 
 # writer discovery needs one explicit structural contract that type checkers can inspect
@@ -55,14 +62,16 @@ class WriterProtocol(Protocol):
 
     # metadata access lets selection validate formats before any destination is mutated
     @property
-    def GetInfo(SelfValue) -> AdapterInfo: ...
+    def GetInfo(SelfValue) -> AdapterInfo:
+        pass
 
     # destination checks let registries select writers before staging output
     def CanWrite(
         SelfValue,
         DocumentData: CadDocument,
         TargetData: KTargetType,
-    ) -> bool: ...
+    ) -> bool:
+        pass
 
     # writing returns structured preservation evidence for registry policy checks
     def WriteTarget(
@@ -70,7 +79,12 @@ class WriterProtocol(Protocol):
         DocumentData: CadDocument,
         TargetData: KTargetType,
         OptionsData: WriteOptions | None = None,
-    ) -> WriteResult: ...
+    ) -> WriteResult:
+        pass
+
+    locals()["info"] = locals().pop("GetInfo")
+    locals()["supports"] = locals().pop("CanWrite")
+    locals()["write"] = locals().pop("WriteTarget")
 
 
 # combined adapters remain distinguishable for callers that require both directions
@@ -78,29 +92,6 @@ class WriterProtocol(Protocol):
 class AdapterProtocol(ReaderProtocol, WriterProtocol, Protocol):
     locals()["__slots__"] = ()
 
-
-setattr(ReaderProtocol, "info", ReaderProtocol.GetInfo)
-setattr(ReaderProtocol, "probe", ReaderProtocol.ProbeSource)
-setattr(ReaderProtocol, "read", ReaderProtocol.ReadSource)
-delattr(ReaderProtocol, "GetInfo")
-delattr(ReaderProtocol, "ProbeSource")
-delattr(ReaderProtocol, "ReadSource")
-setattr(ReaderProtocol, "__protocol_attrs__", {"info", "probe", "read"})
-setattr(ReaderProtocol, "__non_callable_proto_members__", {"info"})
-setattr(WriterProtocol, "info", WriterProtocol.GetInfo)
-setattr(WriterProtocol, "supports", WriterProtocol.CanWrite)
-setattr(WriterProtocol, "write", WriterProtocol.WriteTarget)
-delattr(WriterProtocol, "GetInfo")
-delattr(WriterProtocol, "CanWrite")
-delattr(WriterProtocol, "WriteTarget")
-setattr(WriterProtocol, "__protocol_attrs__", {"info", "supports", "write"})
-setattr(WriterProtocol, "__non_callable_proto_members__", {"info"})
-setattr(
-    AdapterProtocol,
-    "__protocol_attrs__",
-    {"info", "probe", "read", "supports", "write"},
-)
-setattr(AdapterProtocol, "__non_callable_proto_members__", {"info"})
 
 for ProtocolType, PublicName in (
     (ReaderProtocol, "CadReaderAdapter"),

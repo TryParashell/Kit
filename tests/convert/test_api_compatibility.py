@@ -23,6 +23,7 @@ from convert.adapters import Source
 from convert.adapters import WriteOptions
 from convert.adapters import WriteResult
 from interchange import CadDocument
+from interchange import PayloadRole
 
 
 # api signatures stay explicit because generated wrappers must match every historical parameter exactly
@@ -223,6 +224,7 @@ KPropertyAnnots = {
 
 # public wrappers need exact metadata because documentation schema and pickle consumers all depend on it
 def CheckApiCalls() -> None:
+    assert ApiModule.PayloadRole is PayloadRole
     for PublicName in KApiSigns:
         CallValue = getattr(ApiModule, PublicName)
         assert getattr(ConvertPackage, PublicName) is CallValue

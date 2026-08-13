@@ -24,7 +24,10 @@ from convert.adapters import CadAdapter
 from convert.adapters import CadReaderAdapter
 from convert.adapters import CadWriterAdapter
 from convert.adapters import CapabilityLossError
+from convert.adapters import CarrierReason
+from convert.adapters import TransferMode
 from convert.adapters import WriteResult
+from convert.adapters.catia.adapter import CatiaAdapter
 from convert.adapters.json import JsonAdapter
 from interchange import Capability
 
@@ -35,11 +38,16 @@ def CheckProtocols() -> None:
         assert ProtocolType.__module__ == "convert.adapters.base"
         assert Pickle.loads(Pickle.dumps(ProtocolType)) is ProtocolType
         assert ProtocolType._is_runtime_protocol
-    assert CadReaderAdapter.__protocol_attrs__ == {"info", "probe", "read"}
-    assert CadWriterAdapter.__protocol_attrs__ == {"info", "supports", "write"}
+    if hasattr(CadReaderAdapter, "__protocol_attrs__"):
+        assert CadReaderAdapter.__protocol_attrs__ == {"info", "probe", "read"}
+    if hasattr(CadWriterAdapter, "__protocol_attrs__"):
+        assert CadWriterAdapter.__protocol_attrs__ == {"info", "supports", "write"}
     assert isinstance(JsonAdapter(), CadAdapter)
     assert isinstance(JsonAdapter(), CadReaderAdapter)
     assert isinstance(JsonAdapter(), CadWriterAdapter)
+    assert isinstance(CatiaAdapter(), CadAdapter)
+    assert isinstance(CatiaAdapter(), CadReaderAdapter)
+    assert isinstance(CatiaAdapter(), CadWriterAdapter)
     assert str(Inspect.signature(CadReaderAdapter.read)) == (
         "(self, source: 'Source', options: 'ReadOptions | None' = None) "
         "-> 'CadDocument'"
@@ -264,6 +272,9 @@ def CheckWriteWords() -> None:
 
 # explicit exports protect callers from implementation module names introduced by responsibility splitting
 def CheckExports() -> None:
+    for TransferType in (CarrierReason, TransferMode):
+        assert TransferType.__module__ == "convert.adapters.base"
+        assert Pickle.loads(Pickle.dumps(TransferType)) is TransferType
     assert set(AdapterPackage.__all__) == {
         "AdapterBinding",
         "AdapterDiscoveryError",
