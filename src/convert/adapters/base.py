@@ -51,6 +51,8 @@ for PublicType in (
     WriteOptions,
     WriteResult,
     CapTransfer,
+    CarrierReason,
+    TransferMode,
 ):
     setattr(PublicType, "__module__", __name__)
 

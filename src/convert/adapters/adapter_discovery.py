@@ -14,7 +14,6 @@ from inspect import isclass as IsClass
 from pkgutil import iter_modules as IterModules
 from pkgutil import walk_packages as WalkPackages
 from types import ModuleType
-from typing import Any as AnyValue
 
 from .adapter_protocols import CadReaderAdapter
 from .adapter_protocols import CadWriterAdapter
@@ -23,11 +22,14 @@ from .registry_errors import DiscoveryError
 
 # protocol member checks exclude inherited protocol artifacts while confirming concrete methods
 def HasMethods(AdapterData: object, ProtocolType: type[object]) -> bool:
-    MemberNames = (
-        NameValue
-        for NameValue in getattr(ProtocolType, "__protocol_attrs__", ())
-        if NameValue != "info"
-    )
+    ProtocolNames = getattr(ProtocolType, "__protocol_attrs__", None)
+    if ProtocolNames is None:
+        ProtocolNames = {
+            NameValue
+            for NameValue in vars(ProtocolType)
+            if not NameValue.startswith("_")
+        }
+    MemberNames = (NameValue for NameValue in ProtocolNames if NameValue != "info")
     return all(
         callable(getattr(AdapterData, NameValue, None)) for NameValue in MemberNames
     )

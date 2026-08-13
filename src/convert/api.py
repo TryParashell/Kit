@@ -141,6 +141,14 @@ def extract_brep(
     )
 
 
+# historical mapping helper remains public because direct module consumers imported it before the refactor
 globals()["frozen_mapping"] = FreezeMapping
+
+# historical device helper remains public because direct module consumers imported it before the refactor
 globals()["is_windows_device_name"] = IsDeviceName
+
+# historical regex module remains public because direct module consumers imported it before the refactor
 globals()["re"] = Regex
+
+# historical payload enum remains public because the module intentionally has no restricted export list
+globals()["PayloadRole"] = PayloadRole
