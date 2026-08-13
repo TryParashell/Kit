@@ -14,6 +14,9 @@ from pathlib import Path
 import struct
 from typing import Any
 
+from black import FileMode as BlackMode
+from black import format_str as FormatBlack
+
 from convert.adapters.solidworks.archive import encode_string, read_string
 from convert.adapters.solidworks.container import SldprtArchive
 from convert.adapters.solidworks.format import CONFIGURATION_STREAM
@@ -104,6 +107,11 @@ def ValueLiteral(TypeName: str, FieldValue: Any) -> str:
     if TypeName in {"float", "double"}:
         return f"float.fromhex({float(FieldValue).hex()!r})"
     return repr(FieldValue)
+
+
+# generated snapshots need canonical formatting so regeneration cannot create formatter drift
+def FormatSource(SourceText: str) -> str:
+    return FormatBlack(SourceText, mode=BlackMode())
 
 
 # interval insertion prevents overlapping debugger aliases from duplicating bytes
@@ -635,7 +643,7 @@ def RunMain() -> int:
             )
         Operations.sort()
         Arguments.output.write_text(
-            RenderRangeSource(Operations, RangeStart, RangeEnd),
+            FormatSource(RenderRangeSource(Operations, RangeStart, RangeEnd)),
             encoding="utf-8",
             newline="\n",
         )
@@ -671,10 +679,12 @@ def RunMain() -> int:
         raise ValueError(f"Config-0 field program leaves ranges uncovered {RunsList}")
     Operations.sort()
     Arguments.output.write_text(
-        (
-            RenderFixedSource(Operations, len(StreamData))
-            if Arguments.fixed
-            else RenderSource(Operations, len(StreamData))
+        FormatSource(
+            (
+                RenderFixedSource(Operations, len(StreamData))
+                if Arguments.fixed
+                else RenderSource(Operations, len(StreamData))
+            )
         ),
         encoding="utf-8",
         newline="\n",

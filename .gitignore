@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 .hoplite/
 .hoplite/**
+!.hoplite/
 .env.local
 .vercel/
 .metadata
@@ -1144,5 +1145,5 @@ hs_err_pid*
 .hoplite/attachments/
 .context/
 .tmp_*
-!.hoplite/settings.json
 .rescratch/freecad.7z
+!.hoplite/settings.json

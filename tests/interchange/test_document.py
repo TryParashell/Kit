@@ -7,28 +7,27 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
-
-from dataclasses import is_dataclass, replace
-from enum import Enum
-import hashlib
-import os
-from pathlib import Path
-import subprocess
-import sys
-
-import interchange
-import pytest
-
+from dataclasses import is_dataclass as IsDataClass
+from dataclasses import replace as ReplaceValue
+from enum import Enum as EnumBase
+import hashlib as HashCodec
+import os as OsSystem
+from pathlib import Path as FilePath
+import subprocess as Subprocess
+import sys as System
+import interchange as InterchangeApi
+import pytest as PytestLib
 from interchange import (
     AssemblyData,
-    Body,
+    DesignBody,
     BrepPayload,
     CadDocument,
-    CadDocumentValidationError,
+    Diagnostic,
+    DocumentError,
     CadSource,
     Capability,
-    ComponentDefinition,
-    ComponentInstance,
+    ComponentDef,
+    ComponentInst,
     ComponentKind,
     Configuration,
     FeatureKind,
@@ -39,134 +38,151 @@ from interchange import (
     SketchEntity,
     SupportPlane,
     Transform,
-    Vector2,
-    filter_document,
-    infer_capabilities,
+    PlaneVector,
+    FilterDocument,
+    InferCaps,
 )
-from interchange.history import _LEGACY_PAYLOAD_RULES, _legacy_payload_fields
-from interchange.serialization import _TYPE_REGISTRY, from_data, register_types, to_data
+from interchange.history import KLegacyPayloadRules, GetLegacyFields
+from interchange.serialization import FromData, KTypeRegistry, RegisterTypes, ToData
 
 
-def document() -> CadDocument:
-    plane = SupportPlane("plane:xy", "XY", Transform())
-    entity = SketchEntity(
+# behavior coverage protects portable interchange semantics during structural refactors
+def BuildDocument() -> CadDocument:
+    PlaneValue = SupportPlane("plane:xy", "XY", Transform())
+    EntityValue = SketchEntity(
         "sketch:1:line:1",
         "line",
-        LineGeometry(Vector2(0.0, 0.0), Vector2(10.0, 0.0)),
+        LineGeometry(PlaneVector(0.0, 0.0), PlaneVector(10.0, 0.0)),
     )
-    sketch = Sketch("sketch:1", "Sketch1", plane.id, (entity,))
-    feature = FeatureStep(
-        "feature:1", "Boss1", FeatureKind.EXTRUSION, 0, sketch_id=sketch.id
+    SketchValue = Sketch("sketch:1", "Sketch1", PlaneValue.EntityId, (EntityValue,))
+    FeatureValue = FeatureStep(
+        "feature:1", "Boss1", FeatureKind.KExtrusion, 0, SketchId=SketchValue.EntityId
     )
-    body = Body("body:1", "Body", feature.id)
+    BodyValue = DesignBody("body:1", "Body", FeatureValue.EntityId)
     return CadDocument(
-        source=CadSource("test", "memory", "0" * 64),
-        configurations=(Configuration("config:default", "Default", True),),
-        parameters=(),
-        support_planes=(plane,),
-        sketches=(sketch,),
-        selections=(),
-        feature_timeline=(feature,),
-        bodies=(body,),
-        capabilities=frozenset(
-            {Capability.PARAMETRIC_HISTORY, Capability.EDITABLE_SKETCHES}
+        Source=CadSource("test", "memory", "0" * 64),
+        Configurations=(Configuration("config:default", "Default", True),),
+        Parameters=(),
+        SupportPlanes=(PlaneValue,),
+        Sketches=(SketchValue,),
+        Selections=(),
+        FeatureTimeline=(FeatureValue,),
+        Bodies=(BodyValue,),
+        Capabilities=frozenset(
+            {Capability.KParamHistory, Capability.KEditableSketches}
         ),
     )
 
 
-def test_json_roundtrip_is_lossless() -> None:
-    source = document()
-    restored = CadDocument.from_json(source.to_json())
-    assert restored == source
-    assert isinstance(restored.capabilities, frozenset)
-    assert isinstance(restored.feature_timeline, tuple)
+# historical imports keep conversion suites independent from helper renaming
+def __getattr__(NameText: str) -> object:
+    if NameText == "document":
+        return BuildDocument
+    raise AttributeError(f"module {__name__!r} has no attribute {NameText!r}")
 
 
-def test_json_serialization_is_stable_across_hash_seeds() -> None:
-    payload = document().to_json(indent=None)
-    source_root = Path(__file__).parents[2] / "src"
-    script = (
-        "from interchange import CadDocument;"
-        f"print(CadDocument.from_json({payload!r}).to_json(indent=None))"
-    )
-    outputs = {
-        subprocess.check_output(
-            [sys.executable, "-c", script],
-            cwd=source_root.parent,
-            env={**os.environ, "PYTHONHASHSEED": str(seed)},
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckRoundtrip() -> None:
+    SourceValue = BuildDocument()
+    RestoredValue = CadDocument.FromJson(SourceValue.ToJson())
+    assert RestoredValue == SourceValue
+    assert isinstance(RestoredValue.Capabilities, frozenset)
+    assert isinstance(RestoredValue.FeatureTimeline, tuple)
+
+
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckStableJson() -> None:
+    PayloadValue = BuildDocument().ToJson(IndentSize=None)
+    SourceRoot = FilePath(__file__).parents[2] / "src"
+    ScriptText = f"from interchange import CadDocument;print(CadDocument.FromJson({PayloadValue!r}).ToJson(IndentSize=None))"
+    OutputValues = {
+        Subprocess.check_output(
+            [System.executable, "-c", ScriptText],
+            cwd=SourceRoot.parent,
+            env={**OsSystem.environ, "PYTHONHASHSEED": str(SeedValue)},
             text=True,
         )
-        for seed in (1, 7, 31)
+        for SeedValue in (1, 7, 31)
     }
-    assert len(outputs) == 1
+    assert len(OutputValues) == 1
 
 
-def test_serialization_registry_contains_every_public_interchange_type() -> None:
-    expected = {
-        value.__name__: value
-        for name, value in vars(interchange).items()
-        if not name.startswith("_")
-        and isinstance(value, type)
-        and (is_dataclass(value) or issubclass(value, Enum))
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckRegistry() -> None:
+    ExpectedValues = {
+        ItemValue
+        for NameValue in InterchangeApi.__all__
+        for ItemValue in (getattr(InterchangeApi, NameValue),)
+        if isinstance(ItemValue, type)
+        and (IsDataClass(ItemValue) or issubclass(ItemValue, EnumBase))
     }
-    assert _TYPE_REGISTRY == expected
+    assert set(KTypeRegistry.values()) == ExpectedValues
 
 
-def test_serialization_registry_rejects_conflicting_type_names() -> None:
-    conflicting = Enum("CadSource", {"VALUE": "value"})
-    with pytest.raises(ValueError, match="duplicate interchange type name"):
-        register_types(conflicting)
-    register_types(CadSource)
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckDuplicate() -> None:
+    ConflictType = EnumBase("CadSource", {"VALUE": "value"})
+    with PytestLib.raises(ValueError, match="duplicate interchange type name"):
+        RegisterTypes(ConflictType)
+    RegisterTypes(CadSource)
 
 
-@pytest.mark.parametrize("role", tuple(PayloadRole))
-def test_every_payload_role_and_file_extension_roundtrip_losslessly(
-    role: PayloadRole,
-) -> None:
-    payload = BrepPayload(
+# behavior coverage protects portable interchange semantics during structural refactors
+@PytestLib.mark.parametrize("RoleValue", tuple(PayloadRole))
+def CheckPayRole(RoleValue: PayloadRole) -> None:
+    PayloadValue = BrepPayload(
         "geometry",
         "future.kernel",
         "custom",
         "v1",
         "0" * 64,
-        data=b"geometry",
-        role=role,
-        file_extension=".geo",
+        PayloadData=b"geometry",
+        ValueRole=RoleValue,
+        FileExtension=".geo",
     )
-    restored = CadDocument.from_json(
-        replace(document(), brep_payloads=(payload,)).to_json()
+    RestoredValue = CadDocument.FromJson(
+        ReplaceValue(BuildDocument(), BrepPayloads=(PayloadValue,)).ToJson()
     )
-    assert restored.brep_payloads == (payload,)
+    assert RestoredValue.BrepPayloads == (PayloadValue,)
 
 
-@pytest.mark.parametrize("rule", _LEGACY_PAYLOAD_RULES)
-def test_every_legacy_payload_rule_is_reachable(rule) -> None:
-    format_id = sorted(rule.format_ids)[0] if rule.format_ids else ""
-    kind = sorted(rule.kinds)[0] if rule.kinds else ""
-    schema = sorted(rule.schemas)[0] if rule.schemas else ""
-    suffix = sorted(rule.source_suffixes)[0] if rule.source_suffixes else ""
-    role, file_extension = _legacy_payload_fields(
+# behavior coverage protects portable interchange semantics during structural refactors
+@PytestLib.mark.parametrize("RuleValue", KLegacyPayloadRules)
+def CheckRules(RuleValue) -> None:
+    FormatId = sorted(RuleValue.FormatIds)[0] if RuleValue.FormatIds else ""
+    KindValue = sorted(RuleValue.Kinds)[0] if RuleValue.Kinds else ""
+    SchemaText = sorted(RuleValue.Schemas)[0] if RuleValue.Schemas else ""
+    SuffixText = sorted(RuleValue.SourceSuffixes)[0] if RuleValue.SourceSuffixes else ""
+    RoleValue, FileExtension = GetLegacyFields(
         {
-            "format_id": format_id,
-            "kind": kind,
-            "schema": schema,
-            "source_stream": f"legacy{suffix}" if suffix else "",
+            "format_id": FormatId,
+            "kind": KindValue,
+            "schema": SchemaText,
+            "source_stream": f"legacy{SuffixText}" if SuffixText else "",
         }
     )
-    assert role == rule.role
-    assert file_extension == (rule.file_extension or ".bin")
+    assert RoleValue == RuleValue.ValueRole
+    assert FileExtension == (RuleValue.FileExtension or ".bin")
 
 
-@pytest.mark.parametrize(
-    ("format_id", "kind", "schema", "source_stream", "role", "extension"),
+# behavior coverage protects portable interchange semantics during structural refactors
+@PytestLib.mark.parametrize(
     (
-        ("parasolid", "binary", "SCH_3500040", "Partition", PayloadRole.BREP, ".x_b"),
+        "FormatId",
+        "KindValue",
+        "SchemaText",
+        "SourceStream",
+        "RoleValue",
+        "ExtensionText",
+    ),
+    (
+        ("parasolid", "binary", "SCH_3500040", "Partition", PayloadRole.KBrep, ".x_b"),
         (
             "catia.cgr",
             "native_tessellation",
             "CATCGRCont",
             "3",
-            PayloadRole.TESSELLATION,
+            PayloadRole.KTessellation,
             ".cgr",
         ),
         (
@@ -174,7 +190,7 @@ def test_every_legacy_payload_rule_is_reachable(rule) -> None:
             "native_feature_graph",
             "CATPrtCont",
             "1",
-            PayloadRole.FEATURE_HISTORY,
+            PayloadRole.KFeatureHistory,
             ".osmx",
         ),
         (
@@ -182,7 +198,7 @@ def test_every_legacy_payload_rule_is_reachable(rule) -> None:
             "mate-list",
             "solidworks.serialized-object-stream",
             "Mates",
-            PayloadRole.ASSEMBLY_STRUCTURE,
+            PayloadRole.KAssemblyStructure,
             ".bin",
         ),
         (
@@ -190,7 +206,7 @@ def test_every_legacy_payload_rule_is_reachable(rule) -> None:
             "native_document",
             "FreeCAD Schema 4",
             "Legacy.FCStd",
-            PayloadRole.DOCUMENT,
+            PayloadRole.KDocument,
             ".FCStd",
         ),
         (
@@ -198,235 +214,239 @@ def test_every_legacy_payload_rule_is_reachable(rule) -> None:
             "native_document_binding",
             "sha256",
             "V5_CFV2",
-            PayloadRole.VERIFICATION,
+            PayloadRole.KVerification,
             ".sha256",
         ),
-        ("future.cad", "opaque", "v9", "Data", PayloadRole.AUXILIARY, ".bin"),
+        ("future.cad", "opaque", "v9", "Data", PayloadRole.KAuxiliary, ".bin"),
     ),
 )
-def test_pre_payload_field_records_migrate_without_losing_data(
-    format_id: str,
-    kind: str,
-    schema: str,
-    source_stream: str,
-    role: PayloadRole,
-    extension: str,
+def CheckOldPayload(
+    FormatId: str,
+    KindValue: str,
+    SchemaText: str,
+    SourceStream: str,
+    RoleValue: PayloadRole,
+    ExtensionText: str,
 ) -> None:
-    raw = to_data(
+    RawValue = ToData(
         BrepPayload(
             "legacy",
-            format_id,
-            kind,
-            schema,
-            hashlib.sha256(b"legacy payload").hexdigest(),
-            data=b"legacy payload",
-            source_stream=source_stream,
+            FormatId,
+            KindValue,
+            SchemaText,
+            HashCodec.sha256(b"legacy payload").hexdigest(),
+            PayloadData=b"legacy payload",
+            SourceStream=SourceStream,
         )
     )
-    raw.pop("role")
-    raw.pop("file_extension")
-    restored = from_data(raw)
-    assert isinstance(restored, BrepPayload)
-    assert restored.role == role
-    assert restored.file_extension == extension
-    assert restored.data == b"legacy payload"
-    assert restored.sha256 == hashlib.sha256(b"legacy payload").hexdigest()
+    RawValue.pop("role")
+    RawValue.pop("file_extension")
+    RestoredValue = FromData(RawValue)
+    assert isinstance(RestoredValue, BrepPayload)
+    assert RestoredValue.ValueRole == RoleValue
+    assert RestoredValue.FileExtension == ExtensionText
+    assert RestoredValue.PayloadData == b"legacy payload"
+    assert RestoredValue.SourceDigest == HashCodec.sha256(b"legacy payload").hexdigest()
 
 
-def test_legacy_payload_migration_only_supplies_missing_fields() -> None:
-    raw = to_data(
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckPartial() -> None:
+    RawValue = ToData(
         BrepPayload(
             "legacy",
             "parasolid",
             "binary",
             "SCH_3500040",
-            hashlib.sha256(b"payload").hexdigest(),
-            data=b"payload",
-            role=PayloadRole.AUXILIARY,
-            file_extension=".custom",
+            HashCodec.sha256(b"payload").hexdigest(),
+            PayloadData=b"payload",
+            ValueRole=PayloadRole.KAuxiliary,
+            FileExtension=".custom",
         )
     )
-    without_role = dict(raw)
-    without_role.pop("role")
-    restored_role = from_data(without_role)
-    assert restored_role.role == PayloadRole.BREP
-    assert restored_role.file_extension == ".custom"
-    without_extension = dict(raw)
-    without_extension.pop("file_extension")
-    restored_extension = from_data(without_extension)
-    assert restored_extension.role == PayloadRole.AUXILIARY
-    assert restored_extension.file_extension == ".x_b"
-    assert from_data(raw).role == PayloadRole.AUXILIARY
-    assert from_data(raw).file_extension == ".custom"
-    binding = to_data(
+    WithoutRole = dict(RawValue)
+    WithoutRole.pop("role")
+    RestoredRole = FromData(WithoutRole)
+    assert RestoredRole.ValueRole == PayloadRole.KBrep
+    assert RestoredRole.FileExtension == ".custom"
+    WithoutExt = dict(RawValue)
+    WithoutExt.pop("file_extension")
+    RestoredExt = FromData(WithoutExt)
+    assert RestoredExt.ValueRole == PayloadRole.KAuxiliary
+    assert RestoredExt.FileExtension == ".x_b"
+    assert FromData(RawValue).ValueRole == PayloadRole.KAuxiliary
+    assert FromData(RawValue).FileExtension == ".custom"
+    BindingValue = ToData(
         BrepPayload(
             "binding",
             "catia.v5.sha256",
             "native_document_binding",
             "sha256",
-            hashlib.sha256(b"binding").hexdigest(),
-            data=b"binding",
-            role=PayloadRole.DOCUMENT,
-            file_extension=".bin",
+            HashCodec.sha256(b"binding").hexdigest(),
+            PayloadData=b"binding",
+            ValueRole=PayloadRole.KDocument,
+            FileExtension=".bin",
         )
     )
-    binding.pop("file_extension")
-    restored_binding = from_data(binding)
-    assert restored_binding.role == PayloadRole.DOCUMENT
-    assert restored_binding.file_extension == ".sha256"
+    BindingValue.pop("file_extension")
+    RestoredBinding = FromData(BindingValue)
+    assert RestoredBinding.ValueRole == PayloadRole.KDocument
+    assert RestoredBinding.FileExtension == ".sha256"
 
 
-def test_legacy_unknown_payload_retains_safe_source_extension() -> None:
-    raw = to_data(
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckUnknown() -> None:
+    RawValue = ToData(
         BrepPayload(
             "unknown",
             "future.cad",
             "opaque",
             "v9",
-            hashlib.sha256(b"unknown").hexdigest(),
-            data=b"unknown",
-            source_stream="Container/Opaque.future",
+            HashCodec.sha256(b"unknown").hexdigest(),
+            PayloadData=b"unknown",
+            SourceStream="Container/Opaque.future",
         )
     )
-    raw.pop("role")
-    raw.pop("file_extension")
-    restored = from_data(raw)
-    assert restored.role == PayloadRole.AUXILIARY
-    assert restored.file_extension == ".future"
-    assert restored.data == b"unknown"
+    RawValue.pop("role")
+    RawValue.pop("file_extension")
+    RestoredValue = FromData(RawValue)
+    assert RestoredValue.ValueRole == PayloadRole.KAuxiliary
+    assert RestoredValue.FileExtension == ".future"
+    assert RestoredValue.PayloadData == b"unknown"
 
 
-def test_every_capability_roundtrips_losslessly() -> None:
-    capabilities = frozenset(Capability)
-    restored = CadDocument.from_json(
-        replace(document(), capabilities=capabilities).to_json()
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckAllCaps() -> None:
+    Capabilities = frozenset(Capability)
+    RestoredValue = CadDocument.FromJson(
+        ReplaceValue(BuildDocument(), Capabilities=Capabilities).ToJson()
     )
-    assert restored.capabilities == capabilities
+    assert RestoredValue.Capabilities == Capabilities
 
 
-def test_document_filter_projects_nested_representation_data() -> None:
-    from tests.interchange.test_assembly import assembly_document
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckFiltering() -> None:
+    from tests.interchange.test_assembly import BuildAssembly
 
-    source = assembly_document()
-    assembly = source.assembly
-    assert assembly is not None
-    component = assembly.documents[0]
-    child = component.document
-    assert isinstance(child, CadDocument)
-    payloads = tuple(
-        BrepPayload(
-            f"payload:{role.value}",
-            "future.cad",
-            role.value,
-            "1",
-            hashlib.sha256(role.value.encode("ascii")).hexdigest(),
-            data=role.value.encode("ascii"),
-            role=role,
+    SourceValue = BuildAssembly()
+    AssemblyValue = SourceValue.Assembly
+    assert AssemblyValue is not None
+    ComponentValue = AssemblyValue.Documents[0]
+    ChildValue = ComponentValue.Document
+    assert isinstance(ChildValue, CadDocument)
+    PayloadValues = tuple(
+        (
+            BrepPayload(
+                f"payload:{RoleValue.value}",
+                "future.cad",
+                RoleValue.value,
+                "1",
+                HashCodec.sha256(RoleValue.value.encode("ascii")).hexdigest(),
+                PayloadData=RoleValue.value.encode("ascii"),
+                ValueRole=RoleValue,
+            )
+            for RoleValue in (
+                PayloadRole.KBrep,
+                PayloadRole.KTessellation,
+                PayloadRole.KAuxiliary,
+            )
         )
-        for role in (
-            PayloadRole.BREP,
-            PayloadRole.TESSELLATION,
-            PayloadRole.AUXILIARY,
-        )
     )
-    child = replace(
-        child,
-        brep_payloads=payloads,
-        capabilities=child.capabilities
-        | {
-            Capability.BREP,
-            Capability.TESSELLATION,
-            Capability.NATIVE_PAYLOADS,
-        },
+    ChildValue = ReplaceValue(
+        ChildValue,
+        BrepPayloads=PayloadValues,
+        Capabilities=ChildValue.Capabilities
+        | {Capability.KBrep, Capability.KTessellation, Capability.KNativePayloads},
     )
-    source = replace(
-        source,
-        capabilities=source.capabilities
-        | {
-            Capability.BREP,
-            Capability.TESSELLATION,
-            Capability.NATIVE_PAYLOADS,
-        },
-        assembly=replace(
-            assembly,
-            documents=(replace(component, document=child),),
+    SourceValue = ReplaceValue(
+        SourceValue,
+        Capabilities=SourceValue.Capabilities
+        | {Capability.KBrep, Capability.KTessellation, Capability.KNativePayloads},
+        Assembly=ReplaceValue(
+            AssemblyValue,
+            Documents=(ReplaceValue(ComponentValue, Document=ChildValue),),
         ),
     )
-    filtered = filter_document(
-        source,
-        include_brep=False,
-        include_tessellation=False,
-        keep_payload_records=False,
+    FilteredValue = FilterDocument(
+        SourceValue, IncludeBrep=False, IncludeMesh=False, KeepPayloads=False
     )
-    assert Capability.BREP not in filtered.capabilities
-    assert Capability.TESSELLATION not in filtered.capabilities
-    filtered_child = filtered.assembly.documents[0].document
-    assert isinstance(filtered_child, CadDocument)
-    assert tuple(payload.role for payload in filtered_child.brep_payloads) == (
-        PayloadRole.AUXILIARY,
+    assert Capability.KBrep not in FilteredValue.Capabilities
+    assert Capability.KTessellation not in FilteredValue.Capabilities
+    FilteredChild = FilteredValue.Assembly.Documents[0].Document
+    assert isinstance(FilteredChild, CadDocument)
+    assert tuple(
+        (PayloadValue.ValueRole for PayloadValue in FilteredChild.BrepPayloads)
+    ) == (PayloadRole.KAuxiliary,)
+    assert Capability.KBrep not in FilteredChild.Capabilities
+    assert Capability.KTessellation not in FilteredChild.Capabilities
+    DescribedValue = FilterDocument(
+        SourceValue, IncludeBrep=False, IncludeMesh=False, KeepPayloads=True
     )
-    assert Capability.BREP not in filtered_child.capabilities
-    assert Capability.TESSELLATION not in filtered_child.capabilities
-    described = filter_document(
-        source,
-        include_brep=False,
-        include_tessellation=False,
-        keep_payload_records=True,
-    )
-    described_child = described.assembly.documents[0].document
-    assert isinstance(described_child, CadDocument)
-    assert tuple(payload.role for payload in described_child.brep_payloads) == tuple(
-        payload.role for payload in payloads
-    )
-    assert tuple(payload.data for payload in described_child.brep_payloads) == (
-        None,
-        None,
-        b"auxiliary",
-    )
+    DescribedChild = DescribedValue.Assembly.Documents[0].Document
+    assert isinstance(DescribedChild, CadDocument)
+    assert tuple(
+        (PayloadValue.ValueRole for PayloadValue in DescribedChild.BrepPayloads)
+    ) == tuple((PayloadValue.ValueRole for PayloadValue in PayloadValues))
+    assert tuple(
+        (PayloadValue.PayloadData for PayloadValue in DescribedChild.BrepPayloads)
+    ) == (None, None, b"auxiliary")
 
 
-def test_document_rejects_non_capability_values() -> None:
-    invalid = replace(document(), capabilities=frozenset({"parameters"}))
-    with pytest.raises(CadDocumentValidationError, match="Capability values"):
-        invalid.assert_valid()
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckCapTypes() -> None:
+    InvalidValue = ReplaceValue(BuildDocument(), Capabilities=frozenset({"parameters"}))
+    with PytestLib.raises(DocumentError, match="Capability values"):
+        InvalidValue.AssertValid()
 
 
-def test_capability_inference_is_exhaustive_and_data_driven() -> None:
-    source = replace(document(), capabilities=frozenset())
-    assert infer_capabilities(source) == frozenset(
+# diagnostic links may target the same entity without becoming duplicate identities
+def CheckDiagLinks() -> None:
+    SourceValue = BuildDocument()
+    FirstValue = Diagnostic("first", "first message", EntityId="body:1")
+    SecondValue = Diagnostic("second", "second message", EntityId="body:1")
+    ReplaceValue(SourceValue, Diagnostics=(FirstValue, SecondValue)).AssertValid()
+
+
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckInferCaps() -> None:
+    SourceValue = ReplaceValue(BuildDocument(), Capabilities=frozenset())
+    assert InferCaps(SourceValue) == frozenset(
         {
-            Capability.PARAMETRIC_HISTORY,
-            Capability.SUPPORT_PLANES,
-            Capability.EDITABLE_SKETCHES,
-            Capability.BODY_STRUCTURE,
-            Capability.CONFIGURATIONS,
+            Capability.KParamHistory,
+            Capability.KSupportPlanes,
+            Capability.KEditableSketches,
+            Capability.KBodyStructure,
+            Capability.KConfigurations,
         }
     )
-    imported = replace(
-        source,
-        feature_timeline=(
-            replace(source.feature_timeline[0], kind=FeatureKind.IMPORTED),
+    ImportedValue = ReplaceValue(
+        SourceValue,
+        FeatureTimeline=(
+            ReplaceValue(
+                SourceValue.FeatureTimeline[0], EntityKind=FeatureKind.KImported
+            ),
         ),
     )
-    assert Capability.PARAMETRIC_HISTORY not in infer_capabilities(imported)
+    assert Capability.KParamHistory not in InferCaps(ImportedValue)
 
 
-def test_assembly_children_are_ordered_with_stable_ties() -> None:
-    definitions = (
-        ComponentDefinition("root", "Root", ComponentKind.ASSEMBLY),
-        ComponentDefinition("part", "Part", ComponentKind.PART),
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckOrdering() -> None:
+    Definitions = (
+        ComponentDef("root", "Root", ComponentKind.KAssembly),
+        ComponentDef("part", "Part", ComponentKind.KPart),
     )
-    second = ComponentInstance("second", "Second", "part", "root", order=1)
-    first = ComponentInstance("first", "First", "part", "root", order=1)
-    assembly = AssemblyData("root", definitions, (second, first))
-    assert assembly.children("root") == (first, second)
-    capabilities = infer_capabilities(replace(document(), assembly=assembly))
-    assert Capability.ASSEMBLIES in capabilities
-    assert Capability.ASSEMBLY_MATES not in capabilities
+    SecondValue = ComponentInst("second", "Second", "part", "root", Order=1)
+    FirstValue = ComponentInst("first", "First", "part", "root", Order=1)
+    AssemblyValue = AssemblyData("root", Definitions, (SecondValue, FirstValue))
+    assert AssemblyValue.GetChildren("root") == (FirstValue, SecondValue)
+    Capabilities = InferCaps(ReplaceValue(BuildDocument(), Assembly=AssemblyValue))
+    assert Capability.KAssemblies in Capabilities
+    assert Capability.KAssemblyMates not in Capabilities
 
 
-@pytest.mark.parametrize(
-    "extension",
+# behavior coverage protects portable interchange semantics during structural refactors
+@PytestLib.mark.parametrize(
+    "ExtensionText",
     (
         "brep",
         ".",
@@ -444,43 +464,45 @@ def test_assembly_children_are_ordered_with_stable_ties() -> None:
         ".é",
     ),
 )
-def test_payload_file_extension_rejects_unsafe_values(extension: str) -> None:
-    with pytest.raises(ValueError, match="file extension"):
-        BrepPayload("geometry", "kernel", "shape", "", "", file_extension=extension)
+def CheckExtensions(ExtensionText: str) -> None:
+    with PytestLib.raises(ValueError, match="file extension"):
+        BrepPayload("geometry", "kernel", "shape", "", "", FileExtension=ExtensionText)
 
 
-def test_payload_role_requires_the_payload_role_enum() -> None:
-    with pytest.raises(TypeError, match="PayloadRole"):
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckRoleType() -> None:
+    with PytestLib.raises(TypeError, match="PayloadRole"):
         BrepPayload(
             "geometry",
             "kernel",
             "shape",
             "",
             "",
-            role="brep",
-            file_extension=".brep",
+            ValueRole="brep",
+            FileExtension=".brep",
         )
 
 
-def test_forward_feature_dependency_is_rejected() -> None:
-    source = document()
-    first = FeatureStep(
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckForwardRef() -> None:
+    SourceValue = BuildDocument()
+    FirstValue = FeatureStep(
         "feature:0",
         "Invalid",
-        FeatureKind.EXTRUSION,
+        FeatureKind.KExtrusion,
         0,
-        input_feature_ids=("feature:1",),
+        InputFeatureIds=("feature:1",),
     )
-    second = FeatureStep("feature:1", "Later", FeatureKind.EXTRUSION, 1)
-    invalid = CadDocument(
-        source=source.source,
-        configurations=source.configurations,
-        parameters=(),
-        support_planes=source.support_planes,
-        sketches=(),
-        selections=(),
-        feature_timeline=(first, second),
-        bodies=(Body("body:1", "Body", second.id),),
+    SecondValue = FeatureStep("feature:1", "Later", FeatureKind.KExtrusion, 1)
+    InvalidValue = CadDocument(
+        Source=SourceValue.Source,
+        Configurations=SourceValue.Configurations,
+        Parameters=(),
+        SupportPlanes=SourceValue.SupportPlanes,
+        Sketches=(),
+        Selections=(),
+        FeatureTimeline=(FirstValue, SecondValue),
+        Bodies=(DesignBody("body:1", "Body", SecondValue.EntityId),),
     )
-    with pytest.raises(CadDocumentValidationError, match="forward dependency"):
-        invalid.assert_valid()
+    with PytestLib.raises(DocumentError, match="forward dependency"):
+        InvalidValue.AssertValid()

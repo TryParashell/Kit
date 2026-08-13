@@ -25,6 +25,7 @@
   ],
   "depth_present": [true, false],
   "donor_id": "boss_revcut",
+  "mo_version": 18000,
   "feature_ids": [32, 39],
   "feature_names": ["Boss-Extrude1", "Cut-Revolve1"],
   "features": [

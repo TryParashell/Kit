@@ -25,6 +25,7 @@
   ],
   "depth_present": [true, true, true, true, true, true, true, true],
   "donor_id": "boss8_front_rect_blind",
+  "mo_version": 18000,
   "feature_ids": [32, 40, 47, 54, 61, 68, 75, 82],
   "feature_names": [
     "Boss-Extrude1",

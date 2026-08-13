@@ -17,9 +17,11 @@ import subprocess
 import sys
 import zipfile
 
+from tests.convert.isolated_runtime import KIsolatedRuntime
+
 ROOT = Path(__file__).parents[2]
 SOURCE = ROOT / "src"
-DYNAMIC_IMPORT_PATH = SOURCE / "convert" / "adapters" / "registry.py"
+DYNAMIC_IMPORT_PATH = SOURCE / "convert" / "adapters" / "adapter_discovery.py"
 FORBIDDEN_ROOTS = {
     "FreeCADGui",
     "FreeCAD",
@@ -95,128 +97,6 @@ ALLOWED_RUNTIME_ROOTS = frozenset(sys.stdlib_module_names) | {
     "convert",
     "interchange",
 }
-ISOLATED_RUNTIME = r"""
-import io
-from pathlib import Path
-import sys
-
-blocked_imports = frozenset(
-    {
-        "FreeCAD",
-        "FreeCADGui",
-        "NXOpen",
-        "OCC",
-        "OCP",
-        "Part",
-        "Sketcher",
-        "adsk",
-        "aiohttp",
-        "cadquery",
-        "cffi",
-        "clr",
-        "comtypes",
-        "ctypes",
-        "ftplib",
-        "httpx",
-        "lxml",
-        "multiprocessing",
-        "numpy",
-        "pycatia",
-        "pythoncom",
-        "requests",
-        "runpy",
-        "scipy",
-        "socket",
-        "ssl",
-        "subprocess",
-        "urllib",
-        "urllib3",
-        "websockets",
-        "win32com",
-    }
-)
-
-
-class ImportBlocker:
-    def find_spec(self, fullname, path=None, target=None):
-        root = fullname.partition(".")[0]
-        if root in blocked_imports:
-            raise RuntimeError(f"blocked runtime import: {fullname}")
-        return None
-
-
-def audit(event, arguments):
-    blocked = (
-        event == "os.system"
-        or event.startswith("os.spawn")
-        or event.startswith("socket.")
-        or event.startswith("subprocess.")
-        or event.startswith("ctypes.")
-    )
-    if blocked:
-        raise RuntimeError(f"blocked runtime operation: {event}")
-
-
-sys.meta_path.insert(0, ImportBlocker())
-sys.addaudithook(audit)
-sys.path.insert(0, sys.argv[1])
-
-from convert import available_adapters, convert, open_document, write_document
-
-root = Path(sys.argv[2])
-output = Path(sys.argv[3])
-adapters = {adapter.format_id for adapter in available_adapters()}
-assert adapters == {
-    "catia.v5",
-    "freecad.fcstd",
-    "interchange.json",
-    "solidworks.sldprt",
-}
-cases = (
-    (root / "examples" / ".SLDPRT" / "example.SLDPRT", ".FCStd"),
-    (
-        root
-        / "examples"
-        / "Random"
-        / "V8_engine"
-        / "hex bolt gradeb_iso.FCStd",
-        ".CATPart",
-    ),
-    (root / "examples" / ".CATPart" / "Banjo.CATPart", ".SLDPRT"),
-    (
-        root / "examples" / "Random" / "Pistons" / "Piston.SLDASM",
-        ".CATProduct",
-    ),
-    (
-        root
-        / "examples"
-        / ".CATProduct"
-        / "Brake_Pedal_Assembly - Backup 2.CATProduct",
-        ".SLDASM",
-    ),
-)
-for index, (source, suffix) in enumerate(cases):
-    destination = output / f"conversion_{index}{suffix}"
-    result = convert(source, destination)
-    assert result.output.path == destination.resolve()
-    assert result.output.bytes_written == destination.stat().st_size
-    assert result.requirements == ()
-    assert result.dropped == frozenset()
-    assert open_document(destination).validate() == ()
-
-source_document = open_document(cases[0][0])
-buffer = io.BytesIO()
-written = write_document(
-    source_document,
-    buffer,
-    destination_format="interchange.json",
-)
-assert written.path is None
-assert written.bytes_written == len(buffer.getvalue())
-assert open_document(
-    buffer.getvalue(), source_format="interchange.json"
-) == source_document
-"""
 
 
 def test_runtime_has_no_cad_or_process_dependencies() -> None:
@@ -239,7 +119,7 @@ def test_runtime_has_no_cad_or_process_dependencies() -> None:
                     for alias in node.names:
                         if alias.name == "import_module":
                             assert path == DYNAMIC_IMPORT_PATH, path
-                            assert alias.asname is None, path
+                            assert alias.asname == "ImportModule", path
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name):
                     assert node.func.id not in FORBIDDEN_NAMES, (path, node.func.id)
@@ -353,7 +233,7 @@ def test_built_wheel_is_self_contained_and_runs_with_external_hooks_blocked(
             "-I",
             "-S",
             "-c",
-            ISOLATED_RUNTIME,
+            KIsolatedRuntime,
             str(install_root),
             str(ROOT),
             str(runtime_output),

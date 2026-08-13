@@ -6,58 +6,160 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-"""Regression coverage for the Kiro-to-Agent-Skills migration."""
-
 from __future__ import annotations
 
-import shutil
-import subprocess
-import sys
-from pathlib import Path
+import os as OsEnv
+import shutil as Shutil
+import subprocess as Subprocess
+import sys as System
+import textwrap as Textwrap
+from pathlib import Path as FilePath
 
-ROOT = Path(__file__).resolve().parents[1]
+import pytest as Pytest
 
 
-def run_migration(repository: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "tools/migrate_kiro_steering.py", *args],
-        cwd=repository,
+# command tests need repository context because migration inputs are checked in assets
+KRootPath = FilePath(__file__).resolve().parents[1]
+
+
+# subprocess isolation matters because migration behavior includes command status and diagnostics
+def RunMigration(
+    RepositoryPath: FilePath, *ArgValues: str
+) -> Subprocess.CompletedProcess[str]:
+    return Subprocess.run(
+        [System.executable, "tools/migrate_kiro_steering.py", *ArgValues],
+        cwd=RepositoryPath,
         capture_output=True,
         text=True,
         check=False,
     )
 
 
-def test_kiro_steering_is_mirrored_as_agent_skills() -> None:
-    """The checked-in Agent Skills copy must stay synchronized with Kiro steering."""
+# synchronized copies prevent agent runtimes from receiving stale steering guidance
+def CheckMirrored() -> None:
+    ResultInfo = RunMigration(KRootPath, "--check")
 
-    result = run_migration(ROOT, "--check")
-
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert ResultInfo.returncode == 0, ResultInfo.stdout + ResultInfo.stderr
 
 
-def test_migration_removes_and_detects_stale_generated_skills(tmp_path: Path) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "tools", repository / "tools")
-    shutil.copytree(ROOT / ".kiro" / "steering", repository / ".kiro" / "steering")
-    shutil.copytree(ROOT / ".agents" / "skills", repository / ".agents" / "skills")
+# isolated repositories prove stale generated skills are both detected and removed
+def CheckStale(TmpPath: FilePath) -> None:
+    RepositoryPath = TmpPath / "repository"
+    Shutil.copytree(KRootPath / "tools", RepositoryPath / "tools")
+    Shutil.copytree(
+        KRootPath / ".kiro" / "steering", RepositoryPath / ".kiro" / "steering"
+    )
+    Shutil.copytree(
+        KRootPath / ".agents" / "skills", RepositoryPath / ".agents" / "skills"
+    )
 
-    stale_skill = repository / ".agents" / "skills" / "obsolete-rule" / "SKILL.md"
-    stale_skill.parent.mkdir()
-    stale_skill.write_text("obsolete\n", encoding="utf-8")
+    StalePath = RepositoryPath / ".agents" / "skills" / "obsolete-rule" / "SKILL.md"
+    StalePath.parent.mkdir()
+    StalePath.write_text("obsolete\n", encoding="utf-8")
 
-    check_result = run_migration(repository, "--check")
-    assert check_result.returncode == 1
+    CheckResult = RunMigration(RepositoryPath, "--check")
+    assert CheckResult.returncode == 1
     assert (
-        "unexpected generated skill: .agents/skills/obsolete-rule"
-        in check_result.stderr
+        "unexpected generated skill: .agents/skills/obsolete-rule" in CheckResult.stderr
     )
 
-    write_result = run_migration(repository, "--write")
-    assert write_result.returncode == 0, write_result.stdout + write_result.stderr
-    assert not stale_skill.parent.exists()
+    WriteResult = RunMigration(RepositoryPath, "--write")
+    assert WriteResult.returncode == 0, WriteResult.stdout + WriteResult.stderr
+    assert not StalePath.parent.exists()
 
-    final_check_result = run_migration(repository, "--check")
-    assert final_check_result.returncode == 0, (
-        final_check_result.stdout + final_check_result.stderr
+    FinalResult = RunMigration(RepositoryPath, "--check")
+    assert FinalResult.returncode == 0, FinalResult.stdout + FinalResult.stderr
+
+
+# rendered bytes need direct coverage because structural refactors must not rewrite generated guidance
+def CheckByteOutput(TmpPath: FilePath) -> None:
+    RepositoryPath = TmpPath / "repository"
+    Shutil.copytree(KRootPath / "tools", RepositoryPath / "tools")
+    Shutil.copytree(
+        KRootPath / ".kiro" / "steering", RepositoryPath / ".kiro" / "steering"
     )
+    Shutil.copytree(
+        KRootPath / ".agents" / "skills", RepositoryPath / ".agents" / "skills"
+    )
+    BeforeData = {
+        SkillPath.relative_to(RepositoryPath): SkillPath.read_bytes()
+        for SkillPath in (RepositoryPath / ".agents" / "skills").glob("*/SKILL.md")
+    }
+
+    WriteResult = RunMigration(RepositoryPath, "--write")
+    assert WriteResult.returncode == 0, WriteResult.stdout + WriteResult.stderr
+    AfterData = {
+        SkillPath.relative_to(RepositoryPath): SkillPath.read_bytes()
+        for SkillPath in (RepositoryPath / ".agents" / "skills").glob("*/SKILL.md")
+    }
+    assert AfterData == BeforeData
+
+
+# subprocess collection proves legacy and compliant test names coexist without source aliases
+def CheckCollect(TmpPath: FilePath) -> None:
+    TestPath = TmpPath / "test_mixed_names.py"
+    TestPath.write_text(
+        "def test_legacy_name():\n"
+        "    assert True\n\n"
+        "def CheckModern():\n"
+        "    assert True\n",
+        encoding="utf-8",
+    )
+    EnvValues = dict(OsEnv.environ)
+    EnvValues.pop("PYTEST_ADDOPTS", None)
+    CommandArgs = [
+        System.executable,
+        "-m",
+        "pytest",
+        "--collect-only",
+        "-q",
+        "--rootdir",
+        str(KRootPath),
+        "-c",
+        str(KRootPath / "pyproject.toml"),
+        str(TestPath),
+    ]
+    ResultInfo = Subprocess.run(
+        CommandArgs,
+        cwd=KRootPath,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=EnvValues,
+    )
+
+    assert ResultInfo.returncode == 0, ResultInfo.stdout + ResultInfo.stderr
+    assert "::test_legacy_name" in ResultInfo.stdout
+    assert "::CheckModern" in ResultInfo.stdout
+
+
+# subprocess execution proves compliant aliases share builtin values and teardown behavior
+def CheckAliases(
+    TmpPath: FilePath,
+    MonkeyPatch: Pytest.MonkeyPatch,
+) -> None:
+    ProbePath = KRootPath / "tests" / "test_fixture_aliases_probe.py"
+    ProbePath.write_text(
+        Textwrap.dedent(
+            """
+            def test_fixture_aliases(tmp_path, TmpPath, monkeypatch, MonkeyPatch):
+                assert TmpPath is tmp_path
+                assert MonkeyPatch is monkeypatch
+            """
+        ),
+        encoding="utf-8",
+    )
+    MonkeyPatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
+    try:
+        ResultInfo = Subprocess.run(
+            [System.executable, "-m", "pytest", "-q", str(ProbePath)],
+            cwd=KRootPath,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        ProbePath.unlink(missing_ok=True)
+
+    assert ResultInfo.returncode == 0, ResultInfo.stdout + ResultInfo.stderr
+    assert "1 passed" in ResultInfo.stdout

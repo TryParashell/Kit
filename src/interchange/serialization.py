@@ -7,119 +7,213 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import base64 as BaseCodec
+from dataclasses import fields as GetFields
+from dataclasses import is_dataclass as IsDataClass
+from enum import Enum as EnumBase
+import json as JsonCodec
+from inspect import Parameter as FuncParam
+from inspect import Signature as FuncSig
+from typing import Any as AnyValue
+from typing import Callable as CallableType
+from typing import Mapping as TypeMap
+from .wire import GetWireField, GetWireType
 
-import base64
-from collections.abc import Mapping as MappingABC
-from dataclasses import fields, is_dataclass
-from enum import Enum
-import json
-from types import MappingProxyType
-from typing import Any, Callable, Mapping, get_origin, get_type_hints
+# registered types allow wire data to reconstruct concrete immutable records safely
+KTypeRegistry: dict[str, type] = {}
 
-_TYPE_REGISTRY: dict[str, type] = {}
-_MIGRATION_REGISTRY: dict[type, Callable[[Mapping[str, Any]], Mapping[str, Any]]] = {}
+# migrations preserve old documents when record schemas evolve compatibly
+KMigrationRegistry: dict[
+    type, CallableType[[TypeMap[str, AnyValue]], TypeMap[str, AnyValue]]
+] = {}
 
 
-def register_types(*types: type) -> None:
-    for value in types:
-        existing = _TYPE_REGISTRY.get(value.__name__)
-        if existing is not None and existing is not value:
-            raise ValueError(f"duplicate interchange type name {value.__name__!r}")
-        _TYPE_REGISTRY[value.__name__] = value
+# explicit registration prevents deserialization from importing arbitrary classes by name
+def RegisterTypes(*ClassTypes: type) -> None:
+    for ClassType in ClassTypes:
+        WireType = GetWireType(ClassType)
+        ExistingType = KTypeRegistry.get(WireType)
+        if ExistingType is not None and ExistingType is not ClassType:
+            raise ValueError(f"duplicate interchange type name {WireType!r}")
+        KTypeRegistry[WireType] = ClassType
 
 
-def register_migration(
-    target: type, migration: Callable[[Mapping[str, Any]], Mapping[str, Any]]
+# schema migrations belong beside registration so decoding applies them consistently
+def RegMigration(
+    TargetType: type,
+    MigrationFunc: CallableType[[TypeMap[str, AnyValue]], TypeMap[str, AnyValue]],
 ) -> None:
-    existing = _MIGRATION_REGISTRY.get(target)
-    if existing is not None and existing is not migration:
-        raise ValueError(f"duplicate interchange migration for {target.__name__!r}")
-    _MIGRATION_REGISTRY[target] = migration
+    ExistingFunc = KMigrationRegistry.get(TargetType)
+    if ExistingFunc is not None and ExistingFunc is not MigrationFunc:
+        raise ValueError(
+            f"duplicate interchange migration for {GetWireType(TargetType)!r}"
+        )
+    KMigrationRegistry[TargetType] = MigrationFunc
 
 
-def _ordered_data(values: set[Any] | frozenset[Any]) -> list[Any]:
-    encoded = [to_data(item) for item in values]
-    return sorted(
-        encoded,
-        key=lambda item: json.dumps(
-            item,
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ),
+# unordered collections need canonical ordering so output remains stable across hash seeds
+def OrderData(SourceValues: set[AnyValue] | frozenset[AnyValue]) -> list[AnyValue]:
+    EncodedValues = [ToData(ItemValue) for ItemValue in SourceValues]
+
+    # canonical text ordering avoids dependence on collection hash iteration order
+    def GetSortKey(ItemValue: AnyValue) -> str:
+        return JsonCodec.dumps(
+            ItemValue, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        )
+
+    return sorted(EncodedValues, key=GetSortKey)
+
+
+# recursive encoding preserves every supported container and model type losslessly
+def ToData(SourceValue: AnyValue) -> AnyValue:
+    if IsDataClass(SourceValue):
+        ResultValue = {"$type": GetWireType(type(SourceValue))}
+        for FieldValue in GetFields(SourceValue):
+            ResultValue[GetWireField(FieldValue.name, type(SourceValue))] = ToData(
+                getattr(SourceValue, FieldValue.name)
+            )
+        return ResultValue
+    if isinstance(SourceValue, EnumBase):
+        return {"$enum": GetWireType(type(SourceValue)), "value": SourceValue.value}
+    if isinstance(SourceValue, bytes):
+        return {"$bytes": BaseCodec.b64encode(SourceValue).decode("ascii")}
+    if isinstance(SourceValue, tuple):
+        return {"$tuple": [ToData(ItemValue) for ItemValue in SourceValue]}
+    if isinstance(SourceValue, frozenset):
+        return {"$frozenset": OrderData(SourceValue)}
+    if isinstance(SourceValue, set):
+        return {"$set": OrderData(SourceValue)}
+    if isinstance(SourceValue, list):
+        return [ToData(ItemValue) for ItemValue in SourceValue]
+    if isinstance(SourceValue, TypeMap):
+        return {
+            str(KeyValue): ToData(ItemValue)
+            for KeyValue, ItemValue in SourceValue.items()
+        }
+    if SourceValue is None or isinstance(SourceValue, (str, int, float, bool)):
+        return SourceValue
+    raise TypeError(f"cannot serialize value of type {type(SourceValue).__name__}")
+
+
+from .deserialize import FromData
+
+
+# json output provides deterministic portable text for storage and hashing
+def DumpJson(SourceValue: AnyValue, *, IndentSize: int | None = 2) -> str:
+    return JsonCodec.dumps(
+        ToData(SourceValue), indent=IndentSize, sort_keys=True, ensure_ascii=False
     )
 
 
-def to_data(value: Any) -> Any:
-    if is_dataclass(value):
-        result = {"$type": type(value).__name__}
-        for item in fields(value):
-            result[item.name] = to_data(getattr(value, item.name))
-        return result
-    if isinstance(value, Enum):
-        return {"$enum": type(value).__name__, "value": value.value}
-    if isinstance(value, bytes):
-        return {"$bytes": base64.b64encode(value).decode("ascii")}
-    if isinstance(value, tuple):
-        return {"$tuple": [to_data(item) for item in value]}
-    if isinstance(value, frozenset):
-        return {"$frozenset": _ordered_data(value)}
-    if isinstance(value, set):
-        return {"$set": _ordered_data(value)}
-    if isinstance(value, list):
-        return [to_data(item) for item in value]
-    if isinstance(value, Mapping):
-        return {str(key): to_data(item) for key, item in value.items()}
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    raise TypeError(f"cannot serialize value of type {type(value).__name__}")
+# json input shares the validated recursive decoder used by mapping based callers
+def LoadJson(SourceText: str) -> AnyValue:
+    return FromData(JsonCodec.loads(SourceText))
 
 
-def from_data(value: Any) -> Any:
-    if isinstance(value, list):
-        return [from_data(item) for item in value]
-    if not isinstance(value, dict):
-        return value
-    if set(value) == {"$bytes"}:
-        return base64.b64decode(value["$bytes"], validate=True)
-    if set(value) == {"$tuple"}:
-        return tuple(from_data(item) for item in value["$tuple"])
-    if set(value) == {"$frozenset"}:
-        return frozenset(from_data(item) for item in value["$frozenset"])
-    if set(value) == {"$set"}:
-        return set(from_data(item) for item in value["$set"])
-    if "$enum" in value:
-        enum_type = _TYPE_REGISTRY.get(value["$enum"])
-        if enum_type is None or not issubclass(enum_type, Enum):
-            raise ValueError(f"unknown enum type {value['$enum']!r}")
-        return enum_type(value["value"])
-    type_name = value.get("$type")
-    if type_name:
-        target = _TYPE_REGISTRY.get(type_name)
-        if target is None:
-            raise ValueError(f"unknown data type {type_name!r}")
-        arguments = {
-            key: from_data(item) for key, item in value.items() if key != "$type"
-        }
-        migration = _MIGRATION_REGISTRY.get(target)
-        if migration is not None:
-            arguments = dict(migration(MappingProxyType(arguments)))
-        hints = get_type_hints(target)
-        for item in fields(target):
-            hint = hints.get(item.name)
-            if (
-                item.name in arguments
-                and isinstance(arguments[item.name], dict)
-                and get_origin(hint) in {Mapping, MappingABC}
-            ):
-                arguments[item.name] = MappingProxyType(dict(arguments[item.name]))
-        return target(**arguments)
-    return {key: from_data(item) for key, item in value.items()}
+globals().update(
+    {
+        "dumps": DumpJson,
+        "from_data": FromData,
+        "loads": LoadJson,
+        "register_migration": RegMigration,
+        "register_types": RegisterTypes,
+        "to_data": ToData,
+    }
+)
 
+DumpJson.__module__ = __name__
+FromData.__module__ = __name__
+LoadJson.__module__ = __name__
+RegMigration.__module__ = __name__
+RegisterTypes.__module__ = __name__
+ToData.__module__ = __name__
 
-def dumps(value: Any, *, indent: int | None = 2) -> str:
-    return json.dumps(to_data(value), indent=indent, sort_keys=True, ensure_ascii=False)
+DumpJson.__name__ = "dumps"
+DumpJson.__qualname__ = "dumps"
+FromData.__name__ = "from_data"
+FromData.__qualname__ = "from_data"
+LoadJson.__name__ = "loads"
+LoadJson.__qualname__ = "loads"
+RegMigration.__name__ = "register_migration"
+RegMigration.__qualname__ = "register_migration"
+RegisterTypes.__name__ = "register_types"
+RegisterTypes.__qualname__ = "register_types"
+ToData.__name__ = "to_data"
+ToData.__qualname__ = "to_data"
 
+DumpJson.__annotations__ = {
+    "value": "Any",
+    "indent": "int | None",
+    "return": "str",
+}
+FromData.__annotations__ = {
+    "value": "Any",
+    "return": "Any",
+}
+LoadJson.__annotations__ = {
+    "source": "str",
+    "return": "Any",
+}
+RegMigration.__annotations__ = {
+    "target": "type",
+    "migration": "Callable[[Mapping[str, Any]], Mapping[str, Any]]",
+    "return": "None",
+}
+RegisterTypes.__annotations__ = {
+    "types": "type",
+    "return": "None",
+}
+ToData.__annotations__ = {
+    "value": "Any",
+    "return": "Any",
+}
 
-def loads(source: str) -> Any:
-    return from_data(json.loads(source))
+DumpJson.__signature__ = FuncSig(
+    (
+        FuncParam("value", FuncParam.POSITIONAL_OR_KEYWORD, annotation="Any"),
+        FuncParam(
+            "indent",
+            FuncParam.KEYWORD_ONLY,
+            default=2,
+            annotation="int | None",
+        ),
+    ),
+    return_annotation="str",
+)
+FromData.__signature__ = FuncSig(
+    (FuncParam("value", FuncParam.POSITIONAL_OR_KEYWORD, annotation="Any"),),
+    return_annotation="Any",
+)
+LoadJson.__signature__ = FuncSig(
+    (FuncParam("source", FuncParam.POSITIONAL_OR_KEYWORD, annotation="str"),),
+    return_annotation="Any",
+)
+RegMigration.__signature__ = FuncSig(
+    (
+        FuncParam("target", FuncParam.POSITIONAL_OR_KEYWORD, annotation="type"),
+        FuncParam(
+            "migration",
+            FuncParam.POSITIONAL_OR_KEYWORD,
+            annotation="Callable[[Mapping[str, Any]], Mapping[str, Any]]",
+        ),
+    ),
+    return_annotation="None",
+)
+RegisterTypes.__signature__ = FuncSig(
+    (FuncParam("types", FuncParam.VAR_POSITIONAL, annotation="type"),),
+    return_annotation="None",
+)
+ToData.__signature__ = FuncSig(
+    (FuncParam("value", FuncParam.POSITIONAL_OR_KEYWORD, annotation="Any"),),
+    return_annotation="Any",
+)
+
+# serialization consumers need one intentional historical public contract
+__all__ = (
+    "dumps",
+    "from_data",
+    "loads",
+    "register_migration",
+    "register_types",
+    "to_data",
+)
