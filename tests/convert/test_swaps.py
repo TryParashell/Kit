@@ -334,9 +334,21 @@ def test_swap_formats_match_readme_and_document_kinds() -> None:
     assert readme_suffixes == set(FORMAT_BY_SUFFIX)
     assert set(PART_SUFFIXES) | set(ASSEMBLY_SUFFIXES) == readme_suffixes
     assert set(PART_SUFFIXES) & set(ASSEMBLY_SUFFIXES) == {".FCStd"}
+    counts = Counter(_suffix(path) for path in CORPUS_FILES)
+    MissingSuffixes = tuple(
+        SuffixName
+        for SuffixName, ExpectedCount in EXPECTED_SUFFIX_COUNTS.items()
+        if counts[SuffixName] == 0 and ExpectedCount
+    )
+    for SuffixName, ExpectedCount in EXPECTED_SUFFIX_COUNTS.items():
+        if SuffixName not in MissingSuffixes:
+            assert counts[SuffixName] == ExpectedCount
+    if MissingSuffixes:
+        pytest.skip(
+            "bundled example corpus is unavailable for " + ", ".join(MissingSuffixes)
+        )
     assert len(CORPUS_FILES) == 218
     assert len(SUPPORTED_FILES) == 217
-    counts = Counter(_suffix(path) for path in CORPUS_FILES)
     assert counts == EXPECTED_SUFFIX_COUNTS
     assert len(FCSTD_ASSEMBLIES) == 3
     assert FCSTD_ASSEMBLIES <= set(SUPPORTED_FILES)
@@ -356,7 +368,11 @@ def test_every_valid_format_swap_runs_both_directions(
     destination_suffix: str,
     tmp_path: Path,
 ) -> None:
-    original = _matrix_document(source)
+    original = (
+        _matrix_document(source)
+        if source.is_file()
+        else pytest.skip(f"bundled example source is unavailable: {source.name}")
+    )
     assert (original.assembly is not None) == is_assembly
     original_signature = _document_signature(original)
     forward_directory = tmp_path / f"{name}_forward"

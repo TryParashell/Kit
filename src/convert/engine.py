@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interchange import CadDocument, Capability
+
 from .adapters import (
     AdapterRegistry,
     CapabilityTransfer,
@@ -19,9 +21,13 @@ from .adapters import (
     WriteOptions,
     WriteResult,
 )
-from interchange import CadDocument, Capability
+from .engine_reader import EngineRead
+from .engine_writer import EngineWrite
+from .result_details import ResultDetails
+from .result_flags import ResultFlags
 
 
+# immutable conversion records keep document and attestation evidence together for callers
 @dataclass(frozen=True, slots=True)
 class ConversionResult:
     document: CadDocument
@@ -29,39 +35,50 @@ class ConversionResult:
     source_format: str
     destination_format: str
 
+    # callers need preservation evidence without navigating the nested writer result
     @property
     def transfers(self) -> tuple[CapabilityTransfer, ...]:
-        return self.output.transfers
+        return ResultDetails.GetTransfers(self)
 
+    # callers need loss evidence beside the conversion summary for immediate gating
     @property
     def dropped(self) -> frozenset[Capability]:
-        return self.output.dropped
+        return ResultDetails.GetDropped(self)
 
+    # callers need external requirements exposed where conversion outcomes are inspected
     @property
     def requirements(self) -> tuple[str, ...]:
-        return self.output.requirements
+        return ResultDetails.GetNeeds(self)
 
+    # application gating belongs on the conversion outcome users already inspect
     @property
     def application_usable(self) -> bool:
-        return self.output.application_usable
+        return ResultFlags.IsAppUsable(self)
 
+    # vendor loadability remains distinct because usable output requires both attestations
     @property
     def vendor_loadable(self) -> bool:
-        return self.output.vendor_loadable
+        return ResultFlags.IsVendorLoad(self)
 
+    # round trip safety remains visible because capability preservation is a primary contract
     @property
     def roundtrip_safe(self) -> bool:
-        return self.output.roundtrip_safe
+        return ResultFlags.IsRoundtrip(self)
 
+    # lossless status remains delegated so writer evidence has one authoritative calculation
     @property
     def near_lossless(self) -> bool:
-        return self.output.near_lossless
+        return ResultFlags.IsLossless(self)
 
 
+# one coordinator keeps registry backed operations independent from format implementations
 class ConversionEngine:
+
+    # dependency injection keeps adapter discovery replaceable without cad application coupling
     def __init__(self, registry: AdapterRegistry):
         self.registry = registry
 
+    # registry delegation preserves one validation path for every public document read
     def read(
         self,
         source: Source,
@@ -69,10 +86,14 @@ class ConversionEngine:
         format_id: str | None = None,
         options: ReadOptions | None = None,
     ) -> CadDocument:
-        return self.registry.read(
-            source, format_id=format_id, options=options or ReadOptions()
+        return EngineRead.ReadSource(
+            self,
+            source,
+            FormatId=format_id,
+            ReadOpts=options,
         )
 
+    # registry delegation preserves one validation path for every public document write
     def write(
         self,
         document: CadDocument,
@@ -81,13 +102,15 @@ class ConversionEngine:
         format_id: str | None = None,
         options: WriteOptions | None = None,
     ) -> WriteResult:
-        return self.registry.write(
+        return EngineWrite.WriteTarget(
+            self,
             document,
             destination,
-            format_id=format_id,
-            options=options or WriteOptions(),
+            FormatId=format_id,
+            WriteOpts=options,
         )
 
+    # one neutral document boundary prevents direct coupling between independent format adapters
     def convert(
         self,
         source: Source,
@@ -98,27 +121,14 @@ class ConversionEngine:
         read_options: ReadOptions | None = None,
         write_options: WriteOptions | None = None,
     ) -> ConversionResult:
-        document, reader = self.registry.read_with_adapter(
+        from .engine_convert import EngineConvert
+
+        return EngineConvert.ConvertData(
+            self,
             source,
-            format_id=source_format,
-            options=read_options or ReadOptions(),
-        )
-        output = self.registry.write(
-            document,
             destination,
-            format_id=destination_format,
-            options=write_options or WriteOptions(),
-        )
-        source_ids = {
-            value.casefold() for value in (reader.info.format_id, *reader.info.aliases)
-        }
-        return ConversionResult(
-            document=document,
-            output=output,
-            source_format=(
-                document.source.format_id
-                if document.source.format_id.casefold() in source_ids
-                else reader.info.format_id
-            ),
-            destination_format=output.adapter,
+            SourceFormat=source_format,
+            DestFormat=destination_format,
+            ReadOpts=read_options,
+            WriteOpts=write_options,
         )

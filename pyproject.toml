@@ -59,7 +59,14 @@ include = [
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+python_functions = ["test_*", "Test*", "Check*"]
+collect_imported_tests = false
 
 [tool.black]
 line-length = 88
 target-version = ["py311"]
+
+[dependency-groups]
+dev = [
+    "black==25.12.0",
+]

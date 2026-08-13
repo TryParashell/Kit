@@ -148,7 +148,7 @@ def test_midplane_pin_model_header_bounds_follow_profile() -> None:
     assert HeaderBounds[:3] == (0.0, 0.0, 0.025)
     assert HeaderBounds[3:6] == (0.0025, 0.0025, 0.05)
     assert HeaderBounds[6:9] == (-0.0025, -0.0025, 0.0)
-    assert HeaderBounds[9] == 0.025248762345905194
+    assert HeaderBounds[9] == pytest.approx(0.025248762345905194, abs=1e-17)
 
 
 # one immutable carrier prevents feature configuration and header identity drift

@@ -8,18 +8,33 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any as AnyValue
+from typing import Mapping as TypeMap
 
-from .types import Provenance, Vector3, frozen_mapping
+from .common import FreezeMapping
+from .model_base import ModelBase, ModelDataMut
+from .python_compat import BindCompatMut
+from .record_provenance import Provenance
+from .vector_space import SpaceVector
 
 
-@dataclass(frozen=True, slots=True)
-class Mesh:
-    id: str
-    name: str
-    vertices: tuple[Vector3, ...]
-    triangles: tuple[tuple[int, int, int], ...]
-    normals: tuple[Vector3, ...] = ()
-    provenance: Provenance | None = None
-    attributes: Mapping[str, Any] = field(default_factory=frozen_mapping)
+# surface meshes retain triangulation normals and source evidence for preview and exchange
+@ModelDataMut(
+    DefaultMap={"Normals": (), "Provenance": None},
+    FactoryMap={"Attributes": FreezeMapping},
+)
+class SurfaceMesh(ModelBase):
+    EntityId: str
+    EntityName: str
+    Vertices: tuple[SpaceVector, ...]
+    Triangles: tuple[tuple[int, int, int], ...]
+    Normals: tuple[SpaceVector, ...]
+    Provenance: Provenance | None
+    Attributes: TypeMap[str, AnyValue]
+
+
+# historical defining module identity preserves direct imports and existing pickle payloads
+BindCompatMut((SurfaceMesh,), {__name__: globals()})
+
+# mesh consumers need one intentional historical public contract
+__all__ = ("Mesh",)

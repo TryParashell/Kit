@@ -2958,8 +2958,8 @@ KResolvedOps = (
     (9489, 4, 446, "primitive:ulong", 5),
     (9493, 4, 447, "primitive:long", 768),
     (9497, 4, 448, "primitive:ulong", 1457),
-    (9501, 8, 449, "primitive:double", 1e+100),
-    (9509, 8, 450, "primitive:double", 1e+100),
+    (9501, 8, 449, "primitive:double", 1e100),
+    (9509, 8, 450, "primitive:double", 1e100),
     (9517, 2, 498, "null", 0),
     (9519, 29, 498, "definition", ("moFromSktEntSurfIdRep_c", 1)),
     (9548, 2, 498, "null", 0),
@@ -3016,8 +3016,8 @@ KResolvedOps = (
     (9781, 4, 446, "primitive:ulong", 5),
     (9785, 4, 447, "primitive:long", 768),
     (9789, 4, 448, "primitive:ulong", 1466),
-    (9793, 8, 449, "primitive:double", 1e+100),
-    (9801, 8, 450, "primitive:double", 1e+100),
+    (9793, 8, 449, "primitive:double", 1e100),
+    (9801, 8, 450, "primitive:double", 1e100),
     (9809, 2, 498, "null", 0),
     (9811, 2, 498, "classref", 227),
     (9813, 2, 498, "null", 0),
@@ -3578,7 +3578,7 @@ def EncodeProgram(Overrides: Mapping[int, Any] | None = None) -> bytes:
     OutputData = bytearray()
     for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in KResolvedOps:
         if len(OutputData) != StartPos:
-            raise SldprtFormatError(f'resolved field program drifted at {StartPos}')
+            raise SldprtFormatError(f"resolved field program drifted at {StartPos}")
         FieldValue = FieldOverrides.get(StartPos, DefaultValue)
         if KindName == "definition":
             ClassName, SchemaCode = FieldValue
@@ -3599,9 +3599,9 @@ def EncodeProgram(Overrides: Mapping[int, Any] | None = None) -> bytes:
             ValuesData = FieldValue if isinstance(FieldValue, tuple) else (FieldValue,)
             FieldData = struct.pack("<" + FormatText, *ValuesData)
         else:
-            raise SldprtFormatError(f'unknown resolved operation {KindName!r}')
+            raise SldprtFormatError(f"unknown resolved operation {KindName!r}")
         if len(FieldData) != FieldWidth:
-            raise SldprtFormatError(f'resolved field width changed at {StartPos}')
+            raise SldprtFormatError(f"resolved field width changed at {StartPos}")
         OutputData.extend(FieldData)
     if len(OutputData) != KReferenceLength:
         raise SldprtFormatError("resolved field program length changed")

@@ -36,6 +36,18 @@ _EXPECTED_ROW = ("64d80045", "ae0d4ef6", "54ce179a")
 _EXPECTED_INDEX = 711
 
 
+# vendor comparisons need the hydrated binary instead of its local pointer
+def LoadHostDll() -> bytes:
+    assert _HOST_DLL.is_file(), _HOST_DLL
+    HostData = _HOST_DLL.read_bytes()
+    if HostData.startswith(b"version https://git-lfs.github.com/spec/v1\n"):
+        pytest.skip(
+            "sldmfcu.dll content is unavailable because Git LFS is not hydrated"
+        )
+    assert hashlib.sha256(HostData).hexdigest() == _recorded_host_digest()
+    return HostData
+
+
 def _example_documents() -> list[Path]:
     if not _EXAMPLES.is_dir():
         return []
@@ -79,9 +91,7 @@ def test_only_one_signature_row_is_carried_in_source() -> None:
 
 
 def test_the_carried_row_is_a_genuine_row_of_the_vendor_table() -> None:
-    assert _HOST_DLL.is_file(), _HOST_DLL
-    host = _HOST_DLL.read_bytes()
-    assert hashlib.sha256(host).hexdigest() == _recorded_host_digest()
+    host = LoadHostDll()
     rows = _host_rows(host)
     assert len(rows) == _TABLE_ENTRIES
     assert len({file_id for file_id, _ in rows}) == _TABLE_ENTRIES
@@ -133,7 +143,7 @@ def test_file_id_without_a_carried_row_refuses_to_invent_signatures() -> None:
 def test_example_documents_pair_their_own_id_with_their_own_signatures() -> None:
     documents = _example_documents()
     assert documents
-    host_rows = dict(_host_rows(_HOST_DLL.read_bytes()))
+    host_rows = dict(_host_rows(LoadHostDll()))
     covered = 0
     for path in documents:
         blob = path.read_bytes()

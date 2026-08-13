@@ -788,8 +788,19 @@ def test_nested_assembly_documents_preserve_their_own_timelines(document) -> Non
 
 def test_resolved_assembly_companions_are_retained_exactly() -> None:
     payloads = _companion_payloads(str(ASSEMBLY))
-    assert [(payload.format_id, len(payload.data or b"")) for payload in payloads] == [
-        ("acis.sat", 62444621),
-        ("parasolid.x_t", 8036848),
+    assert [
+        (payload.format_id, len(payload.data or b""), payload.sha256)
+        for payload in payloads
+    ] == [
+        (
+            "acis.sat",
+            61518735,
+            "accecfe74a515d095c38b12b669546e54cc5d55308d6e1c8e0913dd6649e7017",
+        ),
+        (
+            "parasolid.x_t",
+            8036848,
+            "00dc62be5c5adb9b9ff4c83ae3f674f5e1df07782c65f86b50987c8dde76dde3",
+        ),
     ]
     assert payloads[0].attributes["body_count"] == 391

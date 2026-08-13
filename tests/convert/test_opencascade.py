@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import pytest as PytestLib
+
 import convert.opencascade as opencascade
 from convert.adapters.freecad.brep import triangle_mesh_brep
 from convert.adapters.freecad.native import _decoded_document_brep, read_native_fcstd
@@ -382,6 +384,8 @@ def test_structural_validator_rejects_incomplete_or_ambiguous_brep() -> None:
 
 def test_native_fcstd_decodes_only_provable_final_shape_and_keeps_raw() -> None:
     path = EXAMPLES / "Piston_shaft.FCStd"
+    if not path.is_file():
+        PytestLib.skip(f"bundled FreeCAD example is unavailable: {path.name}")
     document = read_native_fcstd(path.read_bytes(), str(path))
     payloads = tuple(
         value for value in document.brep_payloads if value.role == PayloadRole.BREP
@@ -396,6 +400,8 @@ def test_native_fcstd_decodes_only_provable_final_shape_and_keeps_raw() -> None:
 
 def test_native_fcstd_leaves_intermediate_shape_raw_only() -> None:
     path = EXAMPLES / "Alternator.FCStd"
+    if not path.is_file():
+        PytestLib.skip(f"bundled FreeCAD example is unavailable: {path.name}")
     document = read_native_fcstd(path.read_bytes(), str(path))
     payloads = tuple(
         value for value in document.brep_payloads if value.role == PayloadRole.BREP

@@ -25,6 +25,7 @@
   ],
   "depth_present": [true, true, true, false, false],
   "donor_id": "arcboss_cut_cut_cut_through_rev_meta",
+  "mo_version": 18000,
   "feature_ids": [32, 40, 47, 54, 60],
   "feature_names": [
     "Boss-Extrude1",

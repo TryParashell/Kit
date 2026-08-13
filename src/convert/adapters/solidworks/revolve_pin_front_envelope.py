@@ -60,9 +60,7 @@ def CalcPinFrontBounds(
         raise SldprtFormatError("pin revolution profile must enclose positive volume")
     AxisCentre = (AxisMinimum + AxisMaximum) * 0.5
     SphereRadius = math.sqrt(
-        (AxisMaximum - AxisMinimum) ** 2 * 0.25
-        + RadiusMetres**2
-        + RadiusMetres**2
+        (AxisMaximum - AxisMinimum) ** 2 * 0.25 + RadiusMetres**2 + RadiusMetres**2
     )
     return (
         0.0,
@@ -127,14 +125,12 @@ def EncodeHeader() -> bytes:
             break
         ReferencePositions.append(ReferencePos)
         SearchStart = ReferencePos + len(LogReferenceData)
-    if len(ReferencePositions) != 2 or len(LogReferenceData) != len(
-        ModelReferenceData
-    ):
+    if len(ReferencePositions) != 2 or len(LogReferenceData) != len(ModelReferenceData):
         raise SldprtFormatError("front pin header document references drifted")
     ModelReferencePos = ReferencePositions[1]
-    HeaderData[
-        ModelReferencePos : ModelReferencePos + len(LogReferenceData)
-    ] = ModelReferenceData
+    HeaderData[ModelReferencePos : ModelReferencePos + len(LogReferenceData)] = (
+        ModelReferenceData
+    )
     return bytes(HeaderData)
 
 

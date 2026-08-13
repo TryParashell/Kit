@@ -25,6 +25,7 @@
   ],
   "depth_present": [true],
   "donor_id": "boss_midplane",
+  "mo_version": 18000,
   "feature_ids": [32],
   "feature_names": ["Boss-Extrude1"],
   "features": [["boss", "rectangle", "front", "mid-plane"]],

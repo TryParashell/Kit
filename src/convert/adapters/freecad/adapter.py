@@ -8,12 +8,10 @@
 
 from __future__ import annotations
 
-import base64
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
-from dataclasses import asdict, fields, is_dataclass, replace
+from dataclasses import replace
 from datetime import datetime, timezone
-from enum import Enum
 import hashlib
 import io
 import json
@@ -63,6 +61,7 @@ from interchange import (
     semantic_metadata,
     source_payload_indexes,
 )
+from interchange.serialization import ToData
 
 from .archive import (
     DOCUMENT_ENTRY,
@@ -111,42 +110,12 @@ class FreeCADAdapterError(RuntimeError):
         super().__init__(message)
 
 
-def _plain(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, bytes):
-        return {"$bytes": base64.b64encode(value).decode("ascii")}
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, Enum):
-        return {"$enum": type(value).__name__, "value": _plain(value.value)}
-    to_dict = getattr(value, "to_dict", None)
-    if callable(to_dict):
-        return _plain(to_dict())
-    if is_dataclass(value):
-        return _plain(asdict(value))
-    if isinstance(value, Mapping):
-        return {str(key): _plain(item) for key, item in value.items()}
-    if isinstance(value, Sequence):
-        return [_plain(item) for item in value]
-    fields = getattr(value, "__dict__", None)
-    if isinstance(fields, dict):
-        return {
-            str(key): _plain(item)
-            for key, item in fields.items()
-            if not str(key).startswith("_")
-        }
-    raise TypeError(
-        f"cannot serialize {type(value).__name__} into the FreeCAD manifest"
-    )
-
-
 def document_to_manifest(document: Any) -> dict[str, Any]:
-    manifest = _plain(document)
+    manifest = ToData(document)
     if not isinstance(manifest, dict):
         raise TypeError("CadDocument.to_dict() must produce a mapping")
-    required = {item.name for item in fields(CadDocument)}
     if manifest.get("$type") == "CadDocument":
+        required = set(document.to_dict())
         missing = sorted(required.difference(manifest))
         if missing:
             raise ValueError("CadDocument manifest is missing: " + ", ".join(missing))

@@ -14,6 +14,9 @@ from pathlib import Path
 import struct
 from typing import Any
 
+from black import FileMode as BlackMode
+from black import format_str as FormatBlack
+
 from convert.adapters.solidworks.archive import read_string
 from convert.adapters.solidworks.container import SldprtArchive
 from convert.adapters.solidworks.format import RESOLVED_FEATURES_STREAM
@@ -95,6 +98,11 @@ def ValueLiteral(TypeName: str, FieldValue: Any) -> str:
     if TypeName in {"float", "double"}:
         return f"float.fromhex({float(FieldValue).hex()!r})"
     return repr(FieldValue)
+
+
+# generated snapshots need canonical formatting so regeneration cannot create formatter drift
+def FormatSource(SourceText: str) -> str:
+    return FormatBlack(SourceText, mode=BlackMode())
 
 
 # interval insertion prevents overlapping debugger aliases from duplicating bytes
@@ -522,7 +530,7 @@ def RunMain() -> int:
         )
     Operations.sort()
     Arguments.output.write_text(
-        RenderSource(Operations, len(StreamData)),
+        FormatSource(RenderSource(Operations, len(StreamData))),
         encoding="utf-8",
         newline="\n",
     )
