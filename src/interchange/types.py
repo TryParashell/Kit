@@ -7,17 +7,11 @@
 # to you under it immediately and permanently.
 
 from .common import FreezeMapping, KJsonScalar, KJsonValue
-from .enums import (
-    BooleanOp,
-    Capability,
-    ConstraintKind,
-    FeatureKind,
-    GeometryKind,
-    ParameterRole,
-    Severity,
-    UnitSystem,
-    ValueKind,
-)
+from .enum_document import Capability, Severity
+from .enum_features import BooleanOp, FeatureKind
+from .enum_geometry import ConstraintKind, GeometryKind
+from .enum_units import UnitSystem
+from .enum_values import ParameterRole, ValueKind
 from .records import (
     CadSource,
     Configuration,
