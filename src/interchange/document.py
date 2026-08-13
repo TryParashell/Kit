@@ -9,7 +9,6 @@
 from .document_caps import GetRetainedCaps, InferCaps
 from .document_error import DocumentError
 from .document_filter import FilterDocument
-from .document_identity import GetIdFields, GetIdGroups
 from .document_metadata import AddWrapperMeta, GetSemanticMeta
 from .document_model import CadDocument
 from .document_payload import GetPayloadIds

@@ -9,18 +9,15 @@
 from dataclasses import dataclass as DataClass
 from inspect import Signature as FuncSig
 
-from .enums import Capability
-from .features import (
+from .enum_document import Capability
+from .feature_body import DesignBody
+from .feature_contract import FeatureDef
+from .feature_extrude import ExtrudeEnd, ExtrudeFeature
+from .feature_kinds import (
     ChamferFeature,
     CirclePattern,
     CombineFeature,
-    DesignBody,
     DomeFeature,
-    ExtrudeEnd,
-    ExtrudeFeature,
-    FeatureCfgState,
-    FeatureDef,
-    FeatureStep,
     FilletFeature,
     HoleFeature,
     LinearPattern,
@@ -31,6 +28,7 @@ from .features import (
     ScaleFeature,
     ShellFeature,
 )
+from .feature_step import FeatureCfgState, FeatureStep
 from .payloads import (
     BrepPayload,
     GetLegacyFields,

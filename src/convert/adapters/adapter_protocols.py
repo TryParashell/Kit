@@ -37,11 +37,11 @@ class ReaderProtocol(Protocol):
     # metadata access lets discovery validate formats before any source data is consumed
     @property
     def GetInfo(SelfValue) -> AdapterInfo:
-        pass
+        raise TypeError("reader info requires a concrete implementation")
 
     # probing lets registries select readers without consuming the source
     def ProbeSource(SelfValue, SourceData: KSourceType) -> ProbeResult:
-        pass
+        raise TypeError("reader probing requires a concrete implementation")
 
     # reading returns the neutral document boundary shared by independent adapters
     def ReadSource(
@@ -49,7 +49,7 @@ class ReaderProtocol(Protocol):
         SourceData: KSourceType,
         OptionsData: ReadOptions | None = None,
     ) -> CadDocument:
-        pass
+        raise TypeError("reader loading requires a concrete implementation")
 
     locals()["info"] = locals().pop("GetInfo")
     locals()["probe"] = locals().pop("ProbeSource")
@@ -63,7 +63,7 @@ class WriterProtocol(Protocol):
     # metadata access lets selection validate formats before any destination is mutated
     @property
     def GetInfo(SelfValue) -> AdapterInfo:
-        pass
+        raise TypeError("writer info requires a concrete implementation")
 
     # destination checks let registries select writers before staging output
     def CanWrite(
@@ -71,7 +71,7 @@ class WriterProtocol(Protocol):
         DocumentData: CadDocument,
         TargetData: KTargetType,
     ) -> bool:
-        pass
+        raise TypeError("writer support requires a concrete implementation")
 
     # writing returns structured preservation evidence for registry policy checks
     def WriteTarget(
@@ -80,7 +80,7 @@ class WriterProtocol(Protocol):
         TargetData: KTargetType,
         OptionsData: WriteOptions | None = None,
     ) -> WriteResult:
-        pass
+        raise TypeError("writer output requires a concrete implementation")
 
     locals()["info"] = locals().pop("GetInfo")
     locals()["supports"] = locals().pop("CanWrite")

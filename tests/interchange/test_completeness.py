@@ -46,7 +46,7 @@ from interchange import (
     SpaceVector,
     InferCaps,
 )
-from interchange.document import GetIdFields
+from interchange.document_identity import GetIdFields
 from interchange.geometry import Geometry
 from interchange.serialization import FromData, ToData
 from interchange.wire import GetWireField

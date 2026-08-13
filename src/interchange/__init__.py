@@ -103,28 +103,19 @@ from .document import (
     GetSemanticMeta,
     InferCaps,
 )
-from .enums import (
-    BooleanOp,
-    Capability,
-    ConstraintKind,
-    FeatureKind,
-    GeometryKind,
-    ParameterRole,
-    Severity,
-    UnitSystem,
-    ValueKind,
-)
-from .features import (
+from .enum_document import Capability, Severity
+from .enum_features import BooleanOp, FeatureKind
+from .enum_geometry import ConstraintKind, GeometryKind
+from .enum_units import UnitSystem
+from .enum_values import ParameterRole, ValueKind
+from .feature_body import DesignBody
+from .feature_contract import FeatureDef
+from .feature_extrude import ExtrudeEnd, ExtrudeFeature
+from .feature_kinds import (
     ChamferFeature,
     CirclePattern,
     CombineFeature,
-    DesignBody,
     DomeFeature,
-    ExtrudeEnd,
-    ExtrudeFeature,
-    FeatureCfgState,
-    FeatureDef,
-    FeatureStep,
     FilletFeature,
     HoleFeature,
     LinearPattern,
@@ -135,6 +126,7 @@ from .features import (
     ScaleFeature,
     ShellFeature,
 )
+from .feature_step import FeatureCfgState, FeatureStep
 from .geometry import (
     ArcEllipseGeom,
     ArcGeometry,
