@@ -64,6 +64,7 @@ def ModelRows(SourceText: str) -> frozenset[tuple[str, str, str]]:
 def TestFlowScope() -> None:
     SourceText = LoadText(".github/workflows/CodeqlSecurity.yml")
     assert "config-file: ./.github/CodeQL/CodeqlConfig.yml" in SourceText
+    assert "cp -R .github/CodeQL/extensions .github/codeql/extensions" in SourceText
     for LanguageName in ("actions", "java-kotlin", "python"):
         assert f"- {LanguageName}" in SourceText
 
@@ -80,9 +81,7 @@ def TestFilters() -> None:
 
 # model rows stay limited to tested path containment and command allowlists
 def TestModels() -> None:
-    SourceText = LoadText(
-        ".github/codeql/extensions/KitPython/PythonModels.yml"
-    )
+    SourceText = LoadText(".github/codeql/extensions/KitPython/PythonModels.yml")
     RowsInfo = ModelRows(SourceText)
     PathRows = {
         (ModuleName, f"Member[{FunctionName}].ReturnValue", "path-injection")

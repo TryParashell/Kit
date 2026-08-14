@@ -66,11 +66,19 @@ Standard repository governance names and copied third party assets may retain ex
 
 ## Security and quality verification
 
-- Run CodeQL over every supported repository language with the `security-and-quality` query suite and the most sensitive available configuration
+- Run CodeQL over every supported repository language with both the `security-and-quality` and `security-experimental` suites the local threat model in automation and the `all` threat model during maximal local audits
+- Analyze ungrouped results from a fresh database built from a frozen complete tracked source set and record the query file raw finding and configured finding counts
 - Inspect every CodeQL result regardless of severity precision or classification and fix the underlying code before merge
-- Never hide results with blanket exclusions query removal baseline resets or suppressions
-- Document a narrow false positive only when evidence proves the result impossible and keep that exception reviewable beside the relevant check
+- Never hide path injection command injection regular expression denial of service definite timing attack or other security results with exclusions query removal baseline resets or suppressions
+- Fix path flows with resolved fixed root containment command flows with strict allowlists and argument list subprocess calls and unsafe regular expressions with bounded escaped possessive or deterministic parsing
+- Add a CodeQL barrier model only for a concrete validated boundary with focused regression tests and keep every modeled function and dataflow kind explicit
+- Keep query exceptions limited to `py/not-named-self` `py/not-named-cls` `py/possible-timing-attack-sensitive-info` and `py/possible-timing-attack-against-hash` because the first pair conflicts with required PascalCase receivers and the second pair covers documented comparisons of nonsecret CAD structure and hash heuristics
+- Keep definite timing queries enabled and reject any broader identifier timing path command or regular expression filter
+- Store the maximal configuration suite and model sources below `.github/CodeQL/` and prepare the exact lowercase `.github/codeql/extensions/` ecosystem path before GitHub CodeQL initialization
+- Document a narrow false positive only when evidence proves the exact result impossible and keep that exception reviewable tested and adjacent to the relevant check
+- Include Actions Python and Java tracked sources in the audit and state that Java `build-mode: none` does not prove build integration or dependency resolution
 - Run the native strict analyzer for languages and artifacts CodeQL does not cover and do not describe unsupported input as clean
+- Run final local verification directly on native Windows when Windows is the target and never substitute WSL results for the bare metal run
 - Keep custom repository checks for path casing digits folder density identifier rules exact imports comments and steering synchronization because CodeQL does not replace project policy
 - Run focused tests full end to end verification formatters steering checks and security analysis after structural changes
 - Leave no notices warnings alerts failing checks stale generated skills or known quality defects when handing work off
