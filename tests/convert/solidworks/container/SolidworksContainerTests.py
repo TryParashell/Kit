@@ -35,49 +35,46 @@ def DecodedName(ItemValue: bytes) -> str:
     return bytes((ByteInfo >> 4 | (ByteInfo & 15) << 4 for ByteInfo in ItemValue)).decode('utf-8')
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+def ReadDirMeta(BlobInfo: bytes, Streams: tuple) -> tuple[int, int]:
+    EndOffset = len(BlobInfo) - 22
+    DiskNumber, DirectoryDisk, DiskEntries, TotalEntries, DirectorySize, DirectoryOffset, CommentSize = StructLib.unpack_from('<HHHHIIH', BlobInfo, EndOffset + 4)
+    assert BlobInfo[EndOffset:EndOffset + 4] == KSignatureA
+    assert (DiskNumber, DirectoryDisk, DiskEntries, TotalEntries, CommentSize) == (0, 0, len(Streams), len(Streams), 0)
+    assert 8 + DirectoryOffset + DirectorySize == EndOffset
+    return (8 + DirectoryOffset, EndOffset)
+
+# keeps this focused behavior isolated so regressions remain immediately visible
+def CheckDirEntry(BlobInfo: bytes, Archive, Cursor: int, ExpectedName: str, ExpectedData: bytes) -> tuple[int, int]:
+    assert BlobInfo[Cursor:Cursor + 4] == KSignature
+    assert BlobInfo[Cursor + 6:Cursor + 12] == KMarker
+    TypeId, CrcThreeTwoValue, CompressedSize, SizeInfo = StructLib.unpack_from('<IIII', BlobInfo, Cursor + 12)
+    NameSize, ExtraSize = StructLib.unpack_from('<HH', BlobInfo, Cursor + 28)
+    EntryCommentSize, EntryDisk, InternalAttributes, ExternalAttributes, LocalOffset = StructLib.unpack_from('<HHHII', BlobInfo, Cursor + 32)
+    EncodedName = BlobInfo[Cursor + 46:Cursor + 46 + NameSize]
+    assert DecodedName(EncodedName) == ExpectedName
+    assert (ExtraSize, EntryCommentSize, EntryDisk, ExternalAttributes) == (0, 0, 0, 0)
+    assert InternalAttributes == int(ExpectedName.startswith('swXmlContents/'))
+    LocalCursor = 8 + LocalOffset
+    assert BlobInfo[LocalCursor:LocalCursor + 4] == KSignatureB
+    assert BlobInfo[LocalCursor + 4:LocalCursor + 10] == KMarker
+    assert StructLib.unpack_from('<IIII', BlobInfo, LocalCursor + 10) == (TypeId, CrcThreeTwoValue, CompressedSize, SizeInfo)
+    assert StructLib.unpack_from('<HH', BlobInfo, LocalCursor + 26) == (NameSize, 0)
+    assert DecodedName(BlobInfo[LocalCursor + 30:LocalCursor + 30 + NameSize]) == ExpectedName
+    assert Archive.require(ExpectedName) == ExpectedData
+    return (Cursor + 46 + NameSize, TypeId)
+
+# keeps this focused behavior isolated so regressions remain immediately visible
 def TestGCHCND() -> None:
     Streams = (('Contents/Config-0-Partition', b'PS\x00\x00native body'), ('swXmlContents/KeyWords', b"<?xml version='1.0'?><KeyWords/>"), ('Contents/OleItems', b''))
     BlobInfo = BuildSldprt(Streams, file_id=KIdInfo, signatures=KSignatures)
     Archive = SldprtArchive.from_bytes(BlobInfo)
     assert Archive.file_id == KIdInfo
     assert Archive.streams == dict(Streams)
-    EndOffset = len(BlobInfo) - 22
-    DiskNumber, DirectoryDisk, DiskEntries, TotalEntries, DirectorySize, DirectoryOffset, CommentSize = StructLib.unpack_from('<HHHHIIH', BlobInfo, EndOffset + 4)
-    assert BlobInfo[EndOffset:EndOffset + 4] == KSignatureA
-    assert DiskNumber == 0
-    assert DirectoryDisk == 0
-    assert DiskEntries == len(Streams)
-    assert TotalEntries == len(Streams)
-    assert CommentSize == 0
-    assert 8 + DirectoryOffset + DirectorySize == EndOffset
-    Cursor = 8 + DirectoryOffset
+    Cursor, EndOffset = ReadDirMeta(BlobInfo, Streams)
     Timestamps = set()
     for ExpectedName, ExpectedData in Streams:
-        assert BlobInfo[Cursor:Cursor + 4] == KSignature
-        assert BlobInfo[Cursor + 6:Cursor + 12] == KMarker
-        TypeId, CrcThreeTwoValue, CompressedSize, SizeInfo = StructLib.unpack_from('<IIII', BlobInfo, Cursor + 12)
+        Cursor, TypeId = CheckDirEntry(BlobInfo, Archive, Cursor, ExpectedName, ExpectedData)
         Timestamps.add(TypeId)
-        NameSize, ExtraSize = StructLib.unpack_from('<HH', BlobInfo, Cursor + 28)
-        EntryCommentSize, EntryDisk, InternalAttributes, ExternalAttributes, LocalOffset = StructLib.unpack_from('<HHHII', BlobInfo, Cursor + 32)
-        EncodedName = BlobInfo[Cursor + 46:Cursor + 46 + NameSize]
-        assert DecodedName(EncodedName) == ExpectedName
-        assert ExtraSize == 0
-        assert EntryCommentSize == 0
-        assert EntryDisk == 0
-        assert InternalAttributes == int(ExpectedName.startswith('swXmlContents/'))
-        assert ExternalAttributes == 0
-        LocalCursor = 8 + LocalOffset
-        assert BlobInfo[LocalCursor:LocalCursor + 4] == KSignatureB
-        assert BlobInfo[LocalCursor + 4:LocalCursor + 10] == KMarker
-        assert StructLib.unpack_from('<I', BlobInfo, LocalCursor + 10)[0] == TypeId
-        assert StructLib.unpack_from('<I', BlobInfo, LocalCursor + 14)[0] == CrcThreeTwoValue
-        assert StructLib.unpack_from('<I', BlobInfo, LocalCursor + 18)[0] == CompressedSize
-        assert StructLib.unpack_from('<I', BlobInfo, LocalCursor + 22)[0] == SizeInfo
-        assert StructLib.unpack_from('<H', BlobInfo, LocalCursor + 26)[0] == NameSize
-        assert StructLib.unpack_from('<H', BlobInfo, LocalCursor + 28)[0] == 0
-        assert DecodedName(BlobInfo[LocalCursor + 30:LocalCursor + 30 + NameSize]) == ExpectedName
-        assert Archive.require(ExpectedName) == ExpectedData
-        Cursor += 46 + NameSize
     assert Cursor == EndOffset
     assert Timestamps == {473223809}
 
