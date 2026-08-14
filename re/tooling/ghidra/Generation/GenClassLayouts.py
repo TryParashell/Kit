@@ -857,7 +857,7 @@ def TracedStreams(Traces: Sequence[Mapping[str, object]]) -> DictInfo[str, bytes
 
     StreamsInfo: DictInfo[str, bytes] = {}
     for TraceInfo in Traces:
-        PartInfoInfo = PathInfo(str(TraceInfo["part"]))
+        PartInfoInfo = ResolveLocal(str(TraceInfo["part"]))
         if not PartInfoInfo.is_file():
             continue
         ByteBlob = SldprtArchive.from_bytes(PartInfoInfo.read_bytes()).streams[

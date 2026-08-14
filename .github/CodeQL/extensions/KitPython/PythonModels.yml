@@ -43,6 +43,16 @@ extensions:
         ]
       - [
           "convert",
+          "Member[Security].Member[PathBoundary].Member[ValidateLabel].ReturnValue",
+          "path-injection",
+        ]
+      - [
+          "convert",
+          "Member[Security].Member[ProgramBoundary].Member[GetArgPath].ReturnValue",
+          "command-injection",
+        ]
+      - [
+          "convert",
           "Member[Security].Member[ProgramBoundary].Member[GetFreecadPath].ReturnValue",
           "path-injection",
         ]

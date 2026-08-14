@@ -20,6 +20,7 @@ import time as TimeInfo
 KRootInfo = PathInfo(__file__).resolve().parents[2]
 System.path.insert(0, str(KRootInfo / "src"))
 from convert.Security.PathBoundary import ResolveInput, ResolveOutput
+from convert.Security.ProgramBoundary import GetArgPath
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -216,7 +217,7 @@ def RunTask(
     Script = ResolveInput(Script)
     LogInfo = ResolveOutput(LogInfo)
     if PartInfoInfo is not None:
-        PartInfoInfo = ResolveInput(PartInfoInfo)
+        PartInfoInfo = GetArgPath(PartInfoInfo)
     Sweep()
     LogInfo.parent.mkdir(parents=True, exist_ok=True)
     if LogInfo.exists():

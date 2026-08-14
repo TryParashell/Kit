@@ -14,7 +14,13 @@ from pathlib import Path as FilePath
 from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
+from interchange.document.models.DocumentModel import CadDocument
+
+from convert.adapters.base.AdapterInfo import AdapterInfo
 from convert.adapters.base.ContractTypes import KSourceType, KTargetType
+from convert.adapters.base.WriteResult import WriteResult
+from convert.adapters.registry import AdapterRegistry
+from convert.engine import ConversionResult
 
 globals().update(
     {

@@ -16,11 +16,12 @@ from convert.Security.PathBoundary import (
     UnsafePath,
     ValidateLabel,
 )
-from convert.Security.ProgramBoundary import GetFreecadPath
+from convert.Security.ProgramBoundary import GetArgPath, GetFreecadPath
 
 
 # callers need one explicit public surface for repository security boundaries
 __all__ = [
+    "GetArgPath",
     "GetFreecadPath",
     "ResolveFolder",
     "ResolveInput",

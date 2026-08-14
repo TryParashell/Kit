@@ -620,7 +620,7 @@ def TestCatproduct() -> None:
 
 
 # neutral component outputs need one shared proof that no false geometry escaped
-def CheckNeutral(RootValue: XmlTree.Element, Names: set[str]) -> None:
+def VerifyNeutral(RootValue: XmlTree.Element, Names: set[str]) -> None:
     assert not any((NameValue.endswith(".Shape.brp") for NameValue in Names))
     assert not any((NameValue.endswith(".MeshKernel.bms") for NameValue in Names))
     assert not any(
@@ -664,7 +664,7 @@ def ReadCompRoot(Component: FilePath) -> tuple[FilePath, XmlTree.Element, bool]:
         Target = TargetNode.get("value", "")
         assert Target
         assert RootValue.find(f"./Objects/Object[@name='{Target}']") is not None
-        CheckNeutral(RootValue, Names)
+        VerifyNeutral(RootValue, Names)
         HasPayload = HasCgmPayload(Archive, Names, CgmPayloads)
     return Component.resolve(), RootValue, HasPayload
 
@@ -683,7 +683,7 @@ def LoadCompRoots(
 
 
 # assembly links need cross file validation after every component has been inspected
-def CheckOuterLinks(
+def VerifyLinks(
     Output: FilePath, ComponentRoots: dict[FilePath, XmlTree.Element]
 ) -> None:
     with Zipfile.ZipFile(Output) as Archive:
@@ -728,7 +728,7 @@ def TestCatproductO(TmpPath: Path) -> None:
     assert len(ComponentFiles) == 19
     ComponentRoots, CgmCount = LoadCompRoots(ComponentFiles)
     assert CgmCount == 18
-    CheckOuterLinks(Output, ComponentRoots)
+    VerifyLinks(Output, ComponentRoots)
 
 
 # this definition exists because focused behavior needs one stable owner

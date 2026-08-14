@@ -13,7 +13,13 @@ from inspect import Signature as FuncSig
 from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
+from interchange.document.models.DocumentModel import CadDocument
+
 from convert.adapters.base.ContractTypes import KSourceType, KTargetType
+from convert.adapters.base.ReadOptions import ReadOptions
+from convert.adapters.base.WriteOptions import WriteOptions
+from convert.adapters.base.WriteResult import WriteResult
+from convert.adapters.registry import AdapterRegistry
 
 globals().update({"Destination": KTargetType, "Source": KSourceType})
 

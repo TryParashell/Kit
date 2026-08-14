@@ -62,6 +62,16 @@ def TestBlocksProgram(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> Non
         ProgramBoundary.GetFreecadPath()
 
 
+# argument-list paths become absolute so filenames cannot become process options
+def TestArgPath(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> None:
+    ProgramPath = TmpPath / "-Option.sldprt"
+    ProgramPath.write_bytes(b"part")
+    MonkeyPatch.chdir(TmpPath)
+    ResultPath = ProgramBoundary.GetArgPath(ProgramPath.name)
+    assert ResultPath == ProgramPath.resolve()
+    assert not str(ResultPath).startswith("-")
+
+
 # debugger labels reject metacharacters before they enter generated command scripts
 def TestBlocksLabel() -> None:
     assert ValidateLabel("Boss-Cut") == "Boss-Cut"

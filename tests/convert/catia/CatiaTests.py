@@ -346,7 +346,7 @@ def TestPrePayload(TmpPath: Path) -> None:
 
 
 # every corpus archive needs the same boundary proof before deeper semantic checks
-def CheckArchive(PathValue: FilePath) -> None:
+def VerifyArchive(PathValue: FilePath) -> None:
     Archive = CfvTwoArchive.from_bytes(PathValue.read_bytes())
     assert Archive.outer.offset + Archive.outer.length == PathValue.stat().st_size
     assert Archive.outer.streams
@@ -420,7 +420,7 @@ def LoadPartState(
 
 
 # declaration payloads need byte level checks independent from document metadata checks
-def CheckDeclData(Archive, DocValue, Declarations: tuple) -> None:
+def VerifyDeclData(Archive, DocValue, Declarations: tuple) -> None:
     DeclPayloads = DocValue.brep_payloads[2:]
     assert len(DeclPayloads) == len(Declarations)
     for DeclValue, Payload in zip(Declarations, DeclPayloads):
@@ -434,7 +434,7 @@ def CheckDeclData(Archive, DocValue, Declarations: tuple) -> None:
 
 
 # native document semantics need one focused proof after physical stream validation
-def CheckPartDoc(
+def VerifyPartDoc(
     PathValue: FilePath,
     Source: bytes,
     Archive,
@@ -465,7 +465,7 @@ def CheckPartDoc(
         )
     )
     assert FeaturePayload.data == Archive.stream_bytes(PartStream)
-    CheckDeclData(Archive, DocValue, Declarations)
+    VerifyDeclData(Archive, DocValue, Declarations)
     assert DocValue.validate() == ()
     Output = BytesIo()
     Result = CatiaAdapter().write(DocValue, Output)
@@ -480,7 +480,7 @@ def TestRealCorpus() -> None:
     assert len(Parts) == 27
     assert len(Products) == 3
     for PathValue in Parts + Products:
-        CheckArchive(PathValue)
+        VerifyArchive(PathValue)
     ExpectedClasses = (
         "CATProdCont",
         "CATPrtCont",
@@ -501,7 +501,7 @@ def TestRealCorpus() -> None:
         Source, Archive, Declarations, CgmStream, PartStream = LoadPartState(
             PathValue, ExpectedClasses, FragmentedGeom
         )
-        CheckPartDoc(PathValue, Source, Archive, Declarations, CgmStream, PartStream)
+        VerifyPartDoc(PathValue, Source, Archive, Declarations, CgmStream, PartStream)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -677,7 +677,7 @@ def TestStripped(TmpPath: Path) -> None:
 
 
 # native geometry payloads need focused validation against their declared source streams
-def CheckCgmPayload(Archive, DocValue) -> None:
+def VerifyCgmData(Archive, DocValue) -> None:
     NativeContainers = DocValue.brep_payloads[2:]
     assert [Payload.schema for Payload in NativeContainers] == [
         DeclValue.class_name for DeclValue in Archive.declarations()
@@ -716,7 +716,7 @@ def CheckCgmPayload(Archive, DocValue) -> None:
 
 
 # parametric feature metadata needs isolation from native geometry payload checks
-def CheckFeatData(DocValue) -> None:
+def VerifyFeatData(DocValue) -> None:
     FeatureGraph = next(
         (
             Payload
@@ -756,7 +756,7 @@ def CheckFeatData(DocValue) -> None:
 
 
 # filtered reads need a separate proof that role specific payload retention remains exact
-def CheckFiltered(Source: FilePath) -> None:
+def VerifyFiltered(Source: FilePath) -> None:
     WithoutData = CatiaAdapter().read(
         Source, ReadOptions(include_brep=False, include_tessellation=False)
     )
@@ -813,9 +813,9 @@ def TestCatpartGeom() -> None:
     assert DocValue.source.format_id == "catia.v5"
     assert DocValue.source.application_version == "V5R28SP6HF0"
     assert DocValue.metadata["catia.document_type"] == "CATPart"
-    CheckCgmPayload(Archive, DocValue)
-    CheckFeatData(DocValue)
-    CheckFiltered(Source)
+    VerifyCgmData(Archive, DocValue)
+    VerifyFeatData(DocValue)
+    VerifyFiltered(Source)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1212,7 +1212,7 @@ def TestUnresolved(TmpPath: Path) -> None:
 
 
 # generated carriers need their compatibility claims checked independently from restored content
-def CheckKitMeta(Result) -> None:
+def VerifyKitMeta(Result) -> None:
     assert Result.destination_format == "catia.v5"
     assert Result.output.metadata["mode"] == "generated_cfv2"
     assert Result.output.metadata["compatibility"] == "kit-neutral-only"
@@ -1226,7 +1226,7 @@ def CheckKitMeta(Result) -> None:
 
 
 # restored foreign content needs semantic equality checks separated from carrier metadata
-def CheckSldRestore(Source, Restored) -> None:
+def VerifySldData(Source, Restored) -> None:
     assert Restored.source.format_id == "catia.v5"
     assert (
         Restored.metadata["catia.embedded_source_format_id"] == Source.source.format_id
@@ -1266,7 +1266,7 @@ def TestSolidworksA(TmpPath: Path) -> None:
     with Pytest.raises(AppUsabilityError):
         Convert(KSldprt, Output, allow_carrier=False)
     Result = Convert(KSldprt, Output, allow_carrier=True)
-    CheckKitMeta(Result)
+    VerifyKitMeta(Result)
     Archive = CfvTwoArchive.from_bytes(Output.read_bytes())
     assert [Value.class_name for Value in Archive.declarations()] == [
         "CATProdCont",
@@ -1275,7 +1275,7 @@ def TestSolidworksA(TmpPath: Path) -> None:
     assert any(
         (Folder.stream("KitInterchange") is not None for Folder in Archive.nested)
     )
-    CheckSldRestore(Source, OpenDoc(Output))
+    VerifySldData(Source, OpenDoc(Output))
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -1374,7 +1374,7 @@ def TestReaderPart() -> None:
 
 
 # edited carriers need compatibility claims checked separately from archive byte retention
-def CheckEditMeta(Result, Source: FilePath, Output: FilePath) -> None:
+def VerifyEditMeta(Result, Source: FilePath, Output: FilePath) -> None:
     assert Result.metadata["mode"] == "native_base_with_neutral_edits"
     assert Result.metadata["compatibility"] == "native-base-neutral-overlay"
     assert Result.metadata["vendor_loadable"] is False
@@ -1387,7 +1387,7 @@ def CheckEditMeta(Result, Source: FilePath, Output: FilePath) -> None:
 
 
 # native streams must remain byte exact while the neutral overlay changes
-def CheckStreamCopy(Source: FilePath, Output: FilePath):
+def VerifyStream(Source: FilePath, Output: FilePath):
     OriginalArchive = CfvTwoArchive.from_bytes(Source.read_bytes())
     OutputArchive = CfvTwoArchive.from_bytes(Output.read_bytes())
     assert tuple(
@@ -1406,7 +1406,7 @@ def CheckStreamCopy(Source: FilePath, Output: FilePath):
 
 
 # restored edits need semantic checks independent from physical archive preservation
-def CheckEditState(Changed, Restored) -> None:
+def VerifyEditState(Changed, Restored) -> None:
     assert Restored.source.format_id == "catia.v5"
     assert (
         Restored.metadata["catia.container_compatibility"]
@@ -1452,7 +1452,7 @@ def CheckEditState(Changed, Restored) -> None:
 
 
 # exact carrier replay needs proof separate from edited model restoration
-def CheckEditReplay(TmpPath: FilePath, Output: FilePath, Restored) -> None:
+def VerifyReplay(TmpPath: FilePath, Output: FilePath, Restored) -> None:
     Replay = TmpPath / "ChangedReplay.CATPart"
     ReplayResult = WriteDoc(Restored, Replay, allow_carrier=True)
     assert ReplayResult.metadata["mode"] == "exact_carrier_roundtrip"
@@ -1461,7 +1461,7 @@ def CheckEditReplay(TmpPath: FilePath, Output: FilePath, Restored) -> None:
 
 
 # archive tampering needs an isolated proof that native compatibility is revoked
-def CheckTampered(Output: FilePath, OutputArchive) -> None:
+def VerifyTampered(Output: FilePath, OutputArchive) -> None:
     Tampered = bytearray(Output.read_bytes())
     Tolerance = OutputArchive.outer.stream("GesToler")
     assert Tolerance is not None
@@ -1480,12 +1480,12 @@ def TestModifiedDoc(TmpPath: Path) -> None:
     )
     Output = TmpPath / "Changed.CATPart"
     Result = WriteDoc(Changed, Output, allow_carrier=True)
-    CheckEditMeta(Result, Source, Output)
-    OutputArchive = CheckStreamCopy(Source, Output)
+    VerifyEditMeta(Result, Source, Output)
+    OutputArchive = VerifyStream(Source, Output)
     Restored = OpenDoc(Output)
-    CheckEditState(Changed, Restored)
-    CheckEditReplay(TmpPath, Output, Restored)
-    CheckTampered(Output, OutputArchive)
+    VerifyEditState(Changed, Restored)
+    VerifyReplay(TmpPath, Output, Restored)
+    VerifyTampered(Output, OutputArchive)
 
 
 # this definition exists because focused behavior needs one stable owner

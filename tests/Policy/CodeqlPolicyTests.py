@@ -47,6 +47,10 @@ KPathBarriers = frozenset(
         ),
         (
             "convert",
+            "Member[Security].Member[PathBoundary].Member[ValidateLabel].ReturnValue",
+        ),
+        (
+            "convert",
             "Member[Security].Member[ProgramBoundary].Member[GetFreecadPath].ReturnValue",
         ),
     )
@@ -58,6 +62,10 @@ KCommandBarriers = frozenset(
         (
             "convert",
             "Member[Security].Member[PathBoundary].Member[ValidateLabel].ReturnValue",
+        ),
+        (
+            "convert",
+            "Member[Security].Member[ProgramBoundary].Member[GetArgPath].ReturnValue",
         ),
         (
             "convert",

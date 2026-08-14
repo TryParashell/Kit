@@ -381,7 +381,7 @@ def RootLinkData(RootValue: ElementTree.Element):
         ItemValue.get("name", ""): ItemValue
         for ItemValue in RootValue.findall("./ObjectData/Object")
     }
-    return AssemblyLinks, Occurrences, LinkedFiles, DataValue, DirectOccurrences
+    return AssemblyLinks, Occurrences, LinkedFiles, DataValue
 
 
 # this helper verifies every root assembly proxy targets matching component data
@@ -472,9 +472,7 @@ def TestRAWECF(RandomDocument: CadDocument, TmpPath: PathValue) -> None:
     assert Result.metadata["component_file_count"] == 67
     assert CountTimeline(Output, Components) == 2474
     RootValue = ReadDocRoot(Output)
-    AssemblyLinks, Occurrences, LinkedFiles, DataValue, DirectOccurrences = (
-        RootLinkData(RootValue)
-    )
+    AssemblyLinks, Occurrences, LinkedFiles, DataValue = RootLinkData(RootValue)
     AssemblyRoot = next(
         ItemValue
         for ItemValue in DataValue.values()

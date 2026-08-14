@@ -24,14 +24,18 @@ def ResolveWithin(
     RootValue: str | OsLayer.PathLike[str],
     RequireFile: bool = False,
 ) -> PathInfo:
-    RootText = OsLayer.path.realpath(OsLayer.fspath(RootValue))
-    CandidateText = OsLayer.path.realpath(OsLayer.fspath(PathValue))
-    RootKey = OsLayer.path.normcase(RootText)
-    CandidateKey = OsLayer.path.normcase(CandidateText)
-    RootPrefix = RootKey.rstrip("\\/") + OsLayer.sep
-    if CandidateKey != RootKey and not CandidateKey.startswith(RootPrefix):
-        raise UnsafePath(f"path escapes trusted root {RootText!r}")
-    ResultPath = PathInfo(CandidateText)
+    RootKey = OsLayer.path.normcase(OsLayer.path.realpath(OsLayer.fspath(RootValue)))
+    CandidateKey = OsLayer.path.normcase(
+        OsLayer.path.realpath(OsLayer.fspath(PathValue))
+    )
+    RootBase = RootKey.rstrip("\\/") or OsLayer.sep
+    if not CandidateKey.startswith(RootBase):
+        raise UnsafePath(f"path escapes trusted root {RootKey!r}")
+    Remainder = CandidateKey[len(RootBase) :]
+    IsBoundary = not Remainder or RootBase.endswith(("\\", "/"))
+    if not IsBoundary and Remainder[0] not in "\\/":
+        raise UnsafePath(f"path escapes trusted root {RootKey!r}")
+    ResultPath = PathInfo(CandidateKey)
     if RequireFile and not ResultPath.is_file():
         raise FileNotFoundError(ResultPath)
     return ResultPath
