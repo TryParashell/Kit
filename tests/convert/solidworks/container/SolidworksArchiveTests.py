@@ -542,7 +542,7 @@ def TestARCOZRNC() -> None:
     assert Verify(BackBlob, 109, BackLayouts).identical
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckSketchMeta(Layout) -> None:
+def AssertSkMeta(Layout) -> None:
     assert Layout.walks_groups
     assert Layout.child_slots == ()
     assert Layout.repeat_count is None
@@ -554,7 +554,7 @@ def CheckSketchMeta(Layout) -> None:
     assert Layout.variable_runs['tail'][0].predicate == 'NextParentToken'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckSketchGeom(Layout) -> None:
+def AssertSkGeom(Layout) -> None:
     assert [Group.name for Group in Layout.groups] == ['entity', 'point', 'relation', 'constraint', 'lists', 'chain']
     Shape = {Group.name: Group for Group in Layout.groups}
     assert Shape['entity'].element == (8, 39, 0, 87)
@@ -568,7 +568,7 @@ def CheckSketchGeom(Layout) -> None:
     assert len(Shape['point'].ElementRunVariants) == 12
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckSketchRels(Layout) -> None:
+def AssertSkRels(Layout) -> None:
     Shape = {Group.name: Group for Group in Layout.groups}
     assert Shape['relation'].element_runs(18000) == (0, 16, 17, 4)
     assert Shape['relation'].element_runs(14000) == (0, 16, 16, 4)
@@ -592,9 +592,9 @@ def CheckSketchRels(Layout) -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestTSTDSSFRG() -> None:
     Layout = Layouts()['sgSketch']
-    CheckSketchMeta(Layout)
-    CheckSketchGeom(Layout)
-    CheckSketchRels(Layout)
+    AssertSkMeta(Layout)
+    AssertSkGeom(Layout)
+    AssertSkRels(Layout)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestTSTDPBCAFC() -> None:
@@ -820,7 +820,7 @@ def TestLTVII() -> None:
         LayoutTable.load(KRootInfo / 're' / 'data' / 'class_layouts_missing.json')
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckLayoutRow(NameText, Entry) -> None:
+def AssertLayoutRow(NameText, Entry) -> None:
     assert Entry.confidence in {'confirmed', 'partial', 'not found'}
     assert Entry.source
     assert set(Entry.runs_by_version) <= set(Entry.run_keys()), NameText
@@ -861,7 +861,7 @@ def TestSLTMTRC() -> None:
     Confirmed = [NameText for NameText, Entry in LayoutsA.classes.items() if Entry.confidence == 'confirmed']
     assert len(Confirmed) >= KFloor
     for NameText, Entry in LayoutsA.classes.items():
-        CheckLayoutRow(NameText, Entry)
+        AssertLayoutRow(NameText, Entry)
     assert GetRecordedSet() <= set(LayoutsA.classes)
 
 # keeps this focused behavior isolated so regressions remain immediately visible

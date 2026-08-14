@@ -29,7 +29,7 @@ def Model(NameText: str):
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KVendorCorpus
-@PytestLib.mark.parametrize(('name', 'plane_id', 'sketch_ids'), KParts)
+@PytestLib.mark.parametrize(('NameText', 'PlaneId', 'SketchIds'), KParts)
 def TestSOURPFBTDP(NameText: str, PlaneId: int, SketchIds: tuple[int, ...]) -> None:
     ModelDoc = Model(NameText)
     Framed = {Plane.object_id for Plane in ModelDoc.planes}
@@ -43,7 +43,7 @@ def TestSOURPFBTDP(NameText: str, PlaneId: int, SketchIds: tuple[int, ...]) -> N
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KVendorCorpus
-@PytestLib.mark.parametrize(('name', 'plane_id', 'sketch_ids'), KParts)
+@PytestLib.mark.parametrize(('NameText', 'PlaneId', 'SketchIds'), KParts)
 def TestURPARAD(NameText: str, PlaneId: int, SketchIds: tuple[int, ...]) -> None:
     ModelDoc = Model(NameText)
     assert any((Message.startswith('reference plane frames unavailable for') and f'{PlaneId}:' in Message for Message in ModelDoc.diagnostics))
@@ -51,7 +51,7 @@ def TestURPARAD(NameText: str, PlaneId: int, SketchIds: tuple[int, ...]) -> None
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KVendorCorpus
-@PytestLib.mark.parametrize(('name', 'plane_id', 'sketch_ids'), KParts)
+@PytestLib.mark.parametrize(('NameText', 'PlaneId', 'SketchIds'), KParts)
 def TestDWURPV(NameText: str, PlaneId: int, SketchIds: tuple[int, ...]) -> None:
     Document = ReadSldprt(KCorpus / NameText, include_brep=False)
     assert Document.validate() == ()

@@ -14,16 +14,17 @@ from convert import write_document as WriteDocument
 from convert.adapters.solidworks.container.Container import SldprtArchive
 from convert.adapters.solidworks.container.Format import PARTITION_STREAM as Stream, RESOLVED_FEATURES_STREAM as StreamA
 from convert.adapters.solidworks.resolved.Core import BLIND_END_CONDITION as Condition, locate_rectangle_pad as LocateRectanglePad
-from tests.convert.solidworks.core.SolidworksWriterTests import _freecad_rectangle_pad_document as FreecadRPD
-from tests.oracle import SolidWorksSession, solidworks_available as SolidworksAvailable
+from tests.convert.solidworks.core.SolidworksWriterTests import FreecadRPD
+from tests.oracle.Session import IsOracleReady, OracleSession
 
 # centralizes shared evidence so every related assertion uses one value
 KEnabled = OsInfo.environ.get('KIT_SOLIDWORKS_ORACLE') == '1'
 
 # centralizes shared evidence so every related assertion uses one value
-KPytestmark = PytestLib.mark.skipif(not KEnabled or not SolidworksAvailable(), reason='KIT_SOLIDWORKS_ORACLE=1 and a registered SOLIDWORKS install are required')
+KPytestmark = PytestLib.mark.skipif(not KEnabled or not IsOracleReady(), reason='KIT_SOLIDWORKS_ORACLE=1 and a registered SOLIDWORKS install are required')
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@KPytestmark
 def TestFRPOISWEV(TmpPath: FilePath) -> None:
     Document = FreecadRPD()
     TargetDoc = TmpPath / 'FreeCADRectanglePad.SLDPRT'
@@ -35,18 +36,19 @@ def TestFRPOISWEV(TmpPath: FilePath) -> None:
     assert Layout is not None
     MinimumX, MinimumY, MaximumX, MaximumY = Layout.bounds_mm
     ExpectedVolume = (MaximumX - MinimumX) * (MaximumY - MinimumY) * Layout.depth_mm
-    with SolidWorksSession() as Session:
-        Report = Session.inspect_part(TargetDoc)
-    assert Report.opened is True
-    assert Report.load_errors == ()
-    assert Report.rebuilt is True
-    assert Report.body_count == 1
-    assert Report.solid is not None
-    assert Report.solid.volume_mm3 == PytestLib.approx(ExpectedVolume, rel=1e-09)
-    assert 'Extrusion' in Report.feature_type_names
-    assert 'ProfileFeature' in Report.feature_type_names
+    with OracleSession() as Session:
+        Report = Session.InspectPart(TargetDoc)
+    assert Report.Opened is True
+    assert Report.LoadErrors == ()
+    assert Report.Rebuilt is True
+    assert Report.BodyCount == 1
+    assert Report.Solid is not None
+    assert Report.Solid.VolumeMmThree == PytestLib.approx(ExpectedVolume, rel=1e-09)
+    assert 'Extrusion' in Report.FeatureTN
+    assert 'ProfileFeature' in Report.FeatureTN
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@KPytestmark
 def TestSRGWACP(TmpPath: FilePath) -> None:
     Document = FreecadRPD()
     TargetDoc = TmpPath / 'NoPartition.SLDPRT'
@@ -57,7 +59,7 @@ def TestSRGWACP(TmpPath: FilePath) -> None:
     assert Layout is not None
     assert Layout.reversed is False
     assert Layout.end_condition_code == Condition
-    with SolidWorksSession() as Session:
-        Report = Session.inspect_part(TargetDoc)
-    assert Report.opened is True
-    assert Report.body_count == 1
+    with OracleSession() as Session:
+        Report = Session.InspectPart(TargetDoc)
+    assert Report.Opened is True
+    assert Report.BodyCount == 1

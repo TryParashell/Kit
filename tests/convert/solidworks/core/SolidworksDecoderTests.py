@@ -85,7 +85,7 @@ def Circles(SketchA: NativeSketch) -> tuple[NativeProfile, ...]:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusParts
-@PytestLib.mark.parametrize(('name', 'plane_id', 'axis_code', 'basis'), KSupports)
+@PytestLib.mark.parametrize(('NameText', 'PlaneId', 'AxisCode', 'Basis'), KSupports)
 def TestPPSRTSSP(NameText: str, PlaneId: int, AxisCode: int, Basis: tuple[tuple[float, float, float], ...]) -> None:
     ModelDoc, IgnoredValue = Decode(KParts, NameText)
     SketchA = Sketch(ModelDoc, 'Sketch1')
@@ -121,7 +121,7 @@ def TestTSPRIRFTSCR() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusParts
-@PytestLib.mark.parametrize(('name', 'radius_mm'), KRadiiA)
+@PytestLib.mark.parametrize(('NameText', 'RadiusMm'), KRadiiA)
 def TestCRARFTSCP(NameText: str, RadiusMm: float) -> None:
     ModelDoc, IgnoredValue = Decode(KParts, NameText)
     CirclesA = Circles(Sketch(ModelDoc, 'Sketch1'))
@@ -134,7 +134,7 @@ def TestCRARFTSCP(NameText: str, RadiusMm: float) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusTwoPartsA
-@PytestLib.mark.parametrize(('name', 'radius_mm'), KRadii)
+@PytestLib.mark.parametrize(('NameText', 'RadiusMm'), KRadii)
 def TestSFCRAE(NameText: str, RadiusMm: float) -> None:
     ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, NameText)
     CirclesA = Circles(Sketch(ModelDoc, 'Sketch2'))
@@ -152,7 +152,7 @@ def TestRPCNASA() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusParts
-@PytestLib.mark.parametrize(('name', 'depth_mm'), KPartsA)
+@PytestLib.mark.parametrize(('NameText', 'DepthMm'), KPartsA)
 def TestASDCAM(NameText: str, DepthMm: float) -> None:
     ModelDoc, IgnoredValue = Decode(KParts, NameText)
     Operation = ModelDoc.operations[0]
@@ -191,7 +191,7 @@ def TestAFSSFSTAEPC() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusParts
-@PytestLib.mark.parametrize(('name', 'center_mm', 'diameter_mm'), KBoxes)
+@PytestLib.mark.parametrize(('NameText', 'CenterMm', 'DiameterMm'), KBoxes)
 def TestTBBCID(NameText: str, CenterMm: tuple[float, float, float], DiameterMm: float) -> None:
     ModelDoc, Resolved = Decode(KParts, NameText)
     BoxInfo = ModelDoc.bounding_box
@@ -212,7 +212,7 @@ def TestTBSDMTBHE() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusParts
-@PytestLib.mark.parametrize(('name', 'mirrored'), (('BASELINE_40x20x10', 0), ('REVERSED_d10', 1), ('MIDPLANE_d10', 0)))
+@PytestLib.mark.parametrize(('NameText', 'Mirrored'), (('BASELINE_40x20x10', 0), ('REVERSED_d10', 1), ('MIDPLANE_d10', 0)))
 def TestTMDFIR(NameText: str, Mirrored: int) -> None:
     ModelDoc, Resolved = Decode(KParts, NameText)
     Operation = ModelDoc.operations[0]
@@ -224,7 +224,7 @@ def TestTMDFIR(NameText: str, Mirrored: int) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusParts
-@PytestLib.mark.parametrize(('name', 'record_end'), (('BASELINE_40x20x10', 8280), ('PLANE_TOP', 8352), ('PLANE_RIGHT', 8352), ('CIRCLE_r10', 7881)))
+@PytestLib.mark.parametrize(('NameText', 'RecordEnd'), (('BASELINE_40x20x10', 8280), ('PLANE_TOP', 8352), ('PLANE_RIGHT', 8352), ('CIRCLE_r10', 7881)))
 def TestTEORTRE(NameText: str, RecordEnd: int) -> None:
     ModelDoc, Resolved = Decode(KParts, NameText)
     Operation = ModelDoc.operations[0]
@@ -245,7 +245,7 @@ def TestTEREITNCM() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KCorpusTwoPartsA
-@PytestLib.mark.parametrize(('name', 'sketch_name'), KSketchesA)
+@PytestLib.mark.parametrize(('NameText', 'SketchName'), KSketchesA)
 def TestPSSSRAPS(NameText: str, SketchName: str) -> None:
     ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, NameText)
     SketchA = Sketch(ModelDoc, SketchName)
@@ -259,7 +259,7 @@ def TestPSSSRAPS(NameText: str, SketchName: str) -> None:
     assert SketchA.native_offset < Reference.offset < SketchA.native_end
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-@PytestLib.mark.parametrize(('name', 'sketch_name', 'directory'), KSketches)
+@PytestLib.mark.parametrize(('NameText', 'SketchName', 'Directory'), KSketches)
 def TestFSSANRAPS(NameText: str, SketchName: str, Directory: FilePath) -> None:
     if not Directory.is_dir():
         PytestLib.skip('the SOLIDWORKS corpus is not present in this checkout')

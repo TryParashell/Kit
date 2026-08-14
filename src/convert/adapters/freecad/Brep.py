@@ -212,7 +212,7 @@ def DotAction(LeftValue: Point, Right: Point) -> float:
     return sum((LeftValue[Index] * Right[Index] for Index in range(3)))
 
 # this definition exists because focused behavior needs one stable owner
-def Length(Vector: Point) -> float:
+def GetLength(Vector: Point) -> float:
     return MathValue.sqrt(DotAction(Vector, Vector))
 
 # this definition exists because focused behavior needs one stable owner
@@ -239,10 +239,10 @@ def Triangle(Value: Any, VertexCount: int) -> KTriangle:
 def FacetIs(Points: tuple[Point, ...], Facet: Triangle, Tolerance: float) -> bool:
     Corners = tuple((Points[Index] for Index in Facet))
     Edges = tuple((Subtract(Corners[(Index + 1) % 3], Corners[Index]) for Index in range(3)))
-    Lengths = tuple((Length(EdgeValue) for EdgeValue in Edges))
+    Lengths = tuple((GetLength(EdgeValue) for EdgeValue in Edges))
     if min(Lengths) <= Tolerance:
         return True
-    NormalLength = Length(Cross(Edges[0], Subtract(Corners[2], Corners[0])))
+    NormalLength = GetLength(Cross(Edges[0], Subtract(Corners[2], Corners[0])))
     return NormalLength <= Tolerance * max(Lengths)
 
 # this definition exists because focused behavior needs one stable owner
@@ -251,11 +251,11 @@ def GeomAction(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Toleranc
     for Triangle in Facets:
         Corners = tuple((Points[Index] for Index in Triangle))
         Edges = tuple((Subtract(Corners[(Index + 1) % 3], Corners[Index]) for Index in range(3)))
-        Lengths = tuple((Length(EdgeValue) for EdgeValue in Edges))
+        Lengths = tuple((GetLength(EdgeValue) for EdgeValue in Edges))
         if min(Lengths) <= Tolerance:
             raise ValueError('triangle edges must exceed the BRep tolerance')
         NormalVector = Cross(Edges[0], Subtract(Corners[2], Corners[0]))
-        NormalLength = Length(NormalVector)
+        NormalLength = GetLength(NormalVector)
         if NormalLength <= Tolerance * max(Lengths):
             raise ValueError('triangle area must exceed the BRep tolerance')
         Normal = Scale(NormalVector, 1.0 / NormalLength)
@@ -275,7 +275,7 @@ def EdgeUses(Facets: tuple[Triangle, ...]):
     return Result
 
 # this definition exists because focused behavior needs one stable owner
-def Oriented(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float):
+def OrientFacets(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float):
     UsesValue = EdgeUses(Facets)
     if any((len(EdgeFaces) > 2 for EdgeFaces in UsesValue.values())):
         return None
@@ -340,7 +340,7 @@ def Header(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Edges: tuple
     Lines = ['DBRep_DrawableShape', '', 'CASCADE Topology V1, (c) Matra-Datavision', 'Locations 0', 'Curve2ds 0', f'Curves {len(Edges)}']
     for Start, EndValue in Edges:
         Vector = Subtract(Points[EndValue], Points[Start])
-        Direction = Scale(Vector, 1.0 / Length(Vector))
+        Direction = Scale(Vector, 1.0 / GetLength(Vector))
         Lines.append(f'1 {Values(Points[Start] + Direction)} ')
     Lines.extend(['Polygon3D 0', 'PolygonOnTriangulations 0', f'Surfaces {len(Facets)}'])
     for Corners, Ignored, Normal, XDirection, YDirection in GeomValue:
@@ -403,7 +403,7 @@ def SharedBrep(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Componen
         Lines.extend(VertexRecord(Points[Index], ToleranceText))
     for CurveIndex, EdgeValue in enumerate(Edges, 1):
         Start, EndValue = EdgeValue
-        Lines.extend(EdgeRecord(ToleranceText, CurveIndex, Length(Subtract(Points[EndValue], Points[Start])), RefValue(VertexOrdinals[Start]), RefValue(VertexOrdinals[EndValue])))
+        Lines.extend(EdgeRecord(ToleranceText, CurveIndex, GetLength(Subtract(Points[EndValue], Points[Start])), RefValue(VertexOrdinals[Start]), RefValue(VertexOrdinals[EndValue])))
     for FacetIndex, Facet in enumerate(Facets):
         EdgeValues = []
         for Index in range(3):
@@ -469,7 +469,7 @@ def UnitTwo(Value: Vector2, Label: str) -> tuple[tuple[float, float], float]:
 # this definition exists because focused behavior needs one stable owner
 def UnitThree(Value: Vector3, Label: str) -> tuple[KPoint, float]:
     RawValue = VectorThreeA(Value)
-    Length = Length(RawValue)
+    Length = GetLength(RawValue)
     if not MathValue.isfinite(Length) or Length <= 0.0:
         Unsupported(f'{Label} has an invalid direction')
     return (Scale(RawValue, 1.0 / Length), Length)
@@ -481,7 +481,7 @@ def Frame(AxisValue: Vector3, RefValue: Vector3, Label: str) -> tuple[KPoint, KP
     if abs(DotAction(NormalizedAxis, NormalizedRef)) > 1e-09:
         Unsupported(f'{Label} axis and reference direction are not orthogonal')
     YDirection = Cross(NormalizedAxis, NormalizedRef)
-    if abs(Length(YDirection) - 1.0) > 1e-09:
+    if abs(GetLength(YDirection) - 1.0) > 1e-09:
         Unsupported(f'{Label} has an invalid coordinate frame')
     return (NormalizedAxis, NormalizedRef, YDirection)
 
@@ -716,7 +716,7 @@ def SurfaceResidual(Value: object, Point: Point) -> float | None:
         Expected = Value.radius + Axial / Cosine * MathValue.sin(Value.half_angle)
         return abs(Radial - abs(Expected))
     if isinstance(Value, SphereSurface):
-        return abs(Length(Subtract(Point, VectorThreeA(Value.center))) - Value.radius)
+        return abs(GetLength(Subtract(Point, VectorThreeA(Value.center))) - Value.radius)
     if isinstance(Value, TorusSurface):
         AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'torus surface {Value.id}')
         Delta = Subtract(Point, VectorThreeA(Value.center))
@@ -839,7 +839,7 @@ def SeamBandA(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float) -> tupl
     LowPoint = VectorThreeA(Graph.vertices[LowEdge.start_vertex_id].point)
     HighPoint = VectorThreeA(Graph.vertices[HighEdge.start_vertex_id].point)
     Vector = Subtract(HighPoint, LowPoint)
-    Length = Length(Vector)
+    Length = GetLength(Vector)
     if Length <= Allowed or abs(Length - (Means[HighIndex] - Means[LowIndex])) > Allowed:
         return None
     if any(((SurfaceResidual(Surface, tuple((LowPoint[AxisValue] + Vector[AxisValue] * Ratio for AxisValue in range(3)))) or 0.0) > Allowed for Ratio in (0.25, 0.5, 0.75))):
@@ -1131,7 +1131,7 @@ def CheckEdgeGeom(EdgeValue: BrepEdge, Curve: object, Vertices: Mapping[str, Bre
     for Actual, VertexId in ((Start, EdgeValue.start_vertex_id), (EndValue, EdgeValue.end_vertex_id)):
         Vertex = Vertices[VertexId]
         Allowed = max(Tolerance, EdgeValue.tolerance, Vertex.tolerance)
-        if Length(Subtract(Actual, VectorThreeA(Vertex.point))) > Allowed:
+        if GetLength(Subtract(Actual, VectorThreeA(Vertex.point))) > Allowed:
             Unsupported(f'edge {EdgeValue.id} curve endpoint does not match vertex {VertexId}')
 
 # this definition exists because focused behavior needs one stable owner
@@ -1314,7 +1314,7 @@ def TriangleMesh(Vertices: Sequence[Any], Triangles: Sequence[Any], Tolerance: f
     Facets = tuple((Facet for Facet in Declared if not FacetIs(Points, Facet, Tolerance)))
     if not Facets:
         raise ValueError('at least one triangle area must exceed the BRep tolerance')
-    Oriented = Oriented(Points, Facets, Tolerance)
+    Oriented = OrientFacets(Points, Facets, Tolerance)
     if Oriented is None:
         return IndependentBrep(Points, Facets, Tolerance)
     OrientedFacets, Components, Closed = Oriented
@@ -1420,7 +1420,7 @@ globals()['_header'] = Header
 globals()['_independent_brep'] = IndependentBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()['_length'] = Length
+globals()['_length'] = GetLength
 
 # this binding exists because shared behavior needs one stable value
 globals()['_linear_surface_pcurve'] = LinearSurface
@@ -1432,7 +1432,7 @@ globals()['_loop_uv_points'] = LoopUvPoints
 globals()['_number'] = Number
 
 # this binding exists because shared behavior needs one stable value
-globals()['_oriented_components'] = Oriented
+globals()['_oriented_components'] = OrientFacets
 
 # this binding exists because shared behavior needs one stable value
 globals()['_pcurve_record'] = PcurveRecord

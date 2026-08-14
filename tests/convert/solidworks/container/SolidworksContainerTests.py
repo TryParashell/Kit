@@ -44,7 +44,7 @@ def ReadDirMeta(BlobInfo: bytes, Streams: tuple) -> tuple[int, int]:
     return (8 + DirectoryOffset, EndOffset)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckDirEntry(BlobInfo: bytes, Archive, Cursor: int, ExpectedName: str, ExpectedData: bytes) -> tuple[int, int]:
+def AssertDirEntry(BlobInfo: bytes, Archive, Cursor: int, ExpectedName: str, ExpectedData: bytes) -> tuple[int, int]:
     assert BlobInfo[Cursor:Cursor + 4] == KSignature
     assert BlobInfo[Cursor + 6:Cursor + 12] == KMarker
     TypeId, CrcThreeTwoValue, CompressedSize, SizeInfo = StructLib.unpack_from('<IIII', BlobInfo, Cursor + 12)
@@ -73,7 +73,7 @@ def TestGCHCND() -> None:
     Cursor, EndOffset = ReadDirMeta(BlobInfo, Streams)
     Timestamps = set()
     for ExpectedName, ExpectedData in Streams:
-        Cursor, TypeId = CheckDirEntry(BlobInfo, Archive, Cursor, ExpectedName, ExpectedData)
+        Cursor, TypeId = AssertDirEntry(BlobInfo, Archive, Cursor, ExpectedName, ExpectedData)
         Timestamps.add(TypeId)
     assert Cursor == EndOffset
     assert Timestamps == {473223809}

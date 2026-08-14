@@ -244,7 +244,7 @@ def TestRSSDCFNER() -> None:
     assert ReadSldprt(Output.getvalue()).feature_timeline[0].name == 'Forged metadata cannot certify native semantics'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckNeutral(Archive) -> None:
+def AssertNeutral(Archive) -> None:
     assert Archive.format_version == 4
     assert Archive.require('Kit/Interchange')
     assert StreamK not in Archive.streams
@@ -257,7 +257,7 @@ def CheckNeutral(Archive) -> None:
     assert Archive.require(StreamD).startswith(b'<?xml')
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckNeutralDoc(SourceDoc, Output, ResultInfo) -> None:
+def AssertNeutDoc(SourceDoc, Output, ResultInfo) -> None:
     Reread = ReadSldprt(Output)
     assert Reread.configurations == SourceDoc.configurations
     assert Reread.support_planes == SourceDoc.support_planes
@@ -289,7 +289,7 @@ def TestFDWSSC(TmpPath) -> None:
         WriteSldprt(Restored, Output, allow_non_native=False)
     ResultInfo = WriteSldprt(Restored, Output)
     Archive = SldprtArchive.open(Output)
-    CheckNeutral(Archive)
+    AssertNeutral(Archive)
     Native = DecodeNativeModel(Archive.require(StreamE), Archive.require(StreamH), resolved_stream=StreamH)
     assert Native.diagnostics == ()
     assert [(ItemValue.name, ItemValue.configuration_id) for ItemValue in Native.configurations] == [('Default', 0)]
@@ -298,7 +298,7 @@ def TestFDWSSC(TmpPath) -> None:
     assert [(ItemValue.name, ItemValue.profile_id) for ItemValue in Native.operations] == [('Boss1', Native.sketches[0].object_id)]
     assert Output.read_bytes()[:1] not in {b'{', b'['}
     assert Output.read_bytes()[:4] != b'PK\x03\x04'
-    CheckNeutralDoc(SourceDoc, Output, ResultInfo)
+    AssertNeutDoc(SourceDoc, Output, ResultInfo)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def BuildStablePart():
@@ -310,7 +310,7 @@ def BuildStablePart():
     return SldprtArchive.from_bytes(First.getvalue())
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckPartRels(Archive) -> None:
+def AssertPartRels(Archive) -> None:
     ContentTypes = Archive.require(StreamC)
     Relationships = Archive.require(StreamJ)
     assert len(ContentTypes) == 556
@@ -324,7 +324,7 @@ def CheckPartRels(Archive) -> None:
     assert len(Archive.require('docProps/custom.xml')) == 853
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckPartXml(Archive) -> None:
+def AssertPartXml(Archive) -> None:
     Keywords = Archive.require(StreamE)
     Features = Archive.require(StreamD)
     assert Keywords.startswith(b'\x86<?xml version="1.0" encoding="UTF-8"?>\r\n<Keywords ')
@@ -349,7 +349,7 @@ def CheckPartXml(Archive) -> None:
     assert ModelStamps == (int(KeywordRoot.attrib['id']), int(NativeElements['swModel'].attrib['swLastModifiedStamp']), 101)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckDefaults(Archive) -> None:
+def AssertDefaults(Archive) -> None:
     assert Archive.require('Contents/CnfgObjs') == bytes.fromhex('00000000fffeff00fffeff00')
     assert Archive.require('Contents/OleItems') == b'\x00' * 4
     assert Archive.require('Contents/eModelLic') == b'\x00' * 4
@@ -361,9 +361,9 @@ def CheckDefaults(Archive) -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSLNPSAD() -> None:
     Archive = BuildStablePart()
-    CheckPartRels(Archive)
-    CheckPartXml(Archive)
-    CheckDefaults(Archive)
+    AssertPartRels(Archive)
+    AssertPartXml(Archive)
+    AssertDefaults(Archive)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSLBPWNBP() -> None:
@@ -482,7 +482,7 @@ def TestSLNRBRAP() -> None:
     assert Restored.feature_timeline[0].definition == Feature.definition
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckRectNative(Archive, ResultInfo) -> None:
+def AssertRectData(Archive, ResultInfo) -> None:
     assert StreamK in Archive.streams
     assert StreamH not in Archive.streams
     assert Archive.require(StreamA)
@@ -511,7 +511,7 @@ def TestFRPWNPSP(TmpPath: FilePath) -> None:
     TargetDoc = TmpPath / 'FreeCADRectanglePad.SLDPRT'
     ResultInfo = WriteDocument(SourceDoc, TargetDoc, allow_carrier=False)
     DataValue = TargetDoc.read_bytes()
-    CheckRectNative(SldprtArchive.from_bytes(DataValue), ResultInfo)
+    AssertRectData(SldprtArchive.from_bytes(DataValue), ResultInfo)
     Restored = ReadSldprt(DataValue)
     assert Restored.feature_timeline[0].definition == SourceDoc.feature_timeline[0].definition
     Replay = BytesIO()
@@ -749,7 +749,7 @@ def TestFPTPWFENF() -> None:
         assert TransferData[CapabilityValue] == 'native'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckRevCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
+def AssertRevCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
     assert ResultData.vendor_loadable is True
     assert ResultData.application_usable is True
     assert ResultData.metadata['native_brep'] == 'feature-rebuilt'
@@ -766,7 +766,7 @@ def CheckRevCore(ResultData, ArchiveData, FeatureData, NativeData) -> None:
     assert NativeAxisBindings(NativeData) == frozenset({(31, 26, 'V_Axis')})
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckRevHead(ArchiveData, NativeData) -> None:
+def AssertRevHead(ArchiveData, NativeData) -> None:
     HeaderData = ArchiveData.require('Contents/Config-0-ModelHeader')
     assert DecodeNativeModelHeader(HeaderData).objects[-2:] == ((26, 'Sketch1'), (31, 'Revolve1'))
     ResolvedData = ArchiveData.require(StreamK)
@@ -781,7 +781,7 @@ def CheckRevHead(ArchiveData, NativeData) -> None:
     assert bytes.fromhex('088001000a80') + StructLib.pack('<I', 0) + b'\x00\x00' + StructLib.pack('<I', SketchModifiedStamp) + SerializedCreated + StructLib.pack('<I', 31) + SerializedRevolve in HeaderData
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckRevolveCfg(ArchiveData, ResultData) -> None:
+def AssertRevCfg(ArchiveData, ResultData) -> None:
     ConfigurationData = ArchiveData.require(StreamB)
     AtomDefinition = b'\xff\xff\x01\x00\x08\x00moAtom_c'
     AtomPos = ConfigurationData.index(AtomDefinition)
@@ -798,12 +798,12 @@ def TestFFRWENRB() -> None:
     ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
     FeatureData = LocateFeatures(ArchiveData.require(StreamK))
     NativeData = DecodeNativeModel(ArchiveData.require(StreamE), ArchiveData.require(StreamK), ArchiveData.require(StreamB), resolved_stream=StreamK)
-    CheckRevCore(ResultData, ArchiveData, FeatureData, NativeData)
-    CheckRevHead(ArchiveData, NativeData)
-    CheckRevolveCfg(ArchiveData, ResultData)
+    AssertRevCore(ResultData, ArchiveData, FeatureData, NativeData)
+    AssertRevHead(ArchiveData, NativeData)
+    AssertRevCfg(ArchiveData, ResultData)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckPinProgram(SourceData, ResultData, ArchiveData, ProgramData, EnvelopeData) -> None:
+def AssertPinProg(SourceData, ResultData, ArchiveData, ProgramData, EnvelopeData) -> None:
     assert len(ProgramData) == 12337
     assert Hashlib.sha256(ProgramData).hexdigest() == 'e8a72dfd4796bda2a408ab8b629e9f12dc4ae225c8a1e0cc08f3c09b02ff68bf'
     assert len(RevolvePinOps) == 3014
@@ -820,7 +820,7 @@ def CheckPinProgram(SourceData, ResultData, ArchiveData, ProgramData, EnvelopeDa
     assert ArchiveData.require('Header2') == EnvelopeData.HeaderPayload
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckPinNative(ArchiveData, ProgramData, EnvelopeData) -> None:
+def AssertPinNative(ArchiveData, ProgramData, EnvelopeData) -> None:
     NativeData = DecodeNativeModel(ArchiveData.require(StreamE), ProgramData, EnvelopeData.Config0Payload, resolved_stream=StreamK)
     assert len(NativeData.sketches) == 1
     assert NativeData.sketches[0].support_plane_id == 3
@@ -834,7 +834,7 @@ def CheckPinNative(ArchiveData, ProgramData, EnvelopeData) -> None:
     assert NativeAxisBindings(NativeData) == frozenset({(31, 26, 'V_Axis')})
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-def CheckPinModes(ResultData) -> None:
+def AssertPinModes(ResultData) -> None:
     TransferData = {ItemData.capability: ItemData.mode.value for ItemData in ResultData.transfers}
     for CapabilityValue in (Capability.BREP, Capability.PARAMETERS, Capability.PARAMETRIC_HISTORY, Capability.EDITABLE_SKETCHES, Capability.BODY_STRUCTURE, Capability.SELECTIONS):
         assert TransferData[CapabilityValue] == 'native'
@@ -847,9 +847,9 @@ def TestFCPRWRCE(TmpPath: FilePath) -> None:
     ArchiveData = SldprtArchive.from_bytes(TargetPath.read_bytes())
     ProgramData = EncodeRevolvePinProgram()
     EnvelopeData = BuildRevolvePinEnvelope()
-    CheckPinProgram(SourceData, ResultData, ArchiveData, ProgramData, EnvelopeData)
-    CheckPinNative(ArchiveData, ProgramData, EnvelopeData)
-    CheckPinModes(ResultData)
+    AssertPinProg(SourceData, ResultData, ArchiveData, ProgramData, EnvelopeData)
+    AssertPinNative(ArchiveData, ProgramData, EnvelopeData)
+    AssertPinModes(ResultData)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFCPWNEF() -> None:
@@ -1224,7 +1224,7 @@ def TestGCPDSC(SourceDoc) -> None:
         assert tuple((ItemValue.document.capabilities for ItemValue in Restored.assembly.documents if ItemValue.document is not None)) == tuple((ItemValue.document.capabilities for ItemValue in SourceDoc.assembly.documents if ItemValue.document is not None))
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-@PytestLib.mark.parametrize(('payload_index', 'changes'), ((0, {'data': b'changed document'}), (1, {'data': b'changed binding'}), (0, {'id': 'changed-document'}), (1, {'id': 'changed-binding'})))
+@PytestLib.mark.parametrize(('PayloadIndex', 'Changes'), ((0, {'data': b'changed document'}), (1, {'data': b'changed binding'}), (0, {'id': 'changed-document'}), (1, {'id': 'changed-binding'})))
 def TestFDPMIOR(PayloadIndex: int, Changes: dict[str, bytes | str]) -> None:
     SourceDoc = ReplaceData(Document(), brep_payloads=(BrepPayload('foreign-document', 'future.cad.document', 'native_document', 'v1', '', data=b'original document', role=PayloadRole.DOCUMENT, file_extension='.cad'), BrepPayload('foreign-binding', 'future.cad.sha256', 'native_document_binding', 'sha256', '', data=b'original binding', role=PayloadRole.VERIFICATION, file_extension='.sha256')))
     Carrier = BytesIO()
@@ -1402,7 +1402,7 @@ def TestSAEDK(TmpPath) -> None:
     assert Conversion.destination_format == 'solidworks.sldasm'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-@PytestLib.mark.parametrize(('source', 'wrong_suffix'), ((KSample, '.SLDASM'), (KAssembly, '.SLDPRT')))
+@PytestLib.mark.parametrize(('SourceDoc', 'WrongSuffix'), ((KSample, '.SLDASM'), (KAssembly, '.SLDPRT')))
 def TestSRRNSKM(SourceDoc, WrongSuffix, TmpPath) -> None:
     Renamed = TmpPath / f'renamed{WrongSuffix}'
     Renamed.write_bytes(SourceDoc.read_bytes())

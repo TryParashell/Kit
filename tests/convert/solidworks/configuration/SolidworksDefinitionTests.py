@@ -85,14 +85,14 @@ def TestDSMTRD():
     assert Hashlib.sha256(Stream).hexdigest() == KDigest
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-@PytestLib.mark.parametrize(('standard', 'expected'), (('moBS_c', 3736), ('moISO_c', 3737), ('moANSI_c', 3738)))
+@PytestLib.mark.parametrize(('Standard', 'Expected'), (('moBS_c', 3736), ('moISO_c', 3737), ('moANSI_c', 3738)))
 def TestEDSEIRL(Standard, Expected):
     Stream = EncodeDefinitionStream(standard=Standard)
     assert len(Stream) == Expected
     assert Stream.count(Standard.encode('ascii')) == 1
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-@PytestLib.mark.parametrize(('user', 'expected'), (('Kit', 3736), ('odin', 3738), ('Parashell', 3748), ('abcdefghijklmnopqrstuvwxyz1', 3784)))
+@PytestLib.mark.parametrize(('UserInfo', 'Expected'), (('Kit', 3736), ('odin', 3738), ('Parashell', 3748), ('abcdefghijklmnopqrstuvwxyz1', 3784)))
 def NamedTUNLMTSBTB(UserInfo, Expected):
     Stream = EncodeDefinitionStream(user=UserInfo)
     assert len(Stream) == Expected

@@ -236,10 +236,10 @@ def Generated(DocValue: CadDocument, DocType: str) -> bytes:
     Nested = BuildCfvTwo(((KManifestName, Manifest), ('KitDocumentType', TypeData)))
     if DocType == ProductDocType:
         Selected = KProductStream
-        Declarations = BuildDecl('CATProdCont', 'CATFeatCont', Selected, ordinal=1)
+        Declarations = BuildDecl('CATProdCont', 'CATFeatCont', Selected, Ordinal=1)
     else:
         Selected = KPartStream
-        Declarations = b''.join((BuildDecl('CATProdCont', 'CATFeatCont', KProductStream, ordinal=1), BuildDecl('CATPrtCont', 'CATProdCont', KPartStream, ordinal=2)))
+        Declarations = b''.join((BuildDecl('CATProdCont', 'CATFeatCont', KProductStream, Ordinal=1), BuildDecl('CATPrtCont', 'CATProdCont', KPartStream, Ordinal=2)))
     Summary = SummaryStream(DocType)
     Streams: list[tuple[str, bytes]] = [('Format', TypeData), ('Data', Declarations)]
     if DocType == PartDocType:
