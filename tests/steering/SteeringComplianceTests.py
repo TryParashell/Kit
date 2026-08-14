@@ -96,8 +96,8 @@ class bad:
             for FindingInfo in FindingList
             if FindingInfo.RuleCode == "NAM001"
         }
-        CaseSelf.assertTrue(
-            {"bad", "calc", "self", "bad_attr", "local_name"} <= BadNames
+        CaseSelf.assertLessEqual(
+            {"bad", "calc", "self", "bad_attr", "local_name"}, BadNames
         )
 
 
@@ -225,7 +225,7 @@ class CacheState:
         with Tempfile.TemporaryDirectory() as TmpPath:
             SourcePath = WriteSample(FilePath(TmpPath), MakeSource(BodyText))
             CodeSet = ReadCodes(SourcePath)
-        CaseSelf.assertTrue({"MRK002", "MRK003"} <= CodeSet)
+        CaseSelf.assertLessEqual({"MRK002", "MRK003"}, CodeSet)
 
 
 # constant examples stay together because stable and reassigned state require contrasting assertions
@@ -249,7 +249,7 @@ class PolicyState:
         with Tempfile.TemporaryDirectory() as TmpPath:
             SourcePath = WriteSample(FilePath(TmpPath), MakeSource(BodyText))
             CodeSet = ReadCodes(SourcePath)
-        CaseSelf.assertTrue({"CON001", "CON002"} <= CodeSet)
+        CaseSelf.assertLessEqual({"CON001", "CON002"}, CodeSet)
 
 
 # field container fixtures stay together because instance fields and explicit class constants need contrast
@@ -305,7 +305,7 @@ def ParseValue(InputValue):
         with Tempfile.TemporaryDirectory() as TmpPath:
             SourcePath = WriteSample(FilePath(TmpPath), MakeSource(BodyText))
             CodeSet = ReadCodes(SourcePath)
-        CaseSelf.assertTrue({"RAT001", "RAT003", "RAT004"} <= CodeSet)
+        CaseSelf.assertLessEqual({"RAT001", "RAT003", "RAT004"}, CodeSet)
 
 
 # comment fixtures stay focused because rationale uniqueness and narrow pragma exemptions form one contract
