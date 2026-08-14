@@ -12,8 +12,14 @@ from dataclasses import dataclass as DataClass
 from pathlib import Path as PathInfo
 import re as Regex
 import subprocess as Subprocess
+import sys as System
 import threading as Threading
 import time as TimeInfo
+
+# source discovery keeps the debugger utility executable directly from the worktree
+KRootInfo = PathInfo(__file__).resolve().parents[2]
+System.path.insert(0, str(KRootInfo / "src"))
+from convert.Security.PathBoundary import ResolveInput, ResolveOutput
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -207,6 +213,10 @@ def RunTask(
     HardDeadline: float = 600.0,
     QuietSeconds: float = 45.0,
 ) -> RunResult:
+    Script = ResolveInput(Script)
+    LogInfo = ResolveOutput(LogInfo)
+    if PartInfoInfo is not None:
+        PartInfoInfo = ResolveInput(PartInfoInfo)
     Sweep()
     LogInfo.parent.mkdir(parents=True, exist_ok=True)
     if LogInfo.exists():
@@ -220,7 +230,7 @@ def RunTask(
         str(KSldworks),
     ]
     if PartInfoInfo is not None:
-        Command.append(str(PartInfoInfo.resolve()))
+        Command.append(str(PartInfoInfo))
     StopInfo = Threading.Event()
     WatcherMut = Threading.Thread(target=WatchDialogs, args=(StopInfo,), daemon=True)
     WatcherMut.start()

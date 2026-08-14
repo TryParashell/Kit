@@ -26,6 +26,7 @@ for CandInfo in (KHereInfo, KGrammar):
         System.path.insert(0, str(CandInfo))
 import Tracelog as Tracelog
 import Streamlib as Streamlib
+from convert.Security.PathBoundary import ResolveInput, ValidateLabel
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -361,9 +362,9 @@ def MainRun() -> int:
     if len(ArgsInfo) % 3:
         raise SystemExit("usage: Segment.py <label> <part> <log> [...]")
     for PosInfoInfo in range(0, len(ArgsInfo), 3):
-        LabelInfo = ArgsInfo[PosInfoInfo]
-        PartInfoInfo = PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve()
-        LogInfo = PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve()
+        LabelInfo = ValidateLabel(ArgsInfo[PosInfoInfo])
+        PartInfoInfo = ResolveInput(ArgsInfo[PosInfoInfo + 1])
+        LogInfo = ResolveInput(ArgsInfo[PosInfoInfo + 2])
         Report(LabelInfo, PartInfoInfo, LogInfo)
     return 0
 

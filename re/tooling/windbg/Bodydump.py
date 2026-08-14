@@ -19,6 +19,7 @@ for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
 import Blocks as Blockslib
+from convert.Security.PathBoundary import ResolveInput
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -28,8 +29,8 @@ def MainRun() -> int:
     GetRows = System.argv[3:]
     for PosInfoInfo in range(0, len(GetRows), 3):
         LabelInfo = GetRows[PosInfoInfo]
-        PartInfoInfo = PathInfo(GetRows[PosInfoInfo + 1]).resolve()
-        LogInfo = PathInfo(GetRows[PosInfoInfo + 2]).resolve()
+        PartInfoInfo = ResolveInput(GetRows[PosInfoInfo + 1])
+        LogInfo = ResolveInput(GetRows[PosInfoInfo + 2])
         ModelInfo = Blockslib.LoadModel(PartInfoInfo, LogInfo, Stream)
         print(f"== {LabelInfo} nodes={len(ModelInfo.nodes)}")
         for IndexData in sorted(Wanted):

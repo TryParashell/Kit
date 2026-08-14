@@ -25,6 +25,7 @@ for CandInfo in (KHereInfo, KGrammar):
         System.path.insert(0, str(CandInfo))
 import Blocks as Blockslib
 import Model as Modellib
+from convert.Security.PathBoundary import ResolveInput, ValidateLabel
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KOutInfo = KScratch / "trace" / "out"
@@ -114,9 +115,9 @@ def MainRun() -> int:
     Stream = ArgsInfo[0]
     Models: list[tuple[str, Modellib.Model]] = []
     for PosInfoInfo in range(1, len(ArgsInfo), 3):
-        LabelInfo = ArgsInfo[PosInfoInfo]
-        PartInfoInfo = PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve()
-        LogInfo = PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve()
+        LabelInfo = ValidateLabel(ArgsInfo[PosInfoInfo])
+        PartInfoInfo = ResolveInput(ArgsInfo[PosInfoInfo + 1])
+        LogInfo = ResolveInput(ArgsInfo[PosInfoInfo + 2])
         Models.append((LabelInfo, Blockslib.LoadModel(PartInfoInfo, LogInfo, Stream)))
     GetRows = Align(Models)
     return FinishMain(GetRows, LabelInfo, Models, PosInfoInfo, Stream)

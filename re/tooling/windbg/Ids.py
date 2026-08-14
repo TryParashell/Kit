@@ -20,12 +20,13 @@ for CandInfo in (KHereInfo, KGrammar):
         System.path.insert(0, str(CandInfo))
 import Streamlib as Streamlib
 from convert.adapters.solidworks import resolved as Resolvedlib
+from convert.Security.PathBoundary import ResolveInput
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun() -> int:
     for ItemData in System.argv[1:]:
-        PartInfoInfo = PathInfo(ItemData).resolve()
+        PartInfoInfo = ResolveInput(ItemData)
         DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
         ByteBlob = DonorInfo.resolved
         Nodes = Resolvedlib.tree_nodes(ByteBlob)

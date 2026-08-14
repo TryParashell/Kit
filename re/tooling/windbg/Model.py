@@ -21,6 +21,7 @@ for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
 import Segment as Segmentlib
+from convert.Security.PathBoundary import ResolveInput
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -341,8 +342,8 @@ def MainRun() -> int:
         raise SystemExit("usage: Model.py <label> <part> <log> [...]")
     for PosInfoInfo in range(0, len(ArgsInfo), 3):
         LabelInfo = ArgsInfo[PosInfoInfo]
-        PartInfoInfo = PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve()
-        LogInfo = PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve()
+        PartInfoInfo = ResolveInput(ArgsInfo[PosInfoInfo + 1])
+        LogInfo = ResolveInput(ArgsInfo[PosInfoInfo + 2])
         ByteBlob, ModelInfo, SpareValue = LoadData(PartInfoInfo, LogInfo)
         Rebuilt = ModelInfo.emit()
         ExternClasses = sum(

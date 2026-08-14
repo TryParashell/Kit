@@ -19,6 +19,7 @@ for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
 import Streamlib as Streamlib
+from convert.Security.PathBoundary import ResolveInput
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KTargets = (
@@ -34,7 +35,7 @@ KTargets = (
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun() -> int:
     for ItemData in System.argv[1:]:
-        PartInfoInfo = PathInfo(ItemData).resolve()
+        PartInfoInfo = ResolveInput(ItemData)
         DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
         FeatInfoInfo = len(Streamlib.CompFeatEntries(DonorInfo.resolved)) // 2
         Sizes = {

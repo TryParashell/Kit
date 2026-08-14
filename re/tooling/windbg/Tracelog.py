@@ -11,6 +11,8 @@ from dataclasses import dataclass as DataClass
 from pathlib import Path as PathInfo
 import re as Regex
 
+from convert.Security.PathBoundary import ResolveInput
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def GetLegacyAttr(SelfRef, NameText):
@@ -109,7 +111,7 @@ def Hexint(TextValueData: str) -> int:
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def ReadEvents(LogInfo: PathInfo) -> tuple[Event, ...]:
     Result: list[Event] = []
-    for RawData in LogInfo.read_text(errors="replace").splitlines():
+    for RawData in ResolveInput(LogInfo).read_text(errors="replace").splitlines():
         Match = KEvent.match(RawData.strip())
         if Match is None:
             continue
@@ -153,7 +155,7 @@ def ReadDumps(LogInfo: PathInfo) -> tuple[DumpRecord, ...]:
     ThisValue = 0
     Words: list[int] = []
     Active = False
-    for RawData in LogInfo.read_text(errors="replace").splitlines():
+    for RawData in ResolveInput(LogInfo).read_text(errors="replace").splitlines():
         LineText = RawData.strip()
         HeadInfo = KCalib.match(LineText)
         if HeadInfo is not None:

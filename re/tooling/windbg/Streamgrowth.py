@@ -19,11 +19,12 @@ for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
 import Streamlib as Streamlib
+from convert.Security.PathBoundary import ResolveInput
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun() -> int:
-    Parts = [PathInfo(ItemData).resolve() for ItemData in System.argv[1:]]
+    Parts = [ResolveInput(ItemData) for ItemData in System.argv[1:]]
     if not Parts:
         raise SystemExit("usage: Streamgrowth.py <part> <part> [...]")
     Table: dict[str, list[int]] = {}

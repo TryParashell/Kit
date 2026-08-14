@@ -24,6 +24,7 @@ for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
 import Streamlib as Streamlib
+from convert.Security.PathBoundary import ResolveInput
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KOutInfo = KScratch / "trace" / "out"
@@ -66,7 +67,7 @@ def Matches(ByteBlob: bytes, ValueInfo: int) -> set[tuple[int, int]]:
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def FinishMain(Formula, RuleInfo) -> int:
-    Parts = [PathInfo(ItemData).resolve() for ItemData in System.argv[2:]]
+    Parts = [ResolveInput(ItemData) for ItemData in System.argv[2:]]
     if len(Parts) < 2:
         raise SystemExit("usage: Fieldscan.py <formula> <part> <part> [...]")
     PerStream: dict[str, list[set[tuple[int, int]]]] = {}

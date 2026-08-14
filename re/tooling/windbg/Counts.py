@@ -25,6 +25,7 @@ for CandInfo in (KHereInfo, KGrammar):
         System.path.insert(0, str(CandInfo))
 import Model as Modellib
 import Streamlib as Streamlib
+from convert.Security.PathBoundary import ResolveInput
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KOutInfo = KScratch / "trace" / "out"
@@ -86,8 +87,8 @@ def MainRun() -> int:
     Loaded: list[tuple[str, PathInfo, bytes, Modellib.Model, int]] = []
     for PosInfoInfo in range(0, len(ArgsInfo), 3):
         LabelInfo = ArgsInfo[PosInfoInfo]
-        PartInfoInfo = PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve()
-        LogInfo = PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve()
+        PartInfoInfo = ResolveInput(ArgsInfo[PosInfoInfo + 1])
+        LogInfo = ResolveInput(ArgsInfo[PosInfoInfo + 2])
         ByteBlob, ModelInfo, SpareValue = Modellib.LoadData(PartInfoInfo, LogInfo)
         CountInfo = ItemCount(ByteBlob, ModeInfo)
         Loaded.append((LabelInfo, PartInfoInfo, ByteBlob, ModelInfo, CountInfo))

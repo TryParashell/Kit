@@ -21,6 +21,7 @@ for CandInfo in (KHereInfo, KGrammar):
 import Model as Modellib
 import Streamlib as Streamlib
 from convert.adapters.solidworks import resolved as Resolvedlib
+from convert.Security.PathBoundary import ResolveInput
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -39,12 +40,11 @@ def Anchors(ByteBlob: bytes) -> dict[int, str]:
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun() -> int:
-    PartInfoInfo = PathInfo(System.argv[1]).resolve()
-    LogInfo = PathInfo(System.argv[2]).resolve()
+    PartInfoInfo = ResolveInput(System.argv[1])
+    LogInfo = ResolveInput(System.argv[2])
     LowValue = int(System.argv[3]) if len(System.argv) > 3 else 0
     HighValue = int(System.argv[4]) if len(System.argv) > 4 else 0
     ByteBlob, ModelInfo, SegmentsInfo = Modellib.LoadData(PartInfoInfo, LogInfo)
-    Offsets = Modellib.NodeOffsets(ModelInfo)
     Marks = Anchors(ByteBlob)
     StopInfo = HighValue if HighValue else len(SegmentsInfo)
     print(

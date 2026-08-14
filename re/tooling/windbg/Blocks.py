@@ -26,6 +26,7 @@ for CandInfo in (KHereInfo, KGrammar):
         System.path.insert(0, str(CandInfo))
 import Model as Modellib
 import Segment as Segmentlib
+from convert.Security.PathBoundary import ResolveInput, ValidateLabel
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -170,13 +171,13 @@ def MainRun() -> int:
         GetRows.append(
             (
                 ArgsInfo[PosInfoInfo],
-                PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve(),
-                PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve(),
+                ResolveInput(ArgsInfo[PosInfoInfo + 1]),
+                ResolveInput(ArgsInfo[PosInfoInfo + 2]),
             )
         )
     PayloadInfo = Compare(Stream, GetRows)
     KOutInfo.mkdir(parents=True, exist_ok=True)
-    TagInfoInfo = Stream.replace("/", "_").replace("-", "_")
+    TagInfoInfo = ValidateLabel(Stream.replace("/", "_").replace("-", "_"))
     (KOutInfo / f"blocks_{TagInfoInfo}.json").write_text(
         JsonData.dumps(PayloadInfo, indent=2), encoding="utf-8"
     )

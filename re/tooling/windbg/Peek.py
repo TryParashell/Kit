@@ -19,6 +19,7 @@ for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
 import Streamlib as Streamlib
+from convert.Security.PathBoundary import ResolveInput
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KPrintable = set(range(32, 127))
@@ -36,7 +37,7 @@ def Render(ByteBlob: bytes, StartRun: int, StopInfo: int) -> None:
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun() -> int:
-    PartInfoInfo = PathInfo(System.argv[1]).resolve()
+    PartInfoInfo = ResolveInput(System.argv[1])
     NameTextInfo = System.argv[2]
     StartRun = int(System.argv[3])
     StopInfo = int(System.argv[4])

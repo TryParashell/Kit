@@ -27,6 +27,7 @@ import Model as Modellib
 import Segment as Segmentlib
 import Tracelog as Tracelog
 import Streamlib as Streamlib
+from convert.Security.PathBoundary import ResolveInput, ValidateLabel
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KOutInfo = KScratch / "trace" / "out"
@@ -221,8 +222,8 @@ def MainRun() -> int:
     KOutInfo.mkdir(parents=True, exist_ok=True)
     RecordsInfo: list[dict[str, object]] = []
     for PosInfoInfo in range(0, len(Pairs), 2):
-        LabelInfo = Pairs[PosInfoInfo]
-        PartInfoInfo = PathInfo(Pairs[PosInfoInfo + 1]).resolve()
+        LabelInfo = ValidateLabel(Pairs[PosInfoInfo])
+        PartInfoInfo = ResolveInput(Pairs[PosInfoInfo + 1])
         Record = TraceOne(LabelInfo, PartInfoInfo, Fields, ModeInfo, KStreams)
         RecordsInfo.append(Record)
         print(f"== {LabelInfo} {Record.get('status')} {Record.get('cdb_reason')}")
