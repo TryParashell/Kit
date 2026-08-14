@@ -2342,7 +2342,70 @@ def DecodedDocBrep(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition decodes the native binary mesh sidecar format
+def BinaryMesh(
+    DataValue: bytes,
+) -> tuple[tuple[VectorThree, ...], tuple[tuple[int, int, int], ...]]:
+    if len(DataValue) < 296:
+        return ((), ())
+    try:
+        Endian = "<"
+        Magic, Version = Struct.unpack_from("<II", DataValue)
+        if (Magic, Version) != (2695938256, 65536):
+            Magic, Version = Struct.unpack_from(">II", DataValue)
+            Endian = ">"
+        VertexCount, TriangleCount = Struct.unpack_from(f"{Endian}II", DataValue, 264)
+        Expected = 272 + VertexCount * 12 + TriangleCount * 24 + 24
+        if Magic != 2695938256 or Version != 65536 or Expected > len(DataValue):
+            return ((), ())
+        Vertices = tuple(
+            VectorThree(*Struct.unpack_from(f"{Endian}fff", DataValue, 272 + Index * 12))
+            for Index in range(VertexCount)
+        )
+        TriangleOffset = 272 + VertexCount * 12
+        Triangles = tuple(
+            Struct.unpack_from(
+                f"{Endian}III", DataValue, TriangleOffset + Index * 24
+            )
+            for Index in range(TriangleCount)
+        )
+        return (Vertices, Triangles)
+    except Struct.error:
+        return ((), ())
+
+
+# this definition decodes an xml embedded mesh representation
+def XmlMesh(
+    Value: ET.Element,
+) -> tuple[tuple[VectorThree, ...], tuple[tuple[int, int, int], ...]]:
+    if Value.find("./Points") is None:
+        return ((), ())
+    Vertices = tuple(
+        VectorThree(
+            Number(Point.get("x")), Number(Point.get("y")), Number(Point.get("z"))
+        )
+        for Point in Value.findall("./Points/P")
+    )
+    Triangles = tuple(
+        (
+            Integer(FaceValue.get("p0"), -1),
+            Integer(FaceValue.get("p1"), -1),
+            Integer(FaceValue.get("p2"), -1),
+        )
+        for FaceValue in Value.findall("./Faces/F")
+    )
+    return (Vertices, Triangles)
+
+
+# this definition chooses binary or xml mesh decoding for one property
+def MeshData(
+    Value: ET.Element, Entries: Mapping[str, bytes]
+) -> tuple[tuple[VectorThree, ...], tuple[tuple[int, int, int], ...]]:
+    DataValue = Entries.get(Value.get("file", ""))
+    return BinaryMesh(DataValue) if DataValue is not None else XmlMesh(Value)
+
+
+# this definition decodes every valid native mesh property
 def ParseMeshes(Native: _NativeArchive) -> tuple[MeshValue, ...]:
     Result: list[MeshValue] = []
     for ObjValue in Native.objects:
@@ -2351,77 +2414,12 @@ def ParseMeshes(Native: _NativeArchive) -> tuple[MeshValue, ...]:
             if Value is None:
                 continue
             FileName = Value.get("file", "")
-            DataValue = Native.entries.get(FileName)
-            Vertices: tuple[VectorThree, ...] = ()
-            Triangles: tuple[tuple[int, int, int], ...] = ()
-            if DataValue is not None and len(DataValue) >= 296:
-                try:
-                    Endian = "<"
-                    Magic, Version = Struct.unpack_from("<II", DataValue)
-                    if (Magic, Version) != (2695938256, 65536):
-                        Magic, Version = Struct.unpack_from(">II", DataValue)
-                        Endian = ">"
-                    VertexCount, TriangleCount = Struct.unpack_from(
-                        f"{Endian}II", DataValue, 264
-                    )
-                    Expected = 272 + VertexCount * 12 + TriangleCount * 24 + 24
-                    if (
-                        Magic == 2695938256
-                        and Version == 65536
-                        and (Expected <= len(DataValue))
-                    ):
-                        Vertices = tuple(
-                            (
-                                VectorThree(
-                                    *Struct.unpack_from(
-                                        f"{Endian}fff", DataValue, 272 + Index * 12
-                                    )
-                                )
-                                for Index in range(VertexCount)
-                            )
-                        )
-                        TriangleOffset = 272 + VertexCount * 12
-                        Triangles = tuple(
-                            (
-                                Struct.unpack_from(
-                                    f"{Endian}III",
-                                    DataValue,
-                                    TriangleOffset + Index * 24,
-                                )
-                                for Index in range(TriangleCount)
-                            )
-                        )
-                except Struct.error:
-                    Vertices = ()
-                    Triangles = ()
-            elif Value.find("./Points") is not None:
-                Vertices = tuple(
-                    (
-                        VectorThree(
-                            Number(Point.get("x")),
-                            Number(Point.get("y")),
-                            Number(Point.get("z")),
-                        )
-                        for Point in Value.findall("./Points/P")
-                    )
-                )
-                Triangles = tuple(
-                    (
-                        (
-                            Integer(FaceValue.get("p0"), -1),
-                            Integer(FaceValue.get("p1"), -1),
-                            Integer(FaceValue.get("p2"), -1),
-                        )
-                        for FaceValue in Value.findall("./Faces/F")
-                    )
-                )
-            if not Vertices and (not Triangles):
+            Vertices, Triangles = MeshData(Value, Native.entries)
+            if not Vertices and not Triangles:
                 continue
             if any(
-                (
-                    any((Index < 0 or Index >= len(Vertices) for Index in Triangle))
-                    for Triangle in Triangles
-                )
+                any(Index < 0 or Index >= len(Vertices) for Index in Triangle)
+                for Triangle in Triangles
             ):
                 continue
             Result.append(
