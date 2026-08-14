@@ -8114,28 +8114,8 @@ def ModelHeader(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def HeaderPayload(
-    Identity: _NativeIdentity,
-    ConfigName: str,
-    Objects: Sequence[tuple[int, str, bool]],
-    DocPath: str,
-    UserName: str = "Kit",
-    NextObjectId: int | None = None,
-    ObjectStampsA: Mapping[int, tuple[int, ...]] | None = None,
-    HeaderBounds: tuple[float, ...] | None = None,
-) -> bytes:
-    if HeaderBounds is not None and (
-        len(HeaderBounds) != 10
-        or not all((MathValue.isfinite(ItemValue) for ItemValue in HeaderBounds))
-    ):
-        raise SldprtFormatError(
-            "native SOLIDWORKS header bounds require ten finite values"
-        )
-    LegacyStamp = bytes.fromhex("f65a1a69")
-    CStringHandleClassIndex = 14 + sum(
-        (2 + int(Modified) for ObjectId, NameValue, Modified in Objects)
-    )
+# header prefix assembly owns fixed native identity records
+def StartHeader(Identity, Objects, UserName, LegacyStamp):
     Output = bytearray(ClassDecl("moHeader_c"))
     Output.extend(
         bytes.fromhex("01000000ffff00000f00")
@@ -8154,6 +8134,11 @@ def HeaderPayload(
     Output.extend(Serialized("Created"))
     Output.extend(Struct.pack("<I", 0))
     Output.extend(Serialized(Identity.reference_name))
+    return Output
+
+
+# header object assembly owns action stamp sequencing and object records
+def HeaderObjsMut(Output, Identity, Objects, ObjectStampsA, LegacyStamp):
     LogicalStamp = Identity.creation_stamp
     ObjectStamps = ObjectStampsA or {}
     for ObjectId, NameValue, Modified in Objects:
@@ -8183,11 +8168,12 @@ def HeaderPayload(
             Output.extend(Serialized(Action))
         Output.extend(Struct.pack("<I", ObjectId))
         Output.extend(Serialized(NameValue))
-    Watermark = (
-        max((ItemValue[0] for ItemValue in Objects)) + 1
-        if NextObjectId is None
-        else max(NextObjectId, max((ItemValue[0] for ItemValue in Objects)) + 1)
-    )
+
+
+# header reference assembly owns document and configuration identity records
+def HeaderRefMut(
+    Output, Identity, ConfigName, DocPath, CStringHandleClassIndex, Watermark, LegacyStamp
+):
     Output.extend(
         LegacyStamp
         + Struct.pack("<IH", Watermark, 0)
@@ -8205,6 +8191,10 @@ def HeaderPayload(
     Output.extend(Struct.pack("<III", Identity.header_stamp, 1, 0))
     Output.extend(Struct.pack("<I", 4294967295))
     Output.extend(Serialized(ConfigName))
+
+
+# header bounds assembly owns native spatial metadata and trailer records
+def HeaderBoundsMut(Output, Identity, HeaderBounds):
     Output.extend(b"\x00" * 16)
     Output.extend(Struct.pack("<I", Identity.baseline_stamp))
     Output.extend(b"\x00" * 8)
@@ -8222,6 +8212,48 @@ def HeaderPayload(
     Output.extend(Struct.pack("<I", 1))
     Output.extend(b"\x00" * 16)
     Output.extend(Struct.pack("<I", 1))
+
+
+# this definition exists because focused behavior needs one stable owner
+def HeaderPayload(
+    Identity: _NativeIdentity,
+    ConfigName: str,
+    Objects: Sequence[tuple[int, str, bool]],
+    DocPath: str,
+    UserName: str = "Kit",
+    NextObjectId: int | None = None,
+    ObjectStampsA: Mapping[int, tuple[int, ...]] | None = None,
+    HeaderBounds: tuple[float, ...] | None = None,
+) -> bytes:
+    if HeaderBounds is not None and (
+        len(HeaderBounds) != 10
+        or not all(MathValue.isfinite(ItemValue) for ItemValue in HeaderBounds)
+    ):
+        raise SldprtFormatError(
+            "native SOLIDWORKS header bounds require ten finite values"
+        )
+    LegacyStamp = bytes.fromhex("f65a1a69")
+    CStringHandleClassIndex = 14 + sum(
+        2 + int(Modified) for ObjectId, NameValue, Modified in Objects
+    )
+    Output = StartHeader(Identity, Objects, UserName, LegacyStamp)
+    HeaderObjsMut(Output, Identity, Objects, ObjectStampsA, LegacyStamp)
+    MinimumWatermark = max(ItemValue[0] for ItemValue in Objects) + 1
+    Watermark = (
+        MinimumWatermark
+        if NextObjectId is None
+        else max(NextObjectId, MinimumWatermark)
+    )
+    HeaderRefMut(
+        Output,
+        Identity,
+        ConfigName,
+        DocPath,
+        CStringHandleClassIndex,
+        Watermark,
+        LegacyStamp,
+    )
+    HeaderBoundsMut(Output, Identity, HeaderBounds)
     return bytes(Output)
 
 

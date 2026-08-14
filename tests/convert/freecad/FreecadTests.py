@@ -3735,11 +3735,6 @@ def ShapeFixture(Owner: str, ElemMap: str) -> ET.Element:
 
 # this definition exists because focused behavior needs one stable owner
 def TestSketchShape() -> None:
-
-    # this definition exists because focused behavior needs one stable owner
-    def ShapeProp(Owner: str, ElemMap: str) -> XmlTree.Element:
-        return ShapeFixture(Owner, ElemMap)
-
     SketchBrep = b"\nCASCADE Topology V1, (c) Matra-Datavision\nsketch\n"
     FinalBrep = b"\nCASCADE Topology V1, (c) Matra-Datavision\nfinal\n"
     SketchMap = b"BeginElementMap v1\nSketch map\nEndMap\n"
@@ -3766,7 +3761,7 @@ def TestSketchShape() -> None:
                         "ConstraintList",
                         {"count": "0"},
                     ),
-                    ShapeProp("Sketch", "0.15.70200.5"),
+                    ShapeFixture("Sketch", "0.15.70200.5"),
                 ),
             ),
             (
@@ -3777,7 +3772,7 @@ def TestSketchShape() -> None:
                     NativeProp(
                         "Label", "App::PropertyString", "String", {"value": "Final"}
                     ),
-                    ShapeProp("Final", "1.15.70200.5"),
+                    ShapeFixture("Final", "1.15.70200.5"),
                 ),
             ),
         ),

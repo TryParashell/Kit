@@ -1484,26 +1484,16 @@ def RuleElemSlots(NodeValue: ET.Element) -> tuple[tuple[int, int], ...]:
     return tuple(Values)
 
 
-# this definition exists because focused behavior needs one stable owner
-def ParseSketchMut(
-    Objects: tuple[_NativeObject, ...],
-    Parameters: list[Parameter],
-    ConsumedExpressions: set[tuple[str, str]],
-) -> tuple[tuple[SupportPlane, ...], tuple[Sketch, ...]]:
-    Planes: list[SupportPlane] = []
-    PlaneIds: dict[str, str] = {}
-    SourcePlaneTransforms: dict[str, Transform] = {}
-    PlaneTransforms: dict[str, Transform] = {}
-    SupportTargets = {
-        Target
-        for ObjValue in Objects
-        if ObjValue.type_id == SketchTypeId and (Target := SupportTarget(ObjValue))
-    }
+# this definition collects support plane objects transforms and principal frames
+def OriginData(
+    Objects: tuple[_NativeObject, ...], SupportTargets: set[str]
+) -> tuple[dict[str, NativeObject], dict[str, Transform], dict[str, tuple[int, Transform]]]:
     PlaneObjects = {
         ObjValue.name: ObjValue
         for ObjValue in Objects
         if IsSupportPlane(ObjValue, SupportTargets)
     }
+    SourcePlaneTransforms: dict[str, Transform] = {}
     OriginFrames: dict[str, tuple[int, Transform]] = {}
     for NameValue, ObjValue in PlaneObjects.items():
         PlaneTransform = TransformA(PlacementElem(ObjValue, "Placement"))
@@ -1511,6 +1501,15 @@ def ParseSketchMut(
         Frame = OriginPlane(ObjValue, PlaneTransform)
         if Frame is not None:
             OriginFrames[NameValue] = Frame
+    return (PlaneObjects, SourcePlaneTransforms, OriginFrames)
+
+
+# this definition finds principal frames that constrained geometry cannot safely adopt
+def BlockedFrames(
+    Objects: tuple[_NativeObject, ...],
+    OriginFrames: Mapping[str, tuple[int, Transform]],
+    SourceTransforms: Mapping[str, Transform],
+) -> set[str]:
     BlockedOriginFrames: set[str] = set()
     for ObjValue in Objects:
         if ObjValue.type_id != SketchTypeId:
@@ -1537,14 +1536,25 @@ def ParseSketchMut(
             )
         ):
             BlockedOriginFrames.add(SupportName)
-    for ObjValue in Objects:
-        if not IsSupportPlane(ObjValue, SupportTargets):
-            continue
+    return BlockedOriginFrames
+
+
+# this definition builds support planes and their selected transform maps
+def BuildPlanes(
+    PlaneObjects: Mapping[str, NativeObject],
+    SourceTransforms: Mapping[str, Transform],
+    OriginFrames: Mapping[str, tuple[int, Transform]],
+    Blocked: set[str],
+) -> tuple[list[SupportPlane], dict[str, str], dict[str, Transform]]:
+    Planes: list[SupportPlane] = []
+    PlaneIds: dict[str, str] = {}
+    PlaneTransforms: dict[str, Transform] = {}
+    for NameValue, ObjValue in PlaneObjects.items():
         PlaneId = f"freecad:plane:{ObjValue.name}"
         PlaneIds[ObjValue.name] = PlaneId
-        SourceTransform = SourcePlaneTransforms[ObjValue.name]
+        SourceTransform = SourceTransforms[ObjValue.name]
         Frame = OriginFrames.get(ObjValue.name)
-        Principal = Frame is not None and ObjValue.name not in BlockedOriginFrames
+        Principal = Frame is not None and ObjValue.name not in Blocked
         PlaneTransform = Frame[1] if Principal else SourceTransform
         PlaneTransforms[ObjValue.name] = PlaneTransform
         Attributes: dict[str, AnyValue] = {"freecad": NativeObjectA(ObjValue)}
@@ -1560,181 +1570,276 @@ def ParseSketchMut(
                 attributes=Attributes,
             )
         )
-    Sketches: list[Sketch] = []
-    for ObjValue in Objects:
-        if ObjValue.type_id != SketchTypeId:
-            continue
-        SketchId = f"freecad:sketch:{ObjValue.name}"
-        SupportName = SupportTarget(ObjValue)
-        SupportId = PlaneIds.get(SupportName)
-        if SupportId is None:
-            SupportId = f"freecad:plane:{ObjValue.name}:support"
-            PlaneIds[f"{ObjValue.name}:support"] = SupportId
-            Planes.append(
-                SupportPlane(
-                    SupportId,
-                    SupportName or f"{ObjValue.name} support",
-                    TransformA(PlacementElem(ObjValue, "Placement")),
-                    attributes={
-                        "freecad_support": SupportName,
-                        "freecad_attachment_offset": (
-                            ElemData(ObjValue.properties["AttachmentOffset"])
-                            if "AttachmentOffset" in ObjValue.properties
-                            else {}
-                        ),
-                    },
-                )
-            )
-        GeomList = FindChild(ObjValue, "Geometry", "GeometryList")
-        GeomNodes = [] if GeomList is None else GeomList.findall("./Geometry")
-        RuleList = FindChild(ObjValue, "Constraints", "ConstraintList")
-        RuleNodes = [] if RuleList is None else RuleList.findall("./Constrain")
-        SourceTransform = SourcePlaneTransforms.get(SupportName)
-        TargetTransform = PlaneTransforms.get(SupportName)
-        Reframe = (
-            PlaneReframe(SourceTransform, TargetTransform)
-            if SourceTransform is not None
-            and TargetTransform is not None
-            and (not IsTransformNear(SourceTransform, TargetTransform))
-            else None
+    return (Planes, PlaneIds, PlaneTransforms)
+
+
+# this definition creates a synthetic support plane when a sketch target is absent
+def EnsureSupport(
+    ObjValue: NativeObject,
+    PlaneIds: dict[str, str],
+    Planes: list[SupportPlane],
+) -> tuple[str, str]:
+    SupportName = SupportTarget(ObjValue)
+    SupportId = PlaneIds.get(SupportName)
+    if SupportId is not None:
+        return (SupportName, SupportId)
+    SupportId = f"freecad:plane:{ObjValue.name}:support"
+    PlaneIds[f"{ObjValue.name}:support"] = SupportId
+    OffsetData = (
+        ElemData(ObjValue.properties["AttachmentOffset"])
+        if "AttachmentOffset" in ObjValue.properties
+        else {}
+    )
+    Planes.append(
+        SupportPlane(
+            SupportId,
+            SupportName or f"{ObjValue.name} support",
+            TransformA(PlacementElem(ObjValue, "Placement")),
+            attributes={
+                "freecad_support": SupportName,
+                "freecad_attachment_offset": OffsetData,
+            },
         )
-        FixedIndices = {
-            RuleElemSlots(NodeValue)[0][0]
-            for NodeValue in RuleNodes
-            if Integer(NodeValue.get("Type"), -1) == 17
-        }
-        Entities: list[SketchEntity] = []
-        for Index, NodeValue in enumerate(GeomNodes):
-            EntityId = f"{SketchId}:entity:{Index}"
-            KindValue, GeomValue = GeomAction(NodeValue, EntityId)
-            if Reframe is not None:
-                GeomValue = ReframeGeom(GeomValue, Reframe)
-            ConstructionNode = NodeValue.find("./Construction")
-            Construction = (
-                ConstructionNode is not None
-                and ConstructionNode.get("value", "0").casefold() in XmlTrueValues
-            )
-            if not Construction:
-                Extension = NodeValue.find(
-                    "./GeoExtensions/GeoExtension[@type='Sketcher::SketchGeometryExtension']"
-                )
-                Flags = (
-                    "" if Extension is None else Extension.get("geometryModeFlags", "")
-                )
-                Construction = bool(Flags and Flags[-2:] == "10")
-            Entities.append(
-                SketchEntity(
-                    EntityId,
-                    KindValue,
-                    GeomValue,
-                    construction=Construction,
-                    fixed=Index in FixedIndices,
-                    attributes={
-                        "freecad_geometry_id": NodeValue.get("id", ""),
-                        "freecad": ElemData(NodeValue),
-                    },
-                )
-            )
-        Expressions = ReadExpressions(ObjValue)
-        Constraints: list[SketchRule] = []
-        SketchParamIds: list[str] = []
-        for Index, NodeValue in enumerate(RuleNodes):
-            CodeValue = Integer(NodeValue.get("Type"), -1)
-            NameValue = NodeValue.get("Name", "") or str(Index)
-            RuleId = f"{SketchId}:constraint:{Index}"
-            References: list[RuleRef] = []
-            RefSlots: list[dict[str, AnyValue]] = []
-            for SlotIndex, (EntityIndex, PointIndex) in enumerate(
-                RuleElemSlots(NodeValue)
-            ):
-                Point = RulePointByIndex.get(PointIndex, "")
-                EntityId = (
-                    Entities[EntityIndex].id if 0 <= EntityIndex < len(Entities) else ""
-                )
-                RefSlots.append(
-                    {
-                        "slot": (
-                            ("first", "second", "third")[SlotIndex]
-                            if SlotIndex < 3
-                            else f"element_{SlotIndex}"
-                        ),
-                        "entity_id": EntityId,
-                        "point": Point,
-                        "freecad_geometry_index": EntityIndex,
-                        "freecad_point_index": PointIndex,
-                    }
-                )
-                if 0 <= EntityIndex < len(Entities):
-                    References.append(RuleRef(EntityId, Point))
-            ParamId: str | None = None
-            if CodeValue in DimensionalRuleCodes:
-                ParamId = f"freecad:parameter:{ObjValue.name}:constraint:{Index}"
-                ValueKind, UnitValue = RuleValueKindByCode[CodeValue]
-                ExpressionSource = RuleExpression(Expressions, Index, NameValue)
-                if ExpressionSource:
-                    for PathValue, Source in Expressions.items():
-                        if Source == ExpressionSource and PathValue in {
-                            f"Constraints[{Index}]",
-                            f"Constraints.{NameValue}",
-                        }:
-                            ConsumedExpressions.add((ObjValue.name, PathValue))
-                Parameters.append(
-                    Param(
-                        ParamId,
-                        f"{String(ObjValue, 'Label', ObjValue.name)}.{NameValue}",
-                        ParamValue(
-                            Number(NodeValue.get("Value")), ValueKind, UnitValue
-                        ),
-                        expression=(
-                            Expression(ExpressionSource, language="freecad")
-                            if ExpressionSource
-                            else None
-                        ),
-                        owner_id=SketchId,
-                        attributes={
-                            "freecad_path": f"Constraints[{Index}]",
-                            "freecad_constraint": dict(NodeValue.attrib),
-                        },
-                    )
-                )
-                SketchParamIds.append(ParamId)
-            Constraints.append(
-                SketchRule(
-                    RuleId,
-                    RuleKindByCode.get(CodeValue, RuleKind.NATIVE),
-                    tuple(References),
-                    parameter_id=ParamId,
-                    driving=NodeValue.get("IsDriving", "1") != "0",
-                    suppressed=NodeValue.get("IsActive", "1") == "0",
-                    attributes={
-                        "freecad_type_code": CodeValue,
-                        "freecad": dict(NodeValue.attrib),
-                        "freecad_reference_slots": RefSlots,
-                    },
-                )
-            )
-        EntityValues = tuple(Entities)
-        Sketches.append(
-            Sketch(
-                SketchId,
-                String(ObjValue, "Label", ObjValue.name),
-                SupportId,
-                EntityValues,
-                constraints=tuple(Constraints),
-                parameter_ids=tuple(SketchParamIds),
-                closed_profile_entity_ids=ClosedProfile(EntityValues),
-                suppressed=not IsBoolValue(ObjValue, "Visibility", True),
+    )
+    return (SupportName, SupportId)
+
+
+# this definition identifies construction geometry from native flags
+def IsConstruction(NodeValue: ET.Element) -> bool:
+    ConstructionNode = NodeValue.find("./Construction")
+    if ConstructionNode is not None:
+        Value = ConstructionNode.get("value", "0").casefold()
+        if Value in XmlTrueValues:
+            return True
+    Extension = NodeValue.find(
+        "./GeoExtensions/GeoExtension[@type='Sketcher::SketchGeometryExtension']"
+    )
+    Flags = "" if Extension is None else Extension.get("geometryModeFlags", "")
+    return bool(Flags and Flags[-2:] == "10")
+
+
+# this definition decodes all geometry entities owned by one native sketch
+def SketchEntities(
+    SketchId: str,
+    GeomNodes: Sequence[ET.Element],
+    RuleNodes: Sequence[ET.Element],
+    Reframe: tuple[float, float, float, float, float, float] | None,
+) -> list[SketchEntity]:
+    FixedIndices = {
+        RuleElemSlots(NodeValue)[0][0]
+        for NodeValue in RuleNodes
+        if Integer(NodeValue.get("Type"), -1) == 17
+    }
+    Entities: list[SketchEntity] = []
+    for Index, NodeValue in enumerate(GeomNodes):
+        EntityId = f"{SketchId}:entity:{Index}"
+        KindValue, GeomValue = GeomAction(NodeValue, EntityId)
+        if Reframe is not None:
+            GeomValue = ReframeGeom(GeomValue, Reframe)
+        Entities.append(
+            SketchEntity(
+                EntityId,
+                KindValue,
+                GeomValue,
+                construction=IsConstruction(NodeValue),
+                fixed=Index in FixedIndices,
                 attributes={
-                    "freecad": NativeObjectA(ObjValue),
-                    "fully_constrained": IsBoolValue(ObjValue, "FullyConstrained"),
-                    "external_geometry": (
-                        ElemData(ObjValue.properties["ExternalGeometry"])
-                        if "ExternalGeometry" in ObjValue.properties
-                        else {}
-                    ),
+                    "freecad_geometry_id": NodeValue.get("id", ""),
+                    "freecad": ElemData(NodeValue),
                 },
             )
         )
+    return Entities
+
+
+# this definition resolves rule references and preserves native slot metadata
+def RuleRefs(
+    NodeValue: ET.Element, Entities: Sequence[SketchEntity]
+) -> tuple[list[RuleRef], list[dict[str, AnyValue]]]:
+    References: list[RuleRef] = []
+    RefSlots: list[dict[str, AnyValue]] = []
+    for SlotIndex, (EntityIndex, PointIndex) in enumerate(RuleElemSlots(NodeValue)):
+        Point = RulePointByIndex.get(PointIndex, "")
+        EntityId = Entities[EntityIndex].id if 0 <= EntityIndex < len(Entities) else ""
+        SlotName = (
+            ("first", "second", "third")[SlotIndex]
+            if SlotIndex < 3
+            else f"element_{SlotIndex}"
+        )
+        RefSlots.append(
+            {
+                "slot": SlotName,
+                "entity_id": EntityId,
+                "point": Point,
+                "freecad_geometry_index": EntityIndex,
+                "freecad_point_index": PointIndex,
+            }
+        )
+        if EntityId:
+            References.append(RuleRef(EntityId, Point))
+    return (References, RefSlots)
+
+
+# this definition emits one dimensional rule parameter and records expression use
+def RuleParamMut(
+    ObjValue: NativeObject,
+    SketchId: str,
+    Index: int,
+    NameValue: str,
+    NodeValue: ET.Element,
+    Expressions: Mapping[str, str],
+    Parameters: list[Parameter],
+    Consumed: set[tuple[str, str]],
+) -> str | None:
+    CodeValue = Integer(NodeValue.get("Type"), -1)
+    if CodeValue not in DimensionalRuleCodes:
+        return None
+    ParamId = f"freecad:parameter:{ObjValue.name}:constraint:{Index}"
+    ValueKind, UnitValue = RuleValueKindByCode[CodeValue]
+    ExpressionSource = RuleExpression(dict(Expressions), Index, NameValue)
+    if ExpressionSource:
+        Paths = {f"Constraints[{Index}]", f"Constraints.{NameValue}"}
+        Consumed.update(
+            (ObjValue.name, PathValue)
+            for PathValue, Source in Expressions.items()
+            if Source == ExpressionSource and PathValue in Paths
+        )
+    Parameters.append(
+        Param(
+            ParamId,
+            f"{String(ObjValue, 'Label', ObjValue.name)}.{NameValue}",
+            ParamValue(Number(NodeValue.get("Value")), ValueKind, UnitValue),
+            expression=Expression(ExpressionSource, language="freecad") if ExpressionSource else None,
+            owner_id=SketchId,
+            attributes={
+                "freecad_path": f"Constraints[{Index}]",
+                "freecad_constraint": dict(NodeValue.attrib),
+            },
+        )
+    )
+    return ParamId
+
+
+# this definition decodes all dimensional and geometric rules for one sketch
+def SketchRulesMut(
+    ObjValue: NativeObject,
+    SketchId: str,
+    RuleNodes: Sequence[ET.Element],
+    Entities: Sequence[SketchEntity],
+    Parameters: list[Parameter],
+    Consumed: set[tuple[str, str]],
+) -> tuple[list[SketchRule], list[str]]:
+    Expressions = ReadExpressions(ObjValue)
+    Constraints: list[SketchRule] = []
+    ParamIds: list[str] = []
+    for Index, NodeValue in enumerate(RuleNodes):
+        CodeValue = Integer(NodeValue.get("Type"), -1)
+        NameValue = NodeValue.get("Name", "") or str(Index)
+        References, RefSlots = RuleRefs(NodeValue, Entities)
+        ParamId = RuleParamMut(
+            ObjValue, SketchId, Index, NameValue, NodeValue, Expressions, Parameters, Consumed
+        )
+        if ParamId is not None:
+            ParamIds.append(ParamId)
+        Constraints.append(
+            SketchRule(
+                f"{SketchId}:constraint:{Index}",
+                RuleKindByCode.get(CodeValue, RuleKind.NATIVE),
+                tuple(References),
+                parameter_id=ParamId,
+                driving=NodeValue.get("IsDriving", "1") != "0",
+                suppressed=NodeValue.get("IsActive", "1") == "0",
+                attributes={
+                    "freecad_type_code": CodeValue,
+                    "freecad": dict(NodeValue.attrib),
+                    "freecad_reference_slots": RefSlots,
+                },
+            )
+        )
+    return (Constraints, ParamIds)
+
+
+# this definition decodes one native sketch after support planes are established
+def NativeSketchMut(
+    ObjValue: NativeObject,
+    PlaneIds: dict[str, str],
+    Planes: list[SupportPlane],
+    SourceTransforms: Mapping[str, Transform],
+    PlaneTransforms: Mapping[str, Transform],
+    Parameters: list[Parameter],
+    Consumed: set[tuple[str, str]],
+) -> Sketch:
+    SketchId = f"freecad:sketch:{ObjValue.name}"
+    SupportName, SupportId = EnsureSupport(ObjValue, PlaneIds, Planes)
+    GeomList = FindChild(ObjValue, "Geometry", "GeometryList")
+    GeomNodes = [] if GeomList is None else GeomList.findall("./Geometry")
+    RuleList = FindChild(ObjValue, "Constraints", "ConstraintList")
+    RuleNodes = [] if RuleList is None else RuleList.findall("./Constrain")
+    SourceTransform = SourceTransforms.get(SupportName)
+    TargetTransform = PlaneTransforms.get(SupportName)
+    Reframe = (
+        PlaneReframe(SourceTransform, TargetTransform)
+        if SourceTransform is not None
+        and TargetTransform is not None
+        and not IsTransformNear(SourceTransform, TargetTransform)
+        else None
+    )
+    Entities = SketchEntities(SketchId, GeomNodes, RuleNodes, Reframe)
+    Constraints, ParamIds = SketchRulesMut(
+        ObjValue, SketchId, RuleNodes, Entities, Parameters, Consumed
+    )
+    EntityValues = tuple(Entities)
+    ExternalData = (
+        ElemData(ObjValue.properties["ExternalGeometry"])
+        if "ExternalGeometry" in ObjValue.properties
+        else {}
+    )
+    return Sketch(
+        SketchId,
+        String(ObjValue, "Label", ObjValue.name),
+        SupportId,
+        EntityValues,
+        constraints=tuple(Constraints),
+        parameter_ids=tuple(ParamIds),
+        closed_profile_entity_ids=ClosedProfile(EntityValues),
+        suppressed=not IsBoolValue(ObjValue, "Visibility", True),
+        attributes={
+            "freecad": NativeObjectA(ObjValue),
+            "fully_constrained": IsBoolValue(ObjValue, "FullyConstrained"),
+            "external_geometry": ExternalData,
+        },
+    )
+
+
+# this definition coordinates support plane and sketch decoding
+def ParseSketchMut(
+    Objects: tuple[_NativeObject, ...],
+    Parameters: list[Parameter],
+    ConsumedExpressions: set[tuple[str, str]],
+) -> tuple[tuple[SupportPlane, ...], tuple[Sketch, ...]]:
+    SupportTargets = {
+        Target
+        for ObjValue in Objects
+        if ObjValue.type_id == SketchTypeId and (Target := SupportTarget(ObjValue))
+    }
+    PlaneObjects, SourceTransforms, OriginFrames = OriginData(Objects, SupportTargets)
+    Blocked = BlockedFrames(Objects, OriginFrames, SourceTransforms)
+    Planes, PlaneIds, PlaneTransforms = BuildPlanes(
+        PlaneObjects, SourceTransforms, OriginFrames, Blocked
+    )
+    Sketches = [
+        NativeSketchMut(
+            ObjValue,
+            PlaneIds,
+            Planes,
+            SourceTransforms,
+            PlaneTransforms,
+            Parameters,
+            ConsumedExpressions,
+        )
+        for ObjValue in Objects
+        if ObjValue.type_id == SketchTypeId
+    ]
     return (tuple(Planes), tuple(Sketches))
 
 
