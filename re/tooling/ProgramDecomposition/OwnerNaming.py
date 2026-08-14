@@ -60,14 +60,14 @@ def GetOwnerBase(OwnerText: str) -> str:
 
 # generated path components need one deterministic pascal conversion across every owner
 def MakePascal(NameText: str) -> str:
-    ExpandedText = "".join(
-        KDigitWords.get(CharText, CharText) for CharText in NameText
-    )
+    ExpandedText = "".join(KDigitWords.get(CharText, CharText) for CharText in NameText)
     WordParts = re.findall(r"[A-Za-z]+", ExpandedText)
     PascalParts = (
-        WordText.capitalize()
-        if WordText.isupper() or WordText.islower()
-        else WordText[0].upper() + WordText[1:]
+        (
+            WordText.capitalize()
+            if WordText.isupper() or WordText.islower()
+            else WordText[0].upper() + WordText[1:]
+        )
         for WordText in WordParts
     )
     PascalText = "".join(PascalParts)
@@ -94,8 +94,7 @@ def GetGroupPath(OwnerText: str) -> str:
             "operator<<": "WriteOperator",
         }.get(MethodText, MethodText)
         return "/".join(
-            MakePascal(NameText)
-            for NameText in (LibraryText, ClassText, MethodText)
+            MakePascal(NameText) for NameText in (LibraryText, ClassText, MethodText)
         )
     if "!" in OwnerBase:
         LibraryText, MethodText = OwnerBase.split("!", 1)
@@ -103,9 +102,7 @@ def GetGroupPath(OwnerText: str) -> str:
             "operator>>": "ReadOperator",
             "operator<<": "WriteOperator",
         }.get(MethodText, MethodText)
-        return "/".join(
-            (MakePascal(LibraryText), "Functions", MakePascal(MethodText))
-        )
+        return "/".join((MakePascal(LibraryText), "Functions", MakePascal(MethodText)))
     return "/".join(("Synthetic", MakePascal(OwnerBase)))
 
 

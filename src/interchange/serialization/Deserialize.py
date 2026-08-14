@@ -12,13 +12,12 @@ import base64 as BaseCodec
 from enum import Enum as EnumBase
 
 from interchange.serialization.DecodeRecord import DecodeRecord
+from interchange.serialization.TypeRegistry import KTypeRegistry
 from typing import Any as AnyValue
 
 
 # recursive decoding validates registered types before constructing immutable model records
 def FromData(SourceValue: AnyValue) -> AnyValue:
-    from interchange.serialization import KTypeRegistry
-
     if isinstance(SourceValue, list):
         return [FromData(ItemValue) for ItemValue in SourceValue]
     if not isinstance(SourceValue, dict):

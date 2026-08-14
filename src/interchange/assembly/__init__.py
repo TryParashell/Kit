@@ -7,7 +7,12 @@
 # to you under it immediately and permanently.
 
 from interchange.assembly.AssemblyData import AssemblyData
-from interchange.assembly.AssemblyEnums import ComponentKind, MateAlignment, MateEntityKind, MateKind
+from interchange.assembly.AssemblyEnums import (
+    ComponentKind,
+    MateAlignment,
+    MateEntityKind,
+    MateKind,
+)
 from interchange.assembly.ComponentDefinition import ComponentDef
 from interchange.assembly.ComponentDocument import ComponentDoc
 from interchange.assembly.ComponentInstance import ComponentInst
@@ -16,14 +21,11 @@ from interchange.assembly.MateEntity import MateEntity
 from interchange.assembly.MateGroup import MateGroup
 from interchange.compatibility.PythonCompat import BindCompatMut
 from interchange.compatibility.PythonCompatAssemblyMethods import BindAssemblyMut
+from interchange.compatibility.PublicMetadata import BindModules
 from interchange.assembly.TransformMatrix import TransformMatrix
 
-ComponentKind.__module__ = __name__
-MateAlignment.__module__ = __name__
-MateEntityKind.__module__ = __name__
-MateKind.__module__ = __name__
+BindModules((ComponentKind, MateAlignment, MateEntityKind, MateKind), __name__)
 
-# historical defining module identity preserves direct imports and existing pickle payloads
 BindCompatMut(
     (
         TransformMatrix,

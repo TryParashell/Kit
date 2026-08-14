@@ -17,6 +17,7 @@ from typing import get_origin as GetOrigin
 from typing import get_type_hints as GetTypeHints
 
 from interchange.serialization.Wire import ResolveField
+from interchange.serialization.MigrationRegistry import KMigrationRegistry
 
 
 # record reconstruction applies migrations and mapping immutability before model construction
@@ -25,8 +26,6 @@ def DecodeRecord(
     TargetType: type,
     DecoderFunc: AnyValue,
 ) -> AnyValue:
-    from interchange.serialization import KMigrationRegistry
-
     WireArguments = {
         KeyValue: DecoderFunc(ItemValue)
         for KeyValue, ItemValue in SourceValue.items()

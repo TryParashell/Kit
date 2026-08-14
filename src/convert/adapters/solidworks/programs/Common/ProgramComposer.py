@@ -27,9 +27,7 @@ def ComposeOps(MethodPrograms: tuple[Any, ...], StreamName: str) -> tuple[Any, .
                 raise SldprtFormatError(
                     f"program owner key {OwnerKey!r} is missing for {StreamName!r}"
                 ) from ErrorData
-            OwnedOps.append(
-                (StartPos, FieldWidth, OwnerText, KindName, DefaultValue)
-            )
+            OwnedOps.append((StartPos, FieldWidth, OwnerText, KindName, DefaultValue))
     OwnedOps.sort(key=ItemGetter(0))
     SourceCursor = 0
     for StartPos, FieldWidth, OwnerText, KindName, DefaultValue in OwnedOps:
@@ -70,8 +68,7 @@ def BuildStreams(
     MethodPrograms: tuple[Any, ...], StreamNames: tuple[str, ...]
 ) -> tuple[tuple[str, ...], dict[str, tuple[Any, ...]]]:
     OwnedStreams = {
-        StreamName: ComposeOps(MethodPrograms, StreamName)
-        for StreamName in StreamNames
+        StreamName: ComposeOps(MethodPrograms, StreamName) for StreamName in StreamNames
     }
     OwnerNames = tuple(
         sorted(

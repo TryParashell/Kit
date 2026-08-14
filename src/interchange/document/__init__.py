@@ -14,142 +14,166 @@ from interchange.document.models.DocumentModel import CadDocument
 from interchange.document.models.DocumentPayload import GetPayloadIds
 from interchange.document.behavior.DocumentMethods import BindDocumentMut
 from interchange.compatibility.PythonCompat import BindCompatMut
+from interchange.compatibility.PublicMetadata import BindFunctionMut, BindNameMut
 from inspect import Signature as FuncSig
 from inspect import Parameter as FuncParam
 
-# historical defining module identity preserves direct imports and existing pickle payloads
 BindCompatMut((CadDocument,), {__name__: globals()})
 BindDocumentMut(CadDocument)
 
-DocumentError.__name__ = "CadDocumentValidationError"
-DocumentError.__qualname__ = "CadDocumentValidationError"
-DocumentError.__module__ = __name__
+BindNameMut(
+    DocumentError,
+    __name__,
+    "CadDocumentValidationError",
+    globals(),
+)
 
-globals().update(
+BindFunctionMut(
+    FilterDocument,
+    __name__,
+    "filter_document",
     {
-        "CadDocumentValidationError": DocumentError,
-        "filter_document": FilterDocument,
-        "infer_capabilities": InferCaps,
-        "retained_capabilities": GetRetainedCaps,
-        "semantic_metadata": GetSemanticMeta,
-        "source_payload_indexes": GetPayloadIds,
-        "with_wrapper_metadata": AddWrapperMeta,
-    }
-)
-
-FilterDocument.__module__ = __name__
-InferCaps.__module__ = __name__
-GetRetainedCaps.__module__ = __name__
-GetSemanticMeta.__module__ = __name__
-GetPayloadIds.__module__ = __name__
-AddWrapperMeta.__module__ = __name__
-
-FilterDocument.__name__ = "filter_document"
-FilterDocument.__qualname__ = "filter_document"
-InferCaps.__name__ = "infer_capabilities"
-InferCaps.__qualname__ = "infer_capabilities"
-GetRetainedCaps.__name__ = "retained_capabilities"
-GetRetainedCaps.__qualname__ = "retained_capabilities"
-GetSemanticMeta.__name__ = "semantic_metadata"
-GetSemanticMeta.__qualname__ = "semantic_metadata"
-GetPayloadIds.__name__ = "source_payload_indexes"
-GetPayloadIds.__qualname__ = "source_payload_indexes"
-AddWrapperMeta.__name__ = "with_wrapper_metadata"
-AddWrapperMeta.__qualname__ = "with_wrapper_metadata"
-
-FilterDocument.__annotations__ = {
-    "document": "CadDocument",
-    "include_brep": "bool",
-    "include_tessellation": "bool",
-    "keep_payload_records": "bool",
-    "return": "CadDocument",
-}
-InferCaps.__annotations__ = {
-    "document": "CadDocument",
-    "roundtrip_metadata": "bool",
-    "return": "frozenset[Capability]",
-}
-GetRetainedCaps.__annotations__ = {
-    "document": "CadDocument",
-    "capabilities": "frozenset[Capability]",
-    "include_brep": "bool",
-    "include_tessellation": "bool",
-    "return": "frozenset[Capability]",
-}
-GetSemanticMeta.__annotations__ = {
-    "metadata": "Mapping[str, Any]",
-    "return": "Mapping[str, Any]",
-}
-GetPayloadIds.__annotations__ = {
-    "document": "CadDocument",
-    "return": "frozenset[int]",
-}
-AddWrapperMeta.__annotations__ = {
-    "metadata": "Mapping[str, Any]",
-    "keys": "Iterable[str]",
-    "return": "Mapping[str, Any]",
-}
-
-FilterDocument.__signature__ = FuncSig(
-    (
-        FuncParam(
-            "document", FuncParam.POSITIONAL_OR_KEYWORD, annotation="CadDocument"
+        "document": "CadDocument",
+        "include_brep": "bool",
+        "include_tessellation": "bool",
+        "keep_payload_records": "bool",
+        "return": "CadDocument",
+    },
+    FuncSig(
+        (
+            FuncParam(
+                "document", FuncParam.POSITIONAL_OR_KEYWORD, annotation="CadDocument"
+            ),
+            FuncParam("include_brep", FuncParam.KEYWORD_ONLY, annotation="bool"),
+            FuncParam(
+                "include_tessellation", FuncParam.KEYWORD_ONLY, annotation="bool"
+            ),
+            FuncParam(
+                "keep_payload_records", FuncParam.KEYWORD_ONLY, annotation="bool"
+            ),
         ),
-        FuncParam("include_brep", FuncParam.KEYWORD_ONLY, annotation="bool"),
-        FuncParam("include_tessellation", FuncParam.KEYWORD_ONLY, annotation="bool"),
-        FuncParam("keep_payload_records", FuncParam.KEYWORD_ONLY, annotation="bool"),
+        return_annotation="CadDocument",
     ),
-    return_annotation="CadDocument",
+    globals(),
 )
-InferCaps.__signature__ = FuncSig(
-    (
-        FuncParam(
-            "document", FuncParam.POSITIONAL_OR_KEYWORD, annotation="CadDocument"
+BindFunctionMut(
+    InferCaps,
+    __name__,
+    "infer_capabilities",
+    {
+        "document": "CadDocument",
+        "roundtrip_metadata": "bool",
+        "return": "frozenset[Capability]",
+    },
+    FuncSig(
+        (
+            FuncParam(
+                "document", FuncParam.POSITIONAL_OR_KEYWORD, annotation="CadDocument"
+            ),
+            FuncParam(
+                "roundtrip_metadata",
+                FuncParam.KEYWORD_ONLY,
+                default=False,
+                annotation="bool",
+            ),
         ),
-        FuncParam(
-            "roundtrip_metadata",
-            FuncParam.KEYWORD_ONLY,
-            default=False,
-            annotation="bool",
-        ),
+        return_annotation="frozenset[Capability]",
     ),
-    return_annotation="frozenset[Capability]",
+    globals(),
 )
-GetRetainedCaps.__signature__ = FuncSig(
-    (
-        FuncParam(
-            "document", FuncParam.POSITIONAL_OR_KEYWORD, annotation="CadDocument"
+BindFunctionMut(
+    GetRetainedCaps,
+    __name__,
+    "retained_capabilities",
+    {
+        "document": "CadDocument",
+        "capabilities": "frozenset[Capability]",
+        "include_brep": "bool",
+        "include_tessellation": "bool",
+        "return": "frozenset[Capability]",
+    },
+    FuncSig(
+        (
+            FuncParam(
+                "document", FuncParam.POSITIONAL_OR_KEYWORD, annotation="CadDocument"
+            ),
+            FuncParam(
+                "capabilities",
+                FuncParam.POSITIONAL_OR_KEYWORD,
+                annotation="frozenset[Capability]",
+            ),
+            FuncParam("include_brep", FuncParam.KEYWORD_ONLY, annotation="bool"),
+            FuncParam(
+                "include_tessellation", FuncParam.KEYWORD_ONLY, annotation="bool"
+            ),
         ),
-        FuncParam(
-            "capabilities",
-            FuncParam.POSITIONAL_OR_KEYWORD,
-            annotation="frozenset[Capability]",
-        ),
-        FuncParam("include_brep", FuncParam.KEYWORD_ONLY, annotation="bool"),
-        FuncParam("include_tessellation", FuncParam.KEYWORD_ONLY, annotation="bool"),
+        return_annotation="frozenset[Capability]",
     ),
-    return_annotation="frozenset[Capability]",
+    globals(),
 )
-GetSemanticMeta.__signature__ = FuncSig(
-    (
-        FuncParam(
-            "metadata", FuncParam.POSITIONAL_OR_KEYWORD, annotation="Mapping[str, Any]"
+BindFunctionMut(
+    GetSemanticMeta,
+    __name__,
+    "semantic_metadata",
+    {
+        "metadata": "Mapping[str, Any]",
+        "return": "Mapping[str, Any]",
+    },
+    FuncSig(
+        (
+            FuncParam(
+                "metadata",
+                FuncParam.POSITIONAL_OR_KEYWORD,
+                annotation="Mapping[str, Any]",
+            ),
         ),
+        return_annotation="Mapping[str, Any]",
     ),
-    return_annotation="Mapping[str, Any]",
+    globals(),
 )
-GetPayloadIds.__signature__ = FuncSig(
-    (FuncParam("document", FuncParam.POSITIONAL_OR_KEYWORD, annotation="CadDocument"),),
-    return_annotation="frozenset[int]",
-)
-AddWrapperMeta.__signature__ = FuncSig(
-    (
-        FuncParam(
-            "metadata", FuncParam.POSITIONAL_OR_KEYWORD, annotation="Mapping[str, Any]"
+BindFunctionMut(
+    GetPayloadIds,
+    __name__,
+    "source_payload_indexes",
+    {
+        "document": "CadDocument",
+        "return": "frozenset[int]",
+    },
+    FuncSig(
+        (
+            FuncParam(
+                "document", FuncParam.POSITIONAL_OR_KEYWORD, annotation="CadDocument"
+            ),
         ),
-        FuncParam("keys", FuncParam.POSITIONAL_OR_KEYWORD, annotation="Iterable[str]"),
+        return_annotation="frozenset[int]",
     ),
-    return_annotation="Mapping[str, Any]",
+    globals(),
+)
+BindFunctionMut(
+    AddWrapperMeta,
+    __name__,
+    "with_wrapper_metadata",
+    {
+        "metadata": "Mapping[str, Any]",
+        "keys": "Iterable[str]",
+        "return": "Mapping[str, Any]",
+    },
+    FuncSig(
+        (
+            FuncParam(
+                "metadata",
+                FuncParam.POSITIONAL_OR_KEYWORD,
+                annotation="Mapping[str, Any]",
+            ),
+            FuncParam(
+                "keys",
+                FuncParam.POSITIONAL_OR_KEYWORD,
+                annotation="Iterable[str]",
+            ),
+        ),
+        return_annotation="Mapping[str, Any]",
+    ),
+    globals(),
 )
 
 

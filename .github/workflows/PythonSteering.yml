@@ -41,7 +41,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Synchronize the locked environment
-        run: uv sync --frozen --python 3.11
+        run: uv sync --frozen --all-groups --all-extras --python 3.11
 
       - name: Verify tracked Python sources
         run: |

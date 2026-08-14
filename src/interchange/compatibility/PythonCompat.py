@@ -52,7 +52,7 @@ def GetLegacyAnnot(FieldValue: AnyValue) -> AnyValue:
     }
     for ModelName, LegacyName in AliasNames.items():
         FieldType = FieldType.replace(ModelName, LegacyName)
-    FieldType = FieldType.replace("interchange.enum_document.", "")
+    FieldType = FieldType.replace("interchange.enums.EnumDocument.", "")
     if FieldValue.name == "EntityKind" and "GeometryKind" in FieldType:
         FieldType = "GeometryKind"
     return FieldType

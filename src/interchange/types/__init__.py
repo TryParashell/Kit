@@ -19,23 +19,35 @@ from interchange.records.RecordProvenance import Provenance, ProvenanceSpan
 from interchange.records.RecordSource import CadSource
 from interchange.records.RecordTopology import TopologyCounts
 from interchange.compatibility.PythonCompat import BindCompatMut
-from interchange.geometry.models.Vectors import BoundingBox, PlaneVector, SpaceVector, Transform
+from interchange.compatibility.PublicMetadata import (
+    BindFunctionMut,
+    BindModules,
+    BindNameMut,
+)
+from interchange.geometry.models.Vectors import (
+    BoundingBox,
+    PlaneVector,
+    SpaceVector,
+    Transform,
+)
 from inspect import Parameter as FuncParam
 from inspect import Signature as FuncSig
 
-BooleanOp.__name__ = "BooleanOperation"
-BooleanOp.__qualname__ = "BooleanOperation"
-BooleanOp.__module__ = __name__
-Capability.__module__ = __name__
-ConstraintKind.__module__ = __name__
-FeatureKind.__module__ = __name__
-GeometryKind.__module__ = __name__
-ParameterRole.__module__ = __name__
-Severity.__module__ = __name__
-UnitSystem.__module__ = __name__
-ValueKind.__module__ = __name__
+BindNameMut(BooleanOp, __name__, "BooleanOperation", globals())
+BindModules(
+    (
+        Capability,
+        ConstraintKind,
+        FeatureKind,
+        GeometryKind,
+        ParameterRole,
+        Severity,
+        UnitSystem,
+        ValueKind,
+    ),
+    __name__,
+)
 
-# historical defining module identity preserves direct imports and existing pickle payloads
 BindCompatMut(
     (
         PlaneVector,
@@ -57,7 +69,6 @@ BindCompatMut(
 
 globals().update(
     {
-        "BooleanOperation": BooleanOp,
         "JsonScalar": KJsonScalar,
         "JsonValue": KJsonValue,
         "ParameterOverride": ParamOverride,
@@ -68,23 +79,26 @@ globals().update(
     }
 )
 
-FreezeMapping.__module__ = __name__
-FreezeMapping.__name__ = "frozen_mapping"
-FreezeMapping.__qualname__ = "frozen_mapping"
-FreezeMapping.__annotations__ = {
-    "value": "Mapping[str, Any] | None",
-    "return": "Mapping[str, Any]",
-}
-FreezeMapping.__signature__ = FuncSig(
-    (
-        FuncParam(
-            "value",
-            FuncParam.POSITIONAL_OR_KEYWORD,
-            default=None,
-            annotation="Mapping[str, Any] | None",
+BindFunctionMut(
+    FreezeMapping,
+    __name__,
+    "frozen_mapping",
+    {
+        "value": "Mapping[str, Any] | None",
+        "return": "Mapping[str, Any]",
+    },
+    FuncSig(
+        (
+            FuncParam(
+                "value",
+                FuncParam.POSITIONAL_OR_KEYWORD,
+                default=None,
+                annotation="Mapping[str, Any] | None",
+            ),
         ),
+        return_annotation="Mapping[str, Any]",
     ),
-    return_annotation="Mapping[str, Any]",
+    globals(),
 )
 
 # legacy module exports stay explicit so integrations cannot depend on implementation details

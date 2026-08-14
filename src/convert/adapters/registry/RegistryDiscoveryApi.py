@@ -18,6 +18,9 @@ from convert.adapters.registry.RegistryState import CopyState
 # historical iterable annotations need local resolution after public methods move to the registry facade
 globals()["Iterable"] = TypeIterable
 
+# built in discovery remains rooted above infrastructure packages after registry became a facade package
+KDefaultPackage = "convert.adapters"
+
 
 # discovery api ownership isolates package introspection from ordinary registry operations
 class DiscoveryApi:
@@ -25,7 +28,7 @@ class DiscoveryApi:
     # package failures retain one stable public category while preserving detailed causes
     def Introspect(
         SelfValue,
-        PackageName: str = __package__,
+        PackageName: str = KDefaultPackage,
     ) -> tuple[str, ...]:
         try:
             AdapterValues = FindAdapters(PackageName)
