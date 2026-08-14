@@ -25,10 +25,10 @@ for CandInfo in (str(KRootInfo / "src"),):
         System.path.insert(0, CandInfo)
 from convert.adapters.solidworks.container.Archive import (
     BaseResolution,
+    ContainerMo,
+    KMoVersionPrefix,
+    KStreamHeaderSize,
     LayoutTable,
-    MoVersionPrefix,
-    StreamSize,
-    ContainVersion,
     ResolveBase,
     Verify,
 )
@@ -38,7 +38,7 @@ from convert.adapters.solidworks.container.Container import SldprtArchive
 KDefaultData = KRootInfo / "tests" / "fixtures" / "solidworks" / "donors"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDefaultLayouts = KRootInfo / "re" / "data" / "ClassLayouts.json"
+KDefaultLayouts = KRootInfo / "re" / "data" / "Layouts" / "ClassLayouts.json"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KDefaultValue = KRootInfo / "re" / "data" / "segments"
@@ -103,15 +103,15 @@ def DonorMoVersion(DonorInfo: PathInfo) -> Tuple[int | None, str]:
         if isinstance(Recorded, int) and (not isinstance(Recorded, bool)):
             return (int(Recorded), "mo_version field in the fixture meta.json")
     Names = DonorNames(DonorInfo)
-    Found = ContainVersion(Names)
+    Found = ContainerMo(Names)
     if Found is not None:
         return (
             Found,
-            f"{MoVersionPrefix}{Found} among the {len(Names)} container stream names in the fixture meta.json",
+            f"{KMoVersionPrefix}{Found} among the {len(Names)} container stream names in the fixture meta.json",
         )
     return (
         None,
-        f"neither an mo_version field nor a {MoVersionPrefix}* storage among the {len(Names)} container stream names in the fixture meta.json",
+        f"neither an mo_version field nor a {KMoVersionPrefix}* storage among the {len(Names)} container stream names in the fixture meta.json",
     )
 
 
@@ -124,7 +124,7 @@ def TracedVersions(SegmentsDir: PathInfo) -> DictInfo[str, int]:
         if not PartInfoInfo.is_file():
             continue
         ArchiveInfo = SldprtArchive.from_bytes(PartInfoInfo.read_bytes())
-        Found = ContainVersion(ArchiveInfo.streams)
+        Found = ContainerMo(ArchiveInfo.streams)
         if Found is not None:
             Table[str(PayloadInfo["label"])] = Found
     return Table
@@ -150,7 +150,7 @@ def AuthoredVersion(Traced: Mapping[str, int]) -> Tuple[int | None, str]:
         )
     return (
         Found[0],
-        f"{MoVersionPrefix}{Found[0]} read from the {len(Authored)} authored traced parts, which the same writer produced as the donor corpus",
+        f"{KMoVersionPrefix}{Found[0]} read from the {len(Authored)} authored traced parts, which the same writer produced as the donor corpus",
     )
 
 
@@ -182,7 +182,7 @@ def ResolvedBase(
     ByteBlob: bytes, Layouts: LayoutTable, SeedInfo: int, MoVersion: int | None
 ) -> BaseResolution:
     return ResolveBase(
-        ByteBlob, SeedInfo, Layouts, header_size=StreamSize, MoVersion=MoVersion
+        ByteBlob, SeedInfo, Layouts, header_size=KStreamHeaderSize, MoVersion=MoVersion
     )
 
 
@@ -205,7 +205,7 @@ def BuildDonorMut(
     Resolve = ResolvedBase(ByteBlob, Layouts, SeedInfo, MoVersion)
     BaseInfo = Resolve.base
     Report = Verify(
-        ByteBlob, BaseInfo, Layouts, header_size=StreamSize, MoVersion=MoVersion
+        ByteBlob, BaseInfo, Layouts, header_size=KStreamHeaderSize, MoVersion=MoVersion
     )
     Scanned = ScannedNames(ByteBlob)
     Outstanding = sorted(

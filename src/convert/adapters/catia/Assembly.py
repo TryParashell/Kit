@@ -368,14 +368,86 @@ def NativeProductE(
             for Order, ItemValue in enumerate(Table.occurrences)
         )
     )
-    Missing = tuple(
-        (NameValue for NameValue in DefinitionIds if NameValue not in Selected)
+    Diagnostics = ProductDiags(
+        Table,
+        DefinitionIds,
+        Selected,
+        Instances,
+        (*SearchDiagnostics, *RefDiagnostics, *DocDiagnostics),
     )
-    Diagnostics: list[DiagValue] = [
-        *SearchDiagnostics,
-        *RefDiagnostics,
-        *DocDiagnostics,
-    ]
+    AsmValue = AsmData(
+        root_definition_id=RootId,
+        definitions=tuple(Definitions),
+        instances=Instances,
+        documents=Documents,
+        attributes=FrozenMapping(
+            {
+                "native_structure": "ASMPRODUCT",
+                "native_stream": Table.stream_name,
+                "native_string_table_logical_offset": Table.table_offset,
+                "native_string_table_physical_offset": PhysicalSpans(
+                    Archive, Table, Table.table_offset, 1, "string-table-prefix"
+                )[0].offset,
+                "native_string_count": len(Table.tokens),
+                "native_instance_count": len(Instances),
+                "native_definition_count": len(DefinitionIds),
+                "resolved_definition_count": len(Selected),
+                "linked_document_count": len(Documents),
+                "linked_sketch_count": sum(
+                    (len(ItemValue.document.sketches) for ItemValue in Documents)
+                ),
+                "linked_feature_count": sum(
+                    (
+                        len(ItemValue.document.feature_timeline)
+                        for ItemValue in Documents
+                    )
+                ),
+                "transform_status": "native-only",
+                "constraint_status": "native-only",
+                "native_table_candidates": (
+                    TableChoice(Table),
+                    *(TableChoice(Choice) for Choice in Table.alternatives),
+                ),
+                "native_unresolved_tokens": tuple(
+                    (TokenRecord(Token) for Token in Table.ambiguous_tokens)
+                ),
+                "native_reference_candidates": tuple(
+                    (
+                        {
+                            "definition_name": NameValue,
+                            "candidates": tuple(
+                                (
+                                    {
+                                        "path": str(Choice.path),
+                                        "document_type": Choice.document_type,
+                                        "sha256": Choice.sha256,
+                                    }
+                                    for Choice in Candidates
+                                )
+                            ),
+                        }
+                        for NameValue, Candidates in RefCandidates.items()
+                        if Candidates
+                    )
+                ),
+            }
+        ),
+    )
+    return (AsmValue, Diagnostics)
+
+
+# this definition exists because focused behavior needs one stable owner
+def ProductDiags(
+    Table: NativeProductTable,
+    DefinitionIds: dict[str, str],
+    Selected: dict[str, NativeProductReference],
+    Instances: tuple[ComponentInstance, ...],
+    Initial: tuple[DiagValue, ...],
+) -> tuple[DiagValue, ...]:
+    Missing = tuple(
+        NameValue for NameValue in DefinitionIds if NameValue not in Selected
+    )
+    Diagnostics = list(Initial)
     if Table.alternatives:
         Diagnostics.append(
             DiagValue(
@@ -438,65 +510,7 @@ def NativeProductE(
             Severity.INFO,
         )
     )
-    AsmValue = AsmData(
-        root_definition_id=RootId,
-        definitions=tuple(Definitions),
-        instances=Instances,
-        documents=Documents,
-        attributes=FrozenMapping(
-            {
-                "native_structure": "ASMPRODUCT",
-                "native_stream": Table.stream_name,
-                "native_string_table_logical_offset": Table.table_offset,
-                "native_string_table_physical_offset": PhysicalSpans(
-                    Archive, Table, Table.table_offset, 1, "string-table-prefix"
-                )[0].offset,
-                "native_string_count": len(Table.tokens),
-                "native_instance_count": len(Instances),
-                "native_definition_count": len(DefinitionIds),
-                "resolved_definition_count": len(Selected),
-                "linked_document_count": len(Documents),
-                "linked_sketch_count": sum(
-                    (len(ItemValue.document.sketches) for ItemValue in Documents)
-                ),
-                "linked_feature_count": sum(
-                    (
-                        len(ItemValue.document.feature_timeline)
-                        for ItemValue in Documents
-                    )
-                ),
-                "transform_status": "native-only",
-                "constraint_status": "native-only",
-                "native_table_candidates": (
-                    TableChoice(Table),
-                    *(TableChoice(Choice) for Choice in Table.alternatives),
-                ),
-                "native_unresolved_tokens": tuple(
-                    (TokenRecord(Token) for Token in Table.ambiguous_tokens)
-                ),
-                "native_reference_candidates": tuple(
-                    (
-                        {
-                            "definition_name": NameValue,
-                            "candidates": tuple(
-                                (
-                                    {
-                                        "path": str(Choice.path),
-                                        "document_type": Choice.document_type,
-                                        "sha256": Choice.sha256,
-                                    }
-                                    for Choice in Candidates
-                                )
-                            ),
-                        }
-                        for NameValue, Candidates in RefCandidates.items()
-                        if Candidates
-                    )
-                ),
-            }
-        ),
-    )
-    return (AsmValue, tuple(Diagnostics))
+    return tuple(Diagnostics)
 
 
 # this definition exists because focused behavior needs one stable owner
