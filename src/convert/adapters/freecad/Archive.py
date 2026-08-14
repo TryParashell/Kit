@@ -922,7 +922,7 @@ class ObjectGraph:
 # this definition exists because parameter aliases need deterministic collision handling
 def InitCatalogMut(Instance, Parameters: list[dict[str, Any]]) -> None:
     Instance.Parameters = Parameters
-    Instance.ById = {
+    Instance.ByIdentifier = {
         TextAction(ItemValue.get("id")): ItemValue for ItemValue in Parameters
     }
     Instance.Aliases = {}
@@ -956,14 +956,14 @@ def ParamExpression(
 
 # this predicate exists because source expressions alter feature carrier behavior
 def HasParamSource(Instance, ParamId: str) -> bool:
-    Param = Instance.ById.get(ParamId, {})
+    Param = Instance.ByIdentifier.get(ParamId, {})
     Expression = Param.get("expression", {}) if isinstance(Param, Mapping) else {}
     return isinstance(Expression, Mapping) and bool(TextAction(Expression.get("source")))
 
 
 # this definition exists because native expression paths survive neutral translation
 def ParamSource(Instance, ParamId: str) -> str:
-    Param = Instance.ById.get(ParamId, {})
+    Param = Instance.ByIdentifier.get(ParamId, {})
     Attributes = Param.get("attributes", {}) if isinstance(Param, Mapping) else {}
     return (
         TextAction(Attributes.get("freecad_path"))
@@ -974,7 +974,7 @@ def ParamSource(Instance, ParamId: str) -> str:
 
 # this definition exists because feature writers need normalized parameter values
 def ParamValue(Instance, ParamId: str, Default: float = 0.0) -> float:
-    Param = Instance.ById.get(ParamId)
+    Param = Instance.ByIdentifier.get(ParamId)
     if not Param:
         return Default
     Value = Param.get("value", {})
@@ -985,7 +985,7 @@ def ParamValue(Instance, ParamId: str, Default: float = 0.0) -> float:
 
 # this definition exists because feature writers need normalized parameter kinds
 def ParamKind(Instance, ParamId: str) -> str:
-    Param = Instance.ById.get(ParamId, {})
+    Param = Instance.ByIdentifier.get(ParamId, {})
     Value = Param.get("value", {}) if isinstance(Param, Mapping) else {}
     return TextAction(
         EnumAction(Value.get("kind")) if isinstance(Value, Mapping) else "number",
@@ -1032,7 +1032,7 @@ def ReplaceRefsMut(
         Alias = Instance.Aliases.get(ParamId)
         if not Alias:
             return None
-        Param = Instance.ById.get(ParamId, {})
+        Param = Instance.ByIdentifier.get(ParamId, {})
         NameValue = TextAction(Param.get("name")) if isinstance(Param, Mapping) else ""
         Replaced = False
         for Token in (ParamId, NameValue):
@@ -1184,81 +1184,11 @@ class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def Native(Instance, ItemValue: Mapping[str, Any]) -> str | None:
-        Expression = ItemValue.get("expression", {})
-        if not isinstance(Expression, Mapping):
-            return None
-        Source = TextAction(Expression.get("source")).strip()
-        if not Source or "\n" in Source or "\r" in Source or (";" in Source):
-            return None
-        Language = TextAction(Expression.get("language"), "kit").casefold()
-        if Language == "freecad":
-            return Source
-        if Language != "kit":
-            return None
-        References = [
-            TextAction(Value) for Value in Sequence(Expression.get("parameter_ids", []))
-        ]
-        Translated = Source
-        AllowedIdentifiers = {
-            "abs",
-            "acos",
-            "asin",
-            "atan",
-            "atan2",
-            "ceil",
-            "cos",
-            "e",
-            "exp",
-            "false",
-            "floor",
-            "log",
-            "log10",
-            "max",
-            "min",
-            "pi",
-            "pow",
-            "round",
-            "sin",
-            "sqrt",
-            "tan",
-            "true",
-        }
-        for ParamId in References:
-            Alias = Instance.Aliases.get(ParamId)
-            if not Alias:
-                return None
-            Param = Instance.ById.get(ParamId, {})
-            NameValue = (
-                TextAction(Param.get("name")) if isinstance(Param, Mapping) else ""
-            )
-            Replaced = False
-            for Token in (ParamId, NameValue):
-                if Token and Token in Translated:
-                    Translated = Translated.replace(Token, Alias)
-                    Replaced = True
-            if not Replaced and Alias not in Translated:
-                return None
-            AllowedIdentifiers.add(Alias)
-        Translated = Translated.replace("^", "**")
-        Identifiers = set(RegexLib.findall("[A-Za-z_][A-Za-z0-9_]*", Translated))
-        if Identifiers - AllowedIdentifiers:
-            return None
-        if RegexLib.search("[^A-Za-z0-9_.,+\\-*/%<>=!&|() \\t]", Translated):
-            return None
-        return Translated
+        return NativeExpr(Instance, ItemValue)
 
     # this definition exists because focused behavior needs one stable owner
     def ExpressionParts(Instance) -> tuple[int, int]:
-        Native = 0
-        Carrier = 0
-        for ItemValue in Instance.Parameters:
-            if not isinstance(ItemValue.get("expression"), Mapping):
-                continue
-            if Instance.native_expression(ItemValue) is None:
-                Carrier += 1
-            else:
-                Native += 1
-        return (Native, Carrier)
+        return ExprParts(Instance)
 
     # this definition exists because focused behavior needs one stable owner
     def SheetProperties(Instance) -> list[XmlTree.Element]:
@@ -2889,7 +2819,7 @@ def FeatureParam(
     if not IdsValue:
         IdsValue = [
             ParamId
-            for ParamId, ItemValue in Parameters.ById.items()
+            for ParamId, ItemValue in Parameters.ByIdentifier.items()
             if TextAction(ItemValue.get("owner_id")) == TextAction(Feature.get("id"))
         ]
     LengthIds = [
