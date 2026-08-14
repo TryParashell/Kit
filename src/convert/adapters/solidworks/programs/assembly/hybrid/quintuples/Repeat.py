@@ -103,14 +103,14 @@ def PathKey(PathValue: str) -> str:
 # first occurrences define unique component file ordering independently
 def UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
     SeenPaths: set[str] = set()
-    UniqueItems: list[RepeatItem] = []
+    DistinctItems: list[RepeatItem] = []
     for ItemValue in CoreItems:
         PathValue = PathKey(ItemValue.CompPath)
         if PathValue in SeenPaths:
             continue
         SeenPaths.add(PathValue)
-        UniqueItems.append(ItemValue)
-    return tuple(UniqueItems)
+        DistinctItems.append(ItemValue)
+    return tuple(DistinctItems)
 
 
 # path ordinals reconnect every occurrence to its unique external file
@@ -188,7 +188,7 @@ def EncodeConfig(
     OccurShift = ItemCount - KTracedCount
     UniqueShift = UniqueCount - KTracedUnique
     MapShift = (4 * OccurShift) + UniqueShift
-    PathIndex = PathIndex(UniqueItems)
+    PathMap = PathIndex(UniqueItems)
     InsertPos, UnitWidth = KInsertSpecs["Contents/Config-0"]
     PrefixData = EncodeOps(
         SliceOps("Contents/Config-0", 0, InsertPos),
@@ -227,7 +227,7 @@ def EncodeConfig(
             if ItemIndex <= KTracedCount
             else OccurHash(ItemValue.OccurName)
         )
-        FileIndex = PathIndex[PathKey(ItemValue.CompPath)]
+        FileIndex = PathMap[PathKey(ItemValue.CompPath)]
         UnitData.extend(
             EncodeOps(
                 UnitOps,
@@ -436,6 +436,29 @@ def EncodeHeader(
     return PrefixData + bytes(OccurData) + ExtPrefix + bytes(FileData) + TailData
 
 
+# legacy aliases preserve recovered hybrid helpers and existing external callers
+KLegacyAliases = {
+    "InsertSpecs": KInsertSpecs,
+    "TracedCount": KTracedCount,
+    "TracedUnique": KTracedUnique,
+    "HeaderExtStart": KHeaderExtStart,
+    "HeaderExtWidth": KHeaderExtWidth,
+    "HeaderFileStart": KHeaderFileStart,
+    "HeaderFileWidth": KHeaderFileWidth,
+    "HeaderTailStart": KHeaderTailStart,
+    "_EmitOps": EncodeOps,
+    "_SliceOps": SliceOps,
+    "_PathKey": PathKey,
+    "_UniqueItems": UniqueItems,
+    "_PathIndex": PathIndex,
+    "_EncodeCMgr": EncodeCmgr,
+    "_EncodeConfig": EncodeConfig,
+    "_EncodeResolved": EncodeResolved,
+    "_EncodeHeader": EncodeHeader,
+}
+globals().update(KLegacyAliases)
+
+
 # canonical hybrid programs scale repeated paths with distinct internal identities
 def EncodeHybCore(
     ModelName: str,
@@ -451,22 +474,22 @@ def EncodeHybCore(
         for ItemValue in CoreItems
     ):
         raise SldprtFormatError("hybrid assembly fields cannot be empty")
-    UniqueItems = UniqueItems(CoreItems)
-    if len(UniqueItems) < 2 or len(UniqueItems) == len(CoreItems):
+    UniqueValues = UniqueItems(CoreItems)
+    if len(UniqueValues) < 2 or len(UniqueValues) == len(CoreItems):
         raise SldprtFormatError(
             "hybrid assembly history requires shared and distinct component files"
         )
     StreamsMap = {
         "Contents/CMgr": EncodeCmgr(ModelName, ConfigName, CoreItems),
         "Contents/Config-0": EncodeConfig(
-            ModelName, ConfigName, CoreItems, UniqueItems
+            ModelName, ConfigName, CoreItems, UniqueValues
         ),
-        "Contents/Config-0-ResolvedFeatures": EncodeResolved(CoreItems, UniqueItems),
+        "Contents/Config-0-ResolvedFeatures": EncodeResolved(CoreItems, UniqueValues),
         "Contents/Definition": EncodeOps(
             StreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
         ),
         "Contents/Config-0-ModelHeader": EncodeHeader(
-            ModelName, ConfigName, CoreItems, UniqueItems
+            ModelName, ConfigName, CoreItems, UniqueValues
         ),
     }
     return MappingProxyType(StreamsMap)
