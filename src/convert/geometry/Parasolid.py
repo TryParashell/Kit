@@ -1722,6 +1722,18 @@ def SolidUnchIds(BodyData: bytes) -> dict[int, int]:
 # this declaration exists because focused behavior needs one stable owner
 def SolidFaceData(BodyData: bytes) -> tuple[dict[int, int], dict[str, dict[int, int]]]:
     Names = {'unchanged': b'SWEntUnchanged', 'downstream': b'DOWNSTREAM_FACE_ID', 'colour': b'SDL/TYSA_COLOUR'}
+    IdKinds = ScanFaceIds(BodyData, Names)
+    DefKinds = ScanFaceDefs(BodyData, IdKinds)
+    if not DefKinds:
+        return {}, {}
+    ValueRecords = ScanIntValues(BodyData)
+    Records = ScanFaceAttrs(BodyData, Names, DefKinds)
+    Orders = FaceAttrOrders(Records)
+    return FaceUnchanged(Records['unchanged'], ValueRecords), Orders
+
+
+# face identifier scanning maps vendor names to their encoded identifier records
+def ScanFaceIds(BodyData: bytes, Names: Mapping[str, bytes]) -> dict[int, str]:
     IdKinds: dict[int, str] = {}
     Cursor = 0
     while (OffsetData := BodyData.find(b'\x00O', Cursor)) >= 0:
@@ -1734,6 +1746,11 @@ def SolidFaceData(BodyData: bytes) -> tuple[dict[int, int], dict[str, dict[int, 
         KindValueData = next((NameValue for NameValue, Encoded in Names.items() if ValueData == Encoded), None)
         if KindValueData is not None:
             IdKinds[Index] = KindValueData
+    return IdKinds
+
+
+# face definition scanning links schema definitions to recognized identifier kinds
+def ScanFaceDefs(BodyData: bytes, IdKinds: Mapping[int, str]) -> dict[int, str]:
     DefKinds: dict[int, str] = {}
     Cursor = 0
     while (OffsetData := BodyData.find(b'\x00P', Cursor)) >= 0:
@@ -1744,8 +1761,11 @@ def SolidFaceData(BodyData: bytes) -> tuple[dict[int, int], dict[str, dict[int, 
         if Count is None or Count > 64 or OffsetData + 38 + Count > len(BodyData) or (Index is None) or (IdValue not in IdKinds):
             continue
         DefKinds[Index] = IdKinds[IdValue]
-    if not DefKinds:
-        return ({}, {})
+    return DefKinds
+
+
+# integer value scanning retains positive unchanged face identifiers only
+def ScanIntValues(BodyData: bytes) -> dict[int, int]:
     ValueRecords: dict[int, int] = {}
     Cursor = 0
     while (OffsetData := BodyData.find(b'\x00R', Cursor)) >= 0:
@@ -1757,6 +1777,11 @@ def SolidFaceData(BodyData: bytes) -> tuple[dict[int, int], dict[str, dict[int, 
         ValueData = Struct.unpack_from('>i', BodyData, OffsetData + 8)[0]
         if ValueData > 0:
             ValueRecords[Index] = ValueData
+    return ValueRecords
+
+
+# face attribute scanning decodes ownership and linked list references
+def ScanFaceAttrs(BodyData: bytes, Names: Mapping[str, bytes], DefKinds: Mapping[int, str]) -> dict[str, dict[int, tuple[int, int, int, int]]]:
     Records: dict[str, dict[int, tuple[int, int, int, int]]] = {KindValueData: {} for KindValueData in Names}
     Cursor = 0
     while (OffsetData := BodyData.find(b'\x00Q', Cursor)) >= 0:
@@ -1772,15 +1797,25 @@ def SolidFaceData(BodyData: bytes) -> tuple[dict[int, int], dict[str, dict[int, 
             continue
         KindValueData = DefKinds[AttrDef]
         Records[KindValueData][Index] = (Owner, NextOfType, PreviousOfType, ValueIndex)
+    return Records
+
+
+# face attribute ordering reconstructs each valid nonbranching linked list
+def FaceAttrOrders(Records: Mapping[str, Mapping[int, tuple[int, int, int, int]]]) -> dict[str, dict[int, int]]:
     Orders: dict[str, dict[int, int]] = {}
     for KindValueData, Values in Records.items():
         OrderData = LinkedOrder(Values, {AttrValue: (Record[1], Record[2]) for AttrValue, Record in Values.items()})
         Owners = [Values[AttrValue][0] for AttrValue in OrderData]
         if len(set(Owners)) == len(Owners):
             Orders[KindValueData] = {Owner: RankValue for RankValue, Owner in enumerate(Owners)}
+    return Orders
+
+
+# unchanged face recovery rejects ambiguous owners before exposing stable identifiers
+def FaceUnchanged(Records: Mapping[int, tuple[int, int, int, int]], ValueRecords: Mapping[int, int]) -> dict[int, int]:
     Unchanged: dict[int, int] = {}
     Ambiguous: set[int] = set()
-    for Owner, Ignored, Ignored, ValueIndex in Records['unchanged'].values():
+    for Owner, Ignored, Ignored, ValueIndex in Records.values():
         if ValueIndex not in ValueRecords:
             continue
         if Owner in Unchanged:
@@ -1789,7 +1824,7 @@ def SolidFaceData(BodyData: bytes) -> tuple[dict[int, int], dict[str, dict[int, 
             Unchanged[Owner] = ValueRecords[ValueIndex]
     for Owner in Ambiguous:
         Unchanged.pop(Owner, None)
-    return (Unchanged, Orders)
+    return Unchanged
 
 # this declaration exists because focused behavior needs one stable owner
 def ScanPartRecords(BodyData: bytes) -> RecordTables | None:
@@ -3037,33 +3072,36 @@ def ParseEdgeUse(DataValue: bytes, OffsetData: int, AllowTolerance: bool=False) 
     if Tolerance is not None:
         RefsValueData = RefsValue(DataValue, Start + 16, 6)
     else:
-        Magic = next((Position for Position in range(Start + 9, min(Start + 17, len(DataValue) - len(KEntityMagic) + 1)) if DataValue[Position:Position + len(KEntityMagic)] == KEntityMagic), None)
-        if Magic is None:
-            return None
-        Cursor = Magic + len(KEntityMagic)
-        Decoded = []
-        if Cursor < len(DataValue) and DataValue[Cursor] == 1:
-            while Cursor + 3 <= len(DataValue) and DataValue[Cursor] == 1 and (len(Decoded) < 8):
-                ValueData = ReadShort(DataValue, Cursor + 1)
-                if ValueData is None:
-                    return None
-                Decoded.append(ValueData)
-                Cursor += 3
-        else:
-            while Cursor + 3 <= len(DataValue) and DataValue[Cursor + 2] == 1 and (len(Decoded) < 8):
-                ValueData = ReadShort(DataValue, Cursor)
-                if ValueData is None:
-                    return None
-                Decoded.append(ValueData)
-                Cursor += 3
-        if len(Decoded) < 3:
-            return None
-        RefsValueData = (0, 0, 0, Decoded[2], 0, 0)
+        RefsValueData = EdgeMagicRefs(DataValue, Start)
     if AttrValue is None or AttrValue <= 1 or RefsValueData is None:
         return None
     if DirectTolerance and (len(RefsValueData) < 4 or RefsValueData[0] <= 1 or RefsValueData[3] <= 1):
         return None
     return TopologyRecord(AttrValue, RefsValueData, OffsetData, tolerance=Tolerance or 0.0)
+
+
+# edge magic decoding supports both observed short reference byte layouts
+def EdgeMagicRefs(DataValue: bytes, Start: int) -> tuple[int, ...] | None:
+    Magic = next((Position for Position in range(Start + 9, min(Start + 17, len(DataValue) - len(KEntityMagic) + 1)) if DataValue[Position:Position + len(KEntityMagic)] == KEntityMagic), None)
+    if Magic is None:
+        return None
+    Cursor = Magic + len(KEntityMagic)
+    Decoded = []
+    if Cursor < len(DataValue) and DataValue[Cursor] == 1:
+        while Cursor + 3 <= len(DataValue) and DataValue[Cursor] == 1 and len(Decoded) < 8:
+            ValueData = ReadShort(DataValue, Cursor + 1)
+            if ValueData is None:
+                return None
+            Decoded.append(ValueData)
+            Cursor += 3
+    else:
+        while Cursor + 3 <= len(DataValue) and DataValue[Cursor + 2] == 1 and len(Decoded) < 8:
+            ValueData = ReadShort(DataValue, Cursor)
+            if ValueData is None:
+                return None
+            Decoded.append(ValueData)
+            Cursor += 3
+    return (0, 0, 0, Decoded[2], 0, 0) if len(Decoded) >= 3 else None
 
 # this declaration exists because focused behavior needs one stable owner
 def ParseCoedge(DataValue: bytes, OffsetData: int) -> TopologyRecord | None:
@@ -3213,56 +3251,87 @@ def ParseCarrier(DataValue: bytes, OffsetData: int) -> tuple[int, object] | None
 
 # this declaration exists because focused behavior needs one stable owner
 def AnalyticGeom(KindValueData: int, IdValue: str, Values: tuple[float, ...]) -> object | None:
-
-    # this declaration exists because focused behavior needs one stable owner
-    def Point(Index: int=0) -> VectorThree:
-        return VectorThree(Values[Index] / KLengthScale, Values[Index + 1] / KLengthScale, Values[Index + 2] / KLengthScale)
-
-    # this declaration exists because focused behavior needs one stable owner
-    def DirectData(Index: int) -> VectorThree | None:
-        ValueData = VectorThree(Values[Index], Values[Index + 1], Values[Index + 2])
-        return ValidDirect(ValueData)
     if KindValueData == 30:
-        Tangent = DirectData(3)
-        return LineCurve(IdValue, Point(), Tangent) if Tangent is not None else None
+        Tangent = AnalyticDirect(Values, 3)
+        return LineCurve(IdValue, AnalyticPoint(Values), Tangent) if Tangent is not None else None
     if KindValueData in {31, 32, 50}:
-        AxisValue = DirectData(3)
-        RefValue = DirectData(6)
-        if AxisValue is None or RefValue is None or (not IsOrthogonal(AxisValue, RefValue)):
-            return None
-        if KindValueData == 31 and Values[9] > 0:
-            return CircleCurve(IdValue, Point(), AxisValue, RefValue, Values[9] / KLengthScale)
-        if KindValueData == 32 and Values[9] >= Values[10] > 0:
-            return EllipseCurve(IdValue, Point(), AxisValue, RefValue, Values[9] / KLengthScale, Values[10] / KLengthScale)
-        if KindValueData == 50:
-            return PlaneSurface(IdValue, Point(), AxisValue, RefValue)
-        return None
+        return RoundAnalytic(KindValueData, IdValue, Values)
     if KindValueData == 51:
-        AxisValue = DirectData(3)
-        RefValue = DirectData(7)
-        if AxisValue is None or RefValue is None or (not IsOrthogonal(AxisValue, RefValue)) or (Values[6] <= 0):
-            return None
-        return CylinderSurface(IdValue, Point(), AxisValue, RefValue, Values[6] / KLengthScale)
+        return CylinderGeom(IdValue, Values)
     if KindValueData == 52:
-        AxisValue = DirectData(3)
-        RefValue = DirectData(9)
-        SineValue, Cosine = Values[7:9]
-        if AxisValue is None or RefValue is None or (not IsOrthogonal(AxisValue, RefValue)) or (Values[6] < 0) or (SineValue == 0) or (Cosine <= 0) or (abs(SineValue * SineValue + Cosine * Cosine - 1.0) > 1e-09):
-            return None
-        return ConeSurface(IdValue, Point(), AxisValue, RefValue, Values[6] / KLengthScale, MathValue.asin(SineValue))
+        return ConeGeom(IdValue, Values)
     if KindValueData == 53:
-        AxisValue = DirectData(4)
-        RefValue = DirectData(7)
-        if AxisValue is None or RefValue is None or (not IsOrthogonal(AxisValue, RefValue)) or (Values[3] <= 0):
-            return None
-        return SphereSurface(IdValue, Point(), AxisValue, RefValue, Values[3] / KLengthScale)
+        return SphereGeom(IdValue, Values)
     if KindValueData == 54:
-        AxisValue = DirectData(3)
-        RefValue = DirectData(8)
-        if AxisValue is None or RefValue is None or (not IsOrthogonal(AxisValue, RefValue)) or (Values[6] == 0) or (Values[7] <= 0):
-            return None
-        return TorusSurface(IdValue, Point(), AxisValue, RefValue, abs(Values[6]) / KLengthScale, Values[7] / KLengthScale)
+        return TorusGeom(IdValue, Values)
     return None
+
+
+# analytic point conversion restores model units from encoded parasolid coordinates
+def AnalyticPoint(Values: Sequence[float], Index: int=0) -> VectorThree:
+    return VectorThree(Values[Index] / KLengthScale, Values[Index + 1] / KLengthScale, Values[Index + 2] / KLengthScale)
+
+
+# analytic direction conversion validates encoded unit vectors before construction
+def AnalyticDirect(Values: Sequence[float], Index: int) -> VectorThree | None:
+    ValueData = VectorThree(Values[Index], Values[Index + 1], Values[Index + 2])
+    return ValidDirect(ValueData)
+
+
+# round analytic construction shares axis validation across circles ellipses and planes
+def RoundAnalytic(KindValueData: int, IdValue: str, Values: tuple[float, ...]) -> object | None:
+    AxisValue = AnalyticDirect(Values, 3)
+    RefValue = AnalyticDirect(Values, 6)
+    if AxisValue is None or RefValue is None or not IsOrthogonal(AxisValue, RefValue):
+        return None
+    if KindValueData == 31 and Values[9] > 0:
+        return CircleCurve(IdValue, AnalyticPoint(Values), AxisValue, RefValue, Values[9] / KLengthScale)
+    if KindValueData == 32 and Values[9] >= Values[10] > 0:
+        return EllipseCurve(IdValue, AnalyticPoint(Values), AxisValue, RefValue, Values[9] / KLengthScale, Values[10] / KLengthScale)
+    if KindValueData == 50:
+        return PlaneSurface(IdValue, AnalyticPoint(Values), AxisValue, RefValue)
+    return None
+
+
+# cylinder construction validates its orthogonal frame and positive radius
+def CylinderGeom(IdValue: str, Values: tuple[float, ...]) -> CylinderSurface | None:
+    AxisValue = AnalyticDirect(Values, 3)
+    RefValue = AnalyticDirect(Values, 7)
+    if AxisValue is None or RefValue is None or not IsOrthogonal(AxisValue, RefValue) or Values[6] <= 0:
+        return None
+    return CylinderSurface(IdValue, AnalyticPoint(Values), AxisValue, RefValue, Values[6] / KLengthScale)
+
+
+# cone construction validates its frame radius and normalized angular components
+def ConeGeom(IdValue: str, Values: tuple[float, ...]) -> ConeSurface | None:
+    AxisValue = AnalyticDirect(Values, 3)
+    RefValue = AnalyticDirect(Values, 9)
+    SineValue, Cosine = Values[7:9]
+    if AxisValue is None or RefValue is None or not IsOrthogonal(AxisValue, RefValue) or Values[6] < 0:
+        return None
+    if SineValue == 0 or Cosine <= 0 or abs(SineValue * SineValue + Cosine * Cosine - 1.0) > 1e-09:
+        return None
+    return ConeSurface(IdValue, AnalyticPoint(Values), AxisValue, RefValue, Values[6] / KLengthScale, MathValue.asin(SineValue))
+
+
+# sphere construction validates its oriented frame and positive radius
+def SphereGeom(IdValue: str, Values: tuple[float, ...]) -> SphereSurface | None:
+    AxisValue = AnalyticDirect(Values, 4)
+    RefValue = AnalyticDirect(Values, 7)
+    if AxisValue is None or RefValue is None or not IsOrthogonal(AxisValue, RefValue) or Values[3] <= 0:
+        return None
+    return SphereSurface(IdValue, AnalyticPoint(Values), AxisValue, RefValue, Values[3] / KLengthScale)
+
+
+# torus construction validates its frame and nondegenerate radii
+def TorusGeom(IdValue: str, Values: tuple[float, ...]) -> TorusSurface | None:
+    AxisValue = AnalyticDirect(Values, 3)
+    RefValue = AnalyticDirect(Values, 8)
+    if AxisValue is None or RefValue is None or not IsOrthogonal(AxisValue, RefValue):
+        return None
+    if Values[6] == 0 or Values[7] <= 0:
+        return None
+    return TorusSurface(IdValue, AnalyticPoint(Values), AxisValue, RefValue, abs(Values[6]) / KLengthScale, Values[7] / KLengthScale)
 
 # this declaration exists because focused behavior needs one stable owner
 def ValidDirect(ValueData: VectorThree) -> VectorThree | None:
@@ -3562,50 +3631,51 @@ def BuildPartModel(Tables: RecordTables, SolidUnchangedIds: Mapping[int, int] | 
 def WalkCoedgeRing(Tables: RecordTables, LoopAttr: int, FirstAttr: int) -> tuple[int, ...]:
     if FirstAttr <= 1:
         raise ValueError('empty coedge ring')
-
-    # this declaration exists because focused behavior needs one stable owner
-    def WalkValue(LinkValue: int) -> tuple[int, ...]:
-        RingValue: list[int] = []
-        SeenValue: set[int] = set()
-        AttrValue = FirstAttr
-        while AttrValue not in SeenValue:
-            if len(RingValue) >= 1000000:
-                raise ValueError('coedge ring exceeds record bound')
-            SeenValue.add(AttrValue)
-            Record = Tables.coedges.get(AttrValue)
-            if Record is None or Record.references[1] != LoopAttr:
-                raise ValueError('invalid coedge owner')
-            RingValue.append(AttrValue)
-            AttrValue = Record.references[LinkValue]
-            if AttrValue <= 1:
-                raise ValueError('open coedge ring')
-        if AttrValue != FirstAttr:
-            raise ValueError('coedge ring joins another cycle')
-        return tuple(RingValue)
     if not Tables.v12_partition:
-        return WalkValue(3)
+        return WalkRingLinks(Tables, LoopAttr, FirstAttr, 3)
     Candidates: list[tuple[int, ...]] = []
     for LinkValue in (2, 3):
-        Candidate = WalkValue(LinkValue)
+        Candidate = WalkRingLinks(Tables, LoopAttr, FirstAttr, LinkValue)
         if Candidate not in Candidates:
             Candidates.append(Candidate)
-    Connected = []
-    for Candidate in Candidates:
-        Valid = True
-        for Position, AttrValue in enumerate(Candidate):
-            Record = Tables.coedges[AttrValue]
-            if Record.isolated and len(Candidate) == 1:
-                continue
-            Other = Tables.coedges.get(Record.references[5])
-            NextValue = Tables.coedges[Candidate[(Position + 1) % len(Candidate)]]
-            if Other is None or Other.references[4] != NextValue.references[4]:
-                Valid = False
-                break
-        if Valid:
-            Connected.append(Candidate)
+    Connected = [Candidate for Candidate in Candidates if IsConnectedRing(Tables, Candidate)]
     if not Connected:
         raise ValueError('disconnected coedge ring')
     return Connected[0]
+
+
+# coedge link traversal validates ownership closure and bounded record counts
+def WalkRingLinks(Tables: RecordTables, LoopAttr: int, FirstAttr: int, LinkValue: int) -> tuple[int, ...]:
+    RingValue: list[int] = []
+    SeenValue: set[int] = set()
+    AttrValue = FirstAttr
+    while AttrValue not in SeenValue:
+        if len(RingValue) >= 1000000:
+            raise ValueError('coedge ring exceeds record bound')
+        SeenValue.add(AttrValue)
+        Record = Tables.coedges.get(AttrValue)
+        if Record is None or Record.references[1] != LoopAttr:
+            raise ValueError('invalid coedge owner')
+        RingValue.append(AttrValue)
+        AttrValue = Record.references[LinkValue]
+        if AttrValue <= 1:
+            raise ValueError('open coedge ring')
+    if AttrValue != FirstAttr:
+        raise ValueError('coedge ring joins another cycle')
+    return tuple(RingValue)
+
+
+# ring connectivity confirms adjacent fins share the same edge reference
+def IsConnectedRing(Tables: RecordTables, Candidate: Sequence[int]) -> bool:
+    for Position, AttrValue in enumerate(Candidate):
+        Record = Tables.coedges[AttrValue]
+        if Record.isolated and len(Candidate) == 1:
+            continue
+        Other = Tables.coedges.get(Record.references[5])
+        NextValue = Tables.coedges[Candidate[(Position + 1) % len(Candidate)]]
+        if Other is None or Other.references[4] != NextValue.references[4]:
+            return False
+    return True
 
 # this declaration exists because focused behavior needs one stable owner
 def ProveCurveRange(Curve: object, Start: VectorThree, EndValue: VectorThree, StartTol: float=0.0, EndTol: float=0.0) -> tuple[float, float]:
