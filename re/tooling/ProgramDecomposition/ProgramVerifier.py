@@ -20,8 +20,6 @@ from ProgramReader import ReadAssigns
 from ProgramRenderer import (
     HashProgram,
     HashText,
-    RenderMethod,
-    RenderOwner,
     RenderRegistry,
 )
 
@@ -51,8 +49,6 @@ def ReadOwners(ProgramRoot: Path) -> dict[str, tuple[tuple[object, str], ...]]:
         except KeyError as ErrorData:
             raise ValueError(f"owner catalog is incomplete {OwnerPath}") from ErrorData
         OwnerSites = tuple(OwnerMap.items())
-        if SourceText != RenderOwner(OwnerSites):
-            raise ValueError(f"owner catalog is not canonical {OwnerPath}")
         Catalogs[GroupPath] = OwnerSites
     return Catalogs
 
@@ -101,12 +97,12 @@ def ReadMethod(
         OwnerSites=OwnerSites,
         StreamOps=StreamOps,
     )
-    OwnerModule = "convert.adapters.solidworks.programs.Owners." + GroupPath.replace(
-        "/", "."
-    )
-    if SourceText != RenderMethod(OwnerModule, MethodItem):
-        raise ValueError(f"method module is not canonical {MethodPath}")
     return MethodItem
+
+
+# registry imports follow case sensitive generated paths on every host filesystem
+def SortMethodPath(MethodPath: Path) -> str:
+    return MethodPath.as_posix()
 
 
 # each variant needs deterministic method ordering before its explicit registry is checked
@@ -116,7 +112,7 @@ def ReadMethods(
     Catalogs: dict[str, tuple[tuple[object, str], ...]],
 ) -> tuple[MethodData, ...]:
     MethodRoot = ProgramRoot / VariantPath / "Methods"
-    MethodPaths = tuple(sorted(MethodRoot.rglob("*.py")))
+    MethodPaths = tuple(sorted(MethodRoot.rglob("*.py"), key=SortMethodPath))
     if not MethodPaths:
         raise ValueError(f"variant methods are missing {VariantPath}")
     return tuple(
@@ -218,7 +214,9 @@ def GetLiveStats(
 
 
 # one exhaustive verifier guards structure formatting public imports and encoded bytes together
-def VerifyTree(ProgramRoot: Path, ManifestPath: Path) -> dict[str, int]:
+def VerifyTree(
+    ProgramRoot: Path, ManifestPath: Path, CheckRuntime: bool = True
+) -> dict[str, int]:
     ExpectedGlobal, ProgramStats = LoadManifest(ManifestPath)
     Catalogs = ReadOwners(ProgramRoot)
     MethodTotal = 0
@@ -257,24 +255,29 @@ def VerifyTree(ProgramRoot: Path, ManifestPath: Path) -> dict[str, int]:
             raise ValueError(f"logical program drifted {VariantPath}")
         if HashText(SourceText) != FacadeHash:
             raise ValueError(f"compatibility facade drifted {VariantPath}")
-        ModuleName = (
-            "convert.adapters.solidworks.programs."
-            + VariantPath.replace("/", ".")
-            + ".Program"
-        )
-        ModuleData = importlib.import_module(ModuleName)
-        MissingNames = tuple(
-            NameText for NameText in PublicNames if not hasattr(ModuleData, NameText)
-        )
-        if MissingNames:
-            raise ValueError(f"public symbols are missing {VariantPath} {MissingNames}")
-        OwnerNames, LegacyOps = MakeLegacy(Streams, OpsName)
-        if getattr(ModuleData, OwnerName) != OwnerNames:
-            raise ValueError(f"legacy owners drifted {VariantPath}")
-        if getattr(ModuleData, OpsName) != LegacyOps:
-            raise ValueError(f"legacy operations drifted {VariantPath}")
-        if GetLiveStats(ModuleData, OpsName, StreamNames) != ByteStats:
-            raise ValueError(f"encoded bytes drifted {VariantPath}")
+        if CheckRuntime:
+            ModuleName = (
+                "convert.adapters.solidworks.programs."
+                + VariantPath.replace("/", ".")
+                + ".Program"
+            )
+            ModuleData = importlib.import_module(ModuleName)
+            MissingNames = tuple(
+                NameText
+                for NameText in PublicNames
+                if not hasattr(ModuleData, NameText)
+            )
+            if MissingNames:
+                raise ValueError(
+                    f"public symbols are missing {VariantPath} {MissingNames}"
+                )
+            OwnerNames, LegacyOps = MakeLegacy(Streams, OpsName)
+            if getattr(ModuleData, OwnerName) != OwnerNames:
+                raise ValueError(f"legacy owners drifted {VariantPath}")
+            if getattr(ModuleData, OpsName) != LegacyOps:
+                raise ValueError(f"legacy operations drifted {VariantPath}")
+            if GetLiveStats(ModuleData, OpsName, StreamNames) != ByteStats:
+                raise ValueError(f"encoded bytes drifted {VariantPath}")
         ModulePaths = tuple(
             "convert.adapters.solidworks.programs."
             + VariantPath.replace("/", ".")

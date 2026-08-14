@@ -24,3 +24,8 @@ KAdapterRegistry = BuildRegistry()
 
 # one shared engine keeps public operations on the same introspected adapter set
 KConvertEngine = ConversionEngine(KAdapterRegistry)
+
+
+# compatibility callers need access to the already introspected shared registry
+def GetRegistry() -> AdapterRegistry:
+    return KAdapterRegistry

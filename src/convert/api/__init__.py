@@ -8,139 +8,64 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path as FilePath
 import re as Regex
-from typing import Any, Mapping
+from typing import Any as AnyValue
+from typing import Mapping as TypeMap
 
 from interchange import CadDocument, PayloadRole
 from interchange import frozen_mapping as FreezeMapping
 
-from convert.adapters import AdapterInfo, AdapterRegistry, Destination, ReadOptions, Source, WriteOptions, WriteResult
-from convert.adapters import is_windows_device_name as IsDeviceName
+from convert.adapters.base.AdapterInfo import AdapterInfo
+from convert.adapters.base.ContractTypes import (
+    IsDeviceName,
+    KSourceType as Source,
+    KTargetType as Destination,
+)
+from convert.adapters.base.ReadOptions import ReadOptions
+from convert.adapters.base.WriteOptions import WriteOptions
+from convert.adapters.base.WriteResult import WriteResult
+from convert.adapters.registry import AdapterRegistry
 from convert.api.ApiAvailable import ListAdapters
 from convert.api.ApiBrep import ExtractBrep
 from convert.api.ApiContext import KAdapterRegistry, KConvertEngine
 from convert.api.ApiConvert import ConvertFile
 from convert.api.ApiOpen import OpenDocument
 from convert.api.ApiWrite import WriteDocument
+from convert.api.Compatibility.AvailableCall import MakeAvailable
+from convert.api.Compatibility.BrepCall import MakeBrepCall
+from convert.api.Compatibility.ConvertCall import MakeConvertCall
+from convert.api.Compatibility.OpenCall import MakeOpenCall
+from convert.api.Compatibility.RegistryCall import MakeRegCall
+from convert.api.Compatibility.WriteCall import MakeWriteCall
 from convert.engine import ConversionEngine, ConversionResult
 
+globals().update(
+    {
+        "_build_registry": MakeRegCall(),
+        "available_adapters": MakeAvailable(),
+        "convert": MakeConvertCall(),
+        "extract_brep": MakeBrepCall(),
+        "open_document": MakeOpenCall(),
+        "write_document": MakeWriteCall(),
+    }
+)
 
-# historical registry construction stays stable because direct module consumers may replace the returned registry
-def _build_registry() -> AdapterRegistry:
-    return KAdapterRegistry
+globals().update(
+    {
+        "_engine": KConvertEngine,
+        "registry": globals()["_build_registry"](),
+    }
+)
 
-
-# historical registry naming remains public because integrations inspect and replace the shared registry
-registry = _build_registry()
-
-# historical engine naming remains public because integrations inspect the initialized coordinator
-_engine = KConvertEngine
-
-
-# historical discovery naming stays stable because sdk consumers inspect and pickle this public function
-def available_adapters() -> tuple[AdapterInfo, ...]:
-    return ListAdapters()
-
-
-# historical read naming stays stable because sdk consumers inspect and pickle this public function
-def open_document(
-    source: Source,
-    *,
-    source_format: str | None = None,
-    configuration: str | None = None,
-    include_brep: bool = True,
-    include_tessellation: bool = True,
-    strict: bool = True,
-) -> CadDocument:
-    return OpenDocument(
-        source,
-        SourceFormat=source_format,
-        Configuration=configuration,
-        IncludeBrep=include_brep,
-        IncludeTess=include_tessellation,
-        StrictMode=strict,
-    )
-
-
-# historical write naming stays stable because sdk consumers inspect and pickle this public function
-def write_document(
-    document: CadDocument,
-    destination: Destination,
-    *,
-    destination_format: str | None = None,
-    configuration: str | None = None,
-    overwrite: bool = False,
-    validate: bool = True,
-    allow_carrier: bool = True,
-    values: Mapping[str, Any] | None = None,
-) -> WriteResult:
-    return WriteDocument(
-        document,
-        destination,
-        DestFormat=destination_format,
-        Configuration=configuration,
-        Overwrite=overwrite,
-        ValidateData=validate,
-        AllowCarrier=allow_carrier,
-        InputValues=values,
-    )
-
-
-# historical conversion naming stays stable because sdk consumers inspect and pickle this public function
-def convert(
-    source: Source,
-    destination: Destination,
-    *,
-    source_format: str | None = None,
-    destination_format: str | None = None,
-    configuration: str | None = None,
-    include_brep: bool = True,
-    include_tessellation: bool = True,
-    strict: bool = True,
-    overwrite: bool = False,
-    allow_carrier: bool = True,
-    write_values: Mapping[str, Any] | None = None,
-) -> ConversionResult:
-    return ConvertFile(
-        source,
-        destination,
-        SourceFormat=source_format,
-        DestFormat=destination_format,
-        Configuration=configuration,
-        IncludeBrep=include_brep,
-        IncludeTess=include_tessellation,
-        StrictMode=strict,
-        Overwrite=overwrite,
-        AllowCarrier=allow_carrier,
-        WriteValues=write_values,
-    )
-
-
-# historical extraction naming stays stable because sdk consumers inspect and pickle this public function
-def extract_brep(
-    source: Source | CadDocument,
-    directory: str | Path,
-    *,
-    source_format: str | None = None,
-    overwrite: bool = False,
-) -> tuple[Path, ...]:
-    return ExtractBrep(
-        source,
-        directory,
-        SourceFormat=source_format,
-        Overwrite=overwrite,
-    )
-
-
-# historical mapping helper remains public because direct module consumers imported it before the refactor
-globals()["frozen_mapping"] = FreezeMapping
-
-# historical device helper remains public because direct module consumers imported it before the refactor
-globals()["is_windows_device_name"] = IsDeviceName
-
-# historical regex module remains public because direct module consumers imported it before the refactor
-globals()["re"] = Regex
-
-# historical payload enum remains public because the module intentionally has no restricted export list
-globals()["PayloadRole"] = PayloadRole
+globals().update(
+    {
+        "Any": AnyValue,
+        "Mapping": TypeMap,
+        "Path": FilePath,
+        "PayloadRole": PayloadRole,
+        "frozen_mapping": FreezeMapping,
+        "is_windows_device_name": IsDeviceName,
+        "re": Regex,
+    }
+)

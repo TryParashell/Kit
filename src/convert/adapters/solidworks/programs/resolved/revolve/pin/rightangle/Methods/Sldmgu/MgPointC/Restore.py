@@ -1,0 +1,101 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+from __future__ import annotations
+
+from convert.adapters.solidworks.programs.Owners.Sldmgu.MgPointC.Restore import (
+    KOwnerSites,
+)
+
+
+# isolated method data lets new reverse engineered serializers compose independently
+KMethodProgram = (
+    KOwnerSites,
+    {
+        "ResolvedFeatures": (
+            (3533, 8, 30, "primitive:double", float.fromhex("-0x1.0624dd2f1a9f8p-13")),
+            (3541, 8, 54, "primitive:double", float.fromhex("0x1.5810624dd2f1ap-9")),
+            (3549, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (3598, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (3606, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (3614, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (3727, 8, 30, "primitive:double", float.fromhex("0x1.47ae147ae147bp-10")),
+            (3735, 8, 54, "primitive:double", float.fromhex("0x1.47ae147ae147bp-10")),
+            (3743, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4052, 8, 30, "primitive:double", float.fromhex("-0x1.0624dd2f1a9f8p-13")),
+            (4060, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4068, 8, 79, "primitive:double", float.fromhex("-0x1.47ae147ae1480p-9")),
+            (4092, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4100, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4108, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4293, 8, 30, "primitive:double", float.fromhex("0x1.47ae147ae147bp-10")),
+            (4301, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4309, 8, 79, "primitive:double", float.fromhex("0x1.999999999999ap-6")),
+            (4622, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4630, 8, 54, "primitive:double", float.fromhex("0x1.5810624dd2f1ap-9")),
+            (4638, 8, 79, "primitive:double", float.fromhex("0x1.ae147ae147ae2p-5")),
+            (4662, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4670, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4678, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4863, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (4871, 8, 54, "primitive:double", float.fromhex("0x1.47ae147ae147bp-10")),
+            (4879, 8, 79, "primitive:double", float.fromhex("0x1.999999999999ap-6")),
+            (10195, 8, 30, "primitive:double", float.fromhex("0x1.47ae147ae147bp-10")),
+            (10203, 8, 54, "primitive:double", float.fromhex("0x1.47ae147ae147bp-10")),
+            (10211, 8, 79, "primitive:double", float.fromhex("0x1.999999999999ap-6")),
+            (10568, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (10576, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (10584, 8, 79, "primitive:double", float.fromhex("-0x1.89374bc6a7efap-8")),
+            (10775, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (10783, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (10791, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (10988, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (10996, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11004, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11012, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11020, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11028, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11036, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11044, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11052, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11060, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11068, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11076, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11140, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11148, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11156, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11174, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11182, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11190, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11513, 8, 30, "primitive:double", float.fromhex("-0x1.0624dd2f1a9fcp-10")),
+            (11521, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11529, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11537, 8, 30, "primitive:double", float.fromhex("-0x1.21295b554560bp-64")),
+            (11545, 8, 54, "primitive:double", float.fromhex("-0x1.0624dd2f1a9fcp-10")),
+            (11553, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11561, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11569, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11577, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11777, 8, 30, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11785, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11793, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11801, 8, 30, "primitive:double", float.fromhex("-0x1.0624dd2f1a9fcp-10")),
+            (11809, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11817, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11825, 8, 30, "primitive:double", float.fromhex("-0x1.0624dd2f1a9fcp-10")),
+            (11833, 8, 54, "primitive:double", float.fromhex("0x1.0624dd2f1a9fcp-10")),
+            (11841, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11849, 8, 30, "primitive:double", float.fromhex("-0x1.0624dd2f1a9fcp-10")),
+            (11857, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11865, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11873, 8, 30, "primitive:double", float.fromhex("-0x1.0624dd2f1a9fcp-10")),
+            (11881, 8, 54, "primitive:double", float.fromhex("0x0.0p+0")),
+            (11889, 8, 79, "primitive:double", float.fromhex("0x0.0p+0")),
+        ),
+    },
+)

@@ -180,11 +180,19 @@ def ClearModules() -> None:
     importlib.invalidate_caches()
 
 
+# direct script execution needs the source tree available for compatibility imports
+def AddSourcePath() -> None:
+    SourcePath = str(KRepoRoot / "src")
+    if SourcePath not in sys.path:
+        sys.path.insert(0, SourcePath)
+
+
 # one executable owns decomposition writes and exhaustive deterministic checks
 def MainEntry() -> int:
     Arguments = ParseArgs()
     ProgramRoot = Arguments.ProgramRoot.resolve()
     ManifestPath = Arguments.ManifestPath.resolve()
+    AddSourcePath()
     if Arguments.CheckMode:
         CheckStats = VerifyTree(ProgramRoot, ManifestPath)
         print(json.dumps(CheckStats, indent=2, sort_keys=True))
