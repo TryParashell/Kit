@@ -1099,8 +1099,8 @@ def NativeComponent(PathValue: Sequence[str], AsmValue: AssemblyData, Definition
         Owner = Definitions.get(OwnerId)
         if Instance is None or Owner is None or Instance.owner_definition_id != OwnerId:
             return None
-        RefNumber = RefNumber(Instance, Index + 1)
-        Result.append(f'{InstanceBase(Instance, RefNumber)}-{RefNumber}@{Owner.name}')
+        RefValue = RefNumber(Instance, Index + 1)
+        Result.append(f'{InstanceBase(Instance, RefValue)}-{RefValue}@{Owner.name}')
         OwnerId = Instance.definition_id
     return '/'.join(Result)
 

@@ -8,7 +8,7 @@
 
 from __future__ import annotations as Annotations
 from dataclasses import dataclass as Dataclass
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import struct as Struct
 from typing import Iterable, Mapping
 import zlib as ZlibValue
@@ -93,8 +93,8 @@ class SldprtArchive:
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def OpenAction(ClassType, PathValue: str | Path) -> SldprtArchive:
-        Source = PathValue(PathValue).expanduser().resolve()
+    def OpenAction(ClassType, SourcePath: str | FilePath) -> SldprtArchive:
+        Source = FilePath(SourcePath).expanduser().resolve()
         try:
             BlobValue = Source.read_bytes()
         except OSError as ErrorInfo:
@@ -103,8 +103,8 @@ class SldprtArchive:
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
-    def FromBytes(ClassType, BlobValue: bytes | bytearray, PathValue: str | Path='<memory>') -> SldprtArchive:
-        Source = PathValue(PathValue)
+    def FromBytes(ClassType, BlobValue: bytes | bytearray, SourcePath: str | FilePath='<memory>') -> SldprtArchive:
+        Source = FilePath(SourcePath)
         DataValue = bytes(BlobValue)
         if len(DataValue) < 8:
             raise SldprtFormat('file is too short to contain an SLDPRT header')

@@ -16,7 +16,7 @@ import io as IoStream
 import json as JsonValue
 import math as MathValue
 import os as OsModule
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import re as RegexLib
 import tempfile as Tempfile
 from typing import Any as AnyValue
@@ -75,8 +75,8 @@ def SourceBytes(Source: Source) -> bytes:
         return Source
     if isinstance(Source, bytearray):
         return bytes(Source)
-    if isinstance(Source, (str, PathValue)):
-        return PathValue(Source).expanduser().resolve().read_bytes()
+    if isinstance(Source, (str, FilePath)):
+        return FilePath(Source).expanduser().resolve().read_bytes()
     Reader = getattr(Source, 'read', None)
     if callable(Reader):
         Position = None
@@ -100,17 +100,17 @@ def SourceBytes(Source: Source) -> bytes:
     raise TypeError('source must be a path, bytes, or binary stream')
 
 # this definition exists because focused behavior needs one stable owner
-def TargetPath(Target: Destination) -> PathValue | None:
-    if isinstance(Target, (str, PathValue)):
-        return PathValue(Target).expanduser().resolve()
+def ResolveTarget(Target: Destination) -> FilePath | None:
+    if isinstance(Target, (str, FilePath)):
+        return FilePath(Target).expanduser().resolve()
     return None
 
 # this definition exists because focused behavior needs one stable owner
 def SourcePath(Source: Source) -> str:
-    if isinstance(Source, (str, PathValue)):
-        return str(PathValue(Source).expanduser().resolve())
+    if isinstance(Source, (str, FilePath)):
+        return str(FilePath(Source).expanduser().resolve())
     NameValue = getattr(Source, 'name', '')
-    return str(NameValue) if isinstance(NameValue, (str, PathValue)) else ''
+    return str(NameValue) if isinstance(NameValue, (str, FilePath)) else ''
 
 # this definition exists because focused behavior needs one stable owner
 def FilteredDoc(DocValue: CadDocument, Settings: ReadOptions) -> CadDoc:
@@ -714,8 +714,8 @@ def CapabilityA(DocValue: CadDocument, TargetPath: Path | None, Portable: bool, 
     return tuple((CapabilityTransfer(Capability, (ModeValue := TransferModeA(Parts[Capability])), None if ModeValue is TransferMode.NATIVE else CarrierReasonA(Capability, CarrierReasons)) for Capability in sorted(Required, key=lambda Value: Value.value)))
 
 # this definition exists because focused behavior needs one stable owner
-def WriteBytes(Target: Destination, DataValue: bytes, Overwrite: bool) -> PathValue | None:
-    PathValue = TargetPath(Target)
+def WriteBytes(Target: Destination, DataValue: bytes, Overwrite: bool) -> FilePath | None:
+    PathValue = ResolveTarget(Target)
     if PathValue is None:
         Writer = getattr(Target, 'write', None)
         if not callable(Writer):
@@ -754,14 +754,14 @@ def ComponentStem(Value: str) -> str:
     return StemValue[:120].rstrip(' .') or 'Component'
 
 # this definition exists because focused behavior needs one stable owner
-def ComponentPaths(DocValue: CadDocument, Target: Path) -> dict[str, PathValue]:
+def ComponentPaths(DocValue: CadDocument, Target: FilePath) -> dict[str, FilePath]:
     AsmValue = DocValue.assembly
     if AsmValue is None:
         return {}
     Documents = {ItemValue.id for ItemValue in AsmValue.documents}
     Folder = Target.parent / Target.stem
     UsedValue: set[str] = set()
-    Result: dict[str, PathValue] = {}
+    Result: dict[str, FilePath] = {}
     for Definition in AsmValue.definitions:
         if Definition.id == AsmValue.root_definition_id:
             continue
@@ -779,7 +779,7 @@ def ComponentPaths(DocValue: CadDocument, Target: Path) -> dict[str, PathValue]:
     return Result
 
 # this definition exists because focused behavior needs one stable owner
-def SelectedMeshes(DocValue: CadDocument, Definition: ComponentDefinition) -> tuple[MeshValue, ...]:
+def ChooseMeshes(DocValue: CadDocument, Definition: ComponentDefinition) -> tuple[MeshValue, ...]:
     Meshes = {ItemValue.id: ItemValue for ItemValue in DocValue.meshes}
     Missing = [MeshId for MeshId in Definition.mesh_ids if MeshId not in Meshes]
     if Missing:
@@ -795,7 +795,7 @@ def MeshComponent(DocValue: CadDocument, Definition: ComponentDefinition, Meshes
 
 # this definition exists because focused behavior needs one stable owner
 def ComponentDoc(DocValue: CadDocument, Definition: ComponentDefinition, Documents: Mapping[str, CadDocument]) -> CadDoc | None:
-    SelectedMeshes = SelectedMeshes(DocValue, Definition)
+    SelectedMeshes = ChooseMeshes(DocValue, Definition)
     Linked = Documents.get(Definition.document_id)
     if Linked is None:
         return MeshComponent(DocValue, Definition, SelectedMeshes) if SelectedMeshes else None
@@ -906,7 +906,7 @@ def ParsedTimestamp(Value: str) -> float | None:
     return Parsed.timestamp()
 
 # this definition exists because focused behavior needs one stable owner
-def Existing(PathValue: Path) -> tuple[float, ...]:
+def FileTimestamps(PathValue: FilePath) -> tuple[float, ...]:
     Values: list[float] = []
     try:
         Values.append(PathValue.stat().st_mtime)
@@ -939,7 +939,7 @@ def BundleTimestamp(Target: Path) -> tuple[str, float]:
         except OSError:
             ComponentFiles = ()
         Files.extend(ComponentFiles)
-    Existing = [Timestamp for PathValue in Files for Timestamp in Existing(PathValue)]
+    Existing = [Timestamp for PathValue in Files for Timestamp in FileTimestamps(PathValue)]
     Epoch = int(NowValue)
     if Existing:
         Epoch = max(Epoch, int(max(Existing)) + 1)
@@ -947,7 +947,7 @@ def BundleTimestamp(Target: Path) -> tuple[str, float]:
     return (Modified.strftime('%Y-%m-%dT%H:%M:%SZ'), float(Epoch))
 
 # this definition exists because focused behavior needs one stable owner
-def Definition(Definition: ComponentDefinition, Documents: Mapping[str, CadDocument]) -> frozenset[tuple[str, str, str]]:
+def SourceKeys(Definition: ComponentDefinition, Documents: Mapping[str, CadDocument]) -> frozenset[tuple[str, str, str]]:
     Config = Definition.configuration_id or Definition.configuration_name
     Scope = f'{Definition.kind.value}:{Config}'
     Values: set[tuple[str, str, str]] = set()
@@ -970,16 +970,16 @@ def Definition(Definition: ComponentDefinition, Documents: Mapping[str, CadDocum
     return frozenset(Values)
 
 # this definition exists because focused behavior needs one stable owner
-def MatchingLink(Definition: ComponentDefinition, Documents: Mapping[str, CadDocument], RootDefinitions: Mapping[str, ComponentDefinition], RootDocuments: Mapping[str, CadDocument], Links: Mapping[str, Mapping[str, Any]]) -> Mapping[str, AnyValue] | None:
-    Sources = Definition(Definition, Documents)
+def MatchLink(Definition: ComponentDefinition, Documents: Mapping[str, CadDocument], RootDefinitions: Mapping[str, ComponentDefinition], RootDocuments: Mapping[str, CadDocument], Links: Mapping[str, Mapping[str, Any]]) -> Mapping[str, AnyValue] | None:
+    Sources = SourceKeys(Definition, Documents)
     if not Sources:
         return None
-    Matches = [LinkValue for DefinitionId, LinkValue in Links.items() if Sources & Definition(RootDefinitions[DefinitionId], RootDocuments)]
+    Matches = [LinkValue for DefinitionId, LinkValue in Links.items() if Sources & SourceKeys(RootDefinitions[DefinitionId], RootDocuments)]
     Identities = {(str(LinkValue.get('path', '')), str(LinkValue.get('target', '')), str(LinkValue.get('stamp', ''))) for LinkValue in Matches}
     return Matches[0] if len(Identities) == 1 else None
 
 # this definition exists because focused behavior needs one stable owner
-def NestedOuter(Component: CadDocument, ComponentPath: Path, RootDefinitions: Mapping[str, ComponentDefinition], RootDocuments: Mapping[str, CadDocument], Links: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, AnyValue]]:
+def OuterLinkMap(Component: CadDocument, ComponentPath: FilePath, RootDefinitions: Mapping[str, ComponentDefinition], RootDocuments: Mapping[str, CadDocument], Links: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, AnyValue]]:
     AsmValue = Component.assembly
     if AsmValue is None:
         return {}
@@ -988,11 +988,11 @@ def NestedOuter(Component: CadDocument, ComponentPath: Path, RootDefinitions: Ma
     for Definition in AsmValue.definitions:
         if Definition.id == AsmValue.root_definition_id:
             continue
-        LinkValue = MatchingLink(Definition, Documents, RootDefinitions, RootDocuments, Links)
+        LinkValue = MatchLink(Definition, Documents, RootDefinitions, RootDocuments, Links)
         if LinkValue is None:
             continue
-        PathValue = PathValue(LinkValue['path'])
-        Result[Definition.id] = {'file': PathValue(OsModule.path.relpath(PathValue, ComponentPath.parent)).as_posix(), 'stamp': str(LinkValue.get('stamp', '')), 'target': str(LinkValue.get('target', '')), 'occurrences': list(LinkValue.get('occurrences', []))}
+        PathValue = FilePath(LinkValue['path'])
+        Result[Definition.id] = {'file': FilePath(OsModule.path.relpath(PathValue, ComponentPath.parent)).as_posix(), 'stamp': str(LinkValue.get('stamp', '')), 'target': str(LinkValue.get('target', '')), 'occurrences': list(LinkValue.get('occurrences', []))}
     return Result
 
 # this definition exists because focused behavior needs one stable owner
@@ -1007,7 +1007,7 @@ def WriteComponents(DocValue: CadDocument, Target: Path, Overwrite: bool, Valida
             raise FileExistsError(Existing)
     Documents = {ItemValue.id: ItemValue.document for ItemValue in AsmValue.documents if isinstance(ItemValue.document, CadDoc)}
     Definitions = {ItemValue.id: ItemValue for ItemValue in AsmValue.definitions}
-    Plans: list[tuple[str, PathValue, ComponentDefinition, CadDoc]] = []
+    Plans: list[tuple[str, FilePath, ComponentDefinition, CadDoc]] = []
     for DefinitionId, PathValue in Paths.items():
         Definition = Definitions[DefinitionId]
         Component = ComponentDoc(DocValue, Definition, Documents)
@@ -1022,7 +1022,7 @@ def WriteComponents(DocValue: CadDocument, Target: Path, Overwrite: bool, Valida
     for DefinitionId, PathValue, Definition, Component in Plans:
         if Validate:
             Component.assert_valid()
-        NestedLinks = NestedOuter(Component, PathValue, Definitions, Documents, ComponentLinks) if Definition.kind == ComponentKind.ASSEMBLY else {}
+        NestedLinks = OuterLinkMap(Component, PathValue, Definitions, Documents, ComponentLinks) if Definition.kind == ComponentKind.ASSEMBLY else {}
         DataValue = BuildFcstdArchive(DocToManifest(Component), external_links=NestedLinks, document_timestamp=DocTimestamp, trusted_native_breps=TrustedNativeBreps)
         TargetA, Occurrences = OuterLink(DataValue)
         WriteBytes(PathValue, DataValue, Overwrite)
@@ -1072,9 +1072,9 @@ def WriteNative(DocValue: CadDocument, Target: Path, Overwrite: bool, Validate: 
     Links: dict[str, str] = {}
     BytesWritten = 0
     for SourceFile, Linked in Records:
-        SourceName = PathValue(SourceFile).name
-        Suffix = PathValue(SourceName).suffix or Suffix
-        BaseValue = ComponentStem(PathValue(SourceName).stem)
+        SourceName = FilePath(SourceFile).name
+        Suffix = FilePath(SourceName).suffix or Suffix
+        BaseValue = ComponentStem(FilePath(SourceName).stem)
         Choice = BaseValue
         Index = 1
         while (Choice + Suffix).casefold() in UsedValue:
@@ -1175,7 +1175,7 @@ class FreeCadAdapter:
 
     # this definition exists because focused behavior needs one stable owner
     def Supports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
-        PathValue = TargetPath(Target)
+        PathValue = ResolveTarget(Target)
         if PathValue is not None:
             return PathValue.suffix.casefold() == Suffix.casefold()
         if not IsBinaryTarget(Target):
@@ -1196,7 +1196,7 @@ class FreeCadAdapter:
             DocValue.assert_valid()
         if not Instance.supports(DocValue, Target):
             raise FreeCadAdapterA(f'FreeCAD destination must be a {Suffix} path or writable binary stream')
-        TargetPath = TargetPath(Target)
+        TargetPath = ResolveTarget(Target)
         if TargetPath is not None and TargetPath.exists() and (not ShouldOverwrite):
             raise FileExistsError(TargetPath)
         Portable = Selected.values.get('portable', True) is True
@@ -1309,7 +1309,7 @@ globals()['NATIVE_DOCUMENT_SHA256_ATTRIBUTE'] = NativeDocShaTwoFiveSix
 globals()['NativeFreeCADError'] = NativeFreeCadError
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['SUFFIX'] = Suffix
@@ -1375,7 +1375,7 @@ globals()['_configuration_parts'] = ConfigParts
 globals()['_definition_sources'] = Definition
 
 # this binding exists because shared behavior needs one stable value
-globals()['_destination_path'] = TargetPath
+globals()['_destination_path'] = ResolveTarget
 
 # this binding exists because shared behavior needs one stable value
 globals()['_document_tree'] = DocTree
@@ -1477,7 +1477,7 @@ globals()['_payload_native_brep'] = PayloadNative
 globals()['_selected_configurations'] = Selected
 
 # this binding exists because shared behavior needs one stable value
-globals()['_selected_meshes'] = SelectedMeshes
+globals()['_selected_meshes'] = ChooseMeshes
 
 # this binding exists because shared behavior needs one stable value
 globals()['_selection_parts'] = SelectionParts
