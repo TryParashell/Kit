@@ -162,10 +162,8 @@ def NativeXlink(NameValue: str, Target: str, Subelements: tuple[str, ...]=(), Fi
         XmlTree.SubElement(NodeValue[0], 'Sub', {'value': SubElem})
     return NodeValue
 
-# this definition exists because focused behavior needs one stable owner
-def NativeArchive(Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...], Entries: dict[str, bytes], ObjectOptions: dict[str, dict[str, object]] | None=None) -> bytes:
-    ObjectOptions = ObjectOptions or {}
-    RootValue = XmlTree.Element('Document', {'SchemaVersion': '4', 'ProgramVersion': '1.0', 'FileVersion': '1'})
+# this definition exists because native object declarations have a separate archive responsibility
+def AppendNativeDeclarations(RootValue: ET.Element, Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...], ObjectOptions: dict[str, dict[str, object]]) -> None:
     Declarations = XmlTree.SubElement(RootValue, 'Objects', {'Count': str(len(Objects)), 'Dependencies': '1'})
     for NameValue, Ignored, Dependencies, Ignored in Objects:
         DependencyNode = XmlTree.SubElement(Declarations, 'ObjectDeps', {'Name': NameValue, 'Count': str(len(Dependencies))})
@@ -177,6 +175,10 @@ def NativeArchive(Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Eleme
         if bool(Options.get('touched')):
             Attributes['Touched'] = '1'
         XmlTree.SubElement(Declarations, 'Object', Attributes)
+
+
+# this definition exists because native property payloads have a separate archive responsibility
+def AppendNativeObjectData(RootValue: ET.Element, Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...], ObjectOptions: dict[str, dict[str, object]]) -> None:
     DataValue = XmlTree.SubElement(RootValue, 'ObjectData', {'Count': str(len(Objects))})
     for NameValue, Ignored, Ignored, Properties in Objects:
         Options = ObjectOptions.get(NameValue, {})
@@ -193,12 +195,25 @@ def NativeArchive(Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Eleme
         PropNode = XmlTree.SubElement(ObjectNode, 'Properties', {'Count': str(len(Properties)), 'TransientCount': str(len(TransientProperties))})
         PropNode.extend(TransientProperties)
         PropNode.extend(Properties)
+
+
+# this definition exists because deterministic ZIP emission is independent of XML construction
+def EmitNativeArchive(RootValue: ET.Element, Entries: dict[str, bytes]) -> bytes:
     Stream = IoStream.BytesIO()
     with Zipfile.ZipFile(Stream, 'w', Zipfile.ZIP_DEFLATED) as Archive:
         Archive.writestr('Document.xml', XmlTree.tostring(RootValue, encoding='utf-8', xml_declaration=True))
         for NameValue, Value in Entries.items():
             Archive.writestr(NameValue, Value)
     return Stream.getvalue()
+
+
+# this definition exists because focused behavior needs one stable owner
+def NativeArchive(Objects: tuple[tuple[str, str, tuple[str, ...], tuple[ET.Element, ...]], ...], Entries: dict[str, bytes], ObjectOptions: dict[str, dict[str, object]] | None=None) -> bytes:
+    Options = ObjectOptions or {}
+    RootValue = XmlTree.Element('Document', {'SchemaVersion': '4', 'ProgramVersion': '1.0', 'FileVersion': '1'})
+    AppendNativeDeclarations(RootValue, Objects, Options)
+    AppendNativeObjectData(RootValue, Objects, Options)
+    return EmitNativeArchive(RootValue, Entries)
 
 # this definition exists because focused behavior needs one stable owner
 def RewriteDocXml(Source: bytes, Mutate) -> bytes:
@@ -241,9 +256,8 @@ def NativeMesh(Endian: str='<', Inline: bool=False) -> bytes:
     Properties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Derived Mesh'}), MeshValue)
     return NativeArchive((('Derived', 'Mesh::Import', (), Properties),), Entries)
 
-# this definition exists because focused behavior needs one stable owner
-def NativePart(BrepData: bytes | None=None) -> bytes:
-    PlaneProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'XY'}), NativePlacement())
+# this definition exists because the native sketch fixture needs one coherent geometry payload
+def NativeSketchProperties() -> tuple[ET.Element, ...]:
     Attachment = NativeProp('AttachmentSupport', 'App::PropertyLinkSubList', 'LinkSubList', {'count': '1'})
     XmlTree.SubElement(Attachment[0], 'Link', {'obj': 'XY_Plane', 'sub': ''})
     GeomValue = NativeProp('Geometry', 'Part::PropertyGeometryList', 'GeometryList', {'count': '4'})
@@ -266,7 +280,13 @@ def NativePart(BrepData: bytes | None=None) -> bytes:
         XmlTree.SubElement(Constraints[0], 'Constrain', Attributes)
     Expressions = NativeProp('ExpressionEngine', 'App::PropertyExpressionEngine', 'ExpressionEngine', {'count': '1'})
     XmlTree.SubElement(Expressions[0], 'Expression', {'path': 'Constraints[0]', 'expression': 'diameter'})
-    SketchProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Sketch'}), Attachment, GeomValue, Constraints, Expressions, NativeProp('FullyConstrained', 'App::PropertyBool', 'Bool', {'value': 'true'}), NativePlacement())
+    return (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Sketch'}), Attachment, GeomValue, Constraints, Expressions, NativeProp('FullyConstrained', 'App::PropertyBool', 'Bool', {'value': 'true'}), NativePlacement())
+
+
+# this definition exists because focused behavior needs one stable owner
+def NativePart(BrepData: bytes | None=None) -> bytes:
+    PlaneProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'XY'}), NativePlacement())
+    SketchProperties = NativeSketchProperties()
     Profile = NativeProp('Profile', 'App::PropertyLinkSub', 'LinkSub', {'value': 'Sketch', 'count': '0'})
     Direction = NativeProp('Direction', 'App::PropertyVector', 'PropertyVector', {'valueX': '0', 'valueY': '0', 'valueZ': '1'})
     Shape = NativeProp('Shape', 'Part::PropertyPartShape', 'Part', {'file': 'Pad.Shape.brp'})

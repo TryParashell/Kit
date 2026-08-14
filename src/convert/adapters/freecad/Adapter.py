@@ -1435,6 +1435,11 @@ def AddDocPartsMut(
     AddProvMut(ItemValue, Parts)
 
 
+# this definition provides stable capability ordering without inline callbacks
+def CapabilityKey(Value: Capability) -> str:
+    return Value.value
+
+
 # this definition computes the capability transfer contract for a freecad write
 def CapabilityA(
     DocValue: CadDocument,
@@ -1450,7 +1455,7 @@ def CapabilityA(
     if Exact:
         return tuple(
             CapabilityTransfer(CapabilityValue, TransferMode.NATIVE)
-            for CapabilityValue in sorted(Required, key=lambda Value: Value.value)
+            for CapabilityValue in sorted(Required, key=CapabilityKey)
         )
     Parts = {CapabilityValue: [] for CapabilityValue in Capability}
     CarrierReasons = {CapabilityValue: set() for CapabilityValue in Capability}
@@ -1469,7 +1474,7 @@ def CapabilityA(
                 else CarrierReasonA(CapabilityValue, CarrierReasons)
             ),
         )
-        for CapabilityValue in sorted(Required, key=lambda Value: Value.value)
+        for CapabilityValue in sorted(Required, key=CapabilityKey)
     )
 
 
