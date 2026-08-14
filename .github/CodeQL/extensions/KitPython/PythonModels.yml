@@ -12,42 +12,42 @@ extensions:
       extensible: barrierModel
     data:
       - [
-          "convert.Security.PathBoundary",
-          "Member[ResolveInput].ReturnValue",
+          "convert",
+          "Member[Security].Member[PathBoundary].Member[ResolveInput].ReturnValue",
           "path-injection",
         ]
       - [
-          "convert.Security.PathBoundary",
-          "Member[ResolveLocal].ReturnValue",
+          "convert",
+          "Member[Security].Member[PathBoundary].Member[ResolveLocal].ReturnValue",
           "path-injection",
         ]
       - [
-          "convert.Security.PathBoundary",
-          "Member[ResolveOutput].ReturnValue",
+          "convert",
+          "Member[Security].Member[PathBoundary].Member[ResolveOutput].ReturnValue",
           "path-injection",
         ]
       - [
-          "convert.Security.PathBoundary",
-          "Member[ResolveFolder].ReturnValue",
+          "convert",
+          "Member[Security].Member[PathBoundary].Member[ResolveFolder].ReturnValue",
           "path-injection",
         ]
       - [
-          "convert.Security.PathBoundary",
-          "Member[ResolveTemp].ReturnValue",
+          "convert",
+          "Member[Security].Member[PathBoundary].Member[ResolveTemp].ReturnValue",
           "path-injection",
         ]
       - [
-          "convert.Security.PathBoundary",
-          "Member[ValidateLabel].ReturnValue",
+          "convert",
+          "Member[Security].Member[PathBoundary].Member[ValidateLabel].ReturnValue",
           "command-injection",
         ]
       - [
-          "convert.Security.ProgramBoundary",
-          "Member[GetFreecadPath].ReturnValue",
+          "convert",
+          "Member[Security].Member[ProgramBoundary].Member[GetFreecadPath].ReturnValue",
           "path-injection",
         ]
       - [
-          "convert.Security.ProgramBoundary",
-          "Member[GetFreecadPath].ReturnValue",
+          "convert",
+          "Member[Security].Member[ProgramBoundary].Member[GetFreecadPath].ReturnValue",
           "command-injection",
         ]

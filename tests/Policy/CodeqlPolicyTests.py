@@ -25,20 +25,44 @@ KQueryExcludes = frozenset(
 # modeled path barriers correspond only to fixed root containment functions
 KPathBarriers = frozenset(
     (
-        ("convert.Security.PathBoundary", "ResolveInput"),
-        ("convert.Security.PathBoundary", "ResolveLocal"),
-        ("convert.Security.PathBoundary", "ResolveOutput"),
-        ("convert.Security.PathBoundary", "ResolveFolder"),
-        ("convert.Security.PathBoundary", "ResolveTemp"),
-        ("convert.Security.ProgramBoundary", "GetFreecadPath"),
+        (
+            "convert",
+            "Member[Security].Member[PathBoundary].Member[ResolveInput].ReturnValue",
+        ),
+        (
+            "convert",
+            "Member[Security].Member[PathBoundary].Member[ResolveLocal].ReturnValue",
+        ),
+        (
+            "convert",
+            "Member[Security].Member[PathBoundary].Member[ResolveOutput].ReturnValue",
+        ),
+        (
+            "convert",
+            "Member[Security].Member[PathBoundary].Member[ResolveFolder].ReturnValue",
+        ),
+        (
+            "convert",
+            "Member[Security].Member[PathBoundary].Member[ResolveTemp].ReturnValue",
+        ),
+        (
+            "convert",
+            "Member[Security].Member[ProgramBoundary].Member[GetFreecadPath].ReturnValue",
+        ),
     )
 )
 
 # modeled command barriers correspond only to strict allowlist validation functions
 KCommandBarriers = frozenset(
     (
-        ("convert.Security.PathBoundary", "ValidateLabel"),
-        ("convert.Security.ProgramBoundary", "GetFreecadPath"),
+        (
+            "convert",
+            "Member[Security].Member[PathBoundary].Member[ValidateLabel].ReturnValue",
+        ),
+        (
+            "convert",
+            "Member[Security].Member[ProgramBoundary].Member[GetFreecadPath].ReturnValue",
+        ),
     )
 )
 
@@ -56,15 +80,10 @@ def QueryIds(SourceText: str) -> frozenset[str]:
 # model extraction verifies every sanitizer row without accepting broader predicates
 def ModelRows(SourceText: str) -> frozenset[tuple[str, str, str]]:
     Matches = Regex.findall(
-        r'-\s+\[\s*"([^"]+)",\s*"Member\[([^]]+)\]\.ReturnValue",\s*"([^"]+)",?\s*\]',
+        r'-\s+\[\s*"([^"]+)",\s*"([^"]+\.ReturnValue)",\s*"([^"]+)",?\s*\]',
         SourceText,
     )
-    return frozenset(
-        (
-            (ModuleName, f"Member[{FunctionName}].ReturnValue", KindName)
-            for ModuleName, FunctionName, KindName in Matches
-        )
-    )
+    return frozenset(Matches)
 
 
 # workflow configuration must run every suite and supported repository language
@@ -88,14 +107,14 @@ def TestFilters() -> None:
 
 # model rows stay limited to tested path containment and command allowlists
 def TestModels() -> None:
-    SourceText = LoadText(".github/codeql/extensions/KitPython/PythonModels.yml")
+    SourceText = LoadText(".github/CodeQL/extensions/KitPython/PythonModels.yml")
     RowsInfo = ModelRows(SourceText)
     PathRows = {
-        (ModuleName, f"Member[{FunctionName}].ReturnValue", "path-injection")
-        for ModuleName, FunctionName in KPathBarriers
+        (ModuleName, AccessPath, "path-injection")
+        for ModuleName, AccessPath in KPathBarriers
     }
     CommandRows = {
-        (ModuleName, f"Member[{FunctionName}].ReturnValue", "command-injection")
-        for ModuleName, FunctionName in KCommandBarriers
+        (ModuleName, AccessPath, "command-injection")
+        for ModuleName, AccessPath in KCommandBarriers
     }
     assert RowsInfo == PathRows | CommandRows
