@@ -25,6 +25,7 @@
   ],
   "depth_present": [true],
   "donor_id": "rect_hole_boss",
+  "mo_version": 18000,
   "feature_ids": [32],
   "feature_names": ["Boss-Extrude1"],
   "features": [["boss", "rectangle+circle", "front", "blind"]],

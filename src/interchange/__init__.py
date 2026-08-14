@@ -6,13 +6,47 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-# ruff: noqa: F401
+from dataclasses import is_dataclass as IsDataClass
+from enum import Enum as EnumBase
 
+from . import assembly as AssemblyModule
+from . import brep as BrepModule
+from . import document as DocumentModule
+from . import geometry as GeometryModule
+from . import history as HistoryModule
+from . import mesh as MeshModule
+from . import serialization as SerialModule
+from . import types as TypesModule
+from .types import (
+    BooleanOperation,
+    BoundingBox,
+    CadSource,
+    Capability,
+    Configuration,
+    ConstraintKind,
+    Diagnostic,
+    Expression,
+    FeatureKind,
+    GeometryKind,
+    Parameter,
+    ParameterOverride,
+    ParameterRole,
+    ParameterValue,
+    Provenance,
+    ProvenanceSpan,
+    Severity,
+    Transform,
+    UnitSystem,
+    ValueKind,
+    Vector2 as LegacyVectorTwo,
+    Vector3 as LegacyVectorThree,
+    frozen_mapping as FrozenMapping,
+)
 from .assembly import (
     AssemblyData,
-    ComponentDefinition,
-    ComponentDocument,
-    ComponentInstance,
+    ComponentDef,
+    ComponentDoc,
+    ComponentInst,
     ComponentKind,
     MateAlignment,
     MateConstraint,
@@ -20,7 +54,7 @@ from .assembly import (
     MateEntityKind,
     MateGroup,
     MateKind,
-    Matrix4,
+    TransformMatrix,
 )
 from .brep import (
     BrepBody,
@@ -58,105 +92,165 @@ from .brep import (
     SphereSurface,
     TorusSurface,
 )
+from .common import FreezeMapping, KJsonScalar, KJsonValue
 from .document import (
+    AddWrapperMeta,
     CadDocument,
-    CadDocumentValidationError,
-    filter_document,
-    infer_capabilities,
-    retained_capabilities,
-    semantic_metadata,
-    source_payload_indexes,
-    with_wrapper_metadata,
+    DocumentError,
+    FilterDocument,
+    GetPayloadIds,
+    GetRetainedCaps,
+    GetSemanticMeta,
+    InferCaps,
 )
+from .enum_document import Capability, Severity
+from .enum_features import BooleanOp, FeatureKind
+from .enum_geometry import ConstraintKind, GeometryKind
+from .enum_units import UnitSystem
+from .enum_values import ParameterRole, ValueKind
+from .feature_body import DesignBody
+from .feature_contract import FeatureDef
+from .feature_extrude import ExtrudeEnd, ExtrudeFeature
+from .feature_kinds import (
+    ChamferFeature,
+    CirclePattern,
+    CombineFeature,
+    DomeFeature,
+    FilletFeature,
+    HoleFeature,
+    LinearPattern,
+    MoveBodyFeature,
+    NativeFeature,
+    RefPlaneFeature,
+    RevolveFeature,
+    ScaleFeature,
+    ShellFeature,
+)
+from .feature_step import FeatureCfgState, FeatureStep
 from .geometry import (
-    ArcEllipseGeometry,
+    ArcEllipseGeom,
     ArcGeometry,
-    ArcHyperbolaGeometry,
-    ArcParabolaGeometry,
+    ArcHyperGeom,
+    ArcParabGeom,
     CircleGeometry,
-    ConstraintReference,
+    ConstraintRef,
     EllipseGeometry,
-    HyperbolaGeometry,
+    HyperbolaGeom,
     LineGeometry,
     NativeGeometry,
-    ParabolaGeometry,
+    ParabolaGeom,
     PointGeometry,
+    SelectPathElem,
     Selection,
-    SelectionPathElement,
     Sketch,
-    SketchConstraint,
     SketchEntity,
+    SketchRelation,
     SplineGeometry,
     SupportPlane,
 )
-from .history import (
-    AdapterCapabilities,
-    Body,
-    BrepPayload,
-    ChamferFeature,
-    CircularPatternFeature,
-    CombineFeature,
-    DomeFeature,
-    ExtrusionEndCondition,
-    ExtrusionFeature,
-    FeatureConfigurationState,
-    FeatureDefinition,
-    FeatureStep,
-    FilletFeature,
-    HoleFeature,
-    LinearPatternFeature,
-    MoveBodyFeature,
-    NativeFeatureDefinition,
-    PayloadRole,
-    ReferencePlaneFeature,
-    RevolutionFeature,
-    ScaleFeature,
-    ShellFeature,
-    TopologySummary,
-    _migrate_brep_payload,
+from .history import AdapterCaps
+from .mesh import SurfaceMesh
+from .payload_migrate import MigratePayload
+from .payload_record import BrepPayload
+from .payload_roles import PayloadRole
+from .package_exports import KPackageExports
+from .python_compat import BindTypeGlobals
+from .record_config import Configuration, ParamOverride
+from .record_diagnostic import Diagnostic
+from .record_parameter import Expression, Parameter, ParameterValue
+from .record_provenance import Provenance, ProvenanceSpan
+from .record_source import CadSource
+from .record_topology import TopologyCounts
+from .serialization import RegMigration, RegisterTypes
+from .vectors import BoundingBox, PlaneVector, SpaceVector, Transform
+
+globals().update(
+    {
+        "AdapterCapabilities": AdapterCaps,
+        "ArcEllipseGeometry": ArcEllipseGeom,
+        "ArcHyperbolaGeometry": ArcHyperGeom,
+        "ArcParabolaGeometry": ArcParabGeom,
+        "Body": DesignBody,
+        "BooleanOperation": BooleanOperation,
+        "CircularPatternFeature": CirclePattern,
+        "ComponentDefinition": ComponentDef,
+        "ComponentDocument": ComponentDoc,
+        "ComponentInstance": ComponentInst,
+        "ConstraintReference": ConstraintRef,
+        "CadDocumentValidationError": DocumentError,
+        "ExtrusionEndCondition": ExtrudeEnd,
+        "ExtrusionFeature": ExtrudeFeature,
+        "FeatureDefinition": FeatureDef,
+        "FeatureConfigurationState": FeatureCfgState,
+        "HyperbolaGeometry": HyperbolaGeom,
+        "LinearPatternFeature": LinearPattern,
+        "Matrix4": TransformMatrix,
+        "Mesh": SurfaceMesh,
+        "NativeFeatureDefinition": NativeFeature,
+        "ParabolaGeometry": ParabolaGeom,
+        "ParameterOverride": ParameterOverride,
+        "ReferencePlaneFeature": RefPlaneFeature,
+        "RevolutionFeature": RevolveFeature,
+        "SelectionPathElement": SelectPathElem,
+        "SketchConstraint": SketchRelation,
+        "TopologySummary": TopologyCounts,
+        "Vector2": LegacyVectorTwo,
+        "Vector3": LegacyVectorThree,
+        "filter_document": FilterDocument,
+        "frozen_mapping": FrozenMapping,
+        "infer_capabilities": InferCaps,
+        "retained_capabilities": GetRetainedCaps,
+        "register_migration": RegMigration,
+        "register_types": RegisterTypes,
+        "semantic_metadata": GetSemanticMeta,
+        "source_payload_indexes": GetPayloadIds,
+        "with_wrapper_metadata": AddWrapperMeta,
+    }
 )
-from .mesh import Mesh
-from .serialization import register_migration, register_types
-from .types import (
-    BooleanOperation,
-    BoundingBox,
-    CadSource,
-    Capability,
-    Configuration,
-    ConstraintKind,
-    Diagnostic,
-    Expression,
-    FeatureKind,
-    GeometryKind,
-    Parameter,
-    ParameterOverride,
-    ParameterRole,
-    ParameterValue,
-    Provenance,
-    ProvenanceSpan,
-    Severity,
-    Transform,
-    UnitSystem,
-    ValueKind,
-    Vector2,
-    Vector3,
-    frozen_mapping,
+
+globals().update(
+    {
+        "assembly": AssemblyModule,
+        "brep": BrepModule,
+        "document": DocumentModule,
+        "geometry": GeometryModule,
+        "history": HistoryModule,
+        "mesh": MeshModule,
+        "serialization": SerialModule,
+        "types": TypesModule,
+    }
 )
 
+# package consumers need one intentional stable list of supported public symbols
+__all__ = KPackageExports
 
-from dataclasses import is_dataclass as _is_dataclass
-from enum import Enum as _Enum
+BindTypeGlobals(
+    (
+        vars(AssemblyModule),
+        vars(BrepModule),
+        vars(DocumentModule),
+        vars(GeometryModule),
+        vars(HistoryModule),
+        vars(MeshModule),
+        vars(TypesModule),
+    ),
+    tuple(
+        globals()[NameValue]
+        for NameValue in __all__
+        if isinstance(globals()[NameValue], type)
+    ),
+)
 
-register_types(
+RegisterTypes(
     *(
-        value
-        for name, value in tuple(globals().items())
-        if not name.startswith("_")
-        and isinstance(value, type)
-        and (_is_dataclass(value) or issubclass(value, _Enum))
+        globals()[NameValue]
+        for NameValue in __all__
+        if isinstance(globals()[NameValue], type)
+        and (
+            IsDataClass(globals()[NameValue])
+            or issubclass(globals()[NameValue], EnumBase)
+        )
     )
 )
-register_migration(BrepPayload, _migrate_brep_payload)
 
-
-__all__ = [name for name in globals() if not name.startswith("_")]
+RegMigration(BrepPayload, MigratePayload)

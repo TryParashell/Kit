@@ -9,10 +9,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
+import re as Regex
 from typing import Any, Mapping
 
-from interchange import CadDocument, PayloadRole, frozen_mapping
+from interchange import CadDocument, PayloadRole
+from interchange import frozen_mapping as FreezeMapping
 
 from .adapters import (
     AdapterInfo,
@@ -22,29 +23,35 @@ from .adapters import (
     Source,
     WriteOptions,
     WriteResult,
-    is_windows_device_name,
 )
+from .adapters import is_windows_device_name as IsDeviceName
+from .api_available import ListAdapters
+from .api_brep import ExtractBrep
+from .api_context import KAdapterRegistry, KConvertEngine
+from .api_convert import ConvertFile
+from .api_open import OpenDocument
+from .api_write import WriteDocument
 from .engine import ConversionEngine, ConversionResult
 
 
+# historical registry construction stays stable because direct module consumers may replace the returned registry
 def _build_registry() -> AdapterRegistry:
-    result = AdapterRegistry()
-    result.introspect()
-    return result
+    return KAdapterRegistry
 
 
+# historical registry naming remains public because integrations inspect and replace the shared registry
 registry = _build_registry()
-_engine = ConversionEngine(registry)
+
+# historical engine naming remains public because integrations inspect the initialized coordinator
+_engine = KConvertEngine
 
 
+# historical discovery naming stays stable because sdk consumers inspect and pickle this public function
 def available_adapters() -> tuple[AdapterInfo, ...]:
-    by_id = {adapter.info.format_id: adapter.info for adapter in registry.readers()}
-    by_id.update(
-        {adapter.info.format_id: adapter.info for adapter in registry.writers()}
-    )
-    return tuple(by_id[key] for key in sorted(by_id))
+    return ListAdapters()
 
 
+# historical read naming stays stable because sdk consumers inspect and pickle this public function
 def open_document(
     source: Source,
     *,
@@ -54,18 +61,17 @@ def open_document(
     include_tessellation: bool = True,
     strict: bool = True,
 ) -> CadDocument:
-    return _engine.read(
+    return OpenDocument(
         source,
-        format_id=source_format,
-        options=ReadOptions(
-            configuration=configuration,
-            include_brep=include_brep,
-            include_tessellation=include_tessellation,
-            strict=strict,
-        ),
+        SourceFormat=source_format,
+        Configuration=configuration,
+        IncludeBrep=include_brep,
+        IncludeTess=include_tessellation,
+        StrictMode=strict,
     )
 
 
+# historical write naming stays stable because sdk consumers inspect and pickle this public function
 def write_document(
     document: CadDocument,
     destination: Destination,
@@ -77,24 +83,19 @@ def write_document(
     allow_carrier: bool = True,
     values: Mapping[str, Any] | None = None,
 ) -> WriteResult:
-    selected_values = {"portable": True}
-    if values is not None:
-        selected_values.update(values)
-    selected_values["allow_carrier"] = allow_carrier
-    selected_values["require_self_contained"] = True
-    return _engine.write(
+    return WriteDocument(
         document,
         destination,
-        format_id=destination_format,
-        options=WriteOptions(
-            configuration=configuration,
-            overwrite=overwrite,
-            validate=validate,
-            values=frozen_mapping(selected_values),
-        ),
+        DestFormat=destination_format,
+        Configuration=configuration,
+        Overwrite=overwrite,
+        ValidateData=validate,
+        AllowCarrier=allow_carrier,
+        InputValues=values,
     )
 
 
+# historical conversion naming stays stable because sdk consumers inspect and pickle this public function
 def convert(
     source: Source,
     destination: Destination,
@@ -109,31 +110,22 @@ def convert(
     allow_carrier: bool = True,
     write_values: Mapping[str, Any] | None = None,
 ) -> ConversionResult:
-    values = {"portable": True}
-    if write_values is not None:
-        values.update(write_values)
-    values["allow_carrier"] = allow_carrier
-    values["require_self_contained"] = True
-    return _engine.convert(
+    return ConvertFile(
         source,
         destination,
-        source_format=source_format,
-        destination_format=destination_format,
-        read_options=ReadOptions(
-            configuration=configuration,
-            include_brep=include_brep,
-            include_tessellation=include_tessellation,
-            strict=strict,
-        ),
-        write_options=WriteOptions(
-            configuration=configuration,
-            overwrite=overwrite,
-            validate=True,
-            values=frozen_mapping(values),
-        ),
+        SourceFormat=source_format,
+        DestFormat=destination_format,
+        Configuration=configuration,
+        IncludeBrep=include_brep,
+        IncludeTess=include_tessellation,
+        StrictMode=strict,
+        Overwrite=overwrite,
+        AllowCarrier=allow_carrier,
+        WriteValues=write_values,
     )
 
 
+# historical extraction naming stays stable because sdk consumers inspect and pickle this public function
 def extract_brep(
     source: Source | CadDocument,
     directory: str | Path,
@@ -141,34 +133,22 @@ def extract_brep(
     source_format: str | None = None,
     overwrite: bool = False,
 ) -> tuple[Path, ...]:
-    document = (
-        source
-        if isinstance(source, CadDocument)
-        else open_document(source, source_format=source_format, include_brep=True)
+    return ExtractBrep(
+        source,
+        directory,
+        SourceFormat=source_format,
+        Overwrite=overwrite,
     )
-    target = Path(directory).expanduser().resolve()
-    target.mkdir(parents=True, exist_ok=True)
-    outputs: list[Path] = []
-    used: set[str] = set()
-    payloads = tuple(
-        payload
-        for payload in document.brep_payloads
-        if payload.role == PayloadRole.BREP and payload.data is not None
-    )
-    for index, payload in enumerate(payloads, start=1):
-        base = re.sub(r"[^A-Za-z0-9._-]", "_", payload.id).strip("._-")
-        base = base or f"payload_{index}"
-        if is_windows_device_name(base):
-            base = f"_{base}"
-        name = base
-        suffix = 2
-        while name.lower() in used:
-            name = f"{base}_{suffix}"
-            suffix += 1
-        used.add(name.lower())
-        output = target / f"{name}{payload.file_extension}"
-        if output.exists() and not overwrite:
-            raise FileExistsError(output)
-        output.write_bytes(payload.data)
-        outputs.append(output)
-    return tuple(outputs)
+
+
+# historical mapping helper remains public because direct module consumers imported it before the refactor
+globals()["frozen_mapping"] = FreezeMapping
+
+# historical device helper remains public because direct module consumers imported it before the refactor
+globals()["is_windows_device_name"] = IsDeviceName
+
+# historical regex module remains public because direct module consumers imported it before the refactor
+globals()["re"] = Regex
+
+# historical payload enum remains public because the module intentionally has no restricted export list
+globals()["PayloadRole"] = PayloadRole

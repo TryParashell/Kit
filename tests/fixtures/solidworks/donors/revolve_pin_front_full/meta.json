@@ -25,6 +25,7 @@
   ],
   "depth_present": [false],
   "donor_id": "revolve_pin_front_full",
+  "mo_version": 18000,
   "feature_ids": [31],
   "feature_names": ["Revolve1"],
   "features": [

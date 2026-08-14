@@ -1,0 +1,204 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+from dataclasses import asdict as AsDict
+from dataclasses import fields as GetFields
+from enum import Enum as EnumBase
+from importlib import import_module as ImportModule
+from inspect import getattr_static as GetStaticAttr
+from inspect import signature as GetSignature
+import pickle as PickleCodec
+
+import interchange as InterchangeApi
+from interchange.serialization import KTypeRegistry
+from interchange.serialization import from_data as FromData
+from interchange.serialization import to_data as ToData
+
+from .python_compat_enum_names import KCompatEnumNames
+from .python_compat_facades import KPythonCompatFacades
+from .python_compat_methods import KPythonCompatMethods
+from .python_compat_pickles import KPythonCompatPickles
+from .compat_fields_assembly import KCompatFieldsAssembly
+from .compat_fields_brep import KCompatFieldsBrep
+from .compat_fields_document import KCompatFieldsDocument
+from .compat_fields_geometry import KCompatFieldsGeometry
+from .compat_fields_history import KCompatFieldsHistory
+from .compat_fields_mesh import KCompatFieldsMesh
+from .compat_fields_types import KCompatFieldsTypes
+from .python_compat_top_names import KPythonCompatTopNames
+
+
+# split field expectations combine here so reflection checks use one immutable sequence
+KPythonCompatFields = (
+    *KCompatFieldsAssembly,
+    *KCompatFieldsBrep,
+    *KCompatFieldsDocument,
+    *KCompatFieldsGeometry,
+    *KCompatFieldsHistory,
+    *KCompatFieldsMesh,
+    *KCompatFieldsTypes,
+)
+
+
+# top level names are contractual because adapters historically imported them without module qualification
+def CheckTopLevel() -> None:
+    assert set(InterchangeApi.__all__) == set(KPythonCompatTopNames)
+    for NameText in KPythonCompatTopNames:
+        assert hasattr(InterchangeApi, NameText)
+
+
+# explicit facade exports prevent compatibility from leaking current implementation details
+def CheckExports() -> None:
+    for ModuleName, ExportNames in KPythonCompatFacades:
+        ModuleValue = ImportModule(ModuleName)
+        assert ModuleValue.__all__ == ExportNames
+        for ExportName in ExportNames:
+            assert getattr(ModuleValue, ExportName) is getattr(
+                InterchangeApi, ExportName, getattr(ModuleValue, ExportName)
+            )
+
+
+# dataclass reflection must stay standard because callers use matching fields annotations and asdict
+def CheckClasses() -> None:
+    for QualifiedName, FieldNames in KPythonCompatFields:
+        ModuleName, ClassName = QualifiedName.rsplit(".", 1)
+        ClassType = getattr(ImportModule(ModuleName), ClassName)
+        assert ClassType.__name__ == ClassName
+        assert ClassType.__qualname__ == ClassName
+        assert ClassType.__module__ == ModuleName
+        assert (
+            tuple(FieldValue.name for FieldValue in GetFields(ClassType)) == FieldNames
+        )
+        assert ClassType.__match_args__ == tuple(
+            FieldValue.name
+            for FieldValue in GetFields(ClassType)
+            if not FieldValue.kw_only
+        )
+        assert tuple(ClassType.__annotations__) == tuple(
+            FieldValue.name
+            for FieldValue in GetFields(ClassType)
+            if FieldValue.name in ClassType.__annotations__
+        )
+
+
+# representative values prove standard mapping reflection and positional matching remain functional
+def CheckReflection() -> None:
+    VectorValue = InterchangeApi.Vector2(1.0, 2.0)
+    assert AsDict(VectorValue) == {"x": 1.0, "y": 2.0}
+    assert (
+        str(GetSignature(InterchangeApi.Vector2)) == "(x: 'float', y: 'float') -> None"
+    )
+    assert InterchangeApi.Vector2.__match_args__ == ("x", "y")
+    assert repr(VectorValue) == "Vector2(x=1.0, y=2.0)"
+
+
+# historical methods remain ordinary reflected descriptors instead of transparent lookup aliases
+def CheckMethods() -> None:
+    for QualifiedName, MethodNames in KPythonCompatMethods:
+        ModuleName, ClassName = QualifiedName.rsplit(".", 1)
+        ClassType = getattr(ImportModule(ModuleName), ClassName)
+        for MethodName in MethodNames:
+            DescriptorValue = GetStaticAttr(ClassType, MethodName)
+            MethodValue = (
+                DescriptorValue.__func__
+                if isinstance(DescriptorValue, (classmethod, staticmethod))
+                else DescriptorValue
+            )
+            assert MethodValue.__name__ == MethodName
+            assert MethodValue.__qualname__ == f"{ClassName}.{MethodName}"
+            assert MethodValue.__module__ == ModuleName
+
+
+# every public enum exposes historical names without changing its stable wire values
+def CheckEnumNames() -> None:
+    for TypeName in KCompatEnumNames:
+        EnumType = getattr(InterchangeApi, TypeName)
+        assert issubclass(EnumType, EnumBase)
+        for MemberValue in EnumType:
+            assert (
+                MemberValue.name
+                == MemberValue.value.upper()
+                .replace("mm", "MILLIMETER")
+                .replace("in", "INCH")
+                or getattr(EnumType, MemberValue.name) is MemberValue
+            )
+            assert getattr(EnumType, MemberValue.name) is MemberValue
+
+
+# adapters require the exact historical constructor attribute and predicate contract
+def CheckAdapters() -> None:
+    ValuesSet = frozenset({InterchangeApi.Capability.PARAMETERS})
+    AdapterValue = InterchangeApi.AdapterCapabilities(values=ValuesSet)
+    assert AdapterValue.values == ValuesSet
+    assert AdapterValue.supports(InterchangeApi.Capability.PARAMETERS)
+    assert not AdapterValue.supports(InterchangeApi.Capability.BREP)
+    assert (
+        str(GetSignature(InterchangeApi.AdapterCapabilities))
+        == "(values: 'frozenset[Capability]' = frozenset()) -> None"
+    )
+    assert FromData(ToData(AdapterValue)) == AdapterValue
+
+
+# historical global identities ensure existing pickle streams resolve after internal module splits
+def CheckPickle() -> None:
+    ValuesSet = frozenset({InterchangeApi.Capability.PARAMETERS})
+    SourceValues = (
+        InterchangeApi.Vector2(1.0, 2.0),
+        InterchangeApi.AdapterCapabilities(values=ValuesSet),
+        InterchangeApi.FeatureConfigurationState("default"),
+        InterchangeApi.Matrix4(),
+    )
+    for SourceValue in SourceValues:
+        RestoredValue = PickleCodec.loads(PickleCodec.dumps(SourceValue))
+        assert RestoredValue == SourceValue
+        assert type(RestoredValue) is type(SourceValue)
+
+
+# authentic baseline bytes ensure loading does not only work for newly emitted streams
+def CheckOldPickle() -> None:
+    ExpectedValues = (
+        InterchangeApi.Vector2(1, 2),
+        InterchangeApi.AdapterCapabilities(
+            frozenset({InterchangeApi.Capability.PARAMETERS})
+        ),
+        InterchangeApi.FeatureConfigurationState("x"),
+        InterchangeApi.Matrix4(),
+    )
+    for PickleText, ExpectedValue in zip(KPythonCompatPickles, ExpectedValues):
+        RestoredValue = PickleCodec.loads(bytes.fromhex(PickleText))
+        assert RestoredValue == ExpectedValue
+        assert type(RestoredValue) is type(ExpectedValue)
+
+
+# lowercase serialization imports remain first class historical functions rather than accidental aliases
+def CheckSerialApi() -> None:
+    SerializeModule = ImportModule("interchange.serialization")
+    for FunctionName in dict(KPythonCompatFacades)["interchange.serialization"]:
+        FunctionValue = getattr(SerializeModule, FunctionName)
+        assert FunctionValue.__name__ == FunctionName
+        assert FunctionValue.__qualname__ == FunctionName
+        assert FunctionValue.__module__ == "interchange.serialization"
+        assert PickleCodec.loads(PickleCodec.dumps(FunctionValue)) is FunctionValue
+
+
+# registration remains restricted to historical public models and enums despite split implementation imports
+def CheckRegistry() -> None:
+    IntendedTypes = {
+        getattr(ImportModule(ModuleName), ExportName)
+        for ModuleName, ExportNames in KPythonCompatFacades
+        for ExportName in ExportNames
+        if isinstance(getattr(ImportModule(ModuleName), ExportName), type)
+        and (
+            hasattr(
+                getattr(ImportModule(ModuleName), ExportName), "__dataclass_fields__"
+            )
+            or issubclass(getattr(ImportModule(ModuleName), ExportName), EnumBase)
+        )
+    }
+    assert set(KTypeRegistry.values()) == IntendedTypes
+    assert set(KTypeRegistry) == {ClassType.__name__ for ClassType in IntendedTypes}

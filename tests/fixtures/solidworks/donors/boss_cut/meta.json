@@ -25,6 +25,7 @@
   ],
   "depth_present": [true, true],
   "donor_id": "boss_cut",
+  "mo_version": 18000,
   "feature_ids": [32, 40],
   "feature_names": ["Boss-Extrude1", "Cut-Extrude1"],
   "features": [

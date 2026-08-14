@@ -6,185 +6,77 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
-from dataclasses import dataclass, field, is_dataclass
-from functools import reduce
-from operator import or_
-from typing import Any, Mapping
-
-from .types import GeometryKind, Provenance, Transform, Vector2, Vector3, frozen_mapping
-
-
-@dataclass(frozen=True, slots=True)
-class PointGeometry:
-    point: Vector2
-
-
-@dataclass(frozen=True, slots=True)
-class LineGeometry:
-    start: Vector2
-    end: Vector2
-
-
-@dataclass(frozen=True, slots=True)
-class CircleGeometry:
-    center: Vector2
-    radius: float
-
-
-@dataclass(frozen=True, slots=True)
-class ArcGeometry:
-    center: Vector2
-    radius: float
-    start_angle: float
-    end_angle: float
-
-
-@dataclass(frozen=True, slots=True)
-class EllipseGeometry:
-    center: Vector2
-    major_axis: Vector2
-    major_radius: float
-    minor_radius: float
-
-
-@dataclass(frozen=True, slots=True)
-class ArcEllipseGeometry:
-    center: Vector2
-    major_axis: Vector2
-    major_radius: float
-    minor_radius: float
-    start_angle: float
-    end_angle: float
-
-
-@dataclass(frozen=True, slots=True)
-class HyperbolaGeometry:
-    center: Vector2
-    major_axis: Vector2
-    major_radius: float
-    minor_radius: float
-
-
-@dataclass(frozen=True, slots=True)
-class ArcHyperbolaGeometry:
-    center: Vector2
-    major_axis: Vector2
-    major_radius: float
-    minor_radius: float
-    start_angle: float
-    end_angle: float
-
-
-@dataclass(frozen=True, slots=True)
-class ParabolaGeometry:
-    center: Vector2
-    axis: Vector2
-    focal_length: float
-
-
-@dataclass(frozen=True, slots=True)
-class ArcParabolaGeometry:
-    center: Vector2
-    axis: Vector2
-    focal_length: float
-    start_angle: float
-    end_angle: float
-
-
-@dataclass(frozen=True, slots=True)
-class SplineGeometry:
-    control_points: tuple[Vector2, ...]
-    degree: int
-    knots: tuple[float, ...] = ()
-    multiplicities: tuple[int, ...] = ()
-    weights: tuple[float, ...] = ()
-    periodic: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class NativeGeometry:
-    format_id: str
-    entity_type: str
-    data: Mapping[str, Any] = field(default_factory=frozen_mapping)
-
-
-_GEOMETRY_TYPES = tuple(
-    value
-    for name, value in tuple(globals().items())
-    if name.endswith("Geometry") and isinstance(value, type) and is_dataclass(value)
+from .geometry_conics import (
+    ArcEllipseGeom,
+    ArcHyperGeom,
+    ArcParabGeom,
+    EllipseGeometry,
+    HyperbolaGeom,
+    ParabolaGeom,
 )
-Geometry = reduce(or_, _GEOMETRY_TYPES)
+from .geometry_curves import (
+    ArcGeometry,
+    CircleGeometry,
+    LineGeometry,
+    NativeGeometry,
+    PointGeometry,
+    SplineGeometry,
+)
+from .geometry_types import KGeometryTypes
+from .python_compat import BindCompatMut
+from .selection import Selection, SelectPathElem
+from .sketch import ConstraintRef, Sketch, SketchEntity, SketchRelation
+from .support_plane import SupportPlane
 
+# historical geometry typing remains available because consumers inspect union coverage
+globals()["Geometry"] = KGeometryTypes
 
-@dataclass(frozen=True, slots=True)
-class SupportPlane:
-    id: str
-    name: str
-    transform: Transform
-    support_selection_id: str | None = None
-    offset_parameter_id: str | None = None
-    provenance: Provenance | None = None
-    attributes: Mapping[str, Any] = field(default_factory=frozen_mapping)
+# historical defining module identity preserves direct imports and existing pickle payloads
+BindCompatMut(
+    (
+        PointGeometry,
+        LineGeometry,
+        CircleGeometry,
+        ArcGeometry,
+        EllipseGeometry,
+        ArcEllipseGeom,
+        HyperbolaGeom,
+        ArcHyperGeom,
+        ParabolaGeom,
+        ArcParabGeom,
+        SplineGeometry,
+        NativeGeometry,
+        SupportPlane,
+        SketchEntity,
+        ConstraintRef,
+        SketchRelation,
+        Sketch,
+        SelectPathElem,
+        Selection,
+    ),
+    {__name__: globals()},
+)
 
-
-@dataclass(frozen=True, slots=True)
-class SketchEntity:
-    id: str
-    kind: GeometryKind
-    geometry: Geometry
-    construction: bool = False
-    fixed: bool = False
-    provenance: Provenance | None = None
-    attributes: Mapping[str, Any] = field(default_factory=frozen_mapping)
-
-
-@dataclass(frozen=True, slots=True)
-class ConstraintReference:
-    entity_id: str
-    point: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class SketchConstraint:
-    id: str
-    kind: str
-    references: tuple[ConstraintReference, ...]
-    parameter_id: str | None = None
-    driving: bool = True
-    suppressed: bool = False
-    provenance: Provenance | None = None
-    attributes: Mapping[str, Any] = field(default_factory=frozen_mapping)
-
-
-@dataclass(frozen=True, slots=True)
-class Sketch:
-    id: str
-    name: str
-    support_plane_id: str
-    entities: tuple[SketchEntity, ...]
-    constraints: tuple[SketchConstraint, ...] = ()
-    parameter_ids: tuple[str, ...] = ()
-    closed_profile_entity_ids: tuple[tuple[str, ...], ...] = ()
-    suppressed: bool = False
-    provenance: Provenance | None = None
-    attributes: Mapping[str, Any] = field(default_factory=frozen_mapping)
-
-
-@dataclass(frozen=True, slots=True)
-class SelectionPathElement:
-    entity_kind: str
-    entity_id: str
-    subelement: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class Selection:
-    id: str
-    name: str
-    path: tuple[SelectionPathElement, ...]
-    query: Mapping[str, Any] = field(default_factory=frozen_mapping)
-    point: Vector3 | None = None
-    provenance: Provenance | None = None
-    attributes: Mapping[str, Any] = field(default_factory=frozen_mapping)
+# geometry consumers need one intentional historical public contract
+__all__ = (
+    "ArcEllipseGeometry",
+    "ArcGeometry",
+    "ArcHyperbolaGeometry",
+    "ArcParabolaGeometry",
+    "CircleGeometry",
+    "ConstraintReference",
+    "EllipseGeometry",
+    "Geometry",
+    "HyperbolaGeometry",
+    "LineGeometry",
+    "NativeGeometry",
+    "ParabolaGeometry",
+    "PointGeometry",
+    "Selection",
+    "SelectionPathElement",
+    "Sketch",
+    "SketchConstraint",
+    "SketchEntity",
+    "SplineGeometry",
+    "SupportPlane",
+)

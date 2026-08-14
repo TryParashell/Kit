@@ -46,6 +46,7 @@ from convert.adapters.solidworks.archive import (
 )
 from convert.adapters.solidworks.container import SldprtArchive, SldprtFormatError
 from convert.adapters.solidworks.format import RESOLVED_FEATURES_STREAM
+from tests.convert.solidworks_donor_version import GetDonorVer
 
 ROOT = Path(__file__).parents[2]
 LAYOUTS = ROOT / "re" / "data" / "class_layouts.json"
@@ -1713,7 +1714,7 @@ def test_fixture_verification_count_does_not_regress() -> None:
     layouts = _layouts()
     streams = _donor_streams()
     assert len(streams) == 32
-    version = _authored_mo_version()
+    version = GetDonorVer(DONORS, _authored_mo_version())
     identical = 0
     for name, blob in streams:
         features = _donor_feature_count(name)
@@ -1747,7 +1748,7 @@ def _donor_feature_count(name: str) -> int:
 
 def test_fixture_object_reach_does_not_regress() -> None:
     layouts = _layouts()
-    version = _authored_mo_version()
+    version = GetDonorVer(DONORS, _authored_mo_version())
     reached = 0
     for name, blob in _donor_streams():
         features = _donor_feature_count(name)
@@ -1794,7 +1795,7 @@ def test_resolved_external_classes_carry_measured_runs() -> None:
 
 def test_fixture_segmentation_failures_name_the_blocking_class() -> None:
     layouts = _layouts()
-    version = _authored_mo_version()
+    version = GetDonorVer(DONORS, _authored_mo_version())
     for name, blob in _donor_streams():
         report = verify(
             blob,

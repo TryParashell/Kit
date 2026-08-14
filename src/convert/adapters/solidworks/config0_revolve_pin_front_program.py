@@ -5425,11 +5425,11 @@ def EncodeProgram(Overrides: Mapping[int, Any] | None = None) -> bytes:
     OutputData = bytearray()
     for StartPos, FieldWidth, _OwnerIndex, KindName, DefaultValue in KConfigOps:
         if StartPos != len(OutputData):
-            raise SldprtFormatError(f'Config-0 field program drifted at {StartPos}')
+            raise SldprtFormatError(f"Config-0 field program drifted at {StartPos}")
         FieldValue = FieldOverrides.get(StartPos, DefaultValue)
         FieldData = EncodeField(KindName, FieldValue)
         if len(FieldData) != FieldWidth:
-            raise SldprtFormatError(f'Config-0 field width changed at {StartPos}')
+            raise SldprtFormatError(f"Config-0 field width changed at {StartPos}")
         OutputData.extend(FieldData)
     if len(OutputData) != KReferenceLength:
         raise SldprtFormatError("Config-0 field program did not close its source")

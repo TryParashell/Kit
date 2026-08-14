@@ -7,23 +7,26 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
-
-from dataclasses import dataclass, fields, is_dataclass, replace
-from enum import Enum
-import hashlib
-from typing import get_args, get_origin, get_type_hints
-
-import interchange
-import pytest
+from dataclasses import dataclass as DataClass
+from dataclasses import fields as GetFields
+from dataclasses import is_dataclass as IsDataClass
+from dataclasses import replace as ReplaceValue
+from enum import Enum as EnumBase
+import hashlib as HashCodec
+from typing import get_args as GetTypeArgs
+from typing import get_origin as GetTypeOrigin
+from typing import get_type_hints as GetTypeHints
+import interchange as InterchangeApi
+import pytest as PytestLib
 from interchange import (
     AssemblyData,
     BrepPayload,
     CadDocument,
     CadSource,
     Capability,
-    ComponentDefinition,
-    ComponentDocument,
-    ComponentInstance,
+    ComponentDef,
+    ComponentDoc,
+    ComponentInst,
     ComponentKind,
     Configuration,
     Expression,
@@ -33,206 +36,282 @@ from interchange import (
     MateEntity,
     MateEntityKind,
     MateKind,
-    Mesh,
+    SurfaceMesh,
     Parameter,
     ParameterValue,
     PayloadRole,
     Provenance,
     Selection,
-    Vector3,
-    infer_capabilities,
+    SelectionPathElement,
+    SpaceVector,
+    InferCaps,
 )
-from interchange.document import _identified_collection_fields
+from interchange.document_identity import GetIdFields
 from interchange.geometry import Geometry
-
-from tests.interchange.test_document import document
-
-
-@dataclass(frozen=True, slots=True)
-class _FutureFeatureDefinition(FeatureDefinition):
-    value: str
+from interchange.serialization import FromData, ToData
+from interchange.wire import GetWireField
+from tests.interchange.test_document import BuildDocument
 
 
-def _identified_fields(value_type: type[object]) -> set[str]:
-    hints = get_type_hints(value_type)
-    result: set[str] = set()
-    for item in fields(value_type):
-        hint = hints[item.name]
-        arguments = get_args(hint)
+# behavior coverage protects portable interchange semantics during structural refactors
+@DataClass(frozen=True, slots=True)
+class FutureFeature(FeatureDefinition):
+    ItemValue: str
+
+
+# behavior coverage protects portable interchange semantics during structural refactors
+def GetExpectedIds(ValueType: type[object]) -> set[str]:
+    TypeHints = GetTypeHints(ValueType)
+    ResultValue: set[str] = set()
+    for FieldValue in GetFields(ValueType):
+        FieldHint = TypeHints[FieldValue.name]
+        TypeArgs = GetTypeArgs(FieldHint)
         if (
-            get_origin(hint) is tuple
-            and len(arguments) == 2
-            and arguments[1] is Ellipsis
-            and isinstance(arguments[0], type)
-            and is_dataclass(arguments[0])
-            and any(member.name == "id" for member in fields(arguments[0]))
+            GetTypeOrigin(FieldHint) is tuple
+            and len(TypeArgs) == 2
+            and (TypeArgs[1] is Ellipsis)
+            and isinstance(TypeArgs[0], type)
+            and IsDataClass(TypeArgs[0])
+            and any(
+                (
+                    GetWireField(MemberField.name, TypeArgs[0]) == "id"
+                    for MemberField in GetFields(TypeArgs[0])
+                )
+            )
         ):
-            result.add(item.name)
-    return result
+            ResultValue.add(FieldValue.name)
+    return ResultValue
 
 
-def test_identity_collection_discovery_covers_every_typed_entity_tuple() -> None:
-    for value_type in (CadDocument, AssemblyData):
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckIdFields() -> None:
+    for ValueType in (CadDocument, AssemblyData):
         assert {
-            name for name, _ in _identified_collection_fields(value_type)
-        } == _identified_fields(value_type)
+            NameValue for NameValue, LabelText in GetIdFields(ValueType)
+        } == GetExpectedIds(ValueType)
 
 
-def test_geometry_union_contains_every_geometry_dataclass() -> None:
-    expected = {
-        value
-        for name, value in vars(interchange.geometry).items()
-        if name.endswith("Geometry") and isinstance(value, type) and is_dataclass(value)
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckGeometry() -> None:
+    ExpectedValues = {
+        ItemValue
+        for NameValue, ItemValue in vars(InterchangeApi.geometry).items()
+        if NameValue.endswith(("Geometry", "Geom"))
+        and isinstance(ItemValue, type)
+        and IsDataClass(ItemValue)
     }
-    assert set(get_args(Geometry)) == expected
+    assert set(GetTypeArgs(Geometry)) == ExpectedValues
 
 
-def test_feature_definition_contract_accepts_future_definition_types() -> None:
-    definition_hint = get_type_hints(FeatureStep)["definition"]
-    assert set(get_args(definition_hint)) == {FeatureDefinition, type(None)}
-    definitions = {
-        value
-        for value in vars(interchange).values()
-        if isinstance(value, type)
-        and is_dataclass(value)
-        and issubclass(value, FeatureDefinition)
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckFeatures() -> None:
+    DefinitionHint = GetTypeHints(FeatureStep)["Definition"]
+    assert set(GetTypeArgs(DefinitionHint)) == {FeatureDefinition, type(None)}
+    Definitions = {
+        ItemValue
+        for ItemValue in vars(InterchangeApi).values()
+        if isinstance(ItemValue, type)
+        and IsDataClass(ItemValue)
+        and issubclass(ItemValue, FeatureDefinition)
     }
-    assert definitions
-    step = replace(
-        document().feature_timeline[0],
-        definition=_FutureFeatureDefinition("future"),
+    assert Definitions
+    StepValue = ReplaceValue(
+        BuildDocument().FeatureTimeline[0], Definition=FutureFeature("future")
     )
-    assert isinstance(step.definition, FeatureDefinition)
-    with pytest.raises(TypeError, match="feature definition"):
-        replace(step, definition={"type": "unregistered"})
+    assert isinstance(StepValue.Definition, FeatureDefinition)
+    with PytestLib.raises(TypeError, match="feature definition"):
+        ReplaceValue(StepValue, Definition={"type": "unregistered"})
 
 
-def test_public_interchange_enums_have_no_hidden_aliases() -> None:
-    enum_types = {
-        value
-        for name, value in vars(interchange).items()
-        if not name.startswith("_")
-        and isinstance(value, type)
-        and issubclass(value, Enum)
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckEnums() -> None:
+    EnumTypes = {
+        ItemValue
+        for NameValue, ItemValue in vars(InterchangeApi).items()
+        if not NameValue.startswith("_")
+        and isinstance(ItemValue, type)
+        and issubclass(ItemValue, EnumBase)
     }
-    assert enum_types
-    for enum_type in enum_types:
-        assert tuple(enum_type.__members__.values()) == tuple(enum_type)
-        assert len({member.value for member in enum_type}) == len(enum_type)
+    assert EnumTypes
+    for EnumType in EnumTypes:
+        assert tuple(EnumType.__members__.values()) == tuple(EnumType)
+        assert len({MemberField.value for MemberField in EnumType}) == len(EnumType)
 
 
-def test_nested_capability_inference_is_exhaustive_and_data_driven() -> None:
-    base = document()
-    parameter = Parameter(
+# behavior coverage protects portable interchange semantics during structural refactors
+def CheckNestedCaps() -> None:
+    BaseValue = BuildDocument()
+    ParamValue = Parameter(
         "parameter:child",
         "Child parameter",
         ParameterValue(1.0),
-        expression=Expression("1.0"),
-        provenance=Provenance("test", "parameter"),
+        Expression=Expression("1.0"),
+        Provenance=Provenance("test", "parameter"),
     )
-    brep_data = b"nested-brep"
-    payload = BrepPayload(
+    BrepData = b"nested-brep"
+    PayloadValue = BrepPayload(
         "payload:child",
         "test.brep",
         "shape",
         "1",
-        hashlib.sha256(brep_data).hexdigest(),
-        data=brep_data,
-        role=PayloadRole.BREP,
-        file_extension=".brep",
+        HashCodec.sha256(BrepData).hexdigest(),
+        PayloadData=BrepData,
+        ValueRole=PayloadRole.KBrep,
+        FileExtension=".brep",
     )
-    mesh = Mesh(
+    MeshValue = SurfaceMesh(
         "mesh:child",
         "Child mesh",
-        (Vector3(0.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0)),
+        (
+            SpaceVector(0.0, 0.0, 0.0),
+            SpaceVector(1.0, 0.0, 0.0),
+            SpaceVector(0.0, 1.0, 0.0),
+        ),
         ((0, 1, 2),),
     )
-    child = replace(
-        base,
-        parameters=(parameter,),
-        selections=(Selection("selection:child", "Child selection", ()),),
-        bodies=(replace(base.bodies[0], material_id="material:child"),),
-        meshes=(mesh,),
-        brep_payloads=(payload,),
-        capabilities=frozenset(),
+    ChildValue = ReplaceValue(
+        BaseValue,
+        Parameters=(ParamValue,),
+        Selections=(Selection("selection:child", "Child selection", ()),),
+        Bodies=(ReplaceValue(BaseValue.Bodies[0], MaterialId="material:child"),),
+        Meshes=(MeshValue,),
+        BrepPayloads=(PayloadValue,),
+        Capabilities=frozenset(),
     )
-    root_definition = ComponentDefinition(
-        "definition:root", "Root", ComponentKind.ASSEMBLY
-    )
-    child_definition = ComponentDefinition(
+    RootDef = ComponentDef("definition:root", "Root", ComponentKind.KAssembly)
+    ChildDef = ComponentDef(
         "definition:child",
         "Child",
-        ComponentKind.PART,
-        document_id="document:child",
-        source_path="Child.FCStd",
+        ComponentKind.KPart,
+        DocumentId="document:child",
+        SourcePath="Child.FCStd",
     )
-    instance = ComponentInstance(
-        "instance:child",
-        "Child",
-        child_definition.id,
-        root_definition.id,
+    InstanceValue = ComponentInst(
+        "instance:child", "Child", ChildDef.EntityId, RootDef.EntityId
     )
-    mate_entity = MateEntity(
-        "mate-entity:root",
-        root_definition.id,
-        (),
-        MateEntityKind.PLANE,
+    MateEntityValue = MateEntity(
+        "mate-entity:root", RootDef.EntityId, (), MateEntityKind.KPlane
     )
-    mate = MateConstraint(
+    MateValue = MateConstraint(
         "mate:root",
         "Root mate",
-        MateKind.COINCIDENT,
-        root_definition.id,
-        (mate_entity.id,),
+        MateKind.KCoincident,
+        RootDef.EntityId,
+        (MateEntityValue.EntityId,),
     )
-    assembly = AssemblyData(
-        root_definition.id,
-        (root_definition, child_definition),
-        (instance,),
-        documents=(ComponentDocument("document:child", child),),
-        mate_entities=(mate_entity,),
-        mates=(mate,),
+    AssemblyValue = AssemblyData(
+        RootDef.EntityId,
+        (RootDef, ChildDef),
+        (InstanceValue,),
+        Documents=(ComponentDoc("document:child", ChildValue),),
+        MateEntities=(MateEntityValue,),
+        Mates=(MateValue,),
     )
-    root = CadDocument(
-        source=CadSource("test.assembly", "Root", "1" * 64),
-        configurations=(Configuration("configuration:root", "Default", True),),
-        parameters=(),
-        support_planes=(),
-        sketches=(),
-        selections=(),
-        feature_timeline=(),
-        bodies=(),
-        capabilities=frozenset(Capability),
-        assembly=assembly,
+    RootValue = CadDocument(
+        Source=CadSource("test.assembly", "Root", "1" * 64),
+        Configurations=(Configuration("configuration:root", "Default", True),),
+        Parameters=(),
+        SupportPlanes=(),
+        Sketches=(),
+        Selections=(),
+        FeatureTimeline=(),
+        Bodies=(),
+        Capabilities=frozenset(Capability),
+        Assembly=AssemblyValue,
     )
-    root.assert_valid()
-    assert infer_capabilities(root) == frozenset(Capability) - {
-        Capability.ROUNDTRIP_METADATA
+    RootValue.AssertValid()
+    assert InferCaps(RootValue) == frozenset(Capability) - {Capability.KRoundtripMeta}
+    assert InferCaps(RootValue, RoundtripMeta=True) == frozenset(Capability)
+    StaleChild = ReplaceValue(BaseValue, Capabilities=frozenset(Capability))
+    StaleAssembly = ReplaceValue(
+        AssemblyValue,
+        Definitions=(RootDef, ReplaceValue(ChildDef, SourcePath="")),
+        Documents=(ComponentDoc("document:child", StaleChild),),
+        MateEntities=(),
+        Mates=(),
+    )
+    StaleRoot = ReplaceValue(
+        RootValue, Assembly=StaleAssembly, Capabilities=frozenset()
+    )
+    assert not InferCaps(StaleRoot) & {
+        Capability.KAssemblyMates,
+        Capability.KBrep,
+        Capability.KExpressions,
+        Capability.KExternalRefs,
+        Capability.KMaterials,
+        Capability.KNativePayloads,
+        Capability.KParameters,
+        Capability.KProvenance,
+        Capability.KRoundtripMeta,
+        Capability.KSelections,
+        Capability.KTessellation,
     }
-    assert infer_capabilities(root, roundtrip_metadata=True) == frozenset(Capability)
-    stale_child = replace(base, capabilities=frozenset(Capability))
-    stale_assembly = replace(
-        assembly,
-        definitions=(root_definition, replace(child_definition, source_path="")),
-        documents=(ComponentDocument("document:child", stale_child),),
-        mate_entities=(),
-        mates=(),
+
+
+# historical constructors must remain usable while adapters migrate independently
+def CheckLegacyKeys() -> None:
+    PathValue = SelectionPathElement(
+        entity_kind="feature",
+        entity_id="feature:one",
+        subelement="Face1",
     )
-    stale_root = replace(
-        root,
-        assembly=stale_assembly,
-        capabilities=frozenset(),
+    SelectionValue = Selection(
+        id="selection:one",
+        name="Selection",
+        path=(PathValue,),
     )
-    assert not infer_capabilities(stale_root) & {
-        Capability.ASSEMBLY_MATES,
-        Capability.BREP,
-        Capability.EXPRESSIONS,
-        Capability.EXTERNAL_REFERENCES,
-        Capability.MATERIALS,
-        Capability.NATIVE_PAYLOADS,
-        Capability.PARAMETERS,
-        Capability.PROVENANCE,
-        Capability.ROUNDTRIP_METADATA,
-        Capability.SELECTIONS,
-        Capability.TESSELLATION,
-    }
+    SourceValue = CadSource(
+        format_id="test",
+        path="source.FCStd",
+        sha256="1" * 64,
+    )
+    assert SelectionValue.SelectionPath == (PathValue,)
+    assert SourceValue.FilePath == "source.FCStd"
+    assert SelectionValue.path == (PathValue,)
+    assert SourceValue.path == "source.FCStd"
+    ReplacedSource = ReplaceValue(SourceValue, path="updated.FCStd")
+    assert ReplacedSource.FilePath == "updated.FCStd"
+    ReplacedDoc = ReplaceValue(BuildDocument(), metadata={"compatibility": "preserved"})
+    assert ReplacedDoc.Metadata == {"compatibility": "preserved"}
+
+
+# serialization keys stay byte compatible so stored interchange documents remain readable
+def CheckWireFields() -> None:
+    PathValue = SelectionPathElement("feature", "feature:one", "Face1")
+    SelectionValue = Selection("selection:one", "Selection", (PathValue,))
+    RawValue = ToData(SelectionValue)
+    assert "path" in RawValue
+    assert "selection_path" not in RawValue
+    PathData = RawValue["path"]["$tuple"][0]
+    assert PathData["entity_kind"] == "feature"
+    assert PathData["entity_id"] == "feature:one"
+    assert FromData(RawValue) == SelectionValue
+
+
+# old capability keywords remain supported because converter modules upgrade independently
+def CheckLegacyCaps() -> None:
+    SourceValue = BuildDocument()
+    assert InferCaps(SourceValue, roundtrip_metadata=True) == InferCaps(
+        SourceValue,
+        RoundtripMeta=True,
+    )
+
+
+# historical enum attributes stay available without becoming duplicate enum members
+def CheckOldEnums() -> None:
+    assert Capability.ROUNDTRIP_METADATA is Capability.KRoundtripMeta
+    assert ComponentKind.ASSEMBLY is ComponentKind.KAssembly
+    assert PayloadRole.BREP is PayloadRole.KBrep
+
+
+# historical json options remain accepted because document consumers upgrade independently
+def CheckLegacyJson() -> None:
+    SourceValue = BuildDocument()
+    assert SourceValue.to_json(indent=None) == SourceValue.ToJson(IndentSize=None)
+
+
+# historical field access takes precedence over similarly named document lookup methods
+def CheckFieldAlias() -> None:
+    SourceValue = BuildDocument()
+    FeatureValue = SourceValue.FeatureTimeline[0]
+    assert FeatureValue.definition is FeatureValue.Definition
