@@ -14,4 +14,3 @@ Treat every preexisting concurrent or unexplained workspace change as user owned
 - If user owned work overlaps the requested edit merge the intent carefully and keep both behaviors whenever technically possible
 - Stop and ask only when preserving both changes is impossible or the next action would destroy or rewrite user owned state
 - Report material overlap factually without treating the user activity as an error
-
