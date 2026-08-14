@@ -2224,101 +2224,314 @@ def Selected(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition probes embedded and native freecad archives without vendor runtime
+def ProbeSource(Instance: AnyValue, Source: Source) -> ProbeResult:
+    try:
+        DataValue = SourceBytes(Source)
+        Archive, Members = ValidatedArchiveMembers(DataValue)
+        Archive.close()
+        if ManifestEntry in Members:
+            try:
+                ManifestDoc(ExtractManifestFromFcstd(DataValue))
+            except (ValueError, FreeCadAdapterA) as ErrorInfo:
+                return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
+            return ProbeResult(Instance.info.format_id, 1.0, "Kit FCStd archive")
+        if "Document.xml" in Members:
+            try:
+                Value = ExtractManifestFromFcstd(DataValue)
+            except ValueError as ErrorInfo:
+                if str(ErrorInfo) != "FCStd archive has no embedded Kit interchange document":
+                    return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
+            else:
+                try:
+                    ManifestDoc(Value)
+                except FreeCadAdapterA as ErrorInfo:
+                    return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
+                return ProbeResult(Instance.info.format_id, 1.0, "Kit FCStd archive")
+            Confidence, Reason = ProbeNativeFcstd(DataValue)
+            return ProbeResult(Instance.info.format_id, Confidence, Reason)
+    except (OSError, TypeError, ValueError, Zipfile.BadZipFile) as ErrorInfo:
+        return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
+    return ProbeResult(Instance.info.format_id, 0.0, "ZIP archive has no FreeCAD document")
+
+
+# this definition reads an embedded or native archive into the interchange model
+def ReadSource(Source: Source, Options: ReadOptions | None = None) -> CadDoc:
+    Settings = Options or ReadOptions(include_tessellation=True)
+    DataValue = SourceBytes(Source)
+    Native = False
+    try:
+        Value = ExtractManifestFromFcstd(DataValue)
+    except ValueError as ErrorInfo:
+        if str(ErrorInfo) != "FCStd archive has no embedded Kit interchange document":
+            raise FreeCadAdapterA(str(ErrorInfo)) from ErrorInfo
+        try:
+            DocValue = ReadNativeFcstd(DataValue, SourcePath(Source))
+        except (NativeFreeCadError, TypeError, ValueError) as NativeError:
+            raise FreeCadAdapterA(str(NativeError)) from NativeError
+        Native = True
+    else:
+        DocValue = ManifestDoc(Value)
+    if Native:
+        DocValue = AnnotateNative(DocValue)
+    DocValue = Replace(
+        DocValue,
+        configurations=Selected(DocValue.configurations, Settings.configuration),
+    )
+    DocValue = FilteredDoc(DocValue, Settings)
+    if Settings.strict:
+        DocValue.assert_valid()
+    return DocValue
+
+
+# this definition validates a freecad path or writable binary destination
+def CanWriteTarget(Target: Destination) -> bool:
+    PathValue = ResolveTarget(Target)
+    if PathValue is not None:
+        return PathValue.suffix.casefold() == Suffix.casefold()
+    if not IsBinaryTarget(Target):
+        return False
+    Writable = getattr(Target, "writable", None)
+    if callable(Writable):
+        try:
+            return bool(Writable())
+        except (OSError, ValueError):
+            return False
+    return True
+
+
+# this definition chooses whether an unchanged native archive remains safe to replay
+def SelectNative(
+    DocValue: CadDocument,
+    Selected: WriteOptions,
+    Portable: bool,
+    NativeOuters: Sequence[tuple[str, CadDoc]],
+) -> bytes | None:
+    if Selected.values.get("rebuild", False) is True:
+        return None
+    if Portable and (DocValue.assembly is not None or bool(NativeOuters)):
+        return None
+    return UnchangedNative(DocValue)
+
+
+# this definition returns the exact native replay result and its reference contract
+def ExactResult(
+    Instance: AnyValue,
+    DocValue: CadDocument,
+    Target: Destination,
+    TargetPath: FilePath | None,
+    Overwrite: bool,
+    Portable: bool,
+    NativeOuters: Sequence[tuple[str, CadDoc]],
+    NativeSource: bytes,
+) -> WriteResult:
+    PathValue = WriteBytes(Target, NativeSource, Overwrite)
+    OuterRequirements = DocValue.assembly is not None or bool(NativeOuters)
+    Requirements = ("referenced FreeCAD component files",) if OuterRequirements else ()
+    return WriteResult(
+        path=PathValue,
+        adapter=Instance.info.format_id,
+        bytes_written=len(NativeSource),
+        diagnostics=DocValue.diagnostics,
+        transfers=CapabilityA(DocValue, TargetPath, Portable, True),
+        metadata={
+            "mode": "exact_native_roundtrip",
+            "compatibility": "native-exact",
+            "vendor_loadable": True,
+            "application_usable": True,
+            "native_self_contained": not OuterRequirements,
+            "referenced_files_written": 0,
+            "runtime": "python-stdlib",
+        },
+        requirements=Requirements,
+        application_usable=True,
+        vendor_loadable=True,
+    )
+
+
+# this definition writes referenced documents and returns their archive link state
+def BundleArtifacts(
+    DocValue: CadDocument,
+    TargetPath: FilePath | None,
+    Overwrite: bool,
+    Validate: bool,
+    Portable: bool,
+    NativeOuters: Sequence[tuple[str, CadDoc]],
+    TrustedBreps: frozenset[NativeBrepKey],
+) -> tuple[dict[str, dict[str, AnyValue]], dict[str, str], int, int, str | None, float | None, bool]:
+    OuterLinks: dict[str, dict[str, AnyValue]] = {}
+    NativeLinks: dict[str, str] = {}
+    ComponentBytes = 0
+    NativeBytes = 0
+    DocTimestamp: str | None = None
+    TimestampEpoch: float | None = None
+    CarrierOnly = TargetPath is None and Portable and (
+        bool(NativeOuters) or DocValue.assembly is not None
+    )
+    if TargetPath is not None and DocValue.assembly is not None:
+        DocTimestamp, TimestampEpoch = BundleTimestamp(TargetPath)
+        OuterLinks, ComponentBytes = WriteComponents(
+            DocValue, TargetPath, Overwrite, Validate, DocTimestamp, TimestampEpoch, TrustedBreps
+        )
+    if TargetPath is not None and NativeOuters and Portable:
+        NativeLinks, NativeBytes = WriteNative(
+            DocValue, TargetPath, Overwrite, Validate
+        )
+    return (
+        OuterLinks,
+        NativeLinks,
+        ComponentBytes,
+        NativeBytes,
+        DocTimestamp,
+        TimestampEpoch,
+        CarrierOnly,
+    )
+
+
+# this definition builds stable metadata for a reconstructed freecad archive
+def RebuildMeta(
+    DocValue: CadDocument,
+    OuterLinks: Mapping[str, AnyValue],
+    ComponentBytes: int,
+    NativeLinks: Mapping[str, str],
+    NativeBytes: int,
+    NativeOuters: Sequence[tuple[str, CadDoc]],
+    CarrierOnly: bool,
+    AppUsable: bool,
+) -> dict[str, AnyValue]:
+    AsmValue = DocValue.assembly
+    return {
+        "schema_version": DocValue.schema_version,
+        "sketch_count": len(DocValue.sketches),
+        "timeline_count": len(DocValue.feature_timeline),
+        "native_payload_count": len(DocValue.brep_payloads),
+        "assembly_occurrence_count": len(AsmValue.instances) if AsmValue is not None else 0,
+        "assembly_mate_count": len(AsmValue.mates) if AsmValue is not None else 0,
+        "component_file_count": len(OuterLinks),
+        "component_bytes_written": ComponentBytes,
+        "external_document_file_count": len(NativeLinks),
+        "external_document_bytes_written": NativeBytes,
+        "runtime": "python-stdlib",
+        "recompute_required": True,
+        "native_referenced_files_emitted": not CarrierOnly,
+        "carrier_embedded_reference_count": len(NativeOuters)
+        + (len(AsmValue.documents) if AsmValue is not None else 0),
+        "application_usable": AppUsable,
+        "vendor_loadable": True,
+    }
+
+
+# this definition appends the diagnostic required for stream only references
+def RebuildDiags(DocValue: CadDocument, CarrierOnly: bool) -> tuple[AnyValue, ...]:
+    if not CarrierOnly:
+        return DocValue.diagnostics
+    return (
+        *DocValue.diagnostics,
+        DiagValue(
+            "freecad.references_embedded_without_files",
+            "Referenced documents are retained in the Kit carrier but cannot be exposed as native relative files from a stream destination",
+            Severity.WARNING,
+        ),
+    )
+
+
+# this definition rebuilds and writes a portable freecad archive
+def RebuildResult(
+    Instance: AnyValue,
+    DocValue: CadDocument,
+    Target: Destination,
+    TargetPath: FilePath | None,
+    Selected: WriteOptions,
+    Overwrite: bool,
+    Portable: bool,
+    NativeOuters: Sequence[tuple[str, CadDoc]],
+    TrustedBreps: frozenset[NativeBrepKey],
+) -> WriteResult:
+    OuterLinks, NativeLinks, ComponentBytes, NativeBytes, DocStamp, StampEpoch, CarrierOnly = BundleArtifacts(
+        DocValue, TargetPath, Overwrite, Selected.validate, Portable, NativeOuters, TrustedBreps
+    )
+    DataValue = BuildFcstdArchive(
+        DocToManifest(DocValue),
+        external_links=OuterLinks,
+        native_external_links=NativeLinks,
+        document_timestamp=DocStamp,
+        trusted_native_breps=TrustedBreps,
+    )
+    PathValue = WriteBytes(Target, DataValue, Overwrite)
+    if PathValue is not None and StampEpoch is not None:
+        OsModule.utime(PathValue, (StampEpoch, StampEpoch))
+    Transfers = CapabilityA(DocValue, TargetPath, Portable, False, TrustedBreps)
+    AppUsable = not CarrierOnly and IsNativeGeom(DocValue, TrustedBreps)
+    MetaValue = RebuildMeta(
+        DocValue, OuterLinks, ComponentBytes, NativeLinks, NativeBytes, NativeOuters, CarrierOnly, AppUsable
+    )
+    return WriteResult(
+        path=PathValue,
+        adapter=Instance.info.format_id,
+        bytes_written=len(DataValue),
+        diagnostics=RebuildDiags(DocValue, CarrierOnly),
+        metadata=MetaValue,
+        transfers=Transfers,
+        application_usable=AppUsable,
+        vendor_loadable=True,
+    )
+
+
+# this definition selects exact replay or reconstruction for one write request
+def WriteTarget(
+    Instance: AnyValue,
+    DocValue: CadDocument,
+    Target: Destination,
+    Options: WriteOptions | None,
+    Overwrite: bool | None,
+) -> WriteResult:
+    Selected = Options or WriteOptions()
+    ShouldOverwrite = Selected.overwrite if Overwrite is None else Overwrite
+    if Selected.validate:
+        DocValue.assert_valid()
+    if not Instance.supports(DocValue, Target):
+        raise FreeCadAdapterA(
+            f"FreeCAD destination must be a {Suffix} path or writable binary stream"
+        )
+    TargetPath = ResolveTarget(Target)
+    if TargetPath is not None and TargetPath.exists() and not ShouldOverwrite:
+        raise FileExistsError(TargetPath)
+    Portable = Selected.values.get("portable", True) is True
+    NativeOuters = NativeOuter(DocValue)
+    TrustedBreps = TrustedNative(DocValue)
+    NativeSource = SelectNative(DocValue, Selected, Portable, NativeOuters)
+    if NativeSource is not None:
+        return ExactResult(
+            Instance, DocValue, Target, TargetPath, ShouldOverwrite, Portable, NativeOuters, NativeSource
+        )
+    return RebuildResult(
+        Instance, DocValue, Target, TargetPath, Selected, ShouldOverwrite, Portable, NativeOuters, TrustedBreps
+    )
+
+
+# this definition exposes the adapter protocol through thin delegating methods
 class FreeCadAdapter:
 
-    # this definition exists because focused behavior needs one stable owner
+    # this definition exposes immutable format metadata to adapter discovery
     @property
     def InfoAction(Instance) -> AdapterInfo:
         return InfoValue
 
-    # this definition exists because focused behavior needs one stable owner
+    # this definition delegates archive probing to the focused probe implementation
     def Probe(Instance, Source: Source) -> ProbeResult:
-        try:
-            DataValue = SourceBytes(Source)
-            Archive, Members = ValidatedArchiveMembers(DataValue)
-            Archive.close()
-            if ManifestEntry in Members:
-                try:
-                    Value = ExtractManifestFromFcstd(DataValue)
-                    ManifestDoc(Value)
-                except (ValueError, FreeCadAdapterA) as ErrorInfo:
-                    return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
-                return ProbeResult(Instance.info.format_id, 1.0, "Kit FCStd archive")
-            if "Document.xml" in Members:
-                try:
-                    Value = ExtractManifestFromFcstd(DataValue)
-                except ValueError as ErrorInfo:
-                    if (
-                        str(ErrorInfo)
-                        != "FCStd archive has no embedded Kit interchange document"
-                    ):
-                        return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
-                else:
-                    try:
-                        ManifestDoc(Value)
-                    except FreeCadAdapterA as ErrorInfo:
-                        return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
-                    return ProbeResult(
-                        Instance.info.format_id, 1.0, "Kit FCStd archive"
-                    )
-                Confidence, Reason = ProbeNativeFcstd(DataValue)
-                return ProbeResult(Instance.info.format_id, Confidence, Reason)
-        except (OSError, TypeError, ValueError, Zipfile.BadZipFile) as ErrorInfo:
-            return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
-        return ProbeResult(
-            Instance.info.format_id, 0.0, "ZIP archive has no FreeCAD document"
-        )
+        return ProbeSource(Instance, Source)
 
-    # this definition exists because focused behavior needs one stable owner
+    # this definition delegates archive reading to the focused reader implementation
     def ReadAction(
         Instance, Source: Source, Options: ReadOptions | None = None
     ) -> CadDoc:
-        Settings = Options or ReadOptions(include_tessellation=True)
-        DataValue = SourceBytes(Source)
-        Native = False
-        try:
-            Value = ExtractManifestFromFcstd(DataValue)
-        except ValueError as ErrorInfo:
-            if (
-                str(ErrorInfo)
-                != "FCStd archive has no embedded Kit interchange document"
-            ):
-                raise FreeCadAdapterA(str(ErrorInfo)) from ErrorInfo
-            try:
-                DocValue = ReadNativeFcstd(DataValue, SourcePath(Source))
-            except (NativeFreeCadError, TypeError, ValueError) as NativeError:
-                raise FreeCadAdapterA(str(NativeError)) from NativeError
-            Native = True
-        else:
-            DocValue = ManifestDoc(Value)
-        if Native:
-            DocValue = AnnotateNative(DocValue)
-        DocValue = Replace(
-            DocValue,
-            configurations=Selected(DocValue.configurations, Settings.configuration),
-        )
-        DocValue = FilteredDoc(DocValue, Settings)
-        if Settings.strict:
-            DocValue.assert_valid()
-        return DocValue
+        return ReadSource(Source, Options)
 
-    # this definition exists because focused behavior needs one stable owner
+    # this definition delegates destination checks to the focused support implementation
     def CanSupport(Instance, DocValue: CadDocument, Target: Destination) -> bool:
-        PathValue = ResolveTarget(Target)
-        if PathValue is not None:
-            return PathValue.suffix.casefold() == Suffix.casefold()
-        if not IsBinaryTarget(Target):
-            return False
-        Writable = getattr(Target, "writable", None)
-        if callable(Writable):
-            try:
-                return bool(Writable())
-            except (OSError, ValueError):
-                return False
-        return True
+        return CanWriteTarget(Target)
 
-    # this definition exists because focused behavior needs one stable owner
+    # this definition delegates archive writing to the focused writer implementation
     def Write(
         Instance,
         DocValue: CadDocument,
@@ -2327,145 +2540,7 @@ class FreeCadAdapter:
         *,
         Overwrite: bool | None = None,
     ) -> WriteResult:
-        Selected = Options or WriteOptions()
-        ShouldOverwrite = Selected.overwrite if Overwrite is None else Overwrite
-        if Selected.validate:
-            DocValue.assert_valid()
-        if not Instance.supports(DocValue, Target):
-            raise FreeCadAdapterA(
-                f"FreeCAD destination must be a {Suffix} path or writable binary stream"
-            )
-        TargetPath = ResolveTarget(Target)
-        if TargetPath is not None and TargetPath.exists() and (not ShouldOverwrite):
-            raise FileExistsError(TargetPath)
-        Portable = Selected.values.get("portable", True) is True
-        NativeOuterDocuments = NativeOuter(DocValue)
-        VerifiedNativeSource = UnchangedNative(DocValue)
-        TrustedNativeBreps = TrustedNative(DocValue)
-        NativeSource = (
-            None
-            if Selected.values.get("rebuild", False) is True
-            or (
-                Portable
-                and (DocValue.assembly is not None or bool(NativeOuterDocuments))
-            )
-            else VerifiedNativeSource
-        )
-        if NativeSource is not None:
-            PathValue = WriteBytes(Target, NativeSource, ShouldOverwrite)
-            OuterRequirements = DocValue.assembly is not None or bool(
-                NativeOuterDocuments
-            )
-            Requirements = (
-                ("referenced FreeCAD component files",) if OuterRequirements else ()
-            )
-            return WriteResult(
-                path=PathValue,
-                adapter=Instance.info.format_id,
-                bytes_written=len(NativeSource),
-                diagnostics=DocValue.diagnostics,
-                transfers=CapabilityA(DocValue, TargetPath, Portable, True),
-                metadata={
-                    "mode": "exact_native_roundtrip",
-                    "compatibility": "native-exact",
-                    "vendor_loadable": True,
-                    "application_usable": True,
-                    "native_self_contained": not OuterRequirements,
-                    "referenced_files_written": 0,
-                    "runtime": "python-stdlib",
-                },
-                requirements=Requirements,
-                application_usable=True,
-                vendor_loadable=True,
-            )
-        OuterLinks: dict[str, dict[str, AnyValue]] = {}
-        NativeOuterLinks: dict[str, str] = {}
-        ComponentBytesWritten = 0
-        NativeOuterBytesWritten = 0
-        DocTimestamp: str | None = None
-        TimestampEpoch: float | None = None
-        CarrierOnlyReferences = (
-            TargetPath is None
-            and Portable
-            and (bool(NativeOuterDocuments) or DocValue.assembly is not None)
-        )
-        if TargetPath is not None and DocValue.assembly is not None:
-            DocTimestamp, TimestampEpoch = BundleTimestamp(TargetPath)
-            OuterLinks, ComponentBytesWritten = WriteComponents(
-                DocValue,
-                TargetPath,
-                ShouldOverwrite,
-                Selected.validate,
-                DocTimestamp,
-                TimestampEpoch,
-                TrustedNativeBreps,
-            )
-        if TargetPath is not None and NativeOuterDocuments and Portable:
-            NativeOuterLinks, NativeOuterBytesWritten = WriteNative(
-                DocValue, TargetPath, ShouldOverwrite, Selected.validate
-            )
-        Manifest = DocToManifest(DocValue)
-        DataValue = BuildFcstdArchive(
-            Manifest,
-            external_links=OuterLinks,
-            native_external_links=NativeOuterLinks,
-            document_timestamp=DocTimestamp,
-            trusted_native_breps=TrustedNativeBreps,
-        )
-        PathValue = WriteBytes(Target, DataValue, ShouldOverwrite)
-        if PathValue is not None and TimestampEpoch is not None:
-            OsModule.utime(PathValue, (TimestampEpoch, TimestampEpoch))
-        Transfers = CapabilityA(
-            DocValue, TargetPath, Portable, False, TrustedNativeBreps
-        )
-        AppUsable = not CarrierOnlyReferences and IsNativeGeom(
-            DocValue, TrustedNativeBreps
-        )
-        MetaValue = {
-            "schema_version": DocValue.schema_version,
-            "sketch_count": len(DocValue.sketches),
-            "timeline_count": len(DocValue.feature_timeline),
-            "native_payload_count": len(DocValue.brep_payloads),
-            "assembly_occurrence_count": (
-                len(DocValue.assembly.instances) if DocValue.assembly is not None else 0
-            ),
-            "assembly_mate_count": (
-                len(DocValue.assembly.mates) if DocValue.assembly is not None else 0
-            ),
-            "component_file_count": len(OuterLinks),
-            "component_bytes_written": ComponentBytesWritten,
-            "external_document_file_count": len(NativeOuterLinks),
-            "external_document_bytes_written": NativeOuterBytesWritten,
-            "runtime": "python-stdlib",
-            "recompute_required": True,
-            "native_referenced_files_emitted": not CarrierOnlyReferences,
-            "carrier_embedded_reference_count": len(NativeOuterDocuments)
-            + (
-                len(DocValue.assembly.documents) if DocValue.assembly is not None else 0
-            ),
-            "application_usable": AppUsable,
-            "vendor_loadable": True,
-        }
-        Diagnostics = DocValue.diagnostics
-        if CarrierOnlyReferences:
-            Diagnostics = (
-                *Diagnostics,
-                DiagValue(
-                    "freecad.references_embedded_without_files",
-                    "Referenced documents are retained in the Kit carrier but cannot be exposed as native relative files from a stream destination",
-                    Severity.WARNING,
-                ),
-            )
-        return WriteResult(
-            path=PathValue,
-            adapter=Instance.info.format_id,
-            bytes_written=len(DataValue),
-            diagnostics=Diagnostics,
-            metadata=MetaValue,
-            transfers=Transfers,
-            application_usable=AppUsable,
-            vendor_loadable=True,
-        )
+        return WriteTarget(Instance, DocValue, Target, Options, Overwrite)
 
     locals()["info"] = InfoAction
     locals()["probe"] = Probe

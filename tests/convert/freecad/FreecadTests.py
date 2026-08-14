@@ -701,37 +701,7 @@ def TestPartdesignA() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def AddLinear(DocRoot: ET.Element) -> None:
-        ObjectData = DocRoot.find('./ObjectData')
-        ObjectsData = DocRoot.find('./Objects')
-        assert ObjectData is not None
-        assert ObjectsData is not None
-        ObjectsData.set('Count', str(int(ObjectsData.get('Count', '0')) + 1))
-        ObjectData.set('Count', str(int(ObjectData.get('Count', '0')) + 1))
-        BodyDeps = ObjectsData.find("./ObjectDeps[@Name='Body']")
-        assert BodyDeps is not None
-        XmlTree.SubElement(BodyDeps, 'Dep', {'Name': 'LinearPattern'})
-        BodyDeps.set('Count', str(int(BodyDeps.get('Count', '0')) + 1))
-        PatternDeps = XmlTree.SubElement(ObjectsData, 'ObjectDeps', {'Name': 'LinearPattern', 'Count': '3'})
-        for DependencyName in ('Pad', 'Sketch', 'Body'):
-            XmlTree.SubElement(PatternDeps, 'Dep', {'Name': DependencyName})
-        XmlTree.SubElement(ObjectsData, 'Object', {'type': 'PartDesign::LinearPattern', 'name': 'LinearPattern', 'id': '5'})
-        BodyProperties = ObjectData.find("./Object[@name='Body']/Properties")
-        assert BodyProperties is not None
-        GroupData = BodyProperties.find("./Property[@name='Group']/LinkList")
-        TipData = BodyProperties.find("./Property[@name='Tip']/Link")
-        assert GroupData is not None
-        assert TipData is not None
-        XmlTree.SubElement(GroupData, 'Link', {'value': 'LinearPattern'})
-        GroupData.set('count', str(int(GroupData.get('count', '0')) + 1))
-        TipData.set('value', 'LinearPattern')
-        OriginalsData = NativeProp('Originals', 'App::PropertyLinkList', 'LinkList', {'count': '1'})
-        XmlTree.SubElement(OriginalsData[0], 'Link', {'value': 'Pad'})
-        DirectionData = NativeProp('Direction', 'App::PropertyLinkSub', 'LinkSub', {'value': 'Sketch', 'count': '1'})
-        XmlTree.SubElement(DirectionData[0], 'Sub', {'value': 'N_Axis'})
-        PropertiesData = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'LinearPattern'}), OriginalsData, DirectionData, NativeProp('Length', 'App::PropertyLength', 'Float', {'value': '10'}), NativeProp('Offset', 'App::PropertyLength', 'Float', {'value': '5'}), NativeProp('Occurrences', 'App::PropertyInteger', 'Integer', {'value': '3'}), NativeProp('Mode', 'App::PropertyEnumeration', 'Integer', {'value': '0'}), NativeProp('Reversed', 'App::PropertyBool', 'Bool', {'value': 'false'}))
-        PatternData = XmlTree.SubElement(ObjectData, 'Object', {'name': 'LinearPattern'})
-        PatternProperties = XmlTree.SubElement(PatternData, 'Properties', {'Count': str(len(PropertiesData)), 'TransientCount': '0'})
-        PatternProperties.extend(PropertiesData)
+        AddLinearPatternMut(DocRoot)
     DocData = FreeCadAdapter().read(RewriteDocXml(NativePart(), AddLinear))
     PatternData = next((ItemData for ItemData in DocData.feature_timeline if ItemData.kind == FeatureKind.PATTERN))
     assert isinstance(PatternData.definition, LinearPatternFeature)
@@ -751,37 +721,7 @@ def TestPartdesignB() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def AddPolarPattern(DocRoot: ET.Element) -> None:
-        ObjectData = DocRoot.find('./ObjectData')
-        ObjectsData = DocRoot.find('./Objects')
-        assert ObjectData is not None
-        assert ObjectsData is not None
-        ObjectsData.set('Count', str(int(ObjectsData.get('Count', '0')) + 1))
-        ObjectData.set('Count', str(int(ObjectData.get('Count', '0')) + 1))
-        BodyDeps = ObjectsData.find("./ObjectDeps[@Name='Body']")
-        assert BodyDeps is not None
-        XmlTree.SubElement(BodyDeps, 'Dep', {'Name': 'PolarPattern'})
-        BodyDeps.set('Count', str(int(BodyDeps.get('Count', '0')) + 1))
-        PatternDeps = XmlTree.SubElement(ObjectsData, 'ObjectDeps', {'Name': 'PolarPattern', 'Count': '3'})
-        for DependencyName in ('Pad', 'Sketch', 'Body'):
-            XmlTree.SubElement(PatternDeps, 'Dep', {'Name': DependencyName})
-        XmlTree.SubElement(ObjectsData, 'Object', {'type': 'PartDesign::PolarPattern', 'name': 'PolarPattern', 'id': '5'})
-        BodyProperties = ObjectData.find("./Object[@name='Body']/Properties")
-        assert BodyProperties is not None
-        GroupData = BodyProperties.find("./Property[@name='Group']/LinkList")
-        TipData = BodyProperties.find("./Property[@name='Tip']/Link")
-        assert GroupData is not None
-        assert TipData is not None
-        XmlTree.SubElement(GroupData, 'Link', {'value': 'PolarPattern'})
-        GroupData.set('count', str(int(GroupData.get('count', '0')) + 1))
-        TipData.set('value', 'PolarPattern')
-        OriginalsData = NativeProp('Originals', 'App::PropertyLinkList', 'LinkList', {'count': '1'})
-        XmlTree.SubElement(OriginalsData[0], 'Link', {'value': 'Pad'})
-        AxisData = NativeProp('Axis', 'App::PropertyLinkSub', 'LinkSub', {'value': 'Sketch', 'count': '1'})
-        XmlTree.SubElement(AxisData[0], 'Sub', {'value': 'N_Axis'})
-        PropertiesData = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'PolarPattern'}), OriginalsData, AxisData, NativeProp('Angle', 'App::PropertyAngle', 'Float', {'value': '360'}), NativeProp('Occurrences', 'App::PropertyInteger', 'Integer', {'value': '4'}), NativeProp('Reversed', 'App::PropertyBool', 'Bool', {'value': 'false'}))
-        PatternData = XmlTree.SubElement(ObjectData, 'Object', {'name': 'PolarPattern'})
-        PatternProperties = XmlTree.SubElement(PatternData, 'Properties', {'Count': str(len(PropertiesData)), 'TransientCount': '0'})
-        PatternProperties.extend(PropertiesData)
+        AddPolarPatternMut(DocRoot)
     DocData = FreeCadAdapter().read(RewriteDocXml(NativePart(), AddPolarPattern))
     PatternData = next((ItemData for ItemData in DocData.feature_timeline if ItemData.kind == FeatureKind.PATTERN))
     assert isinstance(PatternData.definition, CircularPatternFeature)
