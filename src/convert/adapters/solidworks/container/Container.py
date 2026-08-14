@@ -94,25 +94,12 @@ class SldprtArchive:
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def OpenAction(ClassType, SourcePath: str | FilePath) -> SldprtArchive:
-        Source = FilePath(SourcePath).expanduser().resolve()
-        try:
-            BlobValue = Source.read_bytes()
-        except OSError as ErrorInfo:
-            raise SldprtFormat(f'cannot read {Source}: {ErrorInfo}') from ErrorInfo
-        return ClassType.from_bytes(BlobValue, Source)
+        return OpenArchive(ClassType, SourcePath)
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def FromBytes(ClassType, BlobValue: bytes | bytearray, SourcePath: str | FilePath='<memory>') -> SldprtArchive:
-        Source = FilePath(SourcePath)
-        DataValue = bytes(BlobValue)
-        if len(DataValue) < 8:
-            raise SldprtFormat('file is too short to contain an SLDPRT header')
-        FileId, FormatVersion = Struct.unpack_from('>II', DataValue, 0)
-        if FormatVersion not in ContainerVersions:
-            raise SldprtFormat(f'unsupported SLDPRT container version {FormatVersion}')
-        Records = ScanRecords(DataValue)
-        return ClassType(Source, FileId, FormatVersion, Records)
+        return ParseArchive(ClassType, BlobValue, SourcePath)
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -121,10 +108,7 @@ class SldprtArchive:
 
     # this definition exists because focused behavior needs one stable owner
     def GetAction(Instance, NameValue: str) -> bytes | None:
-        for Record in Instance.records:
-            if Record.name == NameValue:
-                return Record.data
-        return None
+        return next((Record.data for Record in Instance.records if Record.name == NameValue), None)
 
     # this definition exists because focused behavior needs one stable owner
     def Require(Instance, NameValue: str) -> bytes:
@@ -138,8 +122,40 @@ class SldprtArchive:
     locals()['require'] = Require
     locals()['streams'] = Streams
 
+# this definition exists because archive loading needs one filesystem boundary
+def OpenArchive(ClassType, SourcePath: str | FilePath) -> SldprtArchive:
+    Source = FilePath(SourcePath).expanduser().resolve()
+    try:
+        BlobValue = Source.read_bytes()
+    except OSError as ErrorInfo:
+        raise SldprtFormat(f'cannot read {Source}: {ErrorInfo}') from ErrorInfo
+    return ClassType.from_bytes(BlobValue, Source)
+
+# this definition exists because archive parsing needs one validated construction boundary
+def ParseArchive(ClassType, BlobValue: bytes | bytearray, SourcePath: str | FilePath='<memory>') -> SldprtArchive:
+    Source = FilePath(SourcePath)
+    DataValue = bytes(BlobValue)
+    if len(DataValue) < 8:
+        raise SldprtFormat('file is too short to contain an SLDPRT header')
+    FileId, FormatVersion = Struct.unpack_from('>II', DataValue, 0)
+    if FormatVersion not in ContainerVersions:
+        raise SldprtFormat(f'unsupported SLDPRT container version {FormatVersion}')
+    Records = ScanRecords(DataValue)
+    return ClassType(Source, FileId, FormatVersion, Records)
+
 # this definition exists because focused behavior needs one stable owner
 def BuildSldprt(Streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]], *, FileId: int | None=None, FormatVersion: int=4, Template: bytes | bytearray | None=None, Signatures: tuple[bytes, bytes, bytes] | None=None) -> bytes:
+    FileId, SignatureSet, TypeIds = ResolveBuild(FileId, Template, Signatures)
+    if not 0 <= FileId <= 4294967295:
+        raise ValueError('SLDPRT file id must fit in 32 bits')
+    if FormatVersion not in ContainerVersions:
+        raise ValueError('SLDPRT container version must be 3 or 4')
+    Items = list(Streams.items() if isinstance(Streams, Mapping) else Streams)
+    ValidateStreams(Items)
+    return EmitSldprt(Items, FileId, FormatVersion, SignatureSet, TypeIds)
+
+# this definition exists because build configuration needs one validation boundary
+def ResolveBuild(FileId: int | None, Template: bytes | bytearray | None, Signatures: tuple[bytes, bytes, bytes] | None) -> tuple[int, tuple[bytes, bytes, bytes], dict[str, int]]:
     TypeIds: dict[str, int] = {}
     if Template is not None and Signatures is not None:
         raise ValueError('SLDPRT signatures cannot be given alongside a template')
@@ -163,17 +179,19 @@ def BuildSldprt(Streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]], *, F
         elif FileId != Archive.file_id:
             raise ValueError('SLDPRT template file id does not match the requested file id')
         Signatures, TypeIds = TemplateFields(TemplateData, Archive)
-    if not 0 <= FileId <= 4294967295:
-        raise ValueError('SLDPRT file id must fit in 32 bits')
-    if FormatVersion not in ContainerVersions:
-        raise ValueError('SLDPRT container version must be 3 or 4')
-    Items = list(Streams.items() if isinstance(Streams, Mapping) else Streams)
+    return (FileId, Signatures, TypeIds)
+
+# this definition exists because stream validation must precede any emitted bytes
+def ValidateStreams(Items: list[tuple[str, bytes]]) -> None:
     Names = [NameValue for NameValue, Ignored in Items]
     if len(Names) != len(set(Names)):
         raise ValueError('SLDPRT stream names must be unique')
     if len(Items) > KMaxFolderStreamCount:
         raise ValueError('SLDPRT stream count must fit in the native directory')
-    LocalSignature, CentralSignature, EndSignature = Signatures
+
+# this definition exists because local record emission is separate from directory finalization
+def EmitSldprt(Items: list[tuple[str, bytes]], FileId: int, FormatVersion: int, Signatures: tuple[bytes, bytes, bytes], TypeIds: dict[str, int]) -> bytes:
+    LocalSignature, CentralSignature, EndBytes = Signatures
     Output = bytearray(Struct.pack('>II', FileId, FormatVersion))
     Encoded: list[tuple[int, str, int, int, int, int]] = []
     for NameValue, Payload in Items:
@@ -184,6 +202,10 @@ def BuildSldprt(Streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]], *, F
         Output.extend(LocalSignature)
         Output.extend(Record)
         Encoded.append((TypeId, NameValue, CrcThreeTwoValue, CompressedSize, len(DataValue), LocalOffset))
+    return FinishArchiveMut(Output, Encoded, CentralSignature, EndBytes)
+
+# this definition exists because directory finalization enforces native offset bounds centrally
+def FinishArchiveMut(Output: bytearray, Encoded: list[tuple[int, str, int, int, int, int]], CentralSignature: bytes, EndBytes: bytes) -> bytes:
     CentralOffset = len(Output) - KArchiveOffset
     if CentralOffset > KMaxArchiveOffset:
         raise ValueError('SLDPRT local records exceed the native offset range')
@@ -192,7 +214,7 @@ def BuildSldprt(Streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]], *, F
     CentralSize = len(Output) - KArchiveOffset - CentralOffset
     if CentralSize > KMaxArchiveOffset:
         raise ValueError('SLDPRT directory exceeds the native size range')
-    Output.extend(EndSignature)
+    Output.extend(EndBytes)
     Output.extend(Struct.pack('<HHHHIIH', 0, 0, len(Encoded), len(Encoded), CentralSize, CentralOffset, 0))
     return bytes(Output)
 
@@ -217,6 +239,10 @@ def ScanRecords(BlobValue: bytes) -> tuple[StreamRecord, ...]:
             raise SldprtFormat('unreasonable number of streams')
     if not Candidates:
         raise SldprtFormat('no valid compressed SLDPRT streams were found')
+    return UniqueRecordsMut(Candidates)
+
+# this definition exists because duplicate stream arbitration is independent from record scanning
+def UniqueRecordsMut(Candidates: list[StreamRecord]) -> tuple[StreamRecord, ...]:
 
     # this callback exists because local behavior needs one focused transformation
     Candidates.sort(key=lambda Record: Record.offset)
@@ -303,6 +329,19 @@ def TemplateFields(BlobValue: bytes, Archive: SldprtArchive) -> tuple[tuple[byte
     if len(LocalSignatures) != 1 or any((len(Value) != 4 for Value in LocalSignatures)):
         raise ValueError('SLDPRT template has inconsistent local signatures')
     Expected = {(ItemValue.name, ItemValue.crc32, ItemValue.compressed_size, ItemValue.uncompressed_size) for ItemValue in Records}
+    CentralMarkers = CentralMarks(BlobValue, Records, Expected)
+    if len(CentralMarkers) != len(Records):
+        raise ValueError('SLDPRT template central directory is incomplete')
+    CentralSignatures = {BlobValue[Marker - 6:Marker - 2] for Marker in CentralMarkers if BlobValue[Marker - 2:Marker] == b'\x00\x00'}
+    if len(CentralSignatures) != 1:
+        raise ValueError('SLDPRT template has inconsistent central signatures')
+    CentralStart = CentralMarkers[0] - 6
+    EndBytes = EndSignature(BlobValue, CentralStart, len(Records))
+    TypeIds = {ItemValue.name: Struct.unpack_from('<I', ItemValue.signature, 6)[0] for ItemValue in Records}
+    return ((next(iter(LocalSignatures)), next(iter(CentralSignatures)), EndBytes), TypeIds)
+
+# this definition exists because central directory discovery needs isolated candidate filtering
+def CentralMarks(BlobValue: bytes, Records: tuple[StreamRecord, ...], Expected: set[tuple[str, int, int, int]]) -> list[int]:
     CentralMarkers: list[int] = []
     Cursor = max((ItemValue.payload_offset + ItemValue.compressed_size for ItemValue in Records))
     while True:
@@ -325,15 +364,7 @@ def TemplateFields(BlobValue: bytes, Archive: SldprtArchive) -> tuple[tuple[byte
             continue
         if (NameValue, CrcThreeTwoValue, CompressedSize, SizeValue) in Expected:
             CentralMarkers.append(Marker)
-    if len(CentralMarkers) != len(Records):
-        raise ValueError('SLDPRT template central directory is incomplete')
-    CentralSignatures = {BlobValue[Marker - 6:Marker - 2] for Marker in CentralMarkers if BlobValue[Marker - 2:Marker] == b'\x00\x00'}
-    if len(CentralSignatures) != 1:
-        raise ValueError('SLDPRT template has inconsistent central signatures')
-    CentralStart = CentralMarkers[0] - 6
-    EndBytes = EndSignature(BlobValue, CentralStart, len(Records))
-    TypeIds = {ItemValue.name: Struct.unpack_from('<I', ItemValue.signature, 6)[0] for ItemValue in Records}
-    return ((next(iter(LocalSignatures)), next(iter(CentralSignatures)), EndBytes), TypeIds)
+    return CentralMarkers
 
 # this definition exists because focused behavior needs one stable owner
 def EndSignature(BlobValue: bytes, CentralStart: int, Count: int) -> bytes:
