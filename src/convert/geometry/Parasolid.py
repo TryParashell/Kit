@@ -2100,9 +2100,14 @@ def ParseBCurve(DataValue: bytes, OffsetData: int) -> BCurveRecord | None:
     if Start is None:
         return None
     if Start == OffsetData + 2:
-        Compact = ParseCompactCurve(DataValue, OffsetData, Start)
+        Compact = ParseCompCurve(DataValue, OffsetData, Start)
         if Compact is not None:
             return Compact
+    return ParseExtCurve(DataValue, OffsetData, Start)
+
+
+# extended curve parsing validates the carrier header and construction references
+def ParseExtCurve(DataValue: bytes, OffsetData: int, Start: int) -> BCurveRecord | None:
     Decoded = XmtData(DataValue, Start)
     if Decoded is None:
         return None
@@ -2132,7 +2137,7 @@ def ParseBCurve(DataValue: bytes, OffsetData: int) -> BCurveRecord | None:
 
 
 # compact curve parsing isolates the fixed width carrier representation
-def ParseCompactCurve(DataValue: bytes, OffsetData: int, Start: int) -> BCurveRecord | None:
+def ParseCompCurve(DataValue: bytes, OffsetData: int, Start: int) -> BCurveRecord | None:
     CompactAttr = ReadShort(DataValue, Start)
     CompactDescriptor = ReadShort(DataValue, Start + 2)
     CompactEnd = Start + 12
@@ -2315,32 +2320,47 @@ def ResolveNurbSurf(Record: BSurfaceRecord, Descriptors: Mapping[int, NurbsSurfR
     VKnots = FloatArrays.get(Descriptor.references[4])
     if Control is None or Control.kind != 45 or UMultiplicities is None or (VMultiplicities is None) or (UKnots is None) or (UKnots.kind != 128) or (VKnots is None) or (VKnots.kind != 128) or (len(UMultiplicities.values) != len(UKnots.values)) or (len(VMultiplicities.values) != len(VKnots.values)) or any((LeftValue >= Right for Values in (UKnots.values, VKnots.values) for LeftValue, Right in zip(Values, Values[1:]))):
         return None
+    Shape = NurbsSurfShape(Descriptor, Control, UMultiplicities, VMultiplicities, UKnots, VKnots)
+    if Shape is None:
+        return None
+    CountU, CountV, DegreeU, DegreeV, Dimension, Periodic, Closed, Rational, KnotTypes, KnotCounts, SurfForm = Shape
+    PointData = NurbsSurfPoints(Control.values, Dimension, Rational)
+    if PointData is None:
+        return None
+    Points, Weights = PointData
+    RowsValue = tuple((tuple(Points[Index * CountV:(Index + 1) * CountV]) for Index in range(CountU)))
+    WeightRows = tuple((tuple(Weights[Index * CountV:(Index + 1) * CountV]) for Index in range(CountU))) if Rational else ()
+    Attrs = FrozenMapping({'state': Record.state, 'sense': Record.sense, 'header_references': Record.header_references, 'descriptor_reference': Record.descriptor_reference, 'data_reference': Record.data_reference, 'descriptor_layout': Descriptor.layout, 'degrees': (DegreeU, DegreeV), 'counts': (CountU, CountV), 'periodic': Periodic, 'knot_types': KnotTypes, 'knot_counts': KnotCounts, 'array_references': Descriptor.references, 'rational': Rational, 'closed': Closed, 'surface_form': SurfForm, 'vertex_dimension': Dimension, 'surface_data_intervals': DataRecord.intervals if DataRecord is not None else (), 'surface_data_self_intersection': DataRecord.self_intersection if DataRecord is not None else 0, 'surface_data_flags': DataRecord.flags if DataRecord is not None else b'', 'surface_data_references': DataRecord.references if DataRecord is not None else (), 'surface_record': Record.raw, 'descriptor_record': Descriptor.raw, 'surface_data_record': DataRecord.raw if DataRecord is not None else b'', 'control_record': Control.raw, 'u_multiplicity_record': UMultiplicities.raw, 'v_multiplicity_record': VMultiplicities.raw, 'u_knot_record': UKnots.raw, 'v_knot_record': VKnots.raw})
+    return NurbsSurface(NativeId('surface', Record.attribute), DegreeU, DegreeV, RowsValue, UKnots.values, VKnots.values, UMultiplicities.values, VMultiplicities.values, WeightRows, Periodic[0], Periodic[1], attributes=Attrs)
+
+
+# surface shape resolution unifies compact inference with explicit descriptor metadata
+def NurbsSurfShape(Descriptor: NurbsSurfRecord, Control: FloatArray, UMultiplicities: ShortArray, VMultiplicities: ShortArray, UKnots: FloatArray, VKnots: FloatArray) -> tuple[object, ...] | None:
     if Descriptor.layout == 'compact':
         Inferred = CompactNurbSurf(len(Control.values), UMultiplicities.values, VMultiplicities.values)
         if Inferred is None:
             return None
         CountU, CountV, DegreeU, DegreeV, Dimension = Inferred
-        Periodic = (False, False)
-        Closed = (False, False)
-        Rational = Dimension == 4
-        KnotTypes = (0, 0)
-        KnotCounts = (len(UKnots.values), len(VKnots.values))
-        SurfForm = 0
+        Periodic, Closed = (False, False), (False, False)
+        Rational, KnotTypes = Dimension == 4, (0, 0)
+        KnotCounts, SurfForm = (len(UKnots.values), len(VKnots.values)), 0
     else:
         CountU, CountV = Descriptor.counts
         DegreeU, DegreeV = Descriptor.degrees
-        Dimension = Descriptor.vertex_dimension
-        Periodic = Descriptor.periodic
-        Closed = Descriptor.closed
-        Rational = Descriptor.rational
-        KnotTypes = Descriptor.knot_types
-        KnotCounts = Descriptor.knot_counts
-        SurfForm = Descriptor.surface_form
-    if len(Control.values) != CountU * CountV * Dimension or len(UKnots.values) != KnotCounts[0] or len(VKnots.values) != KnotCounts[1] or (sum(UMultiplicities.values) != CountU + DegreeU + 1) or (sum(VMultiplicities.values) != CountV + DegreeV + 1):
-        return None
-    Points = []
-    Weights = []
-    for PoleValue in (Control.values[Index:Index + Dimension] for Index in range(0, len(Control.values), Dimension)):
+        Dimension, Periodic, Closed = Descriptor.vertex_dimension, Descriptor.periodic, Descriptor.closed
+        Rational, KnotTypes = Descriptor.rational, Descriptor.knot_types
+        KnotCounts, SurfForm = Descriptor.knot_counts, Descriptor.surface_form
+    IsValid = len(Control.values) == CountU * CountV * Dimension
+    IsValid = IsValid and len(UKnots.values) == KnotCounts[0] and len(VKnots.values) == KnotCounts[1]
+    IsValid = IsValid and sum(UMultiplicities.values) == CountU + DegreeU + 1
+    IsValid = IsValid and sum(VMultiplicities.values) == CountV + DegreeV + 1
+    return (CountU, CountV, DegreeU, DegreeV, Dimension, Periodic, Closed, Rational, KnotTypes, KnotCounts, SurfForm) if IsValid else None
+
+
+# surface pole decoding restores euclidean points and validated rational weights
+def NurbsSurfPoints(Values: Sequence[float], Dimension: int, Rational: bool) -> tuple[tuple[VectorThree, ...], tuple[float, ...]] | None:
+    Points, Weights = [], []
+    for PoleValue in (Values[Index:Index + Dimension] for Index in range(0, len(Values), Dimension)):
         Weight = PoleValue[3] if Rational else 1.0
         if not MathValue.isfinite(Weight) or Weight <= 0.0:
             return None
@@ -2350,10 +2370,7 @@ def ResolveNurbSurf(Record: BSurfaceRecord, Descriptors: Mapping[int, NurbsSurfR
         Points.append(VectorThree(*Coords))
         if Rational:
             Weights.append(Weight)
-    RowsValue = tuple((tuple(Points[Index * CountV:(Index + 1) * CountV]) for Index in range(CountU)))
-    WeightRows = tuple((tuple(Weights[Index * CountV:(Index + 1) * CountV]) for Index in range(CountU))) if Rational else ()
-    Attrs = FrozenMapping({'state': Record.state, 'sense': Record.sense, 'header_references': Record.header_references, 'descriptor_reference': Record.descriptor_reference, 'data_reference': Record.data_reference, 'descriptor_layout': Descriptor.layout, 'degrees': (DegreeU, DegreeV), 'counts': (CountU, CountV), 'periodic': Periodic, 'knot_types': KnotTypes, 'knot_counts': KnotCounts, 'array_references': Descriptor.references, 'rational': Rational, 'closed': Closed, 'surface_form': SurfForm, 'vertex_dimension': Dimension, 'surface_data_intervals': DataRecord.intervals if DataRecord is not None else (), 'surface_data_self_intersection': DataRecord.self_intersection if DataRecord is not None else 0, 'surface_data_flags': DataRecord.flags if DataRecord is not None else b'', 'surface_data_references': DataRecord.references if DataRecord is not None else (), 'surface_record': Record.raw, 'descriptor_record': Descriptor.raw, 'surface_data_record': DataRecord.raw if DataRecord is not None else b'', 'control_record': Control.raw, 'u_multiplicity_record': UMultiplicities.raw, 'v_multiplicity_record': VMultiplicities.raw, 'u_knot_record': UKnots.raw, 'v_knot_record': VKnots.raw})
-    return NurbsSurface(NativeId('surface', Record.attribute), DegreeU, DegreeV, RowsValue, UKnots.values, VKnots.values, UMultiplicities.values, VMultiplicities.values, WeightRows, Periodic[0], Periodic[1], attributes=Attrs)
+    return tuple(Points), tuple(Weights)
 
 # this declaration exists because focused behavior needs one stable owner
 def ResolveNurbCurv(Record: BCurveRecord, Descriptors: Mapping[int, NurbsCurveRec], CurveData: Mapping[int, CurveRecord], FloatArrays: Mapping[int, FloatArray], ShortArrays: Mapping[int, ShortArray]) -> NurbsCurve | None:
@@ -2689,39 +2706,64 @@ def ResolveInter(DataValue: bytes, Record: IntersectRecord, Charts: Mapping[int,
     Second = Surfaces.get(SecondSurf)
     if Chart is None or First is None or Second is None or (FirstSurf == SecondSurf):
         return None
-    Limits: tuple[TermRecord, ...]
-    if StartId == 1 and EndId == 1:
-        Limits = ()
-    elif StartId > 1 and EndId > 1:
-        Start = Terms.get(StartId)
-        EndValue = Terms.get(EndId)
-        if Start is None or EndValue is None:
-            return None
-        TolValue = max(Chart.chordal_error, 1e-07)
-        if Distance(Start.point, Chart.points[0]) > TolValue or Distance(EndValue.point, Chart.points[-1]) > TolValue:
-            return None
-        Limits = (Start, EndValue)
-    else:
+    Limits = InterLimits(StartId, EndId, Terms, Chart)
+    if Limits is None:
         return None
     ResolvedUv = ResolvedSuppUv(UvIdValue, SupportUv, CompactSupportUv)
     if ResolvedUv is None:
         return None
     UvLanes, UvMarker, UvRaw = ResolvedUv
     TolValue = max(Chart.chordal_error, 1e-07)
-    for Index, SurfValue in enumerate((First, Second)):
-        if isinstance(SurfValue, NurbsSurface):
-            CandidateLanes = tuple((Lanes[Index] for Lanes in (UvLanes, Chart.support_uv) if Index < len(Lanes) and len(Lanes[Index]) == len(Chart.points)))
-            if not CandidateLanes or not any((all(((Residual := SurfResidual(SurfValue, Point, Params)) is not None and Residual <= TolValue for Point, Params in zip(Chart.points, LaneValue))) for LaneValue in CandidateLanes)):
-                return None
-        else:
-            Residuals = tuple((SurfResidual(SurfValue, Point) for Point in Chart.points))
-            if any((Residual is None or Residual > TolValue for Residual in Residuals)):
-                return None
+    if not IsInterSurfFit((First, Second), Chart, UvLanes, TolValue):
+        return None
     Attrs = FrozenMapping({'base_parameter': Chart.base_parameter, 'base_scale': Chart.base_scale, 'chart_layout': Chart.layout, 'chart_parameters': Chart.parameters, 'chart_tangents': Chart.tangents, 'chart_support_uv': Chart.support_uv, 'support_uv': UvLanes, 'support_uv_marker': UvMarker, 'sense': Record.sense, 'limit_forms': tuple((Limit.form for Limit in Limits)), 'limit_points': tuple((Limit.point for Limit in Limits)), 'chordal_error': Chart.chordal_error, 'angular_error': Chart.angular_error, 'parameter_errors': Chart.parameter_errors, 'header_references': Record.header_references, 'references': Record.references, 'intersection_record': Record.raw, 'chart_record': Chart.raw, 'limit_records': tuple((Limit.raw for Limit in Limits)), 'support_uv_record': UvRaw})
     return IntersectionCurve(NativeId('curve', Record.attribute), NativeId('surface', FirstSurf), NativeId('surface', SecondSurf), Chart.points, Chart.chordal_error, attributes=Attrs)
 
+
+# intersection limits validate optional endpoint records against sampled chart endpoints
+def InterLimits(StartId: int, EndId: int, Terms: Mapping[int, TermRecord], Chart: ChartRecord) -> tuple[TermRecord, ...] | None:
+    if StartId == 1 and EndId == 1:
+        return ()
+    if StartId <= 1 or EndId <= 1:
+        return None
+    Start = Terms.get(StartId)
+    EndValue = Terms.get(EndId)
+    if Start is None or EndValue is None:
+        return None
+    TolValue = max(Chart.chordal_error, 1e-07)
+    if Distance(Start.point, Chart.points[0]) > TolValue:
+        return None
+    if Distance(EndValue.point, Chart.points[-1]) > TolValue:
+        return None
+    return Start, EndValue
+
+
+# intersection surface validation confirms every chart sample lies on both carriers
+def IsInterSurfFit(Surfaces: Sequence[object], Chart: ChartRecord, UvLanes: Sequence[Sequence[tuple[float, float]]], TolValue: float) -> bool:
+    for Index, SurfValue in enumerate(Surfaces):
+        if isinstance(SurfValue, NurbsSurface):
+            CandidateLanes = tuple((Lanes[Index] for Lanes in (UvLanes, Chart.support_uv) if Index < len(Lanes) and len(Lanes[Index]) == len(Chart.points)))
+            if not CandidateLanes:
+                return False
+            if not any((all(((Residual := SurfResidual(SurfValue, Point, Params)) is not None and Residual <= TolValue for Point, Params in zip(Chart.points, LaneValue))) for LaneValue in CandidateLanes)):
+                return False
+        else:
+            Residuals = tuple((SurfResidual(SurfValue, Point) for Point in Chart.points))
+            if any((Residual is None or Residual > TolValue for Residual in Residuals)):
+                return False
+    return True
+
 # this declaration exists because focused behavior needs one stable owner
 def NurbsBasis(Degree: int, Count: int, Knots: Sequence[float], Multiplicities: Sequence[int], Param: float, Periodic: bool) -> tuple[tuple[int, float], ...] | None:
+    SpanData = NurbsSpanData(Degree, Count, Knots, Multiplicities, Param, Periodic)
+    if SpanData is None:
+        return None
+    Expanded, Param, SpanValue = SpanData
+    return CalcNurbsBasis(Degree, Expanded, Param, SpanValue)
+
+
+# nurbs span selection validates the knot domain and normalizes periodic parameters
+def NurbsSpanData(Degree: int, Count: int, Knots: Sequence[float], Multiplicities: Sequence[int], Param: float, Periodic: bool) -> tuple[tuple[float, ...], float, int] | None:
     if not MathValue.isfinite(Param):
         return None
     Expanded = tuple((KnotValue for KnotValue, Multiplicity in zip(Knots, Multiplicities) for Ignored in range(Multiplicity)))
@@ -2743,6 +2785,11 @@ def NurbsBasis(Degree: int, Count: int, Knots: Sequence[float], Multiplicities: 
         SpanValue = Degree
         while SpanValue + 1 < Count and Param >= Expanded[SpanValue + 1]:
             SpanValue += 1
+    return Expanded, Param, SpanValue
+
+
+# basis recurrence computes the nonzero functions for one validated knot span
+def CalcNurbsBasis(Degree: int, Expanded: Sequence[float], Param: float, SpanValue: int) -> tuple[tuple[int, float], ...] | None:
     Values = [0.0] * (Degree + 1)
     LeftValue = [0.0] * (Degree + 1)
     Right = [0.0] * (Degree + 1)
