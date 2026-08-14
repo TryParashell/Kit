@@ -5865,6 +5865,17 @@ def ValidateSource(Label: str, IsAsm: bool) -> None:
         )
 
 
+# stream restoration remains best-effort for non-seekable and closed inputs
+def RestoreStream(SourceData: Source, Position: int | None) -> None:
+    SeekValue = getattr(SourceData, "seek", None)
+    if Position is None or not callable(SeekValue):
+        return
+    try:
+        SeekValue(Position)
+    except (OSError, ValueError):
+        return
+
+
 # this definition exists because focused behavior needs one stable owner
 def SourceBytes(Source: Source) -> tuple[bytes, str]:
     if isinstance(Source, (str, FilePath)):
@@ -5874,18 +5885,13 @@ def SourceBytes(Source: Source) -> tuple[bytes, str]:
         return (bytes(Source), "<memory>")
     Position = None
     TellValue = getattr(Source, "tell", None)
-    SeekValue = getattr(Source, "seek", None)
     if callable(TellValue):
         try:
             Position = TellValue()
         except (OSError, ValueError):
             Position = None
     Value = Source.read()
-    if Position is not None and callable(SeekValue):
-        try:
-            SeekValue(Position)
-        except (OSError, ValueError):
-            Position = None
+    RestoreStream(Source, Position)
     if not isinstance(Value, (bytes, bytearray)):
         raise TypeError("SLDPRT source stream must yield bytes")
     NameValue = getattr(Source, "name", "<stream>")
