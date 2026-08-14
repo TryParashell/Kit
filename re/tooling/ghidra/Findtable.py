@@ -1,68 +1,77 @@
-import pathlib
-import struct
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-DEFAULT = pathlib.Path(r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\sldmfcu.dll")
+import pathlib as Pathlib
+import struct as Struct
+import sys as System
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KDefault = Pathlib.Path('C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldmfcu.dll')
 
 
-def random_run(blob, anchor):
-    def dull(off):
-        chunk = blob[off : off + 16]
-        if len(chunk) < 16:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RandomRun(ByteBlob, Anchor):
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def DullInfo(OffInfo):
+        Chunk = ByteBlob[OffInfo:OffInfo + 16]
+        if len(Chunk) < 16:
             return True
-        if chunk.count(0) >= 8:
+        if Chunk.count(0) >= 8:
             return True
-        return len(set(chunk)) <= 4
+        return len(set(Chunk)) <= 4
+    LoInfo = Anchor & ~15
+    while LoInfo > 0 and (not DullInfo(LoInfo - 16)):
+        LoInfo -= 16
+    HiInfo = Anchor & ~15
+    while HiInfo < len(ByteBlob) and (not DullInfo(HiInfo)):
+        HiInfo += 16
+    return (LoInfo, HiInfo)
 
-    lo = anchor & ~0xF
-    while lo > 0 and not dull(lo - 16):
-        lo -= 16
-    hi = anchor & ~0xF
-    while hi < len(blob) and not dull(hi):
-        hi += 16
-    return lo, hi
 
-
-def main():
-    path = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT
-    blob = path.read_bytes()
-    for anchor in (0x56775C, 0x569D34):
-        lo, hi = random_run(blob, anchor)
-        print(
-            f"anchor 0x{anchor:x} run 0x{lo:x}..0x{hi:x} size={hi - lo} dwords={(hi - lo) // 4}"
-        )
-    a0, a1 = random_run(blob, 0x56775C)
-    b0, b1 = random_run(blob, 0x569D34)
-    print("---")
-    print(f"A candidate base 0x{a0:x} end 0x{a1:x}")
-    print(f"B candidate base 0x{b0:x} end 0x{b1:x}")
-    if a0 == b0:
-        n = (a1 - a0) // 16
-        print("single block; cannot split by entropy", n)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    PathInfoData = Pathlib.Path(System.argv[1]) if len(System.argv) > 1 else KDefault
+    ByteBlob = PathInfoData.read_bytes()
+    for Anchor in (5666652, 5676340):
+        LoInfo, HiInfo = RandomRun(ByteBlob, Anchor)
+        print(f'anchor 0x{Anchor:x} run 0x{LoInfo:x}..0x{HiInfo:x} size={HiInfo - LoInfo} dwords={(HiInfo - LoInfo) // 4}')
+    AZero, AOneInfo = RandomRun(ByteBlob, 5666652)
+    BZero, BOneInfo = RandomRun(ByteBlob, 5676340)
+    print('---')
+    print(f'A candidate base 0x{AZero:x} end 0x{AOneInfo:x}')
+    print(f'B candidate base 0x{BZero:x} end 0x{BOneInfo:x}')
+    if AZero == BZero:
+        ItemCountInfo = (AOneInfo - AZero) // 16
+        print('single block; cannot split by entropy', ItemCountInfo)
         return
-    countA = (a1 - a0) // 4
-    countB = (b1 - b0) // 12
-    print(f"A dwords={countA} B triplets={countB}")
-    iA = (0x56775C - a0) // 4
-    iB = (0x569D34 - b0) // 12
-    print(f"index of default in A={iA} in B={iB} (must match)")
-    iA2 = (0x5677F8 - a0) // 4
-    iB2 = (0x569F08 - b0) // 12
-    print(f"index of alt in A={iA2} in B={iB2}")
-    if iA == iB and iA2 == iB2:
-        n = min(countA, countB)
-        print(f"pairs={n}")
-        rows = []
-        for i in range(n):
-            fid = struct.unpack_from(">I", blob, a0 + 4 * i)[0]
-            trip = struct.unpack_from("<3I", blob, b0 + 12 * i)
-            rows.append((i, fid, trip))
-        for i, fid, trip in rows[:8]:
-            print(i, f"0x{fid:08x}", [f"{v:08x}" for v in trip])
-        print("...")
-        for i, fid, trip in rows[-4:]:
-            print(i, f"0x{fid:08x}", [f"{v:08x}" for v in trip])
-
-
-if __name__ == "__main__":
-    main()
+    CountA = (AOneInfo - AZero) // 4
+    CountB = (BOneInfo - BZero) // 12
+    print(f'A dwords={CountA} B triplets={CountB}')
+    IAInfo = (5666652 - AZero) // 4
+    IBInfo = (5676340 - BZero) // 12
+    print(f'index of default in A={IAInfo} in B={IBInfo} (must match)')
+    IATwo = (5666808 - AZero) // 4
+    IBTwo = (5676808 - BZero) // 12
+    print(f'index of alt in A={IATwo} in B={IBTwo}')
+    if IAInfo == IBInfo and IATwo == IBTwo:
+        ItemCountInfo = min(CountA, CountB)
+        print(f'pairs={ItemCountInfo}')
+        GetRows = []
+        for IndexInfo in range(ItemCountInfo):
+            FidInfo = Struct.unpack_from('>I', ByteBlob, AZero + 4 * IndexInfo)[0]
+            TripInfo = Struct.unpack_from('<3I', ByteBlob, BZero + 12 * IndexInfo)
+            GetRows.append((IndexInfo, FidInfo, TripInfo))
+        for IndexInfo, FidInfo, TripInfo in GetRows[:8]:
+            print(IndexInfo, f'0x{FidInfo:08x}', [f'{ValueData:08x}' for ValueData in TripInfo])
+        print('...')
+        for IndexInfo, FidInfo, TripInfo in GetRows[-4:]:
+            print(IndexInfo, f'0x{FidInfo:08x}', [f'{ValueData:08x}' for ValueData in TripInfo])
+if __name__ == '__main__':
+    MainRunInfo()

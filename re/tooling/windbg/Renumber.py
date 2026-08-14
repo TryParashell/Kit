@@ -1,324 +1,271 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from dataclasses import dataclass as DataClass
+import json as JsonData
+from pathlib import Path as PathInfo
+import sys as System
 
-from dataclasses import dataclass
-import json
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-SCRATCH = HERE.parents[2] / ".rescratch"
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KScratch = KHereInfo.parents[2] / '.rescratch'
 
-import model as modellib
-import segment as segmentlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Model as Modellib
+import Segment as Segmentlib
+import Streamlib as Streamlib
+from convert.adapters.solidworks import resolved as Resolvedlib
 
-import streamlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = KScratch / 'trace' / 'out'
 
-from convert.adapters.solidworks import resolved as resolvedlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCompClass = 'moCompFeature_c'
 
-OUT = SCRATCH / "trace" / "out"
-
-COMP_CLASS = "moCompFeature_c"
-HISTORY_ITEM_CLASS = "moHistoryFeatItemData_c"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHistoryClass = 'moHistoryFeatItemData_c'
 
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
 class RenumberError(RuntimeError):
     __slots__ = ()
 
 
-@dataclass(frozen=True, slots=True)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class Block:
-    start: int
-    stop: int
+    StartRun: int
+    StopInfo: int
 
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
-    def size(self) -> int:
-        return self.stop - self.start
-
-    def __contains__(self, position: int) -> bool:
-        return self.start <= position < self.stop
+    def ByteSize(SelfRef) -> int:
+        return SelfRef.StopInfo - SelfRef.StartRun
 
 
-def history_count_node(model: modellib.Model) -> int:
-    for position, node in enumerate(model.nodes):
-        if node.class_name == HISTORY_ITEM_CLASS:
-            if position == 0:
-                raise RenumberError(
-                    f"{HISTORY_ITEM_CLASS} is the first object; the array count "
-                    "cannot precede it"
-                )
-            return position - 1
-    raise RenumberError(f"{HISTORY_ITEM_CLASS} never appears in the stream")
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __contains__(SelfRef, PosInfoInfo: int) -> bool:
+        return SelfRef.StartRun <= PosInfoInfo < SelfRef.StopInfo
+    KAliasNames = {'start': 'StartRun', 'stop': 'StopInfo', 'size': 'ByteSize'}
 
 
-def read_history_count(model: modellib.Model) -> int:
-    node = model.nodes[history_count_node(model)]
-    if len(node.body) < 2:
-        raise RenumberError("the object preceding the history array is too short")
-    return int.from_bytes(node.body[-2:], "little")
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
 
 
-def set_history_count(model: modellib.Model, value: int) -> None:
-    if not 0 < value < 0x10000:
-        raise RenumberError(f"history item count {value} does not fit in a u16")
-    position = history_count_node(model)
-    node = model.nodes[position]
-    node.body = node.body[:-2] + value.to_bytes(2, "little")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def HistoryNode(ModelInfo: Modellib.Model) -> int:
+    for PosInfoInfo, NodeInfoInfo in enumerate(ModelInfo.nodes):
+        if NodeInfoInfo.class_name == KHistoryClass:
+            if PosInfoInfo == 0:
+                raise RenumberError(f'{KHistoryClass} is the first object; the array count cannot precede it')
+            return PosInfoInfo - 1
+    raise RenumberError(f'{KHistoryClass} never appears in the stream')
 
 
-def node_range(model: modellib.Model, start_byte: int, stop_byte: int) -> Block:
-    offsets = modellib.node_offsets(model)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ReadCount(ModelInfo: Modellib.Model) -> int:
+    NodeInfoInfo = ModelInfo.nodes[HistoryNode(ModelInfo)]
+    if len(NodeInfoInfo.body) < 2:
+        raise RenumberError('the object preceding the history array is too short')
+    return int.from_bytes(NodeInfoInfo.body[-2:], 'little')
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetHistoryCount(ModelInfo: Modellib.Model, ValueInfo: int) -> None:
+    if not 0 < ValueInfo < 65536:
+        raise RenumberError(f'history item count {ValueInfo} does not fit in a u16')
+    PosInfoInfo = HistoryNode(ModelInfo)
+    NodeInfoInfo = ModelInfo.nodes[PosInfoInfo]
+    setattr(NodeInfoInfo, 'body', NodeInfoInfo.body[:-2] + ValueInfo.to_bytes(2, 'little'))
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def NodeRange(ModelInfo: Modellib.Model, StartByte: int, StopByte: int) -> Block:
+    Offsets = Modellib.NodeOffsets(ModelInfo)
     try:
-        start = offsets.index(start_byte)
-        stop = offsets.index(stop_byte)
-    except ValueError as error:
-        raise RenumberError(
-            f"byte span [{start_byte}, {stop_byte}) does not align with object "
-            f"boundaries"
-        ) from error
-    return Block(start, stop)
+        StartRun = Offsets.index(StartByte)
+        StopInfo = Offsets.index(StopByte)
+    except ValueError as Error:
+        raise RenumberError(f'byte span [{StartByte}, {StopByte}) does not align with object boundaries') from Error
+    return Block(StartRun, StopInfo)
 
 
-def comp_unit(model: modellib.Model, blob: bytes) -> Block:
-    entries = streamlib.comp_feature_entries(blob)
-    if len(entries) < 4 or len(entries) % 2:
-        raise RenumberError(
-            f"{COMP_CLASS} holds {len(entries)} entries; an even count of at "
-            "least four is required to duplicate one feature"
-        )
-    return node_range(model, entries[-2][0], entries[-1][1])
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def CompUnit(ModelInfo: Modellib.Model, ByteBlob: bytes) -> Block:
+    Entries = Streamlib.CompFeatEntries(ByteBlob)
+    if len(Entries) < 4 or len(Entries) % 2:
+        raise RenumberError(f'{KCompClass} holds {len(Entries)} entries; an even count of at least four is required to duplicate one feature')
+    return NodeRange(ModelInfo, Entries[-2][0], Entries[-1][1])
 
 
-def feature_unit(blob: bytes, segments: tuple[segmentlib.Segment, ...]) -> Block:
-    sketches = [
-        item for item in resolvedlib.tree_nodes(blob) if item.name.startswith("Sketch")
-    ]
-    if len(sketches) < 2:
-        raise RenumberError(
-            f"the donor exposes {len(sketches)} sketch nodes; at least two are "
-            "needed so the duplicated group is not the first feature"
-        )
-    anchor = sketches[-1].text_end
-    position = -1
-    for item in segments:
-        if item.offset <= anchor < item.end:
-            position = item.index
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def FeatUnit(ByteBlob: bytes, SegmentsInfo: tuple[Segmentlib.Segment, ...]) -> Block:
+    Sketches = [ItemData for ItemData in Resolvedlib.tree_nodes(ByteBlob) if ItemData.name.startswith('Sketch')]
+    if len(Sketches) < 2:
+        raise RenumberError(f'the donor exposes {len(Sketches)} sketch nodes; at least two are needed so the duplicated group is not the first feature')
+    Anchor = Sketches[-1].text_end
+    PosInfoInfo = -1
+    for ItemData in SegmentsInfo:
+        if ItemData.offset <= Anchor < ItemData.end:
+            PosInfoInfo = ItemData.index
             break
-    if position < 0:
-        raise RenumberError(f"sketch name record at {anchor} is outside every object")
-    while position > 0 and segments[position].depth != 0:
-        position -= 1
-    if segments[position].depth != 0:
-        raise RenumberError("no top-level object precedes the last sketch")
-    return Block(position, len(segments))
+    if PosInfoInfo < 0:
+        raise RenumberError(f'sketch name record at {Anchor} is outside every object')
+    while PosInfoInfo > 0 and SegmentsInfo[PosInfoInfo].depth != 0:
+        PosInfoInfo -= 1
+    if SegmentsInfo[PosInfoInfo].depth != 0:
+        raise RenumberError('no top-level object precedes the last sketch')
+    return Block(PosInfoInfo, len(SegmentsInfo))
 
 
-def duplicate(
-    model: modellib.Model, blocks: tuple[Block, ...], copies: int
-) -> tuple[modellib.Model, tuple[tuple[int, int], ...]]:
-    if copies < 1:
-        raise RenumberError("copies must be at least 1")
-    ordered = sorted(blocks, key=lambda item: item.start)
-    for block in ordered:
-        if block.start < 0 or block.stop > len(model.nodes) or block.size <= 0:
-            raise RenumberError(f"block {block} is out of range")
-    for left, right in zip(ordered, ordered[1:]):
-        if left.stop > right.start:
-            raise RenumberError("blocks overlap")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Duplicate(ModelInfo: Modellib.Model, Blocks: tuple[Block, ...], Copies: int) -> tuple[Modellib.Model, tuple[tuple[int, int], ...]]:
+    if Copies < 1:
+        raise RenumberError('copies must be at least 1')
 
-    plan: list[tuple[int, int]] = []
-    cursor = 0
-    for block in ordered:
-        while cursor < block.stop:
-            plan.append((cursor, 0))
-            cursor += 1
-        for copy_id in range(1, copies + 1):
-            for source in range(block.start, block.stop):
-                plan.append((source, copy_id))
-    while cursor < len(model.nodes):
-        plan.append((cursor, 0))
-        cursor += 1
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    OrderedInfo = sorted(Blocks, key=lambda ItemData: ItemData.start)
+    for BlockInfo in OrderedInfo:
+        if BlockInfo.start < 0 or BlockInfo.stop > len(ModelInfo.nodes) or BlockInfo.size <= 0:
+            raise RenumberError(f'block {BlockInfo} is out of range')
+    for LeftInfo, Right in zip(OrderedInfo, OrderedInfo[1:]):
+        if LeftInfo.stop > Right.start:
+            raise RenumberError('blocks overlap')
+    PlanInfo: list[tuple[int, int]] = []
+    Cursor = 0
+    for BlockInfo in OrderedInfo:
+        while Cursor < BlockInfo.stop:
+            PlanInfo.append((Cursor, 0))
+            Cursor += 1
+        for CopyId in range(1, Copies + 1):
+            for Source in range(BlockInfo.start, BlockInfo.stop):
+                PlanInfo.append((Source, CopyId))
+    while Cursor < len(ModelInfo.nodes):
+        PlanInfo.append((Cursor, 0))
+        Cursor += 1
+    Lookup = {KeyName: PosInfoInfo for PosInfoInfo, KeyName in enumerate(PlanInfo)}
 
-    lookup = {key: position for position, key in enumerate(plan)}
 
-    def duplicated(source: int) -> bool:
-        return any(source in block for block in ordered)
-
-    result = modellib.Model(header=model.header, base=model.base, nodes=[])
-    for source, copy_id in plan:
-        original = model.nodes[source]
-        kind = original.kind
-        target = original.target
-        literal = original.literal
-        if copy_id and kind == "definition":
-            kind = "classref"
-            target = lookup[(source, 0)]
-            literal = modellib.CLASS_TAG_BIT
-        if target >= 0:
-            if copy_id and duplicated(target):
-                target = lookup[(target, copy_id)]
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def IsDuplicated(Source: int) -> bool:
+        return any((Source in BlockInfo for BlockInfo in OrderedInfo))
+    Result = Modellib.Model(Header=ModelInfo.header, BaseInfo=ModelInfo.base, Nodes=[])
+    for Source, CopyId in PlanInfo:
+        Original = ModelInfo.nodes[Source]
+        KindNameInfo = Original.kind
+        Target = Original.target
+        Literal = Original.literal
+        if CopyId and KindNameInfo == 'definition':
+            KindNameInfo = 'classref'
+            Target = Lookup[Source, 0]
+            Literal = Modellib.KClassTagBit
+        if Target >= 0:
+            if CopyId and IsDuplicated(Target):
+                Target = Lookup[Target, CopyId]
             else:
-                target = lookup[(target, 0)]
-        result.nodes.append(
-            modellib.Node(
-                kind=kind,
-                body=original.body,
-                schema=original.schema,
-                class_name=original.class_name,
-                target=target,
-                literal=literal,
-                origin=original.origin,
-            )
-        )
-    result.assign()
-    return result, tuple(plan)
+                Target = Lookup[Target, 0]
+        Result.nodes.append(Modellib.NodeInfo(KindNameInfo=KindNameInfo, BodyInfo=Original.body, Schema=Original.schema, ClassNameData=Original.class_name, Target=Target, Literal=Literal, Origin=Original.origin))
+    Result.assign()
+    return (Result, tuple(PlanInfo))
 
 
-def remove(
-    model: modellib.Model, blocks: tuple[Block, ...]
-) -> tuple[modellib.Model, tuple[int, ...]]:
-    ordered = sorted(blocks, key=lambda item: item.start)
-    dropped: set[int] = set()
-    for block in ordered:
-        for position in range(block.start, block.stop):
-            dropped.add(position)
-    for position in sorted(dropped):
-        node = model.nodes[position]
-        if node.kind == "definition":
-            raise RenumberError(
-                f"node {position} defines {node.class_name}; deleting a class "
-                "definition needs the definition moved to its first surviving use"
-            )
-    survivors = [
-        position for position in range(len(model.nodes)) if position not in dropped
-    ]
-    lookup = {source: index for index, source in enumerate(survivors)}
-    result = modellib.Model(header=model.header, base=model.base, nodes=[])
-    for source in survivors:
-        original = model.nodes[source]
-        target = original.target
-        if target >= 0:
-            if target not in lookup:
-                raise RenumberError(
-                    f"node {source} references deleted node {target}; "
-                    "the deletion set is not closed"
-                )
-            target = lookup[target]
-        result.nodes.append(
-            modellib.Node(
-                kind=original.kind,
-                body=original.body,
-                schema=original.schema,
-                class_name=original.class_name,
-                target=target,
-                literal=original.literal,
-                origin=original.origin,
-            )
-        )
-    result.assign()
-    return result, tuple(survivors)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Remove(ModelInfo: Modellib.Model, Blocks: tuple[Block, ...]) -> tuple[Modellib.Model, tuple[int, ...]]:
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    OrderedInfo = sorted(Blocks, key=lambda ItemData: ItemData.start)
+    Dropped: set[int] = set()
+    for BlockInfo in OrderedInfo:
+        for PosInfoInfo in range(BlockInfo.start, BlockInfo.stop):
+            Dropped.add(PosInfoInfo)
+    for PosInfoInfo in sorted(Dropped):
+        NodeInfoInfo = ModelInfo.nodes[PosInfoInfo]
+        if NodeInfoInfo.kind == 'definition':
+            raise RenumberError(f'node {PosInfoInfo} defines {NodeInfoInfo.class_name}; deleting a class definition needs the definition moved to its first surviving use')
+    Survivors = [PosInfoInfo for PosInfoInfo in range(len(ModelInfo.nodes)) if PosInfoInfo not in Dropped]
+    Lookup = {Source: IndexData for IndexData, Source in enumerate(Survivors)}
+    Result = Modellib.Model(Header=ModelInfo.header, BaseInfo=ModelInfo.base, Nodes=[])
+    for Source in Survivors:
+        Original = ModelInfo.nodes[Source]
+        Target = Original.target
+        if Target >= 0:
+            if Target not in Lookup:
+                raise RenumberError(f'node {Source} references deleted node {Target}; the deletion set is not closed')
+            Target = Lookup[Target]
+        Result.nodes.append(Modellib.NodeInfo(KindNameInfo=Original.kind, BodyInfo=Original.body, Schema=Original.schema, ClassNameData=Original.class_name, Target=Target, Literal=Original.literal, Origin=Original.origin))
+    Result.assign()
+    return (Result, tuple(Survivors))
 
 
-def renumbering_table(
-    before: modellib.Model,
-    after: modellib.Model,
-    plan: tuple[tuple[int, int], ...],
-) -> list[dict[str, int | str]]:
-    before.assign()
-    after.assign()
-    rows: list[dict[str, int | str]] = []
-    for position, (source, copy_id) in enumerate(plan):
-        old_node = before.nodes[source]
-        new_node = after.nodes[position]
-        rows.append(
-            {
-                "source_node": source,
-                "copy": copy_id,
-                "target_node": position,
-                "kind": new_node.kind,
-                "class_name": new_node.class_name,
-                "old_class_index": old_node.class_index,
-                "new_class_index": new_node.class_index,
-                "old_map_index": old_node.object_index,
-                "new_map_index": new_node.object_index,
-                "shift": new_node.object_index - old_node.object_index,
-            }
-        )
-    return rows
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Renumbering(Before: Modellib.Model, After: Modellib.Model, PlanInfo: tuple[tuple[int, int], ...]) -> list[dict[str, int | str]]:
+    Before.assign()
+    After.assign()
+    GetRows: list[dict[str, int | str]] = []
+    for PosInfoInfo, (Source, CopyId) in enumerate(PlanInfo):
+        OldNode = Before.nodes[Source]
+        NewNode = After.nodes[PosInfoInfo]
+        GetRows.append({'source_node': Source, 'copy': CopyId, 'target_node': PosInfoInfo, 'kind': NewNode.kind, 'class_name': NewNode.class_name, 'old_class_index': OldNode.class_index, 'new_class_index': NewNode.class_index, 'old_map_index': OldNode.object_index, 'new_map_index': NewNode.object_index, 'shift': NewNode.object_index - OldNode.object_index})
+    return GetRows
 
 
-def grow(
-    part: Path, log: Path, copies: int
-) -> tuple[bytes, bytes, modellib.Model, dict[str, object]]:
-    blob, base_model, segments = modellib.load(part, log)
-    comp = comp_unit(base_model, blob)
-    feature = feature_unit(blob, segments)
-    print(f"comp unit nodes=[{comp.start},{comp.stop}) size={comp.size}")
-    print(f"feature unit nodes=[{feature.start},{feature.stop}) size={feature.size}")
-    grown, plan = duplicate(base_model, (comp, feature), copies)
-    before_count = read_history_count(base_model)
-    entries_before = len(streamlib.comp_feature_entries(blob))
-    if before_count != entries_before:
-        raise RenumberError(
-            f"history array count {before_count} disagrees with the "
-            f"{entries_before} moCompFeature_c entries in {part.name}"
-        )
-    set_history_count(grown, before_count + 2 * copies)
-    payload = grown.emit()
-    table = renumbering_table(base_model, grown, plan)
-    facts = {
-        "renumbering_table": table,
-        "part": str(part),
-        "copies": copies,
-        "comp_block": [comp.start, comp.stop],
-        "feature_block": [feature.start, feature.stop],
-        "nodes_before": len(base_model.nodes),
-        "nodes_after": len(grown.nodes),
-        "bytes_before": len(blob),
-        "bytes_after": len(payload),
-        "map_indices_before": len(base_model.nodes)
-        and base_model.nodes[-1].object_index,
-        "map_indices_after": grown.nodes[-1].object_index,
-        "comp_entries_before": entries_before,
-        "comp_entries_after": len(streamlib.comp_feature_entries(payload)),
-        "history_count_before": before_count,
-        "history_count_after": read_history_count(grown),
-        "layouts_before": len(resolvedlib.locate_features(blob)),
-        "layouts_after": len(resolvedlib.locate_features(payload)),
-    }
-    return blob, payload, grown, facts
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GrowInfo(PartInfoInfo: PathInfo, LogInfo: PathInfo, Copies: int) -> tuple[bytes, bytes, Modellib.Model, dict[str, object]]:
+    ByteBlob, BaseModel, SegmentsInfo = Modellib.LoadData(PartInfoInfo, LogInfo)
+    CompInfo = CompUnit(BaseModel, ByteBlob)
+    FeatInfo = FeatUnit(ByteBlob, SegmentsInfo)
+    print(f'comp unit nodes=[{CompInfo.start},{CompInfo.stop}) size={CompInfo.size}')
+    print(f'feature unit nodes=[{FeatInfo.start},{FeatInfo.stop}) size={FeatInfo.size}')
+    Grown, PlanInfo = Duplicate(BaseModel, (CompInfo, FeatInfo), Copies)
+    BeforeCount = ReadCount(BaseModel)
+    EntriesBefore = len(Streamlib.CompFeatEntries(ByteBlob))
+    if BeforeCount != EntriesBefore:
+        raise RenumberError(f'history array count {BeforeCount} disagrees with the {EntriesBefore} moCompFeature_c entries in {PartInfoInfo.name}')
+    SetHistoryCount(Grown, BeforeCount + 2 * Copies)
+    PayloadInfo = Grown.emit()
+    Table = Renumbering(BaseModel, Grown, PlanInfo)
+    Facts = {'renumbering_table': Table, 'part': str(PartInfoInfo), 'copies': Copies, 'comp_block': [CompInfo.start, CompInfo.stop], 'feature_block': [FeatInfo.start, FeatInfo.stop], 'nodes_before': len(BaseModel.nodes), 'nodes_after': len(Grown.nodes), 'bytes_before': len(ByteBlob), 'bytes_after': len(PayloadInfo), 'map_indices_before': len(BaseModel.nodes) and BaseModel.nodes[-1].object_index, 'map_indices_after': Grown.nodes[-1].object_index, 'comp_entries_before': EntriesBefore, 'comp_entries_after': len(Streamlib.CompFeatEntries(PayloadInfo)), 'history_count_before': BeforeCount, 'history_count_after': ReadCount(Grown), 'layouts_before': len(Resolvedlib.locate_features(ByteBlob)), 'layouts_after': len(Resolvedlib.locate_features(PayloadInfo))}
+    return (ByteBlob, PayloadInfo, Grown, Facts)
 
 
-def main() -> int:
-    part = Path(sys.argv[1]).resolve()
-    log = Path(sys.argv[2]).resolve()
-    copies = int(sys.argv[3]) if len(sys.argv) > 3 else 1
-    blob, payload, grown, facts = grow(part, log, copies)
-    OUT.mkdir(parents=True, exist_ok=True)
-    table = facts.pop("renumbering_table")
-    (OUT / f"grown_{part.stem}_{copies}.bin").write_bytes(payload)
-    (OUT / f"renumbering_{part.stem}_{copies}.json").write_text(
-        json.dumps(table, indent=2), encoding="utf-8"
-    )
-    shifts = sorted({int(row["shift"]) for row in table})
-    facts["distinct_map_index_shifts"] = shifts
-    (OUT / f"grown_{part.stem}_{copies}.json").write_text(
-        json.dumps(facts, indent=2), encoding="utf-8"
-    )
-    nodes = resolvedlib.tree_nodes(payload)
-    sketches = [item.name for item in nodes if item.name.startswith("Sketch")]
-    features = [
-        item.name for item in nodes if resolvedlib.feature_kind(item.flags) is not None
-    ]
-    print(json.dumps(facts, indent=2))
-    print(f"sketch nodes={sketches}")
-    print(f"feature nodes={features}")
-    print(f"comp ids={[entry[2] for entry in streamlib.comp_feature_entries(payload)]}")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    PartInfoInfo = PathInfo(System.argv[1]).resolve()
+    LogInfo = PathInfo(System.argv[2]).resolve()
+    Copies = int(System.argv[3]) if len(System.argv) > 3 else 1
+    ByteBlob, PayloadInfo, Grown, Facts = GrowInfo(PartInfoInfo, LogInfo, Copies)
+    KOutInfo.mkdir(parents=True, exist_ok=True)
+    Table = Facts.pop('renumbering_table')
+    (KOutInfo / f'grown_{PartInfoInfo.stem}_{Copies}.bin').write_bytes(PayloadInfo)
+    (KOutInfo / f'renumbering_{PartInfoInfo.stem}_{Copies}.json').write_text(JsonData.dumps(Table, indent=2), encoding='utf-8')
+    Shifts = sorted({int(RowDataInfo['shift']) for RowDataInfo in Table})
+    Facts['distinct_map_index_shifts'] = Shifts
+    (KOutInfo / f'grown_{PartInfoInfo.stem}_{Copies}.json').write_text(JsonData.dumps(Facts, indent=2), encoding='utf-8')
+    Nodes = Resolvedlib.tree_nodes(PayloadInfo)
+    Sketches = [ItemData.name for ItemData in Nodes if ItemData.name.startswith('Sketch')]
+    FeatInfoInfo = [ItemData.name for ItemData in Nodes if Resolvedlib.feature_kind(ItemData.flags) is not None]
+    print(JsonData.dumps(Facts, indent=2))
+    print(f'sketch nodes={Sketches}')
+    print(f'feature nodes={FeatInfoInfo}')
+    print(f'comp ids={[Entry[2] for Entry in Streamlib.CompFeatEntries(PayloadInfo)]}')
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

@@ -7,210 +7,157 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import argparse as Argparse
+import json as JsonData
+import re as Regex
+from typing import Dict as DictInfo, Iterable, List as ListInfo, Optional, Tuple
 
-import argparse
-import json
-import re
-from typing import Dict, Iterable, List, Optional, Tuple
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KFuncRe = Regex.compile('^=== FUNCTION (.+)$')
 
-FUNCTION_RE = re.compile(r"^=== FUNCTION (.+)$")
-ADDRESS_RE = re.compile(r"^=== ADDRESS ([0-9a-fA-F]+)$")
-MANGLED_RE = re.compile(r"\?([A-Za-z0-9_]+)@([A-Za-z0-9_]+)@@")
-GET_RE = re.compile(
-    r"return\s+\*\(([A-Za-z0-9_ ]+?)\s*\*+\)\s*\(this\s*\+\s*(?:\(longlong\)"
-    r"(param_\d+)\s*\*\s*(\d+)\s*\+\s*)?(0x[0-9a-fA-F]+|\d+)\s*\)\s*;"
-)
-GET_INDEX_FIRST_RE = re.compile(
-    r"return\s+\*\(([A-Za-z0-9_ ]+?)\s*\*+\)\s*\(\(longlong\)(param_\d+)\s*\*\s*"
-    r"(\d+)\s*\+\s*this\s*\+\s*(0x[0-9a-fA-F]+|\d+)\s*\)\s*;"
-)
-SET_RE = re.compile(
-    r"\*\(([A-Za-z0-9_ ]+?)\s*\*+\)\s*\(this\s*\+\s*(?:\(longlong\)(param_\d+)"
-    r"\s*\*\s*(\d+)\s*\+\s*)?(0x[0-9a-fA-F]+|\d+)\s*\)\s*=\s*param_\d+\s*;"
-)
-ADDR_OF_RE = re.compile(r"return\s+this\s*\+\s*(0x[0-9a-fA-F]+|\d+)\s*;")
-DEREF_RE = re.compile(
-    r"\*\(([A-Za-z0-9_ ]+?)\s*\*+\)\s*\((?:\(longlong\)(param_\d+)\s*\*\s*(\d+)"
-    r"\s*\+\s*)?this\s*\+\s*(?:\(longlong\)(param_\d+)\s*\*\s*(\d+)\s*\+\s*)?"
-    r"(0x[0-9a-fA-F]+|\d+)\s*\)"
-)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KAddressRe = Regex.compile('^=== ADDRESS ([0-9a-fA-F]+)$')
 
-WIDTHS = {
-    "char": 1,
-    "uchar": 1,
-    "byte": 1,
-    "bool": 1,
-    "undefined1": 1,
-    "short": 2,
-    "ushort": 2,
-    "undefined2": 2,
-    "wchar_t": 2,
-    "int": 4,
-    "uint": 4,
-    "long": 4,
-    "ulong": 4,
-    "float": 4,
-    "undefined4": 4,
-    "double": 8,
-    "longlong": 8,
-    "ulonglong": 8,
-    "undefined8": 8,
-    "int64": 8,
-    "size_t": 8,
-}
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KMangledRe = Regex.compile('\\?([A-Za-z0-9_]+)@([A-Za-z0-9_]+)@@')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGetReInfo = Regex.compile('return\\s+\\*\\(([A-Za-z0-9_ ]+?)\\s*\\*+\\)\\s*\\(this\\s*\\+\\s*(?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)\\s*;')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGetRe = Regex.compile('return\\s+\\*\\(([A-Za-z0-9_ ]+?)\\s*\\*+\\)\\s*\\(\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*this\\s*\\+\\s*(0x[0-9a-fA-F]+|\\d+)\\s*\\)\\s*;')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSetRe = Regex.compile('\\*\\(([A-Za-z0-9_ ]+?)\\s*\\*+\\)\\s*\\(this\\s*\\+\\s*(?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)\\s*=\\s*param_\\d+\\s*;')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KAddrOfRe = Regex.compile('return\\s+this\\s*\\+\\s*(0x[0-9a-fA-F]+|\\d+)\\s*;')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KDerefRe = Regex.compile('\\*\\(([A-Za-z0-9_ ]+?)\\s*\\*+\\)\\s*\\((?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?this\\s*\\+\\s*(?:\\(longlong\\)(param_\\d+)\\s*\\*\\s*(\\d+)\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KWidths = {'char': 1, 'uchar': 1, 'byte': 1, 'bool': 1, 'undefined1': 1, 'short': 2, 'ushort': 2, 'undefined2': 2, 'wchar_t': 2, 'int': 4, 'uint': 4, 'long': 4, 'ulong': 4, 'float': 4, 'undefined4': 4, 'double': 8, 'longlong': 8, 'ulonglong': 8, 'undefined8': 8, 'int64': 8, 'size_t': 8}
 
 
-def width_of(ctype: str) -> Tuple[int, str]:
-    text = ctype.strip()
-    if text in WIDTHS:
-        return WIDTHS[text], text
-    parts = text.split()
-    if parts and parts[-1] in WIDTHS:
-        return WIDTHS[parts[-1]], text
-    return 8, text
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WidthOf(Ctype: str) -> Tuple[int, str]:
+    TextValueData = Ctype.strip()
+    if TextValueData in KWidths:
+        return (KWidths[TextValueData], TextValueData)
+    Parts = TextValueData.split()
+    if Parts and Parts[-1] in KWidths:
+        return (KWidths[Parts[-1]], TextValueData)
+    return (8, TextValueData)
 
 
-def parse_int(text: str) -> int:
-    return int(text, 16) if text.lower().startswith("0x") else int(text)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ParseInt(TextValueData: str) -> int:
+    return int(TextValueData, 16) if TextValueData.lower().startswith('0x') else int(TextValueData)
 
 
-def iter_blocks(text: str) -> Iterable[Tuple[str, str, str]]:
-    lines = text.splitlines()
-    starts: List[int] = []
-    for i, line in enumerate(lines):
-        if line.startswith("=== FUNCTION "):
-            starts.append(i)
-    starts.append(len(lines))
-    for k in range(len(starts) - 1):
-        chunk = lines[starts[k] : starts[k + 1]]
-        name = FUNCTION_RE.match(chunk[0]).group(1).strip()
-        address = ""
-        for line in chunk[:6]:
-            match = ADDRESS_RE.match(line)
-            if match:
-                address = match.group(1)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def IterBlocks(TextValueData: str) -> Iterable[Tuple[str, str, str]]:
+    Lines = TextValueData.splitlines()
+    Starts: ListInfo[int] = []
+    for IndexInfo, LineText in enumerate(Lines):
+        if LineText.startswith('=== FUNCTION '):
+            Starts.append(IndexInfo)
+    Starts.append(len(Lines))
+    for KeyIndex in range(len(Starts) - 1):
+        Chunk = Lines[Starts[KeyIndex]:Starts[KeyIndex + 1]]
+        NameTextInfo = KFuncRe.match(Chunk[0]).group(1).strip()
+        Address = ''
+        for LineText in Chunk[:6]:
+            Match = KAddressRe.match(LineText)
+            if Match:
+                Address = Match.group(1)
                 break
-        yield name, address, "\n".join(chunk)
+        yield (NameTextInfo, Address, '\n'.join(Chunk))
 
 
-def classify(body: str) -> Optional[dict]:
-    match = GET_INDEX_FIRST_RE.search(body)
-    if match:
-        width, ctype = width_of(match.group(1))
-        return {
-            "kind": "get",
-            "width": width,
-            "ctype": ctype,
-            "stride": int(match.group(3)),
-            "offset": parse_int(match.group(4)),
-        }
-    match = GET_RE.search(body)
-    if match:
-        width, ctype = width_of(match.group(1))
-        return {
-            "kind": "get",
-            "width": width,
-            "ctype": ctype,
-            "stride": int(match.group(3)) if match.group(3) else 0,
-            "offset": parse_int(match.group(4)),
-        }
-    match = SET_RE.search(body)
-    if match:
-        width, ctype = width_of(match.group(1))
-        return {
-            "kind": "set",
-            "width": width,
-            "ctype": ctype,
-            "stride": int(match.group(3)) if match.group(3) else 0,
-            "offset": parse_int(match.group(4)),
-        }
-    match = ADDR_OF_RE.search(body)
-    if match:
-        return {
-            "kind": "ref",
-            "width": 0,
-            "ctype": "member",
-            "stride": 0,
-            "offset": parse_int(match.group(1)),
-        }
-    hits = DEREF_RE.findall(strip_comments(body))
-    seen: Dict[int, dict] = {}
-    for ctype, pre_var, pre_stride, post_var, post_stride, offset in hits:
-        width, resolved = width_of(ctype)
-        value = parse_int(offset)
-        stride = int(pre_stride or post_stride or 0)
-        seen.setdefault(
-            value,
-            {
-                "kind": "get_derived",
-                "width": width,
-                "ctype": resolved,
-                "stride": stride,
-                "offset": value,
-            },
-        )
-    if len(seen) == 1:
-        return next(iter(seen.values()))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Classify(BodyInfo: str) -> Optional[dict]:
+    Match = KGetRe.search(BodyInfo)
+    if Match:
+        WidthInfo, Ctype = WidthOf(Match.group(1))
+        return {'kind': 'get', 'width': WidthInfo, 'ctype': Ctype, 'stride': int(Match.group(3)), 'offset': ParseInt(Match.group(4))}
+    Match = KGetReInfo.search(BodyInfo)
+    if Match:
+        WidthInfo, Ctype = WidthOf(Match.group(1))
+        return {'kind': 'get', 'width': WidthInfo, 'ctype': Ctype, 'stride': int(Match.group(3)) if Match.group(3) else 0, 'offset': ParseInt(Match.group(4))}
+    Match = KSetRe.search(BodyInfo)
+    if Match:
+        WidthInfo, Ctype = WidthOf(Match.group(1))
+        return {'kind': 'set', 'width': WidthInfo, 'ctype': Ctype, 'stride': int(Match.group(3)) if Match.group(3) else 0, 'offset': ParseInt(Match.group(4))}
+    Match = KAddrOfRe.search(BodyInfo)
+    if Match:
+        return {'kind': 'ref', 'width': 0, 'ctype': 'member', 'stride': 0, 'offset': ParseInt(Match.group(1))}
+    HitsInfo = KDerefRe.findall(StripComments(BodyInfo))
+    SeenInfo: DictInfo[int, dict] = {}
+    for Ctype, PreVar, PreStride, PostVar, PostStride, Offset in HitsInfo:
+        WidthInfo, Resolved = WidthOf(Ctype)
+        ValueInfo = ParseInt(Offset)
+        Stride = int(PreStride or PostStride or 0)
+        SeenInfo.setdefault(ValueInfo, {'kind': 'get_derived', 'width': WidthInfo, 'ctype': Resolved, 'stride': Stride, 'offset': ValueInfo})
+    if len(SeenInfo) == 1:
+        return next(iter(SeenInfo.values()))
     return None
 
 
-def strip_comments(body: str) -> str:
-    return re.sub(r"/\*.*?\*/", " ", body, flags=re.S)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def StripComments(BodyInfo: str) -> str:
+    return Regex.sub('/\\*.*?\\*/', ' ', BodyInfo, flags=Regex.S)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dumps", nargs="+")
-    parser.add_argument("--classes", required=True)
-    parser.add_argument("--out", required=True)
-    args = parser.parse_args()
-    wanted = set()
-    for line in open(args.classes, encoding="utf-8"):
-        text = line.strip()
-        if not text:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    ParserInfo = Argparse.ArgumentParser()
+    ParserInfo.add_argument('dumps', nargs='+')
+    ParserInfo.add_argument('--classes', required=True)
+    ParserInfo.add_argument('--out', required=True)
+    ArgValues = ParserInfo.parse_args()
+    Wanted = set()
+    for LineText in open(ArgValues.classes, encoding='utf-8'):
+        TextValueData = LineText.strip()
+        if not TextValueData:
             continue
-        parts = text.split(None, 1)
-        wanted.add(parts[1].strip() if len(parts) == 2 and parts[0].isdigit() else text)
-    result: Dict[str, Dict[str, dict]] = {}
-    scanned = 0
-    matched = 0
-    for path in args.dumps:
-        text = open(path, encoding="utf-8", errors="replace").read()
-        for name, address, body in iter_blocks(text):
-            scanned += 1
-            info = classify(body)
-            if info is None:
+        Parts = TextValueData.split(None, 1)
+        Wanted.add(Parts[1].strip() if len(Parts) == 2 and Parts[0].isdigit() else TextValueData)
+    Result: DictInfo[str, DictInfo[str, dict]] = {}
+    Scanned = 0
+    Matched = 0
+    for PathInfoData in ArgValues.dumps:
+        TextValueData = open(PathInfoData, encoding='utf-8', errors='replace').read()
+        for NameTextInfo, Address, BodyInfo in IterBlocks(TextValueData):
+            Scanned += 1
+            InfoInfo = Classify(BodyInfo)
+            if InfoInfo is None:
                 continue
-            matched += 1
-            owners: List[Tuple[str, str]] = []
-            if "::" in name:
-                cls, member = name.split("::", 1)
-                owners.append((cls, member))
-            for member, cls in MANGLED_RE.findall(body):
-                owners.append((cls, member))
-            for cls, member in owners:
-                if cls not in wanted:
+            Matched += 1
+            Owners: ListInfo[Tuple[str, str]] = []
+            if '::' in NameTextInfo:
+                ClassRef, Member = NameTextInfo.split('::', 1)
+                Owners.append((ClassRef, Member))
+            for Member, ClassRef in KMangledRe.findall(BodyInfo):
+                Owners.append((ClassRef, Member))
+            for ClassRef, Member in Owners:
+                if ClassRef not in Wanted:
                     continue
-                entry = dict(info)
-                entry["address"] = address
-                entry["source"] = path.replace("\\", "/").rsplit("/", 1)[-1]
-                bucket = result.setdefault(cls, {})
-                previous = bucket.get(member)
-                if previous is not None and previous["offset"] != entry["offset"]:
-                    entry["conflicts_with"] = previous["offset"]
-                bucket[member] = entry
-    payload = {
-        cls: dict(sorted(members.items())) for cls, members in sorted(result.items())
-    }
-    with open(args.out, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=1)
-        handle.write("\n")
-    total = sum(len(v) for v in payload.values())
-    print(
-        f"blocks={scanned} recognised={matched} classes={len(payload)} accessors={total}"
-    )
+                Entry = dict(InfoInfo)
+                Entry['address'] = Address
+                Entry['source'] = PathInfoData.replace('\\', '/').rsplit('/', 1)[-1]
+                Bucket = Result.setdefault(ClassRef, {})
+                Previous = Bucket.get(Member)
+                if Previous is not None and Previous['offset'] != Entry['offset']:
+                    Entry['conflicts_with'] = Previous['offset']
+                Bucket[Member] = Entry
+    PayloadInfo = {ClassRef: dict(sorted(Members.items())) for ClassRef, Members in sorted(Result.items())}
+    with open(ArgValues.out, 'w', encoding='utf-8') as Handle:
+        JsonData.dump(PayloadInfo, Handle, indent=1)
+        Handle.write('\n')
+    Total = sum((len(ValueData) for ValueData in PayloadInfo.values()))
+    print(f'blocks={Scanned} recognised={Matched} classes={len(PayloadInfo)} accessors={Total}')
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

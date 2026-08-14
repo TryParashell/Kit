@@ -7,253 +7,148 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
-
-import ast
-import hashlib
-import importlib
+import ast as AstLib
+import hashlib as Hashlib
+import importlib as Importlib
 from operator import itemgetter as ItemGetter
-from pathlib import Path
-from typing import Any
-
+from pathlib import Path as PathInfo
+from typing import Any as AnyInfo
 from ProgramModel import MethodData, ProgramData
 from ProgramReader import GetByteStats, ReadAssigns
-from ProgramRenderer import (
-    HashProgram,
-    HashText,
-    RenderRegistry,
-)
+from ProgramRenderer import HashProgram, HashText, RenderRegistry
 
 
-# checks need immutable expected evidence without importing reverse engineering tooling as a package
-def LoadManifest(ManifestPath: Path) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
-    SourceText = ManifestPath.read_text(encoding="utf-8")
-    AssignData = ReadAssigns(ast.parse(SourceText, filename=str(ManifestPath)))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def LoadManifest(ManifestPath: PathInfo) -> tuple[tuple[AnyInfo, ...], tuple[AnyInfo, ...]]:
+    SourceText = ManifestPath.read_text(encoding='utf-8')
+    AssignData = ReadAssigns(AstLib.parse(SourceText, filename=str(ManifestPath)))
     try:
-        GlobalStats = AssignData["KGlobalStats"][1]
-        ProgramStats = AssignData["KProgramStats"][1]
+        GlobalStats = AssignData['KGlobalStats'][1]
+        ProgramStats = AssignData['KProgramStats'][1]
     except KeyError as ErrorData:
-        raise ValueError("program decomposition manifest is incomplete") from ErrorData
-    return GlobalStats, ProgramStats
+        raise ValueError('program decomposition manifest is incomplete') from ErrorData
+    return (GlobalStats, ProgramStats)
 
 
-# canonical owner modules are the single allowed source for exact trace spellings
-def ReadOwners(ProgramRoot: Path) -> dict[str, tuple[tuple[object, str], ...]]:
-    OwnerRoot = ProgramRoot / "Owners"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ReadOwners(ProgramRoot: PathInfo) -> dict[str, tuple[tuple[object, str], ...]]:
+    OwnerRoot = ProgramRoot / 'Owners'
     Catalogs: dict[str, tuple[tuple[object, str], ...]] = {}
-    for OwnerPath in sorted(OwnerRoot.rglob("*.py")):
-        GroupPath = OwnerPath.relative_to(OwnerRoot).with_suffix("").as_posix()
-        SourceText = OwnerPath.read_text(encoding="utf-8")
-        AssignData = ReadAssigns(ast.parse(SourceText, filename=str(OwnerPath)))
+    for OwnerPath in sorted(OwnerRoot.rglob('*.py')):
+        GroupPath = OwnerPath.relative_to(OwnerRoot).with_suffix('').as_posix()
+        SourceText = OwnerPath.read_text(encoding='utf-8')
+        AssignData = ReadAssigns(AstLib.parse(SourceText, filename=str(OwnerPath)))
         try:
-            OwnerMap = AssignData["KOwnerSites"][1]
+            OwnerMap = AssignData['KOwnerSites'][1]
         except KeyError as ErrorData:
-            raise ValueError(f"owner catalog is incomplete {OwnerPath}") from ErrorData
+            raise ValueError(f'owner catalog is incomplete {OwnerPath}') from ErrorData
         OwnerSites = tuple(OwnerMap.items())
         Catalogs[GroupPath] = OwnerSites
     return Catalogs
 
 
-# method modules must remain focused on one owner catalog and one variant table
-def ReadMethod(
-    MethodPath: Path,
-    MethodRoot: Path,
-    Catalogs: dict[str, tuple[tuple[object, str], ...]],
-) -> MethodData:
-    GroupPath = MethodPath.relative_to(MethodRoot).with_suffix("").as_posix()
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ReadMethod(MethodPath: PathInfo, MethodRoot: PathInfo, Catalogs: dict[str, tuple[tuple[object, str], ...]]) -> MethodData:
+    GroupPath = MethodPath.relative_to(MethodRoot).with_suffix('').as_posix()
     try:
         OwnerSites = Catalogs[GroupPath]
     except KeyError as ErrorData:
-        raise ValueError(f"method owner catalog is missing {GroupPath}") from ErrorData
-    SourceText = MethodPath.read_text(encoding="utf-8")
-    TreeData = ast.parse(SourceText, filename=str(MethodPath))
-    ProgramNode: ast.AST | None = None
+        raise ValueError(f'method owner catalog is missing {GroupPath}') from ErrorData
+    SourceText = MethodPath.read_text(encoding='utf-8')
+    TreeData = AstLib.parse(SourceText, filename=str(MethodPath))
+    ProgramNode: AstLib.AST | None = None
     for NodeData in TreeData.body:
-        if not isinstance(NodeData, ast.Assign):
+        if not isinstance(NodeData, AstLib.Assign):
             continue
-        if any(
-            isinstance(TargetNode, ast.Name) and TargetNode.id == "KMethodProgram"
-            for TargetNode in NodeData.targets
-        ):
+        if any((isinstance(TargetNode, AstLib.Name) and TargetNode.id == 'KMethodProgram' for TargetNode in NodeData.targets)):
             ProgramNode = NodeData.value
             break
-    if not isinstance(ProgramNode, ast.Tuple) or len(ProgramNode.elts) != 2:
-        raise ValueError(f"method program is incomplete {MethodPath}")
-    StreamMap = ReadAssigns(
-        ast.Module(
-            body=[
-                ast.Assign(
-                    targets=[ast.Name(id="KStreamData", ctx=ast.Store())],
-                    value=ProgramNode.elts[1],
-                )
-            ],
-            type_ignores=[],
-        )
-    )["KStreamData"][1]
-    StreamOps = tuple(
-        (StreamName, tuple(Operations)) for StreamName, Operations in StreamMap.items()
-    )
-    MethodItem = MethodData(
-        GroupPath=GroupPath,
-        OwnerSites=OwnerSites,
-        StreamOps=StreamOps,
-    )
+    if not isinstance(ProgramNode, AstLib.Tuple) or len(ProgramNode.elts) != 2:
+        raise ValueError(f'method program is incomplete {MethodPath}')
+    StreamMap = ReadAssigns(AstLib.Module(body=[AstLib.Assign(targets=[AstLib.Name(id='KStreamData', ctx=AstLib.Store())], value=ProgramNode.elts[1])], type_ignores=[]))['KStreamData'][1]
+    StreamOps = tuple(((StreamName, tuple(Operations)) for StreamName, Operations in StreamMap.items()))
+    MethodItem = MethodData(GroupPath=GroupPath, OwnerSites=OwnerSites, StreamOps=StreamOps)
     return MethodItem
 
 
-# registry imports follow case sensitive generated paths on every host filesystem
-def SortMethodPath(MethodPath: Path) -> str:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SortMethodPath(MethodPath: PathInfo) -> str:
     return MethodPath.as_posix()
 
 
-# each variant needs deterministic method ordering before its explicit registry is checked
-def ReadMethods(
-    ProgramRoot: Path,
-    VariantPath: str,
-    Catalogs: dict[str, tuple[tuple[object, str], ...]],
-) -> tuple[MethodData, ...]:
-    MethodRoot = ProgramRoot / VariantPath / "Methods"
-    MethodPaths = tuple(sorted(MethodRoot.rglob("*.py"), key=SortMethodPath))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ReadMethods(ProgramRoot: PathInfo, VariantPath: str, Catalogs: dict[str, tuple[tuple[object, str], ...]]) -> tuple[MethodData, ...]:
+    MethodRoot = ProgramRoot / VariantPath / 'Methods'
+    MethodPaths = tuple(sorted(MethodRoot.rglob('*.py'), key=SortMethodPath))
     if not MethodPaths:
-        raise ValueError(f"variant methods are missing {VariantPath}")
-    return tuple(
-        ReadMethod(MethodPath, MethodRoot, Catalogs) for MethodPath in MethodPaths
-    )
+        raise ValueError(f'variant methods are missing {VariantPath}')
+    return tuple((ReadMethod(MethodPath, MethodRoot, Catalogs) for MethodPath in MethodPaths))
 
 
-# verification composes independent method modules into the original contiguous stream order
-def ComposeStreams(
-    MethodItems: tuple[MethodData, ...], StreamNames: tuple[str, ...]
-) -> tuple[tuple[str, tuple[tuple[int, int, str, str, Any], ...]], ...]:
-    StreamResults: list[tuple[str, tuple[Any, ...]]] = []
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ComposeStreams(MethodItems: tuple[MethodData, ...], StreamNames: tuple[str, ...]) -> tuple[tuple[str, tuple[tuple[int, int, str, str, AnyInfo], ...]], ...]:
+    StreamResults: list[tuple[str, tuple[AnyInfo, ...]]] = []
     for StreamName in StreamNames:
-        OwnedOps: list[tuple[int, int, str, str, Any]] = []
+        OwnedOps: list[tuple[int, int, str, str, AnyInfo]] = []
         for MethodItem in MethodItems:
             OwnerMap = dict(MethodItem.OwnerSites)
             StreamMap = dict(MethodItem.StreamOps)
-            for StartPos, FieldWidth, OwnerKey, KindName, DefaultValue in StreamMap.get(
-                StreamName, ()
-            ):
+            for StartPos, FieldWidth, OwnerKey, KindName, DefaultValue in StreamMap.get(StreamName, ()):
                 try:
                     OwnerText = OwnerMap[OwnerKey]
                 except KeyError as ErrorData:
-                    raise ValueError(
-                        f"method owner key is missing {MethodItem.GroupPath} {OwnerKey!r}"
-                    ) from ErrorData
-                OwnedOps.append(
-                    (StartPos, FieldWidth, OwnerText, KindName, DefaultValue)
-                )
+                    raise ValueError(f'method owner key is missing {MethodItem.GroupPath} {OwnerKey!r}') from ErrorData
+                OwnedOps.append((StartPos, FieldWidth, OwnerText, KindName, DefaultValue))
         OwnedOps.sort(key=ItemGetter(0))
         SourceCursor = 0
         for StartPos, FieldWidth, OwnerText, KindName, DefaultValue in OwnedOps:
             if FieldWidth <= 0 or StartPos != SourceCursor:
-                raise ValueError(
-                    f"variant stream order drifted {StreamName!r} at {StartPos}"
-                )
+                raise ValueError(f'variant stream order drifted {StreamName!r} at {StartPos}')
             SourceCursor += FieldWidth
         StreamResults.append((StreamName, tuple(OwnedOps)))
     return tuple(StreamResults)
 
 
-# imported facades must expose the exact legacy tuples even though storage is decomposed
-def MakeLegacy(
-    Streams: tuple[tuple[str, tuple[Any, ...]], ...], OpsName: str
-) -> tuple[tuple[str, ...], Any]:
-    OwnerNames = tuple(
-        sorted(
-            {
-                OwnerText
-                for _, Operations in Streams
-                for _, _, OwnerText, _, _ in Operations
-            }
-        )
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MakeLegacy(Streams: tuple[tuple[str, tuple[AnyInfo, ...]], ...], OpsName: str) -> tuple[tuple[str, ...], AnyInfo]:
+    OwnerNames = tuple(sorted({OwnerText for SpareValue, Operations in Streams for SpareValue, SpareValue, OwnerText, SpareValue, SpareValue in Operations}))
     OwnerIndex = {OwnerText: Index for Index, OwnerText in enumerate(OwnerNames)}
-    LegacyStreams = {
-        StreamName: tuple(
-            (
-                StartPos,
-                FieldWidth,
-                OwnerIndex[OwnerText],
-                KindName,
-                DefaultValue,
-            )
-            for StartPos, FieldWidth, OwnerText, KindName, DefaultValue in Operations
-        )
-        for StreamName, Operations in Streams
-    }
-    if OpsName == "StreamPrograms":
-        return OwnerNames, LegacyStreams
-    return OwnerNames, next(iter(LegacyStreams.values()))
+    LegacyStreams = {StreamName: tuple(((StartPos, FieldWidth, OwnerIndex[OwnerText], KindName, DefaultValue) for StartPos, FieldWidth, OwnerText, KindName, DefaultValue in Operations)) for StreamName, Operations in Streams}
+    if OpsName == 'StreamPrograms':
+        return (OwnerNames, LegacyStreams)
+    return (OwnerNames, next(iter(LegacyStreams.values())))
 
 
-# live byte checks prove compatibility facades still execute every original encoder policy
-def GetLiveStats(
-    ModuleData: Any,
-    OpsName: str,
-    StreamNames: tuple[str, ...],
-) -> tuple[tuple[str, int, str], ...]:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLiveStats(ModuleData: AnyInfo, OpsName: str, StreamNames: tuple[str, ...]) -> tuple[tuple[str, int, str], ...]:
     ByteStats: list[tuple[str, int, str]] = []
-    if OpsName == "StreamPrograms":
-        OutputPairs = (
-            (StreamName, ModuleData.EncodeProgram(StreamName))
-            for StreamName in StreamNames
-        )
-    elif OpsName == "AnnotationOps":
+    if OpsName == 'StreamPrograms':
+        OutputPairs = ((StreamName, ModuleData.EncodeProgram(StreamName)) for StreamName in StreamNames)
+    elif OpsName == 'AnnotationOps':
         OutputPairs = ((StreamNames[0], ModuleData.EncodeTwoViewAnnotationManager()),)
     else:
         OutputPairs = ((StreamNames[0], ModuleData.EncodeProgram()),)
     for StreamName, OutputData in OutputPairs:
-        ByteStats.append(
-            (
-                StreamName,
-                len(OutputData),
-                hashlib.sha256(OutputData).hexdigest(),
-            )
-        )
+        ByteStats.append((StreamName, len(OutputData), Hashlib.sha256(OutputData).hexdigest()))
     return tuple(ByteStats)
 
 
-# committed focused modules must be sufficient to regenerate the complete canonical tree
-def LoadCurrentPrograms(
-    ProgramRoot: Path, ManifestPath: Path
-) -> tuple[ProgramData, ...]:
-    _, ProgramStats = LoadManifest(ManifestPath)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def LoadCurrentInfo(ProgramRoot: PathInfo, ManifestPath: PathInfo) -> tuple[ProgramData, ...]:
+    SpareValue, ProgramStats = LoadManifest(ManifestPath)
     Catalogs = ReadOwners(ProgramRoot)
     Programs: list[ProgramData] = []
     for StatRecord in ProgramStats:
-        (
-            VariantPath,
-            OwnerName,
-            OpsName,
-            StreamNames,
-            _,
-            _,
-            PublicNames,
-            _,
-            _,
-        ) = StatRecord
+        VariantPath, OwnerName, OpsName, StreamNames, SpareValue, SpareValue, PublicNames, SpareValue, SpareValue = StatRecord
         MethodItems = ReadMethods(ProgramRoot, VariantPath, Catalogs)
         Streams = ComposeStreams(MethodItems, StreamNames)
-        ProgramPath = ProgramRoot / VariantPath / "Program.py"
-        Programs.append(
-            ProgramData(
-                VariantPath=VariantPath,
-                SourcePath=ProgramPath,
-                SourceText=ProgramPath.read_text(encoding="utf-8"),
-                OwnerName=OwnerName,
-                OpsName=OpsName,
-                Streams=Streams,
-                PublicNames=PublicNames,
-                ByteStats=GetByteStats(Streams),
-            )
-        )
+        ProgramPath = ProgramRoot / VariantPath / 'Program.py'
+        Programs.append(ProgramData(VariantPath=VariantPath, SourcePath=ProgramPath, SourceText=ProgramPath.read_text(encoding='utf-8'), OwnerName=OwnerName, OpsName=OpsName, Streams=Streams, PublicNames=PublicNames, ByteStats=GetByteStats(Streams)))
     return tuple(Programs)
 
 
-# one exhaustive verifier guards structure formatting public imports and encoded bytes together
-def VerifyTree(
-    ProgramRoot: Path, ManifestPath: Path, CheckRuntime: bool = True
-) -> dict[str, int]:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def VerifyTree(ProgramRoot: PathInfo, ManifestPath: PathInfo, CheckRuntime: bool=True) -> dict[str, int]:
     ExpectedGlobal, ProgramStats = LoadManifest(ManifestPath)
     Catalogs = ReadOwners(ProgramRoot)
     MethodTotal = 0
@@ -261,94 +156,41 @@ def VerifyTree(
     OperationTotal = 0
     UsedGroups: set[str] = set()
     for StatRecord in ProgramStats:
-        (
-            VariantPath,
-            OwnerName,
-            OpsName,
-            StreamNames,
-            ExpectedOps,
-            ExpectedHash,
-            PublicNames,
-            ByteStats,
-            FacadeHash,
-        ) = StatRecord
+        VariantPath, OwnerName, OpsName, StreamNames, ExpectedOps, ExpectedHash, PublicNames, ByteStats, FacadeHash = StatRecord
         MethodItems = ReadMethods(ProgramRoot, VariantPath, Catalogs)
-        UsedGroups.update(MethodItem.GroupPath for MethodItem in MethodItems)
+        UsedGroups.update((MethodItem.GroupPath for MethodItem in MethodItems))
         Streams = ComposeStreams(MethodItems, StreamNames)
-        ProgramPath = ProgramRoot / VariantPath / "Program.py"
-        SourceText = ProgramPath.read_text(encoding="utf-8")
-        ProgramItem = ProgramData(
-            VariantPath=VariantPath,
-            SourcePath=ProgramPath,
-            SourceText=SourceText,
-            OwnerName=OwnerName,
-            OpsName=OpsName,
-            Streams=Streams,
-            PublicNames=PublicNames,
-            ByteStats=ByteStats,
-        )
-        OperationCount = sum(len(Operations) for _, Operations in Streams)
+        ProgramPath = ProgramRoot / VariantPath / 'Program.py'
+        SourceText = ProgramPath.read_text(encoding='utf-8')
+        ProgramItem = ProgramData(VariantPath=VariantPath, SourcePath=ProgramPath, SourceText=SourceText, OwnerName=OwnerName, OpsName=OpsName, Streams=Streams, PublicNames=PublicNames, ByteStats=ByteStats)
+        OperationCount = sum((len(Operations) for SpareValue, Operations in Streams))
         if OperationCount != ExpectedOps or HashProgram(ProgramItem) != ExpectedHash:
-            raise ValueError(f"logical program drifted {VariantPath}")
+            raise ValueError(f'logical program drifted {VariantPath}')
         if HashText(SourceText) != FacadeHash:
-            raise ValueError(f"compatibility facade drifted {VariantPath}")
+            raise ValueError(f'compatibility facade drifted {VariantPath}')
         if CheckRuntime:
-            ModuleName = (
-                "convert.adapters.solidworks.programs."
-                + VariantPath.replace("/", ".")
-                + ".Program"
-            )
-            ModuleData = importlib.import_module(ModuleName)
-            MissingNames = tuple(
-                NameText
-                for NameText in PublicNames
-                if not hasattr(ModuleData, NameText)
-            )
+            ModuleName = 'convert.adapters.solidworks.programs.' + VariantPath.replace('/', '.') + '.Program'
+            ModuleData = Importlib.import_module(ModuleName)
+            MissingNames = tuple((NameText for NameText in PublicNames if not hasattr(ModuleData, NameText)))
             if MissingNames:
-                raise ValueError(
-                    f"public symbols are missing {VariantPath} {MissingNames}"
-                )
+                raise ValueError(f'public symbols are missing {VariantPath} {MissingNames}')
             OwnerNames, LegacyOps = MakeLegacy(Streams, OpsName)
             if getattr(ModuleData, OwnerName) != OwnerNames:
-                raise ValueError(f"legacy owners drifted {VariantPath}")
+                raise ValueError(f'legacy owners drifted {VariantPath}')
             if getattr(ModuleData, OpsName) != LegacyOps:
-                raise ValueError(f"legacy operations drifted {VariantPath}")
+                raise ValueError(f'legacy operations drifted {VariantPath}')
             if GetLiveStats(ModuleData, OpsName, StreamNames) != ByteStats:
-                raise ValueError(f"encoded bytes drifted {VariantPath}")
-        ModulePaths = tuple(
-            "convert.adapters.solidworks.programs."
-            + VariantPath.replace("/", ".")
-            + ".Methods."
-            + MethodItem.GroupPath.replace("/", ".")
-            for MethodItem in MethodItems
-        )
-        RegistryPath = ProgramRoot / VariantPath / "Registry.py"
-        if RegistryPath.read_text(encoding="utf-8") != RenderRegistry(
-            ProgramItem, ModulePaths
-        ):
-            raise ValueError(f"variant registry drifted {VariantPath}")
+                raise ValueError(f'encoded bytes drifted {VariantPath}')
+        ModulePaths = tuple(('convert.adapters.solidworks.programs.' + VariantPath.replace('/', '.') + '.Methods.' + MethodItem.GroupPath.replace('/', '.') for MethodItem in MethodItems))
+        RegistryPath = ProgramRoot / VariantPath / 'Registry.py'
+        if RegistryPath.read_text(encoding='utf-8') != RenderRegistry(ProgramItem, ModulePaths):
+            raise ValueError(f'variant registry drifted {VariantPath}')
         MethodTotal += len(MethodItems)
         StreamTotal += len(Streams)
         OperationTotal += OperationCount
     if UsedGroups != set(Catalogs):
-        raise ValueError("owner catalogs contain missing or unused groups")
-    ActualGlobal = (
-        len(ProgramStats),
-        StreamTotal,
-        len(Catalogs),
-        sum(len(OwnerSites) for OwnerSites in Catalogs.values()),
-        MethodTotal,
-        OperationTotal,
-    )
+        raise ValueError('owner catalogs contain missing or unused groups')
+    ActualGlobal = (len(ProgramStats), StreamTotal, len(Catalogs), sum((len(OwnerSites) for OwnerSites in Catalogs.values())), MethodTotal, OperationTotal)
     if ActualGlobal != ExpectedGlobal:
-        raise ValueError(
-            f"program decomposition counts drifted {ActualGlobal} expected {ExpectedGlobal}"
-        )
-    return {
-        "Programs": ActualGlobal[0],
-        "Streams": ActualGlobal[1],
-        "Catalogs": ActualGlobal[2],
-        "Owners": ActualGlobal[3],
-        "Methods": ActualGlobal[4],
-        "Operations": ActualGlobal[5],
-    }
+        raise ValueError(f'program decomposition counts drifted {ActualGlobal} expected {ExpectedGlobal}')
+    return {'Programs': ActualGlobal[0], 'Streams': ActualGlobal[1], 'Catalogs': ActualGlobal[2], 'Owners': ActualGlobal[3], 'Methods': ActualGlobal[4], 'Operations': ActualGlobal[5]}

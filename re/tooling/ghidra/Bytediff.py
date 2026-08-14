@@ -1,47 +1,54 @@
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-from layout import find, gaps, load
+import sys as System
+from Layout import FindItem, FindGaps, LoadData
 
 
-def runs(label, name, kind):
-    doc, segs, blob, part = load(label)
-    out = []
-    for index in find(segs, name, kind):
-        seq = []
-        for item in gaps(segs, index):
-            if item[0] == "scalars":
-                seq.append(("S", item[1], blob[item[1] : item[1] + item[2]]))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RunsInfo(LabelInfo, NameTextInfo, KindNameInfo):
+    DocInfo, SegsInfo, ByteBlob, PartInfoInfo = LoadData(LabelInfo)
+    OutputDataInfo = []
+    for IndexData in FindItem(SegsInfo, NameTextInfo, KindNameInfo):
+        SeqInfo = []
+        for ItemData in FindGaps(SegsInfo, IndexData):
+            if ItemData[0] == 'scalars':
+                SeqInfo.append(('S', ItemData[1], ByteBlob[ItemData[1]:ItemData[1] + ItemData[2]]))
             else:
-                seq.append(("O", item[2], item[3]))
-        out.append((part.name, index, seq))
-    return out
+                SeqInfo.append(('O', ItemData[2], ItemData[3]))
+        OutputDataInfo.append((PartInfoInfo.name, IndexData, SeqInfo))
+    return OutputDataInfo
 
 
-def main():
-    name = sys.argv[1]
-    left, right = sys.argv[2], sys.argv[3]
-    kind = sys.argv[4] if len(sys.argv) > 4 else "definition"
-    lrows = runs(left, name, kind)
-    rrows = runs(right, name, kind)
-    for (lp, li, lseq), (rp, ri, rseq) in zip(lrows, rrows):
-        print(f"--- {name}: {lp} node={li}   vs   {rp} node={ri}")
-        if len(lseq) != len(rseq):
-            print(f"    SHAPE DIFFERS {len(lseq)} vs {len(rseq)}")
-        for pos, (a, b) in enumerate(zip(lseq, rseq)):
-            if a[0] != b[0]:
-                print(f"    [{pos}] kind differs {a[0]} vs {b[0]}")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    NameTextInfo = System.argv[1]
+    LeftInfo, Right = (System.argv[2], System.argv[3])
+    KindNameInfo = System.argv[4] if len(System.argv) > 4 else 'definition'
+    Lrows = RunsInfo(LeftInfo, NameTextInfo, KindNameInfo)
+    Rrows = RunsInfo(Right, NameTextInfo, KindNameInfo)
+    for (LpInfo, LiInfo, LseqInfo), (RpInfo, RiInfo, RseqInfo) in zip(Lrows, Rrows):
+        print(f'--- {NameTextInfo}: {LpInfo} node={LiInfo}   vs   {RpInfo} node={RiInfo}')
+        if len(LseqInfo) != len(RseqInfo):
+            print(f'    SHAPE DIFFERS {len(LseqInfo)} vs {len(RseqInfo)}')
+        for PosInfo, (FirstValue, SecondValue) in enumerate(zip(LseqInfo, RseqInfo)):
+            if FirstValue[0] != SecondValue[0]:
+                print(f'    [{PosInfo}] kind differs {FirstValue[0]} vs {SecondValue[0]}')
                 continue
-            if a[0] == "O":
-                if a[1] != b[1]:
-                    print(f"    [{pos}] object class {a[1]} vs {b[1]}")
+            if FirstValue[0] == 'O':
+                if FirstValue[1] != SecondValue[1]:
+                    print(f'    [{PosInfo}] object class {FirstValue[1]} vs {SecondValue[1]}')
                 continue
-            if a[2] == b[2]:
+            if FirstValue[2] == SecondValue[2]:
                 continue
-            print(f"    [{pos}] scalars n={len(a[2])}/{len(b[2])} at {a[1]}/{b[1]}")
-            for k in range(min(len(a[2]), len(b[2]))):
-                if a[2][k] != b[2][k]:
-                    print(f"        +{k:4d}  {a[2][k]:02x} -> {b[2][k]:02x}")
-
-
-if __name__ == "__main__":
-    main()
+            print(f'    [{PosInfo}] scalars n={len(FirstValue[2])}/{len(SecondValue[2])} at {FirstValue[1]}/{SecondValue[1]}')
+            for KeyIndex in range(min(len(FirstValue[2]), len(SecondValue[2]))):
+                if FirstValue[2][KeyIndex] != SecondValue[2][KeyIndex]:
+                    print(f'        +{KeyIndex:4d}  {FirstValue[2][KeyIndex]:02x} -> {SecondValue[2][KeyIndex]:02x}')
+if __name__ == '__main__':
+    MainRunInfo()

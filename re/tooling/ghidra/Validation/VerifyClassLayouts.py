@@ -7,409 +7,337 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import argparse as Argparse
+import collections as Collects
+import json as JsonData
+import pathlib as Pathlib
+import re as Regex
+import sys as System
+from typing import Dict as DictInfo, List as ListInfo, Optional, Tuple
 
-import argparse
-import collections
-import json
-import pathlib
-import re
-import sys
-from typing import Dict, List, Optional, Tuple
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = Pathlib.Path(__file__).resolve().parent
 
-HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(HERE))
-
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = KHereInfo.parents[2]
+System.path.insert(0, str(KRootInfo / 'src'))
+System.path.insert(0, str(KHereInfo))
 from convert.adapters.solidworks.container.Container import SldprtArchive
+from solve_runs import Solver, load_traces as LoadTraces
 
-from solve_runs import Solver, load_traces
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KStream = 'Contents/Config-0-ResolvedFeatures'
 
-STREAM = "Contents/Config-0-ResolvedFeatures"
-NO_BODY_KINDS = ("null", "objectref")
-BACKREF = re.compile(r"backref->(\d+)$")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNoBodyKinds = ('null', 'objectref')
 
-
-def part_path(doc: dict) -> pathlib.Path:
-    part = pathlib.Path(doc["part"])
-    if part.exists():
-        return part
-    for base in (
-        ROOT / ".rescratch/corpus/parts",
-        ROOT / ".rescratch/corpus2",
-        ROOT / ".rescratch/trace/parts",
-        ROOT / "examples",
-        ROOT / ".rescratch",
-    ):
-        hits = list(base.rglob(part.name))
-        if hits:
-            return hits[0]
-    raise SystemExit("cannot locate part " + str(part))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBackref = Regex.compile('backref->(\\d+)$')
 
 
-def class_of(segments: List[dict], index: int) -> str:
-    name = segments[index]["class_name"]
-    match = BACKREF.match(name)
-    if match:
-        return segments[int(match.group(1))]["class_name"]
-    return name
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def PartPath(DocInfo: dict) -> Pathlib.Path:
+    PartInfoInfo = Pathlib.Path(DocInfo['part'])
+    if PartInfoInfo.exists():
+        return PartInfoInfo
+    for BaseInfo in (KRootInfo / '.rescratch/corpus/parts', KRootInfo / '.rescratch/corpus2', KRootInfo / '.rescratch/trace/parts', KRootInfo / 'examples', KRootInfo / '.rescratch'):
+        HitsInfo = list(BaseInfo.rglob(PartInfoInfo.name))
+        if HitsInfo:
+            return HitsInfo[0]
+    raise SystemExit('cannot locate part ' + str(PartInfoInfo))
 
 
-def fallback_runs(traces: List[dict]) -> Dict[str, Dict[str, int]]:
-    solver = Solver(traces)
-    solver.solve()
-    table: Dict[str, Dict[str, int]] = collections.defaultdict(dict)
-    for key, value in solver.runs.items():
-        name, slot = key.rsplit("@", 1)
-        table[name][slot] = value
-    return table
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ClassOf(SegmentsInfo: ListInfo[dict], IndexData: int) -> str:
+    NameTextInfo = SegmentsInfo[IndexData]['class_name']
+    Match = KBackref.match(NameTextInfo)
+    if Match:
+        return SegmentsInfo[int(Match.group(1))]['class_name']
+    return NameTextInfo
 
 
-def string_length(blob: bytes, at: int) -> Optional[int]:
-    if blob[at : at + 3] != b"\xff\xfe\xff":
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def FallbackRuns(Traces: ListInfo[dict]) -> DictInfo[str, DictInfo[str, int]]:
+    SolverInfo = Solver(Traces)
+    SolverInfo.solve()
+    Table: DictInfo[str, DictInfo[str, int]] = Collects.defaultdict(dict)
+    for KeyName, ValueInfo in SolverInfo.runs.items():
+        NameTextInfo, SlotIndex = KeyName.rsplit('@', 1)
+        Table[NameTextInfo][SlotIndex] = ValueInfo
+    return Table
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def StringLength(ByteBlob: bytes, AtInfo: int) -> Optional[int]:
+    if ByteBlob[AtInfo:AtInfo + 3] != b'\xff\xfe\xff':
         return None
-    marker = blob[at + 3]
-    if marker == 0xFF:
-        units = int.from_bytes(blob[at + 4 : at + 6], "little")
-        return 6 + 2 * units
-    return 4 + 2 * marker
+    Marker = ByteBlob[AtInfo + 3]
+    if Marker == 255:
+        Units = int.from_bytes(ByteBlob[AtInfo + 4:AtInfo + 6], 'little')
+        return 6 + 2 * Units
+    return 4 + 2 * Marker
 
 
-def run_length(
-    layout: dict, key: str, blob: bytes, start: int
-) -> Tuple[Optional[int], str]:
-    constant = layout.get("runs", {}).get(key)
-    if constant is not None:
-        return constant, "constant"
-    entries = [e for e in layout.get("variable_runs", []) if e["slot"] == key]
-    if not entries:
-        return None, "undeclared"
-    total = 0
-    for entry in entries:
-        rule = entry["rule"]
-        if rule == "opaque":
-            return None, "opaque"
-        total += entry.get("at", 0)
-        cursor = start + total
-        if rule == "string":
-            size = string_length(blob, cursor)
-            if size is None:
-                return None, "string marker absent at %d" % cursor
-            total += size
-        elif rule == "count":
-            width = entry["count_width"]
-            count = int.from_bytes(blob[cursor : cursor + width], "little")
-            total += width + entry["stride"] * count
-        elif rule == "conditional":
-            width = entry["predicate_width"]
-            offset = cursor + entry.get("predicate_at", 0)
-            value = int.from_bytes(blob[offset : offset + width], "little")
-            total += width
-            if value in entry["values"]:
-                total += entry["width"]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RunLength(Layout: dict, KeyName: str, ByteBlob: bytes, StartRun: int) -> Tuple[Optional[int], str]:
+    Constant = Layout.get('runs', {}).get(KeyName)
+    if Constant is not None:
+        return (Constant, 'constant')
+    Entries = [ErrorInfo for ErrorInfo in Layout.get('variable_runs', []) if ErrorInfo['slot'] == KeyName]
+    if not Entries:
+        return (None, 'undeclared')
+    Total = 0
+    for Entry in Entries:
+        RuleInfo = Entry['rule']
+        if RuleInfo == 'opaque':
+            return (None, 'opaque')
+        Total += Entry.get('at', 0)
+        Cursor = StartRun + Total
+        if RuleInfo == 'string':
+            ByteSize = StringLength(ByteBlob, Cursor)
+            if ByteSize is None:
+                return (None, 'string marker absent at %d' % Cursor)
+            Total += ByteSize
+        elif RuleInfo == 'count':
+            WidthInfo = Entry['count_width']
+            CountInfo = int.from_bytes(ByteBlob[Cursor:Cursor + WidthInfo], 'little')
+            Total += WidthInfo + Entry['stride'] * CountInfo
+        elif RuleInfo == 'conditional':
+            WidthInfo = Entry['predicate_width']
+            Offset = Cursor + Entry.get('predicate_at', 0)
+            ValueInfo = int.from_bytes(ByteBlob[Offset:Offset + WidthInfo], 'little')
+            Total += WidthInfo
+            if ValueInfo in Entry['values']:
+                Total += Entry['width']
         else:
-            return None, "unknown rule " + rule
-        total += entry.get("tail", 0)
-    return total, "rule"
+            return (None, 'unknown rule ' + RuleInfo)
+        Total += Entry.get('tail', 0)
+    return (Total, 'rule')
 
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
 class Walker:
-    def __init__(
-        self,
-        segments: List[dict],
-        blob: bytes,
-        declared: Dict[str, dict],
-        fallback: Dict[str, Dict[str, int]],
-    ) -> None:
-        self.segments = segments
-        self.blob = blob
-        self.declared = declared
-        self.fallback = fallback
-        self.kids: Dict[int, List[int]] = collections.defaultdict(list)
-        for index, seg in enumerate(segments):
-            if seg["parent"] >= 0:
-                self.kids[seg["parent"]].append(index)
-        self.order = sorted(
-            range(len(segments)), key=lambda i: (segments[i]["offset"], i)
-        )
-        self.next_offset: Dict[int, Optional[int]] = {}
-        for position, index in enumerate(self.order):
-            head = segments[index]["offset"] + segments[index]["header"]
-            found = None
-            for other in self.order[position + 1 :]:
-                if segments[other]["offset"] >= head:
-                    found = segments[other]["offset"]
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __init__(SelfRef, SegmentsInfo: ListInfo[dict], ByteBlob: bytes, Declared: DictInfo[str, dict], Fallback: DictInfo[str, DictInfo[str, int]]) -> None:
+        SelfRef.SegmentsInfo = SegmentsInfo
+        SelfRef.ByteBlob = ByteBlob
+        SelfRef.Declared = Declared
+        SelfRef.Fallback = Fallback
+        SelfRef.KidsInfo: DictInfo[int, ListInfo[int]] = Collects.defaultdict(list)
+        for IndexData, SegInfo in enumerate(SegmentsInfo):
+            if SegInfo['parent'] >= 0:
+                SelfRef.KidsInfo[SegInfo['parent']].append(IndexData)
+
+        # needed to keep reverse engineering responsibilities isolated and maintainable
+        SelfRef.Order = sorted(range(len(SegmentsInfo)), key=lambda IndexInfo: (SegmentsInfo[IndexInfo]['offset'], IndexInfo))
+        SelfRef.NextOffset: DictInfo[int, Optional[int]] = {}
+        for PosInfoInfo, IndexData in enumerate(SelfRef.Order):
+            HeadInfo = SegmentsInfo[IndexData]['offset'] + SegmentsInfo[IndexData]['header']
+            Found = None
+            for Other in SelfRef.Order[PosInfoInfo + 1:]:
+                if SegmentsInfo[Other]['offset'] >= HeadInfo:
+                    Found = SegmentsInfo[Other]['offset']
                     break
-            self.next_offset[index] = found
-        self.memo: Dict[int, Optional[int]] = {}
-        self.active: set = set()
+            SelfRef.NextOffset[IndexData] = Found
+        SelfRef.MemoInfo: DictInfo[int, Optional[int]] = {}
+        SelfRef.Active: set = set()
 
-    def layout_for(self, index: int) -> Optional[dict]:
-        name = class_of(self.segments, index)
-        if name in self.declared:
-            return self.declared[name]
-        runs = self.fallback.get(name)
-        if runs is None:
-            return None
-        return {"runs": runs, "variable_runs": [], "child_slots": None}
 
-    def body_end(self, index: int) -> Optional[int]:
-        if index in self.memo:
-            return self.memo[index]
-        if index in self.active:
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def LayoutFor(SelfRef, IndexData: int) -> Optional[dict]:
+        NameTextInfo = ClassOf(SelfRef.SegmentsInfo, IndexData)
+        if NameTextInfo in SelfRef.Declared:
+            return SelfRef.Declared[NameTextInfo]
+        RunsInfo = SelfRef.Fallback.get(NameTextInfo)
+        if RunsInfo is None:
             return None
-        seg = self.segments[index]
-        if seg["kind"] in NO_BODY_KINDS:
-            self.memo[index] = seg["offset"] + seg["header"]
-            return self.memo[index]
-        self.active.add(index)
-        result = self.compute(index)
-        self.active.discard(index)
-        self.memo[index] = result
-        return result
+        return {'runs': RunsInfo, 'variable_runs': [], 'child_slots': None}
 
-    def compute(self, index: int) -> Optional[int]:
-        seg = self.segments[index]
-        head = seg["offset"] + seg["header"]
-        layout = self.layout_for(index)
-        if layout is None:
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def BodyEnd(SelfRef, IndexData: int) -> Optional[int]:
+        if IndexData in SelfRef.MemoInfo:
+            return SelfRef.MemoInfo[IndexData]
+        if IndexData in SelfRef.Active:
             return None
-        slots = layout.get("child_slots")
-        kids = self.kids[index]
-        if slots == [] or not kids:
-            size, _ = run_length(layout, "leaf", self.blob, head)
-            return None if size is None else head + size
-        cursor = head
-        size, _ = run_length(layout, "lead", self.blob, cursor)
-        if size is None:
+        SegInfo = SelfRef.SegmentsInfo[IndexData]
+        if SegInfo['kind'] in KNoBodyKinds:
+            SelfRef.MemoInfo[IndexData] = SegInfo['offset'] + SegInfo['header']
+            return SelfRef.MemoInfo[IndexData]
+        SelfRef.Active.add(IndexData)
+        Result = SelfRef.Compute(IndexData)
+        SelfRef.Active.discard(IndexData)
+        SelfRef.MemoInfo[IndexData] = Result
+        return Result
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def Compute(SelfRef, IndexData: int) -> Optional[int]:
+        SegInfo = SelfRef.SegmentsInfo[IndexData]
+        HeadInfo = SegInfo['offset'] + SegInfo['header']
+        Layout = SelfRef.LayoutFor(IndexData)
+        if Layout is None:
             return None
-        cursor += size
-        for slot, kid in enumerate(kids):
-            end = self.body_end(kid)
-            if end is None:
+        Slots = Layout.get('child_slots')
+        KidsInfo = SelfRef.KidsInfo[IndexData]
+        if Slots == [] or not KidsInfo:
+            ByteSize, SpareValue = RunLength(Layout, 'leaf', SelfRef.ByteBlob, HeadInfo)
+            return None if ByteSize is None else HeadInfo + ByteSize
+        Cursor = HeadInfo
+        ByteSize, SpareValue = RunLength(Layout, 'lead', SelfRef.ByteBlob, Cursor)
+        if ByteSize is None:
+            return None
+        Cursor += ByteSize
+        for SlotIndex, KidInfo in enumerate(KidsInfo):
+            EndIndex = SelfRef.BodyEnd(KidInfo)
+            if EndIndex is None:
                 return None
-            cursor = end
-            size, _ = run_length(layout, str(slot), self.blob, cursor)
-            if size is None:
+            Cursor = EndIndex
+            ByteSize, SpareValue = RunLength(Layout, str(SlotIndex), SelfRef.ByteBlob, Cursor)
+            if ByteSize is None:
                 return None
-            cursor += size
-        return cursor
+            Cursor += ByteSize
+        return Cursor
 
-    def predicted_child_offsets(self, index: int) -> List[Tuple[int, int, int]]:
-        seg = self.segments[index]
-        head = seg["offset"] + seg["header"]
-        layout = self.layout_for(index)
-        out: List[Tuple[int, int, int]] = []
-        if layout is None or layout.get("child_slots") == []:
-            return out
-        kids = self.kids[index]
-        if not kids:
-            return out
-        size, _ = run_length(layout, "lead", self.blob, head)
-        if size is not None:
-            out.append((-1, head + size, self.segments[kids[0]]["offset"]))
-        for slot, kid in enumerate(kids):
-            end = self.body_end(kid)
-            if end is None:
-                continue
-            size, _ = run_length(layout, str(slot), self.blob, end)
-            if size is None:
-                continue
-            if slot + 1 < len(kids):
-                out.append((slot, end + size, self.segments[kids[slot + 1]]["offset"]))
-            elif seg["depth"] == 0:
-                out.append((slot, end + size, seg["scope_end"]))
-        return out
 
-    def bound(self, index: int) -> int:
-        seg = self.segments[index]
-        head = seg["offset"] + seg["header"]
-        layout = self.layout_for(index)
-        kids = self.kids[index]
-        leaf = layout is not None and layout.get("child_slots") == []
-        start = head
-        if kids and not leaf:
-            start = max(head, self.segments[kids[-1]]["scope_end"])
-        limit = seg["scope_end"]
-        for other in self.order:
-            offset = self.segments[other]["offset"]
-            if offset >= start:
-                limit = min(limit, offset)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def ChildOffsets(SelfRef, IndexData: int) -> ListInfo[Tuple[int, int, int]]:
+        SegInfo = SelfRef.SegmentsInfo[IndexData]
+        HeadInfo = SegInfo['offset'] + SegInfo['header']
+        Layout = SelfRef.LayoutFor(IndexData)
+        OutputDataInfo: ListInfo[Tuple[int, int, int]] = []
+        if Layout is None or Layout.get('child_slots') == []:
+            return OutputDataInfo
+        KidsInfo = SelfRef.KidsInfo[IndexData]
+        if not KidsInfo:
+            return OutputDataInfo
+        ByteSize, SpareValue = RunLength(Layout, 'lead', SelfRef.ByteBlob, HeadInfo)
+        if ByteSize is not None:
+            OutputDataInfo.append((-1, HeadInfo + ByteSize, SelfRef.SegmentsInfo[KidsInfo[0]]['offset']))
+        for SlotIndex, KidInfo in enumerate(KidsInfo):
+            EndIndex = SelfRef.BodyEnd(KidInfo)
+            if EndIndex is None:
+                continue
+            ByteSize, SpareValue = RunLength(Layout, str(SlotIndex), SelfRef.ByteBlob, EndIndex)
+            if ByteSize is None:
+                continue
+            if SlotIndex + 1 < len(KidsInfo):
+                OutputDataInfo.append((SlotIndex, EndIndex + ByteSize, SelfRef.SegmentsInfo[KidsInfo[SlotIndex + 1]]['offset']))
+            elif SegInfo['depth'] == 0:
+                OutputDataInfo.append((SlotIndex, EndIndex + ByteSize, SegInfo['scope_end']))
+        return OutputDataInfo
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def Bound(SelfRef, IndexData: int) -> int:
+        SegInfo = SelfRef.SegmentsInfo[IndexData]
+        HeadInfo = SegInfo['offset'] + SegInfo['header']
+        Layout = SelfRef.LayoutFor(IndexData)
+        KidsInfo = SelfRef.KidsInfo[IndexData]
+        LeafInfo = Layout is not None and Layout.get('child_slots') == []
+        StartRun = HeadInfo
+        if KidsInfo and (not LeafInfo):
+            StartRun = max(HeadInfo, SelfRef.SegmentsInfo[KidsInfo[-1]]['scope_end'])
+        Limit = SegInfo['scope_end']
+        for Other in SelfRef.Order:
+            Offset = SelfRef.SegmentsInfo[Other]['offset']
+            if Offset >= StartRun:
+                Limit = min(Limit, Offset)
                 break
-        return limit - head
+        return Limit - HeadInfo
+    KAliasNames = {'layout_for': 'LayoutFor', 'body_end': 'BodyEnd', 'compute': 'Compute', 'predicted_child_offsets': 'ChildOffsets', 'bound': 'Bound'}
 
 
-def verify(layouts: dict, segments_dir: pathlib.Path) -> dict:
-    traces = load_traces(str(segments_dir), "")
-    fallback = fallback_runs(traces)
-    declared = layouts["classes"]
-    blobs = {}
-    for trace in traces:
-        blobs[trace["label"]] = SldprtArchive.open(part_path(trace)).require(STREAM)
-    report: Dict[str, dict] = {
-        name: {
-            "confidence": spec.get("confidence", "not found"),
-            "instances": 0,
-            "computed": 0,
-            "exact_span": 0,
-            "overruns": [],
-            "run_checks": 0,
-            "run_mismatches": [],
-            "unresolved": 0,
-            "traced_children_ignored": 0,
-            "declared_leaf": spec.get("child_slots") == [],
-        }
-        for name, spec in declared.items()
-    }
-    for trace in traces:
-        label = trace["label"]
-        segments = trace["segments"]
-        walker = Walker(segments, blobs[label], declared, fallback)
-        for index, seg in enumerate(segments):
-            if seg["kind"] in NO_BODY_KINDS:
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __setattr__(SelfRef, NameText, ValueData):
+        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+        object.__setattr__(SelfRef, TargetName, ValueData)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Verify(Layouts: dict, SegmentsDir: Pathlib.Path) -> dict:
+    Traces = LoadTraces(str(SegmentsDir), '')
+    Fallback = FallbackRuns(Traces)
+    Declared = Layouts['classes']
+    Blobs = {}
+    for TraceInfo in Traces:
+        Blobs[TraceInfo['label']] = SldprtArchive.open(PartPath(TraceInfo)).require(KStream)
+    Report: DictInfo[str, dict] = {NameTextInfo: {'confidence': SpecInfo.get('confidence', 'not found'), 'instances': 0, 'computed': 0, 'exact_span': 0, 'overruns': [], 'run_checks': 0, 'run_mismatches': [], 'unresolved': 0, 'traced_children_ignored': 0, 'declared_leaf': SpecInfo.get('child_slots') == []} for NameTextInfo, SpecInfo in Declared.items()}
+    for TraceInfo in Traces:
+        LabelInfo = TraceInfo['label']
+        SegmentsInfo = TraceInfo['segments']
+        WalkerInfo = Walker(SegmentsInfo, Blobs[LabelInfo], Declared, Fallback)
+        for IndexData, SegInfo in enumerate(SegmentsInfo):
+            if SegInfo['kind'] in KNoBodyKinds:
                 continue
-            name = class_of(segments, index)
-            if name not in declared:
+            NameTextInfo = ClassOf(SegmentsInfo, IndexData)
+            if NameTextInfo not in Declared:
                 continue
-            row = report[name]
-            row["instances"] += 1
-            head = seg["offset"] + seg["header"]
-            gap = walker.bound(index)
-            if row["declared_leaf"] and walker.kids[index]:
-                row["traced_children_ignored"] += 1
-            end = walker.body_end(index)
-            if end is None:
-                row["unresolved"] += 1
+            RowDataInfo = Report[NameTextInfo]
+            RowDataInfo['instances'] += 1
+            HeadInfo = SegInfo['offset'] + SegInfo['header']
+            GapInfo = WalkerInfo.bound(IndexData)
+            if RowDataInfo['declared_leaf'] and WalkerInfo.kids[IndexData]:
+                RowDataInfo['traced_children_ignored'] += 1
+            EndIndex = WalkerInfo.body_end(IndexData)
+            if EndIndex is None:
+                RowDataInfo['unresolved'] += 1
             else:
-                row["computed"] += 1
-                length = end - head
-                if length > gap:
-                    row["overruns"].append(
-                        {
-                            "label": label,
-                            "node": index,
-                            "computed": length,
-                            "gap": gap,
-                        }
-                    )
-                elif length == gap:
-                    row["exact_span"] += 1
-                if seg["depth"] == 0 and end != seg["scope_end"]:
-                    row["overruns"].append(
-                        {
-                            "label": label,
-                            "node": index,
-                            "computed": length,
-                            "gap": seg["scope_end"] - head,
-                            "reason": "top level object must tile exactly",
-                        }
-                    )
-            for slot, predicted, observed in walker.predicted_child_offsets(index):
-                row["run_checks"] += 1
-                if predicted != observed:
-                    row["run_mismatches"].append(
-                        {
-                            "label": label,
-                            "node": index,
-                            "run": "lead" if slot < 0 else str(slot),
-                            "expected": observed,
-                            "computed": predicted,
-                        }
-                    )
-    return report
+                RowDataInfo['computed'] += 1
+                Length = EndIndex - HeadInfo
+                if Length > GapInfo:
+                    RowDataInfo['overruns'].append({'label': LabelInfo, 'node': IndexData, 'computed': Length, 'gap': GapInfo})
+                elif Length == GapInfo:
+                    RowDataInfo['exact_span'] += 1
+                if SegInfo['depth'] == 0 and EndIndex != SegInfo['scope_end']:
+                    RowDataInfo['overruns'].append({'label': LabelInfo, 'node': IndexData, 'computed': Length, 'gap': SegInfo['scope_end'] - HeadInfo, 'reason': 'top level object must tile exactly'})
+            for SlotIndex, Predicted, Observed in WalkerInfo.predicted_child_offsets(IndexData):
+                RowDataInfo['run_checks'] += 1
+                if Predicted != Observed:
+                    RowDataInfo['run_mismatches'].append({'label': LabelInfo, 'node': IndexData, 'run': 'lead' if SlotIndex < 0 else str(SlotIndex), 'expected': Observed, 'computed': Predicted})
+    return Report
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--layouts", default=str(ROOT / "re/data/Layouts/ClassLayoutsDecompiled.json")
-    )
-    parser.add_argument("--segments", default=str(ROOT / "re/data/segments"))
-    parser.add_argument("--out", default="")
-    args = parser.parse_args()
-    layouts = json.loads(pathlib.Path(args.layouts).read_text(encoding="utf-8"))
-    report = verify(layouts, pathlib.Path(args.segments))
-    failures = 0
-    print(
-        "%-24s %-9s %5s %5s %5s %5s %6s %5s %5s"
-        % (
-            "class",
-            "claim",
-            "inst",
-            "comp",
-            "exact",
-            "unres",
-            "runchk",
-            "runX",
-            "over",
-        )
-    )
-    for name in sorted(report):
-        row = report[name]
-        bad = len(row["run_mismatches"]) + len(row["overruns"])
-        if row["confidence"] == "confirmed" and bad:
-            failures += bad
-        print(
-            "%-24s %-9s %5d %5d %5d %5d %6d %5d %5d"
-            % (
-                name,
-                row["confidence"],
-                row["instances"],
-                row["computed"],
-                row["exact_span"],
-                row["unresolved"],
-                row["run_checks"],
-                len(row["run_mismatches"]),
-                len(row["overruns"]),
-            )
-        )
-    for name in sorted(report):
-        row = report[name]
-        for item in row["overruns"]:
-            print(
-                "OVERRUN  %-22s %-16s node=%-4d computed=%-6d gap=%-6d %s"
-                % (
-                    name,
-                    item["label"],
-                    item["node"],
-                    item["computed"],
-                    item["gap"],
-                    item.get("reason", ""),
-                )
-            )
-        for item in row["run_mismatches"]:
-            print(
-                "MISMATCH %-22s %-16s node=%-4d run=%-4s expected=%-6d computed=%-6d"
-                % (
-                    name,
-                    item["label"],
-                    item["node"],
-                    item["run"],
-                    item["expected"],
-                    item["computed"],
-                )
-            )
-    for name in sorted(report):
-        row = report[name]
-        if row["traced_children_ignored"]:
-            print(
-                "NOTE     %-22s %d instances carry traced children that its Serialize does not read"
-                % (name, row["traced_children_ignored"])
-            )
-    print(
-        "classes=%d confirmed=%d failures=%d"
-        % (
-            len(report),
-            sum(1 for r in report.values() if r["confidence"] == "confirmed"),
-            failures,
-        )
-    )
-    if args.out:
-        pathlib.Path(args.out).write_text(
-            json.dumps(report, indent=1), encoding="utf-8"
-        )
-    return 1 if failures else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    ParserInfo = Argparse.ArgumentParser()
+    ParserInfo.add_argument('--layouts', default=str(KRootInfo / 're/data/Layouts/ClassLayoutsDecompiled.json'))
+    ParserInfo.add_argument('--segments', default=str(KRootInfo / 're/data/segments'))
+    ParserInfo.add_argument('--out', default='')
+    ArgValues = ParserInfo.parse_args()
+    Layouts = JsonData.loads(Pathlib.Path(ArgValues.layouts).read_text(encoding='utf-8'))
+    Report = Verify(Layouts, Pathlib.Path(ArgValues.segments))
+    Failures = 0
+    print('%-24s %-9s %5s %5s %5s %5s %6s %5s %5s' % ('class', 'claim', 'inst', 'comp', 'exact', 'unres', 'runchk', 'runX', 'over'))
+    for NameTextInfo in sorted(Report):
+        RowDataInfo = Report[NameTextInfo]
+        BadInfo = len(RowDataInfo['run_mismatches']) + len(RowDataInfo['overruns'])
+        if RowDataInfo['confidence'] == 'confirmed' and BadInfo:
+            Failures += BadInfo
+        print('%-24s %-9s %5d %5d %5d %5d %6d %5d %5d' % (NameTextInfo, RowDataInfo['confidence'], RowDataInfo['instances'], RowDataInfo['computed'], RowDataInfo['exact_span'], RowDataInfo['unresolved'], RowDataInfo['run_checks'], len(RowDataInfo['run_mismatches']), len(RowDataInfo['overruns'])))
+    for NameTextInfo in sorted(Report):
+        RowDataInfo = Report[NameTextInfo]
+        for ItemData in RowDataInfo['overruns']:
+            print('OVERRUN  %-22s %-16s node=%-4d computed=%-6d gap=%-6d %s' % (NameTextInfo, ItemData['label'], ItemData['node'], ItemData['computed'], ItemData['gap'], ItemData.get('reason', '')))
+        for ItemData in RowDataInfo['run_mismatches']:
+            print('MISMATCH %-22s %-16s node=%-4d run=%-4s expected=%-6d computed=%-6d' % (NameTextInfo, ItemData['label'], ItemData['node'], ItemData['run'], ItemData['expected'], ItemData['computed']))
+    for NameTextInfo in sorted(Report):
+        RowDataInfo = Report[NameTextInfo]
+        if RowDataInfo['traced_children_ignored']:
+            print('NOTE     %-22s %d instances carry traced children that its Serialize does not read' % (NameTextInfo, RowDataInfo['traced_children_ignored']))
+    print('classes=%d confirmed=%d failures=%d' % (len(Report), sum((1 for ResultData in Report.values() if ResultData['confidence'] == 'confirmed')), Failures))
+    if ArgValues.out:
+        Pathlib.Path(ArgValues.out).write_text(JsonData.dumps(Report, indent=1), encoding='utf-8')
+    return 1 if Failures else 0
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

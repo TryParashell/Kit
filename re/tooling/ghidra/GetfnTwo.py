@@ -1,43 +1,50 @@
-import pathlib
-import re
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-OUT = pathlib.Path(__file__).resolve().parents[3] / ".rescratch/ghidra/out"
-KEEP = re.compile(
-    r"AR_get_|AR_put_|operator>>|operator<<|ReadObject|WriteObject|IsStoring"
-    r"|hasCondition|Serialize|getCurrentFileVerion|0x780|goto|LAB_|if \(|\} else"
-    r"|while|for \(|su_DBKey|CStringT<wchar_t.*\"|code \*\*\)\(\*"
-)
+import pathlib as Pathlib
+import re as Regex
+import sys as System
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = Pathlib.Path(__file__).resolve().parents[3] / '.rescratch/ghidra/out'
 
-def blocks(path):
-    text = path.read_text(errors="replace").splitlines()
-    starts = [i for i, line in enumerate(text) if line.startswith("=== FUNCTION")]
-    starts.append(len(text))
-    for pos in range(len(starts) - 1):
-        head = starts[pos]
-        body = text[head : starts[pos + 1]]
-        address = ""
-        for line in body[:5]:
-            if line.startswith("=== ADDRESS "):
-                address = line.split()[-1]
-        yield address, body[0], body
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KeepInfo = Regex.compile('AR_get_|AR_put_|operator>>|operator<<|ReadObject|WriteObject|IsStoring|hasCondition|Serialize|getCurrentFileVerion|0x780|goto|LAB_|if \\(|\\} else|while|for \\(|su_DBKey|CStringT<wchar_t.*\\"|code \\*\\*\\)\\(\\*')
 
 
-def main():
-    path = OUT / sys.argv[1]
-    wanted = sys.argv[2]
-    mode = sys.argv[3] if len(sys.argv) > 3 else "skeleton"
-    for address, header, body in blocks(path):
-        if wanted.lower() not in address.lower() and wanted not in header:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Blocks(PathInfoData):
+    TextValueData = PathInfoData.read_text(errors='replace').splitlines()
+    Starts = [IndexInfo for IndexInfo, LineText in enumerate(TextValueData) if LineText.startswith('=== FUNCTION')]
+    Starts.append(len(TextValueData))
+    for PosInfo in range(len(Starts) - 1):
+        HeadInfo = Starts[PosInfo]
+        BodyInfo = TextValueData[HeadInfo:Starts[PosInfo + 1]]
+        Address = ''
+        for LineText in BodyInfo[:5]:
+            if LineText.startswith('=== ADDRESS '):
+                Address = LineText.split()[-1]
+        yield (Address, BodyInfo[0], BodyInfo)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    PathInfoData = KOutInfo / System.argv[1]
+    Wanted = System.argv[2]
+    ModeInfo = System.argv[3] if len(System.argv) > 3 else 'skeleton'
+    for Address, Header, BodyInfo in Blocks(PathInfoData):
+        if Wanted.lower() not in Address.lower() and Wanted not in Header:
             continue
-        print(f"##### {header} @ {address} lines={len(body)}")
-        for index, line in enumerate(body):
-            stripped = line.strip()
-            if mode == "full" or KEEP.search(stripped):
-                print(f"{index:5d} {stripped[:160]}")
+        print(f'##### {Header} @ {Address} lines={len(BodyInfo)}')
+        for IndexData, LineText in enumerate(BodyInfo):
+            Stripped = LineText.strip()
+            if ModeInfo == 'full' or KeepInfo.search(Stripped):
+                print(f'{IndexData:5d} {Stripped[:160]}')
         print()
-
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    MainRunInfo()

@@ -7,282 +7,245 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import argparse as Argparse
+import collections as Collects
+import glob as GlobInfo
+import json as JsonData
+import os as OsLayer
+from typing import Dict as DictInfo, List as ListInfo, Optional, Sequence, Tuple
 
-import argparse
-import collections
-import glob
-import json
-import os
-from typing import Dict, List, Optional, Sequence, Tuple
-
-NO_BODY_KINDS = ("null", "objectref")
-
-
-def load_traces(segments_dir: str, labels: str) -> List[dict]:
-    traces = []
-    for path in sorted(glob.glob(os.path.join(segments_dir, "segments_*.json"))):
-        traces.append(json.load(open(path, encoding="utf-8")))
-    if labels:
-        wanted = set(labels.split(","))
-        traces = [t for t in traces if t["label"] in wanted]
-    return traces
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNoBodyKinds = ('null', 'objectref')
 
 
-def children_of(segments: Sequence[dict]) -> List[List[int]]:
-    children: List[List[int]] = [[] for _ in segments]
-    for i, seg in enumerate(segments):
-        if seg["parent"] >= 0:
-            children[seg["parent"]].append(i)
-    return children
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def LoadTraces(SegmentsDir: str, Labels: str) -> ListInfo[dict]:
+    Traces = []
+    for PathInfoData in sorted(GlobInfo.glob(OsLayer.path.join(SegmentsDir, 'segments_*.json'))):
+        Traces.append(JsonData.load(open(PathInfoData, encoding='utf-8')))
+    if Labels:
+        Wanted = set(Labels.split(','))
+        Traces = [TextData for TextData in Traces if TextData['label'] in Wanted]
+    return Traces
 
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ChildrenOf(SegmentsInfo: Sequence[dict]) -> ListInfo[ListInfo[int]]:
+    Children: ListInfo[ListInfo[int]] = [[] for SpareValue in SegmentsInfo]
+    for IndexInfo, SegInfo in enumerate(SegmentsInfo):
+        if SegInfo['parent'] >= 0:
+            Children[SegInfo['parent']].append(IndexInfo)
+    return Children
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
 class Solver:
-    def __init__(self, traces: Sequence[dict]) -> None:
-        self.traces = list(traces)
-        self.segments: Dict[str, List[dict]] = {}
-        self.kids: Dict[str, List[List[int]]] = {}
-        for trace in self.traces:
-            label = trace["label"]
-            self.segments[label] = trace["segments"]
-            self.kids[label] = children_of(trace["segments"])
-        self.variable: set = set()
-        self.conflicts: List[dict] = []
-        self.runs: Dict[str, int] = {}
-        self.end: Dict[Tuple[str, int], Optional[int]] = {}
-        self.witness: Dict[str, List[str]] = collections.defaultdict(list)
 
-    def key(self, label: str, node: int, slot: int) -> str:
-        name = self.segments[label][node]["class_name"]
-        if slot == -2:
-            return name + "@leaf"
-        if slot == -1:
-            return name + "@lead"
-        return "%s@%d" % (name, slot)
 
-    def seed(self) -> None:
-        self.runs = {}
-        self.witness = collections.defaultdict(list)
-        self.end = {}
-        for label, segments in self.segments.items():
-            for i, seg in enumerate(segments):
-                if seg["kind"] in NO_BODY_KINDS:
-                    self.end[(label, i)] = seg["offset"] + seg["header"]
-                elif seg["depth"] == 0:
-                    self.end[(label, i)] = seg["scope_end"]
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __init__(SelfRef, Traces: Sequence[dict]) -> None:
+        SelfRef.Traces = list(Traces)
+        SelfRef.SegmentsInfo: DictInfo[str, ListInfo[dict]] = {}
+        SelfRef.KidsInfo: DictInfo[str, ListInfo[ListInfo[int]]] = {}
+        for TraceInfo in SelfRef.Traces:
+            LabelInfo = TraceInfo['label']
+            SelfRef.SegmentsInfo[LabelInfo] = TraceInfo['segments']
+            SelfRef.KidsInfo[LabelInfo] = ChildrenOf(TraceInfo['segments'])
+        SelfRef.ValueValue: set = set()
+        SelfRef.Conflicts: ListInfo[dict] = []
+        SelfRef.RunsInfo: DictInfo[str, int] = {}
+        SelfRef.EndIndex: DictInfo[Tuple[str, int], Optional[int]] = {}
+        SelfRef.Witness: DictInfo[str, ListInfo[str]] = Collects.defaultdict(list)
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def KeyName(SelfRef, LabelInfo: str, NodeInfoInfo: int, SlotIndex: int) -> str:
+        NameTextInfo = SelfRef.SegmentsInfo[LabelInfo][NodeInfoInfo]['class_name']
+        if SlotIndex == -2:
+            return NameTextInfo + '@leaf'
+        if SlotIndex == -1:
+            return NameTextInfo + '@lead'
+        return '%s@%d' % (NameTextInfo, SlotIndex)
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def SeedInfo(SelfRef) -> None:
+        SelfRef.RunsInfo = {}
+        SelfRef.Witness = Collects.defaultdict(list)
+        SelfRef.EndIndex = {}
+        for LabelInfo, SegmentsInfo in SelfRef.SegmentsInfo.items():
+            for IndexInfo, SegInfo in enumerate(SegmentsInfo):
+                if SegInfo['kind'] in KNoBodyKinds:
+                    SelfRef.EndIndex[LabelInfo, IndexInfo] = SegInfo['offset'] + SegInfo['header']
+                elif SegInfo['depth'] == 0:
+                    SelfRef.EndIndex[LabelInfo, IndexInfo] = SegInfo['scope_end']
                 else:
-                    self.end[(label, i)] = None
+                    SelfRef.EndIndex[LabelInfo, IndexInfo] = None
 
-    def set_run(self, key: str, value: int, label: str, node: int) -> bool:
-        if key in self.variable:
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def IsSetRun(SelfRef, KeyName: str, ValueInfo: int, LabelInfo: str, NodeInfoInfo: int) -> bool:
+        if KeyName in SelfRef.ValueValue:
             return False
-        if value < 0:
-            self.conflicts.append(
-                {
-                    "key": key,
-                    "reason": "negative",
-                    "observed": value,
-                    "label": label,
-                    "node": node,
-                }
-            )
-            self.variable.add(key)
-            self.runs.pop(key, None)
+        if ValueInfo < 0:
+            SelfRef.Conflicts.append({'key': KeyName, 'reason': 'negative', 'observed': ValueInfo, 'label': LabelInfo, 'node': NodeInfoInfo})
+            SelfRef.ValueValue.add(KeyName)
+            SelfRef.RunsInfo.pop(KeyName, None)
             return False
-        previous = self.runs.get(key)
-        if previous is None:
-            self.runs[key] = value
-            self.witness[key].append("%s:%d" % (label, node))
+        Previous = SelfRef.RunsInfo.get(KeyName)
+        if Previous is None:
+            SelfRef.RunsInfo[KeyName] = ValueInfo
+            SelfRef.Witness[KeyName].append('%s:%d' % (LabelInfo, NodeInfoInfo))
             return True
-        if previous != value:
-            self.conflicts.append(
-                {
-                    "key": key,
-                    "reason": "mismatch",
-                    "existing": previous,
-                    "observed": value,
-                    "label": label,
-                    "node": node,
-                }
-            )
-            self.variable.add(key)
-            self.runs.pop(key, None)
+        if Previous != ValueInfo:
+            SelfRef.Conflicts.append({'key': KeyName, 'reason': 'mismatch', 'existing': Previous, 'observed': ValueInfo, 'label': LabelInfo, 'node': NodeInfoInfo})
+            SelfRef.ValueValue.add(KeyName)
+            SelfRef.RunsInfo.pop(KeyName, None)
             return False
-        self.witness[key].append("%s:%d" % (label, node))
+        SelfRef.Witness[KeyName].append('%s:%d' % (LabelInfo, NodeInfoInfo))
         return False
 
-    def set_end(self, label: str, node: int, value: int) -> bool:
-        seg = self.segments[label][node]
-        low = seg["offset"] + seg["header"]
-        high = seg["scope_end"]
-        if value < low or value > high:
-            self.conflicts.append(
-                {
-                    "key": seg["class_name"] + "@end",
-                    "reason": "out_of_range",
-                    "observed": value,
-                    "low": low,
-                    "high": high,
-                    "label": label,
-                    "node": node,
-                }
-            )
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def IsSetEnd(SelfRef, LabelInfo: str, NodeInfoInfo: int, ValueInfo: int) -> bool:
+        SegInfo = SelfRef.SegmentsInfo[LabelInfo][NodeInfoInfo]
+        LowValue = SegInfo['offset'] + SegInfo['header']
+        HighValue = SegInfo['scope_end']
+        if ValueInfo < LowValue or ValueInfo > HighValue:
+            SelfRef.Conflicts.append({'key': SegInfo['class_name'] + '@end', 'reason': 'out_of_range', 'observed': ValueInfo, 'low': LowValue, 'high': HighValue, 'label': LabelInfo, 'node': NodeInfoInfo})
             return False
-        current = self.end[(label, node)]
-        if current is None:
-            self.end[(label, node)] = value
+        Current = SelfRef.EndIndex[LabelInfo, NodeInfoInfo]
+        if Current is None:
+            SelfRef.EndIndex[LabelInfo, NodeInfoInfo] = ValueInfo
             return True
         return False
 
-    def pass_once(self) -> int:
-        progress = 0
-        for label, segments in self.segments.items():
-            kids_all = self.kids[label]
-            for node, seg in enumerate(segments):
-                if seg["kind"] in NO_BODY_KINDS:
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def PassOnce(SelfRef) -> int:
+        Progress = 0
+        for LabelInfo, SegmentsInfo in SelfRef.SegmentsInfo.items():
+            KidsAll = SelfRef.KidsInfo[LabelInfo]
+            for NodeInfoInfo, SegInfo in enumerate(SegmentsInfo):
+                if SegInfo['kind'] in KNoBodyKinds:
                     continue
-                kids = kids_all[node]
-                head = seg["offset"] + seg["header"]
-                if not kids:
-                    key = self.key(label, node, -2)
-                    known = self.end[(label, node)]
-                    if known is not None:
-                        if self.set_run(key, known - head, label, node):
-                            progress += 1
-                    elif key in self.runs:
-                        if self.set_end(label, node, head + self.runs[key]):
-                            progress += 1
+                KidsInfo = KidsAll[NodeInfoInfo]
+                HeadInfo = SegInfo['offset'] + SegInfo['header']
+                if not KidsInfo:
+                    KeyName = SelfRef.KeyName(LabelInfo, NodeInfoInfo, -2)
+                    Known = SelfRef.EndIndex[LabelInfo, NodeInfoInfo]
+                    if Known is not None:
+                        if SelfRef.IsSetRun(KeyName, Known - HeadInfo, LabelInfo, NodeInfoInfo):
+                            Progress += 1
+                    elif KeyName in SelfRef.RunsInfo:
+                        if SelfRef.IsSetEnd(LabelInfo, NodeInfoInfo, HeadInfo + SelfRef.RunsInfo[KeyName]):
+                            Progress += 1
                     continue
-                if self.set_run(
-                    self.key(label, node, -1),
-                    segments[kids[0]]["offset"] - head,
-                    label,
-                    node,
-                ):
-                    progress += 1
-                for slot, child in enumerate(kids):
-                    key = self.key(label, node, slot)
-                    if slot + 1 < len(kids):
-                        bound = segments[kids[slot + 1]]["offset"]
+                if SelfRef.IsSetRun(SelfRef.KeyName(LabelInfo, NodeInfoInfo, -1), SegmentsInfo[KidsInfo[0]]['offset'] - HeadInfo, LabelInfo, NodeInfoInfo):
+                    Progress += 1
+                for SlotIndex, IsChild in enumerate(KidsInfo):
+                    KeyName = SelfRef.KeyName(LabelInfo, NodeInfoInfo, SlotIndex)
+                    if SlotIndex + 1 < len(KidsInfo):
+                        Bound = SegmentsInfo[KidsInfo[SlotIndex + 1]]['offset']
                     else:
-                        bound = self.end[(label, node)]
-                    child_end = self.end[(label, child)]
-                    if bound is None and child_end is None:
+                        Bound = SelfRef.EndIndex[LabelInfo, NodeInfoInfo]
+                    ChildEndInfo = SelfRef.EndIndex[LabelInfo, IsChild]
+                    if Bound is None and ChildEndInfo is None:
                         continue
-                    if bound is not None and child_end is not None:
-                        if self.set_run(key, bound - child_end, label, node):
-                            progress += 1
-                    elif bound is not None and key in self.runs:
-                        if self.set_end(label, child, bound - self.runs[key]):
-                            progress += 1
-                    elif child_end is not None and key in self.runs:
-                        if self.set_end(label, node, child_end + self.runs[key]):
-                            progress += 1
-        return progress
+                    if Bound is not None and ChildEndInfo is not None:
+                        if SelfRef.IsSetRun(KeyName, Bound - ChildEndInfo, LabelInfo, NodeInfoInfo):
+                            Progress += 1
+                    elif Bound is not None and KeyName in SelfRef.RunsInfo:
+                        if SelfRef.IsSetEnd(LabelInfo, IsChild, Bound - SelfRef.RunsInfo[KeyName]):
+                            Progress += 1
+                    elif ChildEndInfo is not None and KeyName in SelfRef.RunsInfo:
+                        if SelfRef.IsSetEnd(LabelInfo, NodeInfoInfo, ChildEndInfo + SelfRef.RunsInfo[KeyName]):
+                            Progress += 1
+        return Progress
 
-    def solve(self, rounds: int = 400) -> None:
-        attempts = 0
-        while attempts < 40:
-            attempts += 1
-            before = len(self.variable)
-            self.seed()
-            for _ in range(rounds):
-                if self.pass_once() == 0:
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def Solve(SelfRef, Rounds: int=400) -> None:
+        Attempts = 0
+        while Attempts < 40:
+            Attempts += 1
+            Before = len(SelfRef.ValueValue)
+            SelfRef.SeedInfo()
+            for SpareValue in range(Rounds):
+                if SelfRef.PassOnce() == 0:
                     break
-            if len(self.variable) == before:
+            if len(SelfRef.ValueValue) == Before:
                 break
 
-    def bodies(self) -> Dict[str, List[dict]]:
-        result: Dict[str, List[dict]] = collections.defaultdict(list)
-        for label, segments in self.segments.items():
-            for i, seg in enumerate(segments):
-                if seg["kind"] in NO_BODY_KINDS:
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def Bodies(SelfRef) -> DictInfo[str, ListInfo[dict]]:
+        Result: DictInfo[str, ListInfo[dict]] = Collects.defaultdict(list)
+        for LabelInfo, SegmentsInfo in SelfRef.SegmentsInfo.items():
+            for IndexInfo, SegInfo in enumerate(SegmentsInfo):
+                if SegInfo['kind'] in KNoBodyKinds:
                     continue
-                end = self.end[(label, i)]
-                result[seg["class_name"]].append(
-                    {
-                        "label": label,
-                        "node": i,
-                        "kind": seg["kind"],
-                        "depth": seg["depth"],
-                        "children": len(self.kids[label][i]),
-                        "span": seg["scope_end"] - seg["offset"] - seg["header"],
-                        "body": (
-                            None if end is None else end - seg["offset"] - seg["header"]
-                        ),
-                    }
-                )
-        return result
+                EndIndex = SelfRef.EndIndex[LabelInfo, IndexInfo]
+                Result[SegInfo['class_name']].append({'label': LabelInfo, 'node': IndexInfo, 'kind': SegInfo['kind'], 'depth': SegInfo['depth'], 'children': len(SelfRef.KidsInfo[LabelInfo][IndexInfo]), 'span': SegInfo['scope_end'] - SegInfo['offset'] - SegInfo['header'], 'body': None if EndIndex is None else EndIndex - SegInfo['offset'] - SegInfo['header']})
+        return Result
+    KAliasNames = {'key': 'KeyName', 'seed': 'SeedInfo', 'set_run': 'IsSetRun', 'set_end': 'IsSetEnd', 'pass_once': 'PassOnce', 'solve': 'Solve', 'bodies': 'Bodies'}
 
 
-def summarise(bodies: Dict[str, List[dict]], solver: Solver) -> dict:
-    summary: Dict[str, dict] = {}
-    for name, rows in sorted(bodies.items()):
-        resolved = [r["body"] for r in rows if r["body"] is not None]
-        counter = collections.Counter(resolved)
-        own = {
-            key: value
-            for key, value in solver.runs.items()
-            if key.rsplit("@", 1)[0] == name
-        }
-        variable = sorted(k for k in solver.variable if k.rsplit("@", 1)[0] == name)
-        child_counts = sorted(collections.Counter(r["children"] for r in rows).items())
-        scalar_total = None
-        if len(child_counts) == 1 and not variable:
-            slots = child_counts[0][0]
-            if slots == 0:
-                if name + "@leaf" in own:
-                    scalar_total = own[name + "@leaf"]
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __setattr__(SelfRef, NameText, ValueData):
+        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+        object.__setattr__(SelfRef, TargetName, ValueData)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Summarise(Bodies: DictInfo[str, ListInfo[dict]], SolverInfo: Solver) -> dict:
+    Summary: DictInfo[str, dict] = {}
+    for NameTextInfo, GetRows in sorted(Bodies.items()):
+        Resolved = [ResultData['body'] for ResultData in GetRows if ResultData['body'] is not None]
+        CounterInfo = Collects.Counter(Resolved)
+        OwnInfo = {KeyName: ValueInfo for KeyName, ValueInfo in SolverInfo.runs.items() if KeyName.rsplit('@', 1)[0] == NameTextInfo}
+        ValueValue = sorted((KeyIndex for KeyIndex in SolverInfo.variable if KeyIndex.rsplit('@', 1)[0] == NameTextInfo))
+        ChildCounts = sorted(Collects.Counter((ResultData['children'] for ResultData in GetRows)).items())
+        ScalarTotal = None
+        if len(ChildCounts) == 1 and (not ValueValue):
+            Slots = ChildCounts[0][0]
+            if Slots == 0:
+                if NameTextInfo + '@leaf' in OwnInfo:
+                    ScalarTotal = OwnInfo[NameTextInfo + '@leaf']
             else:
-                needed = [name + "@lead"] + ["%s@%d" % (name, j) for j in range(slots)]
-                if all(k in own for k in needed):
-                    scalar_total = sum(own[k] for k in needed)
-        summary[name] = {
-            "instances": len(rows),
-            "resolved": len(resolved),
-            "body_lengths": sorted(counter.items()),
-            "child_counts": child_counts,
-            "runs": dict(sorted(own.items())),
-            "variable_runs": variable,
-            "own_scalar_total": scalar_total,
-        }
-    return summary
+                Needed = [NameTextInfo + '@lead'] + ['%s@%d' % (NameTextInfo, InnerIndex) for InnerIndex in range(Slots)]
+                if all((KeyIndex in OwnInfo for KeyIndex in Needed)):
+                    ScalarTotal = sum((OwnInfo[KeyIndex] for KeyIndex in Needed))
+        Summary[NameTextInfo] = {'instances': len(GetRows), 'resolved': len(Resolved), 'body_lengths': sorted(CounterInfo.items()), 'child_counts': ChildCounts, 'runs': dict(sorted(OwnInfo.items())), 'variable_runs': ValueValue, 'own_scalar_total': ScalarTotal}
+    return Summary
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--segments", default="re/data/segments")
-    parser.add_argument("--labels", default="")
-    parser.add_argument("--out", required=True)
-    args = parser.parse_args()
-    traces = load_traces(args.segments, args.labels)
-    solver = Solver(traces)
-    solver.solve()
-    bodies = solver.bodies()
-    payload = {
-        "traces": [t["label"] for t in traces],
-        "run_keys": dict(sorted(solver.runs.items())),
-        "variable_runs": sorted(solver.variable),
-        "conflicts": solver.conflicts,
-        "witnesses": {k: len(v) for k, v in sorted(solver.witness.items())},
-        "classes": summarise(bodies, solver),
-    }
-    with open(args.out, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=1)
-        handle.write("\n")
-    total = sum(len(v) for v in bodies.values())
-    resolved = sum(1 for v in bodies.values() for r in v if r["body"] is not None)
-    print(
-        "objects=%d resolved=%d runkeys=%d variable=%d conflicts=%d"
-        % (
-            total,
-            resolved,
-            len(solver.runs),
-            len(solver.variable),
-            len(solver.conflicts),
-        )
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    ParserInfo = Argparse.ArgumentParser()
+    ParserInfo.add_argument('--segments', default='re/data/segments')
+    ParserInfo.add_argument('--labels', default='')
+    ParserInfo.add_argument('--out', required=True)
+    ArgValues = ParserInfo.parse_args()
+    Traces = LoadTraces(ArgValues.segments, ArgValues.labels)
+    SolverInfo = Solver(Traces)
+    SolverInfo.solve()
+    Bodies = SolverInfo.bodies()
+    PayloadInfo = {'traces': [TextData['label'] for TextData in Traces], 'run_keys': dict(sorted(SolverInfo.runs.items())), 'variable_runs': sorted(SolverInfo.variable), 'conflicts': SolverInfo.conflicts, 'witnesses': {KeyIndex: len(ValueData) for KeyIndex, ValueData in sorted(SolverInfo.witness.items())}, 'classes': Summarise(Bodies, SolverInfo)}
+    with open(ArgValues.out, 'w', encoding='utf-8') as Handle:
+        JsonData.dump(PayloadInfo, Handle, indent=1)
+        Handle.write('\n')
+    Total = sum((len(ValueData) for ValueData in Bodies.values()))
+    Resolved = sum((1 for ValueData in Bodies.values() for ResultData in ValueData if ResultData['body'] is not None))
+    print('objects=%d resolved=%d runkeys=%d variable=%d conflicts=%d' % (Total, Resolved, len(SolverInfo.runs), len(SolverInfo.variable), len(SolverInfo.conflicts)))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

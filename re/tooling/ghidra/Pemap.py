@@ -1,48 +1,52 @@
-import pathlib
-import struct
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+import pathlib as Pathlib
+import struct as Struct
+import sys as System
 
 
-def sections(blob):
-    pe = struct.unpack_from("<I", blob, 0x3C)[0]
-    machine, nsec = struct.unpack_from("<HH", blob, pe + 4)
-    opt_size = struct.unpack_from("<H", blob, pe + 20)[0]
-    magic = struct.unpack_from("<H", blob, pe + 24)[0]
-    if magic == 0x20B:
-        image_base = struct.unpack_from("<Q", blob, pe + 24 + 24)[0]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Sections(ByteBlob):
+    PeInfo = Struct.unpack_from('<I', ByteBlob, 60)[0]
+    Machine, NsecInfo = Struct.unpack_from('<HH', ByteBlob, PeInfo + 4)
+    OptSize = Struct.unpack_from('<H', ByteBlob, PeInfo + 20)[0]
+    Magic = Struct.unpack_from('<H', ByteBlob, PeInfo + 24)[0]
+    if Magic == 523:
+        ImageBase = Struct.unpack_from('<Q', ByteBlob, PeInfo + 24 + 24)[0]
     else:
-        image_base = struct.unpack_from("<I", blob, pe + 24 + 28)[0]
-    table = pe + 24 + opt_size
-    out = []
-    for i in range(nsec):
-        base = table + 40 * i
-        name = blob[base : base + 8].rstrip(b"\x00").decode("latin1")
-        vsize, vaddr, rsize, raddr = struct.unpack_from("<IIII", blob, base + 8)
-        out.append((name, vaddr, vsize, raddr, rsize))
-    return image_base, out
+        ImageBase = Struct.unpack_from('<I', ByteBlob, PeInfo + 24 + 28)[0]
+    Table = PeInfo + 24 + OptSize
+    OutputDataInfo = []
+    for IndexInfo in range(NsecInfo):
+        BaseInfo = Table + 40 * IndexInfo
+        NameTextInfo = ByteBlob[BaseInfo:BaseInfo + 8].rstrip(b'\x00').decode('latin1')
+        Vsize, Vaddr, Rsize, Raddr = Struct.unpack_from('<IIII', ByteBlob, BaseInfo + 8)
+        OutputDataInfo.append((NameTextInfo, Vaddr, Vsize, Raddr, Rsize))
+    return (ImageBase, OutputDataInfo)
 
 
-def main():
-    path = pathlib.Path(sys.argv[1])
-    blob = path.read_bytes()
-    image_base, secs = sections(blob)
-    print(f"image_base 0x{image_base:x}")
-    for name, vaddr, vsize, raddr, rsize in secs:
-        print(
-            f"  {name:9s} rva=0x{vaddr:08x} vsize=0x{vsize:08x} raw=0x{raddr:08x} rsize=0x{rsize:08x}"
-        )
-    for arg in sys.argv[2:]:
-        off = int(arg, 0)
-        for name, vaddr, vsize, raddr, rsize in secs:
-            if raddr <= off < raddr + rsize:
-                rva = vaddr + (off - raddr)
-                print(
-                    f"file 0x{off:x} -> section {name} rva 0x{rva:x} va 0x{image_base + rva:x}"
-                )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    PathInfoData = Pathlib.Path(System.argv[1])
+    ByteBlob = PathInfoData.read_bytes()
+    ImageBase, SecsInfo = Sections(ByteBlob)
+    print(f'image_base 0x{ImageBase:x}')
+    for NameTextInfo, Vaddr, Vsize, Raddr, Rsize in SecsInfo:
+        print(f'  {NameTextInfo:9s} rva=0x{Vaddr:08x} vsize=0x{Vsize:08x} raw=0x{Raddr:08x} rsize=0x{Rsize:08x}')
+    for ArgInfo in System.argv[2:]:
+        OffInfo = int(ArgInfo, 0)
+        for NameTextInfo, Vaddr, Vsize, Raddr, Rsize in SecsInfo:
+            if Raddr <= OffInfo < Raddr + Rsize:
+                RvaInfo = Vaddr + (OffInfo - Raddr)
+                print(f'file 0x{OffInfo:x} -> section {NameTextInfo} rva 0x{RvaInfo:x} va 0x{ImageBase + RvaInfo:x}')
                 break
         else:
-            print(f"file 0x{off:x} -> not in any section raw range")
-
-
-if __name__ == "__main__":
-    main()
+            print(f'file 0x{OffInfo:x} -> not in any section raw range')
+if __name__ == '__main__':
+    MainRunInfo()

@@ -8,16 +8,16 @@
 
 from __future__ import annotations as Annotations
 import os as OsModule
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import subprocess as Subprocess
 import pytest as Pytest
 from convert import convert as Convert
 
 # this binding exists because shared behavior needs one stable value
-KSample = PathValue(__file__).parents[3] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
+KSample = FilePath(__file__).parents[3] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
 
 # this binding exists because shared behavior needs one stable value
-KOracle = PathValue(OsModule.environ.get('KIT_FREECAD_ORACLE', ''))
+KOracle = FilePath(OsModule.environ.get('KIT_FREECAD_ORACLE', ''))
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason='KIT_FREECAD_ORACLE is unavailable')
@@ -40,7 +40,7 @@ def TestRecomputes(TmpPath) -> None:
 globals()['ORACLE'] = KOracle
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['SAMPLE'] = KSample

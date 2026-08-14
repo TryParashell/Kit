@@ -1,56 +1,64 @@
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-from layout import gaps, load, resolve_name
+import sys as System
+from Layout import FindGaps, LoadData, ResolveName
 
 
-def collect(label, names):
-    doc, segs, blob, part = load(label)
-    out = []
-    for seg in segs:
-        name = resolve_name(segs, seg)
-        if name not in names:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Collect(LabelInfo, Names):
+    DocInfo, SegsInfo, ByteBlob, PartInfoInfo = LoadData(LabelInfo)
+    OutputDataInfo = []
+    for SegInfo in SegsInfo:
+        NameTextInfo = ResolveName(SegsInfo, SegInfo)
+        if NameTextInfo not in Names:
             continue
-        if seg["kind"] not in ("definition", "classref"):
+        if SegInfo['kind'] not in ('definition', 'classref'):
             continue
-        seq = []
-        for item in gaps(segs, seg["index"]):
-            if item[0] == "scalars":
-                seq.append(("S", item[1], blob[item[1] : item[1] + item[2]]))
+        SeqInfo = []
+        for ItemData in FindGaps(SegsInfo, SegInfo['index']):
+            if ItemData[0] == 'scalars':
+                SeqInfo.append(('S', ItemData[1], ByteBlob[ItemData[1]:ItemData[1] + ItemData[2]]))
             else:
-                seq.append(("O", item[2], item[3]))
-        out.append((seg["index"], name, seg["kind"], seg["offset"], seq))
-    return part.name, out
+                SeqInfo.append(('O', ItemData[2], ItemData[3]))
+        OutputDataInfo.append((SegInfo['index'], NameTextInfo, SegInfo['kind'], SegInfo['offset'], SeqInfo))
+    return (PartInfoInfo.name, OutputDataInfo)
 
 
-def shape(seq):
-    return tuple((e[0], len(e[2]) if e[0] == "S" else 0) for e in seq)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Shape(SeqInfo):
+    return tuple(((ErrorInfo[0], len(ErrorInfo[2]) if ErrorInfo[0] == 'S' else 0) for ErrorInfo in SeqInfo))
 
 
-def main():
-    label = sys.argv[1]
-    names = set(sys.argv[2:]) or {"moExtrusion_c", "moICE_c"}
-    part, rows = collect(label, names)
-    print(f"{label} = {part}")
-    for index, name, kind, offset, seq in rows:
-        print(f"  node={index:4d} {kind:10s} off={offset:6d} {name} shape={shape(seq)}")
-    groups = {}
-    for row in rows:
-        groups.setdefault(shape(row[4]), []).append(row)
-    for key, members in groups.items():
-        if len(members) < 2:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    LabelInfo = System.argv[1]
+    Names = set(System.argv[2:]) or {'moExtrusion_c', 'moICE_c'}
+    PartInfoInfo, GetRows = Collect(LabelInfo, Names)
+    print(f'{LabelInfo} = {PartInfoInfo}')
+    for IndexData, NameTextInfo, KindNameInfo, Offset, SeqInfo in GetRows:
+        print(f'  node={IndexData:4d} {KindNameInfo:10s} off={Offset:6d} {NameTextInfo} shape={Shape(SeqInfo)}')
+    Groups = {}
+    for RowDataInfo in GetRows:
+        Groups.setdefault(Shape(RowDataInfo[4]), []).append(RowDataInfo)
+    for KeyName, Members in Groups.items():
+        if len(Members) < 2:
             continue
-        print(f"--- shape group with {len(members)} members")
-        base = members[0]
-        for other in members[1:]:
-            print(f"    node {base[0]} vs {other[0]}")
-            for pos, (a, b) in enumerate(zip(base[4], other[4])):
-                if a[0] != "S" or a[2] == b[2]:
+        print(f'--- shape group with {len(Members)} members')
+        BaseInfo = Members[0]
+        for Other in Members[1:]:
+            print(f'    node {BaseInfo[0]} vs {Other[0]}')
+            for PosInfo, (FirstValue, SecondValue) in enumerate(zip(BaseInfo[4], Other[4])):
+                if FirstValue[0] != 'S' or FirstValue[2] == SecondValue[2]:
                     continue
-                diffs = [k for k in range(len(a[2])) if a[2][k] != b[2][k]]
-                print(f"      [{pos}] n={len(a[2])} ndiff={len(diffs)} at {diffs[:24]}")
-                for k in diffs[:24]:
-                    print(f"          +{k:4d} {a[2][k]:02x} -> {b[2][k]:02x}")
-
-
-if __name__ == "__main__":
-    main()
+                Diffs = [KeyIndex for KeyIndex in range(len(FirstValue[2])) if FirstValue[2][KeyIndex] != SecondValue[2][KeyIndex]]
+                print(f'      [{PosInfo}] n={len(FirstValue[2])} ndiff={len(Diffs)} at {Diffs[:24]}')
+                for KeyIndex in Diffs[:24]:
+                    print(f'          +{KeyIndex:4d} {FirstValue[2][KeyIndex]:02x} -> {SecondValue[2][KeyIndex]:02x}')
+if __name__ == '__main__':
+    MainRunInfo()

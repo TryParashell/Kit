@@ -10,7 +10,7 @@ from __future__ import annotations as Annotations
 from dataclasses import replace as Replace
 import json as JsonValue
 import os as OsModule
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import struct as Struct
 import subprocess as Subprocess
 import xml.etree.ElementTree as XmlTree
@@ -22,7 +22,7 @@ from tests.interchange.assembly.AssemblyTests import assembly_document as Interc
 from tests.interchange.document.DocumentTests import document as DocValue
 
 # this binding exists because shared behavior needs one stable value
-KOracle = PathValue(OsModule.environ.get('KIT_FREECAD_ORACLE', ''))
+KOracle = FilePath(OsModule.environ.get('KIT_FREECAD_ORACLE', ''))
 
 # this definition exists because focused behavior needs one stable owner
 def AsmDoc():
@@ -360,7 +360,7 @@ globals()['Mesh'] = MeshValue
 globals()['ORACLE'] = KOracle
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['Vector3'] = VectorThree

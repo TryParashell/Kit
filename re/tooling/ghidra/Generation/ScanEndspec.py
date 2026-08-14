@@ -1,115 +1,94 @@
-import collections
-import json
-import pathlib
-import struct
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-ROOT = pathlib.Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(ROOT / "src"))
+import collections as Collects
+import json as JsonData
+import pathlib as Pathlib
+import struct as Struct
+import sys as System
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = Pathlib.Path(__file__).resolve().parents[4]
+System.path.insert(0, str(KRootInfo / 'src'))
 from convert.adapters.solidworks.container.Container import SldprtArchive
 
-STREAM = "Contents/Config-0-ResolvedFeatures"
-OUT = pathlib.Path(__file__).resolve().parents[4] / "re/data"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KStream = 'Contents/Config-0-ResolvedFeatures'
 
-NAMES = {
-    0: "Blind",
-    1: "ThroughAll",
-    2: "ThroughNext",
-    3: "UpToVertex",
-    4: "UpToSurface",
-    5: "OffsetFromSurface",
-    6: "MidPlane",
-    7: "UpToBody",
-    9: "ThroughAllBoth",
-    10: "UpToSelection",
-    11: "UpToNext",
-}
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = Pathlib.Path(__file__).resolve().parents[4] / 're/data'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNames = {0: 'Blind', 1: 'ThroughAll', 2: 'ThroughNext', 3: 'UpToVertex', 4: 'UpToSurface', 5: 'OffsetFromSurface', 6: 'MidPlane', 7: 'UpToBody', 9: 'ThroughAllBoth', 10: 'UpToSelection', 11: 'UpToNext'}
 
 
-def marker(name):
-    body = name.encode("ascii")
-    return b"\xff\xff\x01\x00" + struct.pack("<H", len(body)) + body
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Marker(NameTextInfo):
+    BodyInfo = NameTextInfo.encode('ascii')
+    return b'\xff\xff\x01\x00' + Struct.pack('<H', len(BodyInfo)) + BodyInfo
 
 
-def parts(roots):
-    for root in roots:
-        for path in sorted((ROOT / root).rglob("*")):
-            if path.suffix.upper() not in (".SLDPRT",):
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Parts(Roots):
+    for RootPath in Roots:
+        for PathInfoData in sorted((KRootInfo / RootPath).rglob('*')):
+            if PathInfoData.suffix.upper() not in ('.SLDPRT',):
                 continue
-            yield path
+            yield PathInfoData
 
 
-def decode(blob, pos, klass):
-    data = pos + 6 + len(klass)
-    if struct.unpack_from("<H", blob, data)[0] != 0:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Decode(ByteBlob, PosInfo, Klass):
+    DataValue = PosInfo + 6 + len(Klass)
+    if Struct.unpack_from('<H', ByteBlob, DataValue)[0] != 0:
         return None
-    if struct.unpack_from("<H", blob, data + 14)[0] != 0:
+    if Struct.unpack_from('<H', ByteBlob, DataValue + 14)[0] != 0:
         return None
-    return {
-        "data": data,
-        "singleEnd": struct.unpack_from("<i", blob, data + 2)[0],
-        "reverse1": struct.unpack_from("<i", blob, data + 6)[0],
-        "reverse0": struct.unpack_from("<i", blob, data + 10)[0],
-        "type0": struct.unpack_from("<i", blob, data + 16)[0],
-        "type1": struct.unpack_from("<i", blob, data + 20)[0],
-    }
+    return {'data': DataValue, 'singleEnd': Struct.unpack_from('<i', ByteBlob, DataValue + 2)[0], 'reverse1': Struct.unpack_from('<i', ByteBlob, DataValue + 6)[0], 'reverse0': Struct.unpack_from('<i', ByteBlob, DataValue + 10)[0], 'type0': Struct.unpack_from('<i', ByteBlob, DataValue + 16)[0], 'type1': Struct.unpack_from('<i', ByteBlob, DataValue + 20)[0]}
 
 
-def main():
-    roots = sys.argv[1:] or [
-        ".rescratch/corpus/parts",
-        ".rescratch/corpus2",
-        ".rescratch/trace/parts",
-        "examples",
-    ]
-    klass = "moEndSpec_c"
-    needle = marker(klass)
-    histogram = collections.Counter()
-    rows = []
-    seen = 0
-    skipped = 0
-    for path in parts(roots):
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    Roots = System.argv[1:] or ['.rescratch/corpus/parts', '.rescratch/corpus2', '.rescratch/trace/parts', 'examples']
+    Klass = 'moEndSpec_c'
+    Needle = Marker(Klass)
+    Histogram = Collects.Counter()
+    GetRows = []
+    SeenInfo = 0
+    Skipped = 0
+    for PathInfoData in Parts(Roots):
         try:
-            archive = SldprtArchive.open(path)
-            blob = archive.get(STREAM)
+            ArchiveInfo = SldprtArchive.open(PathInfoData)
+            ByteBlob = ArchiveInfo.get(KStream)
         except Exception:
             continue
-        if not blob:
+        if not ByteBlob:
             continue
-        pos = blob.find(needle)
-        if pos < 0:
+        PosInfo = ByteBlob.find(Needle)
+        if PosInfo < 0:
             continue
-        seen += 1
-        record = decode(blob, pos, klass)
-        if record is None:
-            skipped += 1
+        SeenInfo += 1
+        Record = Decode(ByteBlob, PosInfo, Klass)
+        if Record is None:
+            Skipped += 1
             continue
-        histogram[(record["type0"], record["type1"], record["reverse0"])] += 1
-        rows.append(
-            {
-                "part": path.name.encode("ascii", "replace").decode("ascii"),
-                "marker": pos,
-                **record,
-            }
-        )
-    print(
-        f"parts with a moEndSpec_c definition: {seen}, decoded: {len(rows)}, rejected: {skipped}"
-    )
-    for key, count in sorted(histogram.items(), key=lambda kv: -kv[1]):
-        t0, t1, rev = key
-        print(
-            f"  type0={t0:3d} ({NAMES.get(t0, '?'):18s}) type1={t1:3d} "
-            f"({NAMES.get(t1, '?'):18s}) reverse={rev} n={count}"
-        )
-    for row in rows:
-        if row["type0"] not in (0, 1, 6) or row["type1"] != 0:
-            print(
-                f"  NOTABLE {row['part']:44s} type0={row['type0']} type1={row['type1']}"
-            )
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "ScanEndspec.json").write_text(json.dumps(rows, indent=1))
+        Histogram[Record['type0'], Record['type1'], Record['reverse0']] += 1
+        GetRows.append({'part': PathInfoData.name.encode('ascii', 'replace').decode('ascii'), 'marker': PosInfo, **Record})
+    print(f'parts with a moEndSpec_c definition: {SeenInfo}, decoded: {len(GetRows)}, rejected: {Skipped}')
 
-
-if __name__ == "__main__":
-    main()
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    for KeyName, CountInfo in sorted(Histogram.items(), key=lambda KvInfo: -KvInfo[1]):
+        TZero, TOneInfo, RevInfo = KeyName
+        print(f"  type0={TZero:3d} ({KNames.get(TZero, '?'):18s}) type1={TOneInfo:3d} ({KNames.get(TOneInfo, '?'):18s}) reverse={RevInfo} n={CountInfo}")
+    for RowDataInfo in GetRows:
+        if RowDataInfo['type0'] not in (0, 1, 6) or RowDataInfo['type1'] != 0:
+            print(f"  NOTABLE {RowDataInfo['part']:44s} type0={RowDataInfo['type0']} type1={RowDataInfo['type1']}")
+    KOutInfo.mkdir(parents=True, exist_ok=True)
+    (KOutInfo / 'ScanEndspec.json').write_text(JsonData.dumps(GetRows, indent=1))
+if __name__ == '__main__':
+    MainRunInfo()

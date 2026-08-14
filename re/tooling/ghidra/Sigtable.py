@@ -6,106 +6,91 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-import pathlib
-import struct
-import sys
+import pathlib as Pathlib
+import struct as Struct
+import sys as System
+from gen_signature_table import BLOCK_OFFSET as KBlockOffset, ENTRY_COUNT as KEntryCount, host_dll as HostDll
+from gen_signature_table import extract as ExtractRows
 
-from gen_signature_table import BLOCK_OFFSET, ENTRY_COUNT, host_dll
-from gen_signature_table import extract as extract_rows
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHostInfo = HostDll(None)
 
-HOST = host_dll(None)
-ROOT = pathlib.Path(__file__).resolve().parents[3]
-
-
-def extract(path=None):
-    rows = extract_rows(path or HOST)
-    return [
-        (index, file_id, (triplet[0:4], triplet[4:8], triplet[8:12]))
-        for index, (file_id, triplet) in enumerate(rows)
-    ]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = Pathlib.Path(__file__).resolve().parents[3]
 
 
-def locate(path=HOST):
-    blob = path.read_bytes()
-    a = blob.find(struct.pack(">I", 0xEC6E2386))
-    b = blob.find(struct.pack("<I", 0x64D80045))
-    return a, b
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Extract(PathInfoData=None):
+    GetRows = ExtractRows(PathInfoData or KHostInfo)
+    return [(IndexData, FileId, (Triplet[0:4], Triplet[4:8], Triplet[8:12])) for IndexData, (FileId, Triplet) in enumerate(GetRows)]
 
 
-def scan_parts(roots):
-    sys.path.insert(0, str(ROOT / "src"))
-    from convert.adapters.solidworks.container.Container import SldprtArchive, _template_fields
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Locate(PathInfoData=KHostInfo):
+    ByteBlob = PathInfoData.read_bytes()
+    FirstValue = ByteBlob.find(Struct.pack('>I', 3966641030))
+    SecondValue = ByteBlob.find(Struct.pack('<I', 1691877445))
+    return (FirstValue, SecondValue)
 
-    found = []
-    for root in roots:
-        for path in sorted((ROOT / root).rglob("*")):
-            if path.suffix.upper() not in (".SLDPRT", ".SLDASM", ".SLDDRW"):
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ScanParts(Roots):
+    System.path.insert(0, str(KRootInfo / 'src'))
+    from convert.adapters.solidworks.container.Container import SldprtArchive, _template_fields as TemplateFields
+    Found = []
+    for RootPath in Roots:
+        for PathInfoData in sorted((KRootInfo / RootPath).rglob('*')):
+            if PathInfoData.suffix.upper() not in ('.SLDPRT', '.SLDASM', '.SLDDRW'):
                 continue
             try:
-                blob = path.read_bytes()
+                ByteBlob = PathInfoData.read_bytes()
             except OSError:
                 continue
-            if len(blob) < 32:
+            if len(ByteBlob) < 32:
                 continue
             try:
-                archive = SldprtArchive.from_bytes(blob, path)
-                signatures, _ = _template_fields(blob, archive)
-            except Exception as problem:
-                found.append((path, -1, 0, repr(problem)))
+                ArchiveInfo = SldprtArchive.from_bytes(ByteBlob, PathInfoData)
+                Signatures, SpareValue = TemplateFields(ByteBlob, ArchiveInfo)
+            except Exception as Problem:
+                Found.append((PathInfoData, -1, 0, repr(Problem)))
                 continue
-            found.append((path, archive.file_id, archive.format_version, signatures))
-    return found
+            Found.append((PathInfoData, ArchiveInfo.file_id, ArchiveInfo.format_version, Signatures))
+    return Found
 
 
-def main():
-    rows = extract()
-    table = {}
-    for i, file_id, trip in rows:
-        table.setdefault(file_id, (i, trip))
-    print("host", HOST, "block", hex(BLOCK_OFFSET), "count", ENTRY_COUNT)
-    print("anchors", [hex(v) for v in locate()])
-    print("distinct file_ids", len(table), "of", ENTRY_COUNT)
-    for i, file_id, trip in rows[709:714] + rows[748:753]:
-        print(i, f"0x{file_id:08x}", [t.hex() for t in trip])
-    roots = sys.argv[1:] or [
-        "examples",
-        ".rescratch/corpus/parts",
-        ".rescratch/corpus2",
-        ".rescratch/trace/parts",
-        ".rescratch/re/parts",
-    ]
-    parts = scan_parts(roots)
-    ok = 0
-    bad = 0
-    unknown = 0
-    broken = 0
-    for path, file_id, version, signatures in parts:
-        name = path.name.encode("ascii", "replace").decode("ascii")
-        if file_id < 0:
-            broken += 1
-            print("UNREADABLE", name, signatures)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    GetRows = Extract()
+    Table = {}
+    for IndexInfo, FileId, TripInfo in GetRows:
+        Table.setdefault(FileId, (IndexInfo, TripInfo))
+    print('host', KHostInfo, 'block', hex(KBlockOffset), 'count', KEntryCount)
+    print('anchors', [hex(ValueData) for ValueData in Locate()])
+    print('distinct file_ids', len(Table), 'of', KEntryCount)
+    for IndexInfo, FileId, TripInfo in GetRows[709:714] + GetRows[748:753]:
+        print(IndexInfo, f'0x{FileId:08x}', [TextData.hex() for TextData in TripInfo])
+    Roots = System.argv[1:] or ['examples', '.rescratch/corpus/parts', '.rescratch/corpus2', '.rescratch/trace/parts', '.rescratch/re/parts']
+    Parts = ScanParts(Roots)
+    OkInfo = 0
+    BadInfo = 0
+    Unknown = 0
+    Broken = 0
+    for PathInfoData, FileId, Version, Signatures in Parts:
+        NameTextInfo = PathInfoData.name.encode('ascii', 'replace').decode('ascii')
+        if FileId < 0:
+            Broken += 1
+            print('UNREADABLE', NameTextInfo, Signatures)
             continue
-        hit = table.get(file_id)
-        if hit is None:
-            unknown += 1
-            print("NO TABLE ENTRY", name, f"0x{file_id:08x}")
+        HitInfo = Table.get(FileId)
+        if HitInfo is None:
+            Unknown += 1
+            print('NO TABLE ENTRY', NameTextInfo, f'0x{FileId:08x}')
             continue
-        if tuple(hit[1]) == tuple(signatures):
-            ok += 1
+        if tuple(HitInfo[1]) == tuple(Signatures):
+            OkInfo += 1
         else:
-            bad += 1
-            print(
-                "MISMATCH",
-                name,
-                f"0x{file_id:08x}",
-                f"index={hit[0]}",
-                [s.hex() for s in signatures],
-                [t.hex() for t in hit[1]],
-            )
-    print(
-        f"parts={len(parts)} match={ok} mismatch={bad} unknown={unknown} unreadable={broken}"
-    )
-
-
-if __name__ == "__main__":
-    main()
+            BadInfo += 1
+            print('MISMATCH', NameTextInfo, f'0x{FileId:08x}', f'index={HitInfo[0]}', [SourceData.hex() for SourceData in Signatures], [TextData.hex() for TextData in HitInfo[1]])
+    print(f'parts={len(Parts)} match={OkInfo} mismatch={BadInfo} unknown={Unknown} unreadable={Broken}')
+if __name__ == '__main__':
+    MainRunInfo()

@@ -7,205 +7,154 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import json as JsonData
+from pathlib import Path as PathInfo
+import sys as System
 
-import json
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-SCRATCH = HERE.parents[2] / ".rescratch"
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KScratch = KHereInfo.parents[2] / '.rescratch'
 
-import cdbdrive  # noqa: E402
-import model as modellib  # noqa: E402
-import segment as segmentlib  # noqa: E402
-import tracelog  # noqa: E402
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Cdbdrive as Cdbdrive
+import Model as Modellib
+import Segment as Segmentlib
+import Tracelog as Tracelog
+import Streamlib as Streamlib
 
-import streamlib  # noqa: E402
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = KScratch / 'trace' / 'out'
 
-OUT = SCRATCH / "trace" / "out"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KResolved = Streamlib.KResolved
 
-RESOLVED = streamlib.RESOLVED
-CMGR = "Contents/CMgr"
-MODEL_HEADER = "Contents/Config-0-ModelHeader"
-HEADER2 = "Header2"
-CONFIG0 = "Contents/Config-0"
-VISUAL_STATES = "ThirdPtyStore/VisualStates"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCmgrInfo = 'Contents/CMgr'
 
-STREAMS = (RESOLVED, CMGR, MODEL_HEADER, CONFIG0, VISUAL_STATES)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KModelHeader = 'Contents/Config-0-ModelHeader'
 
-PREAMBLE = """$$ SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
-$$ SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
-$$
-$$ This SPDX license identifier and copyright notice must not be
-$$ removed, altered, or obscured. Doing so is a material breach of
-$$ the PolyForm Strict License 1.0.0 and voids all licenses granted
-$$ to you under it immediately and permanently.
-.symopt+0x4000
-.symopt-0x20000
-.exepath+ {solidworks}
-.reload /f swccu.dll
-"""
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHeaderTwo = 'Header2'
 
-BREAKPOINT = (
-    'bp swccu!su_CArchive::{routine} ".if ({guard}) {{ .printf '
-    '\\"{tag} %p %x %d %p %x\\\\n\\", poi(@rcx+{start:#x}), '
-    "poi(@rcx+{cur:#x})-poi(@rcx+{start:#x}), dwo(@rcx+{map:#x}), @rsp, "
-    'poi(@rcx+{max:#x})-poi(@rcx+{start:#x}) }}; gc"\n'
-)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KConfigZero = 'Contents/Config-0'
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KVisualStates = 'ThirdPtyStore/VisualStates'
 
-def layout() -> dict[str, int]:
-    path = OUT / "Calibrate.json"
-    if not path.is_file():
-        raise SystemExit(f"run Calibrate.py first: {path} is missing")
-    return json.loads(path.read_text(encoding="utf-8"))["layout"]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KStreams = (KResolved, KCmgrInfo, KModelHeader, KConfigZero, KVisualStates)
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPreamble = '$$ SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0\n$$ SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin\n$$\n$$ This SPDX license identifier and copyright notice must not be\n$$ removed, altered, or obscured. Doing so is a material breach of\n$$ the PolyForm Strict License 1.0.0 and voids all licenses granted\n$$ to you under it immediately and permanently.\n.symopt+0x4000\n.symopt-0x20000\n.exepath+ {solidworks}\n.reload /f swccu.dll\n'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBreakpoint = 'bp swccu!su_CArchive::{routine} ".if ({guard}) {{ .printf \\"{tag} %p %x %d %p %x\\\\n\\", poi(@rcx+{start:#x}), poi(@rcx+{cur:#x})-poi(@rcx+{start:#x}), dwo(@rcx+{map:#x}), @rsp, poi(@rcx+{max:#x})-poi(@rcx+{start:#x}) }}; gc"\n'
 
 
-def guard(spans: tuple[int, ...], fields: dict[str, int]) -> str:
-    span = f"(poi(@rcx+{fields['max']:#x})-poi(@rcx+{fields['start']:#x}))"
-    return " | ".join(f"({span}=={value:#x})" for value in sorted(set(spans)))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Layout() -> dict[str, int]:
+    PathInfoData = KOutInfo / 'Calibrate.json'
+    if not PathInfoData.is_file():
+        raise SystemExit(f'run Calibrate.py first: {PathInfoData} is missing')
+    return JsonData.loads(PathInfoData.read_text(encoding='utf-8'))['layout']
 
 
-def write_script(path: Path, spans: tuple[int, ...], fields: dict[str, int]) -> None:
-    text = PREAMBLE.format(solidworks=cdbdrive.SOLIDWORKS_DIR)
-    condition = guard(spans, fields)
-    for routine, tag in (("ReadObject", "RO"), ("ReadClass", "RC")):
-        text += BREAKPOINT.format(
-            routine=routine,
-            tag=tag,
-            guard=condition,
-            start=fields["start"],
-            cur=fields["cur"],
-            max=fields["max"],
-            map=fields["map"],
-        )
-    text += "bl\ng\n"
-    path.write_text(text, encoding="ascii")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Guard(Spans: tuple[int, ...], Fields: dict[str, int]) -> str:
+    SpanInfo = f"(poi(@rcx+{Fields['max']:#x})-poi(@rcx+{Fields['start']:#x}))"
+    return ' | '.join((f'({SpanInfo}=={ValueInfo:#x})' for ValueInfo in sorted(set(Spans))))
 
 
-def analyse(part: Path, log: Path, streams: tuple[str, ...]) -> list[dict[str, object]]:
-    donor = streamlib.load_donor(part)
-    events = tracelog.read_events(log)
-    rows: list[dict[str, object]] = []
-    for name in streams:
-        blob = donor.streams.get(name)
-        if blob is None:
-            rows.append({"stream": name, "status": "absent"})
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteScript(PathInfoData: PathInfo, Spans: tuple[int, ...], Fields: dict[str, int]) -> None:
+    TextValueData = KPreamble.format(solidworks=Cdbdrive.KSolidworksDir)
+    Condition = Guard(Spans, Fields)
+    for Routine, TagInfoInfo in (('ReadObject', 'RO'), ('ReadClass', 'RC')):
+        TextValueData += KBreakpoint.format(routine=Routine, tag=TagInfoInfo, guard=Condition, start=Fields['start'], cur=Fields['cur'], max=Fields['max'], map=Fields['map'])
+    TextValueData += 'bl\ng\n'
+    PathInfoData.write_text(TextValueData, encoding='ascii')
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Analyse(PartInfoInfo: PathInfo, LogInfo: PathInfo, StreamsInfo: tuple[str, ...]) -> list[dict[str, object]]:
+    DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
+    Events = Tracelog.ReadEvents(LogInfo)
+    GetRows: list[dict[str, object]] = []
+    for NameTextInfo in StreamsInfo:
+        ByteBlob = DonorInfo.streams.get(NameTextInfo)
+        if ByteBlob is None:
+            GetRows.append({'stream': NameTextInfo, 'status': 'absent'})
             continue
-        counts = tracelog.buffers_for_span(events, len(blob))
-        if not counts:
-            rows.append(
-                {"stream": name, "status": "no-events", "stream_length": len(blob)}
-            )
+        Counts = Tracelog.BuffersForSpan(Events, len(ByteBlob))
+        if not Counts:
+            GetRows.append({'stream': NameTextInfo, 'status': 'no-events', 'stream_length': len(ByteBlob)})
             continue
-        segments = segmentlib.build(blob, events, span=len(blob))
-        shape = segmentlib.tiling(blob, segments)
-        mismatch = segmentlib.counter_mismatches(segments)
-        row: dict[str, object] = {
-            "stream": name,
-            "status": "traced",
-            "stream_length": len(blob),
-            "buffers": len(counts),
-            "objects": len(segments),
-            "definitions": sum(1 for item in segments if item.kind == "definition"),
-            "base_map_index": segments[0].map_index,
-            "tiles": shape["tiles"],
-            "header_bytes": shape["header_bytes"],
-            "trailing_bytes": shape["trailing_bytes"],
-            "gaps": shape["gaps"],
-            "overlaps": shape["overlaps"],
-            "counter_mismatches": len(mismatch),
-            "increment_rule": segmentlib.increment_rule(segments),
-        }
+        SegmentsInfo = Segmentlib.Build(ByteBlob, Events, SpanInfo=len(ByteBlob))
+        Shape = Segmentlib.Tiling(ByteBlob, SegmentsInfo)
+        Mismatch = Segmentlib.CounterData(SegmentsInfo)
+        RowDataInfo: dict[str, object] = {'stream': NameTextInfo, 'status': 'traced', 'stream_length': len(ByteBlob), 'buffers': len(Counts), 'objects': len(SegmentsInfo), 'definitions': sum((1 for ItemData in SegmentsInfo if ItemData.kind == 'definition')), 'base_map_index': SegmentsInfo[0].map_index, 'tiles': Shape['tiles'], 'header_bytes': Shape['header_bytes'], 'trailing_bytes': Shape['trailing_bytes'], 'gaps': Shape['gaps'], 'overlaps': Shape['overlaps'], 'counter_mismatches': len(Mismatch), 'increment_rule': Segmentlib.IncrementRule(SegmentsInfo)}
         try:
-            reparsed = modellib.parse(blob, segments)
-            row["reemit_identical"] = reparsed.emit() == blob
-            row["external_classrefs"] = sum(
-                1
-                for node in reparsed.nodes
-                if node.kind == "classref" and node.target < 0
-            )
-            row["external_objectrefs"] = sum(
-                1
-                for node in reparsed.nodes
-                if node.kind == "objectref" and node.target < 0
-            )
-        except modellib.ModelError as error:
-            row["reemit_identical"] = False
-            row["model_error"] = str(error)
-        rows.append(row)
-    return rows
+            Reparsed = Modellib.Parse(ByteBlob, SegmentsInfo)
+            RowDataInfo['reemit_identical'] = Reparsed.emit() == ByteBlob
+            RowDataInfo['external_classrefs'] = sum((1 for NodeInfoInfo in Reparsed.nodes if NodeInfoInfo.kind == 'classref' and NodeInfoInfo.target < 0))
+            RowDataInfo['external_objectrefs'] = sum((1 for NodeInfoInfo in Reparsed.nodes if NodeInfoInfo.kind == 'objectref' and NodeInfoInfo.target < 0))
+        except Modellib.ModelError as Error:
+            RowDataInfo['reemit_identical'] = False
+            RowDataInfo['model_error'] = str(Error)
+        GetRows.append(RowDataInfo)
+    return GetRows
 
 
-def trace_one(
-    label: str, part: Path, fields: dict[str, int], mode: str, streams: tuple[str, ...]
-) -> dict[str, object]:
-    donor = streamlib.load_donor(part)
-    spans = tuple(len(donor.streams[name]) for name in streams if name in donor.streams)
-    script = HERE / f"cdb_multi_{label}.txt"
-    log = OUT / f"cdb_multi_{label}.log"
-    write_script(script, spans, fields)
-    record: dict[str, object] = {
-        "label": label,
-        "part": str(part),
-        "spans": list(spans),
-        "script": str(script),
-        "log": str(log),
-    }
-    if mode == "run":
-        result = cdbdrive.run(
-            script,
-            log,
-            part,
-            marker=r"^RO ",
-            hard_deadline=900.0,
-            quiet_seconds=60.0,
-        )
-        record["cdb_reason"] = result.reason
-        record["cdb_seconds"] = round(result.seconds, 1)
-        record["read_object_events"] = result.markers
-    if not log.is_file():
-        record["status"] = "no-log"
-        return record
-    record["status"] = "traced"
-    record["streams"] = analyse(part, log, streams)
-    return record
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def TraceOne(LabelInfo: str, PartInfoInfo: PathInfo, Fields: dict[str, int], ModeInfo: str, StreamsInfo: tuple[str, ...]) -> dict[str, object]:
+    DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
+    Spans = tuple((len(DonorInfo.streams[NameTextInfo]) for NameTextInfo in StreamsInfo if NameTextInfo in DonorInfo.streams))
+    Script = KHereInfo / f'cdb_multi_{LabelInfo}.txt'
+    LogInfo = KOutInfo / f'cdb_multi_{LabelInfo}.log'
+    WriteScript(Script, Spans, Fields)
+    Record: dict[str, object] = {'label': LabelInfo, 'part': str(PartInfoInfo), 'spans': list(Spans), 'script': str(Script), 'log': str(LogInfo)}
+    if ModeInfo == 'run':
+        Result = Cdbdrive.RunTask(Script, LogInfo, PartInfoInfo, Marker='^RO ', HardDeadline=900.0, QuietSeconds=60.0)
+        Record['cdb_reason'] = Result.reason
+        Record['cdb_seconds'] = round(Result.seconds, 1)
+        Record['read_object_events'] = Result.markers
+    if not LogInfo.is_file():
+        Record['status'] = 'no-log'
+        return Record
+    Record['status'] = 'traced'
+    Record['streams'] = Analyse(PartInfoInfo, LogInfo, StreamsInfo)
+    return Record
 
 
-def main() -> int:
-    arguments = sys.argv[1:]
-    if len(arguments) < 3:
-        raise SystemExit("usage: Multitrace.py <mode> <label> <part> [<label> <part>]")
-    mode = arguments[0]
-    pairs = arguments[1:]
-    if len(pairs) % 2:
-        raise SystemExit("labels and parts must come in pairs")
-    fields = layout()
-    OUT.mkdir(parents=True, exist_ok=True)
-    records: list[dict[str, object]] = []
-    for position in range(0, len(pairs), 2):
-        label = pairs[position]
-        part = Path(pairs[position + 1]).resolve()
-        record = trace_one(label, part, fields, mode, STREAMS)
-        records.append(record)
-        print(f"== {label} {record.get('status')} {record.get('cdb_reason')}")
-        for row in record.get("streams") or []:
-            print(
-                f"   {str(row['stream']):38s} {str(row['status']):10s} "
-                f"len={row.get('stream_length')} objects={row.get('objects')} "
-                f"tiles={row.get('tiles')} mism={row.get('counter_mismatches')} "
-                f"reemit={row.get('reemit_identical')}",
-                flush=True,
-            )
-        (OUT / "Multitrace.json").write_text(
-            json.dumps(records, indent=2), encoding="utf-8"
-        )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    ArgsInfo = System.argv[1:]
+    if len(ArgsInfo) < 3:
+        raise SystemExit('usage: Multitrace.py <mode> <label> <part> [<label> <part>]')
+    ModeInfo = ArgsInfo[0]
+    Pairs = ArgsInfo[1:]
+    if len(Pairs) % 2:
+        raise SystemExit('labels and parts must come in pairs')
+    Fields = Layout()
+    KOutInfo.mkdir(parents=True, exist_ok=True)
+    RecordsInfo: list[dict[str, object]] = []
+    for PosInfoInfo in range(0, len(Pairs), 2):
+        LabelInfo = Pairs[PosInfoInfo]
+        PartInfoInfo = PathInfo(Pairs[PosInfoInfo + 1]).resolve()
+        Record = TraceOne(LabelInfo, PartInfoInfo, Fields, ModeInfo, KStreams)
+        RecordsInfo.append(Record)
+        print(f"== {LabelInfo} {Record.get('status')} {Record.get('cdb_reason')}")
+        for RowDataInfo in Record.get('streams') or []:
+            print(f"   {str(RowDataInfo['stream']):38s} {str(RowDataInfo['status']):10s} len={RowDataInfo.get('stream_length')} objects={RowDataInfo.get('objects')} tiles={RowDataInfo.get('tiles')} mism={RowDataInfo.get('counter_mismatches')} reemit={RowDataInfo.get('reemit_identical')}", flush=True)
+        (KOutInfo / 'Multitrace.json').write_text(JsonData.dumps(RecordsInfo, indent=2), encoding='utf-8')
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

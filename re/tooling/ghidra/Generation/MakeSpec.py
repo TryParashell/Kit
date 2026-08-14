@@ -1,102 +1,72 @@
-import json
-import pathlib
-import re
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-ROOT = pathlib.Path(__file__).resolve().parents[4]
-TRACE = ROOT / "re/data/segments"
-OUT = ROOT / ".rescratch/ghidra/out"
-GH = ROOT / "re/tooling/ghidra"
+import json as JsonData
+import pathlib as Pathlib
+import re as Regex
 
-PRIORITY = [
-    "moExtrusion_c",
-    "moICE_c",
-    "moEndSpec_c",
-    "moFromEndSpec_c",
-    "moRevEndSpec_c",
-    "moRevolution_c",
-    "moRevolutionThin_c",
-    "moRevCut_c",
-    "moCut_c",
-    "moProfileFeature_c",
-    "moOriginProfileFeature_c",
-    "moLengthParameter_c",
-    "moAngleParameter_c",
-    "moBodyFeature_c",
-    "moFeature_c",
-    "moModelFeature_c",
-    "moCompFeature_c",
-    "moPerBodyChooserData_c",
-    "moFaceRef_c",
-    "moFR_c",
-    "moBBoxCenterData_c",
-    "moDisplayDistanceDim_c",
-    "moFeatureDimHandle_c",
-    "moFavoriteHandle_c",
-    "sgSketch",
-    "sgArc",
-    "sgLine",
-    "sgSpline",
-    "sgPoint",
-    "sgEntHandle",
-    "sgArcHandle",
-    "sgLineHandle",
-    "sgSplineHandle",
-    "sgPointHandle",
-    "sgDim",
-    "sgLogDim",
-    "moHistoryFeatItemData_c",
-    "moSketchChain_c",
-    "moSketchRegion_c",
-]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = Pathlib.Path(__file__).resolve().parents[4]
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KTrace = KRootInfo / 're/data/segments'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = KRootInfo / '.rescratch/ghidra/out'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGhInfo = KRootInfo / 're/tooling/ghidra'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPriority = ['moExtrusion_c', 'moICE_c', 'moEndSpec_c', 'moFromEndSpec_c', 'moRevEndSpec_c', 'moRevolution_c', 'moRevolutionThin_c', 'moRevCut_c', 'moCut_c', 'moProfileFeature_c', 'moOriginProfileFeature_c', 'moLengthParameter_c', 'moAngleParameter_c', 'moBodyFeature_c', 'moFeature_c', 'moModelFeature_c', 'moCompFeature_c', 'moPerBodyChooserData_c', 'moFaceRef_c', 'moFR_c', 'moBBoxCenterData_c', 'moDisplayDistanceDim_c', 'moFeatureDimHandle_c', 'moFavoriteHandle_c', 'sgSketch', 'sgArc', 'sgLine', 'sgSpline', 'sgPoint', 'sgEntHandle', 'sgArcHandle', 'sgLineHandle', 'sgSplineHandle', 'sgPointHandle', 'sgDim', 'sgLogDim', 'moHistoryFeatItemData_c', 'moSketchChain_c', 'moSketchRegion_c']
 
 
-def observed():
-    names = set()
-    for path in sorted(TRACE.glob("segments_*.json")):
-        doc = json.loads(path.read_text())
-        segs = doc["segments"]
-        for seg in segs:
-            name = seg["class_name"]
-            m = re.match(r"backref->(\d+)$", name)
-            if m:
-                name = segs[int(m.group(1))]["class_name"]
-            if (
-                name in ("null",)
-                or name.startswith("external#")
-                or name.startswith("backref->")
-            ):
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Observed():
+    Names = set()
+    for PathInfoData in sorted(KTrace.glob('segments_*.json')):
+        DocInfo = JsonData.loads(PathInfoData.read_text())
+        SegsInfo = DocInfo['segments']
+        for SegInfo in SegsInfo:
+            NameTextInfo = SegInfo['class_name']
+            MatchDataInfo = Regex.match('backref->(\\d+)$', NameTextInfo)
+            if MatchDataInfo:
+                NameTextInfo = SegsInfo[int(MatchDataInfo.group(1))]['class_name']
+            if NameTextInfo in ('null',) or NameTextInfo.startswith('external#') or NameTextInfo.startswith('backref->'):
                 continue
-            names.add(name)
-    return names
+            Names.add(NameTextInfo)
+    return Names
 
 
-def main():
-    smap = json.loads((OUT / "SerializeMap.json").read_text())
-    want = []
-    for name in PRIORITY:
-        if name in smap:
-            want.append(name)
-    for name in sorted(observed()):
-        if name in smap and name not in want:
-            want.append(name)
-    lines = []
-    seen = set()
-    rows = []
-    for name in want:
-        addr = smap[name]["serialize_addr"]
-        rows.append((name, addr, smap[name]["serialize_name"]))
-        if addr in seen:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    SmapInfo = JsonData.loads((KOutInfo / 'SerializeMap.json').read_text())
+    WantInfo = []
+    for NameTextInfo in KPriority:
+        if NameTextInfo in SmapInfo:
+            WantInfo.append(NameTextInfo)
+    for NameTextInfo in sorted(Observed()):
+        if NameTextInfo in SmapInfo and NameTextInfo not in WantInfo:
+            WantInfo.append(NameTextInfo)
+    Lines = []
+    SeenInfo = set()
+    GetRows = []
+    for NameTextInfo in WantInfo:
+        AddrInfo = SmapInfo[NameTextInfo]['serialize_addr']
+        GetRows.append((NameTextInfo, AddrInfo, SmapInfo[NameTextInfo]['serialize_name']))
+        if AddrInfo in SeenInfo:
             continue
-        seen.add(addr)
-        lines.append("0x" + addr)
-    (GH / "SpecSldmodu.txt").write_text("\n".join(lines) + "\n")
-    (OUT / "SpecSldmoduClasses.json").write_text(
-        json.dumps([{"class": n, "addr": a, "name": f} for n, a, f in rows], indent=1)
-    )
-    print("classes requested", len(rows), "distinct functions", len(lines))
-    missing = [n for n in PRIORITY if n not in smap]
-    print("priority classes with no vtable entry:", missing)
-
-
-if __name__ == "__main__":
-    main()
+        SeenInfo.add(AddrInfo)
+        Lines.append('0x' + AddrInfo)
+    (KGhInfo / 'SpecSldmodu.txt').write_text('\n'.join(Lines) + '\n')
+    (KOutInfo / 'SpecSldmoduClasses.json').write_text(JsonData.dumps([{'class': ItemCountInfo, 'addr': FirstValue, 'name': FileData} for ItemCountInfo, FirstValue, FileData in GetRows], indent=1))
+    print('classes requested', len(GetRows), 'distinct functions', len(Lines))
+    MissingInfo = [ItemCountInfo for ItemCountInfo in KPriority if ItemCountInfo not in SmapInfo]
+    print('priority classes with no vtable entry:', MissingInfo)
+if __name__ == '__main__':
+    MainRunInfo()

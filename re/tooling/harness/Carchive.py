@@ -1,169 +1,214 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from dataclasses import dataclass as DataClass
+from pathlib import Path as PathInfo
+import struct as Struct
+import sys as System
 
-from dataclasses import dataclass
-from pathlib import Path
-import struct
-import sys
-
-ROOT = Path(__file__).resolve().parents[3]
-for candidate in (ROOT, ROOT / "src"):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
-
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = PathInfo(__file__).resolve().parents[3]
+for CandInfo in (KRootInfo, KRootInfo / 'src'):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
 from convert.adapters.solidworks.container.Container import SldprtArchive
 
-RESOLVED = "Contents/Config-0-ResolvedFeatures"
-KEYWORDS = "swXmlContents/KeyWords"
-FEATURES = "swXmlContents/Features"
-PARTITION = "Contents/Config-0-Partition"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KResolved = 'Contents/Config-0-ResolvedFeatures'
 
-NEW_CLASS_TAG = 0xFFFF
-CLASS_TAG_BIT = 0x8000
-BIG_OBJECT_TAG = 0x7FFF
-NULL_TAG = 0x0000
-STRING_UNICODE_MARKER = bytes.fromhex("fffeff")
-MAX_CLASS_NAME = 64
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KEYWORDS = 'swXmlContents/KeyWords'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KFeatInfo = 'swXmlContents/Features'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPartition = 'Contents/Config-0-Partition'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNewClassTag = 65535
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KClassTagBit = 32768
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBigObjectTag = 32767
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNullTag = 0
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KStringInfo = bytes.fromhex('fffeff')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KMaxClassName = 64
 
 
-@dataclass(frozen=True, slots=True)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class ClassDefinition:
-    tag_offset: int
-    schema: int
-    name: str
-    name_offset: int
-    data_offset: int
+    TagOffset: int
+    Schema: int
+    NameTextInfo: str
+    NameOffset: int
+    DataOffset: int
+    KAliasNames = {'tag_offset': 'TagOffset', 'schema': 'Schema', 'name': 'NameTextInfo', 'name_offset': 'NameOffset', 'data_offset': 'DataOffset'}
 
 
-@dataclass(frozen=True, slots=True)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class ClassReference:
-    offset: int
-    index: int
+    Offset: int
+    IndexData: int
+    KAliasNames = {'offset': 'Offset', 'index': 'IndexData'}
 
 
-def stream(path: Path, name: str = RESOLVED) -> bytes:
-    return SldprtArchive.open(path).require(name)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
 
 
-def streams(path: Path) -> dict[str, bytes]:
-    return SldprtArchive.open(path).streams
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Stream(PathInfoData: PathInfo, NameTextInfo: str=KResolved) -> bytes:
+    return SldprtArchive.open(PathInfoData).require(NameTextInfo)
 
 
-def class_definitions(blob: bytes) -> tuple[ClassDefinition, ...]:
-    result: list[ClassDefinition] = []
-    cursor = 0
-    limit = len(blob)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def StreamsInfo(PathInfoData: PathInfo) -> dict[str, bytes]:
+    return SldprtArchive.open(PathInfoData).streams
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ClassDefns(ByteBlob: bytes) -> tuple[ClassDefinition, ...]:
+    Result: list[ClassDefinition] = []
+    Cursor = 0
+    Limit = len(ByteBlob)
     while True:
-        offset = blob.find(b"\xff\xff", cursor)
-        if offset < 0 or offset + 6 > limit:
+        Offset = ByteBlob.find(b'\xff\xff', Cursor)
+        if Offset < 0 or Offset + 6 > Limit:
             break
-        cursor = offset + 1
-        schema, length = struct.unpack_from("<HH", blob, offset + 2)
-        if not 0 < length <= MAX_CLASS_NAME:
+        Cursor = Offset + 1
+        Schema, Length = Struct.unpack_from('<HH', ByteBlob, Offset + 2)
+        if not 0 < Length <= KMaxClassName:
             continue
-        start = offset + 6
-        end = start + length
-        if end > limit:
+        StartRun = Offset + 6
+        EndIndex = StartRun + Length
+        if EndIndex > Limit:
             continue
-        raw = blob[start:end]
+        RawData = ByteBlob[StartRun:EndIndex]
         try:
-            name = raw.decode("ascii")
+            NameTextInfo = RawData.decode('ascii')
         except UnicodeDecodeError:
             continue
-        if not name.replace("_", "").isalnum():
+        if not NameTextInfo.replace('_', '').isalnum():
             continue
-        result.append(ClassDefinition(offset, schema, name, start, end))
-    return tuple(result)
+        Result.append(ClassDefinition(Offset, Schema, NameTextInfo, StartRun, EndIndex))
+    return tuple(Result)
 
 
-def class_index_map(blob: bytes) -> dict[str, int]:
-    definitions = class_definitions(blob)
-    references = class_references(blob, definitions)
-    counts: dict[int, int] = {}
-    for reference in references:
-        counts[reference.index] = counts.get(reference.index, 0) + 1
-    return {definition.name: definition.tag_offset for definition in definitions} | {
-        f"#ref:{index}": count for index, count in sorted(counts.items())
-    }
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ClassIndexMap(ByteBlob: bytes) -> dict[str, int]:
+    Defns = ClassDefns(ByteBlob)
+    RefsInfo = ClassRefs(ByteBlob, Defns)
+    Counts: dict[int, int] = {}
+    for RefInfo in RefsInfo:
+        Counts[RefInfo.index] = Counts.get(RefInfo.index, 0) + 1
+    return {DefnInfo.name: DefnInfo.tag_offset for DefnInfo in Defns} | {f'#ref:{IndexData}': CountInfo for IndexData, CountInfo in sorted(Counts.items())}
 
 
-def class_references(
-    blob: bytes, definitions: tuple[ClassDefinition, ...]
-) -> tuple[ClassReference, ...]:
-    boundaries = _definition_spans(definitions)
-    result: list[ClassReference] = []
-    for offset in range(0, len(blob) - 1):
-        if _inside(boundaries, offset):
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ClassRefs(ByteBlob: bytes, Defns: tuple[ClassDefinition, ...]) -> tuple[ClassReference, ...]:
+    Boundaries = DefnSpans(Defns)
+    Result: list[ClassReference] = []
+    for Offset in range(0, len(ByteBlob) - 1):
+        if IsInside(Boundaries, Offset):
             continue
-        token = struct.unpack_from("<H", blob, offset)[0]
-        if token == NEW_CLASS_TAG or not token & CLASS_TAG_BIT:
+        Token = Struct.unpack_from('<H', ByteBlob, Offset)[0]
+        if Token == KNewClassTag or not Token & KClassTagBit:
             continue
-        result.append(ClassReference(offset, token & ~CLASS_TAG_BIT))
-    return tuple(result)
+        Result.append(ClassReference(Offset, Token & ~KClassTagBit))
+    return tuple(Result)
 
 
-def named_object_tokens(blob: bytes) -> dict[int, int]:
-    counts: dict[int, int] = {}
-    cursor = 0
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def NamedTokens(ByteBlob: bytes) -> dict[int, int]:
+    Counts: dict[int, int] = {}
+    Cursor = 0
     while True:
-        offset = blob.find(STRING_UNICODE_MARKER, cursor)
-        if offset < 2:
-            if offset < 0:
+        Offset = ByteBlob.find(KStringInfo, Cursor)
+        if Offset < 2:
+            if Offset < 0:
                 break
-            cursor = offset + 1
+            Cursor = Offset + 1
             continue
-        cursor = offset + 1
-        token = struct.unpack_from("<H", blob, offset - 2)[0]
-        counts[token] = counts.get(token, 0) + 1
-    return dict(sorted(counts.items()))
+        Cursor = Offset + 1
+        Token = Struct.unpack_from('<H', ByteBlob, Offset - 2)[0]
+        Counts[Token] = Counts.get(Token, 0) + 1
+    return dict(sorted(Counts.items()))
 
 
-def unicode_strings(blob: bytes) -> tuple[tuple[int, int, str], ...]:
-    result: list[tuple[int, int, str]] = []
-    cursor = 0
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def UnicodeStrings(ByteBlob: bytes) -> tuple[tuple[int, int, str], ...]:
+    Result: list[tuple[int, int, str]] = []
+    Cursor = 0
     while True:
-        offset = blob.find(STRING_UNICODE_MARKER, cursor)
-        if offset < 0:
+        Offset = ByteBlob.find(KStringInfo, Cursor)
+        if Offset < 0:
             break
-        cursor = offset + 1
-        units_offset = offset + 3
-        if units_offset >= len(blob):
+        Cursor = Offset + 1
+        UnitsOffset = Offset + 3
+        if UnitsOffset >= len(ByteBlob):
             continue
-        units = blob[units_offset]
-        if units == 0 or units == 0xFF:
+        Units = ByteBlob[UnitsOffset]
+        if Units == 0 or Units == 255:
             continue
-        start = units_offset + 1
-        end = start + units * 2
-        if end > len(blob):
+        StartRun = UnitsOffset + 1
+        EndIndex = StartRun + Units * 2
+        if EndIndex > len(ByteBlob):
             continue
         try:
-            text = blob[start:end].decode("utf-16le")
+            TextValueData = ByteBlob[StartRun:EndIndex].decode('utf-16le')
         except UnicodeDecodeError:
             continue
-        if any(not character.isprintable() for character in text):
+        if any((not Character.isprintable() for Character in TextValueData)):
             continue
-        token = (
-            struct.unpack_from("<H", blob, offset - 2)[0] if offset >= 2 else NULL_TAG
-        )
-        result.append((offset, token, text))
-    return tuple(result)
+        Token = Struct.unpack_from('<H', ByteBlob, Offset - 2)[0] if Offset >= 2 else KNullTag
+        Result.append((Offset, Token, TextValueData))
+    return tuple(Result)
 
 
-def _definition_spans(
-    definitions: tuple[ClassDefinition, ...],
-) -> tuple[tuple[int, int], ...]:
-    return tuple(
-        (definition.tag_offset, definition.data_offset) for definition in definitions
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def DefnSpans(Defns: tuple[ClassDefinition, ...]) -> tuple[tuple[int, int], ...]:
+    return tuple(((DefnInfo.tag_offset, DefnInfo.data_offset) for DefnInfo in Defns))
 
 
-def _inside(spans: tuple[tuple[int, int], ...], offset: int) -> bool:
-    for start, end in spans:
-        if start <= offset < end:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def IsInside(Spans: tuple[tuple[int, int], ...], Offset: int) -> bool:
+    for StartRun, EndIndex in Spans:
+        if StartRun <= Offset < EndIndex:
             return True
     return False
 
 
-def hexdump(blob: bytes, offset: int, width: int = 64) -> str:
-    start = max(0, offset)
-    end = min(len(blob), offset + width)
-    return blob[start:end].hex(" ")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Hexdump(ByteBlob: bytes, Offset: int, WidthInfo: int=64) -> str:
+    StartRun = max(0, Offset)
+    EndIndex = min(len(ByteBlob), Offset + WidthInfo)
+    return ByteBlob[StartRun:EndIndex].hex(' ')

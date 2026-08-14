@@ -7,235 +7,194 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
-
-import argparse
+import argparse as Argparse
 from fractions import Fraction
-import glob
-import json
-import os
-from typing import Dict, List, Sequence, Tuple
+import glob as GlobInfo
+import json as JsonData
+import os as OsLayer
+from typing import Dict as DictInfo, List as ListInfo, Sequence, Tuple
 
-NO_BODY_KINDS = ("null", "objectref")
-
-
-def load_traces(segments_dir: str) -> List[dict]:
-    traces = []
-    for path in sorted(glob.glob(os.path.join(segments_dir, "segments_*.json"))):
-        traces.append(json.load(open(path, encoding="utf-8")))
-    return traces
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNoBodyKinds = ('null', 'objectref')
 
 
-def build_tree(segments: Sequence[dict]) -> Tuple[List[List[int]], List[int]]:
-    children: List[List[int]] = [[] for _ in segments]
-    for i, seg in enumerate(segments):
-        parent = seg["parent"]
-        if parent >= 0:
-            children[parent].append(i)
-    subtree_order: List[int] = []
-    for i in range(len(segments) - 1, -1, -1):
-        subtree_order.append(i)
-    return children, subtree_order
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def LoadTraces(SegmentsDir: str) -> ListInfo[dict]:
+    Traces = []
+    for PathInfoData in sorted(GlobInfo.glob(OsLayer.path.join(SegmentsDir, 'segments_*.json'))):
+        Traces.append(JsonData.load(open(PathInfoData, encoding='utf-8')))
+    return Traces
 
 
-def subtree_stats(
-    segments: Sequence[dict], children: Sequence[Sequence[int]]
-) -> Tuple[List[Dict[str, int]], List[int]]:
-    counts: List[Dict[str, int]] = [dict() for _ in segments]
-    headers: List[int] = [0] * len(segments)
-    for i in range(len(segments) - 1, -1, -1):
-        seg = segments[i]
-        acc: Dict[str, int] = {}
-        hdr = 0
-        if seg["kind"] not in NO_BODY_KINDS:
-            acc[seg["class_name"]] = 1
-        for c in children[i]:
-            hdr += segments[c]["header"] + headers[c]
-            for key, value in counts[c].items():
-                acc[key] = acc.get(key, 0) + value
-        counts[i] = acc
-        headers[i] = hdr
-    return counts, headers
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BuildTree(SegmentsInfo: Sequence[dict]) -> Tuple[ListInfo[ListInfo[int]], ListInfo[int]]:
+    Children: ListInfo[ListInfo[int]] = [[] for SpareValue in SegmentsInfo]
+    for IndexInfo, SegInfo in enumerate(SegmentsInfo):
+        Parent = SegInfo['parent']
+        if Parent >= 0:
+            Children[Parent].append(IndexInfo)
+    SubtreeOrder: ListInfo[int] = []
+    for IndexInfo in range(len(SegmentsInfo) - 1, -1, -1):
+        SubtreeOrder.append(IndexInfo)
+    return (Children, SubtreeOrder)
 
 
-def tail_chain(
-    segments: Sequence[dict], children: Sequence[Sequence[int]], index: int
-) -> Tuple[Dict[str, int], bool]:
-    chain: Dict[str, int] = {}
-    cursor = index
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SubtreeStats(SegmentsInfo: Sequence[dict], Children: Sequence[Sequence[int]]) -> Tuple[ListInfo[DictInfo[str, int]], ListInfo[int]]:
+    Counts: ListInfo[DictInfo[str, int]] = [dict() for SpareValue in SegmentsInfo]
+    Headers: ListInfo[int] = [0] * len(SegmentsInfo)
+    for IndexInfo in range(len(SegmentsInfo) - 1, -1, -1):
+        SegInfo = SegmentsInfo[IndexInfo]
+        AccInfo: DictInfo[str, int] = {}
+        HdrInfo = 0
+        if SegInfo['kind'] not in KNoBodyKinds:
+            AccInfo[SegInfo['class_name']] = 1
+        for ThirdValue in Children[IndexInfo]:
+            HdrInfo += SegmentsInfo[ThirdValue]['header'] + Headers[ThirdValue]
+            for KeyName, ValueInfo in Counts[ThirdValue].items():
+                AccInfo[KeyName] = AccInfo.get(KeyName, 0) + ValueInfo
+        Counts[IndexInfo] = AccInfo
+        Headers[IndexInfo] = HdrInfo
+    return (Counts, Headers)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def TailChain(SegmentsInfo: Sequence[dict], Children: Sequence[Sequence[int]], IndexData: int) -> Tuple[DictInfo[str, int], bool]:
+    Chain: DictInfo[str, int] = {}
+    Cursor = IndexData
     while True:
-        seg = segments[cursor]
-        parent = seg["parent"]
-        if parent < 0:
-            return chain, True
-        siblings = children[parent]
-        if siblings[-1] != cursor:
-            return chain, False
-        name = segments[parent]["class_name"]
-        if segments[parent]["kind"] in NO_BODY_KINDS:
-            return chain, False
-        chain[name] = chain.get(name, 0) + 1
-        cursor = parent
+        SegInfo = SegmentsInfo[Cursor]
+        Parent = SegInfo['parent']
+        if Parent < 0:
+            return (Chain, True)
+        Siblings = Children[Parent]
+        if Siblings[-1] != Cursor:
+            return (Chain, False)
+        NameTextInfo = SegmentsInfo[Parent]['class_name']
+        if SegmentsInfo[Parent]['kind'] in KNoBodyKinds:
+            return (Chain, False)
+        Chain[NameTextInfo] = Chain.get(NameTextInfo, 0) + 1
+        Cursor = Parent
 
 
-def build_equations(traces: Sequence[dict]) -> Tuple[List[dict], List[str]]:
-    equations: List[dict] = []
-    variables: Dict[str, None] = {}
-    for trace in traces:
-        segments = trace["segments"]
-        children, _ = build_tree(segments)
-        counts, headers = subtree_stats(segments, children)
-        for i, seg in enumerate(segments):
-            if seg["kind"] in NO_BODY_KINDS:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BuildEquations(Traces: Sequence[dict]) -> Tuple[ListInfo[dict], ListInfo[str]]:
+    Equations: ListInfo[dict] = []
+    ValuesInfo: DictInfo[str, None] = {}
+    for TraceInfo in Traces:
+        SegmentsInfo = TraceInfo['segments']
+        Children, SpareValue = BuildTree(SegmentsInfo)
+        Counts, Headers = SubtreeStats(SegmentsInfo, Children)
+        for IndexInfo, SegInfo in enumerate(SegmentsInfo):
+            if SegInfo['kind'] in KNoBodyKinds:
                 continue
-            chain, usable = tail_chain(segments, children, i)
-            if not usable:
+            Chain, Usable = TailChain(SegmentsInfo, Children, IndexInfo)
+            if not Usable:
                 continue
-            row: Dict[str, int] = {}
-            for key, value in counts[i].items():
-                row["S:" + key] = row.get("S:" + key, 0) + value
-            for key, value in chain.items():
-                row["T:" + key] = row.get("T:" + key, 0) + value
-            span = seg["scope_end"] - seg["offset"] - seg["header"]
-            rhs = span - headers[i]
-            for key in row:
-                variables[key] = None
-            equations.append(
-                {
-                    "label": trace["label"],
-                    "node": i,
-                    "class_name": seg["class_name"],
-                    "row": row,
-                    "rhs": rhs,
-                    "span": span,
-                    "depth": seg["depth"],
-                }
-            )
-    return equations, sorted(variables)
+            RowDataInfo: DictInfo[str, int] = {}
+            for KeyName, ValueInfo in Counts[IndexInfo].items():
+                RowDataInfo['S:' + KeyName] = RowDataInfo.get('S:' + KeyName, 0) + ValueInfo
+            for KeyName, ValueInfo in Chain.items():
+                RowDataInfo['T:' + KeyName] = RowDataInfo.get('T:' + KeyName, 0) + ValueInfo
+            SpanInfo = SegInfo['scope_end'] - SegInfo['offset'] - SegInfo['header']
+            RhsInfo = SpanInfo - Headers[IndexInfo]
+            for KeyName in RowDataInfo:
+                ValuesInfo[KeyName] = None
+            Equations.append({'label': TraceInfo['label'], 'node': IndexInfo, 'class_name': SegInfo['class_name'], 'row': RowDataInfo, 'rhs': RhsInfo, 'span': SpanInfo, 'depth': SegInfo['depth']})
+    return (Equations, sorted(ValuesInfo))
 
 
-def rref(
-    rows: List[List[Fraction]], width: int
-) -> Tuple[List[List[Fraction]], List[int], bool]:
-    pivots: List[int] = []
-    r = 0
-    for c in range(width):
-        pick = -1
-        for k in range(r, len(rows)):
-            if rows[k][c] != 0:
-                pick = k
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RrefInfoMut(GetRows: ListInfo[ListInfo[Fraction]], WidthInfo: int) -> Tuple[ListInfo[ListInfo[Fraction]], ListInfo[int], bool]:
+    Pivots: ListInfo[int] = []
+    ResultData = 0
+    for ThirdValue in range(WidthInfo):
+        PickInfo = -1
+        for KeyIndex in range(ResultData, len(GetRows)):
+            if GetRows[KeyIndex][ThirdValue] != 0:
+                PickInfo = KeyIndex
                 break
-        if pick < 0:
+        if PickInfo < 0:
             continue
-        rows[r], rows[pick] = rows[pick], rows[r]
-        lead = rows[r][c]
-        rows[r] = [value / lead for value in rows[r]]
-        for k in range(len(rows)):
-            if k != r and rows[k][c] != 0:
-                factor = rows[k][c]
-                rows[k] = [a - factor * b for a, b in zip(rows[k], rows[r])]
-        pivots.append(c)
-        r += 1
-        if r == len(rows):
+        GetRows[ResultData], GetRows[PickInfo] = (GetRows[PickInfo], GetRows[ResultData])
+        LeadInfo = GetRows[ResultData][ThirdValue]
+        GetRows[ResultData] = [ValueInfo / LeadInfo for ValueInfo in GetRows[ResultData]]
+        for KeyIndex in range(len(GetRows)):
+            if KeyIndex != ResultData and GetRows[KeyIndex][ThirdValue] != 0:
+                Factor = GetRows[KeyIndex][ThirdValue]
+                GetRows[KeyIndex] = [FirstValue - Factor * SecondValue for FirstValue, SecondValue in zip(GetRows[KeyIndex], GetRows[ResultData])]
+        Pivots.append(ThirdValue)
+        ResultData += 1
+        if ResultData == len(GetRows):
             break
-    consistent = True
-    for k in range(r, len(rows)):
-        if all(value == 0 for value in rows[k][:width]) and rows[k][width] != 0:
-            consistent = False
-    return rows, pivots, consistent
+    Consistent = True
+    for KeyIndex in range(ResultData, len(GetRows)):
+        if all((ValueInfo == 0 for ValueInfo in GetRows[KeyIndex][:WidthInfo])) and GetRows[KeyIndex][WidthInfo] != 0:
+            Consistent = False
+    return (GetRows, Pivots, Consistent)
 
 
-def solve(equations: Sequence[dict], variables: Sequence[str]) -> dict:
-    index = {name: i for i, name in enumerate(variables)}
-    width = len(variables)
-    rows: List[List[Fraction]] = []
-    for eq in equations:
-        row = [Fraction(0)] * (width + 1)
-        for key, value in eq["row"].items():
-            row[index[key]] = Fraction(value)
-        row[width] = Fraction(eq["rhs"])
-        rows.append(row)
-    reduced, pivots, consistent = rref(rows, width)
-    free = [c for c in range(width) if c not in set(pivots)]
-    freeset = set(free)
-    determined: Dict[str, int] = {}
-    for r, c in enumerate(pivots):
-        if all(reduced[r][f] == 0 for f in freeset):
-            value = reduced[r][width]
-            determined[variables[c]] = value
-    return {
-        "consistent": consistent,
-        "rank": len(pivots),
-        "variables": len(variables),
-        "determined": determined,
-        "free": [variables[f] for f in free],
-    }
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Solve(Equations: Sequence[dict], ValuesInfo: Sequence[str]) -> dict:
+    IndexData = {NameTextInfo: IndexInfo for IndexInfo, NameTextInfo in enumerate(ValuesInfo)}
+    WidthInfo = len(ValuesInfo)
+    GetRows: ListInfo[ListInfo[Fraction]] = []
+    for EqInfo in Equations:
+        RowDataInfo = [Fraction(0)] * (WidthInfo + 1)
+        for KeyName, ValueInfo in EqInfo['row'].items():
+            RowDataInfo[IndexData[KeyName]] = Fraction(ValueInfo)
+        RowDataInfo[WidthInfo] = Fraction(EqInfo['rhs'])
+        GetRows.append(RowDataInfo)
+    Reduced, Pivots, Consistent = RrefInfoMut(GetRows, WidthInfo)
+    FreeInfo = [ThirdValue for ThirdValue in range(WidthInfo) if ThirdValue not in set(Pivots)]
+    Freeset = set(FreeInfo)
+    Determined: DictInfo[str, int] = {}
+    for ResultData, ThirdValue in enumerate(Pivots):
+        if all((Reduced[ResultData][FileData] == 0 for FileData in Freeset)):
+            ValueInfo = Reduced[ResultData][WidthInfo]
+            Determined[ValuesInfo[ThirdValue]] = ValueInfo
+    return {'consistent': Consistent, 'rank': len(Pivots), 'variables': len(ValuesInfo), 'determined': Determined, 'free': [ValuesInfo[FileData] for FileData in FreeInfo]}
 
 
-def residual_check(
-    equations: Sequence[dict], determined: Dict[str, Fraction]
-) -> List[dict]:
-    failures: List[dict] = []
-    for eq in equations:
-        total = Fraction(0)
-        complete = True
-        for key, value in eq["row"].items():
-            if key in determined:
-                total += determined[key] * value
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ResidualCheck(Equations: Sequence[dict], Determined: DictInfo[str, Fraction]) -> ListInfo[dict]:
+    Failures: ListInfo[dict] = []
+    for EqInfo in Equations:
+        Total = Fraction(0)
+        Complete = True
+        for KeyName, ValueInfo in EqInfo['row'].items():
+            if KeyName in Determined:
+                Total += Determined[KeyName] * ValueInfo
             else:
-                complete = False
+                Complete = False
                 break
-        if not complete:
+        if not Complete:
             continue
-        if total != Fraction(eq["rhs"]):
-            failures.append(
-                {
-                    "label": eq["label"],
-                    "node": eq["node"],
-                    "class_name": eq["class_name"],
-                    "predicted": str(total),
-                    "observed": eq["rhs"],
-                }
-            )
-    return failures
+        if Total != Fraction(EqInfo['rhs']):
+            Failures.append({'label': EqInfo['label'], 'node': EqInfo['node'], 'class_name': EqInfo['class_name'], 'predicted': str(Total), 'observed': EqInfo['rhs']})
+    return Failures
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--segments", default="re/data/segments")
-    parser.add_argument("--out", default="re/data/body_scalars.json")
-    parser.add_argument("--labels", default="")
-    args = parser.parse_args()
-    traces = load_traces(args.segments)
-    if args.labels:
-        wanted = set(args.labels.split(","))
-        traces = [t for t in traces if t["label"] in wanted]
-    equations, variables = build_equations(traces)
-    result = solve(equations, variables)
-    determined = result["determined"]
-    failures = residual_check(equations, determined)
-    payload = {
-        "traces": [t["label"] for t in traces],
-        "equations": len(equations),
-        "variables": result["variables"],
-        "rank": result["rank"],
-        "consistent": result["consistent"],
-        "determined": {
-            key: (int(value) if value.denominator == 1 else str(value))
-            for key, value in sorted(determined.items())
-        },
-        "free": result["free"],
-        "residual_failures": failures,
-    }
-    with open(args.out, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=1)
-        handle.write("\n")
-    print(
-        f"equations={len(equations)} variables={result['variables']} "
-        f"rank={result['rank']} consistent={result['consistent']} "
-        f"determined={len(determined)} residual_failures={len(failures)}"
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    ParserInfo = Argparse.ArgumentParser()
+    ParserInfo.add_argument('--segments', default='re/data/segments')
+    ParserInfo.add_argument('--out', default='re/data/body_scalars.json')
+    ParserInfo.add_argument('--labels', default='')
+    ArgValues = ParserInfo.parse_args()
+    Traces = LoadTraces(ArgValues.segments)
+    if ArgValues.labels:
+        Wanted = set(ArgValues.labels.split(','))
+        Traces = [TextData for TextData in Traces if TextData['label'] in Wanted]
+    Equations, ValuesInfo = BuildEquations(Traces)
+    Result = Solve(Equations, ValuesInfo)
+    Determined = Result['determined']
+    Failures = ResidualCheck(Equations, Determined)
+    PayloadInfo = {'traces': [TextData['label'] for TextData in Traces], 'equations': len(Equations), 'variables': Result['variables'], 'rank': Result['rank'], 'consistent': Result['consistent'], 'determined': {KeyName: int(ValueInfo) if ValueInfo.denominator == 1 else str(ValueInfo) for KeyName, ValueInfo in sorted(Determined.items())}, 'free': Result['free'], 'residual_failures': Failures}
+    with open(ArgValues.out, 'w', encoding='utf-8') as Handle:
+        JsonData.dump(PayloadInfo, Handle, indent=1)
+        Handle.write('\n')
+    print(f"equations={len(Equations)} variables={Result['variables']} rank={Result['rank']} consistent={Result['consistent']} determined={len(Determined)} residual_failures={len(Failures)}")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

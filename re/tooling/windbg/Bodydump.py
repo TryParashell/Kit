@@ -1,38 +1,43 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from pathlib import Path as PathInfo
+import sys as System
 
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Blocks as Blockslib
 
-import blocks as blockslib
 
-
-def main() -> int:
-    stream = sys.argv[1]
-    wanted = {int(value) for value in sys.argv[2].split(",")}
-    rows = sys.argv[3:]
-    for position in range(0, len(rows), 3):
-        label = rows[position]
-        part = Path(rows[position + 1]).resolve()
-        log = Path(rows[position + 2]).resolve()
-        model = blockslib.load_model(part, log, stream)
-        print(f"== {label} nodes={len(model.nodes)}")
-        for index in sorted(wanted):
-            if index >= len(model.nodes):
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    Stream = System.argv[1]
+    Wanted = {int(ValueInfo) for ValueInfo in System.argv[2].split(',')}
+    GetRows = System.argv[3:]
+    for PosInfoInfo in range(0, len(GetRows), 3):
+        LabelInfo = GetRows[PosInfoInfo]
+        PartInfoInfo = PathInfo(GetRows[PosInfoInfo + 1]).resolve()
+        LogInfo = PathInfo(GetRows[PosInfoInfo + 2]).resolve()
+        ModelInfo = Blockslib.LoadModel(PartInfoInfo, LogInfo, Stream)
+        print(f'== {LabelInfo} nodes={len(ModelInfo.nodes)}')
+        for IndexData in sorted(Wanted):
+            if IndexData >= len(ModelInfo.nodes):
                 continue
-            node = model.nodes[index]
-            print(
-                f"  [{index}] {node.kind} {node.class_name or '-'} "
-                f"len={len(node.body)} literal={node.literal:#06x}"
-            )
-            print("    " + node.body.hex())
+            NodeInfoInfo = ModelInfo.nodes[IndexData]
+            print(f"  [{IndexData}] {NodeInfoInfo.kind} {NodeInfoInfo.class_name or '-'} len={len(NodeInfoInfo.body)} literal={NodeInfoInfo.literal:#06x}")
+            print('    ' + NodeInfoInfo.body.hex())
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

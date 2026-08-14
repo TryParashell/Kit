@@ -11,7 +11,7 @@ from dataclasses import replace as Replace
 import hashlib as Hashlib
 from io import BytesIO as BytesIo, StringIO as StringIo
 import json as JsonValue
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import struct as Struct
 from xml.etree import ElementTree as XmlTree
 import zipfile as Zipfile
@@ -31,7 +31,7 @@ from tests.interchange.document.DocumentTests import document as DocValue
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
 # this binding exists because shared behavior needs one stable value
-KRootValue = PathValue(__file__).parents[3]
+KRootValue = FilePath(__file__).parents[3]
 
 # this binding exists because shared behavior needs one stable value
 KCatparts = KRootValue / 'examples' / '.CATPart'
@@ -1107,7 +1107,7 @@ globals()['PART_DOCUMENT_TYPE'] = PartDocType
 globals()['PRODUCT_DOCUMENT_TYPE'] = ProductDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['ROOT'] = KRootValue

@@ -1,185 +1,175 @@
-import json
-import pathlib
-import re
-import struct
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "src"))
+import json as JsonData
+import pathlib as Pathlib
+import re as Regex
+import struct as Struct
+import sys as System
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = Pathlib.Path(__file__).resolve().parents[3]
+System.path.insert(0, str(KRootInfo / 'src'))
 from convert.adapters.solidworks.container.Container import SldprtArchive
 
-TRACE = ROOT / "re/data/segments"
-STREAM = "Contents/Config-0-ResolvedFeatures"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KTrace = KRootInfo / 're/data/segments'
 
-WIDTHS = {
-    "u8": 1,
-    "i8": 1,
-    "u16": 2,
-    "i16": 2,
-    "u32": 4,
-    "i32": 4,
-    "f32": 4,
-    "u64": 8,
-    "i64": 8,
-    "f64": 8,
-}
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KStream = 'Contents/Config-0-ResolvedFeatures'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KWidths = {'u8': 1, 'i8': 1, 'u16': 2, 'i16': 2, 'u32': 4, 'i32': 4, 'f32': 4, 'u64': 8, 'i64': 8, 'f64': 8}
 
 
-def load(label):
-    doc = json.loads((TRACE / f"segments_{label}.json").read_text())
-    part = pathlib.Path(doc["part"])
-    if not part.exists():
-        for base in (
-            ROOT / ".rescratch/corpus/parts",
-            ROOT / ".rescratch/corpus2",
-            ROOT / ".rescratch/trace/parts",
-            ROOT / "examples",
-            ROOT / ".rescratch",
-        ):
-            hits = list(base.rglob(part.name))
-            if hits:
-                part = hits[0]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def LoadData(LabelInfo):
+    DocInfo = JsonData.loads((KTrace / f'segments_{LabelInfo}.json').read_text())
+    PartInfoInfo = Pathlib.Path(DocInfo['part'])
+    if not PartInfoInfo.exists():
+        for BaseInfo in (KRootInfo / '.rescratch/corpus/parts', KRootInfo / '.rescratch/corpus2', KRootInfo / '.rescratch/trace/parts', KRootInfo / 'examples', KRootInfo / '.rescratch'):
+            HitsInfo = list(BaseInfo.rglob(PartInfoInfo.name))
+            if HitsInfo:
+                PartInfoInfo = HitsInfo[0]
                 break
-    blob = SldprtArchive.open(part).require(STREAM)
-    return doc, doc["segments"], blob, part
+    ByteBlob = SldprtArchive.open(PartInfoInfo).require(KStream)
+    return (DocInfo, DocInfo['segments'], ByteBlob, PartInfoInfo)
 
 
-def resolve_name(segs, seg):
-    name = seg["class_name"]
-    m = re.match(r"backref->(\d+)$", name)
-    if m:
-        return segs[int(m.group(1))]["class_name"]
-    return name
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ResolveName(SegsInfo, SegInfo):
+    NameTextInfo = SegInfo['class_name']
+    MatchDataInfo = Regex.match('backref->(\\d+)$', NameTextInfo)
+    if MatchDataInfo:
+        return SegsInfo[int(MatchDataInfo.group(1))]['class_name']
+    return NameTextInfo
 
 
-def children(segs, index):
-    return [s for s in segs if s["parent"] == index]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Children(SegsInfo, IndexData):
+    return [SourceData for SourceData in SegsInfo if SourceData['parent'] == IndexData]
 
 
-def gaps(segs, index):
-    parent = segs[index]
-    kids = children(segs, index)
-    cursor = parent["offset"] + parent["header"]
-    out = []
-    for kid in kids:
-        if kid["offset"] > cursor:
-            out.append(("scalars", cursor, kid["offset"] - cursor))
-        name = resolve_name(segs, kid)
-        if kid["kind"] in ("definition", "classref"):
-            out.append(("object", kid["index"], name, kid["kind"], kid["tag"]))
-            cursor = kid["scope_end"]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def FindGaps(SegsInfo, IndexData):
+    Parent = SegsInfo[IndexData]
+    KidsInfo = Children(SegsInfo, IndexData)
+    Cursor = Parent['offset'] + Parent['header']
+    OutputDataInfo = []
+    for KidInfo in KidsInfo:
+        if KidInfo['offset'] > Cursor:
+            OutputDataInfo.append(('scalars', Cursor, KidInfo['offset'] - Cursor))
+        NameTextInfo = ResolveName(SegsInfo, KidInfo)
+        if KidInfo['kind'] in ('definition', 'classref'):
+            OutputDataInfo.append(('object', KidInfo['index'], NameTextInfo, KidInfo['kind'], KidInfo['tag']))
+            Cursor = KidInfo['scope_end']
         else:
-            out.append(("object", kid["index"], name, kid["kind"], kid["tag"]))
-            cursor = kid["offset"] + 2
-            if kid["scope_end"] > cursor:
-                out.append(("scalars", cursor, kid["scope_end"] - cursor))
-                cursor = kid["scope_end"]
-    if parent["scope_end"] > cursor:
-        out.append(("scalars", cursor, parent["scope_end"] - cursor))
-    return out
+            OutputDataInfo.append(('object', KidInfo['index'], NameTextInfo, KidInfo['kind'], KidInfo['tag']))
+            Cursor = KidInfo['offset'] + 2
+            if KidInfo['scope_end'] > Cursor:
+                OutputDataInfo.append(('scalars', Cursor, KidInfo['scope_end'] - Cursor))
+                Cursor = KidInfo['scope_end']
+    if Parent['scope_end'] > Cursor:
+        OutputDataInfo.append(('scalars', Cursor, Parent['scope_end'] - Cursor))
+    return OutputDataInfo
 
 
-def find(segs, name, kind=None):
-    hits = []
-    for seg in segs:
-        if resolve_name(segs, seg) != name:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def FindItem(SegsInfo, NameTextInfo, KindNameInfo=None):
+    HitsInfo = []
+    for SegInfo in SegsInfo:
+        if ResolveName(SegsInfo, SegInfo) != NameTextInfo:
             continue
-        if kind and seg["kind"] != kind:
+        if KindNameInfo and SegInfo['kind'] != KindNameInfo:
             continue
-        hits.append(seg["index"])
-    return hits
+        HitsInfo.append(SegInfo['index'])
+    return HitsInfo
 
 
-def show(label, name, kind="definition"):
-    doc, segs, blob, part = load(label)
-    for index in find(segs, name, kind):
-        parent = segs[index]
-        print(
-            f"--- {label} {part.name} {name} node={index} "
-            f"span={parent['offset']}..{parent['scope_end']}"
-        )
-        for item in gaps(segs, index):
-            if item[0] == "scalars":
-                _, off, size = item
-                if size == 0:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ShowData(LabelInfo, NameTextInfo, KindNameInfo='definition'):
+    DocInfo, SegsInfo, ByteBlob, PartInfoInfo = LoadData(LabelInfo)
+    for IndexData in FindItem(SegsInfo, NameTextInfo, KindNameInfo):
+        Parent = SegsInfo[IndexData]
+        print(f"--- {LabelInfo} {PartInfoInfo.name} {NameTextInfo} node={IndexData} span={Parent['offset']}..{Parent['scope_end']}")
+        for ItemData in FindGaps(SegsInfo, IndexData):
+            if ItemData[0] == 'scalars':
+                SpareValue, OffInfo, ByteSize = ItemData
+                if ByteSize == 0:
                     continue
-                raw = blob[off : off + size]
-                print(f"    scalars off={off:6d} n={size:4d} {raw.hex(' ')}")
-                decode(raw)
+                RawData = ByteBlob[OffInfo:OffInfo + ByteSize]
+                print(f"    scalars off={OffInfo:6d} n={ByteSize:4d} {RawData.hex(' ')}")
+                Decode(RawData)
             else:
-                kid, kname, kkind, ktag = item[1], item[2], item[3], item[4]
-                seg = segs[kid]
-                span = (
-                    seg["scope_end"] - seg["offset"]
-                    if kkind in ("definition", "classref")
-                    else 2
-                )
-                print(
-                    f"    OBJECT  off={seg['offset']:6d} "
-                    f"span={span:5d} tag=0x{ktag:04x} {kkind:10s} {kname}"
-                )
+                KidInfo, Kname, Kkind, KtagInfo = (ItemData[1], ItemData[2], ItemData[3], ItemData[4])
+                SegInfo = SegsInfo[KidInfo]
+                SpanInfo = SegInfo['scope_end'] - SegInfo['offset'] if Kkind in ('definition', 'classref') else 2
+                print(f"    OBJECT  off={SegInfo['offset']:6d} span={SpanInfo:5d} tag=0x{KtagInfo:04x} {Kkind:10s} {Kname}")
 
 
-def decode(raw):
-    if len(raw) >= 8:
-        for pos in range(0, len(raw) - 7):
-            value = struct.unpack_from("<d", raw, pos)[0]
-            if value != 0.0 and (1e-7 < abs(value) < 1e7):
-                print(f"        f64@{pos}: {value!r}")
-    for pos in range(0, len(raw) - 3, 1):
-        value = struct.unpack_from("<I", raw, pos)[0]
-        if 0 < value < 1 << 20 and pos % 2 == 0:
-            print(f"        u32@{pos}: {value}")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Decode(RawData):
+    if len(RawData) >= 8:
+        for PosInfo in range(0, len(RawData) - 7):
+            ValueInfo = Struct.unpack_from('<d', RawData, PosInfo)[0]
+            if ValueInfo != 0.0 and 1e-07 < abs(ValueInfo) < 10000000.0:
+                print(f'        f64@{PosInfo}: {ValueInfo!r}')
+    for PosInfo in range(0, len(RawData) - 3, 1):
+        ValueInfo = Struct.unpack_from('<I', RawData, PosInfo)[0]
+        if 0 < ValueInfo < 1 << 20 and PosInfo % 2 == 0:
+            print(f'        u32@{PosInfo}: {ValueInfo}')
 
 
-def check(label, name, spec, kind="definition"):
-    doc, segs, blob, part = load(label)
-    results = []
-    for index in find(segs, name, kind):
-        items = gaps(segs, index)
-        cursor = 0
-        ok = True
-        detail = []
-        for item in items:
-            if item[0] == "object":
-                if cursor >= len(spec) or spec[cursor][0] != "obj":
-                    ok = False
-                    detail.append(
-                        f"expected obj at spec[{cursor}] got {spec[cursor:cursor + 1]}"
-                    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Check(LabelInfo, NameTextInfo, SpecInfo, KindNameInfo='definition'):
+    DocInfo, SegsInfo, ByteBlob, PartInfoInfo = LoadData(LabelInfo)
+    Results = []
+    for IndexData in FindItem(SegsInfo, NameTextInfo, KindNameInfo):
+        Items = FindGaps(SegsInfo, IndexData)
+        Cursor = 0
+        OkInfo = True
+        Detail = []
+        for ItemData in Items:
+            if ItemData[0] == 'object':
+                if Cursor >= len(SpecInfo) or SpecInfo[Cursor][0] != 'obj':
+                    OkInfo = False
+                    Detail.append(f'expected obj at spec[{Cursor}] got {SpecInfo[Cursor:Cursor + 1]}')
                     break
-                detail.append(f"obj {spec[cursor][1]} <- {item[2]} ({item[3]})")
-                cursor += 1
+                Detail.append(f'obj {SpecInfo[Cursor][1]} <- {ItemData[2]} ({ItemData[3]})')
+                Cursor += 1
                 continue
-            _, off, size = item
-            used = 0
-            while used < size and cursor < len(spec) and spec[cursor][0] != "obj":
-                kind_name, field = spec[cursor][0], spec[cursor][1]
-                width = WIDTHS[kind_name]
-                if used + width > size:
+            SpareValue, OffInfo, ByteSize = ItemData
+            UsedInfo = 0
+            while UsedInfo < ByteSize and Cursor < len(SpecInfo) and (SpecInfo[Cursor][0] != 'obj'):
+                KindNameData, FieldInfo = (SpecInfo[Cursor][0], SpecInfo[Cursor][1])
+                WidthInfo = KWidths[KindNameData]
+                if UsedInfo + WidthInfo > ByteSize:
                     break
-                detail.append(f"{kind_name} {field} @{off + used}")
-                used += width
-                cursor += 1
-            if used != size:
-                ok = False
-                detail.append(f"gap mismatch at off={off}: gap={size} consumed={used}")
+                Detail.append(f'{KindNameData} {FieldInfo} @{OffInfo + UsedInfo}')
+                UsedInfo += WidthInfo
+                Cursor += 1
+            if UsedInfo != ByteSize:
+                OkInfo = False
+                Detail.append(f'gap mismatch at off={OffInfo}: gap={ByteSize} consumed={UsedInfo}')
                 break
-        if ok and cursor != len(spec):
-            ok = False
-            detail.append(f"spec has {len(spec) - cursor} unconsumed items")
-        results.append((index, ok, detail))
-    return results
+        if OkInfo and Cursor != len(SpecInfo):
+            OkInfo = False
+            Detail.append(f'spec has {len(SpecInfo) - Cursor} unconsumed items')
+        Results.append((IndexData, OkInfo, Detail))
+    return Results
 
 
-def main():
-    if len(sys.argv) < 3:
-        print("Layout.py <label> <ClassName> [kind]")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    if len(System.argv) < 3:
+        print('Layout.py <label> <ClassName> [kind]')
         return
-    kind = sys.argv[3] if len(sys.argv) > 3 else "definition"
-    show(sys.argv[1], sys.argv[2], kind)
-
-
-if __name__ == "__main__":
-    main()
+    KindNameInfo = System.argv[3] if len(System.argv) > 3 else 'definition'
+    ShowData(System.argv[1], System.argv[2], KindNameInfo)
+if __name__ == '__main__':
+    MainRunInfo()

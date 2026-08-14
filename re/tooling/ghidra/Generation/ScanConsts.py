@@ -1,57 +1,58 @@
-import pathlib
-import struct
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-SW = pathlib.Path(r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS")
+import pathlib as Pathlib
+import struct as Struct
+import sys as System
 
-VALUES = [
-    ("file_id_default", 0xEC6E2386),
-    ("file_id_alt", 0x715BE98F),
-    ("local_1", 0x64D80045),
-    ("central_1", 0xAE0D4EF6),
-    ("end_1", 0x54CE179A),
-    ("local_2", 0xA1909B1F),
-    ("central_2", 0xA576970F),
-    ("end_2", 0x7A004720),
-]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSwInfo = Pathlib.Path('C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS')
 
-
-def needles():
-    out = []
-    for name, value in VALUES:
-        out.append((name + "_le", struct.pack("<I", value)))
-        out.append((name + "_be", struct.pack(">I", value)))
-    return out
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KValues = [('file_id_default', 3966641030), ('file_id_alt', 1901848975), ('local_1', 1691877445), ('central_1', 2920107766), ('end_1', 1422792602), ('local_2', 2710608671), ('central_2', 2776012559), ('end_2', 2046838560)]
 
 
-def main():
-    roots = [SW]
-    if len(sys.argv) > 1:
-        roots = [pathlib.Path(a) for a in sys.argv[1:]]
-    pats = needles()
-    for root in roots:
-        files = sorted(root.rglob("*.dll")) + sorted(root.rglob("*.exe"))
-        for path in files:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Needles():
+    OutputDataInfo = []
+    for NameTextInfo, ValueInfo in KValues:
+        OutputDataInfo.append((NameTextInfo + '_le', Struct.pack('<I', ValueInfo)))
+        OutputDataInfo.append((NameTextInfo + '_be', Struct.pack('>I', ValueInfo)))
+    return OutputDataInfo
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    Roots = [KSwInfo]
+    if len(System.argv) > 1:
+        Roots = [Pathlib.Path(FirstValue) for FirstValue in System.argv[1:]]
+    PatsInfo = Needles()
+    for RootPath in Roots:
+        Files = sorted(RootPath.rglob('*.dll')) + sorted(RootPath.rglob('*.exe'))
+        for PathInfoData in Files:
             try:
-                blob = path.read_bytes()
+                ByteBlob = PathInfoData.read_bytes()
             except OSError:
                 continue
-            hits = []
-            for name, pat in pats:
-                start = 0
+            HitsInfo = []
+            for NameTextInfo, PatInfo in PatsInfo:
+                StartRun = 0
                 while True:
-                    idx = blob.find(pat, start)
-                    if idx < 0:
+                    IdxInfo = ByteBlob.find(PatInfo, StartRun)
+                    if IdxInfo < 0:
                         break
-                    hits.append((name, idx))
-                    start = idx + 1
-                    if len(hits) > 40:
+                    HitsInfo.append((NameTextInfo, IdxInfo))
+                    StartRun = IdxInfo + 1
+                    if len(HitsInfo) > 40:
                         break
-            if hits:
-                print(path.name, len(blob))
-                for name, idx in hits[:40]:
-                    print(f"   {name} @ 0x{idx:x}")
-
-
-if __name__ == "__main__":
-    main()
+            if HitsInfo:
+                print(PathInfoData.name, len(ByteBlob))
+                for NameTextInfo, IdxInfo in HitsInfo[:40]:
+                    print(f'   {NameTextInfo} @ 0x{IdxInfo:x}')
+if __name__ == '__main__':
+    MainRunInfo()

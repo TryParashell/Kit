@@ -14,7 +14,7 @@ import inspect as Inspect
 import io as IoStream
 import json as JsonValue
 import math as MathValue
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import struct as Struct
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
@@ -36,10 +36,10 @@ from tests.interchange.document.DocumentTests import document as NeutralDoc
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
 # this binding exists because shared behavior needs one stable value
-KSample = PathValue(__file__).parents[3] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
+KSample = FilePath(__file__).parents[3] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
 
 # this binding exists because shared behavior needs one stable value
-KFreecadExamples = PathValue(__file__).parents[4] / 'Parashell' / '.pixi' / 'envs' / 'default' / 'Library' / 'data' / 'examples'
+KFreecadExamples = FilePath(__file__).parents[4] / 'Parashell' / '.pixi' / 'envs' / 'default' / 'Library' / 'data' / 'examples'
 
 # this definition exists because focused behavior needs one stable owner
 def LineEntity(IdValue: str, Start: tuple[float, float], EndValue: tuple[float, float]) -> SketchEntity:
@@ -2723,7 +2723,7 @@ globals()['Parameter'] = Param
 globals()['ParameterValue'] = ParamValue
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['PointGeometry'] = PointGeom

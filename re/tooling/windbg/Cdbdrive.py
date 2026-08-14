@@ -7,159 +7,152 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import contextlib as Contextlib
+from dataclasses import dataclass as DataClass
+from pathlib import Path as PathInfo
+import re as Regex
+import subprocess as Subprocess
+import threading as Threading
+import time as TimeInfo
 
-import contextlib
-from dataclasses import dataclass
-from pathlib import Path
-import re
-import subprocess
-import threading
-import time
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCdbInfo = PathInfo('C:\\Users\\odin\\AppData\\Local\\Microsoft\\WindowsApps\\cdbX64.exe')
 
-CDB = Path(r"C:\Users\odin\AppData\Local\Microsoft\WindowsApps\cdbX64.exe")
-SLDWORKS = Path(r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SLDWORKS.exe")
-SOLIDWORKS_DIR = SLDWORKS.parent
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSldworks = PathInfo('C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\SLDWORKS.exe')
 
-# tracked helper processes must be closed between isolated debugger sessions
-PROCESSES = (
-    "cdb.exe",
-    "cdbX64.exe",
-    "SLDWORKS.exe",
-    "sldworks_util.exe",
-    "swMsgHandler.exe",
-    "SLDWORKS_Splash.exe",
-    "SLDEXITAPP.exe",
-    "WerFault.exe",
-)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSolidworksDir = KSldworks.parent
 
-DIALOG_CLASS = "#32770"
-BUTTONS = ("OK", "&OK", "Yes", "&Yes")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KProcesses = ('cdb.exe', 'cdbX64.exe', 'SLDWORKS.exe', 'sldworks_util.exe', 'swMsgHandler.exe', 'SLDWORKS_Splash.exe', 'SLDEXITAPP.exe', 'WerFault.exe')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KDialogClass = '#32770'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KButtons = ('OK', '&OK', 'Yes', '&Yes')
 
 
-@dataclass(frozen=True, slots=True)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class RunResult:
-    log: Path
-    seconds: float
-    markers: int
-    reason: str
+    LogInfo: PathInfo
+    Seconds: float
+    Markers: int
+    Reason: str
+    KAliasNames = {'log': 'LogInfo', 'seconds': 'Seconds', 'markers': 'Markers', 'reason': 'Reason'}
 
 
-def sweep(settle: float = 4.0) -> None:
-    for name in PROCESSES:
-        subprocess.run(
-            ["taskkill", "/F", "/IM", name], capture_output=True, check=False
-        )
-    time.sleep(settle)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
 
 
-# modal prompts must close automatically so unattended oracle traces reach deterministic completion
-def _watch_dialogs(stop: threading.Event) -> None:
-    import ctypes
-    import ctypes.wintypes as wintypes
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Sweep(Settle: float=4.0) -> None:
+    for NameTextInfo in KProcesses:
+        Subprocess.run(['taskkill', '/F', '/IM', NameTextInfo], capture_output=True, check=False)
+    TimeInfo.sleep(Settle)
 
-    user32 = ctypes.windll.user32
-    prototype = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
 
-    def class_name(handle: int) -> str:
-        buffer = ctypes.create_unicode_buffer(256)
-        user32.GetClassNameW(handle, buffer, 256)
-        return buffer.value
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WatchDialogs(StopInfo: Threading.Event) -> None:
+    import ctypes as Ctypes
+    import ctypes.wintypes as Wintypes
+    UserThirtyTwo = Ctypes.windll.user32
+    Prototype = Ctypes.WINFUNCTYPE(Ctypes.c_bool, Wintypes.HWND, Wintypes.LPARAM)
 
-    def window_text(handle: int) -> str:
-        length = user32.GetWindowTextLengthW(handle)
-        buffer = ctypes.create_unicode_buffer(length + 1)
-        user32.GetWindowTextW(handle, buffer, length + 1)
-        return buffer.value
 
-    def press(dialog: int) -> None:
-        buttons: list[int] = []
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def ClassNameData(Handle: int) -> str:
+        Buffer = Ctypes.create_unicode_buffer(256)
+        UserThirtyTwo.GetClassNameW(Handle, Buffer, 256)
+        return Buffer.value
 
-        def child(handle: int, _: int) -> bool:
-            if class_name(handle) == "Button" and window_text(handle) in BUTTONS:
-                buttons.append(handle)
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def WindowTextInfo(Handle: int) -> str:
+        Length = UserThirtyTwo.GetWindowTextLengthW(Handle)
+        Buffer = Ctypes.create_unicode_buffer(Length + 1)
+        UserThirtyTwo.GetWindowTextW(Handle, Buffer, Length + 1)
+        return Buffer.value
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def Press(Dialog: int) -> None:
+        Buttons: list[int] = []
+
+
+        # needed to keep reverse engineering responsibilities isolated and maintainable
+        def IsChild(Handle: int, SpareValue: int) -> bool:
+            if ClassNameData(Handle) == 'Button' and WindowTextInfo(Handle) in KButtons:
+                Buttons.append(Handle)
             return True
+        UserThirtyTwo.EnumChildWindows(Dialog, Prototype(IsChild), 0)
+        for Handle in Buttons[:1]:
+            UserThirtyTwo.SendMessageW(Handle, 245, 0, 0)
+    while not StopInfo.is_set():
+        Dialogs: list[int] = []
 
-        user32.EnumChildWindows(dialog, prototype(child), 0)
-        for handle in buttons[:1]:
-            user32.SendMessageW(handle, 0x00F5, 0, 0)
 
-    while not stop.is_set():
-        dialogs: list[int] = []
-
-        def top(handle: int, _: int) -> bool:
-            if class_name(handle) == DIALOG_CLASS and user32.IsWindowVisible(handle):
-                dialogs.append(handle)
+        # needed to keep reverse engineering responsibilities isolated and maintainable
+        def IsTopInfo(Handle: int, SpareValue: int) -> bool:
+            if ClassNameData(Handle) == KDialogClass and UserThirtyTwo.IsWindowVisible(Handle):
+                Dialogs.append(Handle)
             return True
+        with Contextlib.suppress(OSError):
+            UserThirtyTwo.EnumWindows(Prototype(IsTopInfo), 0)
+            for Dialog in Dialogs:
+                Press(Dialog)
+        StopInfo.wait(0.75)
 
-        with contextlib.suppress(OSError):
-            user32.EnumWindows(prototype(top), 0)
-            for dialog in dialogs:
-                press(dialog)
-        stop.wait(0.75)
 
-
-# debugger sessions need bounded cleanup so failed traces cannot poison later oracle runs
-def run(
-    script: Path,
-    log: Path,
-    part: Path | None,
-    *,
-    marker: str,
-    target_markers: int = 0,
-    hard_deadline: float = 600.0,
-    quiet_seconds: float = 45.0,
-) -> RunResult:
-    sweep()
-    log.parent.mkdir(parents=True, exist_ok=True)
-    if log.exists():
-        log.unlink()
-    command = [str(CDB), "-logo", str(log), "-c", f"$$<{script.name}", str(SLDWORKS)]
-    if part is not None:
-        command.append(str(part.resolve()))
-    stop = threading.Event()
-    watcher = threading.Thread(target=_watch_dialogs, args=(stop,), daemon=True)
-    watcher.start()
-    started = time.monotonic()
-    process = subprocess.Popen(
-        command,
-        cwd=str(script.parent),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL,
-    )
-    pattern = re.compile(marker, re.MULTILINE)
-    count = 0
-    last_change = time.monotonic()
-    reason = "deadline"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RunTask(Script: PathInfo, LogInfo: PathInfo, PartInfoInfo: PathInfo | None, *, Marker: str, TargetMarkers: int=0, HardDeadline: float=600.0, QuietSeconds: float=45.0) -> RunResult:
+    Sweep()
+    LogInfo.parent.mkdir(parents=True, exist_ok=True)
+    if LogInfo.exists():
+        LogInfo.unlink()
+    Command = [str(KCdbInfo), '-logo', str(LogInfo), '-c', f'$$<{Script.name}', str(KSldworks)]
+    if PartInfoInfo is not None:
+        Command.append(str(PartInfoInfo.resolve()))
+    StopInfo = Threading.Event()
+    WatcherMut = Threading.Thread(target=WatchDialogs, args=(StopInfo,), daemon=True)
+    WatcherMut.start()
+    Started = TimeInfo.monotonic()
+    Process = Subprocess.Popen(Command, cwd=str(Script.parent), stdout=Subprocess.DEVNULL, stderr=Subprocess.DEVNULL, stdin=Subprocess.DEVNULL)
+    Pattern = Regex.compile(Marker, Regex.MULTILINE)
+    CountInfo = 0
+    LastChange = TimeInfo.monotonic()
+    Reason = 'deadline'
     try:
         while True:
-            time.sleep(2.0)
-            text = log.read_text(errors="replace") if log.exists() else ""
-            found = len(pattern.findall(text))
-            if found != count:
-                count = found
-                last_change = time.monotonic()
-            if process.poll() is not None:
-                reason = "cdb-exited"
+            TimeInfo.sleep(2.0)
+            TextValueData = LogInfo.read_text(errors='replace') if LogInfo.exists() else ''
+            Found = len(Pattern.findall(TextValueData))
+            if Found != CountInfo:
+                CountInfo = Found
+                LastChange = TimeInfo.monotonic()
+            if Process.poll() is not None:
+                Reason = 'cdb-exited'
                 break
-            if target_markers and count >= target_markers:
-                reason = "target-markers"
+            if TargetMarkers and CountInfo >= TargetMarkers:
+                Reason = 'target-markers'
                 break
-            if count and time.monotonic() - last_change >= quiet_seconds:
-                reason = "quiet"
+            if CountInfo and TimeInfo.monotonic() - LastChange >= QuietSeconds:
+                Reason = 'quiet'
                 break
-            if time.monotonic() - started >= hard_deadline:
-                reason = "deadline"
+            if TimeInfo.monotonic() - Started >= HardDeadline:
+                Reason = 'deadline'
                 break
     finally:
-        stop.set()
-        with contextlib.suppress(OSError):
-            process.terminate()
-        time.sleep(1.0)
-        sweep()
-    return RunResult(
-        log=log,
-        seconds=time.monotonic() - started,
-        markers=count,
-        reason=reason,
-    )
+        StopInfo.set()
+        with Contextlib.suppress(OSError):
+            Process.terminate()
+        TimeInfo.sleep(1.0)
+        Sweep()
+    return RunResult(LogInfo=LogInfo, Seconds=TimeInfo.monotonic() - Started, Markers=CountInfo, Reason=Reason)

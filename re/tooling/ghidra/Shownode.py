@@ -1,48 +1,45 @@
-import struct
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-import layout
+import struct as Struct
+import sys as System
+import Layout as Layout
 
 
-def dump(label, name, kind, limit):
-    doc, segs, blob, part = layout.load(label)
-    print(f"=== {label} {part.name} {name} {kind}")
-    hits = layout.find(segs, name, kind)
-    for index in hits[:limit]:
-        parent = segs[index]
-        print(
-            f"--- node={index} kind={parent['kind']} "
-            f"span={parent['offset']}..{parent['scope_end']} hdr={parent['header']}"
-        )
-        for item in layout.gaps(segs, index):
-            if item[0] == "scalars":
-                off, size = item[1], item[2]
-                raw = blob[off : off + size]
-                head = raw[:96].hex(" ")
-                print(f"  scalars off={off} n={size} {head}")
-                for pos in range(0, min(size, 96) - 3, 4):
-                    value = struct.unpack_from("<I", raw, pos)[0]
-                    print(f"      u32@{pos}=0x{value:08x} {value}")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def DumpData(LabelInfo, NameTextInfo, KindNameInfo, Limit):
+    DocInfo, SegsInfo, ByteBlob, PartInfoInfo = Layout.LoadData(LabelInfo)
+    print(f'=== {LabelInfo} {PartInfoInfo.name} {NameTextInfo} {KindNameInfo}')
+    HitsInfo = Layout.FindItem(SegsInfo, NameTextInfo, KindNameInfo)
+    for IndexData in HitsInfo[:Limit]:
+        Parent = SegsInfo[IndexData]
+        print(f"--- node={IndexData} kind={Parent['kind']} span={Parent['offset']}..{Parent['scope_end']} hdr={Parent['header']}")
+        for ItemData in Layout.FindGaps(SegsInfo, IndexData):
+            if ItemData[0] == 'scalars':
+                OffInfo, ByteSize = (ItemData[1], ItemData[2])
+                RawData = ByteBlob[OffInfo:OffInfo + ByteSize]
+                HeadInfo = RawData[:96].hex(' ')
+                print(f'  scalars off={OffInfo} n={ByteSize} {HeadInfo}')
+                for PosInfo in range(0, min(ByteSize, 96) - 3, 4):
+                    ValueInfo = Struct.unpack_from('<I', RawData, PosInfo)[0]
+                    print(f'      u32@{PosInfo}=0x{ValueInfo:08x} {ValueInfo}')
             else:
-                kid = segs[item[1]]
-                span = (
-                    kid["scope_end"] - kid["offset"]
-                    if item[3] in ("definition", "classref")
-                    else 2
-                )
-                print(
-                    f"  OBJ off={kid['offset']} span={span} "
-                    f"tag=0x{item[4]:04x} {item[3]} {item[2]}"
-                )
+                KidInfo = SegsInfo[ItemData[1]]
+                SpanInfo = KidInfo['scope_end'] - KidInfo['offset'] if ItemData[3] in ('definition', 'classref') else 2
+                print(f"  OBJ off={KidInfo['offset']} span={SpanInfo} tag=0x{ItemData[4]:04x} {ItemData[3]} {ItemData[2]}")
 
 
-def main():
-    label = sys.argv[1]
-    name = sys.argv[2]
-    kind = sys.argv[3] if len(sys.argv) > 3 else "definition"
-    limit = int(sys.argv[4]) if len(sys.argv) > 4 else 2
-    dump(label, name, kind, limit)
-
-
-if __name__ == "__main__":
-    main()
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    LabelInfo = System.argv[1]
+    NameTextInfo = System.argv[2]
+    KindNameInfo = System.argv[3] if len(System.argv) > 3 else 'definition'
+    Limit = int(System.argv[4]) if len(System.argv) > 4 else 2
+    DumpData(LabelInfo, NameTextInfo, KindNameInfo, Limit)
+if __name__ == '__main__':
+    MainRunInfo()

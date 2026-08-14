@@ -1,59 +1,71 @@
-import json
-import pathlib
-import re
-import sys
-from collections import defaultdict
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]
-TRACE = ROOT / "re/data/segments"
+import json as JsonData
+import pathlib as Pathlib
+import re as Regex
+import sys as System
+from collections import defaultdict as Defaultdict
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = Pathlib.Path(__file__).resolve().parents[3]
 
-def load():
-    out = {}
-    for path in sorted(TRACE.glob("segments_*.json")):
-        out[path.stem[len("segments_") :]] = json.loads(path.read_text())
-    return out
-
-
-def resolve(doc):
-    segs = doc["segments"]
-    by_obj = {}
-    for seg in segs:
-        if seg["kind"] in ("definition", "classref"):
-            by_obj[seg["object_index"]] = seg
-    names = []
-    for seg in segs:
-        name = seg["class_name"]
-        m = re.match(r"backref->(\d+)$", name)
-        if m:
-            tgt = segs[int(m.group(1))]
-            name = tgt["class_name"]
-        names.append(name)
-    return segs, names
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KTrace = KRootInfo / 're/data/segments'
 
 
-def main():
-    want = [a for a in sys.argv[1:]]
-    docs = load()
-    table = defaultdict(lambda: defaultdict(list))
-    for label, doc in docs.items():
-        segs, names = resolve(doc)
-        for seg, name in zip(segs, names):
-            if want and not any(w.lower() in name.lower() for w in want):
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def LoadData():
+    OutputDataInfo = {}
+    for PathInfoData in sorted(KTrace.glob('segments_*.json')):
+        OutputDataInfo[PathInfoData.stem[len('segments_'):]] = JsonData.loads(PathInfoData.read_text())
+    return OutputDataInfo
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ResolveInfo(DocInfo):
+    SegsInfo = DocInfo['segments']
+    ByObj = {}
+    for SegInfo in SegsInfo:
+        if SegInfo['kind'] in ('definition', 'classref'):
+            ByObj[SegInfo['object_index']] = SegInfo
+    Names = []
+    for SegInfo in SegsInfo:
+        NameTextInfo = SegInfo['class_name']
+        MatchDataInfo = Regex.match('backref->(\\d+)$', NameTextInfo)
+        if MatchDataInfo:
+            TgtInfo = SegsInfo[int(MatchDataInfo.group(1))]
+            NameTextInfo = TgtInfo['class_name']
+        Names.append(NameTextInfo)
+    return (SegsInfo, Names)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    WantInfo = [FirstValue for FirstValue in System.argv[1:]]
+    DocsInfo = LoadData()
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    Table = Defaultdict(lambda: Defaultdict(list))
+    for LabelInfo, DocInfo in DocsInfo.items():
+        SegsInfo, Names = ResolveInfo(DocInfo)
+        for SegInfo, NameTextInfo in zip(SegsInfo, Names):
+            if WantInfo and (not any((WordData.lower() in NameTextInfo.lower() for WordData in WantInfo))):
                 continue
-            table[name][label].append(
-                (seg["offset"], seg["length"], seg["depth"], seg["kind"])
-            )
-    for name in sorted(table):
-        print("=" * 70)
-        print(name)
-        for label in sorted(table[name]):
-            rows = table[name][label]
-            lens = sorted({r[1] for r in rows})
-            print(f"  {label:18s} n={len(rows):4d} lengths={lens}")
-            for off, ln, depth, kind in rows[:12]:
-                print(f"      off={off:6d} len={ln:5d} depth={depth} kind={kind}")
-
-
-if __name__ == "__main__":
-    main()
+            Table[NameTextInfo][LabelInfo].append((SegInfo['offset'], SegInfo['length'], SegInfo['depth'], SegInfo['kind']))
+    for NameTextInfo in sorted(Table):
+        print('=' * 70)
+        print(NameTextInfo)
+        for LabelInfo in sorted(Table[NameTextInfo]):
+            GetRows = Table[NameTextInfo][LabelInfo]
+            LensInfo = sorted({ResultData[1] for ResultData in GetRows})
+            print(f'  {LabelInfo:18s} n={len(GetRows):4d} lengths={LensInfo}')
+            for OffInfo, LnInfo, Depth, KindNameInfo in GetRows[:12]:
+                print(f'      off={OffInfo:6d} len={LnInfo:5d} depth={Depth} kind={KindNameInfo}')
+if __name__ == '__main__':
+    MainRunInfo()

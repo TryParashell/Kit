@@ -11,7 +11,7 @@ from dataclasses import replace as Replace
 import hashlib as Hashlib
 import io as IoStream
 import os as OsModule
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import subprocess as Subprocess
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
@@ -25,10 +25,10 @@ from interchange import BrepBody, BrepCoedge, BrepEdge, BrepFace, BrepFaceUse, B
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
 # this binding exists because shared behavior needs one stable value
-KOracle = PathValue(OsModule.environ.get('KIT_FREECAD_ORACLE', ''))
+KOracle = FilePath(OsModule.environ.get('KIT_FREECAD_ORACLE', ''))
 
 # this binding exists because shared behavior needs one stable value
-KRootValue = PathValue(__file__).parents[3]
+KRootValue = FilePath(__file__).parents[3]
 
 # this definition exists because focused behavior needs one stable owner
 def RawBrepDoc(DataValue: bytes) -> CadDoc:
@@ -374,7 +374,7 @@ globals()['Mesh'] = MeshValue
 globals()['ORACLE'] = KOracle
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['ROOT'] = KRootValue

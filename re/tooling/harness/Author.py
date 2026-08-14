@@ -1,241 +1,223 @@
-import os
-import pathlib
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-import FreeCAD as App
-import Part
+import os as OsLayer
+import pathlib as Pathlib
+import FreeCAD as AppInfo
+import Part as PartInfo
 import Sketcher
 
-OUTPUT = os.environ.get(
-    "KIT_FCSTD_OUT",
-    str(pathlib.Path(__file__).resolve().parents[3] / ".rescratch" / "sw" / "fcstd"),
-)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutput = OsLayer.environ.get('KIT_FCSTD_OUT', str(Pathlib.Path(__file__).resolve().parents[3] / '.rescratch' / 'sw' / 'fcstd'))
 
-PLANES = {
-    "front": "XY_Plane",
-    "top": "XZ_Plane",
-    "right": "YZ_Plane",
-}
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPlanes = {'front': 'XY_Plane', 'top': 'XZ_Plane', 'right': 'YZ_Plane'}
 
 
-def _new(name):
-    document = App.newDocument(name)
-    body = document.addObject("PartDesign::Body", "Body")
-    return document, body
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def NewInfo(NameTextInfo):
+    Document = AppInfo.newDocument(NameTextInfo)
+    BodyInfo = Document.addObject('PartDesign::Body', 'Body')
+    return (Document, BodyInfo)
 
 
-def _rectangle(document, body, label, plane, bounds):
-    sketch = document.addObject("Sketcher::SketchObject", label)
-    body.addObject(sketch)
-    sketch.AttachmentSupport = [(document.getObject(PLANES[plane]), "")]
-    sketch.MapMode = "FlatFace"
-    minimum_x, minimum_y, maximum_x, maximum_y = bounds
-    corners = (
-        (minimum_x, minimum_y),
-        (maximum_x, minimum_y),
-        (maximum_x, maximum_y),
-        (minimum_x, maximum_y),
-    )
-    for index in range(4):
-        start = corners[index]
-        end = corners[(index + 1) % 4]
-        sketch.addGeometry(
-            Part.LineSegment(
-                App.Vector(start[0], start[1], 0.0),
-                App.Vector(end[0], end[1], 0.0),
-            ),
-            False,
-        )
-    for index in range(4):
-        sketch.addConstraint(
-            Sketcher.Constraint("Coincident", index, 2, (index + 1) % 4, 1)
-        )
-    sketch.addConstraint(Sketcher.Constraint("Horizontal", 0))
-    sketch.addConstraint(Sketcher.Constraint("Horizontal", 2))
-    sketch.addConstraint(Sketcher.Constraint("Vertical", 1))
-    sketch.addConstraint(Sketcher.Constraint("Vertical", 3))
-    sketch.addConstraint(
-        Sketcher.Constraint("DistanceX", 0, 1, 0, 2, maximum_x - minimum_x)
-    )
-    sketch.addConstraint(
-        Sketcher.Constraint("DistanceY", 1, 1, 1, 2, maximum_y - minimum_y)
-    )
-    document.recompute()
-    return sketch
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RectangleInfo(Document, BodyInfo, LabelInfo, Plane, Bounds):
+    Sketch = Document.addObject('Sketcher::SketchObject', LabelInfo)
+    BodyInfo.addObject(Sketch)
+    Sketch.AttachmentSupport = [(Document.getObject(KPlanes[Plane]), '')]
+    Sketch.MapMode = 'FlatFace'
+    MinimumX, MinimumY, MaximumX, MaximumY = Bounds
+    Corners = ((MinimumX, MinimumY), (MaximumX, MinimumY), (MaximumX, MaximumY), (MinimumX, MaximumY))
+    for IndexData in range(4):
+        StartRun = Corners[IndexData]
+        EndIndex = Corners[(IndexData + 1) % 4]
+        Sketch.addGeometry(PartInfo.LineSegment(AppInfo.Vector(StartRun[0], StartRun[1], 0.0), AppInfo.Vector(EndIndex[0], EndIndex[1], 0.0)), False)
+    for IndexData in range(4):
+        Sketch.addConstraint(Sketcher.Constraint('Coincident', IndexData, 2, (IndexData + 1) % 4, 1))
+    Sketch.addConstraint(Sketcher.Constraint('Horizontal', 0))
+    Sketch.addConstraint(Sketcher.Constraint('Horizontal', 2))
+    Sketch.addConstraint(Sketcher.Constraint('Vertical', 1))
+    Sketch.addConstraint(Sketcher.Constraint('Vertical', 3))
+    Sketch.addConstraint(Sketcher.Constraint('DistanceX', 0, 1, 0, 2, MaximumX - MinimumX))
+    Sketch.addConstraint(Sketcher.Constraint('DistanceY', 1, 1, 1, 2, MaximumY - MinimumY))
+    Document.recompute()
+    return Sketch
 
 
-def _circle(document, body, label, plane, centre, radius):
-    sketch = document.addObject("Sketcher::SketchObject", label)
-    body.addObject(sketch)
-    sketch.AttachmentSupport = [(document.getObject(PLANES[plane]), "")]
-    sketch.MapMode = "FlatFace"
-    sketch.addGeometry(
-        Part.Circle(
-            App.Vector(centre[0], centre[1], 0.0), App.Vector(0.0, 0.0, 1.0), radius
-        ),
-        False,
-    )
-    sketch.addConstraint(Sketcher.Constraint("Radius", 0, radius))
-    document.recompute()
-    return sketch
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def CircleInfo(Document, BodyInfo, LabelInfo, Plane, Centre, Radius):
+    Sketch = Document.addObject('Sketcher::SketchObject', LabelInfo)
+    BodyInfo.addObject(Sketch)
+    Sketch.AttachmentSupport = [(Document.getObject(KPlanes[Plane]), '')]
+    Sketch.MapMode = 'FlatFace'
+    Sketch.addGeometry(PartInfo.Circle(AppInfo.Vector(Centre[0], Centre[1], 0.0), AppInfo.Vector(0.0, 0.0, 1.0), Radius), False)
+    Sketch.addConstraint(Sketcher.Constraint('Radius', 0, Radius))
+    Document.recompute()
+    return Sketch
 
 
-def _pad(document, body, label, sketch, length, midplane=False, reversed_flag=False):
-    pad = document.addObject("PartDesign::Pad", label)
-    body.addObject(pad)
-    pad.Profile = sketch
-    pad.Length = length
-    pad.Type = 0
-    pad.Midplane = midplane
-    pad.Reversed = reversed_flag
-    document.recompute()
-    return pad
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def PadInfo(Document, BodyInfo, LabelInfo, Sketch, Length, Midplane=False, ReversedFlag=False):
+    PadInfoInfo = Document.addObject('PartDesign::Pad', LabelInfo)
+    BodyInfo.addObject(PadInfoInfo)
+    PadInfoInfo.Profile = Sketch
+    PadInfoInfo.Length = Length
+    setattr(PadInfoInfo, 'Type', 0)
+    PadInfoInfo.Midplane = Midplane
+    PadInfoInfo.Reversed = ReversedFlag
+    Document.recompute()
+    return PadInfoInfo
 
 
-def _pocket_through(document, body, label, sketch, reversed_flag=False):
-    pocket = document.addObject("PartDesign::Pocket", label)
-    body.addObject(pocket)
-    pocket.Profile = sketch
-    pocket.Type = 1
-    pocket.Midplane = False
-    pocket.Reversed = reversed_flag
-    document.recompute()
-    return pocket
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def PocketThrough(Document, BodyInfo, LabelInfo, Sketch, ReversedFlag=False):
+    PocketInfo = Document.addObject('PartDesign::Pocket', LabelInfo)
+    BodyInfo.addObject(PocketInfo)
+    PocketInfo.Profile = Sketch
+    setattr(PocketInfo, 'Type', 1)
+    PocketInfo.Midplane = False
+    PocketInfo.Reversed = ReversedFlag
+    Document.recompute()
+    return PocketInfo
 
 
-def _pocket(document, body, label, sketch, length, reversed_flag=False):
-    pocket = document.addObject("PartDesign::Pocket", label)
-    body.addObject(pocket)
-    pocket.Profile = sketch
-    pocket.Length = length
-    pocket.Type = 0
-    pocket.Midplane = False
-    pocket.Reversed = reversed_flag
-    document.recompute()
-    return pocket
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Pocket(Document, BodyInfo, LabelInfo, Sketch, Length, ReversedFlag=False):
+    PocketInfo = Document.addObject('PartDesign::Pocket', LabelInfo)
+    BodyInfo.addObject(PocketInfo)
+    PocketInfo.Profile = Sketch
+    PocketInfo.Length = Length
+    setattr(PocketInfo, 'Type', 0)
+    PocketInfo.Midplane = False
+    PocketInfo.Reversed = ReversedFlag
+    Document.recompute()
+    return PocketInfo
 
 
-def _save(document, body, name):
-    target = f"{OUTPUT}\\{name}.FCStd"
-    document.saveAs(target)
-    shape = body.Shape
-    print(
-        f"KIT_AUTHORED {name} volume_mm3={shape.Volume!r} area_mm2={shape.Area!r} "
-        f"solids={len(shape.Solids)} valid={shape.isValid()} path={target}",
-        flush=True,
-    )
-    App.closeDocument(document.Name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SaveInfo(Document, BodyInfo, NameTextInfo):
+    Target = f'{KOutput}\\{NameTextInfo}.FCStd'
+    Document.saveAs(Target)
+    Shape = BodyInfo.Shape
+    print(f'KIT_AUTHORED {NameTextInfo} volume_mm3={Shape.Volume!r} area_mm2={Shape.Area!r} solids={len(Shape.Solids)} valid={Shape.isValid()} path={Target}', flush=True)
+    AppInfo.closeDocument(Document.Name)
 
 
-def boss_blind(name):
-    document, body = _new(name)
-    sketch = _rectangle(document, body, "Sketch", "front", (-25.0, -15.0, 25.0, 15.0))
-    _pad(document, body, "Pad", sketch, 12.0)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossBlind(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Sketch = RectangleInfo(Document, BodyInfo, 'Sketch', 'front', (-25.0, -15.0, 25.0, 15.0))
+    PadInfo(Document, BodyInfo, 'Pad', Sketch, 12.0)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def boss_cut(name):
-    document, body = _new(name)
-    outer = _rectangle(document, body, "Sketch", "front", (-30.0, -20.0, 30.0, 20.0))
-    _pad(document, body, "Pad", outer, 15.0)
-    inner = _rectangle(document, body, "Sketch001", "front", (-10.0, -8.0, 10.0, 8.0))
-    _pocket(document, body, "Pocket", inner, 6.0, reversed_flag=True)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossCut(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Outer = RectangleInfo(Document, BodyInfo, 'Sketch', 'front', (-30.0, -20.0, 30.0, 20.0))
+    PadInfo(Document, BodyInfo, 'Pad', Outer, 15.0)
+    Inner = RectangleInfo(Document, BodyInfo, 'Sketch001', 'front', (-10.0, -8.0, 10.0, 8.0))
+    Pocket(Document, BodyInfo, 'Pocket', Inner, 6.0, ReversedFlag=True)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def boss_boss(name):
-    document, body = _new(name)
-    outer = _rectangle(document, body, "Sketch", "front", (-30.0, -20.0, 30.0, 20.0))
-    _pad(document, body, "Pad", outer, 10.0)
-    inner = _rectangle(document, body, "Sketch001", "front", (-10.0, -8.0, 10.0, 8.0))
-    _pad(document, body, "Pad001", inner, 25.0)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossBoss(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Outer = RectangleInfo(Document, BodyInfo, 'Sketch', 'front', (-30.0, -20.0, 30.0, 20.0))
+    PadInfo(Document, BodyInfo, 'Pad', Outer, 10.0)
+    Inner = RectangleInfo(Document, BodyInfo, 'Sketch001', 'front', (-10.0, -8.0, 10.0, 8.0))
+    PadInfo(Document, BodyInfo, 'Pad001', Inner, 25.0)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def boss_cut_cut(name):
-    document, body = _new(name)
-    outer = _rectangle(document, body, "Sketch", "front", (-30.0, -20.0, 30.0, 20.0))
-    _pad(document, body, "Pad", outer, 15.0)
-    first = _rectangle(document, body, "Sketch001", "front", (-10.0, -8.0, 10.0, 8.0))
-    _pocket(document, body, "Pocket", first, 6.0, reversed_flag=True)
-    second = _rectangle(document, body, "Sketch002", "front", (15.0, -5.0, 25.0, 5.0))
-    _pocket(document, body, "Pocket001", second, 5.0, reversed_flag=True)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossCutCut(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Outer = RectangleInfo(Document, BodyInfo, 'Sketch', 'front', (-30.0, -20.0, 30.0, 20.0))
+    PadInfo(Document, BodyInfo, 'Pad', Outer, 15.0)
+    First = RectangleInfo(Document, BodyInfo, 'Sketch001', 'front', (-10.0, -8.0, 10.0, 8.0))
+    Pocket(Document, BodyInfo, 'Pocket', First, 6.0, ReversedFlag=True)
+    Second = RectangleInfo(Document, BodyInfo, 'Sketch002', 'front', (15.0, -5.0, 25.0, 5.0))
+    Pocket(Document, BodyInfo, 'Pocket001', Second, 5.0, ReversedFlag=True)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def boss_cut_cut_cut(name):
-    document, body = _new(name)
-    outer = _rectangle(document, body, "Sketch", "front", (-30.0, -20.0, 30.0, 20.0))
-    _pad(document, body, "Pad", outer, 15.0)
-    first = _rectangle(document, body, "Sketch001", "front", (-10.0, -8.0, 10.0, 8.0))
-    _pocket(document, body, "Pocket", first, 6.0, reversed_flag=True)
-    second = _rectangle(document, body, "Sketch002", "front", (15.0, -5.0, 25.0, 5.0))
-    _pocket(document, body, "Pocket001", second, 5.0, reversed_flag=True)
-    third = _rectangle(document, body, "Sketch003", "front", (-25.0, -4.0, -17.0, 4.0))
-    _pocket(document, body, "Pocket002", third, 4.0, reversed_flag=True)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossCutCutCut(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Outer = RectangleInfo(Document, BodyInfo, 'Sketch', 'front', (-30.0, -20.0, 30.0, 20.0))
+    PadInfo(Document, BodyInfo, 'Pad', Outer, 15.0)
+    First = RectangleInfo(Document, BodyInfo, 'Sketch001', 'front', (-10.0, -8.0, 10.0, 8.0))
+    Pocket(Document, BodyInfo, 'Pocket', First, 6.0, ReversedFlag=True)
+    Second = RectangleInfo(Document, BodyInfo, 'Sketch002', 'front', (15.0, -5.0, 25.0, 5.0))
+    Pocket(Document, BodyInfo, 'Pocket001', Second, 5.0, ReversedFlag=True)
+    Third = RectangleInfo(Document, BodyInfo, 'Sketch003', 'front', (-25.0, -4.0, -17.0, 4.0))
+    Pocket(Document, BodyInfo, 'Pocket002', Third, 4.0, ReversedFlag=True)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def boss_cut_through(name):
-    document, body = _new(name)
-    outer = _rectangle(document, body, "Sketch", "front", (-30.0, -20.0, 30.0, 20.0))
-    _pad(document, body, "Pad", outer, 15.0)
-    inner = _rectangle(document, body, "Sketch001", "front", (-10.0, -8.0, 10.0, 8.0))
-    _pocket_through(document, body, "Pocket", inner, reversed_flag=True)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossCutThrough(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Outer = RectangleInfo(Document, BodyInfo, 'Sketch', 'front', (-30.0, -20.0, 30.0, 20.0))
+    PadInfo(Document, BodyInfo, 'Pad', Outer, 15.0)
+    Inner = RectangleInfo(Document, BodyInfo, 'Sketch001', 'front', (-10.0, -8.0, 10.0, 8.0))
+    PocketThrough(Document, BodyInfo, 'Pocket', Inner, ReversedFlag=True)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def circle_boss(name):
-    document, body = _new(name)
-    sketch = _circle(document, body, "Sketch", "front", (0.0, 0.0), 14.0)
-    _pad(document, body, "Pad", sketch, 9.0)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def CircleBoss(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Sketch = CircleInfo(Document, BodyInfo, 'Sketch', 'front', (0.0, 0.0), 14.0)
+    PadInfo(Document, BodyInfo, 'Pad', Sketch, 9.0)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def boss_midplane(name):
-    document, body = _new(name)
-    sketch = _rectangle(document, body, "Sketch", "front", (-20.0, -12.0, 20.0, 12.0))
-    _pad(document, body, "Pad", sketch, 18.0, midplane=True)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossMidplane(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Sketch = RectangleInfo(Document, BodyInfo, 'Sketch', 'front', (-20.0, -12.0, 20.0, 12.0))
+    PadInfo(Document, BodyInfo, 'Pad', Sketch, 18.0, Midplane=True)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def boss_right_plane(name):
-    document, body = _new(name)
-    sketch = _rectangle(document, body, "Sketch", "right", (-18.0, -11.0, 18.0, 11.0))
-    _pad(document, body, "Pad", sketch, 7.0)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossRightPlane(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Sketch = RectangleInfo(Document, BodyInfo, 'Sketch', 'right', (-18.0, -11.0, 18.0, 11.0))
+    PadInfo(Document, BodyInfo, 'Pad', Sketch, 7.0)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def boss_top_plane(name):
-    document, body = _new(name)
-    sketch = _rectangle(document, body, "Sketch", "top", (-22.0, -9.0, 22.0, 9.0))
-    _pad(document, body, "Pad", sketch, 13.0)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossTopPlane(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Sketch = RectangleInfo(Document, BodyInfo, 'Sketch', 'top', (-22.0, -9.0, 22.0, 9.0))
+    PadInfo(Document, BodyInfo, 'Pad', Sketch, 13.0)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
 
 
-def boss_reversed(name):
-    document, body = _new(name)
-    sketch = _rectangle(document, body, "Sketch", "front", (-16.0, -16.0, 16.0, 16.0))
-    _pad(document, body, "Pad", sketch, 11.0, reversed_flag=True)
-    _save(document, body, name)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BossReversed(NameTextInfo):
+    Document, BodyInfo = NewInfo(NameTextInfo)
+    Sketch = RectangleInfo(Document, BodyInfo, 'Sketch', 'front', (-16.0, -16.0, 16.0, 16.0))
+    PadInfo(Document, BodyInfo, 'Pad', Sketch, 11.0, ReversedFlag=True)
+    SaveInfo(Document, BodyInfo, NameTextInfo)
+import sys as System
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCases = {'kit_boss_blind': BossBlind, 'kit_boss_cut': BossCut, 'kit_boss_boss': BossBoss, 'kit_boss_cut_cut': BossCutCut, 'kit_boss_cut_cut_cut': BossCutCutCut, 'kit_boss_cut_through': BossCutThrough, 'kit_circle_boss': CircleBoss, 'kit_boss_midplane': BossMidplane, 'kit_boss_right_plane': BossRightPlane, 'kit_boss_top_plane': BossTopPlane, 'kit_boss_reversed': BossReversed}
 
-import sys
-
-CASES = {
-    "kit_boss_blind": boss_blind,
-    "kit_boss_cut": boss_cut,
-    "kit_boss_boss": boss_boss,
-    "kit_boss_cut_cut": boss_cut_cut,
-    "kit_boss_cut_cut_cut": boss_cut_cut_cut,
-    "kit_boss_cut_through": boss_cut_through,
-    "kit_circle_boss": circle_boss,
-    "kit_boss_midplane": boss_midplane,
-    "kit_boss_right_plane": boss_right_plane,
-    "kit_boss_top_plane": boss_top_plane,
-    "kit_boss_reversed": boss_reversed,
-}
-
-selected = [item for item in sys.argv[1:] if item in CASES] or list(CASES)
-for label in selected:
-    CASES[label](label)
-print("KIT_DONE", flush=True)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSelected = [ItemData for ItemData in System.argv[1:] if ItemData in KCases] or list(KCases)
+for LabelInfo in KSelected:
+    KCases[LabelInfo](LabelInfo)
+print('KIT_DONE', flush=True)

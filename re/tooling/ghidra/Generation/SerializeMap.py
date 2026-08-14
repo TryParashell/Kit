@@ -1,82 +1,94 @@
-import json
-import pathlib
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-ROOT = pathlib.Path(__file__).resolve().parents[4]
-DUMPS = ROOT / ".rescratch/ghidra/out"
-OUT = ROOT / "re/data"
-VT = DUMPS / "sldmodu_vtslots.txt"
-SLOT = 5
+import json as JsonData
+import pathlib as Pathlib
+import sys as System
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = Pathlib.Path(__file__).resolve().parents[4]
 
-def tables(path):
-    cur = None
-    rows = []
-    for line in path.read_text(errors="replace").splitlines():
-        if line.startswith("=== VFTABLE "):
-            if cur is not None:
-                yield cur, rows
-            body = line[len("=== VFTABLE ") :]
-            name, _, addr = body.rpartition(" @ ")
-            cur = (name.strip(), addr.strip())
-            rows = []
-        elif line.startswith("VT "):
-            if cur is not None:
-                yield cur, rows
-            body = line[3:]
-            head, _, rest = body.partition(" @ ")
-            addr = rest.split(" ")[0]
-            cur = (head.strip(), addr.strip())
-            rows = []
-        elif cur is not None and (line.startswith("  ")):
-            parts = line.replace("|", " ").split()
-            if len(parts) >= 3 and parts[0].isdigit():
-                rows.append((int(parts[0]), parts[1], parts[2]))
-    if cur is not None:
-        yield cur, rows
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KDumps = KRootInfo / '.rescratch/ghidra/out'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = KRootInfo / 're/data'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KVtInfo = KDumps / 'sldmodu_vtslots.txt'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSlotInfo = 5
 
 
-def build(path=VT, slot=SLOT):
-    best = {}
-    for (name, addr), rows in tables(path):
-        if not rows:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Tables(PathInfoData):
+    CurInfo = None
+    GetRows = []
+    for LineText in PathInfoData.read_text(errors='replace').splitlines():
+        if LineText.startswith('=== VFTABLE '):
+            if CurInfo is not None:
+                yield (CurInfo, GetRows)
+            BodyInfo = LineText[len('=== VFTABLE '):]
+            NameTextInfo, SpareValue, AddrInfo = BodyInfo.rpartition(' @ ')
+            CurInfo = (NameTextInfo.strip(), AddrInfo.strip())
+            GetRows = []
+        elif LineText.startswith('VT '):
+            if CurInfo is not None:
+                yield (CurInfo, GetRows)
+            BodyInfo = LineText[3:]
+            HeadInfo, SpareValue, RestInfo = BodyInfo.partition(' @ ')
+            AddrInfo = RestInfo.split(' ')[0]
+            CurInfo = (HeadInfo.strip(), AddrInfo.strip())
+            GetRows = []
+        elif CurInfo is not None and LineText.startswith('  '):
+            Parts = LineText.replace('|', ' ').split()
+            if len(Parts) >= 3 and Parts[0].isdigit():
+                GetRows.append((int(Parts[0]), Parts[1], Parts[2]))
+    if CurInfo is not None:
+        yield (CurInfo, GetRows)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Build(PathInfoData=KVtInfo, SlotIndex=KSlotInfo):
+    BestInfo = {}
+    for (NameTextInfo, AddrInfo), GetRows in Tables(PathInfoData):
+        if not GetRows:
             continue
-        if rows[0][2].split("::")[-1] != "GetRuntimeClass":
+        if GetRows[0][2].split('::')[-1] != 'GetRuntimeClass':
             continue
-        hit = [r for r in rows if r[0] == slot]
-        if not hit:
+        HitInfo = [ResultData for ResultData in GetRows if ResultData[0] == SlotIndex]
+        if not HitInfo:
             continue
-        target, fn = hit[0][1], hit[0][2]
-        prev = best.get(name)
-        if prev is None or len(rows) > prev[2]:
-            best[name] = (target, fn, len(rows))
-    return best
+        Target, FnInfo = (HitInfo[0][1], HitInfo[0][2])
+        PrevInfo = BestInfo.get(NameTextInfo)
+        if PrevInfo is None or len(GetRows) > PrevInfo[2]:
+            BestInfo[NameTextInfo] = (Target, FnInfo, len(GetRows))
+    return BestInfo
 
 
-def main():
-    path = VT
-    if len(sys.argv) > 1:
-        path = pathlib.Path(sys.argv[1])
-    best = build(path)
-    OUT.mkdir(parents=True, exist_ok=True)
-    doc = {
-        name: {"serialize_addr": v[0], "serialize_name": v[1], "vtable_slots": v[2]}
-        for name, v in sorted(best.items())
-    }
-    (OUT / "SerializeMap.json").write_text(json.dumps(doc, indent=1))
-    print("classes", len(doc))
-    shared = {}
-    for name, v in doc.items():
-        shared.setdefault(v["serialize_addr"], []).append(name)
-    print("distinct serialize functions", len(shared))
-    for key in sys.argv[2:]:
-        for name, v in doc.items():
-            if key.lower() in name.lower():
-                print(
-                    f"{name:34s} {v['serialize_addr']} {v['serialize_name']} "
-                    f"shared_with={len(shared[v['serialize_addr']])}"
-                )
-
-
-if __name__ == "__main__":
-    main()
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    PathInfoData = KVtInfo
+    if len(System.argv) > 1:
+        PathInfoData = Pathlib.Path(System.argv[1])
+    BestInfo = Build(PathInfoData)
+    KOutInfo.mkdir(parents=True, exist_ok=True)
+    DocInfo = {NameTextInfo: {'serialize_addr': ValueData[0], 'serialize_name': ValueData[1], 'vtable_slots': ValueData[2]} for NameTextInfo, ValueData in sorted(BestInfo.items())}
+    (KOutInfo / 'SerializeMap.json').write_text(JsonData.dumps(DocInfo, indent=1))
+    print('classes', len(DocInfo))
+    Shared = {}
+    for NameTextInfo, ValueData in DocInfo.items():
+        Shared.setdefault(ValueData['serialize_addr'], []).append(NameTextInfo)
+    print('distinct serialize functions', len(Shared))
+    for KeyName in System.argv[2:]:
+        for NameTextInfo, ValueData in DocInfo.items():
+            if KeyName.lower() in NameTextInfo.lower():
+                print(f"{NameTextInfo:34s} {ValueData['serialize_addr']} {ValueData['serialize_name']} shared_with={len(Shared[ValueData['serialize_addr']])}")
+if __name__ == '__main__':
+    MainRunInfo()

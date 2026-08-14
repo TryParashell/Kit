@@ -1,102 +1,95 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+import difflib as Difflib
+import json as JsonData
+from pathlib import Path as PathInfo
+import sys as System
 
-import difflib
-import json
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-SCRATCH = HERE.parents[2] / ".rescratch"
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KScratch = KHereInfo.parents[2] / '.rescratch'
 
-import blocks as blockslib
-import model as modellib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Blocks as Blockslib
+import Model as Modellib
 
-OUT = SCRATCH / "trace" / "out"
-
-
-def key(node: modellib.Node) -> tuple[str, str]:
-    if node.kind == "definition":
-        return "class", node.class_name
-    if node.kind == "classref":
-        return "instance", node.class_name
-    return node.kind, ""
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = KScratch / 'trace' / 'out'
 
 
-def align(models: list[tuple[str, modellib.Model]]) -> list[list[int | None]]:
-    reference = models[-1][1]
-    rows: list[list[int | None]] = [[None] * len(models) for _ in reference.nodes]
-    for column, (_label, model) in enumerate(models):
-        matcher = difflib.SequenceMatcher(
-            a=[key(node) for node in model.nodes],
-            b=[key(node) for node in reference.nodes],
-            autojunk=False,
-        )
-        for alow, blow, size in matcher.get_matching_blocks():
-            for step in range(size):
-                rows[blow + step][column] = alow + step
-    return rows
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def KeyName(NodeInfoInfo: Modellib.NodeInfo) -> tuple[str, str]:
+    if NodeInfoInfo.kind == 'definition':
+        return ('class', NodeInfoInfo.class_name)
+    if NodeInfoInfo.kind == 'classref':
+        return ('instance', NodeInfoInfo.class_name)
+    return (NodeInfoInfo.kind, '')
 
 
-def main() -> int:
-    arguments = sys.argv[1:]
-    stream = arguments[0]
-    models: list[tuple[str, modellib.Model]] = []
-    for position in range(1, len(arguments), 3):
-        label = arguments[position]
-        part = Path(arguments[position + 1]).resolve()
-        log = Path(arguments[position + 2]).resolve()
-        models.append((label, blockslib.load_model(part, log, stream)))
-    rows = align(models)
-    reference = models[-1][1]
-    labels = [label for label, _ in models]
-    print(f"stream {stream}")
-    print("ref  kind        class                          " + "  ".join(labels))
-    payload: list[dict[str, object]] = []
-    for position, row in enumerate(rows):
-        node = reference.nodes[position]
-        sizes: list[str] = []
-        lengths: list[int | None] = []
-        for column, (_label, model) in enumerate(models):
-            source = row[column]
-            if source is None:
-                sizes.append("   -")
-                lengths.append(None)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Align(Models: list[tuple[str, Modellib.Model]]) -> list[list[int | None]]:
+    RefInfo = Models[-1][1]
+    GetRows: list[list[int | None]] = [[None] * len(Models) for SpareValue in RefInfo.nodes]
+    for Column, (Label, ModelInfo) in enumerate(Models):
+        Matcher = Difflib.SequenceMatcher(a=[KeyName(NodeInfoInfo) for NodeInfoInfo in ModelInfo.nodes], b=[KeyName(NodeInfoInfo) for NodeInfoInfo in RefInfo.nodes], autojunk=False)
+        for AlowInfo, BlowInfo, ByteSize in Matcher.get_matching_blocks():
+            for StepInfo in range(ByteSize):
+                GetRows[BlowInfo + StepInfo][Column] = AlowInfo + StepInfo
+    return GetRows
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    ArgsInfo = System.argv[1:]
+    Stream = ArgsInfo[0]
+    Models: list[tuple[str, Modellib.Model]] = []
+    for PosInfoInfo in range(1, len(ArgsInfo), 3):
+        LabelInfo = ArgsInfo[PosInfoInfo]
+        PartInfoInfo = PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve()
+        LogInfo = PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve()
+        Models.append((LabelInfo, Blockslib.LoadModel(PartInfoInfo, LogInfo, Stream)))
+    GetRows = Align(Models)
+    RefInfo = Models[-1][1]
+    Labels = [LabelInfo for LabelInfo, SpareValue in Models]
+    print(f'stream {Stream}')
+    print('ref  kind        class                          ' + '  '.join(Labels))
+    PayloadInfo: list[dict[str, object]] = []
+    for PosInfoInfo, RowDataInfo in enumerate(GetRows):
+        NodeInfoInfo = RefInfo.nodes[PosInfoInfo]
+        Sizes: list[str] = []
+        Lengths: list[int | None] = []
+        for Column, (Label, ModelInfo) in enumerate(Models):
+            Source = RowDataInfo[Column]
+            if Source is None:
+                Sizes.append('   -')
+                Lengths.append(None)
             else:
-                sizes.append(f"{len(model.nodes[source].body):4d}")
-                lengths.append(len(model.nodes[source].body))
-        flag = ""
-        present = [value for value in lengths if value is not None]
-        if len(present) != len(models):
-            flag = " NEW"
-        elif len(set(present)) > 1:
-            flag = " GROWS"
-        print(
-            f"{position:3d}  {node.kind:11s} {(node.class_name or '-'):30s} "
-            + " ".join(sizes)
-            + flag
-        )
-        payload.append(
-            {
-                "node": position,
-                "kind": node.kind,
-                "class_name": node.class_name,
-                "sources": row,
-                "body_lengths": lengths,
-                "state": flag.strip() or "same",
-            }
-        )
-    OUT.mkdir(parents=True, exist_ok=True)
-    tag = stream.replace("/", "_").replace("-", "_")
-    (OUT / f"nodediff_{tag}.json").write_text(
-        json.dumps({"stream": stream, "labels": labels, "rows": payload}, indent=2),
-        encoding="utf-8",
-    )
+                Sizes.append(f'{len(ModelInfo.nodes[Source].body):4d}')
+                Lengths.append(len(ModelInfo.nodes[Source].body))
+        FlagInfo = ''
+        Present = [ValueInfo for ValueInfo in Lengths if ValueInfo is not None]
+        if len(Present) != len(Models):
+            FlagInfo = ' NEW'
+        elif len(set(Present)) > 1:
+            FlagInfo = ' GROWS'
+        print(f"{PosInfoInfo:3d}  {NodeInfoInfo.kind:11s} {NodeInfoInfo.class_name or '-':30s} " + ' '.join(Sizes) + FlagInfo)
+        PayloadInfo.append({'node': PosInfoInfo, 'kind': NodeInfoInfo.kind, 'class_name': NodeInfoInfo.class_name, 'sources': RowDataInfo, 'body_lengths': Lengths, 'state': FlagInfo.strip() or 'same'})
+    KOutInfo.mkdir(parents=True, exist_ok=True)
+    TagInfoInfo = Stream.replace('/', '_').replace('-', '_')
+    (KOutInfo / f'nodediff_{TagInfoInfo}.json').write_text(JsonData.dumps({'stream': Stream, 'labels': Labels, 'rows': PayloadInfo}, indent=2), encoding='utf-8')
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

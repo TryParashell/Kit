@@ -9,7 +9,7 @@
 from __future__ import annotations as Annotations
 from dataclasses import replace as Replace
 import io as IoStream
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import pytest as Pytest
@@ -21,7 +21,7 @@ from convert.adapters.freecad import read_freecad as ReadFreecad, write_freecad 
 from interchange import ComponentKind, Matrix4 as MatrixFour, frozen_mapping as FrozenMapping
 
 # this binding exists because shared behavior needs one stable value
-KRootValue = PathValue(__file__).parents[3]
+KRootValue = FilePath(__file__).parents[3]
 
 # this binding exists because shared behavior needs one stable value
 KCatproducts = KRootValue / 'examples' / '.CATProduct'
@@ -99,7 +99,7 @@ def TestCatproductG(TmpPath: Path) -> None:
     AsmValue = DocValue.assembly
     assert AsmValue is not None
     Definition = next((ItemValue for ItemValue in AsmValue.definitions if ItemValue.name == '4876'))
-    assert PathValue(Definition.source_path) == Renamed.resolve()
+    assert FilePath(Definition.source_path) == Renamed.resolve()
     assert Definition.document_id
 
 # this definition exists because focused behavior needs one stable owner
@@ -115,7 +115,7 @@ def TestCatproductJ(TmpPath: Path) -> None:
     Definition = next((ItemValue for ItemValue in AsmValue.definitions if ItemValue.name == '4876'))
     assert Definition.source_path == ''
     assert Definition.document_id == ''
-    assert {PathValue(ItemValue['path']).name for ItemValue in Definition.attributes['native_reference_candidates']} == {'a.CATPart', 'b.CATPart'}
+    assert {FilePath(ItemValue['path']).name for ItemValue in Definition.attributes['native_reference_candidates']} == {'a.CATPart', 'b.CATPart'}
     DiagValue = next((ItemValue for ItemValue in DocValue.diagnostics if ItemValue.code == 'catia.product.component_source_ambiguous'))
     assert DiagValue.attributes['definition_name'] == '4876'
 
@@ -129,17 +129,17 @@ def TestCatproductH() -> None:
     assert len(AsmValue.definitions) == 25
     assert len(AsmValue.documents) == 19
     Definitions = {ItemValue.name: ItemValue for ItemValue in AsmValue.definitions}
-    assert PathValue(Definitions['Brake_pedal'].source_path).name == 'Pedal_Body.CATPart'
+    assert FilePath(Definitions['Brake_pedal'].source_path).name == 'Pedal_Body.CATPart'
     assert Definitions['Brake_pedal'].kind == ComponentKind.PART
-    assert PathValue(Definitions['Screw_ISO_7379_M6_8_30'].source_path).name == 'Fitted_Bolet_M6_8x30.CATPart'
-    assert PathValue(Definitions['Low_Head_M4x20 1'].source_path).name == 'Low_Head_M4x20.CATPart'
+    assert FilePath(Definitions['Screw_ISO_7379_M6_8_30'].source_path).name == 'Fitted_Bolet_M6_8x30.CATPart'
+    assert FilePath(Definitions['Low_Head_M4x20 1'].source_path).name == 'Low_Head_M4x20.CATPart'
     Tilton = Definitions['Tilton']
     assert Tilton.kind == ComponentKind.ASSEMBLY
-    assert PathValue(Tilton.source_path).name == 'Tilton_Set.CATProduct'
+    assert FilePath(Tilton.source_path).name == 'Tilton_Set.CATProduct'
     Linked = AsmValue.document(Tilton.document_id)
     assert Linked.assembly is not None
     LinkedDefinitions = {ItemValue.name: ItemValue for ItemValue in Linked.assembly.definitions}
-    assert PathValue(LinkedDefinitions['4876_1'].source_path).name == '4876_1.CATPart'
+    assert FilePath(LinkedDefinitions['4876_1'].source_path).name == '4876_1.CATPart'
     assert LinkedDefinitions['4876_1'].document_id
     assert AsmValue.attributes['linked_document_count'] == 19
     assert AsmValue.attributes['linked_feature_count'] == 18
@@ -297,7 +297,7 @@ def TestCatproductO(TmpPath: Path) -> None:
     ComponentFolder = Output.parent / Output.stem
     ComponentFiles = tuple(sorted(ComponentFolder.glob('*.FCStd')))
     assert len(ComponentFiles) == 19
-    ComponentRoots: dict[PathValue, XmlTree.Element] = {}
+    ComponentRoots: dict[FilePath, XmlTree.Element] = {}
     CgmCount = 0
     for Component in ComponentFiles:
         ComponentDoc = OpenDoc(Component)
@@ -379,7 +379,7 @@ globals()['ET'] = XmlTree
 globals()['Matrix4'] = MatrixFour
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['ROOT'] = KRootValue

@@ -1,90 +1,71 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from pathlib import Path as PathInfo
+import json as JsonData
+import sys as System
 
-from pathlib import Path
-import json
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-GRAMMAR = HERE.parent / "grammar"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
-
-import carchive
-import streamlib
-import tracedump
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'grammar'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Carchive as Carchive
+import Streamlib as Streamlib
+import Tracedump as Tracedump
 
 
-def main() -> None:
-    part = Path(sys.argv[1]).resolve()
-    report = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
-    blob = streamlib.load_donor(part).resolved
-    items = report["items"]
-    base = report["base_counter"]
-
-    static = carchive.class_definitions(blob)
-    static_offsets = [definition.tag_offset for definition in static]
-    traced_defs = [item["offset"] for item in items if item["kind"] == "definition"]
-    print(f"static definitions={len(static_offsets)} traced={len(traced_defs)}")
-    print(f"definition offsets identical={static_offsets == traced_defs}")
-    missing = sorted(set(static_offsets) - set(traced_defs))
-    extra = sorted(set(traced_defs) - set(static_offsets))
-    print(f"static-only={missing} traced-only={extra}")
-
-    slot_of_class: dict[int, str] = {}
-    counter = base
-    for item in items:
-        if item["kind"] == "definition":
-            slot_of_class[counter] = item["name"]
-            counter += 2
-        elif item["kind"] in {"classref", "big"}:
-            counter += 1
-    print(f"final counter={counter} classes in stream={len(slot_of_class)}")
-
-    external = sorted(
-        {
-            item["index"]
-            for item in items
-            if item["kind"] == "classref" and item["index"] < base
-        }
-    )
-    internal = sorted(
-        {
-            item["index"]
-            for item in items
-            if item["kind"] == "classref" and item["index"] >= base
-        }
-    )
-    print(f"classref indices below base (external)={external}")
-    unresolved = [index for index in internal if index not in slot_of_class]
-    print(f"classref indices at/above base={len(internal)} unresolved={unresolved}")
-
-    obj_external = sorted(
-        {
-            item["index"]
-            for item in items
-            if item["kind"] == "objectref" and item["index"] < base
-        }
-    )
-    print(f"objectref indices below base={obj_external}")
-
-    gaps: list[tuple[int, int, int]] = []
-    for position, item in enumerate(items):
-        start = item["offset"] + item["header"]
-        end = items[position + 1]["offset"] if position + 1 < len(items) else len(blob)
-        gaps.append((item["offset"], start, end - start))
-    zero = sum(1 for _, _, size in gaps if size == 0)
-    print(f"gaps={len(gaps)} zero-length={zero} tail={gaps[-1]}")
-
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> None:
+    PartInfoInfo = PathInfo(System.argv[1]).resolve()
+    Report = JsonData.loads(PathInfo(System.argv[2]).read_text(encoding='utf-8'))
+    ByteBlob = Streamlib.LoadDonor(PartInfoInfo).resolved
+    Items = Report['items']
+    BaseInfo = Report['base_counter']
+    Static = Carchive.ClassDefns(ByteBlob)
+    StaticOffsets = [DefnInfo.tag_offset for DefnInfo in Static]
+    TracedDefs = [ItemData['offset'] for ItemData in Items if ItemData['kind'] == 'definition']
+    print(f'static definitions={len(StaticOffsets)} traced={len(TracedDefs)}')
+    print(f'definition offsets identical={StaticOffsets == TracedDefs}')
+    MissingInfo = sorted(set(StaticOffsets) - set(TracedDefs))
+    Extra = sorted(set(TracedDefs) - set(StaticOffsets))
+    print(f'static-only={MissingInfo} traced-only={Extra}')
+    SlotOfClass: dict[int, str] = {}
+    CounterInfo = BaseInfo
+    for ItemData in Items:
+        if ItemData['kind'] == 'definition':
+            SlotOfClass[CounterInfo] = ItemData['name']
+            CounterInfo += 2
+        elif ItemData['kind'] in {'classref', 'big'}:
+            CounterInfo += 1
+    print(f'final counter={CounterInfo} classes in stream={len(SlotOfClass)}')
+    Extern = sorted({ItemData['index'] for ItemData in Items if ItemData['kind'] == 'classref' and ItemData['index'] < BaseInfo})
+    Intern = sorted({ItemData['index'] for ItemData in Items if ItemData['kind'] == 'classref' and ItemData['index'] >= BaseInfo})
+    print(f'classref indices below base (external)={Extern}')
+    Unresolved = [IndexData for IndexData in Intern if IndexData not in SlotOfClass]
+    print(f'classref indices at/above base={len(Intern)} unresolved={Unresolved}')
+    ObjExtern = sorted({ItemData['index'] for ItemData in Items if ItemData['kind'] == 'objectref' and ItemData['index'] < BaseInfo})
+    print(f'objectref indices below base={ObjExtern}')
+    FindGaps: list[tuple[int, int, int]] = []
+    for PosInfoInfo, ItemData in enumerate(Items):
+        StartRun = ItemData['offset'] + ItemData['header']
+        EndIndex = Items[PosInfoInfo + 1]['offset'] if PosInfoInfo + 1 < len(Items) else len(ByteBlob)
+        FindGaps.append((ItemData['offset'], StartRun, EndIndex - StartRun))
+    ZeroInfo = sum((1 for SpareValue, SpareValue, ByteSize in FindGaps if ByteSize == 0))
+    print(f'gaps={len(FindGaps)} zero-length={ZeroInfo} tail={FindGaps[-1]}')
     print()
     print(f"{'off':>6} {'ctr':>5} {'kind':>10} {'tok':>6} {'idx':>5} {'gap':>6} name")
-    for item, (_, _, size) in zip(items, gaps):
-        label = item["name"] or slot_of_class.get(item["index"], "")
-        print(
-            f"{item['offset']:>6} {item['counter']:>5} {item['kind']:>10} "
-            f"{item['token']:#06x} {item['index']:>5} {size:>6} {label}"
-        )
-
-
-if __name__ == "__main__":
-    main()
+    for ItemData, (SpareValue, SpareValue, ByteSize) in zip(Items, FindGaps):
+        LabelInfo = ItemData['name'] or SlotOfClass.get(ItemData['index'], '')
+        print(f"{ItemData['offset']:>6} {ItemData['counter']:>5} {ItemData['kind']:>10} {ItemData['token']:#06x} {ItemData['index']:>5} {ByteSize:>6} {LabelInfo}")
+if __name__ == '__main__':
+    MainRunInfo()

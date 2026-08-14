@@ -1,180 +1,160 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+import json as JsonData
+from pathlib import Path as PathInfo
+import sys as System
 
-import json
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-SCRATCH = HERE.parents[2] / ".rescratch"
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KScratch = KHereInfo.parents[2] / '.rescratch'
 
-import cdbdrive
-import tracelog
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Cdbdrive as Cdbdrive
+import Tracelog as Tracelog
+import Streamlib as Streamlib
 
-import streamlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = KScratch / 'trace' / 'out'
 
-OUT = SCRATCH / "trace" / "out"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KControl = (KScratch / 'corpus' / 'parts' / 'BASELINE_40x20x10.SLDPRT').resolve()
 
-CONTROL = (SCRATCH / "corpus" / "parts" / "BASELINE_40x20x10.SLDPRT").resolve()
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KScript = '.symopt+0x4000\n.symopt-0x20000\n.exepath+ {solidworks}\n.reload /f swccu.dll\nr $t0 = 0\nbp swccu!su_CArchive::ReadClass "r $t0 = @$t0+1; .printf \\"CALIB %d this=%p\\\\n\\", @$t0, @rcx; dq @rcx L18; .if (@$t0 >= {hits}) {{ bc * }}; g"\nbl\ng\n'
 
-SCRIPT = """.symopt+0x4000
-.symopt-0x20000
-.exepath+ {solidworks}
-.reload /f swccu.dll
-r $t0 = 0
-bp swccu!su_CArchive::ReadClass "r $t0 = @$t0+1; .printf \\"CALIB %d this=%p\\\\n\\", @$t0, @rcx; dq @rcx L18; .if (@$t0 >= {hits}) {{ bc * }}; g"
-bl
-g
-"""
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KMinBuffer = 256
 
-MIN_BUFFER = 256
-MAX_BUFFER = 1 << 26
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KMaxBuffer = 1 << 26
 
 
-class CalibrationError(RuntimeError):
+# needed to keep reverse engineering responsibilities isolated and maintainable
+class Calibration(RuntimeError):
     __slots__ = ()
 
 
-def write_script(path: Path, hits: int) -> None:
-    path.write_text(
-        SCRIPT.format(solidworks=cdbdrive.SOLIDWORKS_DIR, hits=hits), encoding="ascii"
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteScript(PathInfoData: PathInfo, HitsInfo: int) -> None:
+    PathInfoData.write_text(KScript.format(solidworks=Cdbdrive.KSolidworksDir, hits=HitsInfo), encoding='ascii')
 
 
-def group(dumps: tuple[tracelog.Dump, ...]) -> dict[int, list[tracelog.Dump]]:
-    table: dict[int, list[tracelog.Dump]] = {}
-    for dump in dumps:
-        table.setdefault(dump.this, []).append(dump)
-    return table
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Group(Dumps: tuple[Tracelog.DumpRecord, ...]) -> dict[int, list[Tracelog.DumpRecord]]:
+    Table: dict[int, list[Tracelog.DumpRecord]] = {}
+    for DumpData in Dumps:
+        Table.setdefault(DumpData.this, []).append(DumpData)
+    return Table
 
 
-def _globally_ordered(
-    dumps: tuple[tracelog.Dump, ...], key: tuple[int, int, int]
-) -> bool:
-    cursor, top, start = key
-    for dump in dumps:
-        base = dump.u64(start)
-        if base == 0:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def IsGlobally(Dumps: tuple[Tracelog.DumpRecord, ...], KeyName: tuple[int, int, int]) -> bool:
+    Cursor, IsTopInfo, StartRun = KeyName
+    for DumpData in Dumps:
+        BaseInfo = DumpData.u64(StartRun)
+        if BaseInfo == 0:
             continue
-        if not base <= dump.u64(cursor) <= dump.u64(top):
+        if not BaseInfo <= DumpData.u64(Cursor) <= DumpData.u64(IsTopInfo):
             return False
     return True
 
 
-def solve(dumps: tuple[tracelog.Dump, ...], expected: int) -> dict[str, int]:
-    width = min(len(dump.raw) for dump in dumps)
-    slots = range(0, width - 7, 8)
-    votes: dict[tuple[int, int, int], int] = {}
-    anchored: set[tuple[int, int, int]] = set()
-    for series in group(dumps).values():
-        if len(series) < 2:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Solve(Dumps: tuple[Tracelog.DumpRecord, ...], Expect: int) -> dict[str, int]:
+    WidthInfo = min((len(DumpData.raw) for DumpData in Dumps))
+    Slots = range(0, WidthInfo - 7, 8)
+    Votes: dict[tuple[int, int, int], int] = {}
+    Anchored: set[tuple[int, int, int]] = set()
+    for Series in Group(Dumps).values():
+        if len(Series) < 2:
             continue
-        for start in slots:
-            fixed_start = {dump.u64(start) for dump in series}
-            if len(fixed_start) != 1:
+        for StartRun in Slots:
+            FixedStart = {DumpData.u64(StartRun) for DumpData in Series}
+            if len(FixedStart) != 1:
                 continue
-            base = next(iter(fixed_start))
-            if base == 0:
+            BaseInfo = next(iter(FixedStart))
+            if BaseInfo == 0:
                 continue
-            for top in slots:
-                if top == start:
+            for IsTopInfo in Slots:
+                if IsTopInfo == StartRun:
                     continue
-                fixed_top = {dump.u64(top) for dump in series}
-                if len(fixed_top) != 1:
+                FixedTop = {DumpData.u64(IsTopInfo) for DumpData in Series}
+                if len(FixedTop) != 1:
                     continue
-                span = next(iter(fixed_top)) - base
-                if not MIN_BUFFER <= span <= MAX_BUFFER:
+                SpanInfo = next(iter(FixedTop)) - BaseInfo
+                if not KMinBuffer <= SpanInfo <= KMaxBuffer:
                     continue
-                for cursor in slots:
-                    if cursor in (start, top):
+                for Cursor in Slots:
+                    if Cursor in (StartRun, IsTopInfo):
                         continue
-                    values = [dump.u64(cursor) for dump in series]
-                    if len(set(values)) < 2:
+                    Values = [DumpData.u64(Cursor) for DumpData in Series]
+                    if len(set(Values)) < 2:
                         continue
-                    if any(left > right for left, right in zip(values, values[1:])):
+                    if any((LeftInfo > Right for LeftInfo, Right in zip(Values, Values[1:]))):
                         continue
-                    if any(value < base or value > base + span for value in values):
+                    if any((ValueInfo < BaseInfo or ValueInfo > BaseInfo + SpanInfo for ValueInfo in Values)):
                         continue
-                    key = (cursor, top, start)
-                    votes[key] = votes.get(key, 0) + 1
-                    if span == expected:
-                        anchored.add(key)
-    votes = {
-        key: score for key, score in votes.items() if _globally_ordered(dumps, key)
-    }
-    if not votes:
-        raise CalibrationError("no self-consistent buffer pointer triple was observed")
-    pool = {key for key in anchored if key in votes} or set(votes)
-    best = max(pool, key=lambda key: votes[key])
-    cursor, top, start = best
-    return {
-        "cur": cursor,
-        "max": top,
-        "start": start,
-        "map": start + 8,
-        "votes": votes[best],
-        "candidates": len(votes),
-        "anchored_candidates": len(anchored),
-        "anchor_span": expected,
-    }
+                    KeyName = (Cursor, IsTopInfo, StartRun)
+                    Votes[KeyName] = Votes.get(KeyName, 0) + 1
+                    if SpanInfo == Expect:
+                        Anchored.add(KeyName)
+    Votes = {KeyName: Score for KeyName, Score in Votes.items() if IsGlobally(Dumps, KeyName)}
+    if not Votes:
+        raise Calibration('no self-consistent buffer pointer triple was observed')
+    PoolInfo = {KeyName for KeyName in Anchored if KeyName in Votes} or set(Votes)
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    BestInfo = max(PoolInfo, key=lambda KeyName: Votes[KeyName])
+    Cursor, IsTopInfo, StartRun = BestInfo
+    return {'cur': Cursor, 'max': IsTopInfo, 'start': StartRun, 'map': StartRun + 8, 'votes': Votes[BestInfo], 'candidates': len(Votes), 'anchored_candidates': len(Anchored), 'anchor_span': Expect}
 
 
-def verify(
-    dumps: tuple[tracelog.Dump, ...], layout: dict[str, int]
-) -> dict[str, object]:
-    monotonic = 0
-    breaks = 0
-    for series in group(dumps).values():
-        values = [dump.u32(layout["map"]) for dump in series]
-        for left, right in zip(values, values[1:]):
-            if right >= left:
-                monotonic += 1
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Verify(Dumps: tuple[Tracelog.DumpRecord, ...], Layout: dict[str, int]) -> dict[str, object]:
+    Monotonic = 0
+    Breaks = 0
+    for Series in Group(Dumps).values():
+        Values = [DumpData.u32(Layout['map']) for DumpData in Series]
+        for LeftInfo, Right in zip(Values, Values[1:]):
+            if Right >= LeftInfo:
+                Monotonic += 1
             else:
-                breaks += 1
-    return {"map_non_decreasing": monotonic, "map_decreases": breaks}
+                Breaks += 1
+    return {'map_non_decreasing': Monotonic, 'map_decreases': Breaks}
 
 
-def main() -> int:
-    hits = int(sys.argv[1]) if len(sys.argv) > 1 else 200
-    mode = sys.argv[2] if len(sys.argv) > 2 else "run"
-    OUT.mkdir(parents=True, exist_ok=True)
-    script = HERE / "CdbCalibrate.txt"
-    log = OUT / "cdb_calibrate.log"
-    write_script(script, hits)
-    if mode == "run":
-        result = cdbdrive.run(
-            script,
-            log,
-            CONTROL,
-            marker=r"^CALIB ",
-            target_markers=hits,
-            hard_deadline=420.0,
-            quiet_seconds=40.0,
-        )
-        print(
-            f"cdb finished reason={result.reason} CALIB={result.markers} "
-            f"seconds={result.seconds:.1f}"
-        )
-    dumps = tracelog.read_dumps(log)
-    print(f"dumps={len(dumps)} archives={len(group(dumps))}")
-    expected = len(streamlib.load_donor(CONTROL).resolved)
-    layout = solve(dumps, expected)
-    checks = verify(dumps, layout)
-    payload = {
-        "log": str(log),
-        "script": str(script),
-        "dumps": len(dumps),
-        "archives": len(group(dumps)),
-        "layout": layout,
-        "checks": checks,
-    }
-    (OUT / "Calibrate.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(json.dumps(payload, indent=2))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    HitsInfo = int(System.argv[1]) if len(System.argv) > 1 else 200
+    ModeInfo = System.argv[2] if len(System.argv) > 2 else 'run'
+    KOutInfo.mkdir(parents=True, exist_ok=True)
+    Script = KHereInfo / 'CdbCalibrate.txt'
+    LogInfo = KOutInfo / 'cdb_calibrate.log'
+    WriteScript(Script, HitsInfo)
+    if ModeInfo == 'run':
+        Result = Cdbdrive.RunTask(Script, LogInfo, KControl, Marker='^CALIB ', TargetMarkers=HitsInfo, HardDeadline=420.0, QuietSeconds=40.0)
+        print(f'cdb finished reason={Result.reason} CALIB={Result.markers} seconds={Result.seconds:.1f}')
+    Dumps = Tracelog.ReadDumps(LogInfo)
+    print(f'dumps={len(Dumps)} archives={len(Group(Dumps))}')
+    Expect = len(Streamlib.LoadDonor(KControl).resolved)
+    Layout = Solve(Dumps, Expect)
+    Checks = Verify(Dumps, Layout)
+    PayloadInfo = {'log': str(LogInfo), 'script': str(Script), 'dumps': len(Dumps), 'archives': len(Group(Dumps)), 'layout': Layout, 'checks': Checks}
+    (KOutInfo / 'Calibrate.json').write_text(JsonData.dumps(PayloadInfo, indent=2), encoding='utf-8')
+    print(JsonData.dumps(PayloadInfo, indent=2))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

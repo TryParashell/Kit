@@ -1,53 +1,61 @@
-import pathlib
-import struct
-import sys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from pemap import sections
+import pathlib as Pathlib
+import struct as Struct
+import sys as System
+System.path.insert(0, str(Pathlib.Path(__file__).resolve().parent))
+from Pemap import Sections
 
 
-def rva_to_file(secs, rva):
-    for name, vaddr, vsize, raddr, rsize in secs:
-        if vaddr <= rva < vaddr + max(vsize, rsize):
-            return raddr + (rva - vaddr)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RvaToFile(SecsInfo, RvaInfo):
+    for NameTextInfo, Vaddr, Vsize, Raddr, Rsize in SecsInfo:
+        if Vaddr <= RvaInfo < Vaddr + max(Vsize, Rsize):
+            return Raddr + (RvaInfo - Vaddr)
     return None
 
 
-def exports(path):
-    blob = path.read_bytes()
-    image_base, secs = sections(blob)
-    pe = struct.unpack_from("<I", blob, 0x3C)[0]
-    magic = struct.unpack_from("<H", blob, pe + 24)[0]
-    dd = pe + 24 + (112 if magic == 0x20B else 96)
-    edir_rva, edir_size = struct.unpack_from("<II", blob, dd)
-    base = rva_to_file(secs, edir_rva)
-    count_funcs, count_names = struct.unpack_from("<II", blob, base + 20)
-    addr_funcs, addr_names, addr_ords = struct.unpack_from("<III", blob, base + 28)
-    fbase = rva_to_file(secs, addr_funcs)
-    nbase = rva_to_file(secs, addr_names)
-    obase = rva_to_file(secs, addr_ords)
-    out = []
-    for i in range(count_names):
-        name_rva = struct.unpack_from("<I", blob, nbase + 4 * i)[0]
-        noff = rva_to_file(secs, name_rva)
-        end = blob.index(b"\x00", noff)
-        name = blob[noff:end].decode("latin1")
-        index = struct.unpack_from("<H", blob, obase + 2 * i)[0]
-        func_rva = struct.unpack_from("<I", blob, fbase + 4 * index)[0]
-        out.append((name, func_rva, image_base + func_rva))
-    return image_base, out
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Exports(PathInfoData):
+    ByteBlob = PathInfoData.read_bytes()
+    ImageBase, SecsInfo = Sections(ByteBlob)
+    PeInfo = Struct.unpack_from('<I', ByteBlob, 60)[0]
+    Magic = Struct.unpack_from('<H', ByteBlob, PeInfo + 24)[0]
+    DdInfo = PeInfo + 24 + (112 if Magic == 523 else 96)
+    EdirRva, EdirSize = Struct.unpack_from('<II', ByteBlob, DdInfo)
+    BaseInfo = RvaToFile(SecsInfo, EdirRva)
+    CountFuncs, CountNames = Struct.unpack_from('<II', ByteBlob, BaseInfo + 20)
+    AddrFuncs, AddrNames, AddrOrds = Struct.unpack_from('<III', ByteBlob, BaseInfo + 28)
+    Fbase = RvaToFile(SecsInfo, AddrFuncs)
+    Nbase = RvaToFile(SecsInfo, AddrNames)
+    Obase = RvaToFile(SecsInfo, AddrOrds)
+    OutputDataInfo = []
+    for IndexInfo in range(CountNames):
+        NameRva = Struct.unpack_from('<I', ByteBlob, Nbase + 4 * IndexInfo)[0]
+        NoffInfo = RvaToFile(SecsInfo, NameRva)
+        EndIndex = ByteBlob.index(b'\x00', NoffInfo)
+        NameTextInfo = ByteBlob[NoffInfo:EndIndex].decode('latin1')
+        IndexData = Struct.unpack_from('<H', ByteBlob, Obase + 2 * IndexInfo)[0]
+        FuncRva = Struct.unpack_from('<I', ByteBlob, Fbase + 4 * IndexData)[0]
+        OutputDataInfo.append((NameTextInfo, FuncRva, ImageBase + FuncRva))
+    return (ImageBase, OutputDataInfo)
 
 
-def main():
-    path = pathlib.Path(sys.argv[1])
-    keys = sys.argv[2:]
-    image_base, table = exports(path)
-    print(f"image_base 0x{image_base:x} exports {len(table)}")
-    for name, rva, va in table:
-        if keys and not any(k in name for k in keys):
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo():
+    PathInfoData = Pathlib.Path(System.argv[1])
+    KeysInfo = System.argv[2:]
+    ImageBase, Table = Exports(PathInfoData)
+    print(f'image_base 0x{ImageBase:x} exports {len(Table)}')
+    for NameTextInfo, RvaInfo, VaInfo in Table:
+        if KeysInfo and (not any((KeyIndex in NameTextInfo for KeyIndex in KeysInfo))):
             continue
-        print(f"  0x{va:x} rva=0x{rva:x} {name}")
-
-
-if __name__ == "__main__":
-    main()
+        print(f'  0x{VaInfo:x} rva=0x{RvaInfo:x} {NameTextInfo}')
+if __name__ == '__main__':
+    MainRunInfo()

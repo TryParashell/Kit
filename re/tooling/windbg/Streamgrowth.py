@@ -1,37 +1,45 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from pathlib import Path as PathInfo
+import sys as System
 
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Streamlib as Streamlib
 
-import streamlib
 
-
-def main() -> int:
-    parts = [Path(item).resolve() for item in sys.argv[1:]]
-    if not parts:
-        raise SystemExit("usage: Streamgrowth.py <part> <part> [...]")
-    table: dict[str, list[int]] = {}
-    for part in parts:
-        donor = streamlib.load_donor(part)
-        for name, payload in donor.streams.items():
-            table.setdefault(name, []).append(len(payload))
-    width = max(len(name) for name in table)
-    print("stream sizes across " + ", ".join(part.stem for part in parts))
-    for name in sorted(table):
-        sizes = table[name]
-        if len(sizes) != len(parts):
-            print(f"{name:<{width}}  {sizes} (missing from some parts)")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    Parts = [PathInfo(ItemData).resolve() for ItemData in System.argv[1:]]
+    if not Parts:
+        raise SystemExit('usage: Streamgrowth.py <part> <part> [...]')
+    Table: dict[str, list[int]] = {}
+    for PartInfoInfo in Parts:
+        DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
+        for NameTextInfo, PayloadInfo in DonorInfo.streams.items():
+            Table.setdefault(NameTextInfo, []).append(len(PayloadInfo))
+    WidthInfo = max((len(NameTextInfo) for NameTextInfo in Table))
+    print('stream sizes across ' + ', '.join((PartInfoInfo.stem for PartInfoInfo in Parts)))
+    for NameTextInfo in sorted(Table):
+        Sizes = Table[NameTextInfo]
+        if len(Sizes) != len(Parts):
+            print(f'{NameTextInfo:<{WidthInfo}}  {Sizes} (missing from some parts)')
             continue
-        trend = "grows" if sizes == sorted(sizes) and sizes[0] != sizes[-1] else "flat"
-        print(f"{name:<{width}}  {sizes} {trend}")
+        Trend = 'grows' if Sizes == sorted(Sizes) and Sizes[0] != Sizes[-1] else 'flat'
+        print(f'{NameTextInfo:<{WidthInfo}}  {Sizes} {Trend}')
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

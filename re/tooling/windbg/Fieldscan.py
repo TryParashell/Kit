@@ -1,98 +1,83 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+import json as JsonData
+from pathlib import Path as PathInfo
+import struct as Struct
+import sys as System
 
-import json
-from pathlib import Path
-import struct
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-SCRATCH = HERE.parents[2] / ".rescratch"
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KScratch = KHereInfo.parents[2] / '.rescratch'
 
-import streamlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Streamlib as Streamlib
 
-OUT = SCRATCH / "trace" / "out"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = KScratch / 'trace' / 'out'
 
-FORMULAS = {
-    "n": lambda n: n,
-    "2n": lambda n: 2 * n,
-    "24+2n": lambda n: 24 + 2 * n,
-    "25+2n": lambda n: 25 + 2 * n,
-    "18+2n": lambda n: 18 + 2 * n,
-    "n-1": lambda n: n - 1,
-    "n+1": lambda n: n + 1,
-    "2n-1": lambda n: 2 * n - 1,
-    "2n+1": lambda n: 2 * n + 1,
-    "2n+2": lambda n: 2 * n + 2,
-    "3n": lambda n: 3 * n,
-    "4n": lambda n: 4 * n,
-    "19+2n": lambda n: 19 + 2 * n,
-    "23+2n": lambda n: 23 + 2 * n,
-    "26+2n": lambda n: 26 + 2 * n,
-    "40+2n": lambda n: 40 + 2 * n,
-}
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KFormulas = {'n': lambda ItemCountInfo: ItemCountInfo, '2n': lambda ItemCountInfo: 2 * ItemCountInfo, '24+2n': lambda ItemCountInfo: 24 + 2 * ItemCountInfo, '25+2n': lambda ItemCountInfo: 25 + 2 * ItemCountInfo, '18+2n': lambda ItemCountInfo: 18 + 2 * ItemCountInfo, 'n-1': lambda ItemCountInfo: ItemCountInfo - 1, 'n+1': lambda ItemCountInfo: ItemCountInfo + 1, '2n-1': lambda ItemCountInfo: 2 * ItemCountInfo - 1, '2n+1': lambda ItemCountInfo: 2 * ItemCountInfo + 1, '2n+2': lambda ItemCountInfo: 2 * ItemCountInfo + 2, '3n': lambda ItemCountInfo: 3 * ItemCountInfo, '4n': lambda ItemCountInfo: 4 * ItemCountInfo, '19+2n': lambda ItemCountInfo: 19 + 2 * ItemCountInfo, '23+2n': lambda ItemCountInfo: 23 + 2 * ItemCountInfo, '26+2n': lambda ItemCountInfo: 26 + 2 * ItemCountInfo, '40+2n': lambda ItemCountInfo: 40 + 2 * ItemCountInfo}
 
 
-def matches(blob: bytes, value: int) -> set[tuple[int, int]]:
-    found: set[tuple[int, int]] = set()
-    limit = len(blob)
-    for offset in range(limit - 1):
-        if struct.unpack_from("<H", blob, offset)[0] == value:
-            found.add((offset, 2))
-        if offset + 4 <= limit and struct.unpack_from("<I", blob, offset)[0] == value:
-            found.add((offset, 4))
-    return found
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Matches(ByteBlob: bytes, ValueInfo: int) -> set[tuple[int, int]]:
+    Found: set[tuple[int, int]] = set()
+    Limit = len(ByteBlob)
+    for Offset in range(Limit - 1):
+        if Struct.unpack_from('<H', ByteBlob, Offset)[0] == ValueInfo:
+            Found.add((Offset, 2))
+        if Offset + 4 <= Limit and Struct.unpack_from('<I', ByteBlob, Offset)[0] == ValueInfo:
+            Found.add((Offset, 4))
+    return Found
 
 
-def main() -> int:
-    formula = sys.argv[1]
-    if formula not in FORMULAS:
-        raise SystemExit(f"formula must be one of {sorted(FORMULAS)}")
-    rule = FORMULAS[formula]
-    parts = [Path(item).resolve() for item in sys.argv[2:]]
-    if len(parts) < 2:
-        raise SystemExit("usage: Fieldscan.py <formula> <part> <part> [...]")
-    per_stream: dict[str, list[set[tuple[int, int]]]] = {}
-    counts: list[int] = []
-    for part in parts:
-        donor = streamlib.load_donor(part)
-        features = len(streamlib.comp_feature_entries(donor.resolved)) // 2
-        counts.append(features)
-        value = rule(features)
-        for name, payload in donor.streams.items():
-            per_stream.setdefault(name, []).append(matches(payload, value))
-    distinct = sorted(set(counts))
-    print(f"parts={len(parts)} feature counts observed={distinct} formula={formula}")
-    if len(distinct) < 2:
-        raise SystemExit("the part set must contain at least two feature counts")
-    report: dict[str, list[list[int]]] = {}
-    for name in sorted(per_stream):
-        sets = per_stream[name]
-        if len(sets) != len(parts):
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    Formula = System.argv[1]
+    if Formula not in KFormulas:
+        raise SystemExit(f'formula must be one of {sorted(KFormulas)}')
+    RuleInfo = KFormulas[Formula]
+    Parts = [PathInfo(ItemData).resolve() for ItemData in System.argv[2:]]
+    if len(Parts) < 2:
+        raise SystemExit('usage: Fieldscan.py <formula> <part> <part> [...]')
+    PerStream: dict[str, list[set[tuple[int, int]]]] = {}
+    Counts: list[int] = []
+    for PartInfoInfo in Parts:
+        DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
+        FeatInfoInfo = len(Streamlib.CompFeatEntries(DonorInfo.resolved)) // 2
+        Counts.append(FeatInfoInfo)
+        ValueInfo = RuleInfo(FeatInfoInfo)
+        for NameTextInfo, PayloadInfo in DonorInfo.streams.items():
+            PerStream.setdefault(NameTextInfo, []).append(Matches(PayloadInfo, ValueInfo))
+    Distinct = sorted(set(Counts))
+    print(f'parts={len(Parts)} feature counts observed={Distinct} formula={Formula}')
+    if len(Distinct) < 2:
+        raise SystemExit('the part set must contain at least two feature counts')
+    Report: dict[str, list[list[int]]] = {}
+    for NameTextInfo in sorted(PerStream):
+        SetsInfo = PerStream[NameTextInfo]
+        if len(SetsInfo) != len(Parts):
             continue
-        shared = set.intersection(*sets)
-        if not shared:
+        Shared = set.intersection(*SetsInfo)
+        if not Shared:
             continue
-        report[name] = sorted([list(item) for item in shared])
-        print(f"{name}: {sorted(shared)}")
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / f"fieldscan_{formula}.json").write_text(
-        json.dumps(
-            {
-                "formula": formula,
-                "parts": [str(part) for part in parts],
-                "feature_counts": counts,
-                "shared": report,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+        Report[NameTextInfo] = sorted([list(ItemData) for ItemData in Shared])
+        print(f'{NameTextInfo}: {sorted(Shared)}')
+    KOutInfo.mkdir(parents=True, exist_ok=True)
+    (KOutInfo / f'fieldscan_{Formula}.json').write_text(JsonData.dumps({'formula': Formula, 'parts': [str(PartInfoInfo) for PartInfoInfo in Parts], 'feature_counts': Counts, 'shared': Report}, indent=2), encoding='utf-8')
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

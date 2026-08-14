@@ -1,161 +1,167 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from dataclasses import dataclass as DataClass
+from pathlib import Path as PathInfo
+import json as JsonData
+import re as Regex
+import struct as Struct
+import sys as System
 
-from dataclasses import dataclass
-from pathlib import Path
-import json
-import re
-import struct
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-GRAMMAR = HERE.parent / "grammar"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'grammar'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Streamlib as Streamlib
 
-import streamlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KEvent = Regex.compile('^(RO|RC) ([0-9a-fA-F]+) ([0-9a-fA-F]+) (\\d+)\\s*$')
 
-EVENT = re.compile(r"^(RO|RC) ([0-9a-fA-F]+) ([0-9a-fA-F]+) (\d+)\s*$")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNewClassTag = 65535
 
-NEW_CLASS_TAG = 0xFFFF
-CLASS_TAG_BIT = 0x8000
-BIG_OBJECT_TAG = 0x7FFF
-NULL_TAG = 0x0000
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KClassTagBit = 32768
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBigObjectTag = 32767
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNullTag = 0
 
 
-@dataclass(frozen=True, slots=True)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class Event:
-    kind: str
-    buffer: int
-    offset: int
-    counter: int
+    KindNameInfo: str
+    Buffer: int
+    Offset: int
+    CounterInfo: int
+    KAliasNames = {'kind': 'KindNameInfo', 'buffer': 'Buffer', 'offset': 'Offset', 'counter': 'CounterInfo'}
 
 
-@dataclass(frozen=True, slots=True)
-class Tag:
-    offset: int
-    token: int
-    kind: str
-    header: int
-    schema: int
-    name: str
-    index: int
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
 
 
-def read_events(path: Path) -> tuple[Event, ...]:
-    out: list[Event] = []
-    for raw in path.read_text(errors="replace").splitlines():
-        match = EVENT.match(raw.strip())
-        if match is None:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
+class TagInfo:
+    Offset: int
+    Token: int
+    KindNameInfo: str
+    Header: int
+    Schema: int
+    NameTextInfo: str
+    IndexData: int
+    KAliasNames = {'offset': 'Offset', 'token': 'Token', 'kind': 'KindNameInfo', 'header': 'Header', 'schema': 'Schema', 'name': 'NameTextInfo', 'index': 'IndexData'}
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ReadEvents(PathInfoData: PathInfo) -> tuple[Event, ...]:
+    OutputDataInfo: list[Event] = []
+    for RawData in PathInfoData.read_text(errors='replace').splitlines():
+        Match = KEvent.match(RawData.strip())
+        if Match is None:
             continue
-        out.append(
-            Event(
-                kind=match.group(1),
-                buffer=int(match.group(2), 16),
-                offset=int(match.group(3), 16),
-                counter=int(match.group(4)),
-            )
-        )
-    return tuple(out)
+        OutputDataInfo.append(Event(KindNameInfo=Match.group(1), Buffer=int(Match.group(2), 16), Offset=int(Match.group(3), 16), CounterInfo=int(Match.group(4))))
+    return tuple(OutputDataInfo)
 
 
-def decode_tag(blob: bytes, offset: int) -> Tag:
-    token = struct.unpack_from("<H", blob, offset)[0]
-    if token == NEW_CLASS_TAG:
-        schema, length = struct.unpack_from("<HH", blob, offset + 2)
-        name = blob[offset + 6 : offset + 6 + length].decode("ascii", "replace")
-        return Tag(offset, token, "definition", 6 + length, schema, name, -1)
-    if token == NULL_TAG:
-        return Tag(offset, token, "null", 2, 0, "", -1)
-    if token == BIG_OBJECT_TAG:
-        index = struct.unpack_from("<I", blob, offset + 2)[0]
-        return Tag(offset, token, "big", 6, 0, "", index)
-    if token & CLASS_TAG_BIT:
-        return Tag(offset, token, "classref", 2, 0, "", token & ~CLASS_TAG_BIT)
-    return Tag(offset, token, "objectref", 2, 0, "", token)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def DecodeTag(ByteBlob: bytes, Offset: int) -> TagInfo:
+    Token = Struct.unpack_from('<H', ByteBlob, Offset)[0]
+    if Token == KNewClassTag:
+        Schema, Length = Struct.unpack_from('<HH', ByteBlob, Offset + 2)
+        NameTextInfo = ByteBlob[Offset + 6:Offset + 6 + Length].decode('ascii', 'replace')
+        return TagInfo(Offset, Token, 'definition', 6 + Length, Schema, NameTextInfo, -1)
+    if Token == KNullTag:
+        return TagInfo(Offset, Token, 'null', 2, 0, '', -1)
+    if Token == KBigObjectTag:
+        IndexData = Struct.unpack_from('<I', ByteBlob, Offset + 2)[0]
+        return TagInfo(Offset, Token, 'big', 6, 0, '', IndexData)
+    if Token & KClassTagBit:
+        return TagInfo(Offset, Token, 'classref', 2, 0, '', Token & ~KClassTagBit)
+    return TagInfo(Offset, Token, 'objectref', 2, 0, '', Token)
 
 
-def objects(events: tuple[Event, ...]) -> tuple[Event, ...]:
-    return tuple(event for event in events if event.kind == "RO")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Objects(Events: tuple[Event, ...]) -> tuple[Event, ...]:
+    return tuple((EventInfo for EventInfo in Events if EventInfo.kind == 'RO'))
 
 
-def dominant_buffer(events: tuple[Event, ...]) -> int:
-    counts: dict[int, int] = {}
-    for event in events:
-        counts[event.buffer] = counts.get(event.buffer, 0) + 1
-    return max(counts, key=lambda key: counts[key])
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def DominantBuffer(Events: tuple[Event, ...]) -> int:
+    Counts: dict[int, int] = {}
+    for EventInfo in Events:
+        Counts[EventInfo.buffer] = Counts.get(EventInfo.buffer, 0) + 1
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    return max(Counts, key=lambda KeyName: Counts[KeyName])
 
 
-def delta_for(kind: str) -> int:
-    if kind == "definition":
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def DeltaFor(KindNameInfo: str) -> int:
+    if KindNameInfo == 'definition':
         return 2
-    if kind in {"classref", "big"}:
+    if KindNameInfo in {'classref', 'big'}:
         return 1
     return 0
 
 
-def analyse(blob: bytes, log: Path) -> dict[str, object]:
-    events = objects(read_events(log))
-    buffer = dominant_buffer(events)
-    events = tuple(event for event in events if event.buffer == buffer)
-    tags = [decode_tag(blob, event.offset) for event in events]
-    mismatch: list[str] = []
-    for position in range(len(events) - 1):
-        expected = events[position].counter + delta_for(tags[position].kind)
-        actual = events[position + 1].counter
-        if expected != actual:
-            mismatch.append(
-                f"{events[position].offset:#x} {tags[position].kind} "
-                f"counter {events[position].counter} -> {actual} expected {expected}"
-            )
-    monotonic = all(
-        events[position].offset < events[position + 1].offset
-        for position in range(len(events) - 1)
-    )
-    return {
-        "log": log.name,
-        "buffer": f"{buffer:#x}",
-        "stream_length": len(blob),
-        "events": len(events),
-        "base_counter": events[0].counter if events else 0,
-        "monotonic_offsets": monotonic,
-        "counter_rule_mismatches": mismatch,
-        "kinds": {
-            kind: sum(1 for tag in tags if tag.kind == kind)
-            for kind in ("definition", "classref", "objectref", "null", "big")
-        },
-        "items": [
-            {
-                "offset": event.offset,
-                "counter": event.counter,
-                "kind": tag.kind,
-                "token": tag.token,
-                "index": tag.index,
-                "name": tag.name,
-                "schema": tag.schema,
-                "header": tag.header,
-            }
-            for event, tag in zip(events, tags)
-        ],
-    }
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Analyse(ByteBlob: bytes, LogInfo: PathInfo) -> dict[str, object]:
+    Events = Objects(ReadEvents(LogInfo))
+    Buffer = DominantBuffer(Events)
+    Events = tuple((EventInfo for EventInfo in Events if EventInfo.buffer == Buffer))
+    TagsInfo = [DecodeTag(ByteBlob, EventInfo.offset) for EventInfo in Events]
+    Mismatch: list[str] = []
+    for PosInfoInfo in range(len(Events) - 1):
+        Expect = Events[PosInfoInfo].counter + DeltaFor(TagsInfo[PosInfoInfo].kind)
+        ActualInfo = Events[PosInfoInfo + 1].counter
+        if Expect != ActualInfo:
+            Mismatch.append(f'{Events[PosInfoInfo].offset:#x} {TagsInfo[PosInfoInfo].kind} counter {Events[PosInfoInfo].counter} -> {ActualInfo} expected {Expect}')
+    Monotonic = all((Events[PosInfoInfo].offset < Events[PosInfoInfo + 1].offset for PosInfoInfo in range(len(Events) - 1)))
+    return {'log': LogInfo.name, 'buffer': f'{Buffer:#x}', 'stream_length': len(ByteBlob), 'events': len(Events), 'base_counter': Events[0].counter if Events else 0, 'monotonic_offsets': Monotonic, 'counter_rule_mismatches': Mismatch, 'kinds': {KindNameInfo: sum((1 for TagInfoInfo in TagsInfo if TagInfoInfo.kind == KindNameInfo)) for KindNameInfo in ('definition', 'classref', 'objectref', 'null', 'big')}, 'items': [{'offset': EventInfo.offset, 'counter': EventInfo.counter, 'kind': TagInfoInfo.kind, 'token': TagInfoInfo.token, 'index': TagInfoInfo.index, 'name': TagInfoInfo.name, 'schema': TagInfoInfo.schema, 'header': TagInfoInfo.header} for EventInfo, TagInfoInfo in zip(Events, TagsInfo)]}
 
 
-def main() -> None:
-    part = Path(sys.argv[1]).resolve()
-    log = Path(sys.argv[2]).resolve()
-    destination = Path(sys.argv[3]).resolve()
-    blob = streamlib.load_donor(part).resolved
-    report = analyse(blob, log)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(f"stream={report['stream_length']} events={report['events']}")
-    print(f"base_counter={report['base_counter']}")
-    print(f"monotonic_offsets={report['monotonic_offsets']}")
-    print(f"kinds={report['kinds']}")
-    print(f"counter_rule_mismatches={len(report['counter_rule_mismatches'])}")
-    for text in report["counter_rule_mismatches"][:20]:
-        print(f"  {text}")
-
-
-if __name__ == "__main__":
-    main()
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> None:
+    PartInfoInfo = PathInfo(System.argv[1]).resolve()
+    LogInfo = PathInfo(System.argv[2]).resolve()
+    Destination = PathInfo(System.argv[3]).resolve()
+    ByteBlob = Streamlib.LoadDonor(PartInfoInfo).resolved
+    Report = Analyse(ByteBlob, LogInfo)
+    Destination.parent.mkdir(parents=True, exist_ok=True)
+    Destination.write_text(JsonData.dumps(Report, indent=2), encoding='utf-8')
+    print(f"stream={Report['stream_length']} events={Report['events']}")
+    print(f"base_counter={Report['base_counter']}")
+    print(f"monotonic_offsets={Report['monotonic_offsets']}")
+    print(f"kinds={Report['kinds']}")
+    print(f"counter_rule_mismatches={len(Report['counter_rule_mismatches'])}")
+    for TextValueData in Report['counter_rule_mismatches'][:20]:
+        print(f'  {TextValueData}')
+if __name__ == '__main__':
+    MainRunInfo()

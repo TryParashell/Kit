@@ -1,61 +1,61 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from pathlib import Path as PathInfo
+import sys as System
 
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
-
-import model as modellib
-import segment as segmentlib
-
-import streamlib
-
-from convert.adapters.solidworks import resolved as resolvedlib
-
-
-def anchors(blob: bytes) -> dict[int, str]:
-    marks: dict[int, str] = {}
-    for node in resolvedlib.tree_nodes(blob):
-        marks[node.text_end] = f"tree:{node.name}:flags@{node.text_end + 4}"
-    for index, layout in enumerate(resolvedlib.locate_features(blob)):
-        marks[layout.depth_offset] = f"depth[{index}]"
-    for index, entry in enumerate(streamlib.comp_feature_entries(blob)):
-        marks[entry[0]] = f"comp_entry[{index}] id={entry[2]}"
-    return marks
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Model as Modellib
+import Segment as Segmentlib
+import Streamlib as Streamlib
+from convert.adapters.solidworks import resolved as Resolvedlib
 
 
-def main() -> int:
-    part = Path(sys.argv[1]).resolve()
-    log = Path(sys.argv[2]).resolve()
-    low = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-    high = int(sys.argv[4]) if len(sys.argv) > 4 else 0
-    blob, model, segments = modellib.load(part, log)
-    offsets = modellib.node_offsets(model)
-    marks = anchors(blob)
-    stop = high if high else len(segments)
-    print(f"{part.name} stream={len(blob)} nodes={len(segments)} base={model.base}")
-    print(
-        f"{'node':>5} {'offset':>7} {'len':>5} {'tag':>6} {'kind':>10} "
-        f"{'map':>5} {'d':>2} {'parent':>6} class"
-    )
-    for position in range(low, stop):
-        item = segments[position]
-        note = ""
-        for offset, label in marks.items():
-            if item.offset <= offset < item.end:
-                note += f"  <{label}>"
-        print(
-            f"{position:>5} {item.offset:>7} {item.length:>5} {item.tag:>6x} "
-            f"{item.kind:>10} {item.map_index:>5} {item.depth:>2} "
-            f"{item.parent:>6} {item.class_name}{note}"
-        )
-    _ = offsets
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Anchors(ByteBlob: bytes) -> dict[int, str]:
+    Marks: dict[int, str] = {}
+    for NodeInfoInfo in Resolvedlib.tree_nodes(ByteBlob):
+        Marks[NodeInfoInfo.text_end] = f'tree:{NodeInfoInfo.name}:flags@{NodeInfoInfo.text_end + 4}'
+    for IndexData, Layout in enumerate(Resolvedlib.locate_features(ByteBlob)):
+        Marks[Layout.depth_offset] = f'depth[{IndexData}]'
+    for IndexData, Entry in enumerate(Streamlib.CompFeatEntries(ByteBlob)):
+        Marks[Entry[0]] = f'comp_entry[{IndexData}] id={Entry[2]}'
+    return Marks
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    PartInfoInfo = PathInfo(System.argv[1]).resolve()
+    LogInfo = PathInfo(System.argv[2]).resolve()
+    LowValue = int(System.argv[3]) if len(System.argv) > 3 else 0
+    HighValue = int(System.argv[4]) if len(System.argv) > 4 else 0
+    ByteBlob, ModelInfo, SegmentsInfo = Modellib.LoadData(PartInfoInfo, LogInfo)
+    Offsets = Modellib.NodeOffsets(ModelInfo)
+    Marks = Anchors(ByteBlob)
+    StopInfo = HighValue if HighValue else len(SegmentsInfo)
+    print(f'{PartInfoInfo.name} stream={len(ByteBlob)} nodes={len(SegmentsInfo)} base={ModelInfo.base}')
+    print(f"{'node':>5} {'offset':>7} {'len':>5} {'tag':>6} {'kind':>10} {'map':>5} {'d':>2} {'parent':>6} class")
+    for PosInfoInfo in range(LowValue, StopInfo):
+        ItemData = SegmentsInfo[PosInfoInfo]
+        NoteInfo = ''
+        for Offset, LabelInfo in Marks.items():
+            if ItemData.offset <= Offset < ItemData.end:
+                NoteInfo += f'  <{LabelInfo}>'
+        print(f'{PosInfoInfo:>5} {ItemData.offset:>7} {ItemData.length:>5} {ItemData.tag:>6x} {ItemData.kind:>10} {ItemData.map_index:>5} {ItemData.depth:>2} {ItemData.parent:>6} {ItemData.class_name}{NoteInfo}')
+    SpareValue = Offsets
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

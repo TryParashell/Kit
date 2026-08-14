@@ -1,269 +1,247 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from dataclasses import dataclass as DataClass, asdict as Asdict
+import json as JsonData
+from pathlib import Path as PathInfo
+import struct as Struct
+import sys as System
 
-from dataclasses import dataclass, asdict
-import json
-from pathlib import Path
-import struct
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-SCRATCH = HERE.parents[2] / ".rescratch"
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KScratch = KHereInfo.parents[2] / '.rescratch'
 
-import tracelog
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Tracelog as Tracelog
+import Streamlib as Streamlib
 
-import streamlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KOutInfo = KScratch / 'trace' / 'out'
 
-OUT = SCRATCH / "trace" / "out"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNewClassTag = 65535
 
-NEW_CLASS_TAG = 0xFFFF
-CLASS_TAG_BIT = 0x8000
-BIG_OBJECT_TAG = 0x7FFF
-NULL_TAG = 0x0000
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KClassTagBit = 32768
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBigObjectTag = 32767
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KNullTag = 0
 
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
 class SegmentError(RuntimeError):
     __slots__ = ()
 
 
-@dataclass(frozen=True, slots=True)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class Segment:
-    index: int
-    offset: int
-    end: int
-    length: int
-    scope_end: int
-    depth: int
-    parent: int
-    rsp: int
-    tag: int
-    kind: str
-    header: int
-    class_index: int
-    class_name: str
-    map_index: int
-    modelled_index: int
-    object_index: int
+    IndexData: int
+    Offset: int
+    EndIndex: int
+    Length: int
+    ScopeEnd: int
+    Depth: int
+    Parent: int
+    RspInfo: int
+    TagInfoInfo: int
+    KindNameInfo: str
+    Header: int
+    ClassIndex: int
+    ClassNameData: str
+    MapIndex: int
+    ModelledIndex: int
+    ObjectIndex: int
+    KAliasNames = {'index': 'IndexData', 'offset': 'Offset', 'end': 'EndIndex', 'length': 'Length', 'scope_end': 'ScopeEnd', 'depth': 'Depth', 'parent': 'Parent', 'rsp': 'RspInfo', 'tag': 'TagInfoInfo', 'kind': 'KindNameInfo', 'header': 'Header', 'class_index': 'ClassIndex', 'class_name': 'ClassNameData', 'map_index': 'MapIndex', 'modelled_index': 'ModelledIndex', 'object_index': 'ObjectIndex'}
 
 
-def tag_at(blob: bytes, offset: int) -> tuple[int, str, int]:
-    token = struct.unpack_from("<H", blob, offset)[0]
-    if token == NEW_CLASS_TAG:
-        length = struct.unpack_from("<H", blob, offset + 4)[0]
-        return token, "definition", 6 + length
-    if token == NULL_TAG:
-        return token, "null", 2
-    if token == BIG_OBJECT_TAG:
-        return token, "big", 6
-    if token & CLASS_TAG_BIT:
-        return token, "classref", 2
-    return token, "objectref", 2
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
 
 
-def _ordered(
-    events: tuple[tracelog.Event, ...], buffer: int, span: int | None = None
-) -> list[tracelog.Event]:
-    seen: set[int] = set()
-    result: list[tracelog.Event] = []
-    for event in events:
-        if event.kind != "RO" or event.buffer != buffer or event.offset in seen:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def TagAt(ByteBlob: bytes, Offset: int) -> tuple[int, str, int]:
+    Token = Struct.unpack_from('<H', ByteBlob, Offset)[0]
+    if Token == KNewClassTag:
+        Length = Struct.unpack_from('<H', ByteBlob, Offset + 4)[0]
+        return (Token, 'definition', 6 + Length)
+    if Token == KNullTag:
+        return (Token, 'null', 2)
+    if Token == KBigObjectTag:
+        return (Token, 'big', 6)
+    if Token & KClassTagBit:
+        return (Token, 'classref', 2)
+    return (Token, 'objectref', 2)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Ordered(Events: tuple[Tracelog.Event, ...], Buffer: int, SpanInfo: int | None=None) -> list[Tracelog.Event]:
+    SeenInfo: set[int] = set()
+    Result: list[Tracelog.Event] = []
+    for EventInfo in Events:
+        if EventInfo.kind != 'RO' or EventInfo.buffer != Buffer or EventInfo.offset in SeenInfo:
             continue
-        if span is not None and event.span != span:
+        if SpanInfo is not None and EventInfo.span != SpanInfo:
             continue
-        seen.add(event.offset)
-        result.append(event)
-    result.sort(key=lambda event: event.offset)
-    return result
+        SeenInfo.add(EventInfo.offset)
+        Result.append(EventInfo)
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    Result.sort(key=lambda EventInfo: EventInfo.offset)
+    return Result
 
 
-def _nesting(events: list[tracelog.Event]) -> tuple[list[int], list[int], list[int]]:
-    stack: list[tuple[int, int]] = []
-    depths: list[int] = []
-    parents: list[int] = []
-    for position, event in enumerate(events):
-        while stack and stack[-1][0] <= event.rsp:
-            stack.pop()
-        parents.append(stack[-1][1] if stack else -1)
-        depths.append(len(stack))
-        stack.append((event.rsp, position))
-    scope: list[int] = []
-    for position, event in enumerate(events):
-        end = -1
-        for later in range(position + 1, len(events)):
-            if events[later].rsp >= event.rsp:
-                end = events[later].offset
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Nesting(Events: list[Tracelog.Event]) -> tuple[list[int], list[int], list[int]]:
+    Stack: list[tuple[int, int]] = []
+    Depths: list[int] = []
+    Parents: list[int] = []
+    for PosInfoInfo, EventInfo in enumerate(Events):
+        while Stack and Stack[-1][0] <= EventInfo.rsp:
+            Stack.pop()
+        Parents.append(Stack[-1][1] if Stack else -1)
+        Depths.append(len(Stack))
+        Stack.append((EventInfo.rsp, PosInfoInfo))
+    Scope: list[int] = []
+    for PosInfoInfo, EventInfo in enumerate(Events):
+        EndIndex = -1
+        for Later in range(PosInfoInfo + 1, len(Events)):
+            if Events[Later].rsp >= EventInfo.rsp:
+                EndIndex = Events[Later].offset
                 break
-        scope.append(end)
-    return depths, parents, scope
+        Scope.append(EndIndex)
+    return (Depths, Parents, Scope)
 
 
-def build(
-    blob: bytes,
-    events: tuple[tracelog.Event, ...],
-    *,
-    buffer: int | None = None,
-    span: int | None = None,
-) -> tuple[Segment, ...]:
-    objects = tuple(event for event in events if event.kind == "RO")
-    if not objects:
-        raise SegmentError("trace contains no ReadObject events")
-    if buffer is not None:
-        target = buffer
-    elif span is not None:
-        target = tracelog.busiest_buffer(events, span)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Build(ByteBlob: bytes, Events: tuple[Tracelog.Event, ...], *, Buffer: int | None=None, SpanInfo: int | None=None) -> tuple[Segment, ...]:
+    Objects = tuple((EventInfo for EventInfo in Events if EventInfo.kind == 'RO'))
+    if not Objects:
+        raise SegmentError('trace contains no ReadObject events')
+    if Buffer is not None:
+        Target = Buffer
+    elif SpanInfo is not None:
+        Target = Tracelog.BusiestBuffer(Events, SpanInfo)
     else:
-        target = tracelog.dominant_buffer(objects)
-    ordered = _ordered(events, target, span)
-    depths, parents, scope = _nesting(ordered)
-    names: dict[int, str] = {}
-    counter = ordered[0].counter
-    result: list[Segment] = []
-    for position, event in enumerate(ordered):
-        offset = event.offset
-        end = ordered[position + 1].offset if position + 1 < len(ordered) else len(blob)
-        token, kind, header = tag_at(blob, offset)
-        modelled = counter
-        if kind == "definition":
-            length = struct.unpack_from("<H", blob, offset + 4)[0]
-            name = blob[offset + 6 : offset + 6 + length].decode("ascii", "replace")
-            class_index = counter
-            names[class_index] = name
-            object_index = counter + 1
-            counter += 2
-        elif kind == "classref":
-            class_index = token & ~CLASS_TAG_BIT
-            name = names.get(class_index, f"external#{class_index}")
-            object_index = counter
-            counter += 1
-        elif kind == "objectref":
-            class_index = 0
-            name = f"backref->{token}"
-            object_index = token
+        Target = Tracelog.DominantBuffer(Objects)
+    OrderedInfo = Ordered(Events, Target, SpanInfo)
+    Depths, Parents, Scope = Nesting(OrderedInfo)
+    Names: dict[int, str] = {}
+    CounterInfo = OrderedInfo[0].counter
+    Result: list[Segment] = []
+    for PosInfoInfo, EventInfo in enumerate(OrderedInfo):
+        Offset = EventInfo.offset
+        EndIndex = OrderedInfo[PosInfoInfo + 1].offset if PosInfoInfo + 1 < len(OrderedInfo) else len(ByteBlob)
+        Token, KindNameInfo, Header = TagAt(ByteBlob, Offset)
+        Modelled = CounterInfo
+        if KindNameInfo == 'definition':
+            Length = Struct.unpack_from('<H', ByteBlob, Offset + 4)[0]
+            NameTextInfo = ByteBlob[Offset + 6:Offset + 6 + Length].decode('ascii', 'replace')
+            ClassIndex = CounterInfo
+            Names[ClassIndex] = NameTextInfo
+            ObjectIndex = CounterInfo + 1
+            CounterInfo += 2
+        elif KindNameInfo == 'classref':
+            ClassIndex = Token & ~KClassTagBit
+            NameTextInfo = Names.get(ClassIndex, f'external#{ClassIndex}')
+            ObjectIndex = CounterInfo
+            CounterInfo += 1
+        elif KindNameInfo == 'objectref':
+            ClassIndex = 0
+            NameTextInfo = f'backref->{Token}'
+            ObjectIndex = Token
         else:
-            class_index = 0
-            name = kind
-            object_index = 0
-        result.append(
-            Segment(
-                index=position,
-                offset=offset,
-                end=end,
-                length=end - offset,
-                scope_end=scope[position] if scope[position] >= 0 else len(blob),
-                depth=depths[position],
-                parent=parents[position],
-                rsp=event.rsp,
-                tag=token,
-                kind=kind,
-                header=header,
-                class_index=class_index,
-                class_name=name,
-                map_index=event.counter,
-                modelled_index=modelled,
-                object_index=object_index,
-            )
-        )
-    return tuple(result)
+            ClassIndex = 0
+            NameTextInfo = KindNameInfo
+            ObjectIndex = 0
+        Result.append(Segment(IndexData=PosInfoInfo, Offset=Offset, EndIndex=EndIndex, Length=EndIndex - Offset, ScopeEnd=Scope[PosInfoInfo] if Scope[PosInfoInfo] >= 0 else len(ByteBlob), Depth=Depths[PosInfoInfo], Parent=Parents[PosInfoInfo], RspInfo=EventInfo.rsp, TagInfoInfo=Token, KindNameInfo=KindNameInfo, Header=Header, ClassIndex=ClassIndex, ClassNameData=NameTextInfo, MapIndex=EventInfo.counter, ModelledIndex=Modelled, ObjectIndex=ObjectIndex))
+    return tuple(Result)
 
 
-def tiling(blob: bytes, segments: tuple[Segment, ...]) -> dict[str, object]:
-    gaps: list[tuple[int, int]] = []
-    overlaps: list[tuple[int, int]] = []
-    cursor = segments[0].offset
-    for item in segments:
-        if item.offset > cursor:
-            gaps.append((cursor, item.offset))
-        if item.offset < cursor:
-            overlaps.append((item.offset, cursor))
-        cursor = item.end
-    trailing = len(blob) - cursor
-    return {
-        "header_bytes": segments[0].offset,
-        "gaps": gaps,
-        "overlaps": overlaps,
-        "trailing_bytes": trailing,
-        "covered": cursor - segments[0].offset,
-        "tiles": not gaps and not overlaps and trailing == 0,
-    }
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Tiling(ByteBlob: bytes, SegmentsInfo: tuple[Segment, ...]) -> dict[str, object]:
+    FindGaps: list[tuple[int, int]] = []
+    Overlaps: list[tuple[int, int]] = []
+    Cursor = SegmentsInfo[0].offset
+    for ItemData in SegmentsInfo:
+        if ItemData.offset > Cursor:
+            FindGaps.append((Cursor, ItemData.offset))
+        if ItemData.offset < Cursor:
+            Overlaps.append((ItemData.offset, Cursor))
+        Cursor = ItemData.end
+    Trailing = len(ByteBlob) - Cursor
+    return {'header_bytes': SegmentsInfo[0].offset, 'gaps': FindGaps, 'overlaps': Overlaps, 'trailing_bytes': Trailing, 'covered': Cursor - SegmentsInfo[0].offset, 'tiles': not FindGaps and (not Overlaps) and (Trailing == 0)}
 
 
-def counter_mismatches(segments: tuple[Segment, ...]) -> tuple[Segment, ...]:
-    return tuple(item for item in segments if item.map_index != item.modelled_index)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def CounterData(SegmentsInfo: tuple[Segment, ...]) -> tuple[Segment, ...]:
+    return tuple((ItemData for ItemData in SegmentsInfo if ItemData.map_index != ItemData.modelled_index))
 
 
-def class_table(segments: tuple[Segment, ...]) -> dict[str, int]:
-    return {
-        item.class_name: item.class_index
-        for item in segments
-        if item.kind == "definition"
-    }
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ClassTable(SegmentsInfo: tuple[Segment, ...]) -> dict[str, int]:
+    return {ItemData.class_name: ItemData.class_index for ItemData in SegmentsInfo if ItemData.kind == 'definition'}
 
 
-def increment_rule(segments: tuple[Segment, ...]) -> dict[str, list[int]]:
-    table: dict[str, set[int]] = {}
-    for left, right in zip(segments, segments[1:]):
-        table.setdefault(left.kind, set()).add(right.map_index - left.map_index)
-    return {kind: sorted(values) for kind, values in sorted(table.items())}
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def IncrementRule(SegmentsInfo: tuple[Segment, ...]) -> dict[str, list[int]]:
+    Table: dict[str, set[int]] = {}
+    for LeftInfo, Right in zip(SegmentsInfo, SegmentsInfo[1:]):
+        Table.setdefault(LeftInfo.kind, set()).add(Right.map_index - LeftInfo.map_index)
+    return {KindNameInfo: sorted(Values) for KindNameInfo, Values in sorted(Table.items())}
 
 
-def load(
-    part: Path, log: Path, *, stream: str = streamlib.RESOLVED
-) -> tuple[bytes, tuple[Segment, ...]]:
-    blob = streamlib.load_donor(part).streams[stream]
-    events = tracelog.read_events(log)
-    spans = {event.span for event in events if event.kind == "RO"}
-    span = len(blob) if spans - {0} else None
-    return blob, build(blob, events, span=span)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def LoadData(PartInfoInfo: PathInfo, LogInfo: PathInfo, *, Stream: str=Streamlib.KResolved) -> tuple[bytes, tuple[Segment, ...]]:
+    ByteBlob = Streamlib.LoadDonor(PartInfoInfo).streams[Stream]
+    Events = Tracelog.ReadEvents(LogInfo)
+    Spans = {EventInfo.span for EventInfo in Events if EventInfo.kind == 'RO'}
+    SpanInfo = len(ByteBlob) if Spans - {0} else None
+    return (ByteBlob, Build(ByteBlob, Events, SpanInfo=SpanInfo))
 
 
-def report(
-    label: str, part: Path, log: Path, *, stream: str = streamlib.RESOLVED
-) -> dict[str, object]:
-    blob, segments = load(part, log, stream=stream)
-    shape = tiling(blob, segments)
-    mismatch = counter_mismatches(segments)
-    definitions = tuple(item for item in segments if item.kind == "definition")
-    payload = {
-        "label": label,
-        "part": str(part),
-        "log": str(log),
-        "stream": stream,
-        "stream_length": len(blob),
-        "base_map_index": segments[0].map_index,
-        "object_count": len(segments),
-        "definition_count": len(definitions),
-        "counter_mismatches": len(mismatch),
-        "tiling": shape,
-        "increment_rule": increment_rule(segments),
-        "class_index": class_table(segments),
-        "segments": [asdict(item) for item in segments],
-    }
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / f"segments_{label}.json").write_text(
-        json.dumps(payload, indent=2), encoding="utf-8"
-    )
-    print(
-        f"{label:14s} stream={len(blob):6d} objects={len(segments):4d} "
-        f"defs={len(definitions):3d} base={segments[0].map_index} "
-        f"tiles={shape['tiles']} mismatches={len(mismatch)}"
-    )
-    return payload
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Report(LabelInfo: str, PartInfoInfo: PathInfo, LogInfo: PathInfo, *, Stream: str=Streamlib.KResolved) -> dict[str, object]:
+    ByteBlob, SegmentsInfo = LoadData(PartInfoInfo, LogInfo, Stream=Stream)
+    Shape = Tiling(ByteBlob, SegmentsInfo)
+    Mismatch = CounterData(SegmentsInfo)
+    Defns = tuple((ItemData for ItemData in SegmentsInfo if ItemData.kind == 'definition'))
+    PayloadInfo = {'label': LabelInfo, 'part': str(PartInfoInfo), 'log': str(LogInfo), 'stream': Stream, 'stream_length': len(ByteBlob), 'base_map_index': SegmentsInfo[0].map_index, 'object_count': len(SegmentsInfo), 'definition_count': len(Defns), 'counter_mismatches': len(Mismatch), 'tiling': Shape, 'increment_rule': IncrementRule(SegmentsInfo), 'class_index': ClassTable(SegmentsInfo), 'segments': [Asdict(ItemData) for ItemData in SegmentsInfo]}
+    KOutInfo.mkdir(parents=True, exist_ok=True)
+    (KOutInfo / f'segments_{LabelInfo}.json').write_text(JsonData.dumps(PayloadInfo, indent=2), encoding='utf-8')
+    print(f"{LabelInfo:14s} stream={len(ByteBlob):6d} objects={len(SegmentsInfo):4d} defs={len(Defns):3d} base={SegmentsInfo[0].map_index} tiles={Shape['tiles']} mismatches={len(Mismatch)}")
+    return PayloadInfo
 
 
-def main() -> int:
-    arguments = sys.argv[1:]
-    if len(arguments) % 3:
-        raise SystemExit("usage: Segment.py <label> <part> <log> [...]")
-    for position in range(0, len(arguments), 3):
-        label = arguments[position]
-        part = Path(arguments[position + 1]).resolve()
-        log = Path(arguments[position + 2]).resolve()
-        report(label, part, log)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    ArgsInfo = System.argv[1:]
+    if len(ArgsInfo) % 3:
+        raise SystemExit('usage: Segment.py <label> <part> <log> [...]')
+    for PosInfoInfo in range(0, len(ArgsInfo), 3):
+        LabelInfo = ArgsInfo[PosInfoInfo]
+        PartInfoInfo = PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve()
+        LogInfo = PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve()
+        Report(LabelInfo, PartInfoInfo, LogInfo)
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

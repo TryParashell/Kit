@@ -1,41 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from pathlib import Path as PathInfo
+import sys as System
 
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-GRAMMAR = HERE.parent / "harness"
-for candidate in (HERE, GRAMMAR):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
-
-import streamlib
-
-from convert.adapters.solidworks import resolved as resolvedlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGrammar = KHereInfo.parent / 'harness'
+for CandInfo in (KHereInfo, KGrammar):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+import Streamlib as Streamlib
+from convert.adapters.solidworks import resolved as Resolvedlib
 
 
-def main() -> int:
-    for item in sys.argv[1:]:
-        part = Path(item).resolve()
-        donor = streamlib.load_donor(part)
-        blob = donor.resolved
-        nodes = resolvedlib.tree_nodes(blob)
-        features = resolvedlib.locate_features(blob)
-        entries = streamlib.comp_feature_entries(blob)
-        print(f"{part.stem}")
-        print(
-            "  tree: " + ", ".join(f"{node.name}#{node.feature_id}" for node in nodes)
-        )
-        print(
-            "  features: "
-            + ", ".join(
-                f"{item.kind}:{item.feature_id}/sketch={item.sketch_id}"
-                for item in features
-            )
-        )
-        print("  comp ids: " + ", ".join(str(entry[2]) for entry in entries))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    for ItemData in System.argv[1:]:
+        PartInfoInfo = PathInfo(ItemData).resolve()
+        DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
+        ByteBlob = DonorInfo.resolved
+        Nodes = Resolvedlib.tree_nodes(ByteBlob)
+        FeatInfoInfo = Resolvedlib.locate_features(ByteBlob)
+        Entries = Streamlib.CompFeatEntries(ByteBlob)
+        print(f'{PartInfoInfo.stem}')
+        print('  tree: ' + ', '.join((f'{NodeInfoInfo.name}#{NodeInfoInfo.feature_id}' for NodeInfoInfo in Nodes)))
+        print('  features: ' + ', '.join((f'{ItemData.kind}:{ItemData.feature_id}/sketch={ItemData.sketch_id}' for ItemData in FeatInfoInfo)))
+        print('  comp ids: ' + ', '.join((str(Entry[2]) for Entry in Entries)))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

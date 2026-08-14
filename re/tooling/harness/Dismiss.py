@@ -1,91 +1,114 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+import ctypes as Ctypes
+import ctypes.wintypes as Wintypes
+import threading as Threading
+import time as TimeInfo
 
-import ctypes
-import ctypes.wintypes as wintypes
-import threading
-import time
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KUserThirtyTwo = Ctypes.windll.user32
 
-USER32 = ctypes.windll.user32
-CALLBACK = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
-BM_CLICK = 0x00F5
-DIALOG_CLASS = "#32770"
-DIALOG_TITLE = "SOLIDWORKS"
-BUTTON_LABELS = ("OK", "&OK")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCallback = Ctypes.WINFUNCTYPE(Ctypes.c_bool, Wintypes.HWND, Wintypes.LPARAM)
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBmClick = 245
 
-def _class_name(handle: int) -> str:
-    buffer = ctypes.create_unicode_buffer(256)
-    USER32.GetClassNameW(handle, buffer, 256)
-    return buffer.value
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KDialogClass = '#32770'
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KDialogTitle = 'SOLIDWORKS'
 
-def _window_text(handle: int) -> str:
-    length = USER32.GetWindowTextLengthW(handle)
-    buffer = ctypes.create_unicode_buffer(length + 1)
-    USER32.GetWindowTextW(handle, buffer, length + 1)
-    return buffer.value
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KButtonLabels = ('OK', '&OK')
 
 
-def _startup_dialogs() -> list[int]:
-    found: list[int] = []
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ClassNameInfo(Handle: int) -> str:
+    Buffer = Ctypes.create_unicode_buffer(256)
+    KUserThirtyTwo.GetClassNameW(Handle, Buffer, 256)
+    return Buffer.value
 
-    def visit(handle: int, _: int) -> bool:
-        if (
-            _class_name(handle) == DIALOG_CLASS
-            and USER32.IsWindowVisible(handle)
-            and _window_text(handle) == DIALOG_TITLE
-        ):
-            found.append(handle)
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WindowText(Handle: int) -> str:
+    Length = KUserThirtyTwo.GetWindowTextLengthW(Handle)
+    Buffer = Ctypes.create_unicode_buffer(Length + 1)
+    KUserThirtyTwo.GetWindowTextW(Handle, Buffer, Length + 1)
+    return Buffer.value
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def StartupDialogs() -> list[int]:
+    Found: list[int] = []
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def IsVisit(Handle: int, SpareValue: int) -> bool:
+        if ClassNameInfo(Handle) == KDialogClass and KUserThirtyTwo.IsWindowVisible(Handle) and (WindowText(Handle) == KDialogTitle):
+            Found.append(Handle)
         return True
+    KUserThirtyTwo.EnumWindows(KCallback(IsVisit), 0)
+    return Found
 
-    USER32.EnumWindows(CALLBACK(visit), 0)
-    return found
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ConfirmButton(Dialog: int) -> int | None:
+    Found: list[int] = []
 
 
-def _confirm_button(dialog: int) -> int | None:
-    found: list[int] = []
-
-    def visit(handle: int, _: int) -> bool:
-        if _class_name(handle) == "Button" and _window_text(handle) in BUTTON_LABELS:
-            found.append(handle)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def IsVisit(Handle: int, SpareValue: int) -> bool:
+        if ClassNameInfo(Handle) == 'Button' and WindowText(Handle) in KButtonLabels:
+            Found.append(Handle)
         return True
+    KUserThirtyTwo.EnumChildWindows(Dialog, KCallback(IsVisit), 0)
+    return Found[0] if Found else None
 
-    USER32.EnumChildWindows(dialog, CALLBACK(visit), 0)
-    return found[0] if found else None
 
-
-def dismiss_once() -> list[str]:
-    dismissed: list[str] = []
-    for dialog in _startup_dialogs():
-        button = _confirm_button(dialog)
-        if button is None:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def DismissOnce() -> list[str]:
+    Dismissed: list[str] = []
+    for Dialog in StartupDialogs():
+        Button = ConfirmButton(Dialog)
+        if Button is None:
             continue
-        USER32.SendMessageW(button, BM_CLICK, 0, 0)
-        dismissed.append(f"hwnd={dialog}")
-    return dismissed
+        KUserThirtyTwo.SendMessageW(Button, KBmClick, 0, 0)
+        Dismissed.append(f'hwnd={Dialog}')
+    return Dismissed
 
 
-def watcher(stop: threading.Event, log: list[str]) -> None:
-    while not stop.is_set():
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WatcherMut(StopInfo: Threading.Event, LogInfo: list[str]) -> None:
+    while not StopInfo.is_set():
         try:
-            for item in dismiss_once():
-                log.append(item)
+            for ItemData in DismissOnce():
+                LogInfo.append(ItemData)
         except Exception:
             pass
-        stop.wait(0.5)
+        StopInfo.wait(0.5)
 
 
-def start() -> tuple[threading.Event, list[str], threading.Thread]:
-    stop = threading.Event()
-    log: list[str] = []
-    thread = threading.Thread(target=watcher, args=(stop, log), daemon=True)
-    thread.start()
-    return stop, log, thread
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def StartRun() -> tuple[Threading.Event, list[str], Threading.Thread]:
+    StopInfo = Threading.Event()
+    LogInfo: list[str] = []
+    ThreadInfo = Threading.Thread(target=WatcherMut, args=(StopInfo, LogInfo), daemon=True)
+    ThreadInfo.start()
+    return (StopInfo, LogInfo, ThreadInfo)
+if __name__ == '__main__':
 
-
-if __name__ == "__main__":
-    deadline = time.monotonic() + 120.0
-    while time.monotonic() < deadline:
-        for item in dismiss_once():
-            print(f"dismissed {item}", flush=True)
-        time.sleep(0.5)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    KDeadline = TimeInfo.monotonic() + 120.0
+    while TimeInfo.monotonic() < KDeadline:
+        for ItemData in DismissOnce():
+            print(f'dismissed {ItemData}', flush=True)
+        TimeInfo.sleep(0.5)

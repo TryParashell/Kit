@@ -1,58 +1,58 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+import json as JsonData
+from pathlib import Path as PathInfo
+import sys as System
 
-import json
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
-for candidate in (ROOT, ROOT / "src"):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
-
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = KHereInfo.parents[2]
+for CandInfo in (KRootInfo, KRootInfo / 'src'):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
 from tests.oracle.Session import SolidWorksSession
 
 
-def main() -> int:
-    target = Path(sys.argv[1])
-    payload: dict[str, object] = {"path": str(target)}
-    session = SolidWorksSession()
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    Target = PathInfo(System.argv[1])
+    PayloadInfo: dict[str, object] = {'path': str(Target)}
+    Session = SolidWorksSession()
     try:
         try:
-            inspection = session.inspect_part(target)
-        except Exception as error:
-            payload["opened"] = False
-            payload["open_exception"] = repr(error)
-            payload["volume_mm3"] = None
-            payload["centre_mm"] = None
-            sys.stdout.write("@@RESULT@@" + json.dumps(payload) + "\n")
+            Inspection = Session.inspect_part(Target)
+        except Exception as Error:
+            PayloadInfo['opened'] = False
+            PayloadInfo['open_exception'] = repr(Error)
+            PayloadInfo['volume_mm3'] = None
+            PayloadInfo['centre_mm'] = None
+            System.stdout.write('@@RESULT@@' + JsonData.dumps(PayloadInfo) + '\n')
             return 0
-        payload["opened"] = inspection.opened
-        payload["load_errors"] = list(inspection.load_errors)
-        payload["load_warnings"] = list(inspection.load_warnings)
-        payload["rebuilt"] = inspection.rebuilt
-        payload["body_count"] = inspection.body_count
-        payload["features"] = [
-            {
-                "name": item.name,
-                "type": item.type_name,
-                "suppressed": item.suppressed,
-                "dimensions": list(item.dimensions),
-            }
-            for item in inspection.features
-        ]
-        if inspection.solid is None:
-            payload["volume_mm3"] = None
-            payload["centre_mm"] = None
+        PayloadInfo['opened'] = Inspection.opened
+        PayloadInfo['load_errors'] = list(Inspection.load_errors)
+        PayloadInfo['load_warnings'] = list(Inspection.load_warnings)
+        PayloadInfo['rebuilt'] = Inspection.rebuilt
+        PayloadInfo['body_count'] = Inspection.body_count
+        PayloadInfo['features'] = [{'name': ItemData.name, 'type': ItemData.type_name, 'suppressed': ItemData.suppressed, 'dimensions': list(ItemData.dimensions)} for ItemData in Inspection.features]
+        if Inspection.solid is None:
+            PayloadInfo['volume_mm3'] = None
+            PayloadInfo['centre_mm'] = None
         else:
-            payload["volume_mm3"] = inspection.solid.volume_mm3
-            payload["surface_mm2"] = inspection.solid.surface_area_mm2
-            payload["centre_mm"] = list(inspection.solid.center_of_mass_mm)
+            PayloadInfo['volume_mm3'] = Inspection.solid.volume_mm3
+            PayloadInfo['surface_mm2'] = Inspection.solid.surface_area_mm2
+            PayloadInfo['centre_mm'] = list(Inspection.solid.center_of_mass_mm)
     finally:
-        session.close()
-    sys.stdout.write("@@RESULT@@" + json.dumps(payload) + "\n")
+        Session.close()
+    System.stdout.write('@@RESULT@@' + JsonData.dumps(PayloadInfo) + '\n')
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

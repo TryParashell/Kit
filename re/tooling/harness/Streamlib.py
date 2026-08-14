@@ -1,172 +1,212 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from dataclasses import dataclass as DataClass
+from pathlib import Path as PathInfo
+import struct as Struct
+import sys as System
 
-from dataclasses import dataclass
-from pathlib import Path
-import struct
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
-for candidate in (HERE, ROOT, ROOT / "src"):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = KHereInfo.parents[2]
+for CandInfo in (KHereInfo, KRootInfo, KRootInfo / 'src'):
+    if str(CandInfo) not in System.path:
+        System.path.insert(0, str(CandInfo))
+from convert.adapters.solidworks.container.Container import SldprtArchive, _template_fields as TemplateFields
+from convert.adapters.solidworks import resolved as Resolvedlib
+import Carchive as Carchive
 
-from convert.adapters.solidworks.container.Container import SldprtArchive, _template_fields
-from convert.adapters.solidworks import resolved as resolvedlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KResolved = 'Contents/Config-0-ResolvedFeatures'
 
-import carchive
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KEYWORDS = 'swXmlContents/KeyWords'
 
-RESOLVED = "Contents/Config-0-ResolvedFeatures"
-KEYWORDS = "swXmlContents/KeyWords"
-FEATURES = "swXmlContents/Features"
-PARTITION = "Contents/Config-0-Partition"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KFeatInfo = 'swXmlContents/Features'
 
-COMP_FEATURE_CLASS = "moCompFeature_c"
-COMP_ENTRY_STRIDE = 119
-COMP_FIRST_ENTRY = 93
-COMP_ENTRY_ID_BACK = 8
-COMP_ENTRY_TIME_BACK = 4
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPartition = 'Contents/Config-0-Partition'
 
-BOSS_FLAGS = 0x40000140
-BOSS_FLAGS_ALT = 0x40000040
-CUT_FLAGS = 0x400201CA
-SKETCH_FLAGS = 0x40000000
-PLANE_FLAGS = 0xC0000000
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCompFeatClass = 'moCompFeature_c'
 
-BLIND = 0
-THROUGH_ALL = 1
-MID_PLANE = 6
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCompStride = 119
 
-FIRST_REVERSE_BACK = 824
-FIRST_END_CONDITION_BACK = 818
-LATER_REVERSE_BACK = 721
-LATER_END_CONDITION_BACK = 715
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCompFirstEntry = 93
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCompBack = 8
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCompBackInfo = 4
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBossFlags = 1073742144
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBossFlagsAlt = 1073741888
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCutFlags = 1073873354
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSketchFlags = 1073741824
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPlaneFlags = 3221225472
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBlind = 0
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KThroughAll = 1
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KMidPlane = 6
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KFirstBackInfo = 824
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KFirstBack = 818
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KLaterBackInfo = 721
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KLaterBack = 715
 
 
-@dataclass(frozen=True, slots=True)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class Donor:
-    path: Path
-    blob: bytes
-    file_id: int
-    format_version: int
-    signatures: tuple[bytes, bytes, bytes]
-    type_ids: dict[str, int]
-    order: tuple[str, ...]
-    streams: dict[str, bytes]
+    PathInfoData: PathInfo
+    ByteBlob: bytes
+    FileId: int
+    FormatVersion: int
+    Signatures: tuple[bytes, bytes, bytes]
+    TypeIds: dict[str, int]
+    Order: tuple[str, ...]
+    StreamsInfo: dict[str, bytes]
 
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
-    def resolved(self) -> bytes:
-        return self.streams[RESOLVED]
+    def Resolved(SelfRef) -> bytes:
+        return SelfRef.StreamsInfo[KResolved]
+    KAliasNames = {'path': 'PathInfoData', 'blob': 'ByteBlob', 'file_id': 'FileId', 'format_version': 'FormatVersion', 'signatures': 'Signatures', 'type_ids': 'TypeIds', 'order': 'Order', 'streams': 'StreamsInfo', 'resolved': 'Resolved'}
 
 
-def load_donor(path: str | Path) -> Donor:
-    source = Path(path)
-    blob = source.read_bytes()
-    archive = SldprtArchive.from_bytes(blob)
-    signatures, type_ids = _template_fields(blob, archive)
-    order = tuple(
-        record.name for record in sorted(archive.records, key=lambda item: item.offset)
-    )
-    return Donor(
-        path=source,
-        blob=blob,
-        file_id=archive.file_id,
-        format_version=archive.format_version,
-        signatures=signatures,
-        type_ids=type_ids,
-        order=order,
-        streams=archive.streams,
-    )
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
 
 
-def rebuild(
-    donor: Donor,
-    replacements: dict[str, bytes],
-    *,
-    drop: frozenset[str] = frozenset({PARTITION}),
-) -> bytes:
-    from convert.adapters.solidworks.container.Container import build_sldprt
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def LoadDonor(PathInfoData: str | PathInfo) -> Donor:
+    Source = PathInfo(PathInfoData)
+    ByteBlob = Source.read_bytes()
+    ArchiveInfo = SldprtArchive.from_bytes(ByteBlob)
+    Signatures, TypeIds = TemplateFields(ByteBlob, ArchiveInfo)
 
-    items: list[tuple[str, bytes]] = []
-    for name in donor.order:
-        if name in drop:
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    Order = tuple((Record.name for Record in sorted(ArchiveInfo.records, key=lambda ItemData: ItemData.offset)))
+    return Donor(PathInfoData=Source, ByteBlob=ByteBlob, FileId=ArchiveInfo.file_id, FormatVersion=ArchiveInfo.format_version, Signatures=Signatures, TypeIds=TypeIds, Order=Order, StreamsInfo=ArchiveInfo.streams)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Rebuild(DonorInfo: Donor, Replacements: dict[str, bytes], *, DropInfo: frozenset[str]=frozenset({KPartition})) -> bytes:
+    from convert.adapters.solidworks.container.Container import build_sldprt as BuildSldprt
+    Items: list[tuple[str, bytes]] = []
+    for NameTextInfo in DonorInfo.order:
+        if NameTextInfo in DropInfo:
             continue
-        items.append((name, replacements.get(name, donor.streams[name])))
-    for name, payload in replacements.items():
-        if name not in donor.order:
-            items.append((name, payload))
-    return build_sldprt(items, template=donor.blob)
+        Items.append((NameTextInfo, Replacements.get(NameTextInfo, DonorInfo.streams[NameTextInfo])))
+    for NameTextInfo, PayloadInfo in Replacements.items():
+        if NameTextInfo not in DonorInfo.order:
+            Items.append((NameTextInfo, PayloadInfo))
+    return BuildSldprt(Items, template=DonorInfo.blob)
 
 
-def comp_feature_span(blob: bytes) -> tuple[int, int]:
-    definitions = carchive.class_definitions(blob)
-    for index, definition in enumerate(definitions):
-        if definition.name != COMP_FEATURE_CLASS:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def CompFeatSpan(ByteBlob: bytes) -> tuple[int, int]:
+    Defns = Carchive.ClassDefns(ByteBlob)
+    for IndexData, DefnInfo in enumerate(Defns):
+        if DefnInfo.name != KCompFeatClass:
             continue
-        end = (
-            definitions[index + 1].tag_offset
-            if index + 1 < len(definitions)
-            else len(blob)
-        )
-        return definition.data_offset, end
-    raise KeyError(COMP_FEATURE_CLASS)
+        EndIndex = Defns[IndexData + 1].tag_offset if IndexData + 1 < len(Defns) else len(ByteBlob)
+        return (DefnInfo.data_offset, EndIndex)
+    raise KeyError(KCompFeatClass)
 
 
-def comp_feature_entries(blob: bytes) -> tuple[tuple[int, int, int, int], ...]:
-    start, end = comp_feature_span(blob)
-    total = end - start
-    if total < COMP_FIRST_ENTRY:
-        raise ValueError("moCompFeature_c record is too short")
-    remainder = total - COMP_FIRST_ENTRY
-    if remainder % COMP_ENTRY_STRIDE:
-        raise ValueError(
-            f"moCompFeature_c record length {total} is not "
-            f"{COMP_FIRST_ENTRY} + n*{COMP_ENTRY_STRIDE}"
-        )
-    count = 1 + remainder // COMP_ENTRY_STRIDE
-    result: list[tuple[int, int, int, int]] = []
-    cursor = start
-    for index in range(count):
-        width = COMP_FIRST_ENTRY if index == 0 else COMP_ENTRY_STRIDE
-        entry_end = cursor + width
-        feature_id = struct.unpack_from("<I", blob, entry_end - COMP_ENTRY_ID_BACK)[0]
-        stamp = struct.unpack_from("<I", blob, entry_end - COMP_ENTRY_TIME_BACK)[0]
-        result.append((cursor, entry_end, feature_id, stamp))
-        cursor = entry_end
-    return tuple(result)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def CompFeatEntries(ByteBlob: bytes) -> tuple[tuple[int, int, int, int], ...]:
+    StartRun, EndIndex = CompFeatSpan(ByteBlob)
+    Total = EndIndex - StartRun
+    if Total < KCompFirstEntry:
+        raise ValueError('moCompFeature_c record is too short')
+    RemainderInfo = Total - KCompFirstEntry
+    if RemainderInfo % KCompStride:
+        raise ValueError(f'moCompFeature_c record length {Total} is not {KCompFirstEntry} + n*{KCompStride}')
+    CountInfo = 1 + RemainderInfo // KCompStride
+    Result: list[tuple[int, int, int, int]] = []
+    Cursor = StartRun
+    for IndexData in range(CountInfo):
+        WidthInfo = KCompFirstEntry if IndexData == 0 else KCompStride
+        EntryEnd = Cursor + WidthInfo
+        FeatId = Struct.unpack_from('<I', ByteBlob, EntryEnd - KCompBack)[0]
+        Stamp = Struct.unpack_from('<I', ByteBlob, EntryEnd - KCompBackInfo)[0]
+        Result.append((Cursor, EntryEnd, FeatId, Stamp))
+        Cursor = EntryEnd
+    return tuple(Result)
 
 
-def features(blob: bytes) -> tuple[resolvedlib.FeatureLayout, ...]:
-    return resolvedlib.locate_features(blob)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def FeatInfoInfo(ByteBlob: bytes) -> tuple[Resolvedlib.FeatureLayout, ...]:
+    return Resolvedlib.locate_features(ByteBlob)
 
 
-def tree_nodes(blob: bytes) -> tuple[resolvedlib.NameRecord, ...]:
-    return resolvedlib.tree_nodes(blob)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def TreeNodes(ByteBlob: bytes) -> tuple[Resolvedlib.NameRecord, ...]:
+    return Resolvedlib.tree_nodes(ByteBlob)
 
 
-def write_u32(output: bytearray, offset: int, value: int) -> None:
-    struct.pack_into("<I", output, offset, value)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteUThirtyTwo(Output: bytearray, Offset: int, ValueInfo: int) -> None:
+    Struct.pack_into('<I', Output, Offset, ValueInfo)
 
 
-def write_double(output: bytearray, offset: int, value: float) -> None:
-    struct.pack_into("<d", output, offset, value)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteDouble(Output: bytearray, Offset: int, ValueInfo: float) -> None:
+    Struct.pack_into('<d', Output, Offset, ValueInfo)
 
 
-def read_u32(blob: bytes, offset: int) -> int:
-    return struct.unpack_from("<I", blob, offset)[0]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ReadUThirtyTwo(ByteBlob: bytes, Offset: int) -> int:
+    return Struct.unpack_from('<I', ByteBlob, Offset)[0]
 
 
-def read_double(blob: bytes, offset: int) -> float:
-    return struct.unpack_from("<d", blob, offset)[0]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ReadDouble(ByteBlob: bytes, Offset: int) -> float:
+    return Struct.unpack_from('<d', ByteBlob, Offset)[0]
 
 
-def flag_offsets(ordinal: int, depth_offset: int) -> tuple[int, int]:
-    if ordinal == 0:
-        return (
-            depth_offset - FIRST_REVERSE_BACK,
-            depth_offset - FIRST_END_CONDITION_BACK,
-        )
-    return (
-        depth_offset - LATER_REVERSE_BACK,
-        depth_offset - LATER_END_CONDITION_BACK,
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def FlagOffsets(Ordinal: int, DepthOffset: int) -> tuple[int, int]:
+    if Ordinal == 0:
+        return (DepthOffset - KFirstBackInfo, DepthOffset - KFirstBack)
+    return (DepthOffset - KLaterBackInfo, DepthOffset - KLaterBack)

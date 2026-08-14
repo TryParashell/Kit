@@ -7,373 +7,309 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import argparse as Argparse
+import json as JsonData
+import re as Regex
+from typing import Dict as DictInfo, List as ListInfo, Optional, Tuple
 
-import argparse
-import json
-import re
-from typing import Dict, List, Optional, Tuple
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KScalarWidth = {'uchar': 1, 'char': 1, 'ushort': 2, 'short': 2, 'long': 4, 'ulong': 4, 'int': 4, 'uint': 4, 'float': 4, 'double': 8, '__int64': 8, 'int64': 8}
 
-SCALAR_WIDTH = {
-    "uchar": 1,
-    "char": 1,
-    "ushort": 2,
-    "short": 2,
-    "long": 4,
-    "ulong": 4,
-    "int": 4,
-    "uint": 4,
-    "float": 4,
-    "double": 8,
-    "__int64": 8,
-    "int64": 8,
-}
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBlockStartRe = Regex.compile('^=== FUNCTION (.+)$')
 
-BLOCK_START_RE = re.compile(r"^=== FUNCTION (.+)$")
-ADDRESS_RE = re.compile(r"^=== ADDRESS ([0-9a-fA-F]+)$")
-GET_RE = re.compile(r"su_CArchive::AR_get_([A-Za-z0-9_]+)\s*\(")
-PUT_RE = re.compile(r"su_CArchive::AR_put_([A-Za-z0-9_]+)\s*\(")
-DECL_RE = re.compile(
-    r"^\s*(?:void|undefined\d*|int|uint|longlong)\s+[A-Za-z_][A-Za-z0-9_:<>,\s]*?"
-    r"\(\s*([A-Za-z_][A-Za-z0-9_:<>,\s]*?)\s*(\*+)?\s*(this|param_1)\s*[,)]"
-)
-POINTER_SCALE = {
-    "longlong": 8,
-    "ulonglong": 8,
-    "double": 8,
-    "int64": 8,
-    "__int64": 8,
-    "int": 4,
-    "uint": 4,
-    "long": 4,
-    "ulong": 4,
-    "float": 4,
-    "short": 2,
-    "ushort": 2,
-    "wchar_t": 2,
-}
-READ_OBJECT_RE = re.compile(
-    r"(?:su_CArchive|su_CDBArchive)::ReadObject\s*\([^;]*?class([A-Za-z0-9_]+)"
-)
-GLOBAL_READ_RE = re.compile(r"(?<!su_CArchive)(?<!su_CDBArchive)::operator>>\s*\(")
-CSTRING_RE = re.compile(r"CStringT<wchar_t")
-SLOT5_RE = re.compile(
-    r"\(\*\*\(code \*\*\)\(\*\(longlong \*\)\((?:this|param_1)\s*\+\s*"
-    r"(0x[0-9a-fA-F]+|\d+)\)\s*\+\s*0x28\)\)"
-)
-STRING_RE = re.compile(r'"([^"\\]{1,64})"')
-BASE_CALL_RE = re.compile(
-    r"\b((?:FUN_[0-9a-f]+)|(?:[A-Za-z_][A-Za-z0-9_]*::Serialize))"
-    r"\s*\(\s*(?:\([A-Za-z0-9_:<>,\s]*\*+\)\s*)?(?:this|param_1)\s*,\s*"
-    r"(?:param_1|param_2)\s*\)"
-)
-BASE_SERIALIZE_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)::Serialize\s*\(")
-DBKEY_NAME_RE = re.compile(r'CStringT\s*\(\s*[^,]+,\s*"([^"]+)"')
-READ_COUNT_RE = re.compile(r"su_CArchive::ReadCount\s*\(")
-VERSION_CMP_RE = re.compile(
-    r"(0x[0-9a-fA-F]+|\d+)\s*<\s*(?:\(int\))?\s*([iu]Var\d+)"
-    r"|([iu]Var\d+)\s*<\s*(0x[0-9a-fA-F]+|\d+)"
-)
-HAS_CONDITION_RE = re.compile(r"hasCondition\s*\([^,]+,\s*(0x[0-9a-fA-F]+|\d+)\s*\)")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KAddressRe = Regex.compile('^=== ADDRESS ([0-9a-fA-F]+)$')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGetReInfo = Regex.compile('su_CArchive::AR_get_([A-Za-z0-9_]+)\\s*\\(')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPutRe = Regex.compile('su_CArchive::AR_put_([A-Za-z0-9_]+)\\s*\\(')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KDeclRe = Regex.compile('^\\s*(?:void|undefined\\d*|int|uint|longlong)\\s+[A-Za-z_][A-Za-z0-9_:<>,\\s]*?\\(\\s*([A-Za-z_][A-Za-z0-9_:<>,\\s]*?)\\s*(\\*+)?\\s*(this|param_1)\\s*[,)]')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPointerScale = {'longlong': 8, 'ulonglong': 8, 'double': 8, 'int64': 8, '__int64': 8, 'int': 4, 'uint': 4, 'long': 4, 'ulong': 4, 'float': 4, 'short': 2, 'ushort': 2, 'wchar_t': 2}
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KReadObjectRe = Regex.compile('(?:su_CArchive|su_CDBArchive)::ReadObject\\s*\\([^;]*?class([A-Za-z0-9_]+)')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KGlobalReadRe = Regex.compile('(?<!su_CArchive)(?<!su_CDBArchive)::operator>>\\s*\\(')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCstringRe = Regex.compile('CStringT<wchar_t')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSlotFiveRe = Regex.compile('\\(\\*\\*\\(code \\*\\*\\)\\(\\*\\(longlong \\*\\)\\((?:this|param_1)\\s*\\+\\s*(0x[0-9a-fA-F]+|\\d+)\\)\\s*\\+\\s*0x28\\)\\)')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KStringRe = Regex.compile('"([^"\\\\]{1,64})"')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBaseCallRe = Regex.compile('\\b((?:FUN_[0-9a-f]+)|(?:[A-Za-z_][A-Za-z0-9_]*::Serialize))\\s*\\(\\s*(?:\\([A-Za-z0-9_:<>,\\s]*\\*+\\)\\s*)?(?:this|param_1)\\s*,\\s*(?:param_1|param_2)\\s*\\)')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBaseSerialRe = Regex.compile('\\b([A-Za-z_][A-Za-z0-9_]*)::Serialize\\s*\\(')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KDbkeyNameRe = Regex.compile('CStringT\\s*\\(\\s*[^,]+,\\s*"([^"]+)"')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KReadCountRe = Regex.compile('su_CArchive::ReadCount\\s*\\(')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KVersionCmpRe = Regex.compile('(0x[0-9a-fA-F]+|\\d+)\\s*<\\s*(?:\\(int\\))?\\s*([iu]Var\\d+)|([iu]Var\\d+)\\s*<\\s*(0x[0-9a-fA-F]+|\\d+)')
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHasConditionRe = Regex.compile('hasCondition\\s*\\([^,]+,\\s*(0x[0-9a-fA-F]+|\\d+)\\s*\\)')
 
 
-def parse_int(text: str) -> int:
-    return int(text, 16) if text.lower().startswith("0x") else int(text)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ParseInt(TextValueData: str) -> int:
+    return int(TextValueData, 16) if TextValueData.lower().startswith('0x') else int(TextValueData)
 
 
-def strip_comments(text: str) -> str:
-    return re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def StripComments(TextValueData: str) -> str:
+    return Regex.sub('/\\*.*?\\*/', ' ', TextValueData, flags=Regex.S)
 
 
-class Dump:
-    def __init__(self, paths: List[str]) -> None:
-        self.by_address: Dict[str, dict] = {}
-        for path in paths:
-            raw = open(path, encoding="utf-8", errors="replace").read()
-            lines = raw.splitlines()
-            starts = [
-                i for i, line in enumerate(lines) if line.startswith("=== FUNCTION ")
-            ]
-            starts.append(len(lines))
-            for k in range(len(starts) - 1):
-                chunk = lines[starts[k] : starts[k + 1]]
-                name = BLOCK_START_RE.match(chunk[0]).group(1).strip()
-                address = ""
-                for line in chunk[:6]:
-                    match = ADDRESS_RE.match(line)
-                    if match:
-                        address = match.group(1).lower()
+# needed to keep reverse engineering responsibilities isolated and maintainable
+class DumpRecord:
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __init__(SelfRef, Paths: ListInfo[str]) -> None:
+        SelfRef.ByAddress: DictInfo[str, dict] = {}
+        for PathInfoData in Paths:
+            RawData = open(PathInfoData, encoding='utf-8', errors='replace').read()
+            Lines = RawData.splitlines()
+            Starts = [IndexInfo for IndexInfo, LineText in enumerate(Lines) if LineText.startswith('=== FUNCTION ')]
+            Starts.append(len(Lines))
+            for KeyIndex in range(len(Starts) - 1):
+                Chunk = Lines[Starts[KeyIndex]:Starts[KeyIndex + 1]]
+                NameTextInfo = KBlockStartRe.match(Chunk[0]).group(1).strip()
+                Address = ''
+                for LineText in Chunk[:6]:
+                    Match = KAddressRe.match(LineText)
+                    if Match:
+                        Address = Match.group(1).lower()
                         break
-                if not address:
+                if not Address:
                     continue
-                record = {
-                    "name": name,
-                    "address": address,
-                    "source": "%s:%d"
-                    % (path.replace("\\", "/").rsplit("/", 1)[-1], starts[k] + 1),
-                    "body": "\n".join(chunk),
-                }
-                self.by_address.setdefault(address, record)
-
-        self.by_name: Dict[str, dict] = {}
-        for record in self.by_address.values():
-            self.by_name.setdefault(record["name"], record)
-
-    def get(self, address: str) -> Optional[dict]:
-        return self.by_address.get(address.lower())
-
-    def resolve(self, token: str) -> Optional[dict]:
-        if token.startswith("FUN_"):
-            return self.get(token[4:])
-        return self.by_name.get(token)
+                Record = {'name': NameTextInfo, 'address': Address, 'source': '%s:%d' % (PathInfoData.replace('\\', '/').rsplit('/', 1)[-1], Starts[KeyIndex] + 1), 'body': '\n'.join(Chunk)}
+                SelfRef.ByAddress.setdefault(Address, Record)
+        SelfRef.ByName: DictInfo[str, dict] = {}
+        for Record in SelfRef.ByAddress.values():
+            SelfRef.ByName.setdefault(Record['name'], Record)
 
 
-def condition_stack(body: str) -> List[Tuple[int, str]]:
-    text = strip_comments(body)
-    lines = text.splitlines()
-    stack: List[Tuple[int, str]] = []
-    result: List[Tuple[int, str]] = []
-    depth = 0
-    pending: Optional[str] = None
-    for line in lines:
-        stripped = line.strip()
-        match = re.match(r"^(?:\}\s*else\s+)?if\s*\((.*)$", stripped)
-        if match:
-            pending = match.group(1)
-        elif stripped.startswith("} else"):
-            pending = "!previous"
-        opens = line.count("{")
-        closes = line.count("}")
-        for _ in range(closes):
-            if stack and stack[-1][0] == depth:
-                stack.pop()
-            depth = max(0, depth - 1)
-        for _ in range(opens):
-            depth += 1
-            stack.append((depth, pending or ""))
-            pending = None
-        result.append((depth, " && ".join(c for _, c in stack if c)))
-    return result
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def GetValue(SelfRef, Address: str) -> Optional[dict]:
+        return SelfRef.ByAddress.get(Address.lower())
 
 
-def version_gates(condition: str) -> List[str]:
-    gates: List[str] = []
-    for match in VERSION_CMP_RE.finditer(condition):
-        if match.group(1):
-            gates.append("version > %d" % parse_int(match.group(1)))
-        elif match.group(4):
-            gates.append("version < %d" % parse_int(match.group(4)))
-    for match in HAS_CONDITION_RE.finditer(condition):
-        gates.append("hasCondition(0x%x)" % parse_int(match.group(1)))
-    return gates
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def ResolveInfo(SelfRef, Token: str) -> Optional[dict]:
+        if Token.startswith('FUN_'):
+            return SelfRef.GetValue(Token[4:])
+        return SelfRef.ByName.get(Token)
+    KAliasNames = {'get': 'GetValue', 'resolve': 'ResolveInfo'}
 
 
-def object_param(body: str) -> Tuple[str, int]:
-    for line in strip_comments(body).splitlines():
-        match = DECL_RE.match(line)
-        if match:
-            base = (match.group(1) or "").strip().split()[-1]
-            stars = match.group(2) or ""
-            name = match.group(3)
-            if len(stars) >= 2:
-                return name, 8
-            return name, POINTER_SCALE.get(base, 1)
-    return "param_1", 1
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
 
 
-def struct_offsets(line: str, holder: str, scale: int) -> List[int]:
-    found: List[int] = []
-    pattern = re.compile(
-        r"\(\s*%s\s*\+\s*(?:\(longlong\)[A-Za-z0-9_]+\s*\*\s*\d+\s*\+\s*)?"
-        r"(0x[0-9a-fA-F]+|\d+)\s*\)" % re.escape(holder)
-    )
-    for match in pattern.finditer(line):
-        found.append(parse_int(match.group(1)) * scale)
-    subscript = re.compile(r"%s\[\s*(0x[0-9a-fA-F]+|\d+)\s*\]" % re.escape(holder))
-    for match in subscript.finditer(line):
-        found.append(parse_int(match.group(1)) * scale)
-    if not found and re.search(r"\)\s*%s\s*[,)]" % re.escape(holder), line):
-        found.append(0)
-    return found
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __setattr__(SelfRef, NameText, ValueData):
+        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+        object.__setattr__(SelfRef, TargetName, ValueData)
 
 
-def extract_ops(record: dict) -> dict:
-    body = record["body"]
-    text = strip_comments(body)
-    lines = text.splitlines()
-    conditions = condition_stack(body)
-    holder, scale = object_param(body)
-    reads: List[dict] = []
-    writes: List[dict] = []
-    bases: List[str] = []
-    dbkeys: List[dict] = []
-    pending_name: Optional[str] = None
-    pending_key = False
-    for i, line in enumerate(lines):
-        depth, condition = conditions[i] if i < len(conditions) else (0, "")
-        gates = version_gates(condition)
-        offsets = struct_offsets(line, holder, scale)
-        literal = STRING_RE.search(line)
-        if literal and "Serialize" not in literal.group(1):
-            pending_name = literal.group(1)
-        for match in BASE_CALL_RE.finditer(line):
-            bases.append(match.group(1))
-        get_match = GET_RE.search(line)
-        if get_match:
-            kind = get_match.group(1)
-            reads.append(
-                {
-                    "op": "AR_get_" + kind,
-                    "width": SCALAR_WIDTH.get(kind, 0),
-                    "type": kind,
-                    "struct_offset": offsets[0] if offsets else None,
-                    "gates": gates,
-                    "condition": condition,
-                    "line": i + 1,
-                }
-            )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ConditionStack(BodyInfo: str) -> ListInfo[Tuple[int, str]]:
+    TextValueData = StripComments(BodyInfo)
+    Lines = TextValueData.splitlines()
+    Stack: ListInfo[Tuple[int, str]] = []
+    Result: ListInfo[Tuple[int, str]] = []
+    Depth = 0
+    Pending: Optional[str] = None
+    for LineText in Lines:
+        Stripped = LineText.strip()
+        Match = Regex.match('^(?:\\}\\s*else\\s+)?if\\s*\\((.*)$', Stripped)
+        if Match:
+            Pending = Match.group(1)
+        elif Stripped.startswith('} else'):
+            Pending = '!previous'
+        Opens = LineText.count('{')
+        Closes = LineText.count('}')
+        for SpareValue in range(Closes):
+            if Stack and Stack[-1][0] == Depth:
+                Stack.pop()
+            Depth = max(0, Depth - 1)
+        for SpareValue in range(Opens):
+            Depth += 1
+            Stack.append((Depth, Pending or ''))
+            Pending = None
+        Result.append((Depth, ' && '.join((ThirdValue for SpareValue, ThirdValue in Stack if ThirdValue))))
+    return Result
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def VersionGates(Condition: str) -> ListInfo[str]:
+    Gates: ListInfo[str] = []
+    for Match in KVersionCmpRe.finditer(Condition):
+        if Match.group(1):
+            Gates.append('version > %d' % ParseInt(Match.group(1)))
+        elif Match.group(4):
+            Gates.append('version < %d' % ParseInt(Match.group(4)))
+    for Match in KHasConditionRe.finditer(Condition):
+        Gates.append('hasCondition(0x%x)' % ParseInt(Match.group(1)))
+    return Gates
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ObjectParam(BodyInfo: str) -> Tuple[str, int]:
+    for LineText in StripComments(BodyInfo).splitlines():
+        Match = KDeclRe.match(LineText)
+        if Match:
+            BaseInfo = (Match.group(1) or '').strip().split()[-1]
+            Stars = Match.group(2) or ''
+            NameTextInfo = Match.group(3)
+            if len(Stars) >= 2:
+                return (NameTextInfo, 8)
+            return (NameTextInfo, KPointerScale.get(BaseInfo, 1))
+    return ('param_1', 1)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def StructOffsets(LineText: str, Holder: str, Scale: int) -> ListInfo[int]:
+    Found: ListInfo[int] = []
+    Pattern = Regex.compile('\\(\\s*%s\\s*\\+\\s*(?:\\(longlong\\)[A-Za-z0-9_]+\\s*\\*\\s*\\d+\\s*\\+\\s*)?(0x[0-9a-fA-F]+|\\d+)\\s*\\)' % Regex.escape(Holder))
+    for Match in Pattern.finditer(LineText):
+        Found.append(ParseInt(Match.group(1)) * Scale)
+    Subscript = Regex.compile('%s\\[\\s*(0x[0-9a-fA-F]+|\\d+)\\s*\\]' % Regex.escape(Holder))
+    for Match in Subscript.finditer(LineText):
+        Found.append(ParseInt(Match.group(1)) * Scale)
+    if not Found and Regex.search('\\)\\s*%s\\s*[,)]' % Regex.escape(Holder), LineText):
+        Found.append(0)
+    return Found
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ExtractOps(Record: dict) -> dict:
+    BodyInfo = Record['body']
+    TextValueData = StripComments(BodyInfo)
+    Lines = TextValueData.splitlines()
+    Conditions = ConditionStack(BodyInfo)
+    Holder, Scale = ObjectParam(BodyInfo)
+    Reads: ListInfo[dict] = []
+    Writes: ListInfo[dict] = []
+    Bases: ListInfo[str] = []
+    Dbkeys: ListInfo[dict] = []
+    PendingName: Optional[str] = None
+    PendingKey = False
+    for IndexInfo, LineText in enumerate(Lines):
+        Depth, Condition = Conditions[IndexInfo] if IndexInfo < len(Conditions) else (0, '')
+        Gates = VersionGates(Condition)
+        Offsets = StructOffsets(LineText, Holder, Scale)
+        Literal = KStringRe.search(LineText)
+        if Literal and 'Serialize' not in Literal.group(1):
+            PendingName = Literal.group(1)
+        for Match in KBaseCallRe.finditer(LineText):
+            Bases.append(Match.group(1))
+        GetMatch = KGetReInfo.search(LineText)
+        if GetMatch:
+            KindNameInfo = GetMatch.group(1)
+            Reads.append({'op': 'AR_get_' + KindNameInfo, 'width': KScalarWidth.get(KindNameInfo, 0), 'type': KindNameInfo, 'struct_offset': Offsets[0] if Offsets else None, 'gates': Gates, 'condition': Condition, 'line': IndexInfo + 1})
             continue
-        put_match = PUT_RE.search(line)
-        if put_match:
-            kind = put_match.group(1)
-            entry = {
-                "op": "AR_put_" + kind,
-                "width": SCALAR_WIDTH.get(kind, 0),
-                "type": kind,
-                "struct_offset": offsets[0] if offsets else None,
-                "gates": gates,
-                "line": i + 1,
-            }
-            if kind == "su_DBKey":
-                if pending_name:
-                    dbkeys.append({"name": pending_name, "line": i + 1})
-                    pending_key = True
-                    pending_name = None
-            elif pending_key and dbkeys:
-                dbkeys[-1]["struct_offset"] = entry["struct_offset"]
-                dbkeys[-1]["width"] = entry["width"]
-                dbkeys[-1]["type"] = kind
-                pending_key = False
-            writes.append(entry)
+        PutMatch = KPutRe.search(LineText)
+        if PutMatch:
+            KindNameInfo = PutMatch.group(1)
+            Entry = {'op': 'AR_put_' + KindNameInfo, 'width': KScalarWidth.get(KindNameInfo, 0), 'type': KindNameInfo, 'struct_offset': Offsets[0] if Offsets else None, 'gates': Gates, 'line': IndexInfo + 1}
+            if KindNameInfo == 'su_DBKey':
+                if PendingName:
+                    Dbkeys.append({'name': PendingName, 'line': IndexInfo + 1})
+                    PendingKey = True
+                    PendingName = None
+            elif PendingKey and Dbkeys:
+                Dbkeys[-1]['struct_offset'] = Entry['struct_offset']
+                Dbkeys[-1]['width'] = Entry['width']
+                Dbkeys[-1]['type'] = KindNameInfo
+                PendingKey = False
+            Writes.append(Entry)
             continue
-        read_object = READ_OBJECT_RE.search(line)
-        if read_object:
-            reads.append(
-                {
-                    "op": "ReadObject",
-                    "width": None,
-                    "type": read_object.group(1),
-                    "struct_offset": offsets[0] if offsets else None,
-                    "gates": gates,
-                    "condition": condition,
-                    "line": i + 1,
-                }
-            )
+        ReadObject = KReadObjectRe.search(LineText)
+        if ReadObject:
+            Reads.append({'op': 'ReadObject', 'width': None, 'type': ReadObject.group(1), 'struct_offset': Offsets[0] if Offsets else None, 'gates': Gates, 'condition': Condition, 'line': IndexInfo + 1})
             continue
-        slot5 = SLOT5_RE.search(line)
-        if slot5:
-            reads.append(
-                {
-                    "op": "slot5_subrecord",
-                    "width": None,
-                    "type": "member",
-                    "struct_offset": parse_int(slot5.group(1)),
-                    "gates": gates,
-                    "condition": condition,
-                    "line": i + 1,
-                }
-            )
+        SlotFive = KSlotFiveRe.search(LineText)
+        if SlotFive:
+            Reads.append({'op': 'slot5_subrecord', 'width': None, 'type': 'member', 'struct_offset': ParseInt(SlotFive.group(1)), 'gates': Gates, 'condition': Condition, 'line': IndexInfo + 1})
             continue
-        if GLOBAL_READ_RE.search(line):
-            reads.append(
-                {
-                    "op": "operator>>",
-                    "width": None,
-                    "type": "CString" if CSTRING_RE.search(line) else "object",
-                    "struct_offset": offsets[0] if offsets else None,
-                    "gates": gates,
-                    "condition": condition,
-                    "line": i + 1,
-                }
-            )
+        if KGlobalReadRe.search(LineText):
+            Reads.append({'op': 'operator>>', 'width': None, 'type': 'CString' if KCstringRe.search(LineText) else 'object', 'struct_offset': Offsets[0] if Offsets else None, 'gates': Gates, 'condition': Condition, 'line': IndexInfo + 1})
             continue
-        if READ_COUNT_RE.search(line):
-            reads.append(
-                {
-                    "op": "ReadCount",
-                    "width": None,
-                    "type": "count",
-                    "struct_offset": None,
-                    "gates": gates,
-                    "condition": condition,
-                    "line": i + 1,
-                }
-            )
-    return {
-        "function": record["name"],
-        "address": "0x" + record["address"],
-        "source": record["source"],
-        "object_param": holder,
-        "pointer_scale": scale,
-        "bases": bases,
-        "reads": reads,
-        "writes": writes,
-        "dbkeys": dbkeys,
-    }
+        if KReadCountRe.search(LineText):
+            Reads.append({'op': 'ReadCount', 'width': None, 'type': 'count', 'struct_offset': None, 'gates': Gates, 'condition': Condition, 'line': IndexInfo + 1})
+    return {'function': Record['name'], 'address': '0x' + Record['address'], 'source': Record['source'], 'object_param': Holder, 'pointer_scale': Scale, 'bases': Bases, 'reads': Reads, 'writes': Writes, 'dbkeys': Dbkeys}
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dumps", nargs="+")
-    parser.add_argument("--map", required=True)
-    parser.add_argument("--classes", required=True)
-    parser.add_argument("--out", required=True)
-    args = parser.parse_args()
-    dump = Dump(args.dumps)
-    serialize_map = json.load(open(args.map, encoding="utf-8"))
-    classes = [
-        line.strip() for line in open(args.classes, encoding="utf-8") if line.strip()
-    ]
-    payload: Dict[str, dict] = {}
-    for name in classes:
-        entry = serialize_map.get(name)
-        if entry is None:
-            payload[name] = {"status": "no_serialize_map_entry"}
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    ParserInfo = Argparse.ArgumentParser()
+    ParserInfo.add_argument('dumps', nargs='+')
+    ParserInfo.add_argument('--map', required=True)
+    ParserInfo.add_argument('--classes', required=True)
+    ParserInfo.add_argument('--out', required=True)
+    ArgValues = ParserInfo.parse_args()
+    DumpData = DumpRecord(ArgValues.dumps)
+    SerialMap = JsonData.load(open(ArgValues.map, encoding='utf-8'))
+    Classes = [LineText.strip() for LineText in open(ArgValues.classes, encoding='utf-8') if LineText.strip()]
+    PayloadInfo: DictInfo[str, dict] = {}
+    for NameTextInfo in Classes:
+        Entry = SerialMap.get(NameTextInfo)
+        if Entry is None:
+            PayloadInfo[NameTextInfo] = {'status': 'no_serialize_map_entry'}
             continue
-        record = dump.get(entry["serialize_addr"])
-        if record is None:
-            payload[name] = {
-                "status": "serialize_not_dumped",
-                "serialize_address": "0x" + entry["serialize_addr"],
-            }
+        Record = DumpData.get(Entry['serialize_addr'])
+        if Record is None:
+            PayloadInfo[NameTextInfo] = {'status': 'serialize_not_dumped', 'serialize_address': '0x' + Entry['serialize_addr']}
             continue
-        extracted = extract_ops(record)
-        extracted["status"] = "ok"
-        chain: List[dict] = []
-        seen = {record["address"]}
-        frontier = list(extracted["bases"])
-        while frontier:
-            token = frontier.pop(0)
-            base = dump.resolve(token)
-            if base is None:
-                chain.append({"token": token, "status": "not_dumped"})
+        Extracted = ExtractOps(Record)
+        Extracted['status'] = 'ok'
+        Chain: ListInfo[dict] = []
+        SeenInfo = {Record['address']}
+        Frontier = list(Extracted['bases'])
+        while Frontier:
+            Token = Frontier.pop(0)
+            BaseInfo = DumpData.resolve(Token)
+            if BaseInfo is None:
+                Chain.append({'token': Token, 'status': 'not_dumped'})
                 continue
-            if base["address"] in seen:
+            if BaseInfo['address'] in SeenInfo:
                 continue
-            seen.add(base["address"])
-            info = extract_ops(base)
-            info["token"] = token
-            info["status"] = "ok"
-            chain.append(info)
-            frontier.extend(info["bases"])
-        extracted["chain"] = chain
-        payload[name] = extracted
-    with open(args.out, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=1)
-        handle.write("\n")
-    ok = sum(1 for v in payload.values() if v.get("status") == "ok")
-    print("classes=%d extracted=%d missing=%d" % (len(payload), ok, len(payload) - ok))
+            SeenInfo.add(BaseInfo['address'])
+            InfoInfo = ExtractOps(BaseInfo)
+            InfoInfo['token'] = Token
+            InfoInfo['status'] = 'ok'
+            Chain.append(InfoInfo)
+            Frontier.extend(InfoInfo['bases'])
+        Extracted['chain'] = Chain
+        PayloadInfo[NameTextInfo] = Extracted
+    with open(ArgValues.out, 'w', encoding='utf-8') as Handle:
+        JsonData.dump(PayloadInfo, Handle, indent=1)
+        Handle.write('\n')
+    OkInfo = sum((1 for ValueData in PayloadInfo.values() if ValueData.get('status') == 'ok'))
+    print('classes=%d extracted=%d missing=%d' % (len(PayloadInfo), OkInfo, len(PayloadInfo) - OkInfo))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())

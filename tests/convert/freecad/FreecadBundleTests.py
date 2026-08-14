@@ -10,7 +10,7 @@ from __future__ import annotations as Annotations
 from dataclasses import replace as Replace
 from datetime import datetime as Datetime, timezone as Timezone
 import io as IoStream
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import convert.adapters.freecad.Adapter as FreecadAdapter
@@ -187,7 +187,7 @@ globals()['ET'] = XmlTree
 globals()['Mesh'] = MeshValue
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['Vector3'] = VectorThree

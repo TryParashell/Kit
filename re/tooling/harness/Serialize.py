@@ -1,702 +1,636 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
 from __future__ import annotations
+from dataclasses import dataclass as DataClass, field as FieldInfo
+import math as MathLib
+from pathlib import Path as PathInfo
+import struct as Struct
+import sys as System
+import time as TimeInfo
 
-from dataclasses import dataclass, field
-import math
-from pathlib import Path
-import struct
-import sys
-import time
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-SCRATCH = HERE.parents[2] / ".rescratch"
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KScratch = KHereInfo.parents[2] / '.rescratch'
+if str(KHereInfo) not in System.path:
+    System.path.insert(0, str(KHereInfo))
+import Carchive as Carchive
+import Streamlib as Streamlib
+from convert.adapters.solidworks import resolved as Resolvedlib
 
-import carchive
-import streamlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSkeletons = KScratch / 'grammar' / 'skeletons'
 
-from convert.adapters.solidworks import resolved as resolvedlib
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KMetre = 1000.0
 
-SKELETONS = SCRATCH / "grammar" / "skeletons"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCircleDegrees = 17.0
 
-METRE = 1000.0
-CIRCLE_ANGLE_DEGREES = 17.0
-PLANE_DISPLAY_MARGIN = 1.1
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPlaneMargin = 1.1
 
-PLANE_IDS = {"front": 2, "top": 3, "right": 4}
-END_CONDITIONS = {"blind": 0, "throughall": 1, "midplane": 6}
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPlaneIds = {'front': 2, 'top': 3, 'right': 4}
 
-KEYWORDS_PREFIX = b"\x86"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KEndConditions = {'blind': 0, 'throughall': 1, 'midplane': 6}
 
-SKETCH_ID_BASE = 26
-FEATURE_ID_BASE = 32
-ID_STRIDE = 7
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KeywordsPrefix = b'\x86'
 
-BBOX_CLASS = "moBBoxCenterData_c"
-BBOX_CENTRE_RELATIVE = 28
-BBOX_DIAMETER_RELATIVE = 52
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KSketchIdBase = 26
 
-REF_PLANE_DATA_CLASS = "moDefaultRefPlnData_c"
-REF_PLANE_CLASS = "moRefPlane_c"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KFeatIdBase = 32
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KIdStride = 7
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBboxClass = 'moBBoxCenterData_c'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBboxRelative = 28
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBboxInfo = 52
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRefClassInfo = 'moDefaultRefPlnData_c'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRefPlaneClass = 'moRefPlane_c'
 
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
 class SerializeError(RuntimeError):
     __slots__ = ()
 
 
-@dataclass(frozen=True, slots=True)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class Rectangle:
-    width_mm: float
-    height_mm: float
-    centre_x_mm: float = 0.0
-    centre_y_mm: float = 0.0
+    WidthMm: float
+    HeightMm: float
+    CentreXMm: float = 0.0
+    CentreYMm: float = 0.0
 
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
-    def kind(self) -> str:
-        return "rectangle"
+    def KindNameInfo(SelfRef) -> str:
+        return 'rectangle'
 
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
-    def area_mm2(self) -> float:
-        return self.width_mm * self.height_mm
-
-    def corners_mm(self) -> tuple[tuple[float, float], ...]:
-        half_x = self.width_mm / 2.0
-        half_y = self.height_mm / 2.0
-        return resolvedlib.rectangle_corners_mm(
-            self.centre_x_mm - half_x,
-            self.centre_y_mm - half_y,
-            self.centre_x_mm + half_x,
-            self.centre_y_mm + half_y,
-        )
-
-    def bounds_mm(self) -> tuple[float, float, float, float]:
-        half_x = self.width_mm / 2.0
-        half_y = self.height_mm / 2.0
-        return (
-            self.centre_x_mm - half_x,
-            self.centre_y_mm - half_y,
-            self.centre_x_mm + half_x,
-            self.centre_y_mm + half_y,
-        )
+    def AreaMmTwo(SelfRef) -> float:
+        return SelfRef.WidthMm * SelfRef.HeightMm
 
 
-@dataclass(frozen=True, slots=True)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def CornersMm(SelfRef) -> tuple[tuple[float, float], ...]:
+        HalfX = SelfRef.WidthMm / 2.0
+        HalfY = SelfRef.HeightMm / 2.0
+        return Resolvedlib.rectangle_corners_mm(SelfRef.CentreXMm - HalfX, SelfRef.CentreYMm - HalfY, SelfRef.CentreXMm + HalfX, SelfRef.CentreYMm + HalfY)
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def BoundsMm(SelfRef) -> tuple[float, float, float, float]:
+        HalfX = SelfRef.WidthMm / 2.0
+        HalfY = SelfRef.HeightMm / 2.0
+        return (SelfRef.CentreXMm - HalfX, SelfRef.CentreYMm - HalfY, SelfRef.CentreXMm + HalfX, SelfRef.CentreYMm + HalfY)
+    KAliasNames = {'width_mm': 'WidthMm', 'height_mm': 'HeightMm', 'centre_x_mm': 'CentreXMm', 'centre_y_mm': 'CentreYMm', 'kind': 'KindNameInfo', 'area_mm2': 'AreaMmTwo', 'corners_mm': 'CornersMm', 'bounds_mm': 'BoundsMm'}
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class Circle:
-    radius_mm: float
-    centre_x_mm: float = 0.0
-    centre_y_mm: float = 0.0
+    RadiusMm: float
+    CentreXMm: float = 0.0
+    CentreYMm: float = 0.0
 
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
-    def kind(self) -> str:
-        return "circle"
+    def KindNameInfo(SelfRef) -> str:
+        return 'circle'
 
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
-    def area_mm2(self) -> float:
-        return math.pi * self.radius_mm * self.radius_mm
-
-    def bounds_mm(self) -> tuple[float, float, float, float]:
-        return (
-            self.centre_x_mm - self.radius_mm,
-            self.centre_y_mm - self.radius_mm,
-            self.centre_x_mm + self.radius_mm,
-            self.centre_y_mm + self.radius_mm,
-        )
+    def AreaMmTwo(SelfRef) -> float:
+        return MathLib.pi * SelfRef.RadiusMm * SelfRef.RadiusMm
 
 
-@dataclass(frozen=True, slots=True)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def BoundsMm(SelfRef) -> tuple[float, float, float, float]:
+        return (SelfRef.CentreXMm - SelfRef.RadiusMm, SelfRef.CentreYMm - SelfRef.RadiusMm, SelfRef.CentreXMm + SelfRef.RadiusMm, SelfRef.CentreYMm + SelfRef.RadiusMm)
+    KAliasNames = {'radius_mm': 'RadiusMm', 'centre_x_mm': 'CentreXMm', 'centre_y_mm': 'CentreYMm', 'kind': 'KindNameInfo', 'area_mm2': 'AreaMmTwo', 'bounds_mm': 'BoundsMm'}
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class Extrude:
-    profile: Rectangle | Circle
-    depth_mm: float
-    operation: str = "boss"
-    plane: str = "front"
-    end_condition: str = "blind"
-    reversed: bool = False
-    support: str = "plane"
+    Profile: Rectangle | Circle
+    DepthMm: float
+    OpInfo: str = 'boss'
+    Plane: str = 'front'
+    EndCondition: str = 'blind'
+    Reversed: bool = False
+    Support: str = 'plane'
 
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
-    def shape(self) -> tuple[str, str, str, bool]:
-        return (
-            self.operation,
-            self.profile.kind,
-            self.support,
-            self.end_condition != "throughall",
-        )
+    def Shape(SelfRef) -> tuple[str, str, str, bool]:
+        return (SelfRef.OpInfo, SelfRef.Profile.kind, SelfRef.Support, SelfRef.EndCondition != 'throughall')
+    KAliasNames = {'profile': 'Profile', 'depth_mm': 'DepthMm', 'operation': 'OpInfo', 'plane': 'Plane', 'end_condition': 'EndCondition', 'reversed': 'Reversed', 'support': 'Support', 'shape': 'Shape'}
 
 
-@dataclass(frozen=True, slots=True)
-class Part:
-    features: tuple[Extrude, ...]
-    name: str = "KitAuthored"
-    document_name: str = "Part1"
-    author_ids: bool = False
-    dedupe_ids: bool = False
-    write_depth_copies: bool = False
-    write_bbox_cache: bool = False
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
+class PartInfo:
+    FeatInfoInfo: tuple[Extrude, ...]
+    NameTextInfo: str = 'KitAuthored'
+    DocumentName: str = 'Part1'
+    AuthorIds: bool = False
+    DedupeIds: bool = False
+    WriteCopies: bool = False
+    WriteBboxCache: bool = False
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
-    def shape(self) -> tuple[tuple[str, str, str, bool], ...]:
-        return tuple(feature.shape for feature in self.features)
+    def Shape(SelfRef) -> tuple[tuple[str, str, str, bool], ...]:
+        return tuple((FeatInfo.shape for FeatInfo in SelfRef.FeatInfoInfo))
+    KAliasNames = {'features': 'FeatInfoInfo', 'name': 'NameTextInfo', 'document_name': 'DocumentName', 'author_ids': 'AuthorIds', 'dedupe_ids': 'DedupeIds', 'write_depth_copies': 'WriteCopies', 'write_bbox_cache': 'WriteBboxCache', 'shape': 'Shape'}
 
 
-@dataclass(frozen=True, slots=True)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(frozen=True, slots=True)
 class Skeleton:
-    shape: tuple[tuple[str, str, str, bool], ...]
-    source: Path
-    resolved: bytes
-    keywords: bytes
-    features_xml: bytes
-    donor: streamlib.Donor
-    grown: bool = False
-    label: str = ""
+    Shape: tuple[tuple[str, str, str, bool], ...]
+    Source: PathInfo
+    Resolved: bytes
+    Keywords: bytes
+    FeatXml: bytes
+    DonorInfo: Streamlib.Donor
+    Grown: bool = False
+    LabelInfo: str = ''
 
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
-    def name(self) -> str:
-        return self.label or self.source.name
+    def NameTextInfo(SelfRef) -> str:
+        return SelfRef.LabelInfo or SelfRef.Source.name
+    KAliasNames = {'shape': 'Shape', 'source': 'Source', 'resolved': 'Resolved', 'keywords': 'Keywords', 'features_xml': 'FeatXml', 'donor': 'DonorInfo', 'grown': 'Grown', 'label': 'LabelInfo', 'name': 'NameTextInfo'}
 
 
-@dataclass(slots=True)
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+@DataClass(slots=True)
 class Emission:
-    resolved: bytes
-    keywords: bytes
-    features_xml: bytes
-    writes: list[str] = field(default_factory=list)
-    skeleton: str = ""
+    Resolved: bytes
+    Keywords: bytes
+    FeatXml: bytes
+    Writes: list[str] = FieldInfo(default_factory=list)
+    SkeletonInfo: str = ''
+    KAliasNames = {'resolved': 'Resolved', 'keywords': 'Keywords', 'features_xml': 'FeatXml', 'writes': 'Writes', 'skeleton': 'SkeletonInfo'}
 
 
-def signed_extent(feature: Extrude) -> tuple[float, float]:
-    depth = feature.depth_mm
-    code = END_CONDITIONS[feature.end_condition]
-    if code == END_CONDITIONS["midplane"]:
-        low, high = -depth / 2.0, depth / 2.0
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __getattr__(SelfRef, NameText):
+        AliasName = SelfRef.KAliasNames.get(NameText)
+        if AliasName is None:
+            raise AttributeError(NameText)
+        return getattr(SelfRef, AliasName)
+
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    def __setattr__(SelfRef, NameText, ValueData):
+        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+        object.__setattr__(SelfRef, TargetName, ValueData)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SignedExtent(FeatInfo: Extrude) -> tuple[float, float]:
+    Depth = FeatInfo.depth_mm
+    CodeInfo = KEndConditions[FeatInfo.end_condition]
+    if CodeInfo == KEndConditions['midplane']:
+        LowValue, HighValue = (-Depth / 2.0, Depth / 2.0)
     else:
-        low, high = 0.0, depth
-    if feature.reversed:
-        low, high = -high, -low
-    return low, high
+        LowValue, HighValue = (0.0, Depth)
+    if FeatInfo.reversed:
+        LowValue, HighValue = (-HighValue, -LowValue)
+    return (LowValue, HighValue)
 
 
-def solid_volume_mm3(part: Part) -> float:
-    total = 0.0
-    for feature in part.features:
-        low, high = signed_extent(feature)
-        length = abs(high - low)
-        volume = feature.profile.area_mm2 * length
-        total += -volume if feature.operation == "cut" else volume
-    return total
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SolidThree(PartInfoInfo: PartInfo) -> float:
+    Total = 0.0
+    for FeatInfo in PartInfoInfo.features:
+        LowValue, HighValue = SignedExtent(FeatInfo)
+        Length = abs(HighValue - LowValue)
+        Volume = FeatInfo.profile.area_mm2 * Length
+        Total += -Volume if FeatInfo.operation == 'cut' else Volume
+    return Total
 
 
-def sketch_ids(count: int) -> tuple[tuple[int, int], ...]:
-    return tuple(
-        (SKETCH_ID_BASE + index * ID_STRIDE, FEATURE_ID_BASE + index * ID_STRIDE)
-        for index in range(count)
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SketchIds(CountInfo: int) -> tuple[tuple[int, int], ...]:
+    return tuple(((KSketchIdBase + IndexData * KIdStride, KFeatIdBase + IndexData * KIdStride) for IndexData in range(CountInfo)))
 
 
-def feature_names(part: Part) -> tuple[tuple[str, str], ...]:
-    boss = 0
-    cut = 0
-    result: list[tuple[str, str]] = []
-    for index, feature in enumerate(part.features):
-        if feature.operation == "cut":
-            cut += 1
-            name = f"Cut-Extrude{cut}"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def FeatNames(PartInfoInfo: PartInfo) -> tuple[tuple[str, str], ...]:
+    BossInfo = 0
+    CutInfo = 0
+    Result: list[tuple[str, str]] = []
+    for IndexData, FeatInfo in enumerate(PartInfoInfo.features):
+        if FeatInfo.operation == 'cut':
+            CutInfo += 1
+            NameTextInfo = f'Cut-Extrude{CutInfo}'
         else:
-            boss += 1
-            name = f"Boss-Extrude{boss}"
-        result.append((f"Sketch{index + 1}", name))
-    return tuple(result)
+            BossInfo += 1
+            NameTextInfo = f'Boss-Extrude{BossInfo}'
+        Result.append((f'Sketch{IndexData + 1}', NameTextInfo))
+    return tuple(Result)
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KReservedIds = frozenset(range(1, 26))
 
 
-RESERVED_IDS = frozenset(range(1, 26))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def DedupeIdents(Pairs: tuple[tuple[int, int], ...]) -> tuple[tuple[int, int], ...]:
+    UsedInfo = {ValueInfo for PairInfo in Pairs for ValueInfo in PairInfo} | set(KReservedIds)
+    Cursor = max(UsedInfo) + 1
+    SeenInfo: set[int] = set()
+    Result: list[tuple[int, int]] = []
+    for SketchId, FeatId in Pairs:
+        if SketchId in SeenInfo or FeatId in SeenInfo:
+            SketchId = Cursor
+            FeatId = Cursor + 1
+            Cursor += 2
+        SeenInfo.add(SketchId)
+        SeenInfo.add(FeatId)
+        Result.append((SketchId, FeatId))
+    return tuple(Result)
 
 
-def dedupe_identifiers(
-    pairs: tuple[tuple[int, int], ...],
-) -> tuple[tuple[int, int], ...]:
-    used = {value for pair in pairs for value in pair} | set(RESERVED_IDS)
-    cursor = max(used) + 1
-    seen: set[int] = set()
-    result: list[tuple[int, int]] = []
-    for sketch_id, feature_id in pairs:
-        if sketch_id in seen or feature_id in seen:
-            sketch_id = cursor
-            feature_id = cursor + 1
-            cursor += 2
-        seen.add(sketch_id)
-        seen.add(feature_id)
-        result.append((sketch_id, feature_id))
-    return tuple(result)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def FeatIdents(ByteBlob: bytes, PartInfoInfo: PartInfo) -> tuple[tuple[int, int], ...]:
+    if PartInfoInfo.author_ids:
+        return SketchIds(len(PartInfoInfo.features))
+    Entries = Streamlib.CompFeatEntries(ByteBlob)
+    Pairs = tuple(((Entries[IndexData * 2][2], Entries[IndexData * 2 + 1][2]) for IndexData in range(len(PartInfoInfo.features))))
+    return DedupeIdents(Pairs) if PartInfoInfo.dedupe_ids else Pairs
 
 
-def feature_identifiers(blob: bytes, part: Part) -> tuple[tuple[int, int], ...]:
-    if part.author_ids:
-        return sketch_ids(len(part.features))
-    entries = streamlib.comp_feature_entries(blob)
-    pairs = tuple(
-        (entries[index * 2][2], entries[index * 2 + 1][2])
-        for index in range(len(part.features))
-    )
-    return dedupe_identifiers(pairs) if part.dedupe_ids else pairs
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def LoadSkeletons() -> tuple[Skeleton, ...]:
+    Manifest = KSkeletons / 'manifest.json'
+    if not Manifest.is_file():
+        raise SerializeError(f'skeleton manifest is missing: run build_skeletons.py first ({Manifest})')
+    import json as JsonData
+    Entries = JsonData.loads(Manifest.read_text(encoding='utf-8'))
+    Result: list[Skeleton] = []
+    for Entry in Entries:
+        Source = PathInfo(Entry['source'])
+        DonorInfo = Streamlib.LoadDonor(Source)
+        Result.append(Skeleton(Shape=tuple(((ItemData[0], ItemData[1], ItemData[2], bool(ItemData[3])) for ItemData in Entry['shape'])), Source=Source, Resolved=DonorInfo.resolved, Keywords=DonorInfo.streams[Streamlib.KEYWORDS], FeatXml=DonorInfo.streams[Streamlib.KFeatInfo], DonorInfo=DonorInfo))
+    return tuple(Result)
 
 
-def load_skeletons() -> tuple[Skeleton, ...]:
-    manifest = SKELETONS / "manifest.json"
-    if not manifest.is_file():
-        raise SerializeError(
-            f"skeleton manifest is missing: run build_skeletons.py first ({manifest})"
-        )
-    import json
-
-    entries = json.loads(manifest.read_text(encoding="utf-8"))
-    result: list[Skeleton] = []
-    for entry in entries:
-        source = Path(entry["source"])
-        donor = streamlib.load_donor(source)
-        result.append(
-            Skeleton(
-                shape=tuple(
-                    (item[0], item[1], item[2], bool(item[3]))
-                    for item in entry["shape"]
-                ),
-                source=source,
-                resolved=donor.resolved,
-                keywords=donor.streams[streamlib.KEYWORDS],
-                features_xml=donor.streams[streamlib.FEATURES],
-                donor=donor,
-            )
-        )
-    return tuple(result)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GrowSkeleton(Shape: tuple[tuple[str, str, str, bool], ...]) -> Skeleton:
+    Scratch = KScratch / 're'
+    if str(Scratch) not in System.path:
+        System.path.insert(0, str(Scratch))
+    import skeletongrow as Skeletongrow
+    Resolved, DonorInfo, LabelInfo = Skeletongrow.grow(Shape)
+    return Skeleton(Shape=Shape, Source=DonorInfo.path, Resolved=Resolved, Keywords=DonorInfo.streams[Streamlib.KEYWORDS], FeatXml=DonorInfo.streams[Streamlib.KFeatInfo], DonorInfo=DonorInfo, Grown=True, LabelInfo=LabelInfo)
 
 
-def grow_skeleton(shape: tuple[tuple[str, str, str, bool], ...]) -> Skeleton:
-    scratch = SCRATCH / "re"
-    if str(scratch) not in sys.path:
-        sys.path.insert(0, str(scratch))
-    import skeletongrow
-
-    resolved, donor, label = skeletongrow.grow(shape)
-    return Skeleton(
-        shape=shape,
-        source=donor.path,
-        resolved=resolved,
-        keywords=donor.streams[streamlib.KEYWORDS],
-        features_xml=donor.streams[streamlib.FEATURES],
-        donor=donor,
-        grown=True,
-        label=label,
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SelectSkeleton(PartInfoInfo: PartInfo, Skeletons: tuple[Skeleton, ...]) -> Skeleton:
+    Wanted = PartInfoInfo.shape
+    for SkeletonInfo in Skeletons:
+        if SkeletonInfo.shape == Wanted:
+            return SkeletonInfo
+    Scratch = KScratch / 're'
+    if str(Scratch) not in System.path:
+        System.path.insert(0, str(Scratch))
+    import skeletongrow as Skeletongrow
+    if Skeletongrow.match(Wanted) is not None:
+        return GrowSkeleton(Wanted)
+    Available = '; '.join((str(SkeletonInfo.shape) for SkeletonInfo in Skeletons))
+    raise SerializeError(f'no skeleton matches shape {Wanted}; available: {Available}')
 
 
-def select_skeleton(part: Part, skeletons: tuple[Skeleton, ...]) -> Skeleton:
-    wanted = part.shape
-    for skeleton in skeletons:
-        if skeleton.shape == wanted:
-            return skeleton
-    scratch = SCRATCH / "re"
-    if str(scratch) not in sys.path:
-        sys.path.insert(0, str(scratch))
-    import skeletongrow
-
-    if skeletongrow.match(wanted) is not None:
-        return grow_skeleton(wanted)
-    available = "; ".join(str(skeleton.shape) for skeleton in skeletons)
-    raise SerializeError(f"no skeleton matches shape {wanted}; available: {available}")
-
-
-def emit(part: Part, skeletons: tuple[Skeleton, ...] | None = None) -> Emission:
-    catalogue = load_skeletons() if skeletons is None else skeletons
-    skeleton = select_skeleton(part, catalogue)
-    if skeleton.grown and not part.author_ids:
-        from dataclasses import replace
-
-        part = replace(part, dedupe_ids=True)
-    output = bytearray(skeleton.resolved)
-    writes: list[str] = []
-    _write_comp_features(output, part, writes)
-    _write_tree_nodes(output, part, writes)
-    _write_sketches(output, part, writes)
-    _write_extrusions(output, part, writes)
-    _write_plane_reference(output, part, writes)
-    _write_bbox_cache(output, part, writes)
-    _write_plane_display(output, part, writes)
-    final = bytes(output)
-    names = stream_names(final)
-    return Emission(
-        resolved=final,
-        keywords=emit_keywords(part, names, feature_identifiers(final, part)),
-        features_xml=emit_features_xml(part),
-        writes=writes,
-        skeleton=skeleton.name,
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def EmitData(PartInfoInfo: PartInfo, Skeletons: tuple[Skeleton, ...] | None=None) -> Emission:
+    Catalogue = LoadSkeletons() if Skeletons is None else Skeletons
+    SkeletonInfo = SelectSkeleton(PartInfoInfo, Catalogue)
+    if SkeletonInfo.grown and (not PartInfoInfo.author_ids):
+        from dataclasses import replace as Replace
+        PartInfoInfo = Replace(PartInfoInfo, dedupe_ids=True)
+    Output = bytearray(SkeletonInfo.resolved)
+    Writes: list[str] = []
+    WriteFeatMut(Output, PartInfoInfo, Writes)
+    WriteNodesMut(Output, PartInfoInfo, Writes)
+    WriteInfoMut(Output, PartInfoInfo, Writes)
+    WriteMut(Output, PartInfoInfo, Writes)
+    WriteRefMut(Output, PartInfoInfo, Writes)
+    WriteCacheMut(Output, PartInfoInfo, Writes)
+    WriteDisplayMut(Output, PartInfoInfo, Writes)
+    Final = bytes(Output)
+    Names = StreamNamesInfo(Final)
+    return Emission(Resolved=Final, Keywords=EmitKeywords(PartInfoInfo, Names, FeatIdents(Final, PartInfoInfo)), FeatXml=EmitFeatXml(PartInfoInfo), Writes=Writes, SkeletonInfo=SkeletonInfo.name)
 
 
-def stream_names(blob: bytes) -> tuple[tuple[str, str], ...]:
-    nodes = streamlib.tree_nodes(blob)
-    sketches = [node.name for node in nodes if node.name.startswith("Sketch")]
-    features = [
-        node.name for node in nodes if resolvedlib.feature_kind(node.flags) is not None
-    ]
-    return tuple(zip(sketches, features, strict=True))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def StreamNamesInfo(ByteBlob: bytes) -> tuple[tuple[str, str], ...]:
+    Nodes = Streamlib.TreeNodes(ByteBlob)
+    Sketches = [NodeInfoInfo.name for NodeInfoInfo in Nodes if NodeInfoInfo.name.startswith('Sketch')]
+    FeatInfoInfo = [NodeInfoInfo.name for NodeInfoInfo in Nodes if Resolvedlib.feature_kind(NodeInfoInfo.flags) is not None]
+    return tuple(zip(Sketches, FeatInfoInfo, strict=True))
 
 
-def _write_comp_features(output: bytearray, part: Part, writes: list[str]) -> None:
-    entries = streamlib.comp_feature_entries(bytes(output))
-    expected = 2 * len(part.features)
-    if len(entries) != expected:
-        raise SerializeError(
-            f"skeleton has {len(entries)} moCompFeature_c entries, "
-            f"{expected} required for {len(part.features)} features"
-        )
-    stamp = int(time.time())
-    flat = [
-        value for pair in feature_identifiers(bytes(output), part) for value in pair
-    ]
-    for entry, identifier in zip(entries, flat, strict=True):
-        streamlib.write_u32(output, entry[1] - streamlib.COMP_ENTRY_ID_BACK, identifier)
-        streamlib.write_u32(output, entry[1] - streamlib.COMP_ENTRY_TIME_BACK, stamp)
-    writes.append(
-        f"moCompFeature_c ids={flat} stamp={stamp} "
-        f"({'authored' if part.author_ids else 'inherited'})"
-    )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteFeatMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -> None:
+    Entries = Streamlib.CompFeatEntries(bytes(Output))
+    Expect = 2 * len(PartInfoInfo.features)
+    if len(Entries) != Expect:
+        raise SerializeError(f'skeleton has {len(Entries)} moCompFeature_c entries, {Expect} required for {len(PartInfoInfo.features)} features')
+    Stamp = int(TimeInfo.time())
+    FlatInfo = [ValueInfo for PairInfo in FeatIdents(bytes(Output), PartInfoInfo) for ValueInfo in PairInfo]
+    for Entry, Ident in zip(Entries, FlatInfo, strict=True):
+        Streamlib.WriteUThirtyTwo(Output, Entry[1] - Streamlib.KCompBack, Ident)
+        Streamlib.WriteUThirtyTwo(Output, Entry[1] - Streamlib.KCompBackInfo, Stamp)
+    Writes.append(f"moCompFeature_c ids={FlatInfo} stamp={Stamp} ({('authored' if PartInfoInfo.author_ids else 'inherited')})")
 
 
-def _write_tree_nodes(output: bytearray, part: Part, writes: list[str]) -> None:
-    identifiers = feature_identifiers(bytes(output), part)
-    nodes = streamlib.tree_nodes(bytes(output))
-    sketches = [node for node in nodes if node.name.startswith("Sketch")]
-    features = [
-        node for node in nodes if resolvedlib.feature_kind(node.flags) is not None
-    ]
-    if len(sketches) != len(part.features) or len(features) != len(part.features):
-        raise SerializeError(
-            f"skeleton exposes {len(sketches)} sketches and {len(features)} features, "
-            f"{len(part.features)} of each required"
-        )
-    for index, feature in enumerate(part.features):
-        sketch_id, feature_id = identifiers[index]
-        streamlib.write_u32(output, sketches[index].text_end + 8, sketch_id)
-        node = features[index]
-        flags = (
-            streamlib.CUT_FLAGS if feature.operation == "cut" else streamlib.BOSS_FLAGS
-        )
-        if resolvedlib.feature_kind(node.flags) != feature.operation:
-            raise SerializeError(
-                f"skeleton feature {index} is a "
-                f"{resolvedlib.feature_kind(node.flags)} and {feature.operation} "
-                f"was requested; the operation is not writable, see results.md E1/E2/A3"
-            )
-        preserved = node.flags & 0x80000000
-        streamlib.write_u32(output, node.text_end + 4, flags | preserved)
-        streamlib.write_u32(output, node.text_end + 8, feature_id)
-        writes.append(
-            f"tree[{index}] {node.name!r} flags=0x{flags:08x} "
-            f"at {node.text_end + 4}, id={feature_id} at {node.text_end + 8}, "
-            f"sketch id={sketch_id} at {sketches[index].text_end + 8}"
-        )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteNodesMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -> None:
+    Idents = FeatIdents(bytes(Output), PartInfoInfo)
+    Nodes = Streamlib.TreeNodes(bytes(Output))
+    Sketches = [NodeInfoInfo for NodeInfoInfo in Nodes if NodeInfoInfo.name.startswith('Sketch')]
+    FeatInfoInfo = [NodeInfoInfo for NodeInfoInfo in Nodes if Resolvedlib.feature_kind(NodeInfoInfo.flags) is not None]
+    if len(Sketches) != len(PartInfoInfo.features) or len(FeatInfoInfo) != len(PartInfoInfo.features):
+        raise SerializeError(f'skeleton exposes {len(Sketches)} sketches and {len(FeatInfoInfo)} features, {len(PartInfoInfo.features)} of each required')
+    for IndexData, FeatInfo in enumerate(PartInfoInfo.features):
+        SketchId, FeatId = Idents[IndexData]
+        Streamlib.WriteUThirtyTwo(Output, Sketches[IndexData].text_end + 8, SketchId)
+        NodeInfoInfo = FeatInfoInfo[IndexData]
+        Flags = Streamlib.KCutFlags if FeatInfo.operation == 'cut' else Streamlib.KBossFlags
+        if Resolvedlib.feature_kind(NodeInfoInfo.flags) != FeatInfo.operation:
+            raise SerializeError(f'skeleton feature {IndexData} is a {Resolvedlib.feature_kind(NodeInfoInfo.flags)} and {FeatInfo.operation} was requested; the operation is not writable, see results.md E1/E2/A3')
+        Preserved = NodeInfoInfo.flags & 2147483648
+        Streamlib.WriteUThirtyTwo(Output, NodeInfoInfo.text_end + 4, Flags | Preserved)
+        Streamlib.WriteUThirtyTwo(Output, NodeInfoInfo.text_end + 8, FeatId)
+        Writes.append(f'tree[{IndexData}] {NodeInfoInfo.name!r} flags=0x{Flags:08x} at {NodeInfoInfo.text_end + 4}, id={FeatId} at {NodeInfoInfo.text_end + 8}, sketch id={SketchId} at {Sketches[IndexData].text_end + 8}')
 
 
-def _write_sketches(output: bytearray, part: Part, writes: list[str]) -> None:
-    blob = bytes(output)
-    nodes = streamlib.tree_nodes(blob)
-    sketches = [node for node in nodes if node.name.startswith("Sketch")]
-    features = [
-        node for node in nodes if resolvedlib.feature_kind(node.flags) is not None
-    ]
-    points = resolvedlib.sketch_points(blob)
-    arcs = resolvedlib.sketch_arcs(blob)
-    for index, feature in enumerate(part.features):
-        low = sketches[index].offset
-        high = features[index].offset
-        if isinstance(feature.profile, Rectangle):
-            owned = [point for point in points if low < point.offset < high]
-            if len(owned) != 4:
-                raise SerializeError(
-                    f"skeleton sketch {index} has {len(owned)} points, 4 required"
-                )
-            for point, (x, y) in zip(owned, feature.profile.corners_mm(), strict=True):
-                streamlib.write_double(output, point.offset, x / METRE)
-                streamlib.write_double(output, point.offset + 8, y / METRE)
-            writes.append(
-                f"sketch[{index}] rectangle {feature.profile.corners_mm()} "
-                f"at {[point.offset for point in owned]}"
-            )
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteInfoMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -> None:
+    ByteBlob = bytes(Output)
+    Nodes = Streamlib.TreeNodes(ByteBlob)
+    Sketches = [NodeInfoInfo for NodeInfoInfo in Nodes if NodeInfoInfo.name.startswith('Sketch')]
+    FeatInfoInfo = [NodeInfoInfo for NodeInfoInfo in Nodes if Resolvedlib.feature_kind(NodeInfoInfo.flags) is not None]
+    Points = Resolvedlib.sketch_points(ByteBlob)
+    ArcsInfo = Resolvedlib.sketch_arcs(ByteBlob)
+    for IndexData, FeatInfo in enumerate(PartInfoInfo.features):
+        LowValue = Sketches[IndexData].offset
+        HighValue = FeatInfoInfo[IndexData].offset
+        if isinstance(FeatInfo.profile, Rectangle):
+            Owned = [Point for Point in Points if LowValue < Point.offset < HighValue]
+            if len(Owned) != 4:
+                raise SerializeError(f'skeleton sketch {IndexData} has {len(Owned)} points, 4 required')
+            for Point, (Xcoord, Ycoord) in zip(Owned, FeatInfo.profile.corners_mm(), strict=True):
+                Streamlib.WriteDouble(Output, Point.offset, Xcoord / KMetre)
+                Streamlib.WriteDouble(Output, Point.offset + 8, Ycoord / KMetre)
+            Writes.append(f'sketch[{IndexData}] rectangle {FeatInfo.profile.corners_mm()} at {[Point.offset for Point in Owned]}')
             continue
-        owned_arcs = [arc for arc in arcs if low < arc.centre_offset < high]
-        if len(owned_arcs) != 1:
-            raise SerializeError(
-                f"skeleton sketch {index} has {len(owned_arcs)} arcs, 1 required"
-            )
-        arc = owned_arcs[0]
-        centre_x = feature.profile.centre_x_mm / METRE
-        centre_y = feature.profile.centre_y_mm / METRE
-        angle = math.radians(CIRCLE_ANGLE_DEGREES)
-        radius = feature.profile.radius_mm / METRE
-        streamlib.write_double(output, arc.centre_offset, centre_x)
-        streamlib.write_double(output, arc.centre_offset + 8, centre_y)
-        streamlib.write_double(
-            output, arc.point_offset, centre_x + radius * math.cos(angle)
-        )
-        streamlib.write_double(
-            output, arc.point_offset + 8, centre_y + radius * math.sin(angle)
-        )
-        writes.append(
-            f"sketch[{index}] circle r={feature.profile.radius_mm} "
-            f"centre@{arc.centre_offset} point@{arc.point_offset}"
-        )
+        OwnedArcs = [ArcInfo for ArcInfo in ArcsInfo if LowValue < ArcInfo.centre_offset < HighValue]
+        if len(OwnedArcs) != 1:
+            raise SerializeError(f'skeleton sketch {IndexData} has {len(OwnedArcs)} arcs, 1 required')
+        ArcInfo = OwnedArcs[0]
+        CentreX = FeatInfo.profile.centre_x_mm / KMetre
+        CentreY = FeatInfo.profile.centre_y_mm / KMetre
+        Angle = MathLib.radians(KCircleDegrees)
+        Radius = FeatInfo.profile.radius_mm / KMetre
+        Streamlib.WriteDouble(Output, ArcInfo.centre_offset, CentreX)
+        Streamlib.WriteDouble(Output, ArcInfo.centre_offset + 8, CentreY)
+        Streamlib.WriteDouble(Output, ArcInfo.point_offset, CentreX + Radius * MathLib.cos(Angle))
+        Streamlib.WriteDouble(Output, ArcInfo.point_offset + 8, CentreY + Radius * MathLib.sin(Angle))
+        Writes.append(f'sketch[{IndexData}] circle r={FeatInfo.profile.radius_mm} centre@{ArcInfo.centre_offset} point@{ArcInfo.point_offset}')
 
 
-def _write_extrusions(output: bytearray, part: Part, writes: list[str]) -> None:
-    layouts = resolvedlib.locate_features(bytes(output))
-    if len(layouts) != len(part.features):
-        raise SerializeError(
-            f"skeleton exposes {len(layouts)} extrusions, "
-            f"{len(part.features)} required"
-        )
-    for index, feature in enumerate(part.features):
-        layout = layouts[index]
-        code = END_CONDITIONS[feature.end_condition]
-        if layout.depth_offset is None:
-            if code != END_CONDITIONS["throughall"]:
-                raise SerializeError(
-                    f"skeleton feature {index} has no dimension scalar, "
-                    f"only ThroughAll can be emitted"
-                )
-            writes.append(f"extrude[{index}] ThroughAll, no scalar in skeleton")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -> None:
+    Layouts = Resolvedlib.locate_features(bytes(Output))
+    if len(Layouts) != len(PartInfoInfo.features):
+        raise SerializeError(f'skeleton exposes {len(Layouts)} extrusions, {len(PartInfoInfo.features)} required')
+    for IndexData, FeatInfo in enumerate(PartInfoInfo.features):
+        Layout = Layouts[IndexData]
+        CodeInfo = KEndConditions[FeatInfo.end_condition]
+        if Layout.depth_offset is None:
+            if CodeInfo != KEndConditions['throughall']:
+                raise SerializeError(f'skeleton feature {IndexData} has no dimension scalar, only ThroughAll can be emitted')
+            Writes.append(f'extrude[{IndexData}] ThroughAll, no scalar in skeleton')
             continue
-        base = feature.depth_mm / METRE
-        deltas = resolvedlib.DEPTH_COPY_DELTAS if part.write_depth_copies else (0,)
-        signs = resolvedlib.DEPTH_COPY_SIGNS if part.write_depth_copies else (1,)
-        for delta, sign in zip(deltas, signs, strict=True):
-            target = layout.depth_offset + delta
-            if target + 8 <= len(output):
-                streamlib.write_double(output, target, sign * base)
-        output[layout.reverse_offset] = 1 if feature.reversed else 0
-        output[layout.end_condition_offset] = code
-        writes.append(
-            f"extrude[{index}] depth={feature.depth_mm} at {layout.depth_offset} "
-            f"copies={list(deltas)}, "
-            f"reverse={int(feature.reversed)} at {layout.reverse_offset}, "
-            f"end={code} at {layout.end_condition_offset}"
-        )
+        BaseInfo = FeatInfo.depth_mm / KMetre
+        Deltas = Resolvedlib.DEPTH_COPY_DELTAS if PartInfoInfo.write_depth_copies else (0,)
+        Signs = Resolvedlib.DEPTH_COPY_SIGNS if PartInfoInfo.write_depth_copies else (1,)
+        for Delta, SignInfo in zip(Deltas, Signs, strict=True):
+            Target = Layout.depth_offset + Delta
+            if Target + 8 <= len(Output):
+                Streamlib.WriteDouble(Output, Target, SignInfo * BaseInfo)
+        Output[Layout.reverse_offset] = 1 if FeatInfo.reversed else 0
+        Output[Layout.end_condition_offset] = CodeInfo
+        Writes.append(f'extrude[{IndexData}] depth={FeatInfo.depth_mm} at {Layout.depth_offset} copies={list(Deltas)}, reverse={int(FeatInfo.reversed)} at {Layout.reverse_offset}, end={CodeInfo} at {Layout.end_condition_offset}')
 
 
-def _write_plane_reference(output: bytearray, part: Part, writes: list[str]) -> None:
-    blob = bytes(output)
-    records = resolvedlib.class_records(blob)
-    chain = resolvedlib.first_class_offset(records, resolvedlib.SKETCH_CHAIN_CLASS)
-    if chain is None:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteRefMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -> None:
+    ByteBlob = bytes(Output)
+    RecordsInfo = Resolvedlib.class_records(ByteBlob)
+    Chain = Resolvedlib.first_class_offset(RecordsInfo, Resolvedlib.SKETCH_CHAIN_CLASS)
+    if Chain is None:
         return
-    wanted = PLANE_IDS[part.features[0].plane]
-    for offset in range(chain, min(chain + 400, len(blob) - 14)):
-        candidate = struct.unpack_from("<I", blob, offset)[0]
-        if candidate not in {2, 3, 4}:
+    Wanted = KPlaneIds[PartInfoInfo.features[0].plane]
+    for Offset in range(Chain, min(Chain + 400, len(ByteBlob) - 14)):
+        CandInfo = Struct.unpack_from('<I', ByteBlob, Offset)[0]
+        if CandInfo not in {2, 3, 4}:
             continue
-        if struct.unpack_from("<I", blob, offset + 10)[0] != 5 - candidate:
+        if Struct.unpack_from('<I', ByteBlob, Offset + 10)[0] != 5 - CandInfo:
             continue
-        streamlib.write_u32(output, offset, wanted)
-        streamlib.write_u32(output, offset + 10, 5 - wanted)
-        writes.append(
-            f"sketch plane id={wanted} axis={5 - wanted} at {offset}/{offset + 10}"
-        )
+        Streamlib.WriteUThirtyTwo(Output, Offset, Wanted)
+        Streamlib.WriteUThirtyTwo(Output, Offset + 10, 5 - Wanted)
+        Writes.append(f'sketch plane id={Wanted} axis={5 - Wanted} at {Offset}/{Offset + 10}')
         return
 
 
-def body_bounds_mm(part: Part) -> tuple[float, float, float, float, float, float]:
-    minimum_x = minimum_y = minimum_z = math.inf
-    maximum_x = maximum_y = maximum_z = -math.inf
-    for feature in part.features:
-        if feature.operation == "cut":
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BodyBoundsMm(PartInfoInfo: PartInfo) -> tuple[float, float, float, float, float, float]:
+    MinimumX = MinimumY = MinimumZ = MathLib.inf
+    MaximumX = MaximumY = MaximumZ = -MathLib.inf
+    for FeatInfo in PartInfoInfo.features:
+        if FeatInfo.operation == 'cut':
             continue
-        low_x, low_y, high_x, high_y = feature.profile.bounds_mm()
-        low_z, high_z = signed_extent(feature)
-        minimum_x = min(minimum_x, low_x)
-        maximum_x = max(maximum_x, high_x)
-        minimum_y = min(minimum_y, low_y)
-        maximum_y = max(maximum_y, high_y)
-        minimum_z = min(minimum_z, low_z)
-        maximum_z = max(maximum_z, high_z)
-    if not math.isfinite(minimum_x):
-        raise SerializeError("a part needs at least one additive feature")
-    plane = part.features[0].plane
-    if plane == "front":
-        return minimum_x, maximum_x, minimum_y, maximum_y, minimum_z, maximum_z
-    if plane == "top":
-        return minimum_x, maximum_x, minimum_z, maximum_z, minimum_y, maximum_y
-    return minimum_z, maximum_z, minimum_y, maximum_y, minimum_x, maximum_x
+        LowXInfo, LowYInfo, HighX, HighY = FeatInfo.profile.bounds_mm()
+        LowZInfo, HighZ = SignedExtent(FeatInfo)
+        MinimumX = min(MinimumX, LowXInfo)
+        MaximumX = max(MaximumX, HighX)
+        MinimumY = min(MinimumY, LowYInfo)
+        MaximumY = max(MaximumY, HighY)
+        MinimumZ = min(MinimumZ, LowZInfo)
+        MaximumZ = max(MaximumZ, HighZ)
+    if not MathLib.isfinite(MinimumX):
+        raise SerializeError('a part needs at least one additive feature')
+    Plane = PartInfoInfo.features[0].plane
+    if Plane == 'front':
+        return (MinimumX, MaximumX, MinimumY, MaximumY, MinimumZ, MaximumZ)
+    if Plane == 'top':
+        return (MinimumX, MaximumX, MinimumZ, MaximumZ, MinimumY, MaximumY)
+    return (MinimumZ, MaximumZ, MinimumY, MaximumY, MinimumX, MaximumX)
 
 
-def _write_bbox_cache(output: bytearray, part: Part, writes: list[str]) -> None:
-    blob = bytes(output)
-    records = resolvedlib.class_records(blob)
-    offset = resolvedlib.first_class_offset(records, BBOX_CLASS)
-    if offset is None:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteCacheMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -> None:
+    ByteBlob = bytes(Output)
+    RecordsInfo = Resolvedlib.class_records(ByteBlob)
+    Offset = Resolvedlib.first_class_offset(RecordsInfo, KBboxClass)
+    if Offset is None:
         return
-    if not part.write_bbox_cache:
-        writes.append(f"{BBOX_CLASS} left stale (derived body bounding cache)")
+    if not PartInfoInfo.write_bbox_cache:
+        Writes.append(f'{KBboxClass} left stale (derived body bounding cache)')
         return
-    if any(feature.support != "plane" for feature in part.features):
-        writes.append(
-            f"{BBOX_CLASS} left stale: a face-supported feature makes the "
-            f"sketch-frame extent unknown to the writer"
-        )
+    if any((FeatInfo.support != 'plane' for FeatInfo in PartInfoInfo.features)):
+        Writes.append(f'{KBboxClass} left stale: a face-supported feature makes the sketch-frame extent unknown to the writer')
         return
-    if len({feature.plane for feature in part.features}) != 1:
-        writes.append(f"{BBOX_CLASS} left stale: features span several planes")
+    if len({FeatInfo.plane for FeatInfo in PartInfoInfo.features}) != 1:
+        Writes.append(f'{KBboxClass} left stale: features span several planes')
         return
-    low_x, high_x, low_y, high_y, low_z, high_z = body_bounds_mm(part)
-    centre = (
-        (low_x + high_x) / 2.0,
-        (low_y + high_y) / 2.0,
-        (low_z + high_z) / 2.0,
-    )
-    half = (
-        (high_x - low_x) / 2.0,
-        (high_y - low_y) / 2.0,
-        (high_z - low_z) / 2.0,
-    )
-    diameter = 2.0 * math.sqrt(sum(value * value for value in half))
-    base = offset + BBOX_CENTRE_RELATIVE
-    for index, value in enumerate(centre):
-        streamlib.write_double(output, base + index * 8, value / METRE)
-    streamlib.write_double(output, offset + BBOX_DIAMETER_RELATIVE, diameter / METRE)
-    writes.append(
-        f"{BBOX_CLASS} centre={centre} diameter={diameter} at {base}"
-        f"/{offset + BBOX_DIAMETER_RELATIVE}"
-    )
+    LowXInfo, HighX, LowYInfo, HighY, LowZInfo, HighZ = BodyBoundsMm(PartInfoInfo)
+    Centre = ((LowXInfo + HighX) / 2.0, (LowYInfo + HighY) / 2.0, (LowZInfo + HighZ) / 2.0)
+    HalfInfo = ((HighX - LowXInfo) / 2.0, (HighY - LowYInfo) / 2.0, (HighZ - LowZInfo) / 2.0)
+    Diameter = 2.0 * MathLib.sqrt(sum((ValueInfo * ValueInfo for ValueInfo in HalfInfo)))
+    BaseInfo = Offset + KBboxRelative
+    for IndexData, ValueInfo in enumerate(Centre):
+        Streamlib.WriteDouble(Output, BaseInfo + IndexData * 8, ValueInfo / KMetre)
+    Streamlib.WriteDouble(Output, Offset + KBboxInfo, Diameter / KMetre)
+    Writes.append(f'{KBboxClass} centre={Centre} diameter={Diameter} at {BaseInfo}/{Offset + KBboxInfo}')
 
 
-def _write_plane_display(output: bytearray, part: Part, writes: list[str]) -> None:
-    blob = bytes(output)
-    records = resolvedlib.class_records(blob)
-    offset = resolvedlib.first_class_offset(records, REF_PLANE_DATA_CLASS)
-    if offset is None:
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteDisplayMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -> None:
+    ByteBlob = bytes(Output)
+    RecordsInfo = Resolvedlib.class_records(ByteBlob)
+    Offset = Resolvedlib.first_class_offset(RecordsInfo, KRefClassInfo)
+    if Offset is None:
         return
-    low_x, high_x, low_y, high_y, low_z, high_z = body_bounds_mm(part)
-    span = max(
-        high_x - low_x,
-        high_y - low_y,
-        high_z - low_z,
-    )
-    writes.append(
-        f"{REF_PLANE_DATA_CLASS} left stale (derived display extents, span={span})"
-    )
+    LowXInfo, HighX, LowYInfo, HighY, LowZInfo, HighZ = BodyBoundsMm(PartInfoInfo)
+    SpanInfo = max(HighX - LowXInfo, HighY - LowYInfo, HighZ - LowZInfo)
+    Writes.append(f'{KRefClassInfo} left stale (derived display extents, span={SpanInfo})')
 
 
-def emit_keywords(
-    part: Part,
-    names: tuple[tuple[str, str], ...],
-    identifiers: tuple[tuple[int, int], ...],
-) -> bytes:
-    stamp = int(time.time())
-    pieces: list[str] = [
-        '<?xml version="1.0" encoding="UTF-8"?>\r\n',
-        f'<Keywords id="{stamp}" Name="{part.document_name}">',
-        '<Configuration id="0" Name="Default" Type="ConfigurationManager" '
-        'Material="Material &lt;not specified&gt;"/>',
-    ]
-    for index, feature in enumerate(part.features):
-        sketch_id, feature_id = identifiers[index]
-        dimension = (
-            ""
-            if feature.end_condition == "throughall"
-            else f'<Dimension Name="D1">{_number(feature.depth_mm)}</Dimension>'
-        )
-        if index == 0:
-            attributes = ' Type="Boss-Extrude"'
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def EmitKeywords(PartInfoInfo: PartInfo, Names: tuple[tuple[str, str], ...], Idents: tuple[tuple[int, int], ...]) -> bytes:
+    Stamp = int(TimeInfo.time())
+    Pieces: list[str] = ['<?xml version="1.0" encoding="UTF-8"?>\r\n', f'<Keywords id="{Stamp}" Name="{PartInfoInfo.document_name}">', '<Configuration id="0" Name="Default" Type="ConfigurationManager" Material="Material &lt;not specified&gt;"/>']
+    for IndexData, FeatInfo in enumerate(PartInfoInfo.features):
+        SketchId, FeatId = Idents[IndexData]
+        DimInfo = '' if FeatInfo.end_condition == 'throughall' else f'<Dimension Name="D1">{Number(FeatInfo.depth_mm)}</Dimension>'
+        if IndexData == 0:
+            Attrs = ' Type="Boss-Extrude"'
         else:
-            attributes = (
-                f' Dissectable="true" DissectableChildren="{sketch_id}"'
-                ' DissectableRoot="true"'
-            )
-        if dimension:
-            pieces.append(
-                f'<Extrusion id="{feature_id}" Name="{names[index][1]}"'
-                f"{attributes}>{dimension}</Extrusion>"
-            )
+            Attrs = f' Dissectable="true" DissectableChildren="{SketchId}" DissectableRoot="true"'
+        if DimInfo:
+            Pieces.append(f'<Extrusion id="{FeatId}" Name="{Names[IndexData][1]}"{Attrs}>{DimInfo}</Extrusion>')
         else:
-            pieces.append(
-                f'<Extrusion id="{feature_id}" Name="{names[index][1]}"'
-                f"{attributes}/>"
-            )
-    for identifier, name, kind in _BOILERPLATE_FEATURES:
-        pieces.append(f'<Feature id="{identifier}" Name="{name}" Type="{kind}"/>')
-    for index in range(len(part.features)):
-        pieces.append(
-            f'<Sketch id="{identifiers[index][0]}" Name="{names[index][0]}" '
-            'Dissectable="true"/>'
-        )
-    pieces.append('<Sketch id="5" Name="Origin" Type="Origin"/>')
-    pieces.append("</Keywords>\r\n")
-    return KEYWORDS_PREFIX + "".join(pieces).encode("utf-8")
+            Pieces.append(f'<Extrusion id="{FeatId}" Name="{Names[IndexData][1]}"{Attrs}/>')
+    for Ident, NameTextInfo, KindNameInfo in KBoilerplate:
+        Pieces.append(f'<Feature id="{Ident}" Name="{NameTextInfo}" Type="{KindNameInfo}"/>')
+    for IndexData in range(len(PartInfoInfo.features)):
+        Pieces.append(f'<Sketch id="{Idents[IndexData][0]}" Name="{Names[IndexData][0]}" Dissectable="true"/>')
+    Pieces.append('<Sketch id="5" Name="Origin" Type="Origin"/>')
+    Pieces.append('</Keywords>\r\n')
+    return KeywordsPrefix + ''.join(Pieces).encode('utf-8')
 
 
-def emit_features_xml(part: Part) -> bytes:
-    stamp = int(time.time())
-    document = (
-        '<?xml version="1.0" encoding="UTF-8"?>\r\n'
-        '<swSolidWorks xmlns="http://www.solidworks.com/sw2003/schema" '
-        'swObjCount="3" swVersion="18000"><swHeader swObjCount="1">'
-        f'<swFile id="3" swDocType="PART" swCreationTime="{stamp}" '
-        f'swPath="{part.name}.sldprt"/></swHeader>'
-        '<swModelList swObjCount="1">'
-        f'<swModel id="2" swName="{part.name}" swConfigurationName="Default" '
-        'swConfigurationId="0" swLastModifiedStamp="106" '
-        'swConfigurationFlags="-2143288960" swFileRef="3"/></swModelList>'
-        '<swConfigurationList swObjCount="1">'
-        '<swConfiguration id="1" swName="Default" swID="0" '
-        f'swReference="{part.document_name}" swMostRecentConfiguration="YES" '
-        'swConfigurationNeedsUpdate="NO" swDefeatureConfiguration="NO" '
-        'swModelRef="2"/></swConfigurationList>'
-        '<swExtFeatureList swObjCount="0"/></swSolidWorks>\r\n'
-    )
-    return document.encode("utf-8")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def EmitFeatXml(PartInfoInfo: PartInfo) -> bytes:
+    Stamp = int(TimeInfo.time())
+    Document = f'<?xml version="1.0" encoding="UTF-8"?>\r\n<swSolidWorks xmlns="http://www.solidworks.com/sw2003/schema" swObjCount="3" swVersion="18000"><swHeader swObjCount="1"><swFile id="3" swDocType="PART" swCreationTime="{Stamp}" swPath="{PartInfoInfo.name}.sldprt"/></swHeader><swModelList swObjCount="1"><swModel id="2" swName="{PartInfoInfo.name}" swConfigurationName="Default" swConfigurationId="0" swLastModifiedStamp="106" swConfigurationFlags="-2143288960" swFileRef="3"/></swModelList><swConfigurationList swObjCount="1"><swConfiguration id="1" swName="Default" swID="0" swReference="{PartInfoInfo.document_name}" swMostRecentConfiguration="YES" swConfigurationNeedsUpdate="NO" swDefeatureConfiguration="NO" swModelRef="2"/></swConfigurationList><swExtFeatureList swObjCount="0"/></swSolidWorks>\r\n'
+    return Document.encode('utf-8')
 
 
-def _number(value: float) -> str:
-    if float(value).is_integer():
-        return str(int(value))
-    return repr(float(value))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Number(ValueInfo: float) -> str:
+    if float(ValueInfo).is_integer():
+        return str(int(ValueInfo))
+    return repr(float(ValueInfo))
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KBoilerplate: tuple[tuple[int, str, str], ...] = ((1, 'Annotations', 'Annotations'), (10, 'Surface Bodies', 'Surface Bodies'), (11, 'Material &lt;not specified&gt;', 'SOLIDWORKS Materials'), (12, 'Ambient', 'Ambient'), (13, 'Directional1', 'Directional'), (14, 'Directional2', 'Directional'), (15, 'Directional3', 'Directional'), (16, 'Equations', 'Equations'), (17, 'Notes', 'Notes'), (18, 'Notes1___EndTag___', 'Notes'), (19, '', 'Exploded Views'), (2, 'Front Plane', 'Plane'), (21, 'Markups', 'Markups'), (22, 'Sensors', 'Sensors'), (23, 'Favorites', 'Favorites'), (24, 'History', 'History'), (25, 'Selection Sets', 'Selection Sets'), (3, 'Top Plane', 'Plane'), (4, 'Right Plane', 'Plane'), (6, 'Lights and Cameras', 'Lights and Cameras'), (7, 'Design Binder', 'Design Binder'), (8, 'Comments', 'Comments'), (9, 'Solid Bodies', 'Solid Bodies'))
 
 
-_BOILERPLATE_FEATURES: tuple[tuple[int, str, str], ...] = (
-    (1, "Annotations", "Annotations"),
-    (10, "Surface Bodies", "Surface Bodies"),
-    (11, "Material &lt;not specified&gt;", "SOLIDWORKS Materials"),
-    (12, "Ambient", "Ambient"),
-    (13, "Directional1", "Directional"),
-    (14, "Directional2", "Directional"),
-    (15, "Directional3", "Directional"),
-    (16, "Equations", "Equations"),
-    (17, "Notes", "Notes"),
-    (18, "Notes1___EndTag___", "Notes"),
-    (19, "", "Exploded Views"),
-    (2, "Front Plane", "Plane"),
-    (21, "Markups", "Markups"),
-    (22, "Sensors", "Sensors"),
-    (23, "Favorites", "Favorites"),
-    (24, "History", "History"),
-    (25, "Selection Sets", "Selection Sets"),
-    (3, "Top Plane", "Plane"),
-    (4, "Right Plane", "Plane"),
-    (6, "Lights and Cameras", "Lights and Cameras"),
-    (7, "Design Binder", "Design Binder"),
-    (8, "Comments", "Comments"),
-    (9, "Solid Bodies", "Solid Bodies"),
-)
-
-
-def build_part(part: Part, target: Path, skeletons: tuple[Skeleton, ...] | None = None):
-    catalogue = load_skeletons() if skeletons is None else skeletons
-    skeleton = select_skeleton(part, catalogue)
-    emission = emit(part, (skeleton,) + tuple(catalogue))
-    container = streamlib.rebuild(
-        skeleton.donor,
-        {
-            streamlib.RESOLVED: emission.resolved,
-            streamlib.KEYWORDS: emission.keywords,
-            streamlib.FEATURES: emission.features_xml,
-        },
-    )
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(container)
-    return emission, len(container)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def BuildPart(PartInfoInfo: PartInfo, Target: PathInfo, Skeletons: tuple[Skeleton, ...] | None=None):
+    Catalogue = LoadSkeletons() if Skeletons is None else Skeletons
+    SkeletonInfo = SelectSkeleton(PartInfoInfo, Catalogue)
+    EmissionInfo = EmitData(PartInfoInfo, (SkeletonInfo,) + tuple(Catalogue))
+    Contain = Streamlib.Rebuild(SkeletonInfo.donor, {Streamlib.KResolved: EmissionInfo.resolved, Streamlib.KEYWORDS: EmissionInfo.keywords, Streamlib.KFeatInfo: EmissionInfo.features_xml})
+    Target.parent.mkdir(parents=True, exist_ok=True)
+    Target.write_bytes(Contain)
+    return (EmissionInfo, len(Contain))

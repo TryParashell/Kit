@@ -7,197 +7,162 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import hashlib as Hashlib
+import json as JsonData
+from pathlib import Path as PathInfo
+import sys as System
 
-import hashlib
-import json
-from pathlib import Path
-import sys
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KHereInfo = PathInfo(__file__).resolve().parent
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KRootInfo = KHereInfo.parents[2]
 
-FIXTURE_ROOT = ROOT / "tests" / "fixtures" / "solidworks" / "donors"
-MANIFEST_NAME = "manifest.json"
-META_NAME = "meta.json"
-RESOLVED_NAME = "resolved.bin"
-CONTAINER_DIRECTORY = "container"
-PER_FEATURE_KEYS = (
-    "features",
-    "feature_ids",
-    "sketch_ids",
-    "feature_names",
-    "sketch_names",
-    "point_counts",
-    "arc_counts",
-    "depth_present",
-)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KFixtureRoot = KRootInfo / 'tests' / 'fixtures' / 'solidworks' / 'donors'
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KManifestName = 'manifest.json'
 
-def sanitised_stream_name(name: str) -> str:
-    return name.replace("/", "__")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KMetaName = 'meta.json'
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KResolvedName = 'resolved.bin'
 
-def container_file_name(name: str) -> str:
-    return f"{sanitised_stream_name(name)}.bin"
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KContainDir = 'container'
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPerFeatKeys = ('features', 'feature_ids', 'sketch_ids', 'feature_names', 'sketch_names', 'point_counts', 'arc_counts', 'depth_present')
 
 
-def digest(payload: bytes) -> str:
-    return hashlib.sha256(payload).hexdigest()
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SanitisedName(NameTextInfo: str) -> str:
+    return NameTextInfo.replace('/', '__')
 
 
-def read_json(path: Path) -> object:
-    return json.loads(path.read_text(encoding="utf-8"))
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ContainFileName(NameTextInfo: str) -> str:
+    return f'{SanitisedName(NameTextInfo)}.bin'
 
 
-def verify_record(
-    path: Path, record: dict[str, object], expected_file: str
-) -> tuple[int, list[str]]:
-    failures: list[str] = []
-    if record.get("file") != expected_file:
-        failures.append(f"{path}: manifest names {record.get('file')!r}")
-    if not path.is_file():
-        failures.append(f"{path}: missing")
-        return 0, failures
-    payload = path.read_bytes()
-    if record.get("length") != len(payload):
-        failures.append(
-            f"{path}: manifest length {record.get('length')} but {len(payload)} on disk"
-        )
-    actual = digest(payload)
-    if record.get("sha256") != actual:
-        failures.append(f"{path}: manifest sha256 {record.get('sha256')} but {actual}")
-    return len(payload), failures
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Digest(PayloadInfo: bytes) -> str:
+    return Hashlib.sha256(PayloadInfo).hexdigest()
 
 
-def verify_metadata(
-    directory: Path, donor_id: str, container: dict[str, object]
-) -> tuple[int, list[str]]:
-    path = directory / META_NAME
-    failures: list[str] = []
-    if not path.is_file():
-        return 0, [f"{path}: missing"]
-    encoded = path.read_bytes()
-    meta = read_json(path)
-    if not isinstance(meta, dict):
-        return len(encoded), [f"{path}: not an object"]
-    if meta.get("donor_id") != donor_id:
-        failures.append(f"{path}: describes {meta.get('donor_id')!r}")
-    features = meta.get("features")
-    if not isinstance(features, list) or not features:
-        failures.append(f"{path}: lists no features")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def ReadJson(PathInfoData: PathInfo) -> object:
+    return JsonData.loads(PathInfoData.read_text(encoding='utf-8'))
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def VerifyRecord(PathInfoData: PathInfo, Record: dict[str, object], ExpectFile: str) -> tuple[int, list[str]]:
+    Failures: list[str] = []
+    if Record.get('file') != ExpectFile:
+        Failures.append(f"{PathInfoData}: manifest names {Record.get('file')!r}")
+    if not PathInfoData.is_file():
+        Failures.append(f'{PathInfoData}: missing')
+        return (0, Failures)
+    PayloadInfo = PathInfoData.read_bytes()
+    if Record.get('length') != len(PayloadInfo):
+        Failures.append(f"{PathInfoData}: manifest length {Record.get('length')} but {len(PayloadInfo)} on disk")
+    ActualInfo = Digest(PayloadInfo)
+    if Record.get('sha256') != ActualInfo:
+        Failures.append(f"{PathInfoData}: manifest sha256 {Record.get('sha256')} but {ActualInfo}")
+    return (len(PayloadInfo), Failures)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def VerifyMeta(DirInfo: PathInfo, DonorId: str, Contain: dict[str, object]) -> tuple[int, list[str]]:
+    PathInfoData = DirInfo / KMetaName
+    Failures: list[str] = []
+    if not PathInfoData.is_file():
+        return (0, [f'{PathInfoData}: missing'])
+    Encoded = PathInfoData.read_bytes()
+    MetaInfo = ReadJson(PathInfoData)
+    if not isinstance(MetaInfo, dict):
+        return (len(Encoded), [f'{PathInfoData}: not an object'])
+    if MetaInfo.get('donor_id') != DonorId:
+        Failures.append(f"{PathInfoData}: describes {MetaInfo.get('donor_id')!r}")
+    FeatInfoInfo = MetaInfo.get('features')
+    if not isinstance(FeatInfoInfo, list) or not FeatInfoInfo:
+        Failures.append(f'{PathInfoData}: lists no features')
     else:
-        for key in PER_FEATURE_KEYS:
-            value = meta.get(key)
-            if not isinstance(value, list) or len(value) != len(features):
-                failures.append(f"{path}: {key} does not hold one entry per feature")
-    streams = meta.get("container_streams")
-    if not isinstance(streams, list):
-        failures.append(f"{path}: lists no container streams")
+        for KeyName in KPerFeatKeys:
+            ValueInfo = MetaInfo.get(KeyName)
+            if not isinstance(ValueInfo, list) or len(ValueInfo) != len(FeatInfoInfo):
+                Failures.append(f'{PathInfoData}: {KeyName} does not hold one entry per feature')
+    StreamsInfo = MetaInfo.get('container_streams')
+    if not isinstance(StreamsInfo, list):
+        Failures.append(f'{PathInfoData}: lists no container streams')
     else:
-        named = {item["name"]: item["file"] for item in streams}
-        if sorted(named) != sorted(container):
-            failures.append(f"{path}: container stream names differ from the manifest")
-        for name, file_name in named.items():
-            if file_name != container_file_name(name):
-                failures.append(f"{path}: stream {name} names {file_name!r}")
-    return len(encoded), failures
+        Named = {ItemData['name']: ItemData['file'] for ItemData in StreamsInfo}
+        if sorted(Named) != sorted(Contain):
+            Failures.append(f'{PathInfoData}: container stream names differ from the manifest')
+        for NameTextInfo, FileName in Named.items():
+            if FileName != ContainFileName(NameTextInfo):
+                Failures.append(f'{PathInfoData}: stream {NameTextInfo} names {FileName!r}')
+    return (len(Encoded), Failures)
 
 
-def verify(fixture_root: Path) -> dict[str, object]:
-    manifest_path = fixture_root / MANIFEST_NAME
-    if not manifest_path.is_file():
-        return {
-            "fixture_root": str(fixture_root),
-            "donor_count": 0,
-            "failures": [f"{manifest_path}: missing"],
-        }
-    manifest = read_json(manifest_path)
-    if not isinstance(manifest, dict):
-        return {
-            "fixture_root": str(fixture_root),
-            "donor_count": 0,
-            "failures": [f"{manifest_path}: not an object"],
-        }
-    donors = manifest.get("donors")
-    if not isinstance(donors, dict):
-        return {
-            "fixture_root": str(fixture_root),
-            "donor_count": 0,
-            "failures": [f"{manifest_path}: carries no donor index"],
-        }
-    failures: list[str] = []
-    resolved_bytes = 0
-    container_bytes = 0
-    metadata_bytes = len(manifest_path.read_bytes())
-    files = 1
-    for donor_id in sorted(donors):
-        record = donors[donor_id]
-        directory = fixture_root / donor_id
-        if not directory.is_dir():
-            failures.append(f"{directory}: missing")
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Verify(FixtureRoot: PathInfo) -> dict[str, object]:
+    ManifestInfo = FixtureRoot / KManifestName
+    if not ManifestInfo.is_file():
+        return {'fixture_root': str(FixtureRoot), 'donor_count': 0, 'failures': [f'{ManifestInfo}: missing']}
+    Manifest = ReadJson(ManifestInfo)
+    if not isinstance(Manifest, dict):
+        return {'fixture_root': str(FixtureRoot), 'donor_count': 0, 'failures': [f'{ManifestInfo}: not an object']}
+    Donors = Manifest.get('donors')
+    if not isinstance(Donors, dict):
+        return {'fixture_root': str(FixtureRoot), 'donor_count': 0, 'failures': [f'{ManifestInfo}: carries no donor index']}
+    Failures: list[str] = []
+    ResolvedBytes = 0
+    ContainBytes = 0
+    MetaBytes = len(ManifestInfo.read_bytes())
+    Files = 1
+    for DonorId in sorted(Donors):
+        Record = Donors[DonorId]
+        DirInfo = FixtureRoot / DonorId
+        if not DirInfo.is_dir():
+            Failures.append(f'{DirInfo}: missing')
             continue
-        length, problems = verify_record(
-            directory / RESOLVED_NAME, record["resolved"], RESOLVED_NAME
-        )
-        resolved_bytes += length
-        failures.extend(problems)
-        files += 1
-        container = record["container"]
-        for name in sorted(container):
-            expected = f"{CONTAINER_DIRECTORY}/{container_file_name(name)}"
-            length, problems = verify_record(
-                directory / CONTAINER_DIRECTORY / container_file_name(name),
-                container[name],
-                expected,
-            )
-            container_bytes += length
-            failures.extend(problems)
-            files += 1
-        length, problems = verify_metadata(directory, donor_id, container)
-        metadata_bytes += length
-        failures.extend(problems)
-        files += 1
-    declared_resolved = manifest.get("resolved_bytes")
-    if declared_resolved != resolved_bytes:
-        failures.append(
-            f"{manifest_path}: declares {declared_resolved} resolved bytes but "
-            f"{resolved_bytes} are on disk"
-        )
-    declared_container = manifest.get("container_bytes")
-    if declared_container != container_bytes:
-        failures.append(
-            f"{manifest_path}: declares {declared_container} container bytes but "
-            f"{container_bytes} are on disk"
-        )
-    declared_count = manifest.get("donor_count")
-    if declared_count != len(donors):
-        failures.append(
-            f"{manifest_path}: declares {declared_count} donors but indexes "
-            f"{len(donors)}"
-        )
-    on_disk = sorted(path.name for path in fixture_root.iterdir() if path.is_dir())
-    if on_disk != sorted(donors):
-        failures.append(
-            f"{fixture_root}: directories on disk differ from the manifest index"
-        )
-    return {
-        "fixture_root": str(fixture_root),
-        "donor_count": len(donors),
-        "directories": len(on_disk),
-        "files": files,
-        "resolved_bytes": resolved_bytes,
-        "container_bytes": container_bytes,
-        "metadata_bytes": metadata_bytes,
-        "total_bytes": resolved_bytes + container_bytes + metadata_bytes,
-        "failures": failures,
-    }
+        Length, Problems = VerifyRecord(DirInfo / KResolvedName, Record['resolved'], KResolvedName)
+        ResolvedBytes += Length
+        Failures.extend(Problems)
+        Files += 1
+        Contain = Record['container']
+        for NameTextInfo in sorted(Contain):
+            Expect = f'{KContainDir}/{ContainFileName(NameTextInfo)}'
+            Length, Problems = VerifyRecord(DirInfo / KContainDir / ContainFileName(NameTextInfo), Contain[NameTextInfo], Expect)
+            ContainBytes += Length
+            Failures.extend(Problems)
+            Files += 1
+        Length, Problems = VerifyMeta(DirInfo, DonorId, Contain)
+        MetaBytes += Length
+        Failures.extend(Problems)
+        Files += 1
+    DeclaredInfo = Manifest.get('resolved_bytes')
+    if DeclaredInfo != ResolvedBytes:
+        Failures.append(f'{ManifestInfo}: declares {DeclaredInfo} resolved bytes but {ResolvedBytes} are on disk')
+    DeclaredContain = Manifest.get('container_bytes')
+    if DeclaredContain != ContainBytes:
+        Failures.append(f'{ManifestInfo}: declares {DeclaredContain} container bytes but {ContainBytes} are on disk')
+    DeclaredCount = Manifest.get('donor_count')
+    if DeclaredCount != len(Donors):
+        Failures.append(f'{ManifestInfo}: declares {DeclaredCount} donors but indexes {len(Donors)}')
+    OnDisk = sorted((PathInfoData.name for PathInfoData in FixtureRoot.iterdir() if PathInfoData.is_dir()))
+    if OnDisk != sorted(Donors):
+        Failures.append(f'{FixtureRoot}: directories on disk differ from the manifest index')
+    return {'fixture_root': str(FixtureRoot), 'donor_count': len(Donors), 'directories': len(OnDisk), 'files': Files, 'resolved_bytes': ResolvedBytes, 'container_bytes': ContainBytes, 'metadata_bytes': MetaBytes, 'total_bytes': ResolvedBytes + ContainBytes + MetaBytes, 'failures': Failures}
 
 
-def main() -> int:
-    summary = verify(FIXTURE_ROOT)
-    sys.stdout.write(json.dumps(summary, indent=2, sort_keys=True) + "\n")
-    return 1 if summary["failures"] else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRunInfo() -> int:
+    Summary = Verify(KFixtureRoot)
+    System.stdout.write(JsonData.dumps(Summary, indent=2, sort_keys=True) + '\n')
+    return 1 if Summary['failures'] else 0
+if __name__ == '__main__':
+    raise SystemExit(MainRunInfo())
