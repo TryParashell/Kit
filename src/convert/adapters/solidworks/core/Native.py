@@ -1463,7 +1463,7 @@ def EncodeReverseA(DepthValue: float) -> bytes:
 
 
 # dispatch isolation keeps vendor tree arity routing independently reviewable
-def SelectVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
+def RouteVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) == 8:
         return BuildFourVendor(AuthoredObjs)
     if len(AuthoredObjs) == 6:
@@ -1534,7 +1534,7 @@ def BuildPolyTree(SketchObject, PadObject, PlaneObjectId, PolylineValue, DepthVa
 # this definition exists because focused behavior needs one stable owner
 def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 2:
-        return SelectVendorTree(AuthoredObjs)
+        return RouteVendorTree(AuthoredObjs)
     SketchObject, PadObject = AuthoredObjs
     if PadObject.class_name == 'moRevolution_c':
         return BuildSingleTree(AuthoredObjs)
