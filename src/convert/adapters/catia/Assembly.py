@@ -722,14 +722,14 @@ def Numbered(Value: str) -> tuple[str, str] | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-# this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class SearchState:
-    References: Defaultdict[str, list[NativeProductA]]
-    Diagnostics: list[DiagValue]
-    FileCount: int = 0
-    TotalBytes: int = 0
-    LimitName: str | None = None
+    locals().setdefault("__annotations__", {})
+    __annotations__["References"] = "Defaultdict[str, list[NativeProductA]]"
+    __annotations__["Diagnostics"] = "list[DiagValue]"
+    __annotations__["FileCount"] = "int"
+    __annotations__["TotalBytes"] = "int"
+    __annotations__["LimitName"] = "str | None"
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -746,7 +746,7 @@ def ComponentRef(
         Settings, "component_search_max_depth", KDefaultMaxDepth, AllowZero=True
     )
     Roots, RootDiagnostics = ComponentSearch(Label, Settings)
-    State = SearchState(Defaultdict(list), list(RootDiagnostics))
+    State = SearchState(Defaultdict(list), list(RootDiagnostics), 0, 0, None)
     for RootValue in Roots:
         ScanRootMut(RootValue, MaxDepth, MaxFiles, MaxTotalBytes, State)
         if State.LimitName is not None:

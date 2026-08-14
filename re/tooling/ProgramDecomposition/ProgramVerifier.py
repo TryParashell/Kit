@@ -26,9 +26,12 @@ def LoadManifest(
     AssignData = ReadAssigns(AstLib.parse(SourceText, filename=str(ManifestPath)))
     try:
         GlobalStats = AssignData["KGlobalStats"][1]
-        ProgramStats = AssignData["KProgramStats"][1]
     except KeyError as ErrorData:
         raise ValueError("program decomposition manifest is incomplete") from ErrorData
+    ProgramInfo = AssignData.get("KProgramManifest") or AssignData.get("KProgramStats")
+    if ProgramInfo is None:
+        raise ValueError("program decomposition manifest is incomplete")
+    ProgramStats = ProgramInfo[1]
     return (GlobalStats, ProgramStats)
 
 

@@ -51,6 +51,10 @@ from convert.adapters.solidworks.container.Format import (
     is_cad_path as IsCadPath,
     is_component_path as IsComponentPath,
 )
+from convert.adapters.solidworks.assembly.MateTypeCatalog import (
+    BuildMateTypes,
+    BuildRefTypes,
+)
 
 # this binding exists because shared behavior needs one stable value
 KWideText = RegexLib.compile(b"(?:[ -~\\xa1-\\xff]\\x00){4,}")
@@ -220,177 +224,7 @@ class NativeMateTypeA:
 
 
 # this binding exists because shared behavior needs one stable value
-KNativeMateTypes = (
-    NativeMateType(
-        0,
-        "swMateCOINCIDENT",
-        "coincident",
-        ("MateCoincident", "moMateCoincident"),
-        ("coincident",),
-    ),
-    NativeMateType(
-        1,
-        "swMateCONCENTRIC",
-        "concentric",
-        ("MateConcentric", "moMateConcentric"),
-        ("concentric",),
-    ),
-    NativeMateType(
-        2,
-        "swMatePERPENDICULAR",
-        "perpendicular",
-        ("MatePerpendicular", "moMatePerpendicular"),
-        ("perpendicular",),
-    ),
-    NativeMateType(
-        3,
-        "swMatePARALLEL",
-        "parallel",
-        ("MateParallel", "moMateParallel"),
-        ("parallel",),
-    ),
-    NativeMateType(
-        4, "swMateTANGENT", "tangent", ("MateTangent", "moMateTangent"), ("tangent",)
-    ),
-    NativeMateType(
-        5,
-        "swMateDISTANCE",
-        "distance",
-        (
-            "MateDistanceDim",
-            "MateLimitDistanceDim",
-            "moMateDistanceDim",
-            "moMateDistanceDim_c",
-            "moMateLimitDistanceDim",
-            "moMateLimitDistanceDim_c",
-        ),
-        ("distance", "limitdistance"),
-        "length",
-    ),
-    NativeMateType(
-        6,
-        "swMateANGLE",
-        "angle",
-        (
-            "MateLimitAngleDim",
-            "MatePlanarAngleDim",
-            "moMateAngleDim_c",
-            "moMateLimitAngleDim",
-            "moMateLimitAngleDim_c",
-            "moMatePlanarAngleDim",
-            "moMatePlanarAngleDim_c",
-        ),
-        ("angle", "limitangle"),
-        "angle",
-    ),
-    NativeMateType(7, "swMateUNKNOWN", "native"),
-    NativeMateType(
-        8,
-        "swMateSYMMETRIC",
-        "symmetric",
-        ("MateSymmetric", "moMateSymmetric"),
-        ("symmetric",),
-    ),
-    NativeMateType(
-        9,
-        "swMateCAMFOLLOWER",
-        "cam_tangent",
-        ("MateCamTangent", "moMateCamTangent"),
-        ("cam", "cammatetangent", "camfollower"),
-        neutral_kind="cam",
-    ),
-    NativeMateType(
-        10,
-        "swMateGEAR",
-        "gear",
-        ("MateGearDim", "moMateGearDim", "moMateGearDim_c"),
-        ("gear", "gearmate"),
-        "ratio",
-    ),
-    NativeMateType(
-        11, "swMateWIDTH", "width", ("MateWidth", "moMateWidth"), ("width", "widthmate")
-    ),
-    NativeMateType(
-        12,
-        "swMateLOCKTOSKETCH",
-        "lock_to_sketch",
-        ("moLockToSketchMate",),
-        ("locktosketch", "locktosketchmate"),
-        neutral_kind="lock",
-    ),
-    NativeMateType(
-        13,
-        "swMateRACKPINION",
-        "rack_pinion",
-        ("MateRackPinionDim", "moMateRackPinionDim", "moMateRackPinionDim_c"),
-        ("rackpinion",),
-        "length",
-    ),
-    NativeMateType(14, "swMateMAXMATES", "native"),
-    NativeMateType(
-        15, "swMatePATH", "path", ("MatePath", "moMatePath"), ("path", "pathmate")
-    ),
-    NativeMateType(
-        16,
-        "swMateLOCK",
-        "lock",
-        ("MateInPlace", "MateLock", "moMateInPlace", "moMateLock"),
-        ("inplace", "lock", "lockmate"),
-    ),
-    NativeMateType(
-        17,
-        "swMateSCREW",
-        "screw",
-        ("MateScrew", "moMateScrew", "moMateScrewDim_c"),
-        ("screw", "screwmate"),
-        "length",
-    ),
-    NativeMateType(
-        18,
-        "swMateLINEARCOUPLER",
-        "linear_coupler",
-        ("MateLinearCoupler", "moMateLinearCoupler"),
-        ("linearcoupler",),
-        "ratio",
-    ),
-    NativeMateType(
-        19,
-        "swMateUNIVERSALJOINT",
-        "universal_joint",
-        ("MateUniversalJoint", "moMateUniversalJoint"),
-        ("universaljoint", "universalmate"),
-    ),
-    NativeMateType(
-        20,
-        "swMateCOORDINATE",
-        "coordinate",
-        ("MateCoordinate", "moMateCoordinate"),
-        ("coordinate",),
-    ),
-    NativeMateType(
-        21, "swMateSLOT", "slot", ("MateSlot", "moMateSlot"), ("slot", "slotmate")
-    ),
-    NativeMateType(
-        22, "swMateHINGE", "hinge", ("MateHinge", "moMateHinge"), ("hinge",)
-    ),
-    NativeMateType(
-        23, "swMateSLIDER", "slider", ("MateSlider", "moMateSlider"), ("slider",)
-    ),
-    NativeMateType(
-        24,
-        "swMatePROFILECENTER",
-        "profile_center",
-        ("MateProfileCenter", "moMateProfileCenter"),
-        ("profilecenter",),
-    ),
-    NativeMateType(
-        25,
-        "swMateMAGNETIC",
-        "magnetic",
-        ("MateMagnetic", "moMateMagnetic"),
-        ("magnetic", "magneticmate"),
-    ),
-)
+KNativeMateTypes = BuildMateTypes(NativeMateType)
 
 # this binding exists because shared behavior needs one stable value
 KNativeMateTypeExtensions = (
@@ -476,43 +310,7 @@ KNativeMateEntityGeomTypA = (
 )
 
 # this binding exists because shared behavior needs one stable value
-KNativeMateEntityRefTypes = (
-    NativeMateTypeA(
-        0, "swMateEntity2ReferenceType_Point", "point", ("refpoint", "point")
-    ),
-    NativeMateTypeA(1, "swMateEntity2ReferenceType_Line", "line", ("line",)),
-    NativeMateTypeA(2, "swMateEntity2ReferenceType_Circle", "circle", ("circle",)),
-    NativeMateTypeA(3, "swMateEntity2ReferenceType_Plane", "plane", ("plane",)),
-    NativeMateTypeA(
-        4,
-        "swMateEntity2ReferenceType_Cylinder",
-        "cylinder",
-        ("cylinder", "wzdhole", "sweepside"),
-    ),
-    NativeMateTypeA(5, "swMateEntity2ReferenceType_Sphere", "sphere", ("sphere",)),
-    NativeMateTypeA(6, "swMateEntity2ReferenceType_Set", "native"),
-    NativeMateTypeA(7, "swMateEntity2ReferenceType_Cone", "cone", ("cone",)),
-    NativeMateTypeA(
-        8, "swMateEntity2ReferenceType_SweptSurface", "surface", ("sweptsurface",)
-    ),
-    NativeMateTypeA(
-        9, "swMateEntity2ReferenceType_MultipleSurface", "surface", ("multiplesurface",)
-    ),
-    NativeMateTypeA(
-        10,
-        "swMateEntity2ReferenceType_GenSurface",
-        "surface",
-        ("gensurface", "generalsurface", "surface"),
-    ),
-    NativeMateTypeA(11, "swMateEntity2ReferenceType_Ellipse", "curve", ("ellipse",)),
-    NativeMateTypeA(
-        12,
-        "swMateEntity2ReferenceType_GeneralCurve",
-        "curve",
-        ("generalcurve", "curve"),
-    ),
-    NativeMateTypeA(13, "swMateEntity2ReferenceType_UNKNOWN", "native"),
-)
+KNativeMateEntityRefTypes = BuildRefTypes(NativeMateTypeA)
 
 # this binding exists because shared behavior needs one stable value
 KNativeMateEntityType = (
