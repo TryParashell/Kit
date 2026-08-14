@@ -18,7 +18,7 @@ from typing import Dict as DictInfo, List as ListInfo, Mapping, Sequence, Tuple
 KHereInfo = PathInfo(__file__).resolve().parent
 if str(KHereInfo) not in System.path:
     System.path.insert(0, str(KHereInfo))
-import solve_runs as SolveRuns
+import SolveRuns
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -63,7 +63,7 @@ KExternPrefix = "external#"
 KPinnedSlots = ("component", "object_list", "pmark_record")
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KNoBodyKinds = SolveRuns.NO_BODY_KINDS
+KNoBodyKinds = SolveRuns.KNoBodyKinds
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KLeadRun = "lead"
@@ -94,7 +94,7 @@ KVersioned = "re/data/Layouts/ClassLayoutsVersioned.json"
 def Reparented(
     SegmentsInfo: Sequence[Mapping[str, object]],
 ) -> Tuple[ListInfo[ListInfo[int]], ListInfo[int]]:
-    KidsInfo = SolveRuns.children_of(SegmentsInfo)
+    KidsInfo = SolveRuns.ChildrenOf(SegmentsInfo)
     Parents = [int(ItemData["parent"]) for ItemData in SegmentsInfo]
     for NodeInfoInfo in range(len(SegmentsInfo) - 1, -1, -1):
         if (
@@ -873,7 +873,7 @@ def Generate(
     Versioned: PathInfo,
     Labels: str,
 ) -> dict:
-    Traces = SolveRuns.load_traces(str(SegmentsDir), Labels)
+    Traces = SolveRuns.LoadTraces(str(SegmentsDir), Labels)
     if not Traces:
         raise ValueError(f"no segmentations found under {SegmentsDir}")
     SolverInfo = TilingSolver(Traces)

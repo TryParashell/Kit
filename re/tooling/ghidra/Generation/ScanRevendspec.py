@@ -16,7 +16,7 @@ import sys as System
 KRootInfo = Pathlib.Path(__file__).resolve().parents[4]
 System.path.insert(0, str(KRootInfo / "src"))
 from convert.adapters.solidworks.container.Container import SldprtArchive
-from scan_endspec import NAMES as KNames, marker as Marker, parts as Parts
+from ScanEndspec import KNames, Marker, Parts
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KStream = "Contents/Config-0-ResolvedFeatures"

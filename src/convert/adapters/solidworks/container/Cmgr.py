@@ -136,7 +136,7 @@ KDisplayGeomCacheDefault = bytes(KDisplayGeomCacheBytes)
 KResidualSpans: tuple[tuple[str, str, int], ...] = ()
 
 # this binding exists because shared behavior needs one stable value
-KVisualProperties = (
+KVisualMaterial = (
     ("appearance_id", "u32", 15651274),
     ("reserved_4", "zeros", 8),
     ("appearance_library", "str", ""),
@@ -157,6 +157,10 @@ KVisualProperties = (
     ("render_style", "u32", KDefaultRenderStyle),
     ("reserved_118", "u32", 0),
     ("appearance_name", "str", "defaultplastic"),
+)
+
+# this binding exists because shared behavior needs one stable value
+KVisualOptics = (
     ("optics_kind_and_id", "u32", 4006726147),
     ("optics_head", "u32", 2147483648),
     ("optics_scale", "u32", 63),
@@ -171,6 +175,10 @@ KVisualProperties = (
     ("optics_minus_217", "u32", 49024),
     ("optics_minus_221", "u32", 49024),
     ("optics_zero_225", "zeros", 10),
+)
+
+# this binding exists because shared behavior needs one stable value
+KVisualTexture = (
     (
         "texture_path",
         "str",
@@ -183,6 +191,10 @@ KVisualProperties = (
     ("texture_scale_v", "f32", 0.0010000000474974513),
     ("texture_zero", "u32", 0),
     ("texture_rows", "u32", 320),
+)
+
+# this binding exists because shared behavior needs one stable value
+KVisualMatrix = (
     ("matrix_zero_a", "zeros", 10),
     ("matrix_one_a", "u32", 16256),
     ("matrix_zero_b", "zeros", 12),
@@ -203,6 +215,10 @@ KVisualProperties = (
     ("edge_pad_g", "u16", 65280),
     ("edge_pad_h", "u32", 65534),
     ("reserved_478", "zeros", 91),
+)
+
+# this binding exists because shared behavior needs one stable value
+KVisualScene = (
     ("decal_name", "str", ""),
     ("reserved_573", "zeros", 8),
     ("scene_name", "str", ""),
@@ -219,6 +235,9 @@ KVisualProperties = (
     ("identity_zero_c", "zeros", 8),
     ("identity_build", "u32", KDocBuild),
 )
+
+# this binding exists because shared behavior needs one stable value
+KVisualProperties = KVisualMaterial + KVisualOptics + KVisualTexture + KVisualMatrix + KVisualScene
 
 # this binding exists because shared behavior needs one stable value
 KAtomTableHead = (

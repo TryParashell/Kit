@@ -981,6 +981,24 @@ def IsDeltaPayload(Payload: BrepPayload) -> bool:
 
 # this definition exists because focused behavior needs one stable owner
 def DetectDocType(Archive: Cfv2Archive, Label: str) -> str:
+    Detected = DeclaredDocType(Archive)
+    FormatType = FormatDocType(Archive)
+    if Detected and FormatType and Detected != FormatType:
+        raise CatiaAdapterA("CATIA container has contradictory document roots")
+    Detected = Detected or FormatType or ProductFallback(Archive)
+    Suffix = FilePath(Label).suffix.casefold()
+    if Detected:
+        Expected = SuffixByDocType[Detected]
+        if Suffix in DocTypeBySuffix and Suffix != Expected:
+            raise CatiaAdapterA(f"{Detected} content requires a .{Detected} source")
+        return Detected
+    if Suffix in DocTypeBySuffix:
+        return DocTypeBySuffix[Suffix]
+    raise CatiaAdapterA("cannot distinguish CATPart from CATProduct")
+
+
+# this definition exists because focused behavior needs one stable owner
+def DeclaredDocType(Archive: Cfv2Archive) -> str:
     Declarations = Archive.declarations()
     PartDeclarations = tuple(
         (Value for Value in Declarations if Value.class_name == "CATPrtCont")
@@ -990,7 +1008,6 @@ def DetectDocType(Archive: Cfv2Archive, Label: str) -> str:
     )
     if len(PartDeclarations) > 1 or len(ProductDeclarations) > 1:
         raise CatiaAdapterA("CATIA container has contradictory document roots")
-    Detected = ""
     if PartDeclarations:
         if (
             ProductDeclarations
@@ -1009,41 +1026,35 @@ def DetectDocType(Archive: Cfv2Archive, Label: str) -> str:
             PayloadRole.TESSELLATION,
         }:
             raise CatiaAdapterA("CATIA container has contradictory document roots")
-        Detected = PartDocType
-    elif ProductDeclarations:
+        return PartDocType
+    if ProductDeclarations:
         if DeclaredRole(Archive, ProductDeclarations[0]) == PayloadRole.FEATURE_HISTORY:
             raise CatiaAdapterA("CATIA container has contradictory document roots")
-        Detected = ProductDocType
-    Suffix = FilePath(Label).suffix.casefold()
-    FormatType = ""
+        return ProductDocType
+    return ""
+
+
+# this definition exists because focused behavior needs one stable owner
+def FormatDocType(Archive: Cfv2Archive) -> str:
     FormatStream = Archive.named_stream("Format")
-    if FormatStream is not None:
-        PartMarker = PartDocType.encode("ascii") in FormatStream
-        ProductMarker = ProductDocType.encode("ascii") in FormatStream
-        if PartMarker == ProductMarker and PartMarker:
-            raise CatiaAdapterA("CATIA Format stream has conflicting markers")
-        if PartMarker:
-            FormatType = PartDocType
-        elif ProductMarker:
-            FormatType = ProductDocType
-    if Detected and FormatType and (Detected != FormatType):
-        raise CatiaAdapterA("CATIA container has contradictory document roots")
-    Detected = Detected or FormatType
-    if not Detected:
-        try:
-            DecodeProductTable(Archive)
-        except CfvTwoFormatError:
-            Detected = ""
-        else:
-            Detected = ProductDocType
-    if Detected:
-        Expected = SuffixByDocType[Detected]
-        if Suffix in DocTypeBySuffix and Suffix != Expected:
-            raise CatiaAdapterA(f"{Detected} content requires a .{Detected} source")
-        return Detected
-    if Suffix in DocTypeBySuffix:
-        return DocTypeBySuffix[Suffix]
-    raise CatiaAdapterA("cannot distinguish CATPart from CATProduct")
+    if FormatStream is None:
+        return ""
+    PartMarker = PartDocType.encode("ascii") in FormatStream
+    ProductMarker = ProductDocType.encode("ascii") in FormatStream
+    if PartMarker and ProductMarker:
+        raise CatiaAdapterA("CATIA Format stream has conflicting markers")
+    if PartMarker:
+        return PartDocType
+    return ProductDocType if ProductMarker else ""
+
+
+# this definition exists because focused behavior needs one stable owner
+def ProductFallback(Archive: Cfv2Archive) -> str:
+    try:
+        DecodeProductTable(Archive)
+    except CfvTwoFormatError:
+        return ""
+    return ProductDocType
 
 
 # this definition exists because focused behavior needs one stable owner

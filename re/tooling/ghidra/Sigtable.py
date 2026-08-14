@@ -9,12 +9,12 @@
 import pathlib as Pathlib
 import struct as Struct
 import sys as System
-from gen_signature_table import (
-    BLOCK_OFFSET as KBlockOffset,
-    ENTRY_COUNT as KEntryCount,
-    host_dll as HostDll,
+from Generation.GenSignatureTable import (
+    KBlockOffset,
+    KEntryCount,
+    HostDll,
+    Extract as ExtractRows,
 )
-from gen_signature_table import extract as ExtractRows
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KHostInfo = HostDll(None)
