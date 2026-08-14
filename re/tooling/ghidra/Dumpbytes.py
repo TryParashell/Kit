@@ -6,13 +6,14 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-import pathlib as Pathlib
 import sys as System
+
+from convert.Security.PathBoundary import ResolveInput
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun():
-    PathInfoData = Pathlib.Path(System.argv[1])
+    PathInfoData = ResolveInput(System.argv[1])
     StartRun = int(System.argv[2], 0)
     Length = int(System.argv[3], 0)
     ByteBlob = PathInfoData.read_bytes()

@@ -6,13 +6,14 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-import pathlib as Pathlib
 import sys as System
+
+from convert.Security.PathBoundary import ResolveInput
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Blocks(PathInfoData):
-    TextValueData = Pathlib.Path(PathInfoData).read_text(errors="replace")
+    TextValueData = ResolveInput(PathInfoData).read_text(errors="replace")
     Parts = TextValueData.split("\n=== FUNCTION ")
     for PartInfoInfo in Parts[1:]:
         HeadInfo, SpareValue, BodyInfo = PartInfoInfo.partition("\n")

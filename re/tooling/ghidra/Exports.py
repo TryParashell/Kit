@@ -10,6 +10,8 @@ import pathlib as Pathlib
 import struct as Struct
 import sys as System
 
+from convert.Security.PathBoundary import ResolveInput
+
 System.path.insert(0, str(Pathlib.Path(__file__).resolve().parent))
 from Pemap import Sections
 
@@ -24,7 +26,7 @@ def RvaToFile(SecsInfo, RvaInfo):
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Exports(PathInfoData):
-    ByteBlob = PathInfoData.read_bytes()
+    ByteBlob = ResolveInput(PathInfoData).read_bytes()
     ImageBase, SecsInfo = Sections(ByteBlob)
     PeInfo = Struct.unpack_from("<I", ByteBlob, 60)[0]
     Magic = Struct.unpack_from("<H", ByteBlob, PeInfo + 24)[0]

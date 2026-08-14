@@ -6,9 +6,10 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-import pathlib as Pathlib
 import struct as Struct
 import sys as System
+
+from convert.Security.PathBoundary import ResolveInput
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -35,7 +36,7 @@ def Sections(ByteBlob):
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun():
-    PathInfoData = Pathlib.Path(System.argv[1])
+    PathInfoData = ResolveInput(System.argv[1])
     ByteBlob = PathInfoData.read_bytes()
     ImageBase, SecsInfo = Sections(ByteBlob)
     print(f"image_base 0x{ImageBase:x}")

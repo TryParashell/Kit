@@ -10,6 +10,8 @@ import pathlib as Pathlib
 import struct as Struct
 import sys as System
 
+from convert.Security.PathBoundary import ResolveInput
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KDefault = Pathlib.Path("C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldmfcu.dll")
 
@@ -78,7 +80,7 @@ def FinishMain(AOneInfo, AZero, BOneInfo, BZero, ByteBlob):
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun():
-    PathInfoData = Pathlib.Path(System.argv[1]) if len(System.argv) > 1 else KDefault
+    PathInfoData = ResolveInput(System.argv[1]) if len(System.argv) > 1 else KDefault
     ByteBlob = PathInfoData.read_bytes()
     for Anchor in (5666652, 5676340):
         LoInfo, HiInfo = RandomRun(ByteBlob, Anchor)

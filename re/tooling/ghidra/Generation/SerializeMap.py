@@ -10,6 +10,8 @@ import json as JsonData
 import pathlib as Pathlib
 import sys as System
 
+from convert.Security.PathBoundary import ResolveInput
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KRootInfo = Pathlib.Path(__file__).resolve().parents[4]
 
@@ -28,6 +30,7 @@ KSlotInfo = 5
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Tables(PathInfoData):
+    PathInfoData = ResolveInput(PathInfoData)
     CurInfo = None
     GetRows = []
     for LineText in PathInfoData.read_text(errors="replace").splitlines():
