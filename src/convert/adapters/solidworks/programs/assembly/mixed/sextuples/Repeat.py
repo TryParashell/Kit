@@ -12,7 +12,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
-from typing import AnyValue as AnyValue
+from typing import Any as AnyValue
 
 from convert.adapters.solidworks.programs.assembly.mixed.sextuples.Program import EncodeField, StreamPrograms
 from convert.adapters.solidworks.programs.assembly.default.Repeat import OccurHash, RepeatItem
