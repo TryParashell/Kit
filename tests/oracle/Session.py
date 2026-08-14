@@ -126,41 +126,41 @@ class SolidWS:
         except ImportError as ErrorInfo:
             raise SolidWU('pywin32 is required for the SOLIDWORKS oracle') from ErrorInfo
         PythoncomA.CoInitialize()
-        SelfRef._initialized = True
-        SelfRef._pythoncom = PythoncomA
-        SelfRef._variant = VARIANT
+        SelfRef.Initialized = True
+        SelfRef.Pythoncom = PythoncomA
+        SelfRef.Variant = VARIANT
         try:
-            SelfRef._app = Dispatch('SldWorks.Application')
+            SelfRef.AppInfo = Dispatch('SldWorks.Application')
         except Exception as ErrorInfo:
             PythoncomA.CoUninitialize()
-            SelfRef._initialized = False
+            SelfRef.Initialized = False
             raise SolidWU(f'cannot start SOLIDWORKS via COM: {ErrorInfo}') from ErrorInfo
-        SelfRef._app.Visible = False
-        SelfRef._app.UserControl = False
-        SelfRef._app.FrameState = 1
+        SelfRef.AppInfo.Visible = False
+        SelfRef.AppInfo.UserControl = False
+        SelfRef.AppInfo.FrameState = 1
 
     # keeps this focused behavior isolated so regressions remain immediately visible
     @property
     def Revision(SelfRef) -> str:
-        return str(ComValue(SelfRef._app, 'RevisionNumber'))
+        return str(ComValue(SelfRef.AppInfo, 'RevisionNumber'))
 
     # keeps this focused behavior isolated so regressions remain immediately visible
     def Close(SelfRef) -> None:
-        if not SelfRef._initialized:
+        if not SelfRef.Initialized:
             return
         try:
-            SelfRef._app.CloseAllDocuments(True)
+            SelfRef.AppInfo.CloseAllDocuments(True)
         except Exception:
             pass
         try:
-            SelfRef._app.ExitApp()
+            SelfRef.AppInfo.ExitApp()
         except Exception:
             pass
-        SelfRef._app = None
+        SelfRef.AppInfo = None
         try:
-            SelfRef._pythoncom.CoUninitialize()
+            SelfRef.Pythoncom.CoUninitialize()
         finally:
-            SelfRef._initialized = False
+            SelfRef.Initialized = False
 
     # keeps this focused behavior isolated so regressions remain immediately visible
     def __enter__(SelfRef) -> SolidWS:
@@ -172,14 +172,14 @@ class SolidWS:
 
     # keeps this focused behavior isolated so regressions remain immediately visible
     def ByrefLong(SelfRef) -> object:
-        return SelfRef._variant(SelfRef._pythoncom.VT_BYREF | SelfRef._pythoncom.VT_I4, 0)
+        return SelfRef.Variant(SelfRef.Pythoncom.VT_BYREF | SelfRef.Pythoncom.VT_I4, 0)
 
     # keeps this focused behavior isolated so regressions remain immediately visible
     @Contextmanager
     def Document(SelfRef, TargetPath: FilePath, DocType: int) -> Iterator[tuple[object, tuple[str, ...], tuple[str, ...]]]:
         ErrorList = SelfRef._byref_long()
         WarningList = SelfRef._byref_long()
-        ModelDoc = SelfRef._app.OpenDoc6(str(TargetPath), DocType, KSilent, '', ErrorList, WarningList)
+        ModelDoc = SelfRef.AppInfo.OpenDoc6(str(TargetPath), DocType, KSilent, '', ErrorList, WarningList)
         ErrorFlags = DecodeFlags(int(ErrorList.value or 0), KErrors)
         WarningFlags = DecodeFlags(int(WarningList.value or 0), KWarnings)
         try:
@@ -187,7 +187,7 @@ class SolidWS:
         finally:
             if ModelDoc is not None:
                 try:
-                    SelfRef._app.CloseDoc(str(ComValue(ModelDoc, 'GetTitle')))
+                    SelfRef.AppInfo.CloseDoc(str(ComValue(ModelDoc, 'GetTitle')))
                 except Exception:
                     pass
 
@@ -227,11 +227,11 @@ class SolidWS:
 
     # keeps this focused behavior isolated so regressions remain immediately visible
     def AuthorPart(SelfRef, Script: object, TargetPath: FilePath) -> PartInspection:
-        ModelDoc = SelfRef._app.NewDocument(PartTemplate(SelfRef._app), 0, 0.0, 0.0)
+        ModelDoc = SelfRef.AppInfo.NewDocument(PartTemplate(SelfRef.AppInfo), 0, 0.0, 0.0)
         if ModelDoc is None:
             raise SolidWU('cannot create a new SOLIDWORKS part')
         try:
-            Script(SelfRef._app, ModelDoc)
+            Script(SelfRef.AppInfo, ModelDoc)
             ErrorList = SelfRef._byref_long()
             WarningList = SelfRef._byref_long()
             ModelDoc.Extension.SaveAs2(str(TargetPath), 0, KSilentA, None, '', False, ErrorList, WarningList)
@@ -239,7 +239,7 @@ class SolidWS:
             return PartInspection(path=TargetPath, opened=True, load_errors=SavedErrors, load_warnings=DecodeFlags(int(WarningList.value or 0), KWarnings), rebuilt=bool(ModelDoc.ForceRebuild3(False)), features=ReadFeatures(ModelDoc), body_count=ReadBodyCount(ModelDoc), solid=ReadSP(ModelDoc))
         finally:
             try:
-                SelfRef._app.CloseDoc(str(ComValue(ModelDoc, 'GetTitle')))
+                SelfRef.AppInfo.CloseDoc(str(ComValue(ModelDoc, 'GetTitle')))
             except Exception:
                 pass
 

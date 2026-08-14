@@ -18,10 +18,10 @@ from convert.adapters.solidworks.core.Native import NativeConstraint, NativeFeat
 from interchange import BooleanOperation, BrepPayload, Capability, CircleGeometry, ExtrusionFeature, FeatureKind, FeatureStep, FilletFeature, LineGeometry, NativeFeatureDefinition, NativeGeometry, PayloadRole
 
 # centralizes shared evidence so every related assertion uses one value
-SAMPLE = FilePath(__file__).resolve().parents[4] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
+KSample = FilePath(__file__).resolve().parents[4] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
 
 # centralizes shared evidence so every related assertion uses one value
-CORPUS = FilePath(__file__).resolve().parents[4] / 'examples' / 'Random'
+KCorpus = FilePath(__file__).resolve().parents[4] / 'examples' / 'Random'
 
 # centralizes shared evidence so every related assertion uses one value
 KTwoZeroTwoSix = frozenset((ItemValueA.casefold() for ItemValueA in '\nAsmExploder\nCompExplodeStep\nExplodeLineProfileFeature\nInContextFeatHolder\nMagneticGroundPlane\nMateCamTangent\nMateCoincident\nMateConcentric\nMateDistanceDim\nMateGearDim\nMateHinge\nMateInPlace\nMateLimitDistanceDim\nMateLinearCoupler\nMateLock\nMateParallel\nMatePerpendicular\nMatePlanarAngleDim\nMateProfileCenter\nMateRackPinionDim\nMateScrew\nMateSlot\nMateSymmetric\nMateTangent\nMateUniversalJoint\nMateWidth\nPosGroupFolder\nReference\nReferencePattern\nSmartComponentFeature\nAdvHoleWzd\nAPattern\nBaseBody\nBending\nBlend\nBlendCut\nBodyExplodeStep\nBoss\nBossThin\nChamfer\nCirPattern\nCombineBodies\nCosmeticThread\nCosmeticWeldBead\nCreateAssemFeat\nCurvePattern\nCut\nCutThin\nDeform\nDeleteBody\nDelFace\nDerivedCirPattern\nDerivedHolePattern\nDerivedLPattern\nDimPattern\nDome\nDraft\nEdgeMerge\nEmboss\nExtrusion\nFillet\nHelix\nHoleSeries\nHoleWzd\nImported\nLocalChainPattern\nLocalCirPattern\nLocalCurvePattern\nLocalLPattern\nLocalSketchPattern\nLPattern\nMacroFeature\nMirrorCompFeat\nMirrorPattern\nMirrorSolid\nMirrorStock\nMoveCopyBody\nNetBlend\nPrtExploder\nPunch\nReplaceFace\nRevCut\nRevolution\nRevolutionThin\nRib\nRip\nSculpt\nShape\nShell\nSketchHole\nSketchPattern\nSplit\nSplitBody\nStock\nSweep\nSweepCut\nSweepThread\nTablePattern\nThicken\nThickenCut\nVarFillet\nBendTableAchor\nBomFeat\nBomTemplate\nDetailCircle\nDrBreakoutSectionLine\nDrSectionLine\nGeneralTableAnchor\nHoleTableAnchor\nLiveSection\nPunchTableAnchor\nRevisionTableAnchor\nWeldmentTableAnchor\nFamilyTableFeat\nWeldTableAnchor\nBlockFolder\nCommentsFolder\nCosmeticWeldSubFolder\nCutListFolder\nFeatSolidBodyFolder\nFeatSurfaceBodyFolder\nFtrFolder\nInsertedFeatureFolder\nMateReferenceGroupFolder\nProfileFtrFolder\nRefAxisFtrFolder\nRefPlaneFtrFolder\nSketchSliceFolder\nSolidBodyFolder\nSubAtomFolder\nSubWeldFolder\nSurfaceBodyFolder\nTemplateFlatPattern\nMBimport\nAttribute\nBlockDef\nCurveInFile\nGridFeature\nLibraryFeature\nScale\nSensor\nViewBodyFeature\nCavity\nMoldCoreCavitySolids\nMoldPartingGeom\nMoldPartLine\nMoldShutOffSrf\nSideCore\nXformStock\nAEM3DContact\nAEMGravity\nAEMLinearDamper\nAEMLinearMotor\nAEMLinearSpring\nAEMRotationalMotor\nAEMTorque\nAEMTorsionalDamper\nAEMTorsionalSpring\nSimPlotFeature\nSimPlotXAxisFeature\nSimPlotYAxisFeature\nSimResultFolder\nBoundingBox\nCenterOfMass\nCoordSys\nGroundPlane\nRefAxis\nRefPlane\nAmbientLight\nCameraFeature\nDirectionLight\nPointLight\nSpotLight\nSMBaseFlange\nBreakCorner\nCornerTrim\nCrossBreak\nEdgeFlange\nFlatPattern\nFlattenBends\nFold\nFormToolInstance\nHem\nJog\nLoftedBend\nNormalCut\nOneBend\nProcessBends\nSheetMetal\nSketchBend\nSM3dBend\nSMGusset\nSMMiteredFlange\nSolidToSheetMetal\nTemplateSheetMetal\nToroidalBend\nUnFold\n3DProfileFeature\n3DSplineCurve\nCompositeCurve\nImportedCurve\nPLine\nProfileFeature\nRefCurve\nRefPoint\nSketchBlockDef\nSketchBlockInst\nSketchBitmap\nBlendRefSurface\nExtendRefSurface\nExtruRefSurface\nFillRefSurface\nFlattenSurface\nMidRefSurface\nOffsetRefSuface\nPlanarSurface\nRadiateRefSurface\nRefSurface\nRevolvRefSurf\nRuledSrfFromEdge\nSewRefSurface\nSurfCut\nSweepRefSurface\nTrimRefSurface\nUnTrimRefSurf\nEndCap\nStrctSysBtwPtsMbrFeat\nStrctSysCnrFeat\nStrctSysCnrGrpFeat\nStrctSysCnrMgmtFeat\nStrctSysFeat\nStrctSysGrpFeat\nStrctSysPathSegMbrFeat\nStrctSysPtToMem\nStrctSysRefPlnMbrFeat\nStrctSysSkPtLenMbrFeat\nStrctSysSupPlnMbrFeat\nStrctSysSurfPlnMbrFeat\nAdvStructMember\nGusset\nWeldBeadFeat\nWeldCornerFeat\nWeldMemberFeat\nWeldmentFeature\nWeldmentTableFeat\nRound fillet corner\n'.splitlines() if ItemValueA))
@@ -37,10 +37,10 @@ def TestAAESC() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPCRTDD() -> None:
-    WithoutBrep = ReadSldprt(SAMPLE, include_brep=False)
+    WithoutBrep = ReadSldprt(KSample, include_brep=False)
     Expected = frozenset({Capability.BODY_STRUCTURE, Capability.CONFIGURATIONS, Capability.EDITABLE_SKETCHES, Capability.PARAMETERS, Capability.PARAMETRIC_HISTORY, Capability.PROVENANCE, Capability.ROUNDTRIP_METADATA, Capability.SELECTIONS, Capability.SUPPORT_PLANES})
     assert WithoutBrep.capabilities == Expected
-    WithBrep = ReadSldprt(SAMPLE, include_brep=True)
+    WithBrep = ReadSldprt(KSample, include_brep=True)
     assert WithBrep.capabilities == Expected | {Capability.BREP, Capability.NATIVE_PAYLOADS}
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -59,11 +59,11 @@ def TestBCDUPS() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPSDDNDOIN() -> None:
-    Archive = SldprtArchive.open(SAMPLE)
+    Archive = SldprtArchive.open(KSample)
     Streams = Archive.streams
     OriginalName = 'Contents/Config-0-Partition'
     Streams['Contents/CustomerGeometryBlob'] = Streams.pop(OriginalName)
-    Renamed = BuildSldprt(Streams, file_id=Archive.file_id, format_version=Archive.format_version, signatures=ContainerSignatures(SAMPLE.read_bytes()))
+    Renamed = BuildSldprt(Streams, file_id=Archive.file_id, format_version=Archive.format_version, signatures=ContainerSignatures(KSample.read_bytes()))
     Document = ReadSldprt(Renamed)
     assert len(Document.brep_payloads) == 3
     assert all((Payload.role == PayloadRole.BREP for Payload in Document.brep_payloads))
@@ -150,7 +150,7 @@ def TestODUROAFS() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCDSDNRDTON() -> None:
-    Archive = SldprtArchive.open(SAMPLE)
+    Archive = SldprtArchive.open(KSample)
     Keywords = Archive.require('swXmlContents/KeyWords').replace(b'Name="D1">&lt;MOD-DIAM&gt;5.5', b'Name="Diametre">5.5')
     ModelDoc = DecodeNativeModel(Keywords, Archive.require('Contents/Config-0-ResolvedFeatures'))
     SketchA = next((ItemValue for ItemValue in ModelDoc.sketches if ItemValue.object_id == 88))
@@ -168,7 +168,7 @@ def TestNFTMTNK(NativeKind: str, NeutralKind: FeatureKind) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCHWFRTT() -> None:
-    Document = ReadSldprt(CORPUS / 'Engine_Block.SLDPRT', include_brep=False)
+    Document = ReadSldprt(KCorpus / 'Engine_Block.SLDPRT', include_brep=False)
     Holes = [Feature for Feature in Document.feature_timeline if Feature.kind == FeatureKind.HOLE]
     assert len(Holes) == 8
     assert {Feature.attributes['xml_tag'] for Feature in Holes} == {'HoleWizard'}
@@ -176,7 +176,7 @@ def TestCHWFRTT() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCRNS() -> None:
-    Archive = SldprtArchive.open(SAMPLE)
+    Archive = SldprtArchive.open(KSample)
     assert Archive.file_id == 1901848975
     assert Archive.format_version == 4
     assert Archive.require('Contents/Config-0-ResolvedFeatures')
@@ -185,7 +185,7 @@ def TestCRNS() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCAVRSD() -> None:
-    SourceDoc = bytearray(SAMPLE.read_bytes())
+    SourceDoc = bytearray(KSample.read_bytes())
     Original = SldprtArchive.from_bytes(SourceDoc)
     Replacement = bytes.fromhex('01020304')
     for RecordInfo in Original.records:
@@ -197,7 +197,7 @@ def TestCAVRSD() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestARPHAB() -> None:
-    Document = ReadSldprt(SAMPLE)
+    Document = ReadSldprt(KSample)
     assert Document.validate() == ()
     assert len(Document.configurations) == 1
     assert len(Document.parameters) == 26
@@ -212,7 +212,7 @@ def TestARPHAB() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestARFOAD() -> None:
-    Document = ReadSldprt(SAMPLE, include_brep=False)
+    Document = ReadSldprt(KSample, include_brep=False)
     Operations = {Feature.name: Feature for Feature in Document.feature_timeline if Feature.name in {'Boss-Extrude1', 'Cut-Extrude1', 'Boss-Extrude2', 'Cut-Extrude2', 'Boss-Extrude3', 'Fillet1'}}
     assert Operations['Boss-Extrude1'].operation == BooleanOperation.JOIN
     assert Operations['Cut-Extrude1'].operation == BooleanOperation.CUT
@@ -239,7 +239,7 @@ def TestARFOAD() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestARSFAP() -> None:
-    Document = ReadSldprt(SAMPLE, include_brep=False)
+    Document = ReadSldprt(KSample, include_brep=False)
     PlaneTwo = Document.plane('sldprt:plane:62')
     assert PlaneTwo.transform.origin.x == PytestLib.approx(124.3)
     assert PlaneTwo.transform.x_axis.z == -1.0
@@ -261,7 +261,7 @@ def TestARSFAP() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestARCGWG() -> None:
-    Document = ReadSldprt(SAMPLE, include_brep=False)
+    Document = ReadSldprt(KSample, include_brep=False)
     ExpectedLineCounts = {'Sketch1': 2, 'Sketch2': 2, 'Sketch3': 6, 'Sketch4': 1, 'Sketch6': 2}
     for SketchA in Document.sketches:
         Lines = [Entity.geometry for Entity in SketchA.entities if Entity.construction and isinstance(Entity.geometry, LineGeometry)]
@@ -279,7 +279,7 @@ def TestARCGWG() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAAPCP() -> None:
-    Document = ReadSldprt(CORPUS / 'Cover.SLDPRT', include_brep=False)
+    Document = ReadSldprt(KCorpus / 'Cover.SLDPRT', include_brep=False)
     SketchA = Document.sketch('sldprt:sketch:26')
     Entities = {Entity.id: Entity.geometry for Entity in SketchA.entities}
     ProfilesA = [Entities[Profile[0]] for Profile in SketchA.closed_profile_entity_ids]
@@ -290,7 +290,7 @@ def TestAAPCP() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestABDOBMP() -> None:
-    Document = ReadSldprt(CORPUS / 'Cover.SLDPRT', include_brep=False)
+    Document = ReadSldprt(KCorpus / 'Cover.SLDPRT', include_brep=False)
     SketchA = Document.sketch('sldprt:sketch:77')
     ConstraintsA = {Constraint.parameter_id: Constraint for Constraint in SketchA.constraints if Constraint.parameter_id}
     assert tuple((Reference.entity_id for Reference in ConstraintsA['sldprt:parameter:77:D2'].references)) == ('sldprt:sketch:77:native:90347', 'sldprt:sketch:77:native:87930')
@@ -301,7 +301,7 @@ def TestABDOBMP() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestARLEBNMI() -> None:
-    Document = ReadSldprt(CORPUS / 'Engine_Block.SLDPRT', include_brep=False)
+    Document = ReadSldprt(KCorpus / 'Engine_Block.SLDPRT', include_brep=False)
     SketchA = Document.sketch('sldprt:sketch:139')
     Expected = {145018: ((-98.287842584929, 161.92745289172), (-130.107647738324, 130.107647738326)), 145110: ((-130.107647738324, 130.107647738326), (-48.790367901871, 48.790367901872)), 145202: ((-48.790367901871, 48.790367901872), (-16.970562748477, 80.610173055267)), 145294: ((-16.970562748477, 80.610173055267), (-98.287842584929, 161.92745289172))}
     Entities = {Entity.provenance.spans[0].offset: Entity for Entity in SketchA.entities}
@@ -372,7 +372,7 @@ def TestBMCSUCS() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAPULBRNI() -> None:
-    Document = ReadSldprt(CORPUS / 'Engine_Block.SLDPRT', include_brep=False)
+    Document = ReadSldprt(KCorpus / 'Engine_Block.SLDPRT', include_brep=False)
     SketchA = Document.sketch('sldprt:sketch:200')
     Unknown = next((Entity for Entity in SketchA.entities if Entity.provenance and Entity.provenance.spans[0].offset == 196708))
     assert isinstance(Unknown.geometry, NativeGeometry)
@@ -383,7 +383,7 @@ def TestAPULBRNI() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestEFWTSHAND() -> None:
-    Document = ReadSldprt(SAMPLE, include_brep=False)
+    Document = ReadSldprt(KSample, include_brep=False)
     assert all((Feature.definition is not None for Feature in Document.feature_timeline))
     NativeA = [Feature.definition for Feature in Document.feature_timeline if isinstance(Feature.definition, NativeFeatureDefinition)]
     assert NativeA
@@ -400,7 +400,7 @@ def TestUNCIRWMR() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAAMARNJ() -> None:
-    SourceDoc = SAMPLE.read_bytes()
+    SourceDoc = KSample.read_bytes()
     Adapter = SldprtAdapter()
     assert Adapter.probe(SourceDoc).confidence == 1.0
     Document = ReadSldprt(SourceDoc, include_brep=False)
@@ -422,7 +422,7 @@ def TestELSCD() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAHPZPFV() -> None:
-    Document = ReadSldprt(CORPUS / 'Addons' / 'Alternator.SLDPRT', include_brep=False)
+    Document = ReadSldprt(KCorpus / 'Addons' / 'Alternator.SLDPRT', include_brep=False)
     Plane = Document.plane('sldprt:plane:289')
     assert Plane.transform.origin.z == PytestLib.approx(50.0)
     assert Plane.transform.z_axis.z == 1.0
@@ -431,7 +431,7 @@ def TestAHPZPFV() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestAAOITDD() -> None:
-    Document = ReadSldprt(CORPUS / 'Cylinder_heads' / 'Spark_plug.SLDPRT', include_brep=False)
+    Document = ReadSldprt(KCorpus / 'Cylinder_heads' / 'Spark_plug.SLDPRT', include_brep=False)
     assert Document.parameter('sldprt:parameter:107:D5').value.value == 2.0
     assert Document.parameter('sldprt:parameter:107:D5:2').value.value == 2.0
     assert Document.validate() == ()

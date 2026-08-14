@@ -13,7 +13,7 @@ from convert.adapters.solidworks.container.Container import SldprtArchive
 from convert.adapters.solidworks.core.Display import decode_display_lists as DecodeDisplayLists, decode_tessellation_faces as DecodeTessellationFaces, is_component_path as IsComponentPath, neutral_meshes as NeutralMeshes
 
 # centralizes shared evidence so every related assertion uses one value
-ASSEMBLY = FilePath(__file__).parents[4] / 'examples' / 'Random' / 'V8_engine.SLDASM'
+KAssembly = FilePath(__file__).parents[4] / 'examples' / 'Random' / 'V8_engine.SLDASM'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @PytestLib.mark.parametrize('ItemValue', ('Rotor@Assembly', 'Custom instance name@Root/Nested occurrence@Subassembly', 'Part-1@Assembly'))
@@ -27,7 +27,7 @@ def TestCPDRERAF(ItemValue: str) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestDLREFAGG() -> None:
-    DataValue = SldprtArchive.open(ASSEMBLY).require('Contents/DisplayLists')
+    DataValue = SldprtArchive.open(KAssembly).require('Contents/DisplayLists')
     Faces = DecodeTessellationFaces(DataValue)
     Components = DecodeDisplayLists(DataValue)
     assert len(Faces) == 4391
@@ -38,7 +38,7 @@ def TestDLREFAGG() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestDGISTMAMTS() -> None:
-    DataValue = SldprtArchive.open(ASSEMBLY).require('Contents/DisplayLists')
+    DataValue = SldprtArchive.open(KAssembly).require('Contents/DisplayLists')
     Component = DecodeDisplayLists(DataValue)[0]
     FaceInfo = Component.faces[0]
     assert Component.occurrence_path == 'Journal_bearig_crank-1@V8_engine'

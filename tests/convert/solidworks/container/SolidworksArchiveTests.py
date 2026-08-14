@@ -20,13 +20,13 @@ from tests.convert.solidworks.core.SolidworksDonorVersion import GetDonorVer
 KRootInfo = FilePath(__file__).parents[4]
 
 # centralizes shared evidence so every related assertion uses one value
-LAYOUTS = KRootInfo / 're' / 'data' / 'ClassLayouts.json'
+KLayouts = KRootInfo / 're' / 'data' / 'ClassLayouts.json'
 
 # centralizes shared evidence so every related assertion uses one value
-SEGMENTS = KRootInfo / 're' / 'data' / 'segments'
+KSegments = KRootInfo / 're' / 'data' / 'segments'
 
 # centralizes shared evidence so every related assertion uses one value
-DONORS = KRootInfo / 'tests' / 'fixtures' / 'solidworks' / 'donors'
+KDonors = KRootInfo / 'tests' / 'fixtures' / 'solidworks' / 'donors'
 
 # centralizes shared evidence so every related assertion uses one value
 KLabels = ('baseline', 'circle', 'cutbase', 'padplane', 'planetop', 'three', 'twopad', 'vendor_cojinete', 'vendor_ring')
@@ -45,11 +45,11 @@ KSeedInfo = 109
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def Layouts() -> LayoutTable:
-    return LayoutTable.load(LAYOUTS)
+    return LayoutTable.load(KLayouts)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def Recorded(Label: str) -> dict:
-    TargetPath = SEGMENTS / f'segments_{Label}.json'
+    TargetPath = KSegments / f'segments_{Label}.json'
     if not TargetPath.is_file():
         PytestLib.skip(f'no recorded segmentation for {Label}')
     return JsonLib.loads(TargetPath.read_text(encoding='utf-8'))
@@ -70,7 +70,7 @@ def AuthoredMV() -> int | None:
     for Label in KLabels:
         if Label.startswith('vendor_'):
             continue
-        TargetPath = SEGMENTS / f'segments_{Label}.json'
+        TargetPath = KSegments / f'segments_{Label}.json'
         if not TargetPath.is_file():
             continue
         PartDoc = FilePath(JsonLib.loads(TargetPath.read_text(encoding='utf-8'))['part'])
@@ -95,7 +95,7 @@ def StaticSegments(BlobInfo: bytes, Payload: dict) -> tuple[StaticSegment, ...]:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def DonorStreams() -> tuple[tuple[str, bytes], ...]:
     RowsInfo = []
-    for Donor in sorted(DONORS.iterdir()):
+    for Donor in sorted(KDonors.iterdir()):
         StreamA = Donor / 'resolved.bin'
         if StreamA.is_file():
             RowsInfo.append((Donor.name, StreamA.read_bytes()))
@@ -861,7 +861,7 @@ def TestSLTMTRC() -> None:
                 assert Element.rule in {'string', 'count', 'conditional', 'guard', 'opaque'}
     RecordedA = set()
     for Label in KLabels:
-        TargetPath = SEGMENTS / f'segments_{Label}.json'
+        TargetPath = KSegments / f'segments_{Label}.json'
         if not TargetPath.is_file():
             continue
         Payload = JsonLib.loads(TargetPath.read_text(encoding='utf-8'))
@@ -875,7 +875,7 @@ def TestFVCDNR() -> None:
     LayoutsA = Layouts()
     Streams = DonorStreams()
     assert len(Streams) == 32
-    Version = GetDonorVer(DONORS, AuthoredMV())
+    Version = GetDonorVer(KDonors, AuthoredMV())
     Identical = 0
     for NameText, BlobInfo in Streams:
         Features = DonorFC(NameText)
@@ -888,7 +888,7 @@ def TestFVCDNR() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def DonorFC(NameText: str) -> int:
-    MetaInfo = DONORS / NameText / 'meta.json'
+    MetaInfo = KDonors / NameText / 'meta.json'
     if not MetaInfo.is_file():
         return -1
     Features = JsonLib.loads(MetaInfo.read_text(encoding='utf-8')).get('features')
@@ -897,7 +897,7 @@ def DonorFC(NameText: str) -> int:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFORDNR() -> None:
     LayoutsA = Layouts()
-    Version = GetDonorVer(DONORS, AuthoredMV())
+    Version = GetDonorVer(KDonors, AuthoredMV())
     Reached = 0
     for NameText, BlobInfo in DonorStreams():
         Features = DonorFC(NameText)
@@ -928,7 +928,7 @@ def TestRECCMR() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFSFNTBC() -> None:
     LayoutsA = Layouts()
-    Version = GetDonorVer(DONORS, AuthoredMV())
+    Version = GetDonorVer(KDonors, AuthoredMV())
     for NameText, BlobInfo in DonorStreams():
         Report = Verify(BlobInfo, 109, LayoutsA, header_size=SizeInfo, mo_version=Version)
         if Report.identical:

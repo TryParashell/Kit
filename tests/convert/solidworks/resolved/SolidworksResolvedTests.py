@@ -36,13 +36,13 @@ from convert.adapters.solidworks.programs.resolved.revolve.default.Program impor
 from convert.adapters.solidworks.programs.resolved.planes.top.Program import EncodeProgram as EncodeTopProgram
 
 # centralizes shared evidence so every related assertion uses one value
-CORPUS = FilePath(__file__).resolve().parents[4] / '.rescratch' / 'corpus2'
+KCorpusA = FilePath(__file__).resolve().parents[4] / '.rescratch' / 'corpus2'
 
 # centralizes shared evidence so every related assertion uses one value
-PARTS = CORPUS / 'parts'
+KParts = KCorpusA / 'parts'
 
 # centralizes shared evidence so every related assertion uses one value
-PATCHED = CORPUS / 'patched'
+KPatched = KCorpusA / 'patched'
 
 # centralizes shared evidence so every related assertion uses one value
 KCorpus = FilePath(__file__).resolve().parents[4] / 'examples' / 'Single Turbo Dual Overhead Cam V8 - KDP - 2024'
@@ -69,10 +69,10 @@ KFeaturesA = {45: KindInfoB, 48: KindInfoB, 64: KindInfoD, 189: KindInfoD, 210: 
 KTypeInfo = {'Sweep': KindInfoD, 'Cut-Sweep': KindInfoD, 'Loft': KindInfoB, 'Cut-Loft': KindInfoB, 'Chamfer': KindInfoC, 'Fillet': KindInfoC}
 
 # centralizes shared evidence so every related assertion uses one value
-KCorpusParts = PytestLib.mark.skipif(not PARTS.is_dir(), reason='the SOLIDWORKS multi-feature corpus is not present in this checkout')
+KCorpusParts = PytestLib.mark.skipif(not KParts.is_dir(), reason='the SOLIDWORKS multi-feature corpus is not present in this checkout')
 
 # centralizes shared evidence so every related assertion uses one value
-KCorpusPatched = PytestLib.mark.skipif(not PATCHED.is_dir(), reason='the proven round-trip artefacts are not present in this checkout')
+KCorpusPatched = PytestLib.mark.skipif(not KPatched.is_dir(), reason='the proven round-trip artefacts are not present in this checkout')
 
 # centralizes shared evidence so every related assertion uses one value
 KFeatures = {'CUTBASE_cd3': ((KindInfo, 10.0, 4), (KindInfoA, 3.0, 4)), 'CUTBASE_cd5': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 4)), 'CUTBASE_cd7': ((KindInfo, 10.0, 4), (KindInfoA, 7.0, 4)), 'CUTBASE_s8': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 4)), 'CUTBASE_s10': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 4)), 'CUTBASE_s14': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 4)), 'CUTTHROUGH_s10': ((KindInfo, 10.0, 4), (KindInfoA, None, 4)), 'CUTFACE_d5': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 4)), 'CUTMID_d5': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 4)), 'PADPLANE_rev_d5': ((KindInfo, 10.0, 4), (KindInfo, 5.0, 4)), 'TWOPAD_d3': ((KindInfo, 10.0, 4), (KindInfo, 3.0, 4)), 'TWOPAD_d5': ((KindInfo, 10.0, 4), (KindInfo, 5.0, 4)), 'TWOPAD_d8': ((KindInfo, 10.0, 4), (KindInfo, 8.0, 4)), 'THREEFEATURE_pad_cut_pad': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 4), (KindInfo, 4.0, 4)), 'CIRCLECUT_r4': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 0)), 'CIRCLECUT_r6': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 0)), 'CONTROL2_A': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 4)), 'CONTROL2_B': ((KindInfo, 10.0, 4), (KindInfoA, 5.0, 4)), 'CONTROL2PAD_A': ((KindInfo, 10.0, 4), (KindInfo, 5.0, 4)), 'CONTROL2PAD_B': ((KindInfo, 10.0, 4), (KindInfo, 5.0, 4))}
@@ -85,7 +85,7 @@ KTrips = (('A_cutbase_both_features', 'CUTBASE_cd5', {0: (50.0, 30.0, 12.0), 1: 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def CorpusStream(NameText: str) -> bytes:
-    Archive = SldprtArchive.from_bytes((PARTS / f'{NameText}.SLDPRT').read_bytes())
+    Archive = SldprtArchive.from_bytes((KParts / f'{NameText}.SLDPRT').read_bytes())
     return Archive.require(StreamA)
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -137,7 +137,7 @@ def AuthoredRBF(KeywordsA: ElementTree.Element) -> tuple[float, ...]:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def PatchedStream(NameText: str) -> bytes:
-    Archive = SldprtArchive.from_bytes((PATCHED / f'{NameText}.SLDPRT').read_bytes())
+    Archive = SldprtArchive.from_bytes((KPatched / f'{NameText}.SLDPRT').read_bytes())
     return Archive.require(StreamA)
 
 # keeps this focused behavior isolated so regressions remain immediately visible

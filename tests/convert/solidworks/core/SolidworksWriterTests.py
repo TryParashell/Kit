@@ -36,22 +36,22 @@ from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 from tests.interchange.document.DocumentTests import document as Document
 
 # centralizes shared evidence so every related assertion uses one value
-SAMPLE = FilePath(__file__).parents[4] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
+KSample = FilePath(__file__).parents[4] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
 
 # centralizes shared evidence so every related assertion uses one value
-ASSEMBLY = FilePath(__file__).parents[4] / 'examples' / 'Random' / 'Pistons' / 'Piston.SLDASM'
+KAssembly = FilePath(__file__).parents[4] / 'examples' / 'Random' / 'Pistons' / 'Piston.SLDASM'
 
 # centralizes shared evidence so every related assertion uses one value
-CONROD = FilePath(__file__).parents[4] / 'examples' / 'Random' / 'Pistons' / 'Conrod.SLDASM'
+KConrod = FilePath(__file__).parents[4] / 'examples' / 'Random' / 'Pistons' / 'Conrod.SLDASM'
 
 # centralizes shared evidence so every related assertion uses one value
 KRingInfo = FilePath(__file__).parents[4] / 'examples' / 'Random' / 'Pistons' / 'Piston_ring.SLDPRT'
 
 # centralizes shared evidence so every related assertion uses one value
-CATPRODUCT = FilePath(__file__).parents[4] / 'examples' / '.CATProduct' / 'Tilton_Set.CATProduct'
+KCatproduct = FilePath(__file__).parents[4] / 'examples' / '.CATProduct' / 'Tilton_Set.CATProduct'
 
 # centralizes shared evidence so every related assertion uses one value
-FreeCadBoxCorpus = FilePath(__file__).parents[4] / '.rescratch' / 'freecad' / 'FreeCAD_1.1.3-Windows-x86_64-py311' / 'Mod' / 'Fem' / 'femtest' / 'data' / 'calculix' / 'box.FCStd'
+KFreeCadBoxCorpus = FilePath(__file__).parents[4] / '.rescratch' / 'freecad' / 'FreeCAD_1.1.3-Windows-x86_64-py311' / 'Mod' / 'Fem' / 'femtest' / 'data' / 'calculix' / 'box.FCStd'
 
 # centralizes shared evidence so every related assertion uses one value
 KFreeCadCylCorpus = FilePath(__file__).parents[4] / '.rescratch' / 'fcstd' / 'cylinder_r5_h10.FCStd'
@@ -170,13 +170,13 @@ def TestPPFSCRPS() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSSREAFR(TmpPath) -> None:
-    SourceDoc = ReadSldprt(SAMPLE)
+    SourceDoc = ReadSldprt(KSample)
     Fcstd = TmpPath / 'source.FCStd'
     Output = TmpPath / 'source.SLDPRT'
     WriteFreecad(SourceDoc, Fcstd)
     Restored = ReadFreecad(Fcstd)
     ResultInfo = WriteSldprt(Restored, Output)
-    assert Output.read_bytes() == SAMPLE.read_bytes()
+    assert Output.read_bytes() == KSample.read_bytes()
     assert ResultInfo.metadata['mode'] == 'exact'
     assert ResultInfo.metadata['native_content'] == 'exact'
     assert ResultInfo.metadata['compatibility'] == 'native-exact'
@@ -186,19 +186,19 @@ def TestSSREAFR(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSSREACC(TmpPath) -> None:
-    SourceDoc = ReadSldprt(SAMPLE)
+    SourceDoc = ReadSldprt(KSample)
     Catpart = TmpPath / 'source.CATPart'
     Output = TmpPath / 'source.SLDPRT'
     WriteCatia(SourceDoc, Catpart, allow_non_native=True)
     Restored = ReadCatia(Catpart)
     ResultInfo = WriteSldprt(Restored, Output)
-    assert Output.read_bytes() == SAMPLE.read_bytes()
+    assert Output.read_bytes() == KSample.read_bytes()
     assert ResultInfo.metadata['mode'] == 'exact'
     assert ResultInfo.metadata['compatibility'] == 'native-exact'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPSADACCE(TmpPath) -> None:
-    SourceDoc = ReadSldprt(ASSEMBLY)
+    SourceDoc = ReadSldprt(KAssembly)
     Catproduct = TmpPath / 'source.CATProduct'
     Output = TmpPath / 'source.SLDASM'
     WriteCatia(SourceDoc, Catproduct, allow_non_native=True)
@@ -211,7 +211,7 @@ def TestPSADACCE(TmpPath) -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 @PytestLib.mark.parametrize('Change', ('capabilities', 'metadata', 'diagnostics'))
 def TestSEDESR(Change: str) -> None:
-    Document = ReadSldprt(SAMPLE)
+    Document = ReadSldprt(KSample)
     if Change == 'capabilities':
         Changed = ReplaceData(Document, capabilities=Document.capabilities | {Capability.MATERIALS})
     elif Change == 'metadata':
@@ -221,7 +221,7 @@ def TestSEDESR(Change: str) -> None:
     Output = BytesIO()
     ResultInfo = WriteSldprt(Changed, Output)
     assert ResultInfo.metadata['mode'] != 'exact'
-    assert Output.getvalue() != SAMPLE.read_bytes()
+    assert Output.getvalue() != KSample.read_bytes()
     Restored = ReadSldprt(Output.getvalue())
     if Change == 'capabilities':
         assert Capability.MATERIALS in Restored.capabilities
@@ -232,7 +232,7 @@ def TestSEDESR(Change: str) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestRSSDCFNER() -> None:
-    Document = ReadSldprt(SAMPLE)
+    Document = ReadSldprt(KSample)
     Feature = Document.feature_timeline[0]
     Changed = ReplaceData(Document, feature_timeline=(ReplaceData(Feature, name='Forged metadata cannot certify native semantics'), *Document.feature_timeline[1:]))
     Changed = ReplaceData(Changed, metadata=FrozenMapping({**Changed.metadata, 'solidworks_source_semantic_sha256': SemanticShaTwoFiveSix(Changed)}))
@@ -240,7 +240,7 @@ def TestRSSDCFNER() -> None:
     ResultInfo = WriteSldprt(Changed, Output)
     assert ResultInfo.metadata['mode'] == 'template'
     assert ResultInfo.metadata['compatibility'] == 'native-source-with-kit-neutral'
-    assert Output.getvalue() != SAMPLE.read_bytes()
+    assert Output.getvalue() != KSample.read_bytes()
     assert ReadSldprt(Output.getvalue()).feature_timeline[0].name == 'Forged metadata cannot certify native semantics'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
@@ -508,9 +508,9 @@ def TestFRPWNPSP(TmpPath: FilePath) -> None:
     assert ReplayResult.vendor_loadable is True
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-@PytestLib.mark.skipif(not FreeCadBoxCorpus.is_file(), reason='box corpus unavailable')
+@PytestLib.mark.skipif(not KFreeCadBoxCorpus.is_file(), reason='box corpus unavailable')
 def TestFCBWNPSWP(TmpPath: FilePath) -> None:
-    SourceData = ReadFreecad(FreeCadBoxCorpus)
+    SourceData = ReadFreecad(KFreeCadBoxCorpus)
     TargetPath = TmpPath / 'FreeCadBox.SLDPRT'
     ResultData = WriteDocument(SourceData, TargetPath, allow_carrier=True)
     ArchiveData = SldprtArchive.from_bytes(TargetPath.read_bytes())
@@ -1107,11 +1107,11 @@ def TestPPDTKNB() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestNSRPPAATB() -> None:
     Encoded = EncodeBrepModel(TriangleBrep())
-    SourceDoc = SldprtArchive.open(SAMPLE)
+    SourceDoc = SldprtArchive.open(KSample)
     StreamsA = SourceDoc.streams
     StreamsA[StreamI] = Encoded
     StreamsA.pop('Contents/Config-0-GhostPartition', None)
-    Native = BuildSldprt(StreamsA, file_id=SourceDoc.file_id, format_version=SourceDoc.format_version, signatures=ContainerSignatures(SAMPLE.read_bytes()))
+    Native = BuildSldprt(StreamsA, file_id=SourceDoc.file_id, format_version=SourceDoc.format_version, signatures=ContainerSignatures(KSample.read_bytes()))
     Decoded = ReadSldprt(Native)
     assert Decoded.brep is not None
     assert Decoded.brep.validate() == ()
@@ -1135,11 +1135,11 @@ def TestPDROTAD() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestNSIBFOTARG() -> None:
     Encoded = EncodeBrepModel(TriangleBrep())
-    SourceDoc = SldprtArchive.open(SAMPLE)
+    SourceDoc = SldprtArchive.open(KSample)
     StreamsA = SourceDoc.streams
     StreamsA[StreamI] = Encoded
     StreamsA.pop('Contents/Config-0-GhostPartition', None)
-    Native = BuildSldprt(StreamsA, file_id=SourceDoc.file_id, format_version=SourceDoc.format_version, signatures=ContainerSignatures(SAMPLE.read_bytes()))
+    Native = BuildSldprt(StreamsA, file_id=SourceDoc.file_id, format_version=SourceDoc.format_version, signatures=ContainerSignatures(KSample.read_bytes()))
     Decoded = ReadSldprt(Native, include_brep=False)
     assert Decoded.brep is None
     assert Decoded.brep_payloads == ()
@@ -1209,16 +1209,16 @@ def TestFDPMIOR(PayloadIndex: int, Changes: dict[str, bytes | str]) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSEUNTWCNE(TmpPath) -> None:
-    SourceDoc = ReadSldprt(SAMPLE)
+    SourceDoc = ReadSldprt(KSample)
     EditedFeature = ReplaceData(SourceDoc.feature_timeline[0], name='Edited in Kit')
     Edited = ReplaceData(SourceDoc, feature_timeline=(EditedFeature, *SourceDoc.feature_timeline[1:]))
     Output = TmpPath / 'edited.SLDPRT'
     with PytestLib.raises(SldprtFormatError, match='allow_non_native'):
         WriteSldprt(Edited, Output, allow_non_native=False)
     ResultInfo = WriteSldprt(Edited, Output)
-    OriginalArchive = SldprtArchive.open(SAMPLE)
+    OriginalArchive = SldprtArchive.open(KSample)
     EditedArchive = SldprtArchive.open(Output)
-    assert Output.read_bytes() != SAMPLE.read_bytes()
+    assert Output.read_bytes() != KSample.read_bytes()
     assert set(OriginalArchive.streams) <= set(EditedArchive.streams)
     assert EditedArchive.require('Kit/Interchange')
     assert ReadSldprt(Output).feature_timeline[0].name == 'Edited in Kit'
@@ -1230,7 +1230,7 @@ def TestSEUNTWCNE(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestNTPDDWCOI(TmpPath) -> None:
-    SourceDoc = ReadSldprt(SAMPLE)
+    SourceDoc = ReadSldprt(KSample)
     ParameterA = SourceDoc.parameters[0]
     TargetValue = float(ParameterA.value.value) + 1.25
     Edited = ReplaceData(SourceDoc, parameters=(ReplaceData(ParameterA, value=ReplaceData(ParameterA.value, value=TargetValue)), *SourceDoc.parameters[1:]))
@@ -1251,7 +1251,7 @@ def TestNTPDDWCOI(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestRACFNTC(TmpPath) -> None:
-    SourceDoc = ReadSldprt(SAMPLE)
+    SourceDoc = ReadSldprt(KSample)
     ParameterA = SourceDoc.parameters[0]
     NativeValue = float(ParameterA.value.value) + 1.25
     NativeDocument = ReplaceData(SourceDoc, parameters=(ReplaceData(ParameterA, value=ReplaceData(ParameterA.value, value=NativeValue)), *SourceDoc.parameters[1:]))
@@ -1288,7 +1288,7 @@ def TestRACFNTC(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestACPKSTNE(TmpPath) -> None:
-    SourceDoc = ReadSldprt(SAMPLE)
+    SourceDoc = ReadSldprt(KSample)
     ParameterA = SourceDoc.parameters[0]
     Edited = ReplaceData(SourceDoc, parameters=(ReplaceData(ParameterA, value=ReplaceData(ParameterA.value, value=float(ParameterA.value.value) + 1.25)), *SourceDoc.parameters[1:]))
     Trusted = TmpPath / 'trusted.SLDPRT'
@@ -1315,7 +1315,7 @@ def TestACPKSTNE(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestNTPSWFN(TmpPath) -> None:
-    SourceDoc = ReadSldprt(SAMPLE)
+    SourceDoc = ReadSldprt(KSample)
     Feature = SourceDoc.feature_timeline[0]
     TargetName = 'X' * len(Feature.name)
     Edited = ReplaceData(SourceDoc, feature_timeline=(ReplaceData(Feature, name=TargetName), *SourceDoc.feature_timeline[1:]))
@@ -1362,7 +1362,7 @@ def TestSAEDK(TmpPath) -> None:
     assert Conversion.destination_format == 'solidworks.sldasm'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
-@PytestLib.mark.parametrize(('source', 'wrong_suffix'), ((SAMPLE, '.SLDASM'), (ASSEMBLY, '.SLDPRT')))
+@PytestLib.mark.parametrize(('source', 'wrong_suffix'), ((KSample, '.SLDASM'), (KAssembly, '.SLDPRT')))
 def TestSRRNSKM(SourceDoc, WrongSuffix, TmpPath) -> None:
     Renamed = TmpPath / f'renamed{WrongSuffix}'
     Renamed.write_bytes(SourceDoc.read_bytes())
@@ -1430,7 +1430,7 @@ def TestSLAEOERM() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSLNMPIRWT() -> None:
-    SourceDoc = DocumentWithoutSource(ReadSldprt(CONROD))
+    SourceDoc = DocumentWithoutSource(ReadSldprt(KConrod))
     Output = BytesIO()
     ResultInfo = WriteSldprt(SourceDoc, Output)
     Native = DecodeNativeAssembly(SldprtArchive.from_bytes(Output.getvalue()))
@@ -1462,7 +1462,7 @@ def TestPSRECOI(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestANTSWMR(TmpPath) -> None:
-    Original = OpenDocument(SAMPLE)
+    Original = OpenDocument(KSample)
     Changed = ReplaceData(Original, metadata=FrozenMapping({**Original.metadata, 'audit_change': True}))
     Carrier = TmpPath / 'carrier.SLDPRT'
     First = WriteDocument(Changed, Carrier)
@@ -1482,7 +1482,7 @@ def TestANTSWMR(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPSDTPAW(TmpPath) -> None:
-    SourceDoc = ReadSldprt(ASSEMBLY)
+    SourceDoc = ReadSldprt(KAssembly)
     Portable = TmpPath / 'portable.SLDASM'
     PortableResult = WriteDocument(SourceDoc, Portable)
     assert PortableResult.metadata['compatibility'] == 'native-template'
@@ -1497,18 +1497,18 @@ def TestPSDTPAW(TmpPath) -> None:
     assert ExactResult.metadata['native_self_contained'] is False
     assert ExactResult.requirements == ('referenced SOLIDWORKS component files',)
     assert ExactResult.near_lossless is False
-    assert Exact.read_bytes() == ASSEMBLY.read_bytes()
+    assert Exact.read_bytes() == KAssembly.read_bytes()
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestIPADTRC(TmpPath) -> None:
-    Isolated = TmpPath / 'isolated' / ASSEMBLY.name
+    Isolated = TmpPath / 'isolated' / KAssembly.name
     Isolated.parent.mkdir()
-    Isolated.write_bytes(ASSEMBLY.read_bytes())
+    Isolated.write_bytes(KAssembly.read_bytes())
     SourceDoc = ReadSldprt(Isolated)
     assert SourceDoc.assembly is not None
     assert SourceDoc.assembly.documents == ()
     assert SourceDoc.meshes
-    Output = TmpPath / 'portable' / ASSEMBLY.name
+    Output = TmpPath / 'portable' / KAssembly.name
     ResultInfo = WriteDocument(SourceDoc, Output)
     assert ResultInfo.application_usable is False
     assert ResultInfo.vendor_loadable is False
@@ -1523,7 +1523,7 @@ def TestIPADTRC(TmpPath) -> None:
     Restored = ReadSldprt(Output)
     assert Restored.assembly == SourceDoc.assembly
     assert Restored.meshes == SourceDoc.meshes
-    Blocked = TmpPath / 'blocked' / ASSEMBLY.name
+    Blocked = TmpPath / 'blocked' / KAssembly.name
     with PytestLib.raises(ApplicationUsabilityError) as Captured:
         WriteDocument(SourceDoc, Blocked, allow_carrier=False)
     assert Captured.value.requirements == ('referenced SOLIDWORKS component files',)
@@ -1531,9 +1531,9 @@ def TestIPADTRC(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCDTRSRC(TmpPath) -> None:
-    SourceDoc = OpenDocument(CATPRODUCT)
+    SourceDoc = OpenDocument(KCatproduct)
     Output = TmpPath / 'converted' / 'Tilton_Set.SLDASM'
-    ResultInfo = Convert(CATPRODUCT, Output)
+    ResultInfo = Convert(KCatproduct, Output)
     assert ResultInfo.requirements == ()
     assert ResultInfo.application_usable is False
     assert ResultInfo.vendor_loadable is False
@@ -1553,7 +1553,7 @@ def TestCDTRSRC(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPAPTMALP(TmpPath) -> None:
-    SourceDoc = ReadSldprt(ASSEMBLY)
+    SourceDoc = ReadSldprt(KAssembly)
     Assembly = SourceDoc.assembly
     Instance = Assembly.instances[0]
     TransformA = list(Instance.transform.values)
@@ -1583,21 +1583,21 @@ def TestPAPTMALP(TmpPath) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPACTLCDS(TmpPath) -> None:
-    SourceDoc = ReadSldprt(ASSEMBLY)
+    SourceDoc = ReadSldprt(KAssembly)
     Output = TmpPath / 'carried.SLDASM'
     ResultInfo = WriteDocument(SourceDoc, Output)
     assert ResultInfo.vendor_loadable is True
     assert ResultInfo.application_usable is True
     assert ResultInfo.metadata['compatibility'] == 'native-template'
     assert not [ItemValue for ItemValue in ResultInfo.diagnostics if ItemValue.code == 'sldasm.vendor_reader_rejects']
-    Donor = SldprtArchive.open(ASSEMBLY).streams
+    Donor = SldprtArchive.open(KAssembly).streams
     Written = SldprtArchive.open(Output).streams
     for NameText in Streams:
         assert Written[NameText] == Donor[NameText]
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPADWACIR(TmpPath) -> None:
-    SourceDoc = ReadSldprt(ASSEMBLY)
+    SourceDoc = ReadSldprt(KAssembly)
     Assembly = SourceDoc.assembly
     Removed = Assembly.instances[-1]
     Entities = tuple((Entity for Entity in Assembly.mate_entities if Removed.id not in Entity.instance_path))
@@ -1611,7 +1611,7 @@ def TestPADWACIR(TmpPath) -> None:
     assert ResultInfo.application_usable is False
     Rejection = next((ItemValue.message for ItemValue in ResultInfo.diagnostics if ItemValue.code == 'sldasm.vendor_reader_rejects'))
     assert f'donor_instance_diverged:{Removed.id}' in Rejection
-    Donor = SldprtArchive.open(ASSEMBLY).streams
+    Donor = SldprtArchive.open(KAssembly).streams
     Written = SldprtArchive.open(Output).streams
     for NameText in Streams:
         assert Written[NameText] == Donor[NameText]

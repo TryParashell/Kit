@@ -21,7 +21,7 @@ from convert.adapters.solidworks.container.Format import ASSEMBLY_FORMAT_ID as I
 from interchange import BooleanOperation, Capability, CircleGeometry, FeatureKind, LineGeometry
 
 # centralizes shared evidence so every related assertion uses one value
-SAMPLE = FilePath(__file__).parents[4] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
+KSample = FilePath(__file__).parents[4] / 'examples' / '.SLDPRT' / 'example.SLDPRT'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFPVAEADFAI() -> None:
@@ -99,7 +99,7 @@ def TestPPCIE(ItemValue: str, IsCad: bool, IsComponent: bool) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCREICS() -> None:
-    Archive = SldprtArchive.open(SAMPLE)
+    Archive = SldprtArchive.open(KSample)
     assert Archive.format_version == 4
     assert len(Archive.records) == 44
     assert Archive.records[0].name == 'Contents/3DExperienceExchange2'
@@ -108,7 +108,7 @@ def TestCREICS() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPHINAO() -> None:
-    Document = SldprtAdapter().read(SAMPLE)
+    Document = SldprtAdapter().read(KSample)
     Operations = [Feature for Feature in Document.feature_timeline if Feature.name in {'Boss-Extrude1', 'Cut-Extrude1', 'Boss-Extrude2', 'Cut-Extrude2', 'Boss-Extrude3', 'Fillet1'}]
     assert [Feature.name for Feature in Operations] == ['Boss-Extrude1', 'Cut-Extrude1', 'Boss-Extrude2', 'Cut-Extrude2', 'Boss-Extrude3', 'Fillet1']
     assert [Feature.operation for Feature in Operations[:-1]] == [BooleanOperation.JOIN, BooleanOperation.CUT, BooleanOperation.JOIN, BooleanOperation.CUT, BooleanOperation.JOIN]
@@ -119,7 +119,7 @@ def TestPHINAO() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestSPASPAE() -> None:
-    Document = SldprtAdapter().read(SAMPLE)
+    Document = SldprtAdapter().read(KSample)
     assert len(Document.sketches) == 5
     First = Document.sketch('sldprt:sketch:26')
     FirstEdges = [Entity.geometry for Entity in First.entities if Entity.id in First.closed_profile_entity_ids[0]]
@@ -139,7 +139,7 @@ def TestSPASPAE() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestPBIPBFB() -> None:
-    Document = SldprtAdapter().read(SAMPLE)
+    Document = SldprtAdapter().read(KSample)
     assert [Payload.kind for Payload in Document.brep_payloads] == ['partition', 'partition', 'deltas']
     assert [len(Payload.data or b'') for Payload in Document.brep_payloads] == [1513, 30850, 23150]
     assert [Payload.sha256 for Payload in Document.brep_payloads] == ['8c57db227621a15a0a429cdd65dbe3f374e2c1145ef2f3edc3a25b745513bf3d', '3f3e3efbfbee0f41bda187579547881126cbf48101f006eecd759f491fc87ac6', '59d5eef7feb40d7a2ce52e20e50e14ca8eedaa1a1671b33a13fdc43720311cb7']
@@ -147,6 +147,6 @@ def TestPBIPBFB() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestNJRKHAB() -> None:
-    SourceDoc = SldprtAdapter().read(SAMPLE)
+    SourceDoc = SldprtAdapter().read(KSample)
     Restored = type(SourceDoc).from_json(SourceDoc.to_json())
     assert Restored == SourceDoc

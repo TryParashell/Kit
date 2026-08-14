@@ -31,10 +31,10 @@ KDirectory = 'container'
 KCount = 32
 
 # centralizes shared evidence so every related assertion uses one value
-Operations = frozenset({Operation, OperationA, OperationB, OperationC})
+KOperations = frozenset({Operation, OperationA, OperationB, OperationC})
 
 # centralizes shared evidence so every related assertion uses one value
-Conditions = ConditionsA | {EndInfo}
+KConditions = ConditionsA | {EndInfo}
 
 # centralizes shared evidence so every related assertion uses one value
 KeysInfo = ('features', 'feature_ids', 'sketch_ids', 'feature_names', 'sketch_names', 'point_counts', 'arc_counts', 'depth_present')
@@ -142,8 +142,8 @@ def TestEMFUTNTV() -> None:
         for Entry, DepthPresent in zip(MetaInfoA['features'], MetaInfoA['depth_present'], strict=True):
             Topology = FeatureTopology(*Entry)
             assert list(Topology.key) == Entry, DonorId
-            assert Topology.operation in Operations, DonorId
-            assert Topology.end_condition in Conditions, DonorId
+            assert Topology.operation in KOperations, DonorId
+            assert Topology.end_condition in KConditions, DonorId
             assert Topology.profile, DonorId
             if Topology.end_condition == EndInfo:
                 assert Topology.support in Supports, DonorId

@@ -20,13 +20,13 @@ from convert.adapters.solidworks.assembly.AssemblyCore import AsmCoreItem, Encod
 from interchange import Capability, ComponentInstance, ComponentKind, MateAlignment, MateEntityKind, MateKind, ValueKind
 
 # centralizes shared evidence so every related assertion uses one value
-RANDOM = FilePath(__file__).resolve().parents[4] / 'examples' / 'Random'
+KRandom = FilePath(__file__).resolve().parents[4] / 'examples' / 'Random'
 
 # centralizes shared evidence so every related assertion uses one value
-ASSEMBLY = RANDOM / 'V8_engine.SLDASM'
+KAssembly = KRandom / 'V8_engine.SLDASM'
 
 # centralizes shared evidence so every related assertion uses one value
-CONROD = RANDOM / 'Pistons' / 'Conrod.SLDASM'
+KConrod = KRandom / 'Pistons' / 'Conrod.SLDASM'
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def MixedCoreItems() -> tuple[AsmCoreItem, ...]:
@@ -83,7 +83,7 @@ def TestNFIDNIFS() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 @PytestLib.fixture(scope='module')
 def Document():
-    return SldprtAdapter().read(ASSEMBLY, ReadOptions(include_brep=False))
+    return SldprtAdapter().read(KAssembly, ReadOptions(include_brep=False))
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestMARHDAH(Document) -> None:
@@ -234,7 +234,7 @@ def TestMARDMVAA(Document) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestMTUNCWLFR() -> None:
-    Archive = SldprtArchive.open(CONROD)
+    Archive = SldprtArchive.open(KConrod)
     RecordInfo = next((ItemValueA for ItemValueA in Archive.records if ItemValueA.name.endswith('-MatesList')))
     OldName = 'Concentric1'.encode('utf-16le')
     NewName = 'CustomMate1'.encode('utf-16le')
@@ -266,7 +266,7 @@ def TestMTUNCWLFR() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestRMCTSARI() -> None:
-    Archive = SldprtArchive.open(CONROD)
+    Archive = SldprtArchive.open(KConrod)
     RecordInfo = next((ItemValueA for ItemValueA in Archive.records if ItemValueA.name.endswith('-MatesList')))
     OldName = 'Coincident2'.encode('utf-16le')
     NewName = 'CustomMate2'.encode('utf-16le')
@@ -281,7 +281,7 @@ def TestRMCTSARI() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestMGBAS() -> None:
-    Archive = SldprtArchive.open(ASSEMBLY)
+    Archive = SldprtArchive.open(KAssembly)
     RecordInfo = next((ItemValueA for ItemValueA in Archive.records if ItemValueA.name.endswith('-MatesList')))
     MateList = DecodeMateList(RecordInfo.data, RecordInfo.name, 7)
     MarkersA = [MateInfo for MateInfo in MateList.mates if MateInfo.kind == 'group']
@@ -293,7 +293,7 @@ def TestMGBAS() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCCPRWNS() -> None:
-    Archive = SldprtArchive.open(CONROD)
+    Archive = SldprtArchive.open(KConrod)
     Native = DecodeNativeAssembly(Archive)
     Occurrence = next((ItemValueA for ItemValueA in Native.occurrences if ItemValueA.owner_definition_id == Native.root_definition_id))
     Owner = next((ItemValueA for ItemValueA in Native.definitions if ItemValueA.object_id == Native.root_definition_id))
@@ -305,8 +305,8 @@ def TestCCPRWNS() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestMLDUSWTSIR() -> None:
-    BlobInfo = CONROD.read_bytes()
-    Archive = SldprtArchive.from_bytes(BlobInfo, CONROD)
+    BlobInfo = KConrod.read_bytes()
+    Archive = SldprtArchive.from_bytes(BlobInfo, KConrod)
     RecordInfo = next((ItemValueA for ItemValueA in Archive.records if ItemValueA.name.endswith('-MatesList')))
     Streams = Archive.streams
     Streams['Relations/AssemblyConstraints'] = Streams.pop(RecordInfo.name)
@@ -339,6 +339,6 @@ def TestNADPTOT(Document) -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestRACARE() -> None:
-    Payloads = CompanionPayloads(str(ASSEMBLY))
+    Payloads = CompanionPayloads(str(KAssembly))
     assert [(Payload.format_id, len(Payload.data or b''), Payload.sha256) for Payload in Payloads] == [('acis.sat', 61518735, 'accecfe74a515d095c38b12b669546e54cc5d55308d6e1c8e0913dd6649e7017'), ('parasolid.x_t', 8036848, '00dc62be5c5adb9b9ff4c83ae3f674f5e1df07782c65f86b50987c8dde76dde3')]
     assert Payloads[0].attributes['body_count'] == 391
