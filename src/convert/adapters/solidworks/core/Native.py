@@ -1462,8 +1462,8 @@ def EncodeReverseA(DepthValue: float) -> bytes:
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
+# dispatch isolation keeps vendor tree arity routing independently reviewable
+def SelectVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) == 8:
         return BuildFourVendor(AuthoredObjs)
     if len(AuthoredObjs) == 6:
@@ -1482,8 +1482,13 @@ def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | 
         return BuildBossLinear(AuthoredObjs)
     if len(AuthoredObjs) == 3 and AuthoredObjs[2].class_name == "moCirPattern_c":
         return BuildBossVendoA(AuthoredObjs)
+    return None
+
+
+# this definition exists because focused behavior needs one stable owner
+def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 2:
-        return None
+        return SelectVendorTree(AuthoredObjs)
     SketchObject, PadObject = AuthoredObjs
     if PadObject.class_name == "moRevolution_c":
         return BuildSingleTree(AuthoredObjs)
