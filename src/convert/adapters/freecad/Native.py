@@ -3403,7 +3403,387 @@ def BuildConfigs(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition preserves dependency order while selecting earlier feature inputs
+def FeatureDeps(
+    ObjValue: NativeObject,
+    FeatureObjects: Sequence[NativeObject],
+    FeatureIds: Mapping[str, str],
+    Order: int,
+) -> tuple[str, ...]:
+    Orders = {Value.name: Index for Index, Value in enumerate(FeatureObjects)}
+    return tuple(
+        FeatureIds[NameValue]
+        for NameValue in dict.fromkeys(ObjValue.dependencies)
+        if NameValue in FeatureIds and Orders[NameValue] < Order
+    )
+
+
+# this definition resolves the declared or inferred boolean feature operation
+def FeatureOp(
+    ObjValue: NativeObject, KindValue: FeatureKind, Dependencies: Sequence[str]
+) -> BoolOperation | str | None:
+    Declared = String(ObjValue, "Operation").casefold()
+    Operation: BoolOperation | str | None = None
+    if Declared:
+        try:
+            Operation = BoolOperation(Declared)
+        except ValueError:
+            Operation = Declared
+    if KindValue not in KSubtractiveCapableKinds:
+        return Operation
+    if ObjValue.type_id in KSubtractiveTypeIds:
+        return BoolOperation.CUT
+    return BoolOperation.JOIN if Dependencies else BoolOperation.CREATE
+
+
+# this definition decodes one native chamfer feature definition
+def ChamferDef(ObjValue: NativeObject) -> ChamferFeature:
+    ChamferType = EnumAction(ObjValue, "ChamferType")
+    ModeValue = {
+        0: "equal_distance",
+        1: "two_distances",
+        2: "distance_angle",
+    }.get(ChamferType, f"native:{ChamferType}")
+    return ChamferFeature(
+        distance=ParamValue(abs(Float(ObjValue, "Size")), ValueKind.LENGTH, "mm"),
+        mode=ModeValue,
+        second_distance=(
+            ParamValue(abs(Float(ObjValue, "Size2")), ValueKind.LENGTH, "mm")
+            if ChamferType == 1
+            else None
+        ),
+        angle=(
+            ParamValue(abs(Float(ObjValue, "Angle")), ValueKind.ANGLE, "deg")
+            if ChamferType == 2
+            else None
+        ),
+    )
+
+
+# this definition decodes one native linear pattern definition
+def LinearPattern(
+    ObjValue: NativeObject, Selections: Sequence[Selection]
+) -> LinearPatternFeature:
+    ItemCount = EnumAction(ObjValue, "Occurrences", 1)
+    LengthValue = abs(Float(ObjValue, "Length"))
+    OffsetValue = abs(Float(ObjValue, "Offset"))
+    SpacingValue = (
+        LengthValue / (ItemCount - 1)
+        if EnumAction(ObjValue, "Mode") == 0 and ItemCount > 1
+        else OffsetValue
+    )
+    return LinearPatternFeature(
+        spacing=ParamValue(SpacingValue, ValueKind.LENGTH, "mm"),
+        instance_count=ItemCount,
+        direction_selection_id=Selections[0].id if Selections else "",
+        reversed=IsBoolValue(ObjValue, "Reversed"),
+    )
+
+
+# this definition decodes one native polar pattern definition
+def PolarPattern(
+    ObjValue: NativeObject, Selections: Sequence[Selection]
+) -> CircularPatternFeature:
+    return CircularPatternFeature(
+        angle=ParamValue(abs(Float(ObjValue, "Angle")), ValueKind.ANGLE, "deg"),
+        instance_count=EnumAction(ObjValue, "Occurrences", 1),
+        axis_selection_id=Selections[0].id if Selections else "",
+        reversed=IsBoolValue(ObjValue, "Reversed"),
+    )
+
+
+# this definition decodes the typed definition for one native feature object
+def FeatureDef(
+    ObjValue: NativeObject,
+    KindValue: FeatureKind,
+    Selections: Sequence[Selection],
+) -> FeatureDefinition:
+    if KindValue == FeatureKind.EXTRUSION:
+        return PartExtrusion(ObjValue) if ObjValue.type_id == "Part::Extrusion" else Extrusion(ObjValue)
+    if KindValue == FeatureKind.FILLET:
+        Radius = Float(ObjValue, "Radius", Float(ObjValue, "DrivingRadius"))
+        return FilletFeature(ParamValue(abs(Radius), ValueKind.LENGTH, "mm"))
+    if KindValue == FeatureKind.CHAMFER:
+        return ChamferDef(ObjValue)
+    if KindValue == FeatureKind.SHELL:
+        return ShellFeature(
+            thickness=ParamValue(abs(Float(ObjValue, "Value")), ValueKind.LENGTH, "mm"),
+            outward=not IsBoolValue(ObjValue, "Reversed"),
+        )
+    if ObjValue.type_id == "PartDesign::LinearPattern":
+        return LinearPattern(ObjValue, Selections)
+    if ObjValue.type_id == "PartDesign::PolarPattern":
+        return PolarPattern(ObjValue, Selections)
+    return NativeFeatureDefinition(FormatId, ObjValue.type_id, NativeObjectA(ObjValue))
+
+
+# this definition decodes one timeline feature and mutates shared parameter state
+def MakeFeatureMut(
+    ObjValue: NativeObject,
+    Order: int,
+    FeatureObjects: Sequence[NativeObject],
+    FeatureIds: Mapping[str, str],
+    SketchIds: Mapping[str, str],
+    OwnerPayloads: Mapping[str, list[str]],
+    Parameters: list[Parameter],
+    Consumed: set[tuple[str, str]],
+) -> tuple[FeatureStep, tuple[Selection, ...]]:
+    FeatureId = FeatureIds[ObjValue.name]
+    KindValue = FeatureKindA(ObjValue)
+    Selections = FeatureA(ObjValue)
+    ParamIds = FeatureMut(ObjValue, FeatureId, Parameters, Consumed)
+    Dependencies = FeatureDeps(ObjValue, FeatureObjects, FeatureIds, Order)
+    ProfileName = LinkAction(ObjValue, "Profile") or LinkAction(ObjValue, "Base")
+    Feature = FeatureStep(
+        FeatureId,
+        String(ObjValue, "Label", ObjValue.name),
+        KindValue,
+        Order,
+        input_feature_ids=Dependencies,
+        sketch_id=SketchIds.get(ProfileName),
+        parameter_ids=ParamIds,
+        operation=FeatureOp(ObjValue, KindValue, Dependencies),
+        definition=FeatureDef(ObjValue, KindValue, Selections),
+        selection_ids=tuple(Value.id for Value in Selections),
+        suppressed=IsBoolValue(ObjValue, "Suppressed"),
+        provenance=Provenance(FormatId, ObjValue.name),
+        attributes={
+            "freecad": NativeObjectA(ObjValue),
+            "brep_payload_ids": OwnerPayloads.get(ObjValue.name, []),
+        },
+    )
+    return (Feature, Selections)
+
+
+# this definition decodes the ordered timeline and extends selection state
+def AddFeaturesMut(
+    Native: NativeArchive,
+    FeatureObjects: Sequence[NativeObject],
+    FeatureIds: Mapping[str, str],
+    SketchIds: Mapping[str, str],
+    OwnerPayloads: Mapping[str, list[str]],
+    Parameters: list[Parameter],
+    Consumed: set[tuple[str, str]],
+) -> tuple[list[FeatureStep], list[Selection]]:
+    Features: list[FeatureStep] = []
+    Selections = list(Explicit(Native.objects))
+    for Order, ObjValue in enumerate(FeatureObjects):
+        FeatureValue, FeatureSelections = MakeFeatureMut(
+            ObjValue,
+            Order,
+            FeatureObjects,
+            FeatureIds,
+            SketchIds,
+            OwnerPayloads,
+            Parameters,
+            Consumed,
+        )
+        Features.append(FeatureValue)
+        Selections.extend(FeatureSelections)
+    return (Features, Selections)
+
+
+# this definition decodes body containers and adds the required default body
+def BuildBodies(
+    Native: NativeArchive,
+    FeatureIds: Mapping[str, str],
+    BodyIds: Mapping[str, str],
+    OwnerPayloads: Mapping[str, list[str]],
+    Features: Sequence[FeatureStep],
+) -> list[BodyValue]:
+    Bodies: list[BodyValue] = []
+    for ObjValue in Native.objects:
+        if not IsBodyContainer(ObjValue):
+            continue
+        FinalName = LinkAction(ObjValue, "Tip")
+        if FinalName not in FeatureIds:
+            FinalName = next(
+                (
+                    Value
+                    for Value in reversed(LinkList(ObjValue, "Group"))
+                    if Value in FeatureIds
+                ),
+                "",
+            )
+        if not FinalName:
+            continue
+        Bodies.append(
+            BodyValue(
+                BodyIds[ObjValue.name],
+                String(ObjValue, "Label", ObjValue.name),
+                FeatureIds[FinalName],
+                TopologySummary(),
+                material_id=String(ObjValue, "MaterialId") or None,
+                provenance=Provenance(FormatId, ObjValue.name),
+                attributes={
+                    "freecad": NativeObjectA(ObjValue),
+                    "tip": FinalName,
+                    "brep_payload_ids": OwnerPayloads.get(ObjValue.name, []),
+                },
+            )
+        )
+    if not Bodies and Features and AsmRootObject(Native.objects) is None:
+        Bodies.append(
+            BodyValue(
+                "freecad:body:default",
+                "Body",
+                Features[-1].id,
+                attributes={"freecad_generated": True},
+            )
+        )
+    return Bodies
+
+
+# this definition annotates native shape payloads with their source document digest
+def HashPayloads(
+    Payloads: tuple[BrepPayload, ...], DataValue: bytes
+) -> tuple[BrepPayload, ...]:
+    NativeDigestText = Hashlib.sha256(DataValue).hexdigest()
+    return tuple(
+        Replace(
+            Payload,
+            attributes={**Payload.attributes, KNativeDocHashAttr: NativeDigestText},
+        )
+        for Payload in Payloads
+    )
+
+
+# this definition reports preserved native features meshes and external references
+def NativeDiags(
+    Native: NativeArchive,
+    FeatureObjects: Sequence[NativeObject],
+    Meshes: Sequence[MeshValue],
+    UnresolvedOuter: Sequence[Mapping[str, str]],
+) -> tuple[DiagValue, ...]:
+    NativeTypes = sorted(
+        {
+            ObjValue.type_id
+            for ObjValue in FeatureObjects
+            if FeatureKindA(ObjValue) == FeatureKind.NATIVE
+        }
+    )
+    Diagnostics: list[DiagValue] = []
+    if NativeTypes:
+        Diagnostics.append(
+            DiagValue(
+                "freecad.native_features_preserved",
+                "FreeCAD feature types were preserved as native operations",
+                Severity.INFO,
+                attributes={"type_ids": NativeTypes},
+            )
+        )
+    MeshPropCount = sum(
+        1
+        for ObjValue in Native.objects
+        for NodeValue in ObjValue.properties.values()
+        if NodeValue.find("./Mesh") is not None
+    )
+    if MeshPropCount > len(Meshes):
+        Diagnostics.append(
+            DiagValue(
+                "freecad.unparsed_mesh_data",
+                "FreeCAD mesh data was preserved but could not be normalized",
+                Severity.WARNING,
+                attributes={"property_count": MeshPropCount, "normalized_count": len(Meshes)},
+            )
+        )
+    if UnresolvedOuter:
+        Diagnostics.append(
+            DiagValue(
+                "freecad.unresolved_external_documents",
+                "FreeCAD external component documents could not be resolved",
+                Severity.WARNING,
+                attributes={"references": UnresolvedOuter},
+            )
+        )
+    return tuple(Diagnostics)
+
+
+# this definition preserves native document metadata and unconsumed archive entries
+def NativeMeta(
+    Native: NativeArchive,
+    AsmValue: AsmData | None,
+    ResolvedOuter: Mapping[str, tuple[str, CadDoc]],
+) -> dict[str, AnyValue]:
+    MetaValue: dict[str, AnyValue] = {
+        "schema_version": Native.root.get("SchemaVersion", ""),
+        "file_version": Native.root.get("FileVersion", ""),
+        "program_version": Native.root.get("ProgramVersion", ""),
+        "entry_order": list(Native.entry_order),
+        "objects": [NativeObjectA(ObjValue) for ObjValue in Native.objects],
+    }
+    DocProperties = Native.root.find("./Properties")
+    if DocProperties is not None:
+        MetaValue["document_properties"] = ElemData(DocProperties)
+    StringHasher = ReadStringHash(Native)
+    if StringHasher is not None:
+        MetaValue["string_hasher"] = StringHasher
+    OtherEntries = OtherEntryData(Native)
+    if OtherEntries:
+        MetaValue["entries"] = OtherEntries
+    if AsmValue is None and ResolvedOuter:
+        MetaValue["external_documents"] = [
+            {"file": FileName, "identity": Identity, "document": LinkedDoc}
+            for FileName, (Identity, LinkedDoc) in ResolvedOuter.items()
+        ]
+    return MetaValue
+
+
+# this definition creates validated source metadata for a native archive
+def NativeSource(DataValue: bytes, SourcePath: str, Native: NativeArchive) -> CadSource:
+    return CadSource(
+        FormatId,
+        SourcePath,
+        Hashlib.sha256(DataValue).hexdigest(),
+        container_version=Native.root.get("FileVersion", ""),
+        application_version=Native.root.get("ProgramVersion", ""),
+        attributes={"freecad_schema_version": Native.root.get("SchemaVersion", "")},
+    )
+
+
+# this definition assembles validates and capability annotates the native document
+def MakeNativeDoc(
+    Source: CadSource,
+    Configurations: tuple[Config, ...],
+    Parameters: list[Param],
+    SupportPlanes: tuple[SupportPlane, ...],
+    Sketches: tuple[Sketch, ...],
+    Selections: list[Selection],
+    Features: list[FeatureStep],
+    Bodies: list[BodyValue],
+    Meshes: tuple[MeshValue, ...],
+    DecodedBrep: BrepModel | None,
+    BrepPayloads: tuple[BrepPayload, ...],
+    Diagnostics: tuple[DiagValue, ...],
+    MetaValue: Mapping[str, AnyValue],
+    AsmValue: AsmData | None,
+    HasOuterRefs: bool,
+) -> CadDoc:
+    DocValue = CadDoc(
+        Source,
+        Configurations,
+        tuple(Parameters),
+        SupportPlanes,
+        Sketches,
+        tuple(Selections),
+        tuple(Features),
+        tuple(Bodies),
+        meshes=Meshes,
+        brep=DecodedBrep,
+        brep_payloads=BrepPayloads,
+        diagnostics=Diagnostics,
+        metadata={"freecad": MetaValue},
+        assembly=AsmValue,
+    )
+    Capabilities = InferCapabilities(DocValue, roundtrip_metadata=True)
+    if HasOuterRefs:
+        Capabilities |= {Capability.EXTERNAL_REFERENCES}
+    DocValue = Replace(DocValue, capabilities=Capabilities)
+    DocValue.assert_valid()
+    return DocValue
+
+
+# this definition coordinates complete native archive decoding
 def ReadNativeFcstd(
     DataValue: bytes,
     SourcePath: str = "",

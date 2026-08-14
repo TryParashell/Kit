@@ -146,6 +146,34 @@ def ValidatedObject(NameValue: str) -> str:
     return NameValue
 
 
+# this definition exists because every archive entry needs the same security gate
+def ValidateInfo(
+    InfoValue: Zipfile.ZipInfo, Members: Mapping[str, Zipfile.ZipInfo]
+) -> tuple[str, int]:
+    NameValue = ValidatedEntry(
+        InfoValue.filename.rstrip("/") if InfoValue.is_dir() else InfoValue.filename
+    )
+    if NameValue in Members:
+        raise ValueError("FCStd archive contains duplicate entries")
+    if InfoValue.flag_bits & 1:
+        raise ValueError("FCStd archive contains an encrypted entry")
+    ModeValue = InfoValue.external_attr >> 16 & 61440
+    if ModeValue == 40960:
+        raise ValueError("FCStd archive contains a symbolic link")
+    if InfoValue.is_dir():
+        return (NameValue, 0)
+    if InfoValue.file_size < 0 or InfoValue.file_size > KMaxEntrySize:
+        raise ValueError("FCStd archive entry exceeds safe limits")
+    if InfoValue.file_size and InfoValue.compress_size <= 0:
+        raise ValueError("FCStd archive has an invalid compressed entry")
+    if (
+        InfoValue.compress_size
+        and InfoValue.file_size / InfoValue.compress_size > KMaxCompressionRatio
+    ):
+        raise ValueError("FCStd archive compression ratio is unsafe")
+    return (NameValue, InfoValue.file_size)
+
+
 # this definition exists because focused behavior needs one stable owner
 def Validated(DataValue: bytes) -> tuple[Zipfile.ZipFile, dict[str, Zipfile.ZipInfo]]:
     try:
@@ -160,33 +188,11 @@ def Validated(DataValue: bytes) -> tuple[Zipfile.ZipFile, dict[str, Zipfile.ZipI
     Total = 0
     try:
         for InfoValue in Infos:
-            NameValue = ValidatedEntry(
-                InfoValue.filename.rstrip("/")
-                if InfoValue.is_dir()
-                else InfoValue.filename
-            )
-            if NameValue in Members:
-                raise ValueError("FCStd archive contains duplicate entries")
+            NameValue, FileSize = ValidateInfo(InfoValue, Members)
             Members[NameValue] = InfoValue
-            if InfoValue.flag_bits & 1:
-                raise ValueError("FCStd archive contains an encrypted entry")
-            ModeValue = InfoValue.external_attr >> 16 & 61440
-            if ModeValue == 40960:
-                raise ValueError("FCStd archive contains a symbolic link")
-            if InfoValue.is_dir():
-                continue
-            if InfoValue.file_size < 0 or InfoValue.file_size > KMaxEntrySize:
-                raise ValueError("FCStd archive entry exceeds safe limits")
-            Total += InfoValue.file_size
+            Total += FileSize
             if Total > KMaxTotalSize:
                 raise ValueError("FCStd archive exceeds safe limits")
-            if InfoValue.file_size and InfoValue.compress_size <= 0:
-                raise ValueError("FCStd archive has an invalid compressed entry")
-            if (
-                InfoValue.compress_size
-                and InfoValue.file_size / InfoValue.compress_size > KMaxCompressionRatio
-            ):
-                raise ValueError("FCStd archive compression ratio is unsafe")
         DocValue = Members.get(KDocEntry)
         if DocValue is not None and DocValue.file_size > KMaxDocSize:
             raise ValueError("FCStd archive has no safe Document.xml")
