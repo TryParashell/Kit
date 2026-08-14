@@ -11,15 +11,19 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
-from typing import Any
+from typing import Any as AnyValue
 
 from convert.adapters.solidworks.programs.assembly.distinct.quintuples.Program import EncodeField, StreamPrograms
-from convert.adapters.solidworks.programs.assembly.default.Repeat import RepeatItem, _IsIdentityBasis, _OccurHash
+from convert.adapters.solidworks.programs.assembly.default.Repeat import (
+    IsIdentityBasis,
+    OccurHash,
+    RepeatItem,
+)
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
 
 # recovered boundaries separate stable fields from unique component records
-InsertSpecs = MappingProxyType(
+KInsertSpecs = MappingProxyType(
     {
         "Contents/CMgr": (1720, 378),
         "Contents/Config-0": (668, 502),
@@ -29,10 +33,10 @@ InsertSpecs = MappingProxyType(
 )
 
 # five traced component files provide four canonical record templates
-TracedCount = 5
+KTracedCount = 5
 
 # config suffix targets advance five map entries per unique component file
-ConfigShift5 = frozenset(
+KConfigShiftFive = frozenset(
     {
         297,
         3337,
@@ -61,16 +65,16 @@ ConfigShift5 = frozenset(
 )
 
 # config class targets advance once for each new external component class
-ConfigShift1 = frozenset({19623, 19715, 20008, 20329, 20650})
+KConfigShiftOne = frozenset({19623, 19715, 20008, 20329, 20650})
 
-# resolved suffix links span both five-entry base and four-entry occurrence maps
-ResolvedShift9 = frozenset({1115, 1310, 1344, 2424, 2747, 2990, 3317})
+# resolved suffix links span both five entry base and four entry occurrence maps
+KResolvedShiftNine = frozenset({1115, 1310, 1344, 2424, 2747, 2990, 3317})
 
 # resolved suffix links into the configuration base advance five entries
-ResolvedShift5 = frozenset({1493, 4069, 4243, 4330})
+KResolvedShiftFive = frozenset({1493, 4069, 4243, 4330})
 
-# resolved component-class links advance once per unique external file
-ResolvedShift1 = frozenset(
+# resolved component class links advance once per unique external file
+KResolvedShiftOne = frozenset(
     {
         28,
         241,
@@ -89,24 +93,32 @@ ResolvedShift1 = frozenset(
     }
 )
 
-# header offsets divide occurrence stamps, external files, and the stable tail
-HeaderExtStart = 1960
-HeaderExtWidth = 286
-HeaderFileStart = 2246
-HeaderFileWidth = 215
-HeaderTailStart = 3106
+# header external start separates occurrence stamps from component records
+KHeaderExtStart = 1960
+
+# header external width preserves each recovered component reference record
+KHeaderExtWidth = 286
+
+# header file start anchors the first recovered external document record
+KHeaderFileStart = 2246
+
+# header file width preserves each recovered external document record
+KHeaderFileWidth = 215
+
+# header tail start separates component files from stable trailing fields
+KHeaderTailStart = 3106
 
 
 # operation emission preserves typed ownership while applying semantic values
-def _EmitOps(
-    Operations: Sequence[tuple[int, int, int, str, Any]],
-    Overrides: Mapping[int, Any],
+def EncodeOps(
+    Operations: Sequence[tuple[int, int, int, str, AnyValue]],
+    Overrides: Mapping[int, AnyValue],
     BasePos: int = 0,
     BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
     OutputData = bytearray()
     BasisMap = BasisValues or {}
-    for StartPos, _FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
+    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
         FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
         OutputData.extend(EncodeField(KindName, FieldValue))
         BasisValue = BasisMap.get(StartPos - BasePos)
@@ -118,11 +130,11 @@ def _EmitOps(
 
 
 # logical slicing remains stable when semantic strings change byte width
-def _SliceOps(
+def SliceOps(
     StreamName: str,
     StartPos: int,
     EndPos: int | None = None,
-) -> tuple[tuple[int, int, int, str, Any], ...]:
+) -> tuple[tuple[int, int, int, str, AnyValue], ...]:
     return tuple(
         Operation
         for Operation in StreamPrograms[StreamName]
@@ -130,13 +142,13 @@ def _SliceOps(
     )
 
 
-# windows path keys identify repeated component documents case-insensitively
-def _PathKey(PathValue: str) -> str:
+# windows path keys identify repeated component documents case insensitively
+def PathKey(PathValue: str) -> str:
     return str(PureWindowsPath(PathValue)).casefold()
 
 
-# first occurrences define the external-file record order independently
-def _UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
+# first occurrences define the external file record order independently
+def UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
     SeenPaths: set[str] = set()
     UniqueItems: list[RepeatItem] = []
     for ItemValue in CoreItems:
@@ -148,8 +160,8 @@ def _UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
     return tuple(UniqueItems)
 
 
-# distinct configuration-manager records enumerate every component occurrence
-def _EncodeCMgr(
+# distinct configuration manager records enumerate every component occurrence
+def EncodeCmgr(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
@@ -198,8 +210,8 @@ def _EncodeCMgr(
     return PrefixData + bytes(UnitData) + SuffixData
 
 
-# distinct configuration records bind paths, identities, and placements
-def _EncodeConfig(
+# distinct configuration records bind paths identities and placements
+def EncodeConfig(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
@@ -294,7 +306,7 @@ def _EncodeConfig(
 
 
 # resolved records reconnect every inserted occurrence to shifted feature maps
-def _EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
+def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
     ItemCount = len(CoreItems)
     BaseShift = ItemCount - TracedCount
     InsertPos, UnitWidth = InsertSpecs["Contents/Config-0-ResolvedFeatures"]
@@ -350,8 +362,8 @@ def _EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
     return PrefixData + bytes(UnitData) + SuffixData
 
 
-# model-header records enumerate occurrences and their independent part files
-def _EncodeHeader(
+# model header records enumerate occurrences and their independent part files
+def EncodeHeader(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
@@ -446,7 +458,7 @@ def _EncodeHeader(
     return PrefixData + bytes(OccurData) + ExtPrefix + bytes(FileData) + TailData
 
 
-# canonical distinct-path programs scale independent component files without donors
+# canonical distinct path programs scale independent component files without donors
 def EncodePathCore(
     ModelName: str,
     ConfigName: str,
