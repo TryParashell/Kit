@@ -218,16 +218,33 @@ def VerifyAsmObjectStructure(RootValue: ET.Element) -> None:
     )
     Placement = PropAction(LinkData[0], "Placement").find("PropertyPlacement")
     assert Placement is not None
-    assert tuple(float(Placement.get(NameValue, "0")) for NameValue in ("Px", "Py", "Pz")) == Pytest.approx((100.0, 20.0, 30.0))
+    assert tuple(
+        float(Placement.get(NameValue, "0")) for NameValue in ("Px", "Py", "Pz")
+    ) == Pytest.approx((100.0, 20.0, 30.0))
 
 
 # this definition exists because mate assertions share one precise XML lookup contract
-def AsmMateContext(RootValue: ET.Element) -> tuple[ET.Element, ET.Element, ET.Element, dict[str, ET.Element]]:
+def AsmMateContext(
+    RootValue: ET.Element,
+) -> tuple[ET.Element, ET.Element, ET.Element, dict[str, ET.Element]]:
     Objects = RootValue.findall("./Objects/Object")
-    LinkValue = next(ItemValue for ItemValue in Objects if ItemValue.get("type") == "App::Link")
-    DataValue = {ItemValue.get("name", ""): ItemValue for ItemValue in RootValue.findall("./ObjectData/Object")}
-    MateValue = next(ItemValue for ItemValue in DataValue.values() if ItemValue.find("./Properties/Property[@name='MateId']") is not None)
-    AsmRoot = next(ItemValue for ItemValue in DataValue.values() if ItemValue.find("./Properties/Property[@name='RootDefinitionId']") is not None)
+    LinkValue = next(
+        ItemValue for ItemValue in Objects if ItemValue.get("type") == "App::Link"
+    )
+    DataValue = {
+        ItemValue.get("name", ""): ItemValue
+        for ItemValue in RootValue.findall("./ObjectData/Object")
+    }
+    MateValue = next(
+        ItemValue
+        for ItemValue in DataValue.values()
+        if ItemValue.find("./Properties/Property[@name='MateId']") is not None
+    )
+    AsmRoot = next(
+        ItemValue
+        for ItemValue in DataValue.values()
+        if ItemValue.find("./Properties/Property[@name='RootDefinitionId']") is not None
+    )
     return MateValue, AsmRoot, LinkValue, DataValue
 
 
@@ -239,14 +256,24 @@ def VerifyAsmMateIdentity(RootValue: ET.Element) -> None:
     assert JointType is not None and JointType.get("value") == "0"
     Proxy = PropAction(MateValue, "Proxy").find("Python")
     assert Proxy is not None
-    assert Proxy.attrib == {"value": "bnVsbA==", "encoded": "yes", "module": "JointObject", "class": "Joint"}
-    assert [ItemValue.get("value") for ItemValue in EntityIds] == ["mate-entity:assembly", "mate-entity:part"]
+    assert Proxy.attrib == {
+        "value": "bnVsbA==",
+        "encoded": "yes",
+        "module": "JointObject",
+        "class": "Joint",
+    }
+    assert [ItemValue.get("value") for ItemValue in EntityIds] == [
+        "mate-entity:assembly",
+        "mate-entity:part",
+    ]
 
 
 # this definition exists because mate references must remain attached to encoded occurrences
 def VerifyAsmMateReferences(RootValue: ET.Element) -> None:
     MateValue, AsmRoot, LinkValue, DataValue = AsmMateContext(RootValue)
-    ComponentLinks = PropAction(MateValue, "ComponentLinks").findall("./StringList/String")
+    ComponentLinks = PropAction(MateValue, "ComponentLinks").findall(
+        "./StringList/String"
+    )
     RootOrigin = PropAction(AsmRoot, "Origin").find("Link").get("value")
     assert len(ComponentLinks) == 2
     assert ComponentLinks[0].get("value") == RootOrigin
@@ -261,8 +288,15 @@ def VerifyAsmMateReferences(RootValue: ET.Element) -> None:
     assert PropAction(MateValue, "Detach1").find("Bool").get("value") == "false"
     assert PropAction(MateValue, "Detach2").find("Bool").get("value") == "false"
     assert PropAction(AsmRoot, "OccurrenceCount").find("Integer").get("value") == "1"
-    RootChildren = {ItemValue.get("value") for ItemValue in PropAction(AsmRoot, "Group").findall("./LinkList/Link")}
-    MetaGroups = {NameValue for NameValue in DataValue if NameValue.endswith(("_Definitions", "_Components", "_MateEntities"))}
+    RootChildren = {
+        ItemValue.get("value")
+        for ItemValue in PropAction(AsmRoot, "Group").findall("./LinkList/Link")
+    }
+    MetaGroups = {
+        NameValue
+        for NameValue in DataValue
+        if NameValue.endswith(("_Definitions", "_Components", "_MateEntities"))
+    }
     assert MetaGroups.isdisjoint(RootChildren)
 
 
@@ -553,36 +587,93 @@ def TestFcstdNesteA(TmpPath) -> None:
 
 
 # this definition exists because nested component history has an independent XML contract
-def VerifyNestedComponent(ComponentRoot: ET.Element) -> tuple[dict[str, str | None], list[str]]:
+def VerifyNestedComponent(
+    ComponentRoot: ET.Element,
+) -> tuple[dict[str, str | None], list[str]]:
     ComponentObjects = ComponentRoot.findall("./Objects/Object")
-    ComponentTypes = {ItemValue.get("name", ""): ItemValue.get("type", "") for ItemValue in ComponentObjects}
-    ComponentData = {ItemValue.get("name", ""): ItemValue for ItemValue in ComponentRoot.findall("./ObjectData/Object")}
-    assert sum(ItemValue.get("type") == "Assembly::AssemblyObject" for ItemValue in ComponentObjects) == 1
-    assert any(ItemValue.get("type") == "Part::Extrusion" for ItemValue in ComponentObjects)
-    ComponentTarget = ComponentRoot.find("./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String").get("value")
+    ComponentTypes = {
+        ItemValue.get("name", ""): ItemValue.get("type", "")
+        for ItemValue in ComponentObjects
+    }
+    ComponentData = {
+        ItemValue.get("name", ""): ItemValue
+        for ItemValue in ComponentRoot.findall("./ObjectData/Object")
+    }
+    assert (
+        sum(
+            ItemValue.get("type") == "Assembly::AssemblyObject"
+            for ItemValue in ComponentObjects
+        )
+        == 1
+    )
+    assert any(
+        ItemValue.get("type") == "Part::Extrusion" for ItemValue in ComponentObjects
+    )
+    ComponentTarget = ComponentRoot.find(
+        "./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String"
+    ).get("value")
     SourceAsm = ComponentData[ComponentTarget]
-    SourceChildren = [ItemValue.get("value") for ItemValue in PropAction(SourceAsm, "Group").findall("./LinkList/Link") if ComponentData[ItemValue.get("value")].find("./Properties/Property[@name='InstanceId']") is not None]
+    SourceChildren = [
+        ItemValue.get("value")
+        for ItemValue in PropAction(SourceAsm, "Group").findall("./LinkList/Link")
+        if ComponentData[ItemValue.get("value")].find(
+            "./Properties/Property[@name='InstanceId']"
+        )
+        is not None
+    ]
     assert len(SourceChildren) == 1
     assert ComponentTypes[SourceChildren[0]] == "App::Link"
     SourceSketches = PropAction(SourceAsm, "Sketches").find("Link").get("value")
     SourceTimeline = PropAction(SourceAsm, "FeatureTimeline").find("Link").get("value")
-    SourceDependencies = next(ItemValue for ItemValue in ComponentRoot.findall("./Objects/ObjectDeps") if ItemValue.get("Name") == ComponentTarget)
-    assert {SourceSketches, SourceTimeline}.issubset({ItemValue.get("Name") for ItemValue in SourceDependencies.findall("Dep")})
+    SourceDependencies = next(
+        ItemValue
+        for ItemValue in ComponentRoot.findall("./Objects/ObjectDeps")
+        if ItemValue.get("Name") == ComponentTarget
+    )
+    assert {SourceSketches, SourceTimeline}.issubset(
+        {ItemValue.get("Name") for ItemValue in SourceDependencies.findall("Dep")}
+    )
     return ComponentTypes, SourceChildren
 
 
 # this definition exists because nested assembly assertions share one decoded object graph
-def NestedRootContext(RootValue: ET.Element, ComponentTypes: dict[str, str | None], SourceChildren: list[str]) -> tuple[list[ET.Element], dict[str, ET.Element], str, ET.Element, str | None, list[str | None], ET.Element]:
+def NestedRootContext(
+    RootValue: ET.Element,
+    ComponentTypes: dict[str, str | None],
+    SourceChildren: list[str],
+) -> tuple[
+    list[ET.Element],
+    dict[str, ET.Element],
+    str,
+    ET.Element,
+    str | None,
+    list[str | None],
+    ET.Element,
+]:
     Objects = RootValue.findall("./Objects/Object")
-    Types = {ItemValue.get("name", ""): ItemValue.get("type", "") for ItemValue in Objects}
-    DataValue = {ItemValue.get("name", ""): ItemValue for ItemValue in RootValue.findall("./ObjectData/Object")}
-    AsmLinkName = next(NameValue for NameValue, TypeId in Types.items() if TypeId == "Assembly::AssemblyLink")
+    Types = {
+        ItemValue.get("name", ""): ItemValue.get("type", "") for ItemValue in Objects
+    }
+    DataValue = {
+        ItemValue.get("name", ""): ItemValue
+        for ItemValue in RootValue.findall("./ObjectData/Object")
+    }
+    AsmLinkName = next(
+        NameValue
+        for NameValue, TypeId in Types.items()
+        if TypeId == "Assembly::AssemblyLink"
+    )
     AsmLink = DataValue[AsmLinkName]
     Extensions = AsmLink.find("Extensions")
     assert Extensions is not None
-    assert [ItemValue.get("type") for ItemValue in Extensions.findall("Extension")] == ["App::OriginGroupExtension"]
+    assert [ItemValue.get("type") for ItemValue in Extensions.findall("Extension")] == [
+        "App::OriginGroupExtension"
+    ]
     Origin = PropAction(AsmLink, "Origin").find("Link").get("value")
-    Children = [ItemValue.get("value") for ItemValue in PropAction(AsmLink, "Group").findall("./LinkList/Link")]
+    Children = [
+        ItemValue.get("value")
+        for ItemValue in PropAction(AsmLink, "Group").findall("./LinkList/Link")
+    ]
     assert Types[Origin] == "App::Origin"
     assert len(Children) == 1
     Proxy = DataValue[Children[0]]
@@ -591,40 +682,91 @@ def NestedRootContext(RootValue: ET.Element, ComponentTypes: dict[str, str | Non
 
 
 # this definition exists because nested proxies must retain their external target and dependency graph
-def VerifyNestedProxyIdentity(RootValue: ET.Element, Objects: list[ET.Element], AsmLinkName: str, AsmLink: ET.Element, Origin: str | None, Children: list[str | None], Proxy: ET.Element, SourceChildren: list[str]) -> None:
+def VerifyNestedProxyIdentity(
+    RootValue: ET.Element,
+    Objects: list[ET.Element],
+    AsmLinkName: str,
+    AsmLink: ET.Element,
+    Origin: str | None,
+    Children: list[str | None],
+    Proxy: ET.Element,
+    SourceChildren: list[str],
+) -> None:
     ParentXlink = PropAction(AsmLink, "LinkedObject").find("XLink")
     ProxyXlink = PropAction(Proxy, "LinkedObject").find("XLink")
     assert ProxyXlink.get("file") == ParentXlink.get("file")
     assert ProxyXlink.get("stamp") == ParentXlink.get("stamp")
     assert ProxyXlink.get("name") == SourceChildren[0]
     InstancePath = PropAction(Proxy, "InstancePath").findall("./StringList/String")
-    assert [ItemValue.get("value") for ItemValue in InstancePath] == ["instance:subassembly", "instance:part"]
-    AsmLinkNode = next(ItemValue for ItemValue in Objects if ItemValue.get("name") == AsmLinkName)
+    assert [ItemValue.get("value") for ItemValue in InstancePath] == [
+        "instance:subassembly",
+        "instance:part",
+    ]
+    AsmLinkNode = next(
+        ItemValue for ItemValue in Objects if ItemValue.get("name") == AsmLinkName
+    )
     assert AsmLinkNode.get("Touched") == "1"
-    Dependency = next(ItemValue for ItemValue in RootValue.findall("./Objects/ObjectDeps") if ItemValue.get("Name") == AsmLinkName)
-    assert {ItemValue.get("Name") for ItemValue in Dependency.findall("Dep")} == {Origin, Children[0]}
+    Dependency = next(
+        ItemValue
+        for ItemValue in RootValue.findall("./Objects/ObjectDeps")
+        if ItemValue.get("Name") == AsmLinkName
+    )
+    assert {ItemValue.get("Name") for ItemValue in Dependency.findall("Dep")} == {
+        Origin,
+        Children[0],
+    }
 
 
 # this definition exists because nested placements and mate references must preserve their frames
-def VerifyNestedPlacementAndMate(AsmLink: ET.Element, Proxy: ET.Element, DataValue: dict[str, ET.Element], AsmLinkName: str, Children: list[str | None]) -> None:
+def VerifyNestedPlacementAndMate(
+    AsmLink: ET.Element,
+    Proxy: ET.Element,
+    DataValue: dict[str, ET.Element],
+    AsmLinkName: str,
+    Children: list[str | None],
+) -> None:
     AsmPlacement = PropAction(AsmLink, "Placement").find("PropertyPlacement")
     assert AsmPlacement is not None
-    assert tuple(float(AsmPlacement.get(NameValue, "0")) for NameValue in ("Px", "Py", "Pz")) == Pytest.approx((100.0, 20.0, 30.0))
+    assert tuple(
+        float(AsmPlacement.get(NameValue, "0")) for NameValue in ("Px", "Py", "Pz")
+    ) == Pytest.approx((100.0, 20.0, 30.0))
     assert PropAction(AsmLink, "Visibility").find("Bool").get("value") == "true"
     ProxyPlacement = PropAction(Proxy, "Placement").find("PropertyPlacement")
-    assert tuple(float(ProxyPlacement.get(NameValue, "0")) for NameValue in ("Px", "Py", "Pz")) == Pytest.approx((0.0, 0.0, 0.0))
-    MateValue = next(ItemValue for ItemValue in DataValue.values() if ItemValue.find("./Properties/Property[@name='MateId']") is not None)
+    assert tuple(
+        float(ProxyPlacement.get(NameValue, "0")) for NameValue in ("Px", "Py", "Pz")
+    ) == Pytest.approx((0.0, 0.0, 0.0))
+    MateValue = next(
+        ItemValue
+        for ItemValue in DataValue.values()
+        if ItemValue.find("./Properties/Property[@name='MateId']") is not None
+    )
     RefValue = PropAction(MateValue, "Reference2").find("XLink")
     assert RefValue.get("name") == AsmLinkName
-    assert [ItemValue.get("value") for ItemValue in RefValue.findall("Sub")] == [f"{Children[0]}.", f"{Children[0]}."]
+    assert [ItemValue.get("value") for ItemValue in RefValue.findall("Sub")] == [
+        f"{Children[0]}.",
+        f"{Children[0]}.",
+    ]
 
 
 # this definition exists because generated metadata groups must stay outside the assembly root
-def VerifyNestedRootMembership(DataValue: dict[str, ET.Element], AsmLinkName: str) -> None:
-    AsmRoot = next(ItemValue for ItemValue in DataValue.values() if ItemValue.find("./Properties/Property[@name='RootDefinitionId']") is not None)
-    RootChildren = {ItemValue.get("value") for ItemValue in PropAction(AsmRoot, "Group").findall("./LinkList/Link")}
+def VerifyNestedRootMembership(
+    DataValue: dict[str, ET.Element], AsmLinkName: str
+) -> None:
+    AsmRoot = next(
+        ItemValue
+        for ItemValue in DataValue.values()
+        if ItemValue.find("./Properties/Property[@name='RootDefinitionId']") is not None
+    )
+    RootChildren = {
+        ItemValue.get("value")
+        for ItemValue in PropAction(AsmRoot, "Group").findall("./LinkList/Link")
+    }
     assert AsmLinkName in RootChildren
-    MetaGroups = {NameValue for NameValue in DataValue if NameValue.endswith(("_Definitions", "_Components", "_MateEntities"))}
+    MetaGroups = {
+        NameValue
+        for NameValue in DataValue
+        if NameValue.endswith(("_Definitions", "_Components", "_MateEntities"))
+    }
     assert MetaGroups.isdisjoint(RootChildren)
 
 
@@ -638,8 +780,19 @@ def TestFcstdNested(TmpPath) -> None:
     ComponentTypes, SourceChildren = VerifyNestedComponent(ComponentRoot)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
-    Objects, DataValue, AsmLinkName, AsmLink, Origin, Children, Proxy = NestedRootContext(RootValue, ComponentTypes, SourceChildren)
-    VerifyNestedProxyIdentity(RootValue, Objects, AsmLinkName, AsmLink, Origin, Children, Proxy, SourceChildren)
+    Objects, DataValue, AsmLinkName, AsmLink, Origin, Children, Proxy = (
+        NestedRootContext(RootValue, ComponentTypes, SourceChildren)
+    )
+    VerifyNestedProxyIdentity(
+        RootValue,
+        Objects,
+        AsmLinkName,
+        AsmLink,
+        Origin,
+        Children,
+        Proxy,
+        SourceChildren,
+    )
     VerifyNestedPlacementAndMate(AsmLink, Proxy, DataValue, AsmLinkName, Children)
     VerifyNestedRootMembership(DataValue, AsmLinkName)
 
