@@ -116,6 +116,25 @@ class SeamBand:
     __annotations__["second_pcurve_index"] = "int"
 
 
+# native write state stays immutable because every emission phase must share one proven index map
+@Dataclass(frozen=True, slots=True)
+class BrepWriteState:
+    Graph: ModelGraph
+    BaseCurveCount: int
+    CurveRecords: tuple[tuple[str, float], ...]
+    SurfaceRecords: tuple[str, ...]
+    PcurveRecords: tuple[str, ...]
+    EdgePcurves: Mapping[str, EdgePcurve]
+    SeamBands: Mapping[str, SeamBand]
+    LoopReversals: Mapping[str, bool]
+    FaceUseReversals: Mapping[str, bool]
+    ShellUseReversals: Mapping[str, bool]
+    CurveIndexes: Mapping[str, int]
+    CurveScales: Mapping[str, float]
+    SurfaceIndexes: Mapping[str, int]
+    HeaderLines: tuple[str, ...]
+
+
 # this definition exists because focused behavior needs one stable owner
 def Number(Value: float) -> str:
     if Value == 0.0:
@@ -1955,7 +1974,115 @@ def FaceEdge(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
+# shell face collection stays isolated because repeated faces invalidate native shell topology
+def GetFaceUses(Shell: BrepShell, Graph: _ModelGraph) -> tuple[BrepFaceUse, ...]:
+    FaceUses = tuple(Graph.face_uses[ValueId] for ValueId in Shell.face_use_ids)
+    FaceIds = tuple(Value.face_id for Value in FaceUses)
+    if len(FaceIds) != len(set(FaceIds)):
+        Unsupported(f"shell {Shell.id} reuses a face")
+    return FaceUses
+
+
+# shell edge indexing stays isolated because manifold and closure rules depend on edge incidence
+def GetShellEdges(
+    Shell: BrepShell,
+    FaceUses: tuple[BrepFaceUse, ...],
+    FaceEdges: Mapping[str, tuple[tuple[str, bool], ...]],
+) -> dict[str, list[tuple[str, bool]]]:
+    ByEdge: dict[str, list[tuple[str, bool]]] = {}
+    for FaceUse in FaceUses:
+        for EdgeId, IsReversed in FaceEdges[FaceUse.face_id]:
+            ByEdge.setdefault(EdgeId, []).append((FaceUse.id, IsReversed))
+    if any(len(Values) > 2 for Values in ByEdge.values()):
+        Unsupported(f"shell {Shell.id} is non-manifold")
+    if Shell.closed and any(len(Values) != 2 for Values in ByEdge.values()):
+        Unsupported(f"closed shell {Shell.id} has a free edge")
+    return ByEdge
+
+
+# face adjacency stays isolated because each shared edge contributes one orientation constraint
+def GetAdjacency(
+    ShellId: str,
+    FaceUses: tuple[BrepFaceUse, ...],
+    ByEdge: Mapping[str, list[tuple[str, bool]]],
+) -> dict[str, list[tuple[str, bool]]]:
+    Adjacency: dict[str, list[tuple[str, bool]]] = {Value.id: [] for Value in FaceUses}
+    for EdgeUses in ByEdge.values():
+        if len(EdgeUses) != 2:
+            continue
+        (LeftId, LeftValue), (RightId, RightValue) = EdgeUses
+        IsRequired = not (LeftValue != RightValue)
+        if LeftId == RightId:
+            if IsRequired:
+                Unsupported(f"shell {ShellId} is not orientable")
+            continue
+        Adjacency[LeftId].append((RightId, IsRequired))
+        Adjacency[RightId].append((LeftId, IsRequired))
+    return Adjacency
+
+
+# component traversal mutates assignments because each connected face receives one consistent parity
+def AddFaceCompMut(
+    StartId: str,
+    ShellId: str,
+    Adjacency: Mapping[str, list[tuple[str, bool]]],
+    Assigned: dict[str, bool],
+) -> tuple[str, ...]:
+    Assigned[StartId] = False
+    Component = [StartId]
+    Pending = Deque((StartId,))
+    while Pending:
+        CurrentId = Pending.popleft()
+        for NeighborId, Parity in Adjacency[CurrentId]:
+            Expected = Assigned[CurrentId] != Parity
+            if NeighborId in Assigned:
+                if Assigned[NeighborId] != Expected:
+                    Unsupported(f"shell {ShellId} is not orientable")
+                continue
+            Assigned[NeighborId] = Expected
+            Component.append(NeighborId)
+            Pending.append(NeighborId)
+    return tuple(Component)
+
+
+# preferred orientation mutates one component because geometric face sense chooses global parity
+def SetFaceSenseMut(
+    Graph: _ModelGraph,
+    FaceUses: tuple[BrepFaceUse, ...],
+    Component: tuple[str, ...],
+    Assigned: dict[str, bool],
+) -> None:
+    Preferred = {
+        Value.id: not Graph.faces[Value.face_id].same_sense != Value.reversed
+        for Value in FaceUses
+        if Value.id in Component
+    }
+    DirectScore = sum(Assigned[Value] != Preferred[Value] for Value in Component)
+    ReverseScore = sum((not Assigned[Value]) != Preferred[Value] for Value in Component)
+    if ReverseScore < DirectScore:
+        for ValueId in Component:
+            Assigned[ValueId] = not Assigned[ValueId]
+
+
+# shell orientation composes incidence traversal and geometric sense because each proves one constraint
+def OrientShell(
+    Shell: BrepShell,
+    Graph: _ModelGraph,
+    FaceEdges: Mapping[str, tuple[tuple[str, bool], ...]],
+) -> dict[str, bool]:
+    FaceUses = GetFaceUses(Shell, Graph)
+    ByEdge = GetShellEdges(Shell, FaceUses, FaceEdges)
+    Adjacency = GetAdjacency(Shell.id, FaceUses, ByEdge)
+    Assigned: dict[str, bool] = {}
+    for StartId in Adjacency:
+        if StartId in Assigned:
+            continue
+        Component = AddFaceCompMut(StartId, Shell.id, Adjacency, Assigned)
+        SetFaceSenseMut(Graph, FaceUses, Component, Assigned)
+    return Assigned
+
+
+# shell face assembly stays small because each shell owns an independent orientation graph
 def ShellFace(
     Model: BrepModel,
     Graph: _ModelGraph,
@@ -1963,66 +2090,7 @@ def ShellFace(
 ) -> dict[str, bool]:
     Result: dict[str, bool] = {}
     for Shell in Model.shells:
-        FaceUses = tuple((Graph.face_uses[Value] for Value in Shell.face_use_ids))
-        FaceIds = tuple((Value.face_id for Value in FaceUses))
-        if len(FaceIds) != len(set(FaceIds)):
-            Unsupported(f"shell {Shell.id} reuses a face")
-        ByEdge: dict[str, list[tuple[str, bool]]] = {}
-        for FaceUse in FaceUses:
-            for EdgeId, ReversedValue in FaceEdges[FaceUse.face_id]:
-                ByEdge.setdefault(EdgeId, []).append((FaceUse.id, ReversedValue))
-        if any((len(Values) > 2 for Values in ByEdge.values())):
-            Unsupported(f"shell {Shell.id} is non-manifold")
-        if Shell.closed and any((len(Values) != 2 for Values in ByEdge.values())):
-            Unsupported(f"closed shell {Shell.id} has a free edge")
-        Adjacency: dict[str, list[tuple[str, bool]]] = {
-            Value.id: [] for Value in FaceUses
-        }
-        for Values in ByEdge.values():
-            if len(Values) != 2:
-                continue
-            (LeftId, LeftValue), (RightId, RightValue) = Values
-            Parity = LeftValue != RightValue
-            Required = not Parity
-            if LeftId == RightId:
-                if Required:
-                    Unsupported(f"shell {Shell.id} is not orientable")
-                continue
-            Adjacency[LeftId].append((RightId, Required))
-            Adjacency[RightId].append((LeftId, Required))
-        Assigned: dict[str, bool] = {}
-        for Start in Adjacency:
-            if Start in Assigned:
-                continue
-            Assigned[Start] = False
-            Component = [Start]
-            Pending = Deque((Start,))
-            while Pending:
-                Current = Pending.popleft()
-                for Neighbor, Parity in Adjacency[Current]:
-                    Expected = Assigned[Current] != Parity
-                    if Neighbor in Assigned:
-                        if Assigned[Neighbor] != Expected:
-                            Unsupported(f"shell {Shell.id} is not orientable")
-                        continue
-                    Assigned[Neighbor] = Expected
-                    Component.append(Neighbor)
-                    Pending.append(Neighbor)
-            Preferred = {
-                Value.id: not Graph.faces[Value.face_id].same_sense != Value.reversed
-                for Value in FaceUses
-                if Value.id in Component
-            }
-            DirectScore = sum(
-                (Assigned[Value] != Preferred[Value] for Value in Component)
-            )
-            ReverseScore = sum(
-                ((not Assigned[Value]) != Preferred[Value] for Value in Component)
-            )
-            if ReverseScore < DirectScore:
-                for Value in Component:
-                    Assigned[Value] = not Assigned[Value]
-        Result.update(Assigned)
+        Result.update(OrientShell(Shell, Graph, FaceEdges))
     return Result
 
 
@@ -2068,24 +2136,10 @@ def CheckEdgeGeom(
             )
 
 
-# this definition exists because focused behavior needs one stable owner
-def EdgeGeom(
-    EdgeValue: BrepEdge,
-    Graph: _ModelGraph,
-    CurveIndexes: Mapping[str, int],
-    CurveScales: Mapping[str, float],
-    EdgePcurves: Mapping[str, _EdgePcurve],
-    SurfaceIndexes: Mapping[str, int],
-    Tolerance: float,
-) -> tuple[str, ...]:
-    if EdgeValue.degenerate:
-        Unsupported(f"degenerate edge {EdgeValue.id} is unsupported")
-    if EdgeValue.end_parameter == EdgeValue.start_parameter:
-        Unsupported(f"edge {EdgeValue.id} requires a nonzero parameter range")
-    CurveScale = CurveScales[EdgeValue.curve_id]
-    First, LastValue = sorted(
-        (EdgeValue.start_parameter * CurveScale, EdgeValue.end_parameter * CurveScale)
-    )
+# coedge grouping stays isolated because wire and surface uses follow different native contracts
+def GroupCoedges(
+    EdgeValue: BrepEdge, Graph: _ModelGraph
+) -> dict[str, list[BrepCoedge]]:
     Grouped: dict[str, list[BrepCoedge]] = {}
     for CoedgeId in Graph.edge_uses[EdgeValue.id]:
         Coedge = Graph.coedges[CoedgeId]
@@ -2094,8 +2148,17 @@ def EdgeGeom(
             if Coedge.pcurve_id:
                 Unsupported(f"wire coedge {Coedge.id} cannot carry a surface pcurve")
             continue
-        Surface = Graph.surfaces[FaceValue.surface_id]
         Grouped.setdefault(FaceValue.surface_id, []).append(Coedge)
+    return Grouped
+
+
+# pcurve representation encoding stays isolated because open and closed surfaces use distinct records
+def GetPcurveReps(
+    EdgeId: str,
+    Grouped: Mapping[str, list[BrepCoedge]],
+    EdgePcurves: Mapping[str, _EdgePcurve],
+    SurfaceIndexes: Mapping[str, int],
+) -> tuple[str, ...]:
     Representations: list[str] = []
     for SurfaceId, UsesValue in Grouped.items():
         SurfaceIndex = SurfaceIndexes[SurfaceId]
@@ -2113,15 +2176,38 @@ def EdgeGeom(
                 or abs(FirstPcurve.last - SecondPcurve.last) > 1e-09
             ):
                 Unsupported(
-                    f"edge {EdgeValue.id} has inconsistent closed-surface pcurve ranges"
+                    f"edge {EdgeId} has inconsistent closed-surface pcurve ranges"
                 )
             Representations.append(
                 f"3  {FirstPcurve.index} {SecondPcurve.index} C0 {SurfaceIndex} 0 {Number(FirstPcurve.first)} {Number(FirstPcurve.last)}"
             )
             continue
         Unsupported(
-            f"edge {EdgeValue.id} has an unsupported closed-surface pcurve arrangement"
+            f"edge {EdgeId} has an unsupported closed-surface pcurve arrangement"
         )
+    return tuple(Representations)
+
+
+# edge geometry composition stays small because grouping and pcurve encoding own their validation
+def EdgeGeom(
+    EdgeValue: BrepEdge,
+    Graph: _ModelGraph,
+    CurveIndexes: Mapping[str, int],
+    CurveScales: Mapping[str, float],
+    EdgePcurves: Mapping[str, _EdgePcurve],
+    SurfaceIndexes: Mapping[str, int],
+    Tolerance: float,
+) -> tuple[str, ...]:
+    if EdgeValue.degenerate:
+        Unsupported(f"degenerate edge {EdgeValue.id} is unsupported")
+    if EdgeValue.end_parameter == EdgeValue.start_parameter:
+        Unsupported(f"edge {EdgeValue.id} requires a nonzero parameter range")
+    CurveScale = CurveScales[EdgeValue.curve_id]
+    First, LastValue = sorted(
+        (EdgeValue.start_parameter * CurveScale, EdgeValue.end_parameter * CurveScale)
+    )
+    Grouped = GroupCoedges(EdgeValue, Graph)
+    Representations = GetPcurveReps(EdgeValue.id, Grouped, EdgePcurves, SurfaceIndexes)
     SameRange = all(
         (
             abs(Value - Expected) <= 1e-09
@@ -2176,29 +2262,30 @@ def ShapeLines(
     return Lines
 
 
-# this definition exists because focused behavior needs one stable owner
-def BrepModelBrep(Model: BrepModel, Tolerance: float = 1e-07) -> bytes:
+# model validation stays isolated because type geometry and transform failures precede all emission
+def ValidateBrep(Model: BrepModel, Tolerance: float) -> None:
     if not isinstance(Model, BrepModel):
         raise TypeError("model must be a BrepModel")
     if not MathValue.isfinite(Tolerance) or Tolerance <= 0.0:
         raise ValueError("tolerance must be finite and positive")
-    Errors = Model.validate(
-        frozenset(
-            (
-                BodyValue.design_body_id
-                for BodyValue in Model.bodies
-                if BodyValue.design_body_id
-            )
-        )
+    DesignIds = frozenset(
+        BodyValue.design_body_id
+        for BodyValue in Model.bodies
+        if BodyValue.design_body_id
     )
-    if Errors:
-        Unsupported(Errors[0])
-    if any((BodyValue.transform != Transform() for BodyValue in Model.bodies)):
+    ErrorList = Model.validate(DesignIds)
+    if ErrorList:
+        Unsupported(ErrorList[0])
+    if any(BodyValue.transform != Transform() for BodyValue in Model.bodies):
         Unsupported("native FreeCAD B-rep writing requires identity body transforms")
+
+
+# write state construction stays isolated because every shape phase consumes the same proven indexes
+def BuildBrepState(Model: BrepModel, Tolerance: float) -> BrepWriteState:
     Graph = ModelGraph(Model)
-    BaseCurveRecords = tuple((CurveRecord(Value) for Value in Model.curves))
+    BaseCurves = tuple(CurveRecord(Value) for Value in Model.curves)
     SurfaceRecords = tuple(
-        (SurfaceRecord(Value, Graph.surfaces) for Value in Model.surfaces)
+        SurfaceRecord(Value, Graph.surfaces) for Value in Model.surfaces
     )
     PcurveRecords, EdgePcurves, SeamBands = EdgePcurveA(Model, Graph, Tolerance)
     LoopReversals: dict[str, bool] = {}
@@ -2212,15 +2299,15 @@ def BrepModelBrep(Model: BrepModel, Tolerance: float = 1e-07) -> bytes:
     }
     FaceUseReversals = ShellFace(Model, Graph, FaceEdges)
     ShellUseReversals = ShellUse(Model, Graph)
-    CurveRecords = BaseCurveRecords + tuple(
-        ((BandValue.curve_record, 1.0) for BandValue in SeamBands.values())
+    CurveRecords = BaseCurves + tuple(
+        (BandValue.curve_record, 1.0) for BandValue in SeamBands.values()
     )
     CurveIndexes = {Value.id: Index for Index, Value in enumerate(Model.curves, 1)}
     CurveScales = {
         Value.id: CurveRecords[Index][1] for Index, Value in enumerate(Model.curves)
     }
     SurfaceIndexes = {Value.id: Index for Index, Value in enumerate(Model.surfaces, 1)}
-    Lines = [
+    HeaderLines = (
         "DBRep_DrawableShape",
         "",
         "CASCADE Topology V1, (c) Matra-Datavision",
@@ -2235,8 +2322,29 @@ def BrepModelBrep(Model: BrepModel, Tolerance: float = 1e-07) -> bytes:
         *SurfaceRecords,
         "Triangulations 0",
         "",
-    ]
-    Shapes: list[ShapeRecord] = []
+    )
+    return BrepWriteState(
+        Graph,
+        len(BaseCurves),
+        CurveRecords,
+        SurfaceRecords,
+        PcurveRecords,
+        EdgePcurves,
+        SeamBands,
+        LoopReversals,
+        FaceUseReversals,
+        ShellUseReversals,
+        CurveIndexes,
+        CurveScales,
+        SurfaceIndexes,
+        HeaderLines,
+    )
+
+
+# vertex emission mutates the ordered shape list because topology references depend on insertion order
+def AddVerticesMut(
+    Shapes: list[ShapeRecord], Model: BrepModel, Tolerance: float
+) -> None:
     for Vertex in Model.vertices:
         Shapes.append(
             ShapeRecord(
@@ -2251,174 +2359,256 @@ def BrepModelBrep(Model: BrepModel, Tolerance: float = 1e-07) -> bytes:
                 (),
             )
         )
+
+
+# edge emission mutates the ordered shape list because vertex references must precede parent edges
+def AddEdgesMut(
+    Shapes: list[ShapeRecord],
+    Model: BrepModel,
+    State: BrepWriteState,
+    Tolerance: float,
+) -> None:
+    Graph = State.Graph
     for EdgeValue in Model.edges:
-        CheckEdgeGeom(
-            EdgeValue,
-            next((Value for Value in Model.curves if Value.id == EdgeValue.curve_id)),
-            Graph.vertices,
-            Tolerance,
+        CurveValue = next(
+            Value for Value in Model.curves if Value.id == EdgeValue.curve_id
         )
-        RangeReversed = EdgeValue.end_parameter < EdgeValue.start_parameter
+        CheckEdgeGeom(EdgeValue, CurveValue, Graph.vertices, Tolerance)
+        IsRangeReversed = EdgeValue.end_parameter < EdgeValue.start_parameter
         FirstVertexId = (
-            EdgeValue.end_vertex_id if RangeReversed else EdgeValue.start_vertex_id
+            EdgeValue.end_vertex_id if IsRangeReversed else EdgeValue.start_vertex_id
         )
         LastVertexId = (
-            EdgeValue.start_vertex_id if RangeReversed else EdgeValue.end_vertex_id
+            EdgeValue.start_vertex_id if IsRangeReversed else EdgeValue.end_vertex_id
+        )
+        GeometryLines = EdgeGeom(
+            EdgeValue,
+            Graph,
+            State.CurveIndexes,
+            State.CurveScales,
+            State.EdgePcurves,
+            State.SurfaceIndexes,
+            Tolerance,
+        )
+        Children = (
+            (f"vertex:{FirstVertexId}", False),
+            (f"vertex:{LastVertexId}", True),
         )
         Shapes.append(
-            ShapeRecord(
-                f"edge:{EdgeValue.id}",
-                "Ed",
-                EdgeGeom(
-                    EdgeValue,
-                    Graph,
-                    CurveIndexes,
-                    CurveScales,
-                    EdgePcurves,
-                    SurfaceIndexes,
-                    Tolerance,
-                ),
-                "0101000",
-                ((f"vertex:{FirstVertexId}", False), (f"vertex:{LastVertexId}", True)),
-            )
+            ShapeRecord(f"edge:{EdgeValue.id}", "Ed", GeometryLines, "0101000", Children)
         )
-    for Offset, BandValue in enumerate(SeamBands.values(), len(BaseCurveRecords) + 1):
+
+
+# seam edge emission mutates the ordered shape list because generated curves follow base curves
+def AddSeamEdgesMut(
+    Shapes: list[ShapeRecord], State: BrepWriteState, Tolerance: float
+) -> None:
+    Graph = State.Graph
+    StartIndex = State.BaseCurveCount + 1
+    for CurveIndex, BandValue in enumerate(State.SeamBands.values(), StartIndex):
+        SurfaceId = Graph.faces[BandValue.face_id].surface_id
+        GeometryLines = (
+            f" {Number(Tolerance)} 1 1 0",
+            f"1  {CurveIndex} 0 0 {Number(BandValue.length)}",
+            f"3  {BandValue.first_pcurve_index} {BandValue.second_pcurve_index} CN {State.SurfaceIndexes[SurfaceId]} 0 0 {Number(BandValue.length)}",
+            "0",
+        )
+        Children = (
+            (f"vertex:{BandValue.low_vertex_id}", False),
+            (f"vertex:{BandValue.high_vertex_id}", True),
+        )
         Shapes.append(
             ShapeRecord(
                 f"edge:seam:{BandValue.face_id}",
                 "Ed",
-                (
-                    f" {Number(Tolerance)} 1 1 0",
-                    f"1  {Offset} 0 0 {Number(BandValue.length)}",
-                    f"3  {BandValue.first_pcurve_index} {BandValue.second_pcurve_index} CN {SurfaceIndexes[Graph.faces[BandValue.face_id].surface_id]} 0 0 {Number(BandValue.length)}",
-                    "0",
-                ),
+                GeometryLines,
                 "0101000",
-                (
-                    (f"vertex:{BandValue.low_vertex_id}", False),
-                    (f"vertex:{BandValue.high_vertex_id}", True),
-                ),
+                Children,
             )
         )
+
+
+# coedge children stay centralized because loops and wires share identical orientation semantics
+def GetEdgeChildren(
+    Graph: ModelGraph, CoedgeIds: Sequence[str]
+) -> tuple[tuple[str, bool], ...]:
+    Children: list[tuple[str, bool]] = []
+    for CoedgeId in CoedgeIds:
+        CoedgeValue = Graph.coedges[CoedgeId]
+        EdgeValue = Graph.edges[CoedgeValue.edge_id]
+        IsReversed = CoedgeValue.reversed != (
+            EdgeValue.end_parameter < EdgeValue.start_parameter
+        )
+        Children.append((f"edge:{EdgeValue.id}", IsReversed))
+    return tuple(Children)
+
+
+# loop emission mutates the ordered shape list because faces reference loop records by identity
+def AddLoopsMut(
+    Shapes: list[ShapeRecord], Model: BrepModel, State: BrepWriteState
+) -> None:
+    SeamLoopIds = {
+        LoopId for BandValue in State.SeamBands.values() for LoopId in BandValue.loop_ids
+    }
     for LoopValue in Model.loops:
-        if any(
-            (LoopValue.id in BandValue.loop_ids for BandValue in SeamBands.values())
-        ):
+        if LoopValue.id in SeamLoopIds:
             continue
+        Children = GetEdgeChildren(State.Graph, LoopValue.coedge_ids)
         Shapes.append(
-            ShapeRecord(
-                f"loop:{LoopValue.id}",
-                "Wi",
-                (),
-                "0101100",
-                tuple(
-                    (
-                        (
-                            f"edge:{Graph.coedges[CoedgeId].edge_id}",
-                            Graph.coedges[CoedgeId].reversed
-                            != (
-                                Graph.edges[
-                                    Graph.coedges[CoedgeId].edge_id
-                                ].end_parameter
-                                < Graph.edges[
-                                    Graph.coedges[CoedgeId].edge_id
-                                ].start_parameter
-                            ),
-                        )
-                        for CoedgeId in LoopValue.coedge_ids
-                    )
-                ),
-            )
+            ShapeRecord(f"loop:{LoopValue.id}", "Wi", (), "0101100", Children)
         )
-    for BandValue in SeamBands.values():
+
+
+# seam loop emission mutates the ordered shape list because one synthetic loop closes each band
+def AddSeamLoopsMut(Shapes: list[ShapeRecord], State: BrepWriteState) -> None:
+    Graph = State.Graph
+    for BandValue in State.SeamBands.values():
         LowEdge = Graph.edges[Graph.coedges[BandValue.low_coedge_id].edge_id]
         HighEdge = Graph.edges[Graph.coedges[BandValue.high_coedge_id].edge_id]
+        Children = (
+            (f"edge:{LowEdge.id}", BandValue.low_reversed),
+            (f"edge:seam:{BandValue.face_id}", False),
+            (f"edge:{HighEdge.id}", BandValue.high_reversed),
+            (f"edge:seam:{BandValue.face_id}", True),
+        )
         Shapes.append(
             ShapeRecord(
-                f"loop:seam:{BandValue.face_id}",
-                "Wi",
-                (),
-                "0101100",
-                (
-                    (f"edge:{LowEdge.id}", BandValue.low_reversed),
-                    (f"edge:seam:{BandValue.face_id}", False),
-                    (f"edge:{HighEdge.id}", BandValue.high_reversed),
-                    (f"edge:seam:{BandValue.face_id}", True),
-                ),
+                f"loop:seam:{BandValue.face_id}", "Wi", (), "0101100", Children
             )
         )
+
+
+# wire emission mutates the ordered shape list because bodies reference standalone wire records
+def AddWiresMut(
+    Shapes: list[ShapeRecord], Model: BrepModel, Graph: ModelGraph
+) -> None:
     for WireValue in Model.wires:
+        FlagsText = "0101100" if WireValue.closed else "0101000"
+        Children = GetEdgeChildren(Graph, WireValue.coedge_ids)
         Shapes.append(
-            ShapeRecord(
-                f"wire:{WireValue.id}",
-                "Wi",
-                (),
-                "0101100" if WireValue.closed else "0101000",
-                tuple(
-                    (
-                        (
-                            f"edge:{Graph.coedges[CoedgeId].edge_id}",
-                            Graph.coedges[CoedgeId].reversed
-                            != (
-                                Graph.edges[
-                                    Graph.coedges[CoedgeId].edge_id
-                                ].end_parameter
-                                < Graph.edges[
-                                    Graph.coedges[CoedgeId].edge_id
-                                ].start_parameter
-                            ),
-                        )
-                        for CoedgeId in WireValue.coedge_ids
-                    )
-                ),
-            )
+            ShapeRecord(f"wire:{WireValue.id}", "Wi", (), FlagsText, Children)
         )
+
+
+# face emission mutates the ordered shape list because shells consume proven loop orientation
+def AddFacesMut(
+    Shapes: list[ShapeRecord],
+    Model: BrepModel,
+    State: BrepWriteState,
+    Tolerance: float,
+) -> None:
     for FaceValue in Model.faces:
-        SeamBand = SeamBands.get(FaceValue.id)
-        if SeamBand is not None:
-            Shapes.append(
-                ShapeRecord(
-                    f"face:{FaceValue.id}",
-                    "Fa",
-                    (
-                        f"0  {Number(max(Tolerance, FaceValue.tolerance))} {SurfaceIndexes[FaceValue.surface_id]} 0",
-                    ),
-                    "0101000",
-                    ((f"loop:seam:{FaceValue.id}", False),),
-                )
-            )
-            continue
-        Shapes.append(
-            ShapeRecord(
-                f"face:{FaceValue.id}",
-                "Fa",
-                (
-                    f"0  {Number(max(Tolerance, FaceValue.tolerance))} {SurfaceIndexes[FaceValue.surface_id]} 0",
-                ),
-                "0101000",
-                tuple(
-                    (
-                        (f"loop:{LoopId}", LoopReversals[LoopId])
-                        for LoopId in FaceValue.loop_ids
-                    )
-                ),
+        GeometryLines = (
+            f"0  {Number(max(Tolerance, FaceValue.tolerance))} {State.SurfaceIndexes[FaceValue.surface_id]} 0",
+        )
+        BandValue = State.SeamBands.get(FaceValue.id)
+        Children = (
+            ((f"loop:seam:{FaceValue.id}", False),)
+            if BandValue is not None
+            else tuple(
+                (f"loop:{LoopId}", State.LoopReversals[LoopId])
+                for LoopId in FaceValue.loop_ids
             )
         )
-    for Shell in Model.shells:
+        Shapes.append(
+            ShapeRecord(
+                f"face:{FaceValue.id}", "Fa", GeometryLines, "0101000", Children
+            )
+        )
+
+
+# shell emission mutates the ordered shape list because region records reference oriented shells
+def AddShellRecsMut(
+    Shapes: list[ShapeRecord], Model: BrepModel, State: BrepWriteState
+) -> None:
+    Graph = State.Graph
+    for ShellValue in Model.shells:
         Children: list[tuple[str, bool]] = []
-        for FaceUseId in Shell.face_use_ids:
+        for FaceUseId in ShellValue.face_use_ids:
             FaceUse = Graph.face_uses[FaceUseId]
             FaceValue = Graph.faces[FaceUse.face_id]
-            Children.append((f"face:{FaceValue.id}", FaceUseReversals[FaceUse.id]))
+            Children.append(
+                (f"face:{FaceValue.id}", State.FaceUseReversals[FaceUse.id])
+            )
+        FlagsText = "0101100" if ShellValue.closed else "0101000"
         Shapes.append(
             ShapeRecord(
-                f"shell:{Shell.id}",
-                "Sh",
-                (),
-                "0101100" if Shell.closed else "0101000",
-                tuple(Children),
+                f"shell:{ShellValue.id}", "Sh", (), FlagsText, tuple(Children)
             )
         )
+
+
+# region emission mutates shapes and returns roots because bodies may reference shells directly
+def AddRegionsMut(
+    Shapes: list[ShapeRecord], Model: BrepModel, State: BrepWriteState
+) -> dict[str, tuple[str, bool]]:
+    Graph = State.Graph
+    RegionRoots: dict[str, tuple[str, bool]] = {}
+    for RegionValue in Model.regions:
+        ShellChildren = tuple(
+            (
+                f"shell:{Graph.shell_uses[ShellUseId].shell_id}",
+                State.ShellUseReversals[ShellUseId],
+            )
+            for ShellUseId in RegionValue.shell_use_ids
+        )
+        if RegionValue.solid:
+            HasOpenShell = any(
+                not Graph.shells[Graph.shell_uses[ValueId].shell_id].closed
+                for ValueId in RegionValue.shell_use_ids
+            )
+            if HasOpenShell:
+                Unsupported(f"solid region {RegionValue.id} contains an open shell")
+            KeyValue = f"region:{RegionValue.id}"
+            Shapes.append(ShapeRecord(KeyValue, "So", (), "0100000", ShellChildren))
+            RegionRoots[RegionValue.id] = (KeyValue, False)
+        elif len(ShellChildren) == 1:
+            RegionRoots[RegionValue.id] = ShellChildren[0]
+        else:
+            KeyValue = f"region:{RegionValue.id}"
+            Shapes.append(ShapeRecord(KeyValue, "Co", (), "0100000", ShellChildren))
+            RegionRoots[RegionValue.id] = (KeyValue, False)
+    return RegionRoots
+
+
+# body emission mutates shapes and returns one root because the native stream ends with one reference
+def AddBodiesMut(
+    Shapes: list[ShapeRecord],
+    Model: BrepModel,
+    RegionRoots: Mapping[str, tuple[str, bool]],
+) -> tuple[str, bool]:
+    BodyRoots: list[tuple[str, bool]] = []
+    for BodyValue in Model.bodies:
+        Children = [RegionRoots[ValueId] for ValueId in BodyValue.region_ids]
+        Children.extend((f"wire:{ValueId}", False) for ValueId in BodyValue.wire_ids)
+        Children.extend((f"vertex:{ValueId}", False) for ValueId in BodyValue.vertex_ids)
+        if len(Children) == 1:
+            BodyRoots.append(Children[0])
+        else:
+            KeyValue = f"body:{BodyValue.id}"
+            Shapes.append(ShapeRecord(KeyValue, "Co", (), "0100000", tuple(Children)))
+            BodyRoots.append((KeyValue, False))
+    if len(BodyRoots) == 1:
+        return BodyRoots[0]
+    RootKey = "model:root"
+    Shapes.append(ShapeRecord(RootKey, "Co", (), "1100000", tuple(BodyRoots)))
+    return RootKey, False
+
+
+# this definition exists because focused behavior needs one stable owner
+def BrepModelBrep(Model: BrepModel, Tolerance: float = 1e-07) -> bytes:
+    ValidateBrep(Model, Tolerance)
+    State = BuildBrepState(Model, Tolerance)
+    Lines = list(State.HeaderLines)
+    Shapes: list[ShapeRecord] = []
+    AddVerticesMut(Shapes, Model, Tolerance)
+    AddEdgesMut(Shapes, Model, State, Tolerance)
+    AddSeamEdgesMut(Shapes, State, Tolerance)
+    AddLoopsMut(Shapes, Model, State)
+    AddSeamLoopsMut(Shapes, State)
+    AddWiresMut(Shapes, Model, State.Graph)
+    AddFacesMut(Shapes, Model, State, Tolerance)
+    AddShellRecsMut(Shapes, Model, State)
     RegionRoots: dict[str, tuple[str, bool]] = {}
     for Region in Model.regions:
         ShellChildren = tuple(

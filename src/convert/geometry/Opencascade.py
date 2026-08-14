@@ -1420,7 +1420,11 @@ class PlacementState:
 def HasLocations(Records: Mapping[int, ShapeRecord], RootRef: Reference) -> bool:
     return bool(
         RootRef.KLocation
-        or any(ChildRef.KLocation for Record in Records.values() for ChildRef in Record.Children)
+        or any(
+            ChildRef.KLocation
+            for Record in Records.values()
+            for ChildRef in Record.Children
+        )
         or any(
             isinstance(Record.GeometryA, (EdgeData, FaceData))
             and Record.GeometryA.KLocation
@@ -1430,7 +1434,9 @@ def HasLocations(Records: Mapping[int, ShapeRecord], RootRef: Reference) -> bool
 
 
 # this definition exists because curve placement and caching need one owner
-def PlaceCurve(State: PlacementState, CurveIndex: int, Location: tuple[float, ...]) -> int:
+def PlaceCurveMut(
+    State: PlacementState, CurveIndex: int, Location: tuple[float, ...]
+) -> int:
     CurveKey = (CurveIndex, Location)
     CachedIndex = State.CurveCache.get(CurveKey)
     if CachedIndex is not None:
@@ -1463,7 +1469,7 @@ def PlaceCurve(State: PlacementState, CurveIndex: int, Location: tuple[float, ..
 
 
 # this definition exists because surface placement and caching need one owner
-def PlaceSurface(
+def PlaceSurfaceMut(
     State: PlacementState, SurfaceIndex: int, Location: tuple[float, ...]
 ) -> int:
     SurfaceKey = (SurfaceIndex, Location)
@@ -1510,7 +1516,7 @@ def PlaceChildren(
             else State.Locations[ChildRef.KLocation - 1]
         )
         ChildMatrix = ProductLocation(ChildLoc, Location)
-        ChildRecord = PlaceRecord(State, ChildRef.RecordA, ChildMatrix)
+        ChildRecord = PlaceRecordMut(State, ChildRef.RecordA, ChildMatrix)
         ChildRefs.append(Reference(ChildRef.Orientation, ChildRecord))
     return tuple(ChildRefs)
 
@@ -1539,7 +1545,7 @@ def PlaceGeometry(
         )
         return EdgeData(
             Geometry.Tolerance * ScaleValue,
-            PlaceCurve(State, Geometry.Curve, CurveLoc),
+            PlaceCurveMut(State, Geometry.Curve, CurveLoc),
             Geometry.FirstValue * ParameterScale,
             Geometry.LastValue * ParameterScale,
         )
@@ -1552,13 +1558,15 @@ def PlaceGeometry(
         return FaceData(
             Geometry.Natural,
             Geometry.Tolerance * ScaleValue,
-            PlaceSurface(State, Geometry.Surface, ProductLocation(GeometryLoc, Location)),
+            PlaceSurfaceMut(
+                State, Geometry.Surface, ProductLocation(GeometryLoc, Location)
+            ),
         )
     return Geometry
 
 
 # this definition exists because record placement and caching need one owner
-def PlaceRecord(
+def PlaceRecordMut(
     State: PlacementState, RecordIndex: int, Location: tuple[float, ...]
 ) -> int:
     RecordKey = (RecordIndex, Location)
@@ -1568,12 +1576,14 @@ def PlaceRecord(
     if len(State.PlacedRecords) >= KMaxShapes:
         raise DecodeFailure("located BRep topology exceeds shape bounds")
     SourceRecord = State.Records[RecordIndex]
+    ChildRefs = PlaceChildren(State, SourceRecord, Location)
+    Geometry = PlaceGeometry(State, SourceRecord, Location)
     PlacedIndex = len(State.PlacedRecords) + 1
     State.PlacedRecords[PlacedIndex] = ShapeRecord(
         SourceRecord.KindValue,
         SourceRecord.FlagBits,
-        PlaceChildren(State, SourceRecord, Location),
-        PlaceGeometry(State, SourceRecord, Location),
+        ChildRefs,
+        Geometry,
     )
     State.RecordCache[RecordKey] = PlacedIndex
     return PlacedIndex
@@ -1611,7 +1621,7 @@ def ApplyLocations(
     RootLoc = (
         KIdentityLocation if not RootRef.KLocation else Locations[RootRef.KLocation - 1]
     )
-    RootIndex = PlaceRecord(State, RootRef.RecordA, RootLoc)
+    RootIndex = PlaceRecordMut(State, RootRef.RecordA, RootLoc)
     return (
         tuple(State.PlacedCurves),
         tuple(State.PlacedSurfaces),
@@ -1722,32 +1732,35 @@ def OrderWireUses(
     return Circuit
 
 
-# this definition exists because focused parser behavior needs one stable owner
-def BuildModel(
-    CurvesA: tuple[BrepCurve, ...],
-    SurfacesA: tuple[BrepSurface, ...],
-    RecordsA: Mapping[int, ShapeRecord],
-    RootValue: Reference,
-    IdPrefix: str,
-    DesignBodyId: str,
-    Attributes: Mapping[str, AnyValue],
-) -> BrepModel:
+# this definition exists because vertex construction needs one focused stage
+def BuildVertices(
+    RecordsA: Mapping[int, ShapeRecord], IdPrefix: str
+) -> tuple[list[BrepVertex], dict[int, str], dict[int, int]]:
     Vertices: list[BrepVertex] = []
-    Edges: list[BrepEdge] = []
     VertexIds: dict[int, str] = {}
-    EdgeIds: dict[int, str] = {}
-    EdgeVertices: dict[int, tuple[int, int]] = {}
     CanonicalVertexData = CanonicalVerts(RecordsA)
     for ReadNumber, RecordA in sorted(RecordsA.items(), reverse=True):
-        if RecordA.KindValue == b"Ve":
-            GeometryA = RecordA.GeometryA
-            if not isinstance(GeometryA, VertexData) or RecordA.Children:
-                raise DecodeFailure("invalid BRep vertex topology")
-            Identifier = f"{IdPrefix}:vertex:{ReadNumber}"
-            VertexIds[ReadNumber] = Identifier
-            Vertices.append(
-                BrepVertex(Identifier, GeometryA.Point, GeometryA.Tolerance)
-            )
+        if RecordA.KindValue != b"Ve":
+            continue
+        GeometryA = RecordA.GeometryA
+        if not isinstance(GeometryA, VertexData) or RecordA.Children:
+            raise DecodeFailure("invalid BRep vertex topology")
+        Identifier = f"{IdPrefix}:vertex:{ReadNumber}"
+        VertexIds[ReadNumber] = Identifier
+        Vertices.append(BrepVertex(Identifier, GeometryA.Point, GeometryA.Tolerance))
+    return Vertices, VertexIds, CanonicalVertexData
+
+
+# this definition exists because edge construction needs one focused stage
+def BuildEdges(
+    RecordsA: Mapping[int, ShapeRecord],
+    IdPrefix: str,
+    VertexIds: Mapping[int, str],
+    CanonicalVertexData: Mapping[int, int],
+) -> tuple[list[BrepEdge], dict[int, str], dict[int, tuple[int, int]]]:
+    Edges: list[BrepEdge] = []
+    EdgeIds: dict[int, str] = {}
+    EdgeVertices: dict[int, tuple[int, int]] = {}
     for ReadNumber, RecordA in sorted(RecordsA.items(), reverse=True):
         if RecordA.KindValue != b"Ed":
             continue
@@ -1780,6 +1793,63 @@ def BuildModel(
                 GeometryA.Tolerance,
             )
         )
+    return Edges, EdgeIds, EdgeVertices
+
+
+# this definition exists because wire construction needs one focused stage
+def BuildWireMut(
+    ReadNumber: int,
+    RecordA: ShapeRecord,
+    WireIndex: int,
+    WireReference: Reference,
+    RecordsA: Mapping[int, ShapeRecord],
+    EdgeVertices: Mapping[int, tuple[int, int]],
+    EdgeIds: Mapping[int, str],
+    IdPrefix: str,
+    Coedges: list[BrepCoedge],
+) -> tuple[str, BrepLoop]:
+    if WireReference.Orientation not in {"+", "-"}:
+        raise DecodeFailure("unsupported BRep wire orientation")
+    WireValue = RecordsA[WireReference.RecordA]
+    if WireValue.KindValue != b"Wi" or not WireValue.Children:
+        raise DecodeFailure("BRep face references an invalid wire")
+    UsesValue = list(WireValue.Children)
+    if WireReference.Orientation == "-":
+        UsesValue = [
+            Reference(Opposite(UseValueA.Orientation), UseValueA.RecordA)
+            for UseValueA in reversed(UsesValue)
+        ]
+    UsesValue = OrderWireUses(UsesValue, EdgeVertices)
+    CoedgeIds: list[str] = []
+    for UseIndex, UseValueA in enumerate(UsesValue, 1):
+        if UseValueA.Orientation not in {"+", "-"}:
+            raise DecodeFailure("unsupported BRep coedge orientation")
+        if RecordsA[UseValueA.RecordA].KindValue != b"Ed":
+            raise DecodeFailure("BRep wire references a non-edge")
+        Suffix = (
+            f"{WireIndex}:{UseIndex}" if len(RecordA.Children) > 1 else str(UseIndex)
+        )
+        Identifier = f"{IdPrefix}:coedge:{ReadNumber}:{Suffix}"
+        Coedges.append(
+            BrepCoedge(
+                Identifier,
+                EdgeIds[UseValueA.RecordA],
+                reversed=UseValueA.Orientation == "-",
+            )
+        )
+        CoedgeIds.append(Identifier)
+    Suffix = f":{WireIndex}" if len(RecordA.Children) > 1 else ""
+    LoopId = f"{IdPrefix}:loop:{ReadNumber}{Suffix}"
+    return LoopId, BrepLoop(LoopId, tuple(CoedgeIds), WireIndex == 1)
+
+
+# this definition exists because face construction needs one focused stage
+def BuildFaces(
+    RecordsA: Mapping[int, ShapeRecord],
+    IdPrefix: str,
+    EdgeVertices: Mapping[int, tuple[int, int]],
+    EdgeIds: Mapping[int, str],
+) -> tuple[list[BrepCoedge], list[BrepLoop], list[BrepFace], dict[int, str]]:
     Coedges: list[BrepCoedge] = []
     Loops: list[BrepLoop] = []
     Faces: list[BrepFace] = []
@@ -1792,41 +1862,18 @@ def BuildModel(
             raise DecodeFailure("ambiguous BRep face boundary")
         LoopIds: list[str] = []
         for WireIndex, WireReference in enumerate(RecordA.Children, 1):
-            if WireReference.Orientation not in {"+", "-"}:
-                raise DecodeFailure("unsupported BRep wire orientation")
-            WireValue = RecordsA[WireReference.RecordA]
-            if WireValue.KindValue != b"Wi" or not WireValue.Children:
-                raise DecodeFailure("BRep face references an invalid wire")
-            UsesValue = list(WireValue.Children)
-            if WireReference.Orientation == "-":
-                UsesValue = [
-                    Reference(Opposite(UseValueA.Orientation), UseValueA.RecordA)
-                    for UseValueA in reversed(UsesValue)
-                ]
-            UsesValue = OrderWireUses(UsesValue, EdgeVertices)
-            CoedgeIds: list[str] = []
-            for UseIndex, UseValueA in enumerate(UsesValue, 1):
-                if UseValueA.Orientation not in {"+", "-"}:
-                    raise DecodeFailure("unsupported BRep coedge orientation")
-                if RecordsA[UseValueA.RecordA].KindValue != b"Ed":
-                    raise DecodeFailure("BRep wire references a non-edge")
-                Suffix = (
-                    f"{WireIndex}:{UseIndex}"
-                    if len(RecordA.Children) > 1
-                    else str(UseIndex)
-                )
-                Identifier = f"{IdPrefix}:coedge:{ReadNumber}:{Suffix}"
-                Coedges.append(
-                    BrepCoedge(
-                        Identifier,
-                        EdgeIds[UseValueA.RecordA],
-                        reversed=UseValueA.Orientation == "-",
-                    )
-                )
-                CoedgeIds.append(Identifier)
-            Suffix = f":{WireIndex}" if len(RecordA.Children) > 1 else ""
-            LoopId = f"{IdPrefix}:loop:{ReadNumber}{Suffix}"
-            Loops.append(BrepLoop(LoopId, tuple(CoedgeIds), WireIndex == 1))
+            LoopId, LoopValue = BuildWireMut(
+                ReadNumber,
+                RecordA,
+                WireIndex,
+                WireReference,
+                RecordsA,
+                EdgeVertices,
+                EdgeIds,
+                IdPrefix,
+                Coedges,
+            )
+            Loops.append(LoopValue)
             LoopIds.append(LoopId)
         FaceId = f"{IdPrefix}:face:{ReadNumber}"
         FaceIds[ReadNumber] = FaceId
@@ -1840,6 +1887,13 @@ def BuildModel(
                 attributes={"natural_restriction": GeometryA.Natural},
             )
         )
+    return Coedges, Loops, Faces, FaceIds
+
+
+# this definition exists because shell construction needs one focused stage
+def BuildShells(
+    RecordsA: Mapping[int, ShapeRecord], IdPrefix: str, FaceIds: Mapping[int, str]
+) -> tuple[list[BrepFaceUse], list[BrepShell], dict[int, str]]:
     FaceUses: list[BrepFaceUse] = []
     Shells: list[BrepShell] = []
     ShellIds: dict[int, str] = {}
@@ -1866,6 +1920,13 @@ def BuildModel(
         ShellId = f"{IdPrefix}:shell:{ReadNumber}"
         ShellIds[ReadNumber] = ShellId
         Shells.append(BrepShell(ShellId, tuple(UseIds), RecordA.FlagBits[4] == "1"))
+    return FaceUses, Shells, ShellIds
+
+
+# this definition exists because region construction needs one focused stage
+def BuildRegions(
+    RecordsA: Mapping[int, ShapeRecord], IdPrefix: str, ShellIds: Mapping[int, str]
+) -> tuple[list[BrepShellUse], list[BrepRegion], dict[int, str]]:
     ShellUses: list[BrepShellUse] = []
     Regions: list[BrepRegion] = []
     RegionIds: dict[int, str] = {}
@@ -1892,75 +1953,116 @@ def BuildModel(
         RegionId = f"{IdPrefix}:region:{ReadNumber}"
         RegionIds[ReadNumber] = RegionId
         Regions.append(BrepRegion(RegionId, tuple(UseIds), True))
-    RootRegions: list[str] = []
-    RootVertices: list[str] = []
-    SeenValue: set[tuple[int, str]] = set()
+    return ShellUses, Regions, RegionIds
 
-    # this definition exists because focused parser behavior needs one stable owner
-    def CollectShape(ReferenceA: Reference) -> None:
-        KeyValue = (ReferenceA.RecordA, ReferenceA.Orientation)
-        if KeyValue in SeenValue:
-            raise DecodeFailure("ambiguous repeated BRep root topology")
-        SeenValue.add(KeyValue)
-        RecordA = RecordsA[ReferenceA.RecordA]
-        if RecordA.KindValue in {b"Co", b"CS"}:
-            if not RecordA.Children:
-                raise DecodeFailure("empty BRep aggregate")
-            for Child in RecordA.Children:
-                CollectShape(
-                    Reference(
-                        Compose(ReferenceA.Orientation, Child.Orientation),
-                        Child.RecordA,
-                    )
-                )
-            return
-        if RecordA.KindValue == b"So":
-            if ReferenceA.Orientation != "+":
-                raise DecodeFailure("unsupported reversed BRep solid")
-            RootRegions.append(RegionIds[ReferenceA.RecordA])
-            return
-        if RecordA.KindValue == b"Sh":
-            UseId = f"{IdPrefix}:shell-use:root:{len(RootRegions) + 1}"
-            ShellUses.append(
-                BrepShellUse(
-                    UseId,
-                    ShellIds[ReferenceA.RecordA],
-                    reversed=ReferenceA.Orientation == "-",
-                )
-            )
-            RegionId = f"{IdPrefix}:region:root:{len(RootRegions) + 1}"
-            Regions.append(BrepRegion(RegionId, (UseId,), False))
-            RootRegions.append(RegionId)
-            return
-        if RecordA.KindValue == b"Fa" and ReferenceA.Orientation in {"+", "-"}:
-            Ordinal = len(RootRegions) + 1
-            FaceUseId = f"{IdPrefix}:face-use:root:{Ordinal}"
-            FaceUses.append(
-                BrepFaceUse(
-                    FaceUseId,
-                    FaceIds[ReferenceA.RecordA],
-                    reversed=ReferenceA.Orientation == "-",
-                )
-            )
-            ShellId = f"{IdPrefix}:shell:root:{Ordinal}"
-            Shells.append(BrepShell(ShellId, (FaceUseId,), False))
-            ShellUseId = f"{IdPrefix}:shell-use:root:{Ordinal}"
-            ShellUses.append(BrepShellUse(ShellUseId, ShellId))
-            RegionId = f"{IdPrefix}:region:root:{Ordinal}"
-            Regions.append(BrepRegion(RegionId, (ShellUseId,), False))
-            RootRegions.append(RegionId)
-            return
-        if RecordA.KindValue == b"Ve" and ReferenceA.Orientation == "+":
-            RootVertices.append(VertexIds[ReferenceA.RecordA])
-            return
-        raise DecodeFailure("unsupported BRep root topology")
 
-    CollectShape(RootValue)
+# this class exists because root topology assembly needs one explicit owner
+@Dataclass(slots=True)
+class RootState:
+    RecordsA: Mapping[int, ShapeRecord]
+    IdPrefix: str
+    VertexIds: Mapping[int, str]
+    FaceIds: Mapping[int, str]
+    ShellIds: Mapping[int, str]
+    RegionIds: Mapping[int, str]
+    FaceUses: list[BrepFaceUse]
+    Shells: list[BrepShell]
+    ShellUses: list[BrepShellUse]
+    Regions: list[BrepRegion]
+    RootRegions: list[str]
+    RootVertices: list[str]
+    SeenValue: set[tuple[int, str]]
+
+
+# this definition exists because root shell wrapping needs one focused stage
+def AddRootShellMut(State: RootState, ReferenceA: Reference) -> None:
+    UseId = f"{State.IdPrefix}:shell-use:root:{len(State.RootRegions) + 1}"
+    State.ShellUses.append(
+        BrepShellUse(
+            UseId,
+            State.ShellIds[ReferenceA.RecordA],
+            reversed=ReferenceA.Orientation == "-",
+        )
+    )
+    RegionId = f"{State.IdPrefix}:region:root:{len(State.RootRegions) + 1}"
+    State.Regions.append(BrepRegion(RegionId, (UseId,), False))
+    State.RootRegions.append(RegionId)
+
+
+# this definition exists because root face wrapping needs one focused stage
+def AddRootFaceMut(State: RootState, ReferenceA: Reference) -> None:
+    Ordinal = len(State.RootRegions) + 1
+    FaceUseId = f"{State.IdPrefix}:face-use:root:{Ordinal}"
+    State.FaceUses.append(
+        BrepFaceUse(
+            FaceUseId,
+            State.FaceIds[ReferenceA.RecordA],
+            reversed=ReferenceA.Orientation == "-",
+        )
+    )
+    ShellId = f"{State.IdPrefix}:shell:root:{Ordinal}"
+    State.Shells.append(BrepShell(ShellId, (FaceUseId,), False))
+    ShellUseId = f"{State.IdPrefix}:shell-use:root:{Ordinal}"
+    State.ShellUses.append(BrepShellUse(ShellUseId, ShellId))
+    RegionId = f"{State.IdPrefix}:region:root:{Ordinal}"
+    State.Regions.append(BrepRegion(RegionId, (ShellUseId,), False))
+    State.RootRegions.append(RegionId)
+
+
+# this definition exists because root topology dispatch needs one focused owner
+def CollectShapeMut(State: RootState, ReferenceA: Reference) -> None:
+    KeyValue = (ReferenceA.RecordA, ReferenceA.Orientation)
+    if KeyValue in State.SeenValue:
+        raise DecodeFailure("ambiguous repeated BRep root topology")
+    State.SeenValue.add(KeyValue)
+    RecordA = State.RecordsA[ReferenceA.RecordA]
+    if RecordA.KindValue in {b"Co", b"CS"}:
+        if not RecordA.Children:
+            raise DecodeFailure("empty BRep aggregate")
+        for Child in RecordA.Children:
+            CollectShapeMut(
+                State,
+                Reference(
+                    Compose(ReferenceA.Orientation, Child.Orientation),
+                    Child.RecordA,
+                ),
+            )
+        return
+    if RecordA.KindValue == b"So":
+        if ReferenceA.Orientation != "+":
+            raise DecodeFailure("unsupported reversed BRep solid")
+        State.RootRegions.append(State.RegionIds[ReferenceA.RecordA])
+        return
+    if RecordA.KindValue == b"Sh":
+        AddRootShellMut(State, ReferenceA)
+        return
+    if RecordA.KindValue == b"Fa" and ReferenceA.Orientation in {"+", "-"}:
+        AddRootFaceMut(State, ReferenceA)
+        return
+    if RecordA.KindValue == b"Ve" and ReferenceA.Orientation == "+":
+        State.RootVertices.append(State.VertexIds[ReferenceA.RecordA])
+        return
+    raise DecodeFailure("unsupported BRep root topology")
+
+
+# this definition exists because model assembly and validation need one owner
+def AssembleModel(
+    CurvesA,
+    SurfacesA,
+    Vertices,
+    Edges,
+    Coedges,
+    Loops,
+    Faces,
+    State: RootState,
+    DesignBodyId,
+    Attributes,
+) -> BrepModel:
     BodyValue = BrepBody(
-        f"{IdPrefix}:body:1",
-        tuple(RootRegions),
+        f"{State.IdPrefix}:body:1",
+        tuple(State.RootRegions),
         design_body_id=DesignBodyId,
-        vertex_ids=tuple(RootVertices),
+        vertex_ids=tuple(State.RootVertices),
         attributes=dict(Attributes),
     )
     Result = BrepModel(
@@ -1971,16 +2073,211 @@ def BuildModel(
         coedges=tuple(Coedges),
         loops=tuple(Loops),
         faces=tuple(Faces),
-        face_uses=tuple(FaceUses),
-        shells=tuple(Shells),
-        shell_uses=tuple(ShellUses),
-        regions=tuple(Regions),
+        face_uses=tuple(State.FaceUses),
+        shells=tuple(State.Shells),
+        shell_uses=tuple(State.ShellUses),
+        regions=tuple(State.Regions),
         bodies=(BodyValue,),
     )
     BodyIds = frozenset({DesignBodyId}) if DesignBodyId else frozenset()
     if Result.validate(BodyIds):
         raise DecodeFailure("decoded BRep model is invalid")
     return Result
+
+
+# this definition exists because focused parser behavior needs one stable owner
+def BuildModel(
+    CurvesA: tuple[BrepCurve, ...],
+    SurfacesA: tuple[BrepSurface, ...],
+    RecordsA: Mapping[int, ShapeRecord],
+    RootValue: Reference,
+    IdPrefix: str,
+    DesignBodyId: str,
+    Attributes: Mapping[str, AnyValue],
+) -> BrepModel:
+    Vertices, VertexIds, CanonicalVertexData = BuildVertices(RecordsA, IdPrefix)
+    Edges, EdgeIds, EdgeVertices = BuildEdges(
+        RecordsA, IdPrefix, VertexIds, CanonicalVertexData
+    )
+    Coedges, Loops, Faces, FaceIds = BuildFaces(
+        RecordsA, IdPrefix, EdgeVertices, EdgeIds
+    )
+    FaceUses, Shells, ShellIds = BuildShells(RecordsA, IdPrefix, FaceIds)
+    ShellUses, Regions, RegionIds = BuildRegions(RecordsA, IdPrefix, ShellIds)
+    State = RootState(
+        RecordsA,
+        IdPrefix,
+        VertexIds,
+        FaceIds,
+        ShellIds,
+        RegionIds,
+        FaceUses,
+        Shells,
+        ShellUses,
+        Regions,
+        [],
+        [],
+        set(),
+    )
+    CollectShapeMut(State, RootValue)
+    return AssembleModel(
+        CurvesA,
+        SurfacesA,
+        Vertices,
+        Edges,
+        Coedges,
+        Loops,
+        Faces,
+        State,
+        DesignBodyId,
+        Attributes,
+    )
+
+
+# this definition exists because decoded model headers need one focused reader
+def ExpectHeader(TokensA: Tokens) -> None:
+    if TokensA.PeekToken() == b"DBRep_DrawableShape":
+        TokensA.TakeToken()
+    TokensA.ExpectToken(b"CASCADE")
+    TokensA.ExpectToken(b"Topology")
+    TokensA.ExpectToken(b"V1,")
+    TokensA.ExpectToken(b"(c)")
+    TokensA.ExpectToken(b"Matra-Datavision")
+
+
+# this definition exists because decoded curves need one focused reader
+def ReadModelCurves(
+    TokensA: Tokens, IdPrefix: str
+) -> tuple[int, tuple[BrepCurve, ...]]:
+    CurveTwoDCount = ReadCurves(TokensA, b"Curve2ds", 2)
+    CurveCount = ReadCount(TokensA, b"Curves", KMaxGeometry)
+    CurvesA: list[BrepCurve] = []
+    for IndexA in range(1, CurveCount + 1):
+        KindValue = TokensA.ReadInteger(1, 9)
+        if KindValue not in {1, 2}:
+            raise DecodeFailure("unsupported BRep curve type")
+        Origin = VectorValue(TokensA)
+        AxisValue = VectorValue(TokensA)
+        if KindValue == 1:
+            if not IsUnit(AxisValue):
+                raise DecodeFailure("invalid BRep line direction")
+            CurvesA.append(
+                LineCurve(
+                    f"{IdPrefix}:curve:{IndexA}",
+                    Origin,
+                    AxisValue,
+                    attributes={"opencascade_index": IndexA},
+                )
+            )
+            continue
+        XDirection = VectorValue(TokensA)
+        YDirection = VectorValue(TokensA)
+        Radius = TokensA.ReadNumber()
+        if not IsFrame(AxisValue, XDirection, YDirection) or Radius <= 0.0:
+            raise DecodeFailure("invalid BRep circle")
+        CurvesA.append(
+            CircleCurve(
+                f"{IdPrefix}:curve:{IndexA}",
+                Origin,
+                AxisValue,
+                XDirection,
+                Radius,
+                attributes={"opencascade_index": IndexA},
+            )
+        )
+    return CurveTwoDCount, tuple(CurvesA)
+
+
+# this definition exists because decoded surfaces need one focused reader
+def ReadModelSurfs(TokensA: Tokens, IdPrefix: str) -> tuple[BrepSurface, ...]:
+    SurfaceCount = ReadCount(TokensA, b"Surfaces", KMaxGeometry)
+    SurfacesA: list[BrepSurface] = []
+    for IndexA in range(1, SurfaceCount + 1):
+        KindValue = TokensA.ReadInteger(1, 11)
+        if KindValue not in {1, 2}:
+            raise DecodeFailure("unsupported BRep surface type")
+        Origin = VectorValue(TokensA)
+        Normal = VectorValue(TokensA)
+        XDirection = VectorValue(TokensA)
+        YDirection = VectorValue(TokensA)
+        if not IsFrame(Normal, XDirection, YDirection):
+            raise DecodeFailure("invalid BRep surface frame")
+        Properties = {
+            "opencascade_index": IndexA,
+            "reference_y": (YDirection.x, YDirection.y, YDirection.z),
+        }
+        if KindValue == 1:
+            SurfacesA.append(
+                PlaneSurface(
+                    f"{IdPrefix}:surface:{IndexA}",
+                    Origin,
+                    Normal,
+                    XDirection,
+                    attributes=Properties,
+                )
+            )
+            continue
+        Radius = TokensA.ReadNumber()
+        if Radius <= 0.0:
+            raise DecodeFailure("invalid BRep cylinder")
+        SurfacesA.append(
+            CylinderSurface(
+                f"{IdPrefix}:surface:{IndexA}",
+                Origin,
+                Normal,
+                XDirection,
+                Radius,
+                attributes=Properties,
+            )
+        )
+    return tuple(SurfacesA)
+
+
+# this definition exists because payload decoding needs one orchestration boundary
+def DecodePayload(
+    DataValue: bytes,
+    IdPrefix: str,
+    DesignBodyId: str,
+    Attributes: Mapping[str, AnyValue],
+) -> BrepModel:
+    TokensA = Tokens(DataValue)
+    ExpectHeader(TokensA)
+    LocationsA = ModelLocations(TokensA)
+    CurveTwoDCount, CurvesA = ReadModelCurves(TokensA, IdPrefix)
+    ZeroTable(TokensA, b"Polygon3D")
+    ZeroTable(TokensA, b"PolygonOnTriangulations")
+    SurfacesA = ReadModelSurfs(TokensA, IdPrefix)
+    ZeroTable(TokensA, b"Triangulations")
+    ShapeCount = ReadCount(TokensA, b"TShapes", KMaxShapes)
+    if ShapeCount == 0:
+        raise DecodeFailure("empty BRep topology")
+    RecordsA = ShapeRecords(
+        TokensA,
+        ShapeCount,
+        len(CurvesA),
+        CurveTwoDCount,
+        len(SurfacesA),
+        len(LocationsA),
+    )
+    RootValue = ReadReference(TokensA, ShapeCount, len(LocationsA))
+    if (
+        RootValue is None
+        or RootValue.Orientation != "+"
+        or TokensA.PeekToken() is not None
+    ):
+        raise DecodeFailure("unsupported BRep root")
+    CurvesA, SurfacesA, RecordsA, RootValue = ApplyLocations(
+        CurvesA, SurfacesA, RecordsA, RootValue, LocationsA, IdPrefix
+    )
+    return BuildModel(
+        CurvesA,
+        SurfacesA,
+        RecordsA,
+        RootValue,
+        IdPrefix,
+        DesignBodyId,
+        Attributes,
+    )
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -2005,128 +2302,7 @@ def DecodeAsciiBrep(
     ):
         return None
     try:
-        TokensA = Tokens(DataValue)
-        if TokensA.PeekToken() == b"DBRep_DrawableShape":
-            TokensA.TakeToken()
-        TokensA.ExpectToken(b"CASCADE")
-        TokensA.ExpectToken(b"Topology")
-        TokensA.ExpectToken(b"V1,")
-        TokensA.ExpectToken(b"(c)")
-        TokensA.ExpectToken(b"Matra-Datavision")
-        LocationsA = ModelLocations(TokensA)
-        CurveTwoDCount = ReadCurves(TokensA, b"Curve2ds", 2)
-        CurveCount = ReadCount(TokensA, b"Curves", KMaxGeometry)
-        CurvesA: list[BrepCurve] = []
-        for IndexA in range(1, CurveCount + 1):
-            KindValue = TokensA.ReadInteger(1, 9)
-            if KindValue not in {1, 2}:
-                raise DecodeFailure("unsupported BRep curve type")
-            Origin = VectorValue(TokensA)
-            AxisValue = VectorValue(TokensA)
-            if KindValue == 1:
-                if not IsUnit(AxisValue):
-                    raise DecodeFailure("invalid BRep line direction")
-                CurvesA.append(
-                    LineCurve(
-                        f"{IdPrefix}:curve:{IndexA}",
-                        Origin,
-                        AxisValue,
-                        attributes={"opencascade_index": IndexA},
-                    )
-                )
-                continue
-            XDirection = VectorValue(TokensA)
-            YDirection = VectorValue(TokensA)
-            Radius = TokensA.ReadNumber()
-            if not IsFrame(AxisValue, XDirection, YDirection) or Radius <= 0.0:
-                raise DecodeFailure("invalid BRep circle")
-            CurvesA.append(
-                CircleCurve(
-                    f"{IdPrefix}:curve:{IndexA}",
-                    Origin,
-                    AxisValue,
-                    XDirection,
-                    Radius,
-                    attributes={"opencascade_index": IndexA},
-                )
-            )
-        ZeroTable(TokensA, b"Polygon3D")
-        ZeroTable(TokensA, b"PolygonOnTriangulations")
-        SurfaceCount = ReadCount(TokensA, b"Surfaces", KMaxGeometry)
-        SurfacesA: list[BrepSurface] = []
-        for IndexA in range(1, SurfaceCount + 1):
-            KindValue = TokensA.ReadInteger(1, 11)
-            if KindValue not in {1, 2}:
-                raise DecodeFailure("unsupported BRep surface type")
-            Origin = VectorValue(TokensA)
-            Normal = VectorValue(TokensA)
-            XDirection = VectorValue(TokensA)
-            YDirection = VectorValue(TokensA)
-            if not IsFrame(Normal, XDirection, YDirection):
-                raise DecodeFailure("invalid BRep surface frame")
-            Properties = {
-                "opencascade_index": IndexA,
-                "reference_y": (
-                    YDirection.x,
-                    YDirection.y,
-                    YDirection.z,
-                ),
-            }
-            if KindValue == 1:
-                SurfacesA.append(
-                    PlaneSurface(
-                        f"{IdPrefix}:surface:{IndexA}",
-                        Origin,
-                        Normal,
-                        XDirection,
-                        attributes=Properties,
-                    )
-                )
-                continue
-            Radius = TokensA.ReadNumber()
-            if Radius <= 0.0:
-                raise DecodeFailure("invalid BRep cylinder")
-            SurfacesA.append(
-                CylinderSurface(
-                    f"{IdPrefix}:surface:{IndexA}",
-                    Origin,
-                    Normal,
-                    XDirection,
-                    Radius,
-                    attributes=Properties,
-                )
-            )
-        ZeroTable(TokensA, b"Triangulations")
-        ShapeCount = ReadCount(TokensA, b"TShapes", KMaxShapes)
-        if ShapeCount == 0:
-            raise DecodeFailure("empty BRep topology")
-        RecordsA = ShapeRecords(
-            TokensA,
-            ShapeCount,
-            CurveCount,
-            CurveTwoDCount,
-            SurfaceCount,
-            len(LocationsA),
-        )
-        RootValue = ReadReference(TokensA, ShapeCount, len(LocationsA))
-        if (
-            RootValue is None
-            or RootValue.Orientation != "+"
-            or TokensA.PeekToken() is not None
-        ):
-            raise DecodeFailure("unsupported BRep root")
-        CurvesA, SurfacesA, RecordsA, RootValue = ApplyLocations(
-            tuple(CurvesA), tuple(SurfacesA), RecordsA, RootValue, LocationsA, IdPrefix
-        )
-        return BuildModel(
-            tuple(CurvesA),
-            tuple(SurfacesA),
-            RecordsA,
-            RootValue,
-            IdPrefix,
-            DesignBodyId,
-            Attributes or {},
-        )
+        return DecodePayload(DataValue, IdPrefix, DesignBodyId, Attributes or {})
     except (DecodeFailure, KeyError, TypeError, ValueError, OverflowError):
         return None
 
@@ -2193,11 +2369,12 @@ def IsValidBrep(DataValue: bytes) -> bool:
 
 # this definition exists because legacy callers need their keyword contract preserved
 def DecodeLegacy(DataValue: bytes, **LegacyValues: AnyValue) -> BrepModel | None:
-    IdPrefix = LegacyValues.pop("id_prefix", "occ")
-    DesignBodyId = LegacyValues.pop("design_body_id", "")
-    Attributes = LegacyValues.pop("attributes", None)
-    if LegacyValues:
-        Unexpected = next(iter(LegacyValues))
+    Options = dict(LegacyValues)
+    IdPrefix = Options.pop("id_prefix", "occ")
+    DesignBodyId = Options.pop("design_body_id", "")
+    Attributes = Options.pop("attributes", None)
+    if Options:
+        Unexpected = next(iter(Options))
         raise TypeError(f"decode_ascii_brep got unexpected keyword {Unexpected!r}")
     return DecodeAsciiBrep(
         DataValue,
@@ -2207,9 +2384,20 @@ def DecodeLegacy(DataValue: bytes, **LegacyValues: AnyValue) -> BrepModel | None
     )
 
 
+# this alias exists because private shape record consumers need compatibility
 globals()["_ShapeRecord"] = ShapeRecord
+
+# this alias exists because private token consumers need compatibility
 globals()["_Tokens"] = Tokens
+
+# this alias exists because private vertex data consumers need compatibility
 globals()["_VertexData"] = VertexData
+
+# this alias exists because private canonical vertex consumers need compatibility
 globals()["_CanonicalVertexRecords"] = CanonicalVerts
+
+# this alias exists because public decoder consumers need compatibility
 globals()["decode_ascii_brep"] = DecodeLegacy
+
+# this alias exists because public validator consumers need compatibility
 globals()["is_structurally_valid_ascii_brep"] = IsValidBrep
