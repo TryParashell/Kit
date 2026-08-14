@@ -29,92 +29,14 @@ from interchange import (
     SpaceVector,
 )
 from tests.interchange.document.DocumentTests import BuildDocument
+from tests.interchange.fixtures.AssemblyFixture import (
+    BuildAssembly as BuildFixtureAssembly,
+)
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def BuildAssembly() -> CadDocument:
-    PartValue = BuildDocument()
-    RootValue = ComponentDef("definition:root", "Engine", ComponentKind.KAssembly)
-    Subassembly = ComponentDef(
-        "definition:subassembly", "Piston", ComponentKind.KAssembly
-    )
-    PartDef = ComponentDef(
-        "definition:part",
-        "Piston",
-        ComponentKind.KPart,
-        DocumentId="document:part",
-        BodyIds=("body:1",),
-    )
-    SubassemblyInst = ComponentInst(
-        "instance:subassembly",
-        "Piston-1",
-        Subassembly.EntityId,
-        RootValue.EntityId,
-        TransformMatrix(
-            (
-                1.0,
-                0.0,
-                0.0,
-                100.0,
-                0.0,
-                1.0,
-                0.0,
-                20.0,
-                0.0,
-                0.0,
-                1.0,
-                30.0,
-                0.0,
-                0.0,
-                0.0,
-                1.0,
-            )
-        ),
-    )
-    PartInstance = ComponentInst(
-        "instance:part", "Piston-1", PartDef.EntityId, Subassembly.EntityId
-    )
-    FirstEntity = MateEntity(
-        "mate-entity:assembly",
-        RootValue.EntityId,
-        (),
-        MateEntityKind.KPlane,
-        SourceEntityId="plane:front",
-    )
-    SecondEntity = MateEntity(
-        "mate-entity:part",
-        RootValue.EntityId,
-        (SubassemblyInst.EntityId, PartInstance.EntityId),
-        MateEntityKind.KPlane,
-        SourceEntityId="plane:xy",
-    )
-    MateValue = MateConstraint(
-        "mate:1",
-        "Coincident1",
-        MateKind.KCoincident,
-        RootValue.EntityId,
-        (FirstEntity.EntityId, SecondEntity.EntityId),
-    )
-    AssemblyValue = AssemblyData(
-        RootValue.EntityId,
-        (RootValue, Subassembly, PartDef),
-        (SubassemblyInst, PartInstance),
-        Documents=(ComponentDoc("document:part", PartValue),),
-        MateEntities=(FirstEntity, SecondEntity),
-        Mates=(MateValue,),
-    )
-    return CadDocument(
-        Source=CadSource("test.assembly", "memory", "1" * 64),
-        Configurations=(Configuration("config:default", "Default", True),),
-        Parameters=(),
-        SupportPlanes=(),
-        Sketches=(),
-        Selections=(),
-        FeatureTimeline=(),
-        Bodies=(),
-        Capabilities=frozenset({Capability.KAssemblies}),
-        Assembly=AssemblyValue,
-    )
+    return BuildFixtureAssembly()
 
 
 # historical imports keep conversion suites independent from helper renaming

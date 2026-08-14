@@ -1540,20 +1540,20 @@ KPinPointsMm = (
 # this binding exists because full pin headers require stable recovered action stamps
 KPinFullStamps = ((1785928014, 1785928014), (1785928014,))
 
-# this binding exists because right-angle pin headers require their own action stamps
+# this binding exists because right angle pin headers require their own action stamps
 KPinRightStamps = ((1786479985, 1786479985), (1786479985,))
 
 # this binding exists because full pin headers require one stable native identity
 KPinFullIdent = (1785928009, 106, 103, 1785928014)
 
-# this binding exists because right-angle pin headers require one stable native identity
+# this binding exists because right angle pin headers require one stable native identity
 KPinRightIdent = (1786479979, 106, 103, 1786479985)
 
 # this binding exists because recovered pin headers preserve their recorded author
 KPinHeaderUser = "odin"
 
 
-# this definition exists because cycle-free pin builders retain the legacy result shape
+# this definition exists because cycle free pin builders retain the legacy result shape
 @Dataclass(frozen=True, slots=True)
 class PinEnvelope:
     locals().setdefault("__annotations__", {})
@@ -2462,7 +2462,7 @@ def PinAxes(
     return (RadiusMetres, AxisMinimum, AxisMaximum)
 
 
-# full-revolution bounds preserve the recovered model-header coordinate frame
+# full revolution bounds preserve the recovered model header coordinate frame
 def PinBounds(
     PointsMm: Sequence[tuple[float, float]] = KPinPointsMm,
 ) -> tuple[float, ...]:
@@ -2485,7 +2485,7 @@ def PinBounds(
     )
 
 
-# right-angle bounds preserve the recovered quarter-revolution coordinate frame
+# right angle bounds preserve the recovered quarter revolution coordinate frame
 def PinRightBounds(
     PointsMm: Sequence[tuple[float, float]] = KPinPointsMm,
 ) -> tuple[float, ...]:
@@ -2509,7 +2509,7 @@ def PinRightBounds(
     )
 
 
-# pin header assembly keeps native identity and feature stamps angle-specific
+# pin header assembly keeps native identity and feature stamps angle specific
 def PinHeader(
     IdentityData: tuple[int, int, int, int],
     HeaderStamps: tuple[tuple[int, ...], ...],
@@ -2536,8 +2536,8 @@ def PinHeader(
     )
 
 
-# the full-angle builder preserves the legacy envelope contract without a cycle
-def BuildPinEnvelope() -> PinEnvelope:
+# the full angle builder preserves the legacy envelope contract without a cycle
+def BuildPinFull() -> PinEnvelope:
     HeaderBounds = PinBounds()
     return PinEnvelope(
         Config0Payload=EncodePinConfig(),
@@ -2548,8 +2548,8 @@ def BuildPinEnvelope() -> PinEnvelope:
     )
 
 
-# the right-angle builder preserves the legacy envelope contract without a cycle
-def BuildPinNineZeroEnvelope() -> PinEnvelope:
+# the right angle builder preserves the legacy envelope contract without a cycle
+def BuildPinRight() -> PinEnvelope:
     HeaderBounds = PinRightBounds()
     return PinEnvelope(
         Config0Payload=EncodePinRight(),
@@ -2601,9 +2601,7 @@ def BuildSingleTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | 
     if not IsFullAngle and (not (IsPinData and IsPartialAngle)):
         return None
     if IsPinData:
-        EnvelopeData = (
-            BuildPinNineZeroEnvelope() if IsPartialAngle else BuildPinEnvelope()
-        )
+        EnvelopeData = BuildPinRight() if IsPartialAngle else BuildPinFull()
         return VendorResolved(
             EncodePinNineZeroRevolve() if IsPartialAngle else EncodePinRevolveProgram(),
             EnvelopeData.HeaderStamps,
@@ -14093,7 +14091,13 @@ globals()["BuildFourFeatureVendorTree"] = BuildFourVendor
 globals()["BuildPadGrooveVendorTree"] = BuildPadGroove
 
 # this binding exists because shared behavior needs one stable value
-globals()["BuildPin90Envelope"] = BuildPinNineZeroEnvelope
+globals()["BuildPin90Envelope"] = BuildPinRight
+
+# this binding exists because shared behavior needs one stable value
+globals()["BuildPinEnvelope"] = BuildPinFull
+
+# this binding exists because shared behavior needs one stable value
+globals()["BuildPinNineZeroEnvelope"] = BuildPinRight
 
 # this binding exists because shared behavior needs one stable value
 globals()["BuildSingleRevolutionVendorTree"] = BuildSingleTree

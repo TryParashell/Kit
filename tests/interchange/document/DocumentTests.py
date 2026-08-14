@@ -45,34 +45,14 @@ from interchange import (
 from interchange.payloads.PayloadMigrate import GetLegacyFields
 from interchange.payloads.PayloadRules import KLegacyPayloadRules
 from interchange.serialization import FromData, KTypeRegistry, RegisterTypes, ToData
+from tests.interchange.fixtures.DocumentFixture import (
+    BuildDocument as BuildFixtureDocument,
+)
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def BuildDocument() -> CadDocument:
-    PlaneValue = SupportPlane("plane:xy", "XY", Transform())
-    EntityValue = SketchEntity(
-        "sketch:1:line:1",
-        "line",
-        LineGeometry(PlaneVector(0.0, 0.0), PlaneVector(10.0, 0.0)),
-    )
-    SketchValue = Sketch("sketch:1", "Sketch1", PlaneValue.EntityId, (EntityValue,))
-    FeatureValue = FeatureStep(
-        "feature:1", "Boss1", FeatureKind.KExtrusion, 0, SketchId=SketchValue.EntityId
-    )
-    BodyValue = DesignBody("body:1", "Body", FeatureValue.EntityId)
-    return CadDocument(
-        Source=CadSource("test", "memory", "0" * 64),
-        Configurations=(Configuration("config:default", "Default", True),),
-        Parameters=(),
-        SupportPlanes=(PlaneValue,),
-        Sketches=(SketchValue,),
-        Selections=(),
-        FeatureTimeline=(FeatureValue,),
-        Bodies=(BodyValue,),
-        Capabilities=frozenset(
-            {Capability.KParamHistory, Capability.KEditableSketches}
-        ),
-    )
+    return BuildFixtureDocument()
 
 
 # historical imports keep conversion suites independent from helper renaming
@@ -326,7 +306,7 @@ def CheckAllCaps() -> None:
 
 # behavior coverage protects portable interchange semantics during structural refactors
 def CheckFiltering() -> None:
-    from tests.interchange.assembly.AssemblyTests import BuildAssembly
+    from tests.interchange.fixtures.AssemblyFixture import BuildAssembly
 
     SourceValue = BuildAssembly()
     AssemblyValue = SourceValue.Assembly

@@ -5865,7 +5865,7 @@ def ValidateSource(Label: str, IsAsm: bool) -> None:
         )
 
 
-# stream restoration remains best-effort for non-seekable and closed inputs
+# stream restoration remains best effort for nonseekable and closed inputs
 def RestoreStream(SourceData: Source, Position: int | None) -> None:
     SeekValue = getattr(SourceData, "seek", None)
     if Position is None or not callable(SeekValue):
