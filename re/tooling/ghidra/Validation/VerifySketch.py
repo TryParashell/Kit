@@ -50,7 +50,35 @@ def DecodeHandle(RawData):
     return {'bytes': Cursor + 8, 'escaped': Cursor == 6, 'EntIndex': EntInfo, 'RefId': RefId, 'DimOnCM': DimOnCm}
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
+# one fixture scan stays isolated so handle decoding evidence remains independently testable
+def ScanLabelMut(LabelInfo, Tally, EntValues, RefValues, DimValues):
+    DocInfo, SegsInfo, ByteBlob, PartInfoInfo = Layout.LoadData(LabelInfo)
+    GetRows = []
+    Total = 0
+    Passed = 0
+    for NameTextInfo in KHandleClasses:
+        for KindNameInfo in ('definition', 'classref'):
+            for IndexData in Layout.FindItem(SegsInfo, NameTextInfo, KindNameInfo):
+                RunsInfo = ScalarRuns(SegsInfo, IndexData, ByteBlob)
+                Total += 1
+                if not RunsInfo:
+                    GetRows.append({'node': IndexData, 'class': NameTextInfo, 'kind': KindNameInfo, 'ok': False})
+                    Tally[NameTextInfo, KindNameInfo, 'no-scalars'] += 1
+                    continue
+                Offset, RawData = RunsInfo[0]
+                DecodedInfo = DecodeHandle(RawData)
+                OkInfo = DecodedInfo is not None and DecodedInfo['bytes'] == len(RawData)
+                if OkInfo:
+                    Passed += 1
+                    EntValues[DecodedInfo['EntIndex']] += 1
+                    RefValues[DecodedInfo['RefId']] += 1
+                    DimValues[DecodedInfo['DimOnCM']] += 1
+                Tally[NameTextInfo, KindNameInfo, 'ok' if OkInfo else 'mismatch'] += 1
+                GetRows.append({'node': IndexData, 'class': NameTextInfo, 'kind': KindNameInfo, 'ok': OkInfo, 'first_run_bytes': len(RawData), 'extra_runs': len(RunsInfo) - 1, 'decoded': DecodedInfo})
+    return {'part': PartInfoInfo.name, 'handles': GetRows}, Total, Passed
+
+
+# command orchestration aggregates fixture evidence without owning record decoding
 def MainRun():
     Report = {}
     Total = 0
@@ -60,28 +88,10 @@ def MainRun():
     RefValues = Collects.Counter()
     DimValues = Collects.Counter()
     for LabelInfo in KLabels:
-        DocInfo, SegsInfo, ByteBlob, PartInfoInfo = Layout.LoadData(LabelInfo)
-        GetRows = []
-        for NameTextInfo in KHandleClasses:
-            for KindNameInfo in ('definition', 'classref'):
-                for IndexData in Layout.FindItem(SegsInfo, NameTextInfo, KindNameInfo):
-                    RunsInfo = ScalarRuns(SegsInfo, IndexData, ByteBlob)
-                    Total += 1
-                    if not RunsInfo:
-                        GetRows.append({'node': IndexData, 'class': NameTextInfo, 'kind': KindNameInfo, 'ok': False})
-                        Tally[NameTextInfo, KindNameInfo, 'no-scalars'] += 1
-                        continue
-                    Offset, RawData = RunsInfo[0]
-                    DecodedInfo = DecodeHandle(RawData)
-                    OkInfo = DecodedInfo is not None and DecodedInfo['bytes'] == len(RawData)
-                    if OkInfo:
-                        Passed += 1
-                        EntValues[DecodedInfo['EntIndex']] += 1
-                        RefValues[DecodedInfo['RefId']] += 1
-                        DimValues[DecodedInfo['DimOnCM']] += 1
-                    Tally[NameTextInfo, KindNameInfo, 'ok' if OkInfo else 'mismatch'] += 1
-                    GetRows.append({'node': IndexData, 'class': NameTextInfo, 'kind': KindNameInfo, 'ok': OkInfo, 'first_run_bytes': len(RawData), 'extra_runs': len(RunsInfo) - 1, 'decoded': DecodedInfo})
-        Report[LabelInfo] = {'part': PartInfoInfo.name, 'handles': GetRows}
+        LabelReport, LabelTotal, LabelPassed = ScanLabelMut(LabelInfo, Tally, EntValues, RefValues, DimValues)
+        Report[LabelInfo] = LabelReport
+        Total += LabelTotal
+        Passed += LabelPassed
     for KeyName in sorted(Tally):
         print(f'{KeyName[0]:16s} {KeyName[1]:11s} {KeyName[2]:12s} {Tally[KeyName]}')
     print(f'sgEntHandle chain: {Passed}/{Total} traced handle records tile exactly')

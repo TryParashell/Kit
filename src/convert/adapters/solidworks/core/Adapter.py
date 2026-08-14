@@ -1081,18 +1081,18 @@ def PatchNativeMut(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames
     OriginalStreams = dict(Streams)
     if KeywordsStream not in Streams or ResolvedFeaturesStream not in Streams:
         return Generated(Streams, 'template', frozenset(), 'native-source-with-kit-neutral', False, False)
-    ResolvedStream = ResolvedStream(Streams, ResolvedFeaturesStream)
-    OriginalModel = DecodeNativeModel(Streams[KeywordsStream], Streams[ResolvedStream], resolved_stream=ResolvedStream)
+    SelectedStream = ResolvedStream(Streams, ResolvedFeaturesStream)
+    OriginalModel = DecodeNativeModel(Streams[KeywordsStream], Streams[SelectedStream], resolved_stream=SelectedStream)
     Keywords = KeywordsRoot(Streams[KeywordsStream])
-    Resolved = bytearray(Streams[ResolvedStream])
+    Resolved = bytearray(Streams[SelectedStream])
     KeywordsChanged = IsPatchFeatuMut(DocValue, OriginalModel, Keywords[1], Resolved)
     KeywordsChanged = IsPatchParamete(DocValue, OriginalModel, Keywords[1], Resolved) or KeywordsChanged
     PatchSupport(DocValue, OriginalModel, Resolved)
     PatchSketchGeom(DocValue, OriginalModel, Resolved)
     if KeywordsChanged:
         Streams[KeywordsStream] = KeywordsBytes(*Keywords)
-    Streams[ResolvedStream] = bytes(Resolved)
-    PatchedModel = DecodeNativeModel(Streams[KeywordsStream], Streams[ResolvedStream], resolved_stream=ResolvedStream)
+    Streams[SelectedStream] = bytes(Resolved)
+    PatchedModel = DecodeNativeModel(Streams[KeywordsStream], Streams[SelectedStream], resolved_stream=SelectedStream)
     PatchedParameters = Parameters(PatchedModel)
     PatchedPlanes = Planes(PatchedModel, {Param.id for Param in PatchedParameters})
     PatchedSketches = Sketches(PatchedModel, {Param.id for Param in PatchedParameters})
@@ -1134,8 +1134,8 @@ def PatchNativeMut(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames
         Divergences = Patch.divergences
         if Capability.COMPONENT_DOCUMENTS in Patch.capabilities and BrepNative:
             Native.add(Capability.NATIVE_PAYLOADS)
-    Required = Required(DocValue)
-    Blockers = Required - Native - KTargetUnsupported
+    NeededCaps = Required(DocValue)
+    Blockers = NeededCaps - Native - KTargetUnsupported
     Usable = not Blockers
     if DocValue.assembly is None:
         return Generated(Streams, NativeBrep, frozenset(Native), 'native-template' if Usable else 'native-source-with-kit-neutral', Usable, Usable)
@@ -1610,8 +1610,8 @@ def PatchAsmMut(AsmValue: AssemblyData, Native: NativeAssembly, Streams: dict[st
     Rewritten: list[str] = []
     for InstanceId, Target in Desired.items():
         Source = Original[InstanceId]
-        NativeId = NativeId(InstanceId, 'sldasm:instance:')
-        ElemValue = Elements.get(NativeId or -1)
+        InstanceNativeId = NativeId(InstanceId, 'sldasm:instance:')
+        ElemValue = Elements.get(InstanceNativeId or -1)
         if ElemValue is None:
             continue
         if Target.owner_definition_id != Source.owner_definition_id or Target.order != Source.order or Target.fixed != Source.fixed:

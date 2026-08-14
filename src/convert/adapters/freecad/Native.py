@@ -179,7 +179,7 @@ def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
     return tuple(Result)
 
 # this definition exists because focused behavior needs one stable owner
-def LoadNative(DataValue: bytes, *, LoadEntries: bool=True) -> NativeArchive:
+def LoadBuildConfigs(DataValue: bytes, *, LoadEntries: bool=True) -> NativeArchive:
     Archive, Members = ArchiveMembers(DataValue)
     with Archive:
         try:
@@ -212,9 +212,9 @@ def LoadNative(DataValue: bytes, *, LoadEntries: bool=True) -> NativeArchive:
     return NativeArchive(RootValue, Objects, Entries, DocXml, tuple((NameValue for NameValue in Members if NameValue in Referenced)))
 
 # this definition exists because focused behavior needs one stable owner
-def ProbeNative(DataValue: bytes) -> tuple[float, str]:
+def ProbeBuildConfigs(DataValue: bytes) -> tuple[float, str]:
     try:
-        Native = LoadNative(DataValue, LoadEntries=False)
+        Native = LoadBuildConfigs(DataValue, LoadEntries=False)
     except NativeFreeCad as exc:
         return (0.0, str(exc))
     return (0.95, f"native FreeCAD schema {Native.root.get('SchemaVersion')} document")
@@ -265,7 +265,7 @@ def OtherEntryData(Native: _NativeArchive) -> list[dict[str, AnyValue]]:
     return [{'source_stream': NameValue, 'data': Native.entries[NameValue]} for NameValue in Native.entry_order if NameValue in Native.entries and NameValue not in Represented]
 
 # this definition exists because focused behavior needs one stable owner
-def NativeDoc(Native: _NativeArchive, DataValue: bytes, SourcePath: str) -> tuple[BrepPayload, BrepPayload]:
+def NativePayloads(Native: _NativeArchive, DataValue: bytes, SourcePath: str) -> tuple[BrepPayload, BrepPayload]:
     NativeDigest = Hashlib.sha256(DataValue).digest()
     NativeName = FilePath(SourcePath).name if SourcePath else f'Document{Suffix}'
     DocValue = BrepPayload('freecad:native-document', FormatId, 'native_document', f"FreeCAD Schema {Native.root.get('SchemaVersion', '')}", NativeDigest.hex(), data=DataValue, source_stream=NativeName, provenance=Provenance(FormatId, DocEntry, spans=(ProvenanceSpan(DocEntry, 0, len(Native.document_xml), 'xml'),)), attributes={'object_count': len(Native.objects), 'entry_order': list(Native.entry_order)}, role=PayloadRole.DOCUMENT, file_extension=Suffix)
@@ -273,7 +273,7 @@ def NativeDoc(Native: _NativeArchive, DataValue: bytes, SourcePath: str) -> tupl
     return (DocValue, Binding)
 
 # this definition exists because focused behavior needs one stable owner
-def Child(ObjValue: _NativeObject, NameValue: str, TagValue: str | None=None) -> XmlTree.Element | None:
+def FindChild(ObjValue: _NativeObject, NameValue: str, TagValue: str | None=None) -> XmlTree.Element | None:
     NodeValue = ObjValue.properties.get(NameValue)
     if NodeValue is None:
         return None
@@ -298,24 +298,24 @@ def Integer(Value: str | None, Default: int=0) -> int:
 
 # this definition exists because focused behavior needs one stable owner
 def String(ObjValue: _NativeObject, NameValue: str, Default: str='') -> str:
-    NodeValue = Child(ObjValue, NameValue, 'String')
+    NodeValue = FindChild(ObjValue, NameValue, 'String')
     return Default if NodeValue is None else NodeValue.get('value', Default)
 
 # this definition exists because focused behavior needs one stable owner
 def BoolAction(ObjValue: _NativeObject, NameValue: str, Default: bool=False) -> bool:
-    NodeValue = Child(ObjValue, NameValue, 'Bool')
+    NodeValue = FindChild(ObjValue, NameValue, 'Bool')
     if NodeValue is None:
         return Default
     return NodeValue.get('value', 'false').casefold() in PermissiveTrueValues
 
 # this definition exists because focused behavior needs one stable owner
 def Float(ObjValue: _NativeObject, NameValue: str, Default: float=0.0) -> float:
-    NodeValue = Child(ObjValue, NameValue, 'Float')
+    NodeValue = FindChild(ObjValue, NameValue, 'Float')
     return Default if NodeValue is None else Number(NodeValue.get('value'), Default)
 
 # this definition exists because focused behavior needs one stable owner
 def EnumAction(ObjValue: _NativeObject, NameValue: str, Default: int=0) -> int:
-    NodeValue = Child(ObjValue, NameValue, 'Integer')
+    NodeValue = FindChild(ObjValue, NameValue, 'Integer')
     return Default if NodeValue is None else Integer(NodeValue.get('value'), Default)
 
 # this definition exists because focused behavior needs one stable owner
@@ -346,7 +346,7 @@ def LinkList(ObjValue: _NativeObject, NameValue: str) -> tuple[str, ...]:
 
 # this definition exists because focused behavior needs one stable owner
 def PlacementElem(ObjValue: _NativeObject, NameValue: str) -> XmlTree.Element | None:
-    return Child(ObjValue, NameValue, 'PropertyPlacement')
+    return FindChild(ObjValue, NameValue, 'PropertyPlacement')
 
 # this definition exists because focused behavior needs one stable owner
 def PlacementMatrix(NodeValue: ET.Element | None) -> tuple[float, ...]:
@@ -732,11 +732,11 @@ def ParseSketches(Objects: tuple[_NativeObject, ...], Parameters: list[Parameter
         SourceTransform = SourcePlaneTransforms.get(SupportName)
         if Frame is None or SourceTransform is None or TransformClose(SourceTransform, Frame[1]):
             continue
-        RuleList = Child(ObjValue, 'Constraints', 'ConstraintList')
+        RuleList = FindChild(ObjValue, 'Constraints', 'ConstraintList')
         if RuleList is not None and RuleList.findall('./Constrain'):
             BlockedOriginFrames.add(SupportName)
             continue
-        GeomList = Child(ObjValue, 'Geometry', 'GeometryList')
+        GeomList = FindChild(ObjValue, 'Geometry', 'GeometryList')
         GeomNodes = [] if GeomList is None else GeomList.findall('./Geometry')
         if any((isinstance(GeomAction(NodeValue, '')[1], NativeGeom) for NodeValue in GeomNodes)):
             BlockedOriginFrames.add(SupportName)
@@ -765,9 +765,9 @@ def ParseSketches(Objects: tuple[_NativeObject, ...], Parameters: list[Parameter
             SupportId = f'freecad:plane:{ObjValue.name}:support'
             PlaneIds[f'{ObjValue.name}:support'] = SupportId
             Planes.append(SupportPlane(SupportId, SupportName or f'{ObjValue.name} support', TransformA(PlacementElem(ObjValue, 'Placement')), attributes={'freecad_support': SupportName, 'freecad_attachment_offset': ElemData(ObjValue.properties['AttachmentOffset']) if 'AttachmentOffset' in ObjValue.properties else {}}))
-        GeomList = Child(ObjValue, 'Geometry', 'GeometryList')
+        GeomList = FindChild(ObjValue, 'Geometry', 'GeometryList')
         GeomNodes = [] if GeomList is None else GeomList.findall('./Geometry')
-        RuleList = Child(ObjValue, 'Constraints', 'ConstraintList')
+        RuleList = FindChild(ObjValue, 'Constraints', 'ConstraintList')
         RuleNodes = [] if RuleList is None else RuleList.findall('./Constrain')
         SourceTransform = SourcePlaneTransforms.get(SupportName)
         TargetTransform = PlaneTransforms.get(SupportName)
@@ -918,7 +918,7 @@ def Explicit(Objects: tuple[_NativeObject, ...]) -> tuple[Selection, ...]:
                 Token = SubElem.rsplit('.', 1)[-1]
                 Inferred = next((KindValue.value for Prefix, KindValue in SubElemKindByPrefix.items() if Token.startswith(Prefix)), MateEntityKind.NATIVE.value)
                 Paths.append(SelectionPathElem(Kinds[Index] if Index < len(Kinds) and Kinds[Index] else Inferred, Target, SubElem))
-        PointNode = Child(ObjValue, 'SelectionPoint', 'PropertyVector')
+        PointNode = FindChild(ObjValue, 'SelectionPoint', 'PropertyVector')
         Point = VectorThree(Number(PointNode.get('valueX')), Number(PointNode.get('valueY')), Number(PointNode.get('valueZ'))) if PointNode is not None else None
         Result.append(Selection(SelectionId, String(ObjValue, 'Label', ObjValue.name), tuple(Paths), point=Point, provenance=Provenance(FormatId, ObjValue.name), attributes={'freecad': NativeObjectA(ObjValue)}))
     return tuple(Result)
@@ -953,7 +953,7 @@ def Extrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
     EndCondition = ExtrusionEnd(EnumAction(ObjValue, 'Type'), ObjValue.type_id)
     SideType = EnumAction(ObjValue, 'SideType', -1)
     SecondEndCondition = ExtrusionEnd(EnumAction(ObjValue, 'Type2'), ObjValue.type_id) if SideType == 1 else None
-    DirectionNode = Child(ObjValue, 'Direction', 'PropertyVector')
+    DirectionNode = FindChild(ObjValue, 'Direction', 'PropertyVector')
     Direction = None
     if DirectionNode is not None:
         Direction = VectorThree(Number(DirectionNode.get('valueX')), Number(DirectionNode.get('valueY')), Number(DirectionNode.get('valueZ')))
@@ -961,7 +961,7 @@ def Extrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
 
 # this definition exists because focused behavior needs one stable owner
 def PartExtrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
-    DirectionNode = Child(ObjValue, 'Dir', 'PropertyVector')
+    DirectionNode = FindChild(ObjValue, 'Dir', 'PropertyVector')
     Direction = None
     if DirectionNode is not None:
         Direction = VectorThree(Number(DirectionNode.get('valueX')), Number(DirectionNode.get('valueY')), Number(DirectionNode.get('valueZ')))
@@ -1463,7 +1463,7 @@ def Remaining(Objects: tuple[_NativeObject, ...], Parameters: list[Parameter], C
             Parameters.append(Param(ParamId, f"{String(ObjValue, 'Label', ObjValue.name)}.{PathValue}", ParamValue(0.0, ValueKind.NUMBER), expression=Expression(Source, language='freecad'), owner_id=f'freecad:object:{ObjValue.name}', attributes={'freecad_path': PathValue}))
 
 # this definition exists because focused behavior needs one stable owner
-def Native(Objects: tuple[_NativeObject, ...], FeatureIds: dict[str, str]) -> tuple[Config, ...]:
+def BuildConfigs(Objects: tuple[_NativeObject, ...], FeatureIds: dict[str, str]) -> tuple[Config, ...]:
     Values = [ObjValue for ObjValue in Objects if String(ObjValue, 'KitConfigurationId')]
     if not Values:
         return (Config('freecad:configuration:default', 'Default', active=True),)
@@ -1472,7 +1472,7 @@ def Native(Objects: tuple[_NativeObject, ...], FeatureIds: dict[str, str]) -> tu
 
 # this definition exists because focused behavior needs one stable owner
 def ReadNativeFcstd(DataValue: bytes, SourcePath: str='', *, OuterState: _ExternalState | None=None, OuterDepth: int=0) -> CadDoc:
-    Native = LoadNative(DataValue)
+    Native = LoadBuildConfigs(DataValue)
     SourceFile = ResolvedSource(SourcePath)
     OuterStateA = OuterState
     if OuterStateA is None and SourceFile is not None:
@@ -1553,7 +1553,7 @@ def ReadNativeFcstd(DataValue: bytes, SourcePath: str='', *, OuterState: _Extern
         Bodies.append(BodyValue('freecad:body:default', 'Body', Final.id, attributes={'freecad_generated': True}))
     DecodedBrep = DecodedDocBrep(BrepPayloads, tuple(Bodies))
     AsmValue = ParseAsm(Native, OwnerPayloads, BrepPayloads, ResolvedOuter, UnresolvedOuter, Parameters, ConsumedExpressions)
-    NativeDoc, NativeBinding = NativeDoc(Native, DataValue, SourcePath)
+    NativeDoc, NativeBinding = NativePayloads(Native, DataValue, SourcePath)
     BrepPayloads = (*BrepPayloads, NativeDoc, NativeBinding)
     Remaining(Native.objects, Parameters, ConsumedExpressions)
     NativeFeatureTypes = sorted({ObjValue.type_id for ObjValue in FeatureObjects if FeatureKindA(ObjValue) == FeatureKind.NATIVE})
@@ -1576,7 +1576,7 @@ def ReadNativeFcstd(DataValue: bytes, SourcePath: str='', *, OuterState: _Extern
         FreecadMeta['entries'] = OtherEntries
     if AsmValue is None and ResolvedOuter:
         FreecadMeta['external_documents'] = [{'file': FileName, 'identity': Identity, 'document': LinkedDoc} for FileName, (Identity, LinkedDoc) in ResolvedOuter.items()]
-    Configurations = Native(Native.objects, FeatureIds)
+    Configurations = BuildConfigs(Native.objects, FeatureIds)
     DocValue = CadDoc(Source, Configurations, tuple(Parameters), SupportPlanes, Sketches, tuple(Selections), tuple(Features), tuple(Bodies), meshes=Meshes, brep=DecodedBrep, brep_payloads=BrepPayloads, diagnostics=Diagnostics, metadata={'freecad': FreecadMeta}, assembly=AsmValue)
     Capabilities = InferCapabilities(DocValue, roundtrip_metadata=True)
     if ResolvedOuter or UnresolvedOuter:

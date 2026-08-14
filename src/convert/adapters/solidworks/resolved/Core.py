@@ -535,12 +535,16 @@ class FeatureEdit:
 
     # this definition exists because legacy and current sketch dimension names must stay synchronized
     def PostInit(Instance) -> None:
-        Dimensions = Instance.SketchDimensionsMm if Instance.SketchDimensionsMm is not None else Instance.sketch_dimensions_mm
-        if Instance.SketchDimensionsMm is not None and Instance.sketch_dimensions_mm is not None and Instance.SketchDimensionsMm != Instance.sketch_dimensions_mm:
-            raise SldprtFormatError('sketch dimension aliases must describe the same values')
-        object.__setattr__(Instance, 'SketchDimensionsMm', Dimensions)
-        object.__setattr__(Instance, 'sketch_dimensions_mm', Dimensions)
+        SyncEditMut(Instance)
     locals()['__post_init__'] = PostInit
+
+# this definition exists because feature edit aliases must resolve before patch validation
+def SyncEditMut(EditValue: FeatureEdit) -> None:
+    Dimensions = EditValue.SketchDimensionsMm if EditValue.SketchDimensionsMm is not None else EditValue.sketch_dimensions_mm
+    if EditValue.SketchDimensionsMm is not None and EditValue.sketch_dimensions_mm is not None and EditValue.SketchDimensionsMm != EditValue.sketch_dimensions_mm:
+        raise SldprtFormatError('sketch dimension aliases must describe the same values')
+    object.__setattr__(EditValue, 'SketchDimensionsMm', Dimensions)
+    object.__setattr__(EditValue, 'sketch_dimensions_mm', Dimensions)
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
@@ -1233,38 +1237,50 @@ def VerifyFeatures(Patched: bytes, Features: tuple[FeatureLayout, ...], Edits: M
         EditValue = Edits[Ordinal]
         Before = Features[Ordinal]
         After = Verification[Ordinal]
-        if After.feature_id != Before.feature_id or After.kind != Before.kind or After.depth_offset != Before.depth_offset or (After.angle_offset != Before.angle_offset) or (tuple((Point.offset for Point in After.points)) != tuple((Point.offset for Point in Before.points))) or (tuple((ArcValue.centre_offset for ArcValue in After.arcs)) != tuple((ArcValue.centre_offset for ArcValue in Before.arcs))) or (tuple((ArcValue.centre_offset for ArcValue in After.swept_arcs)) != tuple((ArcValue.centre_offset for ArcValue in Before.swept_arcs))) or (After.SketchDimensionOffsets != Before.SketchDimensionOffsets):
-            raise SldprtFormatError(f'patched feature {Ordinal} does not relocate to the same layout')
-        if EditValue.swept_arc_centres_mm is not None:
-            if not IsMatches(tuple((ArcValue.centre_mm for ArcValue in After.swept_arcs)), tuple(EditValue.swept_arc_centres_mm)):
-                raise SldprtFormatError(f'patched feature {Ordinal} swept arc centres do not verify')
-            for Index, ArcValue in enumerate(After.swept_arcs):
-                if not ArcValue.consistent:
-                    raise SldprtFormatError(f'patched feature {Ordinal} swept arc {Index} endpoints are not equidistant from its centre')
-        if EditValue.SketchDimensionsMm is not None and (not all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=1e-12, abs_tol=1e-09) for ActualValue, ExpectedValue in zip(After.SketchDimensionsMm, EditValue.SketchDimensionsMm, strict=True)))):
-            raise SldprtFormatError(f'patched feature {Ordinal} sketch dimensions do not verify')
-        if EditValue.corners_mm is not None and (not IsMatches(After.corners_mm, tuple(EditValue.corners_mm))):
-            raise SldprtFormatError(f'patched feature {Ordinal} corners do not verify')
-        if EditValue.radii_mm is not None:
-            for Index, (ArcValue, RadiusMm) in enumerate(zip(After.arcs, EditValue.radii_mm, strict=True)):
-                VerifyArc(ArcValue, Before.arcs[Index], RadiusMm, Index)
-        if EditValue.arc_centres_mm is not None and (not IsMatches(tuple((ArcValue.centre_mm for ArcValue in After.arcs)), tuple(EditValue.arc_centres_mm))):
-            raise SldprtFormatError(f'patched feature {Ordinal} arc centres do not verify')
-        if EditValue.angle_radians is not None and (After.angle_radians is None or not MathValue.isclose(After.angle_radians, EditValue.angle_radians, rel_tol=1e-12, abs_tol=1e-12)):
-            raise SldprtFormatError(f'patched feature {Ordinal} angle does not verify')
-        if EditValue.depth_mm is not None:
-            if After.depth_mm is None or not MathValue.isclose(After.depth_mm, EditValue.depth_mm, rel_tol=1e-12, abs_tol=1e-09):
-                raise SldprtFormatError(f'patched feature {Ordinal} depth does not verify')
-            if EditValue.update_depth_copies and (not IsDepthCopies(Patched, After, EditValue.depth_mm)):
-                raise SldprtFormatError(f'patched feature {Ordinal} depth copies do not verify')
-        if EditValue.reversed is not None:
-            if After.reversed is not bool(EditValue.reversed):
-                raise SldprtFormatError(f'patched feature {Ordinal} direction does not verify')
-            Mirror = After.from_reverse_offset
-            if Mirror is not None and bool(Patched[Mirror]) is not bool(EditValue.reversed):
-                raise SldprtFormatError(f'patched feature {Ordinal} mirrored direction does not verify')
-        if EditValue.end_condition_code is not None and After.end_condition_code != EditValue.end_condition_code:
-            raise SldprtFormatError(f'patched feature {Ordinal} end condition does not verify')
+        VerifyLayout(Before, After, Ordinal)
+        VerifyProfile(Before, After, EditValue, Ordinal)
+        VerifyScalars(Patched, After, EditValue, Ordinal)
+
+# this definition exists because relocated features must retain every native field offset
+def VerifyLayout(Before: FeatureLayout, After: FeatureLayout, Ordinal: int) -> None:
+    if After.feature_id != Before.feature_id or After.kind != Before.kind or After.depth_offset != Before.depth_offset or (After.angle_offset != Before.angle_offset) or (tuple((Point.offset for Point in After.points)) != tuple((Point.offset for Point in Before.points))) or (tuple((ArcValue.centre_offset for ArcValue in After.arcs)) != tuple((ArcValue.centre_offset for ArcValue in Before.arcs))) or (tuple((ArcValue.centre_offset for ArcValue in After.swept_arcs)) != tuple((ArcValue.centre_offset for ArcValue in Before.swept_arcs))) or (After.SketchDimensionOffsets != Before.SketchDimensionOffsets):
+        raise SldprtFormatError(f'patched feature {Ordinal} does not relocate to the same layout')
+
+# this definition exists because patched profile geometry needs one verification boundary
+def VerifyProfile(Before: FeatureLayout, After: FeatureLayout, EditValue: FeatureEdit, Ordinal: int) -> None:
+    if EditValue.swept_arc_centres_mm is not None:
+        if not IsMatches(tuple((ArcValue.centre_mm for ArcValue in After.swept_arcs)), tuple(EditValue.swept_arc_centres_mm)):
+            raise SldprtFormatError(f'patched feature {Ordinal} swept arc centres do not verify')
+        for Index, ArcValue in enumerate(After.swept_arcs):
+            if not ArcValue.consistent:
+                raise SldprtFormatError(f'patched feature {Ordinal} swept arc {Index} endpoints are not equidistant from its centre')
+    if EditValue.SketchDimensionsMm is not None and (not all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=1e-12, abs_tol=1e-09) for ActualValue, ExpectedValue in zip(After.SketchDimensionsMm, EditValue.SketchDimensionsMm, strict=True)))):
+        raise SldprtFormatError(f'patched feature {Ordinal} sketch dimensions do not verify')
+    if EditValue.corners_mm is not None and (not IsMatches(After.corners_mm, tuple(EditValue.corners_mm))):
+        raise SldprtFormatError(f'patched feature {Ordinal} corners do not verify')
+    if EditValue.radii_mm is not None:
+        for Index, (ArcValue, RadiusMm) in enumerate(zip(After.arcs, EditValue.radii_mm, strict=True)):
+            VerifyArc(ArcValue, Before.arcs[Index], RadiusMm, Index)
+    if EditValue.arc_centres_mm is not None and (not IsMatches(tuple((ArcValue.centre_mm for ArcValue in After.arcs)), tuple(EditValue.arc_centres_mm))):
+        raise SldprtFormatError(f'patched feature {Ordinal} arc centres do not verify')
+
+# this definition exists because patched scalar and flag values share one verification boundary
+def VerifyScalars(Patched: bytes, After: FeatureLayout, EditValue: FeatureEdit, Ordinal: int) -> None:
+    if EditValue.angle_radians is not None and (After.angle_radians is None or not MathValue.isclose(After.angle_radians, EditValue.angle_radians, rel_tol=1e-12, abs_tol=1e-12)):
+        raise SldprtFormatError(f'patched feature {Ordinal} angle does not verify')
+    if EditValue.depth_mm is not None:
+        if After.depth_mm is None or not MathValue.isclose(After.depth_mm, EditValue.depth_mm, rel_tol=1e-12, abs_tol=1e-09):
+            raise SldprtFormatError(f'patched feature {Ordinal} depth does not verify')
+        if EditValue.update_depth_copies and (not IsDepthCopies(Patched, After, EditValue.depth_mm)):
+            raise SldprtFormatError(f'patched feature {Ordinal} depth copies do not verify')
+    if EditValue.reversed is not None:
+        if After.reversed is not bool(EditValue.reversed):
+            raise SldprtFormatError(f'patched feature {Ordinal} direction does not verify')
+        Mirror = After.from_reverse_offset
+        if Mirror is not None and bool(Patched[Mirror]) is not bool(EditValue.reversed):
+            raise SldprtFormatError(f'patched feature {Ordinal} mirrored direction does not verify')
+    if EditValue.end_condition_code is not None and After.end_condition_code != EditValue.end_condition_code:
+        raise SldprtFormatError(f'patched feature {Ordinal} end condition does not verify')
 
 # this definition exists because focused behavior needs one stable owner
 def IsDepthCopies(Patched: bytes, Feature: FeatureLayout, DepthMm: float) -> bool:
