@@ -244,12 +244,10 @@ def EdgeUses(Facets: tuple[Triangle, ...]):
     return Result
 
 
-# this definition exists because focused behavior needs one stable owner
-def OrientFacets(
-    Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float
-):
+# facet adjacency stays isolated because manifold validation precedes orientation traversal
+def BuildNeighbors(Facets: tuple[Triangle, ...]):
     UsesValue = EdgeUses(Facets)
-    if any((len(EdgeFaces) > 2 for EdgeFaces in UsesValue.values())):
+    if any(len(EdgeFaces) > 2 for EdgeFaces in UsesValue.values()):
         return None
     Neighbors: dict[int, list[tuple[int, int]]] = {
         Index: [] for Index in range(len(Facets))
@@ -261,38 +259,54 @@ def OrientFacets(
         Relation = -LeftSign * RightSign
         Neighbors[LeftValue].append((Right, Relation))
         Neighbors[Right].append((LeftValue, Relation))
+    return Neighbors
+
+
+# component traversal stays isolated because contradictory facet parity invalidates the whole mesh
+def GetComponents(FacetCount: int, Neighbors: Mapping[int, list[tuple[int, int]]]):
     Flips = [0] * len(Facets)
-    Components = []
-    for Start in range(len(Facets)):
-        if Flips[Start]:
+    Components: list[tuple[int, ...]] = []
+    for StartIndex in range(FacetCount):
+        if Flips[StartIndex]:
             continue
-        Flips[Start] = 1
-        Queue = Deque([Start])
-        Component = []
-        while Queue:
-            Current = Queue.popleft()
-            Component.append(Current)
-            for Neighbor, Relation in Neighbors[Current]:
-                Expected = Flips[Current] * Relation
-                if Flips[Neighbor] and Flips[Neighbor] != Expected:
+        Flips[StartIndex] = 1
+        Pending = Deque([StartIndex])
+        Component: list[int] = []
+        while Pending:
+            CurrentIndex = Pending.popleft()
+            Component.append(CurrentIndex)
+            for NeighborIndex, Relation in Neighbors[CurrentIndex]:
+                Expected = Flips[CurrentIndex] * Relation
+                if Flips[NeighborIndex] and Flips[NeighborIndex] != Expected:
                     return None
-                if not Flips[Neighbor]:
-                    Flips[Neighbor] = Expected
-                    Queue.append(Neighbor)
+                if not Flips[NeighborIndex]:
+                    Flips[NeighborIndex] = Expected
+                    Pending.append(NeighborIndex)
         Components.append(tuple(sorted(Component)))
-    Oriented = list(Facets)
+    return Flips, tuple(Components)
+
+
+# parity application mutates one working copy because input facet order must remain untouched
+def ApplyFlipsMut(Oriented: list[Triangle], Flips: list[int]) -> None:
     for Index, FlipValue in enumerate(Flips):
         if FlipValue < 0:
             LeftValue, Middle, Right = Oriented[Index]
             Oriented[Index] = (LeftValue, Right, Middle)
-    OrientedTuple = tuple(Oriented)
-    OrientedUses = EdgeUses(OrientedTuple)
-    ComponentByFacet = [0] * len(Facets)
+
+
+# closure classification mutates orientation because negative closed volumes must face outward
+def GetClosedMut(
+    Points: tuple[Point, ...],
+    Oriented: list[Triangle],
+    Components: tuple[tuple[int, ...], ...],
+    Tolerance: float,
+) -> tuple[bool, ...]:
+    ComponentByFacet = [0] * len(Oriented)
     for ComponentIndex, Component in enumerate(Components):
         for FacetIndex in Component:
             ComponentByFacet[FacetIndex] = ComponentIndex
     Closed = [True] * len(Components)
-    for EdgeFaces in OrientedUses.values():
+    for EdgeFaces in EdgeUses(tuple(Oriented)).values():
         if len(EdgeFaces) != 2:
             for FacetIndex, Ignored in EdgeFaces:
                 Closed[ComponentByFacet[FacetIndex]] = False
@@ -303,10 +317,10 @@ def OrientFacets(
                 sum(
                     (
                         DotAction(
-                            Points[OrientedTuple[Index][0]],
+                            Points[Oriented[Index][0]],
                             Cross(
-                                Points[OrientedTuple[Index][1]],
-                                Points[OrientedTuple[Index][2]],
+                                Points[Oriented[Index][1]],
+                                Points[Oriented[Index][2]],
                             ),
                         )
                         for Index in Component
@@ -321,6 +335,23 @@ def OrientFacets(
                     LeftValue, Middle, Right = Oriented[Index]
                     Oriented[Index] = (LeftValue, Right, Middle)
         Closed[ComponentIndex] = IsClosed
+    return tuple(Closed)
+
+
+# facet orientation composes adjacency parity and volume phases because each has one failure mode
+def OrientFacets(
+    Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float
+):
+    Neighbors = BuildNeighbors(Facets)
+    if Neighbors is None:
+        return None
+    ComponentData = GetComponents(len(Facets), Neighbors)
+    if ComponentData is None:
+        return None
+    Flips, Components = ComponentData
+    Oriented = list(Facets)
+    ApplyFlipsMut(Oriented, Flips)
+    Closed = GetClosedMut(Points, Oriented, Components, Tolerance)
     return (tuple(Oriented), tuple(Components), tuple(Closed))
 
 
