@@ -1485,165 +1485,75 @@ def SelectVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved |
     return None
 
 
+# box specialization isolates primitive profile serialization behavior
+def BuildBoxTree(SketchObject, PadObject, PlaneObjectId, BoundsValue, DepthValue, DirectionCode, TerminationCode, EndCodes):
+    IsDimensionedBox = PadObject.properties and ('KitPrimitive', 'Box') in PadObject.properties and (len(SketchObject.dimensions) == 2)
+    ExpectedFeatureId = 34 if IsDimensionedBox else 32
+    if PadObject.object_id != ExpectedFeatureId:
+        return None
+    ProgramValue = (EncodeBoxProgram(), KBoxHeaderStamps) if PlaneObjectId == 2 and IsDimensionedBox else (EncodeProgram(), KFrontBossHeaderStamps) if PlaneObjectId == 2 else (EncodeTopProgram(), KTopBossHeaderStamps) if PlaneObjectId == 3 else (EncodeRightProgram(), KRightBossHeaderStamps) if PlaneObjectId == 4 else None
+    if ProgramValue is None:
+        return None
+    ProgramData, HeaderStamps = ProgramValue
+    ConfigZeroData = EncodeBoxConfigProgram() if IsDimensionedBox else None
+    EditData = FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=DepthValue, reversed=bool(DirectionCode), end_condition_code=TerminationCode, update_depth_copies=EndCodes == (0, 0) or PlaneObjectId in {3, 4}, SketchDimensionsMm=tuple((ItemData.value_mm for ItemData in SketchObject.dimensions)) if IsDimensionedBox else None)
+    return VendorResolved(PatchFeatures(ProgramData, {0: EditData}), HeaderStamps, Config0Payload=ConfigZeroData)
+
+# circle specialization isolates radial profile serialization behavior
+def BuildCircleTree(PadObject, PlaneObjectId, CircleValue, DepthValue, DirectionCode, EndCodes):
+    if EndCodes not in {(0, 0), (1, 0)} or PlaneObjectId != 2 or PadObject.object_id != 33:
+        return None
+    CenterX, CenterY, RadiusValue = CircleValue
+    if not MathValue.isclose(CenterX, 0.0, rel_tol=0.0, abs_tol=1e-10) or not MathValue.isclose(CenterY, 0.0, rel_tol=0.0, abs_tol=1e-10):
+        return None
+    IsReverseCircle = DirectionCode == 1
+    ProgramData = EncodeReverseA(DepthValue) if IsReverseCircle else EncodeCircleProgram()
+    HeaderStamps = KCircleBossHeaderStamps
+    CenterXMetres = CenterX / KMillimetres
+    CenterYMetres = CenterY / KMillimetres
+    RadiusMetres = RadiusValue / KMillimetres
+    DepthMetres = DepthValue / KMillimetres
+    CenterZMetres = DepthMetres * (-0.5 if IsReverseCircle else 0.5)
+    HeaderBoundsData = (CenterXMetres, CenterYMetres, CenterZMetres, CenterXMetres + RadiusMetres, CenterYMetres + RadiusMetres, 0.0 if IsReverseCircle else DepthMetres, CenterXMetres - RadiusMetres, CenterYMetres - RadiusMetres, -DepthMetres if IsReverseCircle else 0.0, MathValue.sqrt(RadiusMetres ** 2 * 2.0 + CenterZMetres ** 2))
+    HeaderCreationData = HeaderStamps[0][0] - 1
+    ConfigZeroData = EncodeReverse(CenterX, CenterY, RadiusValue, DepthValue) if IsReverseCircle else EncodeCircCfg(CenterX, CenterY, RadiusValue, DepthValue)
+    EditData = FeatureEdit(radii_mm=(RadiusValue,), arc_centres_mm=((CenterX, CenterY),), depth_mm=DepthValue, update_depth_copies=not IsReverseCircle, SketchDimensionsMm=(RadiusValue * 2.0,))
+    return VendorResolved(PatchFeatures(ProgramData, {0: EditData}), HeaderStamps, HeaderBounds=HeaderBoundsData, HeaderCreation=HeaderCreationData, Config0Payload=ConfigZeroData)
+
+# polyline specialization isolates polygon profile serialization behavior
+def BuildPolyTree(SketchObject, PadObject, PlaneObjectId, PolylineValue, DepthValue, EndCodes):
+    if PolylineValue is None or EndCodes != (0, 0) or PlaneObjectId != 2 or (PadObject.object_id != 32) or SketchObject.dimensions:
+        return None
+    try:
+        ProgramData = EncodePolylineSixProgram(PolylineSixFieldMap(PolylineValue, DepthValue))
+    except SldprtFormatError:
+        return None
+    HeaderStamps = KFrontBossHeaderStamps
+    return VendorResolved(ProgramData, HeaderStamps)
+
 # this definition exists because focused behavior needs one stable owner
 def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 2:
         return SelectVendorTree(AuthoredObjs)
     SketchObject, PadObject = AuthoredObjs
-    if PadObject.class_name == "moRevolution_c":
+    if PadObject.class_name == 'moRevolution_c':
         return BuildSingleTree(AuthoredObjs)
-    PlaneObjectId = (
-        Struct.unpack_from("<I", SketchObject.payload)[0]
-        if len(SketchObject.payload) >= 4
-        else 0
-    )
+    PlaneObjectId = Struct.unpack_from('<I', SketchObject.payload)[0] if len(SketchObject.payload) >= 4 else 0
     BoundsValue = WriteRectangle(SketchObject)
     CircleValue = WriteCircle(SketchObject)
     PolylineValue = PolySixPoints(SketchObject)
     EndCodes = ExtrusionEdit(PadObject.payload)
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or (PadObject.class_name != "moExtrusion_c")
-        or (PadObject.name != "Boss-Extrude1")
-        or (
-            sum(
-                (
-                    ItemValue is not None
-                    for ItemValue in (BoundsValue, CircleValue, PolylineValue)
-                )
-            )
-            != 1
-        )
-        or (EndCodes is None)
-        or (len(PadObject.dimensions) != 1)
-    ):
+    if SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (PadObject.class_name != 'moExtrusion_c') or (PadObject.name != 'Boss-Extrude1') or (sum((ItemValue is not None for ItemValue in (BoundsValue, CircleValue, PolylineValue))) != 1) or (EndCodes is None) or (len(PadObject.dimensions) != 1):
         return None
     DepthValue = PadObject.dimensions[0].value_mm
     if not MathValue.isfinite(DepthValue) or DepthValue <= 0.0:
         return None
     DirectionCode, TerminationCode = EndCodes
-    IsDimensionedBox = False
-    HeaderBoundsData = None
-    HeaderCreationData = None
-    ConfigZeroData = None
     if BoundsValue is not None:
-        IsDimensionedBox = (
-            PadObject.properties
-            and ("KitPrimitive", "Box") in PadObject.properties
-            and (len(SketchObject.dimensions) == 2)
-        )
-        ExpectedFeatureId = 34 if IsDimensionedBox else 32
-        if PadObject.object_id != ExpectedFeatureId:
-            return None
-        ProgramValue = (
-            (EncodeBoxProgram(), KBoxHeaderStamps)
-            if PlaneObjectId == 2 and IsDimensionedBox
-            else (
-                (EncodeProgram(), KFrontBossHeaderStamps)
-                if PlaneObjectId == 2
-                else (
-                    (EncodeTopProgram(), KTopBossHeaderStamps)
-                    if PlaneObjectId == 3
-                    else (
-                        (EncodeRightProgram(), KRightBossHeaderStamps)
-                        if PlaneObjectId == 4
-                        else None
-                    )
-                )
-            )
-        )
-        if ProgramValue is None:
-            return None
-        ProgramData, HeaderStamps = ProgramValue
-        ConfigZeroData = EncodeBoxConfigProgram() if IsDimensionedBox else None
-        EditData = FeatureEdit(
-            corners_mm=RectangleCornersMm(*BoundsValue),
-            depth_mm=DepthValue,
-            reversed=bool(DirectionCode),
-            end_condition_code=TerminationCode,
-            update_depth_copies=EndCodes == (0, 0) or PlaneObjectId in {3, 4},
-            SketchDimensionsMm=(
-                tuple((ItemData.value_mm for ItemData in SketchObject.dimensions))
-                if IsDimensionedBox
-                else None
-            ),
-        )
-    elif CircleValue is not None:
-        if (
-            EndCodes not in {(0, 0), (1, 0)}
-            or PlaneObjectId != 2
-            or PadObject.object_id != 33
-        ):
-            return None
-        CenterX, CenterY, RadiusValue = CircleValue
-        if not MathValue.isclose(
-            CenterX, 0.0, rel_tol=0.0, abs_tol=1e-10
-        ) or not MathValue.isclose(CenterY, 0.0, rel_tol=0.0, abs_tol=1e-10):
-            return None
-        IsReverseCircle = DirectionCode == 1
-        ProgramData = (
-            EncodeReverseA(DepthValue) if IsReverseCircle else EncodeCircleProgram()
-        )
-        HeaderStamps = KCircleBossHeaderStamps
-        CenterXMetres = CenterX / KMillimetres
-        CenterYMetres = CenterY / KMillimetres
-        RadiusMetres = RadiusValue / KMillimetres
-        DepthMetres = DepthValue / KMillimetres
-        CenterZMetres = DepthMetres * (-0.5 if IsReverseCircle else 0.5)
-        HeaderBoundsData = (
-            CenterXMetres,
-            CenterYMetres,
-            CenterZMetres,
-            CenterXMetres + RadiusMetres,
-            CenterYMetres + RadiusMetres,
-            0.0 if IsReverseCircle else DepthMetres,
-            CenterXMetres - RadiusMetres,
-            CenterYMetres - RadiusMetres,
-            -DepthMetres if IsReverseCircle else 0.0,
-            MathValue.sqrt(RadiusMetres**2 * 2.0 + CenterZMetres**2),
-        )
-        HeaderCreationData = HeaderStamps[0][0] - 1
-        ConfigZeroData = (
-            EncodeReverse(CenterX, CenterY, RadiusValue, DepthValue)
-            if IsReverseCircle
-            else EncodeCircCfg(CenterX, CenterY, RadiusValue, DepthValue)
-        )
-        EditData = FeatureEdit(
-            radii_mm=(RadiusValue,),
-            arc_centres_mm=((CenterX, CenterY),),
-            depth_mm=DepthValue,
-            update_depth_copies=not IsReverseCircle,
-            SketchDimensionsMm=(RadiusValue * 2.0,),
-        )
-    else:
-        if (
-            PolylineValue is None
-            or EndCodes != (0, 0)
-            or PlaneObjectId != 2
-            or (PadObject.object_id != 32)
-            or SketchObject.dimensions
-        ):
-            return None
-        try:
-            ProgramData = EncodePolylineSixProgram(
-                PolylineSixFieldMap(PolylineValue, DepthValue)
-            )
-        except SldprtFormatError:
-            return None
-        HeaderStamps = KFrontBossHeaderStamps
-    return VendorResolved(
-        (
-            ProgramData
-            if PolylineValue is not None
-            else PatchFeatures(ProgramData, {0: EditData})
-        ),
-        HeaderStamps,
-        HeaderBounds=HeaderBoundsData,
-        HeaderCreation=HeaderCreationData,
-        Config0Payload=ConfigZeroData,
-    )
+        return BuildBoxTree(SketchObject, PadObject, PlaneObjectId, BoundsValue, DepthValue, DirectionCode, TerminationCode, EndCodes)
+    if CircleValue is not None:
+        return BuildCircleTree(PadObject, PlaneObjectId, CircleValue, DepthValue, DirectionCode, EndCodes)
+    return BuildPolyTree(SketchObject, PadObject, PlaneObjectId, PolylineValue, DepthValue, EndCodes)
 
 
 # this definition exists because focused behavior needs one stable owner
