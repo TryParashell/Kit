@@ -2787,51 +2787,90 @@ def IsReparsePath(PathValue: FilePath, RootValue: FilePath) -> bool:
         Current = Current.parent
 
 
-# this definition exists because focused behavior needs one stable owner
-def OuterDocsMut(
-    Native: _NativeArchive, SourcePath: str, State: _ExternalState | None, Depth: int
-) -> tuple[dict[str, tuple[str, CadDoc]], list[dict[str, str]]]:
-    Source = ResolvedSource(SourcePath)
-    Files = sorted(
+# this definition lists unique external document references in stable order
+def OuterFileNames(Native: _NativeArchive) -> list[str]:
+    return sorted(
         {
             str(Linked["file"])
             for ObjValue in Native.objects
             if IsLinkObject(ObjValue) and (Linked := LinkedObject(ObjValue))["file"]
         }
     )
+
+
+# this definition resolves one external reference within the guarded document root
+def ResolveOuter(
+    FileName: str,
+    Source: FilePath | None,
+    State: OuterState | None,
+    Depth: int,
+) -> tuple[FilePath | None, str]:
+    if Source is None or State is None:
+        return (None, "source location is unavailable")
+    if Depth >= KMaxOuterDepth:
+        return (None, "external reference depth exceeds safe limits")
+    if FilePath(FileName).is_absolute():
+        return (None, "absolute external paths are not allowed")
+    try:
+        Choice = (Source.parent / FileName).resolve(strict=True)
+        Choice.relative_to(State.root)
+    except (OSError, RuntimeError, ValueError):
+        return (None, "external reference is missing or outside the document root")
+    if IsReparsePath(Choice, State.root):
+        return (None, "external reference traverses a reparse point")
+    if Choice.suffix.casefold() != Suffix.casefold():
+        return (None, "external reference is not an FCStd document")
+    if Choice in State.active:
+        return (None, "external reference cycle detected")
+    return (Choice, "")
+
+
+# this definition loads one guarded external document and updates shared limits
+def LoadOuterDoc(Choice: FilePath, State: OuterState, Depth: int) -> CadDoc:
+    try:
+        SizeValue = Choice.stat().st_size
+    except OSError as ErrorInfo:
+        raise NativeFreeCad("external reference is unreadable") from ErrorInfo
+    if (
+        SizeValue < 0
+        or SizeValue > MaxEntrySize
+        or State.FileCount >= MaxOuterFiles
+        or State.TotalBytes + SizeValue > MaxTotalSize
+    ):
+        raise NativeFreeCad("external reference exceeds safe limits")
+    try:
+        ChildData = Choice.read_bytes()
+    except OSError as ErrorInfo:
+        raise NativeFreeCad("external reference is unreadable") from ErrorInfo
+    State.FileCount += 1
+    State.TotalBytes += len(ChildData)
+    State.active.add(Choice)
+    try:
+        try:
+            Manifest = ExtractManifestFromFcstd(ChildData)
+        except ValueError as ErrorInfo:
+            if str(ErrorInfo) != "FCStd archive has no embedded Kit interchange document":
+                raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
+            return ReadNativeFcstd(
+                ChildData, str(Choice), StateValue=State, OuterDepth=Depth + 1
+            )
+        return CadDoc.from_dict(Manifest)
+    finally:
+        State.active.discard(Choice)
+
+
+# this definition resolves and loads all guarded external document references
+def OuterDocsMut(
+    Native: _NativeArchive, SourcePath: str, State: _ExternalState | None, Depth: int
+) -> tuple[dict[str, tuple[str, CadDoc]], list[dict[str, str]]]:
+    Source = ResolvedSource(SourcePath)
     Resolved: dict[str, tuple[str, CadDoc]] = {}
     Unresolved: list[dict[str, str]] = []
-    for FileName in Files:
-        Reason = ""
-        Choice: FilePath | None = None
-        if Source is None or State is None:
-            Reason = "source location is unavailable"
-        elif Depth >= KMaxOuterDepth:
-            Reason = "external reference depth exceeds safe limits"
-        elif FilePath(FileName).is_absolute():
-            Reason = "absolute external paths are not allowed"
-        else:
-            try:
-                Choice = (Source.parent / FileName).resolve(strict=True)
-                Choice.relative_to(State.root)
-            except (OSError, RuntimeError, ValueError):
-                Reason = "external reference is missing or outside the document root"
-        if not Reason and Choice is not None and IsReparsePath(Choice, State.root):
-            Reason = "external reference traverses a reparse point"
-        if (
-            not Reason
-            and Choice is not None
-            and (Choice.suffix.casefold() != Suffix.casefold())
-        ):
-            Reason = "external reference is not an FCStd document"
-        if not Reason and Choice is not None and (Choice in State.active):
-            Reason = "external reference cycle detected"
-        if Reason:
-            Unresolved.append({"file": FileName, "reason": Reason})
-            continue
-        if Choice is None:
+    for FileName in OuterFileNames(Native):
+        Choice, Reason = ResolveOuter(FileName, Source, State, Depth)
+        if Reason or Choice is None or State is None:
             Unresolved.append(
-                {"file": FileName, "reason": "external reference is invalid"}
+                {"file": FileName, "reason": Reason or "external reference is invalid"}
             )
             continue
         Identity = Choice.relative_to(State.root).as_posix()
@@ -2840,51 +2879,10 @@ def OuterDocsMut(
             Resolved[FileName] = (Identity, Cached)
             continue
         try:
-            SizeValue = Choice.stat().st_size
-        except OSError:
-            Unresolved.append(
-                {"file": FileName, "reason": "external reference is unreadable"}
-            )
-            continue
-        if (
-            SizeValue < 0
-            or SizeValue > MaxEntrySize
-            or State.FileCount >= MaxOuterFiles
-            or (State.TotalBytes + SizeValue > MaxTotalSize)
-        ):
-            Unresolved.append(
-                {"file": FileName, "reason": "external reference exceeds safe limits"}
-            )
-            continue
-        try:
-            ChildData = Choice.read_bytes()
-        except OSError:
-            Unresolved.append(
-                {"file": FileName, "reason": "external reference is unreadable"}
-            )
-            continue
-        State.FileCount += 1
-        State.TotalBytes += len(ChildData)
-        State.active.add(Choice)
-        try:
-            try:
-                Manifest = ExtractManifestFromFcstd(ChildData)
-            except ValueError as ErrorInfo:
-                if (
-                    str(ErrorInfo)
-                    != "FCStd archive has no embedded Kit interchange document"
-                ):
-                    raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
-                Child = ReadNativeFcstd(
-                    ChildData, str(Choice), StateValue=State, OuterDepth=Depth + 1
-                )
-            else:
-                Child = CadDoc.from_dict(Manifest)
+            Child = LoadOuterDoc(Choice, State, Depth)
         except (NativeFreeCad, TypeError, ValueError, RecursionError) as ErrorInfo:
             Unresolved.append({"file": FileName, "reason": str(ErrorInfo)})
             continue
-        finally:
-            State.active.discard(Choice)
         State.cache[Choice] = Child
         Resolved[FileName] = (Identity, Child)
     return (Resolved, Unresolved)

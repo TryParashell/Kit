@@ -12380,44 +12380,8 @@ def LinkedRectangle(
     return (tuple(Profiles), UsedValue)
 
 
-# this definition exists because focused behavior needs one stable owner
-def DecodeProfiles(
-    Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...]
-) -> tuple[tuple[NativeProfile, ...], set[int], tuple[NativeDimension, ...]]:
-    LinkedRectangles, LinkedMarkers = LinkedRectangle(Markers)
-    StructuralRectangles, StructuralRectangle = StructuralA(Markers, LinkedMarkers)
-    StructuralCircles, StructuralMarkers, StructuralDimensions = Structural(
-        Markers, Dimensions, LinkedMarkers | StructuralRectangle
-    )
-    StructuralPolylines, StructuralPolylineMarkers = PolyProfiles(
-        Markers, LinkedMarkers | StructuralRectangle | StructuralMarkers
-    )
-    RemainingMarkers = [
-        Marker
-        for Marker in Markers
-        if Marker.offset
-        not in LinkedMarkers
-        | StructuralRectangle
-        | StructuralMarkers
-        | StructuralPolylineMarkers
-    ]
-    CircleProfileValues, CircleDimensions = CircleSet(RemainingMarkers, Dimensions)
-    CircleDimensions.update(StructuralDimensions)
-    Normalized = tuple(
-        (
-            (
-                Replace(Dimension, kind=CircleDimensions[Index])
-                if Index in CircleDimensions
-                else Dimension
-            )
-            for Index, Dimension in enumerate(Dimensions)
-        )
-    )
-    Points = [
-        Marker
-        for Marker in RemainingMarkers
-        if Marker.coordinates_mm is not None and Marker.locus == KPointLocus.hex()
-    ]
+# rectangle discovery owns cartesian corner candidate enumeration
+def FindRectangles(Points):
     Coordinates = list(dict.fromkeys((Marker.coordinates_mm for Marker in Points)))
     Rectangles: list[tuple[float, float, float, float]] = []
     XsValue = sorted({Point[0] for Point in Coordinates})
@@ -12432,6 +12396,11 @@ def DecodeProfiles(
                 (XOneValue, YOneValue),
             } <= CoordinateSet:
                 Rectangles.append((XZero, YZero, XOneValue, YOneValue))
+    return Rectangles
+
+
+# rectangle selection owns dimension matching and deterministic fallback ordering
+def SelectRects(Points, Rectangles, Dimensions):
     Values = [Dimension.value_mm for Dimension in Dimensions]
     MatchValues = [
         Rectangle
@@ -12493,6 +12462,11 @@ def DecodeProfiles(
             default=1 << 62,
         )
     )
+    return Selected
+
+
+# line run grouping owns contiguous rectangle edge marker selection
+def ProfileLineRuns(RemainingMarkers):
     LineMarkers = [
         Marker
         for Marker in RemainingMarkers
@@ -12512,24 +12486,13 @@ def DecodeProfiles(
         for Index in range(0, len(RunValue), 6)
         if len(RunValue[Index : Index + 4]) == 4
     ]
-    Profiles: list[NativeProfile] = [
-        *StructuralCircles,
-        *CircleProfileValues,
-        *LinkedRectangles,
-        *StructuralRectangles,
-        *StructuralPolylines,
-    ]
-    UsedValue: set[int] = (
-        LinkedMarkers
-        | StructuralRectangle
-        | StructuralMarkers
-        | StructuralPolylineMarkers
-        | {
-            Offset
-            for Profile in CircleProfileValues
-            for Offset in Profile.marker_offsets
-        }
-    )
+    return ProfileLines
+
+
+# rectangle attachment owns marker consumption and profile construction
+def AppendRectsMut(
+    Profiles, UsedValue, Selected, ProfileLines, CircleProfileValues, Markers
+):
     for Index, Rectangle in enumerate(Selected):
         if any(
             (
@@ -12561,6 +12524,64 @@ def DecodeProfiles(
             )
         )
         Profiles.append(NativeProfile("rectangle", Rectangle, SpanValue))
+
+
+# this definition exists because focused behavior needs one stable owner
+def DecodeProfiles(
+    Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...]
+) -> tuple[tuple[NativeProfile, ...], set[int], tuple[NativeDimension, ...]]:
+    LinkedRectangles, LinkedMarkers = LinkedRectangle(Markers)
+    StructuralRectangles, StructuralRectangle = StructuralA(Markers, LinkedMarkers)
+    StructuralCircles, StructuralMarkers, StructuralDimensions = Structural(
+        Markers, Dimensions, LinkedMarkers | StructuralRectangle
+    )
+    StructuralPolylines, StructuralPolylineMarkers = PolyProfiles(
+        Markers, LinkedMarkers | StructuralRectangle | StructuralMarkers
+    )
+    ExcludedMarkers = (
+        LinkedMarkers
+        | StructuralRectangle
+        | StructuralMarkers
+        | StructuralPolylineMarkers
+    )
+    RemainingMarkers = [
+        Marker for Marker in Markers if Marker.offset not in ExcludedMarkers
+    ]
+    CircleProfileValues, CircleDimensions = CircleSet(RemainingMarkers, Dimensions)
+    CircleDimensions.update(StructuralDimensions)
+    Normalized = tuple(
+        Replace(Dimension, kind=CircleDimensions[Index])
+        if Index in CircleDimensions
+        else Dimension
+        for Index, Dimension in enumerate(Dimensions)
+    )
+    Points = [
+        Marker
+        for Marker in RemainingMarkers
+        if Marker.coordinates_mm is not None and Marker.locus == KPointLocus.hex()
+    ]
+    Selected = SelectRects(Points, FindRectangles(Points), Dimensions)
+    ProfileLines = ProfileLineRuns(RemainingMarkers)
+    Profiles: list[NativeProfile] = [
+        *StructuralCircles,
+        *CircleProfileValues,
+        *LinkedRectangles,
+        *StructuralRectangles,
+        *StructuralPolylines,
+    ]
+    UsedValue: set[int] = ExcludedMarkers | {
+        Offset
+        for Profile in CircleProfileValues
+        for Offset in Profile.marker_offsets
+    }
+    AppendRectsMut(
+        Profiles,
+        UsedValue,
+        Selected,
+        ProfileLines,
+        CircleProfileValues,
+        Markers,
+    )
 
     # this callback exists because local behavior needs one focused transformation
     Profiles.sort(key=lambda Profile: min(Profile.marker_offsets, default=1 << 62))
