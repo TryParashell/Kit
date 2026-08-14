@@ -722,6 +722,17 @@ def Numbered(Value: str) -> tuple[str, str] | None:
 
 
 # this definition exists because focused behavior needs one stable owner
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
+class SearchState:
+    References: Defaultdict[str, list[NativeProductA]]
+    Diagnostics: list[DiagValue]
+    FileCount: int = 0
+    TotalBytes: int = 0
+    LimitName: str | None = None
+
+
+# this definition exists because focused behavior needs one stable owner
 def ComponentRef(
     Label: str, Settings: ReadOptions
 ) -> tuple[dict[str, tuple[NativeProductA, ...]], tuple[DiagValue, ...]]:
@@ -735,97 +746,22 @@ def ComponentRef(
         Settings, "component_search_max_depth", KDefaultMaxDepth, AllowZero=True
     )
     Roots, RootDiagnostics = ComponentSearch(Label, Settings)
-    References: Defaultdict[str, list[NativeProductA]] = Defaultdict(list)
-    Diagnostics = list(RootDiagnostics)
-    FileCount = 0
-    TotalBytes = 0
-    Limit: str | None = None
+    State = SearchState(Defaultdict(list), list(RootDiagnostics))
     for RootValue in Roots:
-        Pending: list[tuple[FilePath, int]] = [(RootValue, 0)]
-        while Pending and Limit is None:
-            Folder, Depth = Pending.pop(0)
-            try:
-
-                # this callback exists because local behavior needs one focused transformation
-                Entries = tuple(
-                    sorted(
-                        Folder.iterdir(),
-                        key=lambda ItemValue: (
-                            ItemValue.name.casefold(),
-                            ItemValue.name,
-                        ),
-                    )
-                )
-            except OSError as ErrorInfo:
-                Diagnostics.append(
-                    SearchDiag(Folder, "unreadable_directory", str(ErrorInfo))
-                )
-                continue
-            for PathValue in Entries:
-                if IsReparsePoint(PathValue):
-                    Diagnostics.append(SearchDiag(PathValue, "reparse_point"))
-                    continue
-                try:
-                    if PathValue.is_dir():
-                        if Depth >= MaxDepth:
-                            Limit = "depth"
-                            break
-                        ResolvedFolder = PathValue.resolve(strict=True)
-                        if not IsUnderRoot(ResolvedFolder, RootValue):
-                            Diagnostics.append(SearchDiag(PathValue, "root_escape"))
-                            continue
-                        Pending.append((ResolvedFolder, Depth + 1))
-                        continue
-                    if (
-                        not PathValue.is_file()
-                        or PathValue.suffix.casefold() not in DocTypeBySuffix
-                    ):
-                        continue
-                    Resolved = PathValue.resolve(strict=True)
-                    if not IsUnderRoot(Resolved, RootValue):
-                        Diagnostics.append(SearchDiag(PathValue, "root_escape"))
-                        continue
-                    SizeValue = Resolved.stat().st_size
-                except OSError as ErrorInfo:
-                    Diagnostics.append(
-                        SearchDiag(PathValue, "unreadable_candidate", str(ErrorInfo))
-                    )
-                    continue
-                if FileCount >= MaxFiles:
-                    Limit = "files"
-                    break
-                if SizeValue > MaxTotalBytes - TotalBytes:
-                    Limit = "total_bytes"
-                    break
-                FileCount += 1
-                TotalBytes += SizeValue
-                try:
-                    DataValue = Resolved.read_bytes()
-                    Archive = CfvTwoArchive.from_bytes(DataValue)
-                    Table = DecodeProductA(Archive)
-                except (CfvTwoFormatError, OSError, UnicodeDecodeError, ValueError):
-                    continue
-                References[Table.root_name].append(
-                    NativeProductA(
-                        Table.root_name,
-                        Resolved,
-                        DocTypeBySuffix[Resolved.suffix.casefold()],
-                        Hashlib.sha256(DataValue).hexdigest(),
-                    )
-                )
-        if Limit is not None:
+        ScanRootMut(RootValue, MaxDepth, MaxFiles, MaxTotalBytes, State)
+        if State.LimitName is not None:
             break
-    if Limit is not None:
-        Diagnostics.append(
+    if State.LimitName is not None:
+        State.Diagnostics.append(
             DiagValue(
                 "catia.product.component_search_limit",
-                f"CATIA component discovery stopped at the configured {Limit} limit.",
+                f"CATIA component discovery stopped at the configured {State.LimitName} limit.",
                 Severity.WARNING,
                 attributes=FrozenMapping(
                     {
-                        "limit": Limit,
-                        "files": FileCount,
-                        "total_bytes": TotalBytes,
+                        "limit": State.LimitName,
+                        "files": State.FileCount,
+                        "total_bytes": State.TotalBytes,
                         "max_files": MaxFiles,
                         "max_total_bytes": MaxTotalBytes,
                         "max_depth": MaxDepth,
@@ -846,10 +782,142 @@ def ComponentRef(
                     ),
                 )
             )
-            for NameValue, Values in References.items()
+            for NameValue, Values in State.References.items()
         },
-        tuple(Diagnostics),
+        tuple(State.Diagnostics),
     )
+
+
+# this definition exists because focused behavior needs one stable owner
+def ScanRootMut(
+    RootValue: FilePath,
+    MaxDepth: int,
+    MaxFiles: int,
+    MaxTotalBytes: int,
+    State: SearchState,
+) -> None:
+    Pending: list[tuple[FilePath, int]] = [(RootValue, 0)]
+    while Pending and State.LimitName is None:
+        Folder, Depth = Pending.pop(0)
+        Entries, Diagnostic = FolderEntries(Folder)
+        if Diagnostic is not None:
+            State.Diagnostics.append(Diagnostic)
+        for PathValue in Entries:
+            VisitPathMut(
+                PathValue,
+                RootValue,
+                Depth,
+                Pending,
+                MaxDepth,
+                MaxFiles,
+                MaxTotalBytes,
+                State,
+            )
+            if State.LimitName is not None:
+                break
+
+
+# this definition exists because focused behavior needs one stable owner
+def FolderEntries(
+    Folder: FilePath,
+) -> tuple[tuple[FilePath, ...], DiagValue | None]:
+    try:
+
+        # this callback exists because local behavior needs one focused transformation
+        Entries = tuple(
+            sorted(
+                Folder.iterdir(),
+                key=lambda ItemValue: (ItemValue.name.casefold(), ItemValue.name),
+            )
+        )
+    except OSError as ErrorInfo:
+        return ((), SearchDiag(Folder, "unreadable_directory", str(ErrorInfo)))
+    return (Entries, None)
+
+
+# this definition exists because focused behavior needs one stable owner
+def VisitPathMut(
+    PathValue: FilePath,
+    RootValue: FilePath,
+    Depth: int,
+    Pending: list[tuple[FilePath, int]],
+    MaxDepth: int,
+    MaxFiles: int,
+    MaxTotalBytes: int,
+    State: SearchState,
+) -> None:
+    if IsReparsePoint(PathValue):
+        State.Diagnostics.append(SearchDiag(PathValue, "reparse_point"))
+        return
+    try:
+        if PathValue.is_dir():
+            VisitFolderMut(PathValue, RootValue, Depth, Pending, MaxDepth, State)
+            return
+        if (
+            not PathValue.is_file()
+            or PathValue.suffix.casefold() not in DocTypeBySuffix
+        ):
+            return
+        Resolved = PathValue.resolve(strict=True)
+        if not IsUnderRoot(Resolved, RootValue):
+            State.Diagnostics.append(SearchDiag(PathValue, "root_escape"))
+            return
+        SizeValue = Resolved.stat().st_size
+    except OSError as ErrorInfo:
+        State.Diagnostics.append(
+            SearchDiag(PathValue, "unreadable_candidate", str(ErrorInfo))
+        )
+        return
+    if State.FileCount >= MaxFiles:
+        State.LimitName = "files"
+        return
+    if SizeValue > MaxTotalBytes - State.TotalBytes:
+        State.LimitName = "total_bytes"
+        return
+    State.FileCount += 1
+    State.TotalBytes += SizeValue
+    Loaded = LoadReference(Resolved)
+    if Loaded is not None:
+        NameValue, Reference = Loaded
+        State.References[NameValue].append(Reference)
+
+
+# this definition exists because focused behavior needs one stable owner
+def VisitFolderMut(
+    PathValue: FilePath,
+    RootValue: FilePath,
+    Depth: int,
+    Pending: list[tuple[FilePath, int]],
+    MaxDepth: int,
+    State: SearchState,
+) -> None:
+    if Depth >= MaxDepth:
+        State.LimitName = "depth"
+        return
+    Resolved = PathValue.resolve(strict=True)
+    if not IsUnderRoot(Resolved, RootValue):
+        State.Diagnostics.append(SearchDiag(PathValue, "root_escape"))
+        return
+    Pending.append((Resolved, Depth + 1))
+
+
+# this definition exists because focused behavior needs one stable owner
+def LoadReference(
+    Resolved: FilePath,
+) -> tuple[str, NativeProductA] | None:
+    try:
+        DataValue = Resolved.read_bytes()
+        Archive = CfvTwoArchive.from_bytes(DataValue)
+        Table = DecodeProductA(Archive)
+    except (CfvTwoFormatError, OSError, UnicodeDecodeError, ValueError):
+        return None
+    Reference = NativeProductA(
+        Table.root_name,
+        Resolved,
+        DocTypeBySuffix[Resolved.suffix.casefold()],
+        Hashlib.sha256(DataValue).hexdigest(),
+    )
+    return (Table.root_name, Reference)
 
 
 # this definition exists because focused behavior needs one stable owner
