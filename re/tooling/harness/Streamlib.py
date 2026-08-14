@@ -25,6 +25,7 @@ from convert.adapters.solidworks.container.Container import (
     _template_fields as TemplateFields,
 )
 from convert.adapters.solidworks import resolved as Resolvedlib
+from convert.Security.PathBoundary import ResolveInput
 import Carchive as Carchive
 
 
@@ -142,7 +143,7 @@ Donor.__getattr__ = GetLegacyAttr
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def LoadDonor(PathInfoData: str | PathInfo) -> Donor:
-    Source = PathInfo(PathInfoData)
+    Source = ResolveInput(PathInfoData)
     ByteBlob = Source.read_bytes()
     ArchiveInfo = SldprtArchive.from_bytes(ByteBlob)
     Signatures, TypeIds = TemplateFields(ByteBlob, ArchiveInfo)

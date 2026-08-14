@@ -33,6 +33,11 @@ from convert.adapters.solidworks.container.Archive import (
     Verify,
 )
 from convert.adapters.solidworks.container.Container import SldprtArchive
+from convert.Security.PathBoundary import (
+    ResolveFolder,
+    ResolveInput,
+    ResolveOutput,
+)
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KDefaultData = KRootInfo / "tests" / "fixtures" / "solidworks" / "donors"
@@ -120,8 +125,9 @@ def TracedVersions(SegmentsDir: PathInfo) -> DictInfo[str, int]:
     Table: DictInfo[str, int] = {}
     for PathInfoData in sorted(SegmentsDir.glob("segments_*.json")):
         PayloadInfo = JsonData.loads(PathInfoData.read_text(encoding="utf-8"))
-        PartInfoInfo = PathInfo(str(PayloadInfo["part"]))
-        if not PartInfoInfo.is_file():
+        try:
+            PartInfoInfo = ResolveInput(str(PayloadInfo["part"]))
+        except FileNotFoundError:
             continue
         ArchiveInfo = SldprtArchive.from_bytes(PartInfoInfo.read_bytes())
         Found = ContainerMo(ArchiveInfo.streams)
@@ -337,11 +343,11 @@ def MainRun() -> int:
     ParserInfo.add_argument("--out", required=True)
     ArgsInfo = ParserInfo.parse_args()
     PayloadInfo = RunTask(
-        PathInfo(ArgsInfo.fixtures),
-        PathInfo(ArgsInfo.layouts),
-        PathInfo(ArgsInfo.segments),
+        ResolveFolder(ArgsInfo.fixtures),
+        ResolveInput(ArgsInfo.layouts),
+        ResolveFolder(ArgsInfo.segments),
     )
-    Destination = PathInfo(ArgsInfo.out)
+    Destination = ResolveOutput(ArgsInfo.out)
     Destination.parent.mkdir(parents=True, exist_ok=True)
     with Destination.open("w", encoding="utf-8") as Handle:
         JsonData.dump(PayloadInfo, Handle, indent=1)

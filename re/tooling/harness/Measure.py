@@ -21,6 +21,8 @@ KHereInfo = Pathlib.Path(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KRootInfo = KHereInfo.parents[2]
+System.path.insert(0, str(KRootInfo / "src"))
+from convert.Security.PathBoundary import ResolveInput, ValidateLabel
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KOutInfo = KRootInfo / ".rescratch" / "sw" / "out"
@@ -151,8 +153,8 @@ def Describe(Record: dict) -> None:
 def MainRun() -> int:
     KOutInfo.mkdir(parents=True, exist_ok=True)
     StopInfo, Dismissed, Thread = StartDismisser()
-    LabelInfo = System.argv[1]
-    Targets = [Pathlib.Path(ItemData).resolve() for ItemData in System.argv[2:]]
+    LabelInfo = ValidateLabel(System.argv[1])
+    Targets = [ResolveInput(ItemData) for ItemData in System.argv[2:]]
     RecordsInfo: list[dict] = []
     ControlBefore = Measure(KControl)
     ControlBefore["role"] = "control-before"
