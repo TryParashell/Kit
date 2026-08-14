@@ -206,7 +206,8 @@ def EncodeClass(NameValue: str, Schema: int) -> bytes:
     return Struct.pack('<HHH', KNewClassTag, Schema, len(Encoded)) + Encoded
 
 # this definition exists because focused behavior needs one stable owner
-def EncodeClassRef(Index: int, *, WideValue: bool=False) -> bytes:
+def EncodeClassRef(Index: int, *, WideValue: bool=False, **Options: object) -> bytes:
+    WideValue = CompatOption(Options, 'wide', WideValue, 'EncodeClassRef')
     if Index < 0:
         raise ArchiveError(f'negative class index {Index}')
     if Index > KMaxMapIndex:
@@ -216,7 +217,8 @@ def EncodeClassRef(Index: int, *, WideValue: bool=False) -> bytes:
     return Struct.pack('<H', KClassTagBit | Index)
 
 # this definition exists because focused behavior needs one stable owner
-def EncodeObjectRef(Index: int, *, WideValue: bool=False) -> bytes:
+def EncodeObjectRef(Index: int, *, WideValue: bool=False, **Options: object) -> bytes:
+    WideValue = CompatOption(Options, 'wide', WideValue, 'EncodeObjectRef')
     if Index < 0:
         raise ArchiveError(f'negative object index {Index}')
     if Index > KMaxMapIndex:
@@ -226,6 +228,14 @@ def EncodeObjectRef(Index: int, *, WideValue: bool=False) -> bytes:
     if WideValue or Index >= KBigObjectTag:
         return Struct.pack('<HI', KBigObjectTag, Index)
     return Struct.pack('<H', Index)
+
+# this definition exists because one legacy keyword alias needs consistent unknown option errors
+def CompatOption(Options: Mapping[str, object], KeyValue: str, Current: object, Caller: str) -> object:
+    Unknown = set(Options) - {KeyValue}
+    if Unknown:
+        NameValue = next(iter(Unknown))
+        raise TypeError(f"{Caller}() got an unexpected keyword argument '{NameValue}'")
+    return Options.get(KeyValue, Current)
 
 # this definition exists because focused behavior needs one stable owner
 def EncodeNull() -> bytes:
@@ -1489,7 +1499,8 @@ def FinishWalkMut(BaseValue: int, Frames: list[Frame], Segments: list[StaticSegm
     return tuple(Segments)
 
 # this definition exists because focused behavior needs one stable owner
-def Segment(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None) -> tuple[StaticSegment, ...]:
+def Segment(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None, **Options: object) -> tuple[StaticSegment, ...]:
+    HeaderSize, MoVersion, Ignored = ArchiveOptions(Options, HeaderSize, MoVersion, None, 'Segment')
     if MoVersion is not None and MoVersion < 0:
         raise ArchiveError(f'document version {MoVersion} must not be negative')
     Progress = [0, 0]
@@ -1503,6 +1514,17 @@ def Segment(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSiz
         if not ErrorInfo.reached:
             setattr(ErrorInfo, 'reached', tuple(Reached))
         raise
+
+# this definition exists because archive APIs preserve established snake case option names
+def ArchiveOptions(Options: Mapping[str, object], HeaderSize: int, MoVersion: int | None, Limit: int | None, Caller: str) -> tuple[int, int | None, int | None]:
+    Unknown = set(Options) - {'header_size', 'mo_version', 'limit'}
+    if Unknown:
+        NameValue = next(iter(Unknown))
+        raise TypeError(f"{Caller}() got an unexpected keyword argument '{NameValue}'")
+    HeaderSize = Options.get('header_size', HeaderSize)
+    MoVersion = Options.get('mo_version', MoVersion)
+    Limit = Options.get('limit', Limit)
+    return (HeaderSize, MoVersion, Limit)
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
@@ -1532,7 +1554,8 @@ def ImpliedBases(Error: SegmentationError, BaseValue: int) -> tuple[int, ...]:
     return tuple(sorted(Found, reverse=True))
 
 # this definition exists because focused behavior needs one stable owner
-def ResolveBase(BlobValue: bytes, SeedValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None, Limit: int=KBaseResolutionLimit) -> BaseResolution:
+def ResolveBase(BlobValue: bytes, SeedValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None, Limit: int=KBaseResolutionLimit, **Options: object) -> BaseResolution:
+    HeaderSize, MoVersion, Limit = ArchiveOptions(Options, HeaderSize, MoVersion, Limit, 'ResolveBase')
     ValidateBase(SeedValue, Limit)
     Queue: list[int] = [SeedValue]
     Tried: list[int] = []
@@ -1651,7 +1674,8 @@ class VerifyReport:
     locals()['as_dict'] = AsDict
 
 # this definition exists because focused behavior needs one stable owner
-def Verify(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None) -> VerifyReport:
+def Verify(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None, **Options: object) -> VerifyReport:
+    HeaderSize, MoVersion, Ignored = ArchiveOptions(Options, HeaderSize, MoVersion, None, 'Verify')
     try:
         Segments = Segment(BlobValue, BaseValue, Layouts, HeaderSize=HeaderSize, MoVersion=MoVersion)
     except Segmentation as ErrorInfo:
