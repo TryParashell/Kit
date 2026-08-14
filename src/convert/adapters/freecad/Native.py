@@ -2888,21 +2888,10 @@ def OuterDocsMut(
     return (Resolved, Unresolved)
 
 
-# this definition exists because focused behavior needs one stable owner
-def ParseAsm(
-    Native: _NativeArchive,
-    OwnerPayloads: dict[str, list[str]],
-    BrepPayloads: tuple[BrepPayload, ...],
-    OuterDocuments: dict[str, tuple[str, CadDocument]],
-    UnresolvedOuter: list[dict[str, str]],
-    Parameters: list[Parameter],
-    ConsumedExpressions: set[tuple[str, str]],
-) -> AsmData | None:
-    RootValue = AsmRootObject(Native.objects)
-    if RootValue is None:
-        return None
-    Objects = {ObjValue.name: ObjValue for ObjValue in Native.objects}
-    RootDefinitionId = f"freecad:definition:{RootValue.name}"
+# this definition selects ordered component link objects from an assembly root
+def AssemblyLinks(
+    Native: NativeArchive, Objects: Mapping[str, NativeObject], RootValue: NativeObject
+) -> list[NativeObject]:
     RootGroup = LinkList(RootValue, "Group")
     Links = [
         Objects[NameValue]
@@ -2922,6 +2911,13 @@ def ParseAsm(
         )
     else:
         Links = [ObjValue for ObjValue in Native.objects if IsLinkObject(ObjValue)]
+    return Links
+
+
+# this definition collects joint ordering and grounded target context
+def JointContext(
+    Native: NativeArchive, Objects: Mapping[str, NativeObject]
+) -> tuple[NativeObject | None, tuple[str, ...], list[NativeObject], dict[str, NativeObject]]:
     JointGroup = FindJointGroup(Native.objects, Objects)
     JointNames = LinkList(JointGroup, "Group") if JointGroup is not None else ()
     if not JointNames:
@@ -2937,8 +2933,99 @@ def ParseAsm(
         if IsGroundedJoint(ObjValue)
         and (Target := LinkAction(ObjValue, JointGroundProp))
     }
-    GroundedTargets = set(GroundedByTarget)
-    Definitions: list[ComponentDefinition] = [
+    return (JointGroup, tuple(JointNames), JointObjects, GroundedByTarget)
+
+
+# this definition builds a linked or embedded component definition and document
+def MakeDefinition(
+    LinkObj: NativeObject,
+    Target: str,
+    SourceFile: str,
+    SourceIdentity: str,
+    Outer: tuple[str, CadDoc] | None,
+    Objects: Mapping[str, NativeObject],
+    OwnerPayloads: Mapping[str, list[str]],
+    BrepPayloads: tuple[BrepPayload, ...],
+) -> tuple[str, ComponentDoc, ComponentDefinition]:
+    Identity = f"{SourceIdentity}#{Target}"
+    Digest = Hashlib.sha256(Identity.encode("utf-8")).hexdigest()[:20]
+    DefinitionId = f"freecad:definition:{Digest}"
+    TargetObj = Objects.get(Target)
+    PayloadIds = set(OwnerPayloads.get(Target, []))
+    TargetPayloads = tuple(
+        Payload
+        for Payload in BrepPayloads
+        if Payload.id in PayloadIds and Payload.attributes.get("freecad_property") == "Shape"
+    )
+    if Outer is not None:
+        Component = Outer[1]
+        DocId = f"freecad:component-document:{Digest}"
+        BodyIds = tuple(BodyValue.id for BodyValue in Component.bodies)
+    else:
+        DocId, Component, BodyIds = EmbeddedDoc(Target, TargetObj, Identity, TargetPayloads)
+    Definition = ComponentDefinition(
+        DefinitionId,
+        String(TargetObj, "Label", Target) if TargetObj is not None else Target,
+        ComponentKind.ASSEMBLY
+        if IsAsmLinkObject(LinkObj) or Component.assembly is not None
+        else ComponentKind.PART,
+        document_id=DocId,
+        body_ids=BodyIds,
+        source_path=SourceFile,
+        source_format_id=FormatId,
+        source_sha256=Component.source.sha256,
+        provenance=Provenance(FormatId, Target),
+        attributes={
+            "freecad": NativeObjectA(TargetObj) if TargetObj is not None else {},
+            "brep_payload_ids": OwnerPayloads.get(Target, []),
+            "linked_object": LinkedObject(LinkObj),
+        },
+    )
+    return (DefinitionId, ComponentDoc(DocId, Component), Definition)
+
+
+# this definition builds one component occurrence from a native link object
+def MakeInstance(
+    LinkObj: NativeObject,
+    DefinitionId: str,
+    RootDefinitionId: str,
+    Order: int,
+    GroundedByTarget: Mapping[str, NativeObject],
+) -> ComponentInstance:
+    Linked = LinkedObject(LinkObj)
+    Grounded = GroundedByTarget.get(LinkObj.name)
+    return ComponentInstance(
+        f"freecad:instance:{LinkObj.name}",
+        String(LinkObj, "Label", LinkObj.name),
+        DefinitionId,
+        RootDefinitionId,
+        MatrixFour(PlacementMatrix(PlacementElem(LinkObj, "Placement"))),
+        order=Order,
+        reference_number=str(Order + 1),
+        hidden=not IsBoolValue(LinkObj, "Visibility", True),
+        fixed=Grounded is not None,
+        provenance=Provenance(FormatId, LinkObj.name),
+        attributes={
+            "freecad": NativeObjectA(LinkObj),
+            "linked_object": Linked,
+            "link_placement": list(PlacementMatrix(PlacementElem(LinkObj, "LinkPlacement"))),
+            "grounded_joint": NativeObjectA(Grounded) if Grounded is not None else {},
+        },
+    )
+
+
+# this definition builds component definitions documents instances and lookup ids
+def BuildComponents(
+    Native: NativeArchive,
+    RootValue: NativeObject,
+    Objects: Mapping[str, NativeObject],
+    OwnerPayloads: Mapping[str, list[str]],
+    BrepPayloads: tuple[BrepPayload, ...],
+    OuterDocuments: Mapping[str, tuple[str, CadDoc]],
+    GroundedByTarget: Mapping[str, NativeObject],
+) -> tuple[list[ComponentDefinition], list[ComponentDoc], list[ComponentInstance], dict[str, str]]:
+    RootDefinitionId = f"freecad:definition:{RootValue.name}"
+    Definitions = [
         ComponentDefinition(
             RootDefinitionId,
             String(RootValue, "Label", RootValue.name),
@@ -2951,7 +3038,7 @@ def ParseAsm(
     Documents: list[ComponentDoc] = []
     Instances: list[ComponentInstance] = []
     InstanceIds: dict[str, str] = {}
-    for Order, LinkObj in enumerate(Links):
+    for Order, LinkObj in enumerate(AssemblyLinks(Native, Objects, RootValue)):
         Linked = LinkedObject(LinkObj)
         Target = str(Linked["name"]) or LinkObj.name
         SourceFile = str(Linked["file"]).replace("\\", "/")
@@ -2964,85 +3051,130 @@ def ParseAsm(
         DefinitionKey = (SourceIdentity, Target)
         DefinitionId = DefinitionIds.get(DefinitionKey)
         if DefinitionId is None:
-            Identity = f"{SourceIdentity}#{Target}"
-            Digest = Hashlib.sha256(Identity.encode("utf-8")).hexdigest()[:20]
-            DefinitionId = f"freecad:definition:{Digest}"
-            DefinitionIds[DefinitionKey] = DefinitionId
-            TargetObj = Objects.get(Target)
-            TargetPayloadIds = set(OwnerPayloads.get(Target, []))
-            TargetPayloads = tuple(
-                (
-                    Payload
-                    for Payload in BrepPayloads
-                    if Payload.id in TargetPayloadIds
-                    and Payload.attributes.get("freecad_property") == "Shape"
-                )
+            DefinitionId, Document, Definition = MakeDefinition(
+                LinkObj,
+                Target,
+                SourceFile,
+                SourceIdentity,
+                Outer,
+                Objects,
+                OwnerPayloads,
+                BrepPayloads,
             )
-            if Outer is not None:
-                Component = Outer[1]
-                DocId = f"freecad:component-document:{Digest}"
-                BodyIds = tuple((BodyValue.id for BodyValue in Component.bodies))
-            else:
-                DocId, Component, BodyIds = EmbeddedDoc(
-                    Target, TargetObj, Identity, TargetPayloads
-                )
-            Documents.append(ComponentDoc(DocId, Component))
-            Definitions.append(
-                ComponentDefinition(
-                    DefinitionId,
-                    (
-                        String(TargetObj, "Label", Target)
-                        if TargetObj is not None
-                        else Target
-                    ),
-                    (
-                        ComponentKind.ASSEMBLY
-                        if IsAsmLinkObject(LinkObj) or Component.assembly is not None
-                        else ComponentKind.PART
-                    ),
-                    document_id=DocId,
-                    body_ids=BodyIds,
-                    source_path=SourceFile,
-                    source_format_id=FormatId,
-                    source_sha256=Component.source.sha256,
-                    provenance=Provenance(FormatId, Target),
+            DefinitionIds[DefinitionKey] = DefinitionId
+            Documents.append(Document)
+            Definitions.append(Definition)
+        Instance = MakeInstance(
+            LinkObj, DefinitionId, RootDefinitionId, Order, GroundedByTarget
+        )
+        InstanceIds[LinkObj.name] = Instance.id
+        Instances.append(Instance)
+    return (Definitions, Documents, Instances, InstanceIds)
+
+
+# this definition resolves a native joint type to the interchange mate kind
+def JointKind(ObjValue: NativeObject) -> MateKind | str:
+    StoredKind = String(ObjValue, "MateType")
+    if StoredKind:
+        try:
+            return MateKind(StoredKind)
+        except ValueError:
+            return StoredKind
+    return MateKindByJointType.get(Enumeration(ObjValue, "JointType"), MateKind.NATIVE)
+
+
+# this definition builds mate entities and preserves native reference metadata
+def JointRefsMut(
+    ObjValue: NativeObject,
+    RootDefinitionId: str,
+    InstanceIds: Mapping[str, str],
+    MateEntities: list[MateEntity],
+) -> tuple[list[str], list[dict[str, AnyValue]]]:
+    EntityIds: list[str] = []
+    References: list[dict[str, AnyValue]] = []
+    for RefIndex, PropName in enumerate(JointRefProperties, start=1):
+        RefValue = XlinkData(ObjValue, PropName)
+        References.append(RefValue)
+        Placement = PlacementElem(ObjValue, f"Placement{RefIndex}")
+        Frame = None if Placement is None else MatrixFour(PlacementMatrix(Placement))
+        for SubIndex, SubElem in enumerate(RefValue["subelements"]):
+            ComponentName, Separator, SourceEntityId = str(SubElem).partition(".")
+            if not Separator:
+                SourceEntityId = ComponentName
+                ComponentName = ""
+            EntityId = f"freecad:mate-entity:{ObjValue.name}:{RefIndex}:{SubIndex}"
+            EntityIds.append(EntityId)
+            MateEntities.append(
+                MateEntity(
+                    EntityId,
+                    RootDefinitionId,
+                    (InstanceIds[ComponentName],) if ComponentName in InstanceIds else (),
+                    MateEntityKindA(SourceEntityId),
+                    source_entity_id=SourceEntityId,
+                    frame=Frame,
+                    provenance=Provenance(FormatId, f"{ObjValue.name}.{PropName}"),
                     attributes={
-                        "freecad": (
-                            NativeObjectA(TargetObj) if TargetObj is not None else {}
-                        ),
-                        "brep_payload_ids": OwnerPayloads.get(Target, []),
-                        "linked_object": Linked,
+                        "freecad_reference": RefValue,
+                        "freecad_subelement": SubElem,
+                        "reference_property": PropName,
                     },
                 )
             )
-        InstanceId = f"freecad:instance:{LinkObj.name}"
-        InstanceIds[LinkObj.name] = InstanceId
-        Instances.append(
-            ComponentInstance(
-                InstanceId,
-                String(LinkObj, "Label", LinkObj.name),
-                DefinitionId,
-                RootDefinitionId,
-                MatrixFour(PlacementMatrix(PlacementElem(LinkObj, "Placement"))),
-                order=Order,
-                reference_number=str(Order + 1),
-                hidden=not IsBoolValue(LinkObj, "Visibility", True),
-                fixed=LinkObj.name in GroundedTargets,
-                provenance=Provenance(FormatId, LinkObj.name),
-                attributes={
-                    "freecad": NativeObjectA(LinkObj),
-                    "linked_object": Linked,
-                    "link_placement": list(
-                        PlacementMatrix(PlacementElem(LinkObj, "LinkPlacement"))
-                    ),
-                    "grounded_joint": (
-                        NativeObjectA(GroundedByTarget[LinkObj.name])
-                        if LinkObj.name in GroundedByTarget
-                        else {}
-                    ),
-                },
-            )
-        )
+    return (EntityIds, References)
+
+
+# this definition builds one native joint mate and its dimensional parameters
+def MakeMateMut(
+    ObjValue: NativeObject,
+    Order: int,
+    RootDefinitionId: str,
+    InstanceIds: Mapping[str, str],
+    MateEntities: list[MateEntity],
+    Parameters: list[Parameter],
+    Consumed: set[tuple[str, str]],
+) -> MateRule | None:
+    MateId = f"freecad:mate:{ObjValue.name}"
+    KindValue = JointKind(ObjValue)
+    EntityIds, References = JointRefsMut(
+        ObjValue, RootDefinitionId, InstanceIds, MateEntities
+    )
+    Value, ParamIds = MateValuesMut(ObjValue, KindValue, MateId, Parameters, Consumed)
+    StoredValue = StoredMateValue(ObjValue)
+    if StoredValue is not None:
+        Value = StoredValue
+    if not EntityIds:
+        return None
+    return MateRule(
+        MateId,
+        String(ObjValue, "Label", ObjValue.name),
+        KindValue,
+        RootDefinitionId,
+        tuple(EntityIds),
+        order=Order,
+        value=Value,
+        parameter_ids=ParamIds,
+        alignment=String(ObjValue, "Alignment", "unknown"),
+        suppressed=IsBoolValue(
+            ObjValue, "SourceSuppressed", IsBoolValue(ObjValue, "Suppressed")
+        ),
+        driving=IsBoolValue(ObjValue, "Driving", True),
+        provenance=Provenance(FormatId, ObjValue.name),
+        attributes={
+            "freecad": NativeObjectA(ObjValue),
+            "joint_type": Enumeration(ObjValue, "JointType"),
+            "references": References,
+        },
+    )
+
+
+# this definition builds all non grounded mate rules in native joint order
+def BuildMatesMut(
+    JointObjects: Sequence[NativeObject],
+    RootDefinitionId: str,
+    InstanceIds: Mapping[str, str],
+    Parameters: list[Parameter],
+    Consumed: set[tuple[str, str]],
+) -> tuple[list[MateEntity], list[MateRule], dict[str, str]]:
     MateEntities: list[MateEntity] = []
     Mates: list[MateRule] = []
     MateIdsByName: dict[str, str] = {}
@@ -3051,82 +3183,28 @@ def ParseAsm(
             continue
         MateId = f"freecad:mate:{ObjValue.name}"
         MateIdsByName[ObjValue.name] = MateId
-        EntityIds: list[str] = []
-        References: list[dict[str, AnyValue]] = []
-        JointType = Enumeration(ObjValue, "JointType")
-        StoredKind = String(ObjValue, "MateType")
-        if StoredKind:
-            try:
-                KindValue: MateKind | str = MateKind(StoredKind)
-            except ValueError:
-                KindValue = StoredKind
-        else:
-            KindValue = MateKindByJointType.get(JointType, MateKind.NATIVE)
-        for RefIndex, PropName in enumerate(JointRefProperties, start=1):
-            RefValue = XlinkData(ObjValue, PropName)
-            References.append(RefValue)
-            Placement = PlacementElem(ObjValue, f"Placement{RefIndex}")
-            Frame = (
-                None if Placement is None else MatrixFour(PlacementMatrix(Placement))
-            )
-            for SubIndex, SubElem in enumerate(RefValue["subelements"]):
-                ComponentName, Separator, SourceEntityId = str(SubElem).partition(".")
-                if not Separator:
-                    SourceEntityId = ComponentName
-                    ComponentName = ""
-                EntityId = f"freecad:mate-entity:{ObjValue.name}:{RefIndex}:{SubIndex}"
-                EntityIds.append(EntityId)
-                MateEntities.append(
-                    MateEntity(
-                        EntityId,
-                        RootDefinitionId,
-                        (
-                            (InstanceIds[ComponentName],)
-                            if ComponentName in InstanceIds
-                            else ()
-                        ),
-                        MateEntityKindA(SourceEntityId),
-                        source_entity_id=SourceEntityId,
-                        frame=Frame,
-                        provenance=Provenance(FormatId, f"{ObjValue.name}.{PropName}"),
-                        attributes={
-                            "freecad_reference": RefValue,
-                            "freecad_subelement": SubElem,
-                            "reference_property": PropName,
-                        },
-                    )
-                )
-        Value, ParamIds = MateValuesMut(
-            ObjValue, KindValue, MateId, Parameters, ConsumedExpressions
+        MateValue = MakeMateMut(
+            ObjValue,
+            Order,
+            RootDefinitionId,
+            InstanceIds,
+            MateEntities,
+            Parameters,
+            Consumed,
         )
-        StoredValue = StoredMateValue(ObjValue)
-        if StoredValue is not None:
-            Value = StoredValue
-        if not EntityIds:
-            continue
-        Mates.append(
-            MateRule(
-                MateId,
-                String(ObjValue, "Label", ObjValue.name),
-                KindValue,
-                RootDefinitionId,
-                tuple(EntityIds),
-                order=Order,
-                value=Value,
-                parameter_ids=ParamIds,
-                alignment=String(ObjValue, "Alignment", "unknown"),
-                suppressed=IsBoolValue(
-                    ObjValue, "SourceSuppressed", IsBoolValue(ObjValue, "Suppressed")
-                ),
-                driving=IsBoolValue(ObjValue, "Driving", True),
-                provenance=Provenance(FormatId, ObjValue.name),
-                attributes={
-                    "freecad": NativeObjectA(ObjValue),
-                    "joint_type": Enumeration(ObjValue, "JointType"),
-                    "references": References,
-                },
-            )
-        )
+        if MateValue is not None:
+            Mates.append(MateValue)
+    return (MateEntities, Mates, MateIdsByName)
+
+
+# this definition builds the optional native mate group with preserved ordering
+def MateGroupSet(
+    JointGroup: NativeObject | None,
+    JointNames: Sequence[str],
+    MateIdsByName: Mapping[str, str],
+    Mates: Sequence[MateRule],
+    RootDefinitionId: str,
+) -> tuple[MateGroup, ...]:
     Groups: tuple[MateGroup, ...] = ()
     if Mates and JointGroup is not None:
         GroupId = f"freecad:mate-group:{JointGroup.name}"
@@ -3150,6 +3228,46 @@ def ParseAsm(
                 attributes={"freecad": NativeObjectA(JointGroup)},
             ),
         )
+    return Groups
+
+
+# this definition coordinates native assembly component and mate decoding
+def ParseAsm(
+    Native: _NativeArchive,
+    OwnerPayloads: dict[str, list[str]],
+    BrepPayloads: tuple[BrepPayload, ...],
+    OuterDocuments: dict[str, tuple[str, CadDocument]],
+    UnresolvedOuter: list[dict[str, str]],
+    Parameters: list[Parameter],
+    ConsumedExpressions: set[tuple[str, str]],
+) -> AsmData | None:
+    RootValue = AsmRootObject(Native.objects)
+    if RootValue is None:
+        return None
+    Objects = {ObjValue.name: ObjValue for ObjValue in Native.objects}
+    RootDefinitionId = f"freecad:definition:{RootValue.name}"
+    JointGroup, JointNames, JointObjects, GroundedByTarget = JointContext(
+        Native, Objects
+    )
+    Definitions, Documents, Instances, InstanceIds = BuildComponents(
+        Native,
+        RootValue,
+        Objects,
+        OwnerPayloads,
+        BrepPayloads,
+        OuterDocuments,
+        GroundedByTarget,
+    )
+    MateEntities, Mates, MateIdsByName = BuildMatesMut(
+        JointObjects,
+        RootDefinitionId,
+        InstanceIds,
+        Parameters,
+        ConsumedExpressions,
+    )
+    Groups = MateGroupSet(
+        JointGroup, JointNames, MateIdsByName, Mates, RootDefinitionId
+    )
     return AsmData(
         RootDefinitionId,
         tuple(Definitions),

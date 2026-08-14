@@ -12589,7 +12589,7 @@ def DecodeProfiles(
 
 
 # graph traversal owns extraction of one connected edge component
-def TakeComponentMut(Edges, Remaining):
+def TakeGraphMut(Edges, Remaining):
     Component = {Remaining.pop()}
     Vertices = set(Edges[next(iter(Component))].endpoint_indices or ())
     Changed = True
@@ -12688,7 +12688,7 @@ def StructuralA(
     Profiles: list[NativeProfile] = []
     UsedValue: set[int] = set()
     while Remaining:
-        Component, Vertices = TakeComponentMut(Edges, Remaining)
+        Component, Vertices = TakeGraphMut(Edges, Remaining)
         Profile = RectComponent(Edges, Markers, Component, Vertices)
         if Profile is not None:
             Profiles.append(Profile)
