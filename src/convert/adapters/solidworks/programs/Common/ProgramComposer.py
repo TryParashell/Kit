@@ -9,14 +9,16 @@
 from __future__ import annotations
 
 from operator import itemgetter as ItemGetter
-from typing import Any
+from typing import Any as AnyValue
 
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
 
 # split method tables need one checked path back into exact source order
-def ComposeOps(MethodPrograms: tuple[Any, ...], StreamName: str) -> tuple[Any, ...]:
-    OwnedOps: list[tuple[int, int, str, str, Any]] = []
+def ComposeOps(
+    MethodPrograms: tuple[AnyValue, ...], StreamName: str
+) -> tuple[AnyValue, ...]:
+    OwnedOps: list[tuple[int, int, str, str, AnyValue]] = []
     for OwnerSites, StreamOps in MethodPrograms:
         for StartPos, FieldWidth, OwnerKey, KindName, DefaultValue in StreamOps.get(
             StreamName, ()
@@ -45,10 +47,17 @@ def ComposeOps(MethodPrograms: tuple[Any, ...], StreamName: str) -> tuple[Any, .
 
 # legacy callers still require one local owner index for each variant
 def BuildProgram(
-    MethodPrograms: tuple[Any, ...], StreamName: str
-) -> tuple[tuple[str, ...], tuple[Any, ...]]:
+    MethodPrograms: tuple[AnyValue, ...], StreamName: str
+) -> tuple[tuple[str, ...], tuple[AnyValue, ...]]:
     OwnedOps = ComposeOps(MethodPrograms, StreamName)
-    OwnerNames = tuple(sorted({OwnerText for _, _, OwnerText, _, _ in OwnedOps}))
+    OwnerNames = tuple(
+        sorted(
+            {
+                OwnerText
+                for StartPos, FieldWidth, OwnerText, KindName, DefaultValue in OwnedOps
+            }
+        )
+    )
     OwnerIndex = {OwnerText: Index for Index, OwnerText in enumerate(OwnerNames)}
     LegacyOps = tuple(
         (
@@ -65,8 +74,8 @@ def BuildProgram(
 
 # assembly callers need shared owner indices across every coupled stream
 def BuildStreams(
-    MethodPrograms: tuple[Any, ...], StreamNames: tuple[str, ...]
-) -> tuple[tuple[str, ...], dict[str, tuple[Any, ...]]]:
+    MethodPrograms: tuple[AnyValue, ...], StreamNames: tuple[str, ...]
+) -> tuple[tuple[str, ...], dict[str, tuple[AnyValue, ...]]]:
     OwnedStreams = {
         StreamName: ComposeOps(MethodPrograms, StreamName) for StreamName in StreamNames
     }
@@ -75,7 +84,7 @@ def BuildStreams(
             {
                 OwnerText
                 for OwnedOps in OwnedStreams.values()
-                for _, _, OwnerText, _, _ in OwnedOps
+                for StartPos, FieldWidth, OwnerText, KindName, DefaultValue in OwnedOps
             }
         )
     )

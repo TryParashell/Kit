@@ -3510,103 +3510,149 @@ def VertexFinOrder(VertexAttr: int, FirstAttr: int, UsedCoedges: set[int], UsedE
         AttrValue = FinRecord.references[8]
     return tuple(Result)
 
-# this declaration exists because focused behavior needs one stable owner
+# part model construction composes independently validated topology and geometry phases
 def BuildPartModel(Tables: RecordTables, SolidUnchangedIds: Mapping[int, int] | None=None, SolidAttrOrders: Mapping[str, Mapping[int, int]] | None=None) -> BrepModel:
-    UnchangedIds = SolidUnchangedIds or {}
-    AttrOrders = SolidAttrOrders or {}
-    FaceLoops: dict[int, tuple[tuple[int, tuple[int, ...]], ...]] = {}
-    EdgeEndpoints: dict[int, tuple[int, int]] = {}
-    EdgeCurves: dict[int, int] = {}
-    CoedgeEdges: dict[int, int] = {}
-    UsedCoedges: set[int] = set()
-    UsedEdges: set[int] = set()
-    UsedVertices: set[int] = set()
-    UsedPoints: set[int] = set()
-    UsedCurves: set[int] = set()
-    UsedSurfaces: set[int] = set()
-    SyntheticVertices: dict[int, VectorThree] = {}
-    SyntheticCurves: dict[int, NativeCurve] = {}
-    VertexTolerances: dict[int, float] = {}
-    OwnerFaces: dict[int, int] = {}
+    UnchangedIds, AttrOrders = SolidUnchangedIds or {}, SolidAttrOrders or {}
+    TopoData = CollectPartTopo(Tables)
+    FaceLoops, EdgeEndpoints, EdgeCurves, CoedgeEdges, UsedCoedges, UsedEdges, UsedVertices, UsedCurves, UsedSurfaces, SyntheticVertices, SyntheticCurves, OwnerFaces = TopoData
+    RankData = MakePartRanks(Tables, FaceLoops, UsedEdges, UsedVertices, UsedCurves)
+    FaceOrder, FaceSurfOrder, FaceFrontOrder, EdgeOrder, CurveEdgeOrder, VertexOrder, CurveOrder, FaceRanks, FaceSurfRanks, FaceFrontRanks, EdgeRanks, CurveEdgeRanks, VertexRanks, CurveRanks = RankData
+    PointData = VertexPointData(Tables, VertexOrder, SyntheticVertices)
+    PointsByVertex, PointAttrs, VertexTolerances, PointRanks = PointData
+    Vertices = MakeVertices(Tables, VertexOrder, SyntheticVertices, PointsByVertex, PointAttrs, VertexTolerances, VertexRanks, PointRanks, UsedCoedges, UsedEdges)
+    Curves = MakePartCurves(Tables, CurveOrder, SyntheticCurves, CurveRanks)
+    AddCurveSurfMut(Curves, Tables, UsedSurfaces)
+    SurfOrder = LinkedOrder(UsedSurfaces, GeomChainLinks(Tables.surfaces))
+    SurfRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(SurfOrder)}
+    Edges = MakePartEdges(Tables, EdgeOrder, EdgeEndpoints, EdgeCurves, SyntheticCurves, PointsByVertex, VertexTolerances, EdgeRanks, CurveEdgeRanks, UsedCoedges, UsedEdges)
+    Coedges = tuple((BrepCoedge(NativeId('coedge', AttrValue), NativeId('edge', CoedgeEdges[AttrValue]), reversed=Tables.coedges[AttrValue].reversed) for AttrValue in sorted(UsedCoedges)))
+    OuterLoops = FindOuterLoops(FaceLoops, Tables)
+    Loops = MakePartLoops(FaceLoops, OuterLoops)
+    Surfaces = MakePartSurfs(Tables, SurfOrder, SurfRanks)
+    Faces = MakePartFaces(Tables, FaceLoops, FaceOrder, FaceRanks, FaceSurfRanks, FaceFrontRanks, UnchangedIds, AttrOrders)
+    FaceUses, Shells, ShellUses, Regions, Bodies = BuildTreeModel(Tables, OwnerFaces, FaceLoops, FaceRanks)
+    return BrepModel(curves=Curves, surfaces=Surfaces, vertices=Vertices, edges=Edges, coedges=Coedges, loops=Loops, faces=Faces, face_uses=FaceUses, shells=Shells, shell_uses=ShellUses, regions=Regions, bodies=Bodies)
+
+
+# topology collection gathers every reachable face edge vertex and carrier identifier
+def CollectPartTopo(Tables: RecordTables) -> tuple[object, ...]:
+    FaceLoops, EdgeEndpoints, EdgeCurves, CoedgeEdges = {}, {}, {}, {}
+    UsedCoedges, UsedEdges, UsedVertices, UsedCurves, UsedSurfaces = set(), set(), set(), set(), set()
+    SyntheticVertices, SyntheticCurves, OwnerFaces = {}, {}, {}
     for BridgeAttr, Bridge in sorted(Tables.bridges.items()):
-        if Bridge.owner > 1:
-            if Bridge.owner in OwnerFaces:
-                raise ValueError('ambiguous face owner')
-            OwnerFaces[Bridge.owner] = BridgeAttr
-        SurfAttr = Bridge.references[4]
-        if SurfAttr not in Tables.surfaces:
-            raise ValueError('unresolved face surface')
-        UsedSurfaces.add(SurfAttr)
-        LoopAttr = Bridge.references[2]
-        Loops: list[tuple[int, tuple[int, ...]]] = []
-        LoopGuard: set[int] = set()
-        while LoopAttr > 1:
-            if LoopAttr in LoopGuard:
-                raise ValueError('cyclic loop list')
-            LoopGuard.add(LoopAttr)
-            LoopDataData = Tables.loops.get(LoopAttr)
-            if LoopDataData is None or LoopDataData.references[2] != BridgeAttr:
-                raise ValueError('invalid loop owner')
-            RingValue = WalkCoedgeRing(Tables, LoopAttr, LoopDataData.references[1])
-            Loops.append((LoopAttr, RingValue))
-            LoopAttr = LoopDataData.references[3]
-        if not Loops:
-            raise ValueError('face boundary is absent')
-        FaceLoops[BridgeAttr] = tuple(Loops)
-        for Ignored, RingValue in Loops:
-            for CoedgeAttr in RingValue:
-                Coedge = Tables.coedges[CoedgeAttr]
-                if Coedge.isolated:
-                    if len(RingValue) != 1 or not IsIsolatedFin(Coedge.attribute, Coedge.references):
-                        raise ValueError('invalid isolated vertex loop')
-                    EdgeAttr = 65536 + CoedgeAttr
-                    CurveAttr = EdgeAttr
-                    VertexAttr = Coedge.references[4]
-                    EdgeEndpoints[EdgeAttr] = (VertexAttr, VertexAttr)
-                    EdgeCurves[EdgeAttr] = CurveAttr
-                    CoedgeEdges[CoedgeAttr] = EdgeAttr
-                    SyntheticCurves[CurveAttr] = NativeCurve(NativeId('curve', CurveAttr), 'parasolid.xt', 'isolated-vertex-loop')
-                    UsedCoedges.add(CoedgeAttr)
-                    UsedEdges.add(EdgeAttr)
-                    UsedVertices.add(VertexAttr)
-                    UsedCurves.add(CurveAttr)
-                    continue
-                EdgeAttr = Coedge.references[6]
-                StartVertex = Coedge.references[4]
-                OtherCoedge = Tables.coedges.get(Coedge.references[5])
-                if OtherCoedge is None:
-                    raise ValueError('missing opposite coedge')
-                EndVertex = OtherCoedge.references[4]
-                if EdgeAttr <= 1:
-                    raise ValueError('incomplete coedge topology')
-                EdgeUseData = Tables.edge_uses.get(EdgeAttr)
-                if EdgeUseData is None:
-                    raise ValueError('missing edge use')
-                CurveAttr = EdgeUseData.references[3]
-                Curve = Tables.curves.get(CurveAttr)
-                if Curve is None:
-                    raise ValueError('unresolved edge curve')
-                if StartVertex <= 1 or EndVertex <= 1:
-                    if not (StartVertex <= 1 and EndVertex <= 1 and isinstance(Curve, (CircleCurve, EllipseCurve))):
-                        raise ValueError('incomplete coedge topology')
-                    Synthetic = 65536 + EdgeAttr
-                    SyntheticVertices[Synthetic] = ConicPoint(Curve, 0.0)
-                    StartVertex = Synthetic
-                    EndVertex = Synthetic
-                Canonical = (EndVertex, StartVertex) if Coedge.reversed else (StartVertex, EndVertex)
-                Previous = EdgeEndpoints.setdefault(EdgeAttr, Canonical)
-                if Previous != Canonical:
-                    raise ValueError('inconsistent edge orientation')
-                PreviousCurve = EdgeCurves.setdefault(EdgeAttr, CurveAttr)
-                if PreviousCurve != CurveAttr:
-                    raise ValueError('inconsistent edge curve')
-                CoedgeEdges[CoedgeAttr] = EdgeAttr
-                UsedCoedges.add(CoedgeAttr)
-                UsedEdges.add(EdgeAttr)
-                UsedVertices.update(Canonical)
-                UsedCurves.add(CurveAttr)
+        AddBridgeMut(BridgeAttr, Bridge, Tables, FaceLoops, EdgeEndpoints, EdgeCurves, CoedgeEdges, UsedCoedges, UsedEdges, UsedVertices, UsedCurves, UsedSurfaces, SyntheticVertices, SyntheticCurves, OwnerFaces)
     if set(Tables.bridges) != set(FaceLoops):
         raise ValueError('partial face topology')
+    return FaceLoops, EdgeEndpoints, EdgeCurves, CoedgeEdges, UsedCoedges, UsedEdges, UsedVertices, UsedCurves, UsedSurfaces, SyntheticVertices, SyntheticCurves, OwnerFaces
+
+
+# bridge collection validates face ownership surface resolution and boundary rings
+def AddBridgeMut(BridgeAttr: int, Bridge: TopologyRecord, Tables: RecordTables, FaceLoops: dict[int, object], EdgeEndpoints: dict[int, tuple[int, int]], EdgeCurves: dict[int, int], CoedgeEdges: dict[int, int], UsedCoedges: set[int], UsedEdges: set[int], UsedVertices: set[int], UsedCurves: set[int], UsedSurfaces: set[int], SyntheticVertices: dict[int, VectorThree], SyntheticCurves: dict[int, NativeCurve], OwnerFaces: dict[int, int]) -> None:
+    if Bridge.owner > 1:
+        if Bridge.owner in OwnerFaces:
+            raise ValueError('ambiguous face owner')
+        OwnerFaces[Bridge.owner] = BridgeAttr
+    SurfAttr = Bridge.references[4]
+    if SurfAttr not in Tables.surfaces:
+        raise ValueError('unresolved face surface')
+    UsedSurfaces.add(SurfAttr)
+    Loops = GetFaceLoops(Tables, BridgeAttr, Bridge)
+    FaceLoops[BridgeAttr] = tuple(Loops)
+    for Ignored, RingValue in Loops:
+        for CoedgeAttr in RingValue:
+            AddCoedgeMut(CoedgeAttr, RingValue, Tables, EdgeEndpoints, EdgeCurves, CoedgeEdges, UsedCoedges, UsedEdges, UsedVertices, UsedCurves, SyntheticVertices, SyntheticCurves)
+
+
+# face loop traversal validates linked ownership and rejects cyclic boundaries
+def GetFaceLoops(Tables: RecordTables, BridgeAttr: int, Bridge: TopologyRecord) -> list[tuple[int, tuple[int, ...]]]:
+    LoopAttr = Bridge.references[2]
+    Loops: list[tuple[int, tuple[int, ...]]] = []
+    LoopGuard: set[int] = set()
+    while LoopAttr > 1:
+        if LoopAttr in LoopGuard:
+            raise ValueError('cyclic loop list')
+        LoopGuard.add(LoopAttr)
+        LoopData = Tables.loops.get(LoopAttr)
+        if LoopData is None or LoopData.references[2] != BridgeAttr:
+            raise ValueError('invalid loop owner')
+        RingValue = WalkCoedgeRing(Tables, LoopAttr, LoopData.references[1])
+        Loops.append((LoopAttr, RingValue))
+        LoopAttr = LoopData.references[3]
+    if not Loops:
+        raise ValueError('face boundary is absent')
+    return Loops
+
+
+# coedge collection dispatches isolated and dimensional topology representations
+def AddCoedgeMut(CoedgeAttr: int, RingValue: Sequence[int], Tables: RecordTables, EdgeEndpoints: dict[int, tuple[int, int]], EdgeCurves: dict[int, int], CoedgeEdges: dict[int, int], UsedCoedges: set[int], UsedEdges: set[int], UsedVertices: set[int], UsedCurves: set[int], SyntheticVertices: dict[int, VectorThree], SyntheticCurves: dict[int, NativeCurve]) -> None:
+    Coedge = Tables.coedges[CoedgeAttr]
+    if Coedge.isolated:
+        AddIsolatedMut(Coedge, RingValue, EdgeEndpoints, EdgeCurves, CoedgeEdges, UsedCoedges, UsedEdges, UsedVertices, UsedCurves, SyntheticCurves)
+        return
+    AddNormalMut(Coedge, Tables, EdgeEndpoints, EdgeCurves, CoedgeEdges, UsedCoedges, UsedEdges, UsedVertices, UsedCurves, SyntheticVertices)
+
+
+# isolated coedge collection creates deterministic synthetic edge and curve identifiers
+def AddIsolatedMut(Coedge: TopologyRecord, RingValue: Sequence[int], EdgeEndpoints: dict[int, tuple[int, int]], EdgeCurves: dict[int, int], CoedgeEdges: dict[int, int], UsedCoedges: set[int], UsedEdges: set[int], UsedVertices: set[int], UsedCurves: set[int], SyntheticCurves: dict[int, NativeCurve]) -> None:
+    if len(RingValue) != 1 or not IsIsolatedFin(Coedge.attribute, Coedge.references):
+        raise ValueError('invalid isolated vertex loop')
+    EdgeAttr = 65536 + Coedge.attribute
+    VertexAttr = Coedge.references[4]
+    EdgeEndpoints[EdgeAttr] = (VertexAttr, VertexAttr)
+    EdgeCurves[EdgeAttr] = EdgeAttr
+    CoedgeEdges[Coedge.attribute] = EdgeAttr
+    SyntheticCurves[EdgeAttr] = NativeCurve(NativeId('curve', EdgeAttr), 'parasolid.xt', 'isolated-vertex-loop')
+    UsedCoedges.add(Coedge.attribute)
+    UsedEdges.add(EdgeAttr)
+    UsedVertices.add(VertexAttr)
+    UsedCurves.add(EdgeAttr)
+
+
+# dimensional coedge collection enforces consistent edge orientation and carrier identity
+def AddNormalMut(Coedge: TopologyRecord, Tables: RecordTables, EdgeEndpoints: dict[int, tuple[int, int]], EdgeCurves: dict[int, int], CoedgeEdges: dict[int, int], UsedCoedges: set[int], UsedEdges: set[int], UsedVertices: set[int], UsedCurves: set[int], SyntheticVertices: dict[int, VectorThree]) -> None:
+    EdgeAttr = Coedge.references[6]
+    StartVertex, EndVertex, CurveAttr = GetEdgeUseMut(Tables, Coedge, EdgeAttr, SyntheticVertices)
+    Canonical = (EndVertex, StartVertex) if Coedge.reversed else (StartVertex, EndVertex)
+    Previous = EdgeEndpoints.setdefault(EdgeAttr, Canonical)
+    if Previous != Canonical:
+        raise ValueError('inconsistent edge orientation')
+    PreviousCurve = EdgeCurves.setdefault(EdgeAttr, CurveAttr)
+    if PreviousCurve != CurveAttr:
+        raise ValueError('inconsistent edge curve')
+    CoedgeEdges[Coedge.attribute] = EdgeAttr
+    UsedCoedges.add(Coedge.attribute)
+    UsedEdges.add(EdgeAttr)
+    UsedVertices.update(Canonical)
+    UsedCurves.add(CurveAttr)
+
+
+# edge use resolution validates opposite fins carriers and closed conic vertices
+def GetEdgeUseMut(Tables: RecordTables, Coedge: TopologyRecord, EdgeAttr: int, SyntheticVertices: dict[int, VectorThree]) -> tuple[int, int, int]:
+    StartVertex = Coedge.references[4]
+    OtherCoedge = Tables.coedges.get(Coedge.references[5])
+    if OtherCoedge is None:
+        raise ValueError('missing opposite coedge')
+    EndVertex = OtherCoedge.references[4]
+    if EdgeAttr <= 1:
+        raise ValueError('incomplete coedge topology')
+    EdgeUseData = Tables.edge_uses.get(EdgeAttr)
+    if EdgeUseData is None:
+        raise ValueError('missing edge use')
+    CurveAttr = EdgeUseData.references[3]
+    Curve = Tables.curves.get(CurveAttr)
+    if Curve is None:
+        raise ValueError('unresolved edge curve')
+    if StartVertex <= 1 or EndVertex <= 1:
+        if not (StartVertex <= 1 and EndVertex <= 1 and isinstance(Curve, (CircleCurve, EllipseCurve))):
+            raise ValueError('incomplete coedge topology')
+        Synthetic = 65536 + EdgeAttr
+        SyntheticVertices[Synthetic] = ConicPoint(Curve, 0.0)
+        StartVertex, EndVertex = Synthetic, Synthetic
+    return StartVertex, EndVertex, CurveAttr
+
+
+# ranking reconstruction preserves every native linked list ordering dimension
+def MakePartRanks(Tables: RecordTables, FaceLoops: Mapping[int, object], UsedEdges: set[int], UsedVertices: set[int], UsedCurves: set[int]) -> tuple[object, ...]:
     FaceOrder = LinkedOrder(FaceLoops, {AttrValue: (Record.references[0], Record.references[1]) for AttrValue, Record in Tables.bridges.items()})
     FaceSurfOrder = LinkedOrder(FaceLoops, {AttrValue: (Record.references[5], Record.references[6]) for AttrValue, Record in Tables.bridges.items() if len(Record.references) >= 7})
     FaceFrontOrder = LinkedOrder(FaceLoops, {AttrValue: (Record.references[7], Record.references[8]) for AttrValue, Record in Tables.bridges.items() if len(Record.references) >= 9})
@@ -3614,19 +3660,17 @@ def BuildPartModel(Tables: RecordTables, SolidUnchangedIds: Mapping[int, int] | 
     CurveEdgeOrder = LinkedOrder(UsedEdges, {AttrValue: (Record.references[4], Record.references[5]) for AttrValue, Record in Tables.edge_uses.items()})
     VertexOrder = LinkedOrder(UsedVertices, {AttrValue: (Record.references[3], Record.references[2]) for AttrValue, Record in Tables.vertex_uses.items()})
     CurveOrder = LinkedOrder(UsedCurves, GeomChainLinks(Tables.curves))
-    FaceRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(FaceOrder)}
-    FaceSurfRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(FaceSurfOrder)}
-    FaceFrontRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(FaceFrontOrder)}
-    EdgeRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(EdgeOrder)}
-    CurveEdgeRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(CurveEdgeOrder)}
-    VertexRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(VertexOrder)}
-    CurveRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(CurveOrder)}
-    PointsByVertex: dict[int, VectorThree] = {}
-    PointAttrs: dict[int, int] = {}
+    Orders = (FaceOrder, FaceSurfOrder, FaceFrontOrder, EdgeOrder, CurveEdgeOrder, VertexOrder, CurveOrder)
+    Ranks = tuple(({AttrValue: RankValue for RankValue, AttrValue in enumerate(OrderData)} for OrderData in Orders))
+    return (*Orders, *Ranks)
+
+
+# vertex point recovery resolves synthetic and native points with their tolerances
+def VertexPointData(Tables: RecordTables, VertexOrder: Sequence[int], SyntheticVertices: Mapping[int, VectorThree]) -> tuple[dict[int, VectorThree], dict[int, int], dict[int, float], dict[int, int]]:
+    PointsByVertex, PointAttrs, VertexTolerances, UsedPoints = {}, {}, {}, set()
     for VertexAttr in VertexOrder:
         if VertexAttr in SyntheticVertices:
-            Point = SyntheticVertices[VertexAttr]
-            PointsByVertex[VertexAttr] = Point
+            PointsByVertex[VertexAttr] = SyntheticVertices[VertexAttr]
             VertexTolerances[VertexAttr] = 0.0
             continue
         VertexUse = Tables.vertex_uses.get(VertexAttr)
@@ -3642,10 +3686,16 @@ def BuildPartModel(Tables: RecordTables, SolidUnchangedIds: Mapping[int, int] | 
         VertexTolerances[VertexAttr] = VertexUse.tolerance
     PointOrder = LinkedOrder(UsedPoints, {AttrValue: (Record.references[2], Record.references[3]) for AttrValue, Record in Tables.points.items() if len(Record.references) >= 4})
     PointRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(PointOrder)}
+    return PointsByVertex, PointAttrs, VertexTolerances, PointRanks
+
+
+# vertex construction restores fin ordering metadata for every native vertex
+def MakeVertices(Tables: RecordTables, VertexOrder: Sequence[int], SyntheticVertices: Mapping[int, VectorThree], PointsByVertex: Mapping[int, VectorThree], PointAttrs: Mapping[int, int], VertexTolerances: Mapping[int, float], VertexRanks: Mapping[int, int], PointRanks: Mapping[int, int], UsedCoedges: set[int], UsedEdges: set[int]) -> tuple[BrepVertex, ...]:
     Vertices: list[BrepVertex] = []
     for VertexAttr in VertexOrder:
         if VertexAttr in SyntheticVertices:
-            Vertices.append(BrepVertex(NativeId('vertex', VertexAttr), PointsByVertex[VertexAttr], attributes=FrozenMapping({'parasolid.vertex_order': VertexRanks[VertexAttr]})))
+            Attrs = FrozenMapping({'parasolid.vertex_order': VertexRanks[VertexAttr]})
+            Vertices.append(BrepVertex(NativeId('vertex', VertexAttr), PointsByVertex[VertexAttr], attributes=Attrs))
             continue
         VertexUse = Tables.vertex_uses[VertexAttr]
         PointAttr = PointAttrs[VertexAttr]
@@ -3654,23 +3704,41 @@ def BuildPartModel(Tables: RecordTables, SolidUnchangedIds: Mapping[int, int] | 
         if FinOrder:
             Attrs['parasolid.vertex_fins'] = FinOrder
         Vertices.append(BrepVertex(NativeId('vertex', VertexAttr), PointsByVertex[VertexAttr], tolerance=VertexUse.tolerance, attributes=FrozenMapping(Attrs)))
-    Curves = tuple((Replace(Tables.curves[AttrValue] if AttrValue in Tables.curves else SyntheticCurves[AttrValue], attributes=FrozenMapping({**dict(getattr(Tables.curves[AttrValue] if AttrValue in Tables.curves else SyntheticCurves[AttrValue], 'attributes', {})), 'parasolid.curve_order': CurveRanks[AttrValue]})) for AttrValue in CurveOrder))
+    return tuple(Vertices)
+
+
+# curve construction restores native order metadata on direct and synthetic carriers
+def MakePartCurves(Tables: RecordTables, CurveOrder: Sequence[int], SyntheticCurves: Mapping[int, NativeCurve], CurveRanks: Mapping[int, int]) -> tuple[object, ...]:
+    Curves = []
+    for AttrValue in CurveOrder:
+        Curve = Tables.curves[AttrValue] if AttrValue in Tables.curves else SyntheticCurves[AttrValue]
+        Attrs = FrozenMapping({**dict(getattr(Curve, 'attributes', {})), 'parasolid.curve_order': CurveRanks[AttrValue]})
+        Curves.append(Replace(Curve, attributes=Attrs))
+    return tuple(Curves)
+
+
+# intersection support collection retains surfaces referenced only by resolved curves
+def AddCurveSurfMut(Curves: Sequence[object], Tables: RecordTables, UsedSurfaces: set[int]) -> None:
     for Curve in Curves:
         if not isinstance(Curve, IntersectionCurve):
             continue
         RefsValueData = Curve.attributes.get('references')
-        if not isinstance(RefsValueData, tuple) or len(RefsValueData) < 2 or any((type(AttrValue) is not int or AttrValue not in Tables.surfaces for AttrValue in RefsValueData[:2])):
+        if not isinstance(RefsValueData, tuple) or len(RefsValueData) < 2:
+            raise ValueError('intersection support surfaces are unresolved')
+        if any((type(AttrValue) is not int or AttrValue not in Tables.surfaces for AttrValue in RefsValueData[:2])):
             raise ValueError('intersection support surfaces are unresolved')
         UsedSurfaces.update(RefsValueData[:2])
-    SurfOrder = LinkedOrder(UsedSurfaces, GeomChainLinks(Tables.surfaces))
-    SurfRanks = {AttrValue: RankValue for RankValue, AttrValue in enumerate(SurfOrder)}
+
+
+# edge construction proves parameter ranges and restores linked list metadata
+def MakePartEdges(Tables: RecordTables, EdgeOrder: Sequence[int], EdgeEndpoints: Mapping[int, tuple[int, int]], EdgeCurves: Mapping[int, int], SyntheticCurves: Mapping[int, NativeCurve], PointsByVertex: Mapping[int, VectorThree], VertexTolerances: Mapping[int, float], EdgeRanks: Mapping[int, int], CurveEdgeRanks: Mapping[int, int], UsedCoedges: set[int], UsedEdges: set[int]) -> tuple[BrepEdge, ...]:
     Edges: list[BrepEdge] = []
     for EdgeAttr in EdgeOrder:
         StartVertex, EndVertex = EdgeEndpoints[EdgeAttr]
         CurveAttr = EdgeCurves[EdgeAttr]
         Degenerate = CurveAttr in SyntheticCurves
         if Degenerate:
-            StartParam, EndParam = (0.0, 0.0)
+            StartParam, EndParam = 0.0, 0.0
         else:
             Curve = Tables.curves[CurveAttr]
             StartParam, EndParam = ProveCurveRange(Curve, PointsByVertex[StartVertex], PointsByVertex[EndVertex], VertexTolerances[StartVertex], VertexTolerances[EndVertex])
@@ -3680,17 +3748,39 @@ def BuildPartModel(Tables: RecordTables, SolidUnchangedIds: Mapping[int, int] | 
             if FirstFin is not None:
                 EdgeAttrs['parasolid.first_fin'] = FirstFin
         EdgeUse = Tables.edge_uses.get(EdgeAttr)
-        Edges.append(BrepEdge(NativeId('edge', EdgeAttr), NativeId('vertex', StartVertex), NativeId('vertex', EndVertex), NativeId('curve', CurveAttr), StartParam, EndParam, tolerance=max(EdgeUse.tolerance if EdgeUse is not None else 0.0, VertexTolerances[StartVertex], VertexTolerances[EndVertex]), degenerate=Degenerate, attributes=FrozenMapping(EdgeAttrs)))
-    Coedges = tuple((BrepCoedge(NativeId('coedge', AttrValue), NativeId('edge', CoedgeEdges[AttrValue]), reversed=Tables.coedges[AttrValue].reversed) for AttrValue in sorted(UsedCoedges)))
+        Tolerance = max(EdgeUse.tolerance if EdgeUse is not None else 0.0, VertexTolerances[StartVertex], VertexTolerances[EndVertex])
+        Edges.append(BrepEdge(NativeId('edge', EdgeAttr), NativeId('vertex', StartVertex), NativeId('vertex', EndVertex), NativeId('curve', CurveAttr), StartParam, EndParam, tolerance=Tolerance, degenerate=Degenerate, attributes=FrozenMapping(EdgeAttrs)))
+    return tuple(Edges)
+
+
+# outer loop discovery selects the first dimensional ring for every face
+def FindOuterLoops(FaceLoops: Mapping[int, Sequence[tuple[int, Sequence[int]]]], Tables: RecordTables) -> set[int]:
     OuterLoops: set[int] = set()
     for Values in FaceLoops.values():
         OuterLoop = next((LoopAttr for LoopAttr, RingValue in Values if not any((Tables.coedges[ValueData].isolated for ValueData in RingValue))), 0)
         if OuterLoop <= 1:
             raise ValueError('face has no dimensional boundary loop')
         OuterLoops.add(OuterLoop)
-    Loops = tuple((BrepLoop(NativeId('loop', LoopAttr), tuple((NativeId('coedge', ValueData) for ValueData in RingValue)), LoopAttr in OuterLoops) for Values in FaceLoops.values() for LoopAttr, RingValue in Values))
-    Surfaces = tuple((Replace(Tables.surfaces[AttrValue], attributes=FrozenMapping({**dict(getattr(Tables.surfaces[AttrValue], 'attributes', {})), 'parasolid.surface_order': SurfRanks[AttrValue]})) for AttrValue in SurfOrder))
-    Faces = tuple((BrepFace(NativeId('face', BridgeAttr), NativeId('surface', Tables.bridges[BridgeAttr].references[4]), tuple((NativeId('loop', LoopAttr) for LoopAttr, Ignored in FaceLoops[BridgeAttr])), not Tables.bridges[BridgeAttr].reversed, tolerance=Tables.bridges[BridgeAttr].tolerance, attributes=FrozenMapping({**({'solidworks.unchanged_id': UnchangedIds[BridgeAttr]} if BridgeAttr in UnchangedIds else {}), 'parasolid.face_order': FaceRanks[BridgeAttr], 'parasolid.surface_face_order': FaceSurfRanks[BridgeAttr], 'parasolid.front_face_order': FaceFrontRanks[BridgeAttr], **{f'solidworks.{KindValueData}_order': Ranks[BridgeAttr] for KindValueData, Ranks in AttrOrders.items() if BridgeAttr in Ranks}})) for BridgeAttr in FaceOrder))
+    return OuterLoops
+
+
+# loop construction maps native rings into interchange coedge identifiers
+def MakePartLoops(FaceLoops: Mapping[int, Sequence[tuple[int, Sequence[int]]]], OuterLoops: set[int]) -> tuple[BrepLoop, ...]:
+    return tuple((BrepLoop(NativeId('loop', LoopAttr), tuple((NativeId('coedge', ValueData) for ValueData in RingValue)), LoopAttr in OuterLoops) for Values in FaceLoops.values() for LoopAttr, RingValue in Values))
+
+
+# surface construction restores native linked list ordering metadata
+def MakePartSurfs(Tables: RecordTables, SurfOrder: Sequence[int], SurfRanks: Mapping[int, int]) -> tuple[object, ...]:
+    return tuple((Replace(Tables.surfaces[AttrValue], attributes=FrozenMapping({**dict(getattr(Tables.surfaces[AttrValue], 'attributes', {})), 'parasolid.surface_order': SurfRanks[AttrValue]})) for AttrValue in SurfOrder))
+
+
+# face construction restores topology tolerance orientation and vendor ordering metadata
+def MakePartFaces(Tables: RecordTables, FaceLoops: Mapping[int, Sequence[tuple[int, object]]], FaceOrder: Sequence[int], FaceRanks: Mapping[int, int], FaceSurfRanks: Mapping[int, int], FaceFrontRanks: Mapping[int, int], UnchangedIds: Mapping[int, int], AttrOrders: Mapping[str, Mapping[int, int]]) -> tuple[BrepFace, ...]:
+    return tuple((BrepFace(NativeId('face', BridgeAttr), NativeId('surface', Tables.bridges[BridgeAttr].references[4]), tuple((NativeId('loop', LoopAttr) for LoopAttr, Ignored in FaceLoops[BridgeAttr])), not Tables.bridges[BridgeAttr].reversed, tolerance=Tables.bridges[BridgeAttr].tolerance, attributes=FrozenMapping({**({'solidworks.unchanged_id': UnchangedIds[BridgeAttr]} if BridgeAttr in UnchangedIds else {}), 'parasolid.face_order': FaceRanks[BridgeAttr], 'parasolid.surface_face_order': FaceSurfRanks[BridgeAttr], 'parasolid.front_face_order': FaceFrontRanks[BridgeAttr], **{f'solidworks.{KindValueData}_order': Ranks[BridgeAttr] for KindValueData, Ranks in AttrOrders.items() if BridgeAttr in Ranks}})) for BridgeAttr in FaceOrder))
+
+
+# body tree construction prefers native hierarchy and deterministically orders shell faces
+def BuildTreeModel(Tables: RecordTables, OwnerFaces: Mapping[int, int], FaceLoops: Mapping[int, object], FaceRanks: Mapping[int, int]) -> tuple[object, ...]:
     try:
         TreeValue = BuildBodyTree(Tables.entities, OwnerFaces, set(FaceLoops))
     except ValueError:
@@ -3701,8 +3791,7 @@ def BuildPartModel(Tables: RecordTables, SolidUnchangedIds: Mapping[int, int] | 
 
     # this callback exists because local behavior needs one focused transformation
     Shells = tuple((Replace(Shell, face_use_ids=tuple(sorted(Shell.face_use_ids, key=lambda FaceUseId: FaceRankById[FaceUseById[FaceUseId].face_id]))) for Shell in Shells))
-    Model = BrepModel(curves=Curves, surfaces=Surfaces, vertices=tuple(Vertices), edges=tuple(Edges), coedges=Coedges, loops=Loops, faces=Faces, face_uses=FaceUses, shells=Shells, shell_uses=ShellUses, regions=Regions, bodies=Bodies)
-    return Model
+    return FaceUses, Shells, ShellUses, Regions, Bodies
 
 # this declaration exists because focused behavior needs one stable owner
 def WalkCoedgeRing(Tables: RecordTables, LoopAttr: int, FirstAttr: int) -> tuple[int, ...]:

@@ -108,12 +108,12 @@ KVertexDigits = 15
 
 # this class exists because related parser state needs one focused owner
 class DecodeFailure(ValueError):
-    Slots = ()
+    __slots__ = ()
 
 
-# this class exists because related parser state needs one focused owner
-class Tokens:
-    Slots = ("DataValueA", "Iterator", "Lookahead", "LastEnd", "Count")
+# this class exists because token cursor state needs one focused owner
+class TokenCursor:
+    __slots__ = ("DataValueA", "Iterator", "Lookahead", "LastEnd", "Count")
 
     # this definition exists because focused parser behavior needs one stable owner
     def __init__(SelfValue, DataValue: bytes) -> None:
@@ -149,6 +149,11 @@ class Tokens:
                 return None
         return SelfValue.Lookahead.group(0)
 
+
+# this class exists because line sensitive token rules need one focused owner
+class TokenLines:
+    __slots__ = ()
+
     # this definition exists because focused parser behavior needs one stable owner
     def IsFaceTriNext(SelfValue) -> bool:
         CurrentEnd = SelfValue.DataValueA.find(b"\n", SelfValue.LastEnd)
@@ -168,6 +173,11 @@ class Tokens:
     def ExpectToken(SelfValue, Expected: bytes) -> None:
         if SelfValue.TakeToken() != Expected:
             raise DecodeFailure("unexpected BRep token")
+
+
+# this class exists because numeric token conversion needs one focused owner
+class TokenValues:
+    __slots__ = ()
 
     # this definition exists because focused parser behavior needs one stable owner
     def ReadInteger(SelfValue, Minimum: int = 0, Maximum: int = KMaxShapes) -> int:
@@ -205,12 +215,17 @@ class Tokens:
         return Value
 
 
+# this class exists because parser consumers need one complete token interface
+class Tokens(TokenCursor, TokenLines, TokenValues):
+    __slots__ = ()
+
+
 # this class exists because related parser state needs one focused owner
 @Dataclass(frozen=True, slots=True)
 class Reference:
     Orientation: str
     RecordA: int
-    LocationA: int = 0
+    KLocation: int = 0
 
 
 # this class exists because related parser state needs one focused owner
@@ -227,7 +242,7 @@ class EdgeData:
     Curve: int
     FirstValue: float
     LastValue: float
-    LocationA: int = 0
+    KLocation: int = 0
 
 
 # this class exists because related parser state needs one focused owner
@@ -236,7 +251,7 @@ class FaceData:
     Natural: bool
     Tolerance: float
     Surface: int
-    LocationA: int = 0
+    KLocation: int = 0
 
 
 # this class exists because related parser state needs one focused owner
@@ -376,6 +391,24 @@ def Continuity(TokensA: Tokens) -> bytes:
     return Value
 
 
+# this definition exists because spline curve payloads need focused bounds checks
+def CurveSpline(TokensA: Tokens, Dimension: int, KindValue: int) -> None:
+    Rational = IsBoolean(TokensA)
+    if KindValue == 6:
+        Degree = TokensA.ReadInteger(1, KMaxGeometry - 1)
+        Poles = Degree + 1
+        ReadNumbers(TokensA, BoundedProduct(Poles, Dimension + int(Rational)))
+        return
+    IsBoolean(TokensA)
+    TokensA.ReadInteger(1, KMaxGeometry)
+    Poles = TokensA.ReadInteger(2, KMaxGeometry)
+    Knots = TokensA.ReadInteger(2, KMaxGeometry)
+    ReadNumbers(TokensA, BoundedProduct(Poles, Dimension + int(Rational)))
+    for ValueName in range(Knots):
+        TokensA.ReadNumber()
+        TokensA.ReadInteger(1, KMaxGeometry)
+
+
 # this definition exists because focused parser behavior needs one stable owner
 def CurveGeometry(TokensA: Tokens, Dimension: int, Depth: int = 0) -> None:
     if Depth > KMaxRecursion or Dimension not in {2, 3}:
@@ -388,21 +421,8 @@ def CurveGeometry(TokensA: Tokens, Dimension: int, Depth: int = 0) -> None:
         ReadNumbers(TokensA, FrameSize + 1)
     elif KindValue in {3, 5}:
         ReadNumbers(TokensA, FrameSize + 2)
-    elif KindValue == 6:
-        Rational = IsBoolean(TokensA)
-        Degree = TokensA.ReadInteger(1, KMaxGeometry - 1)
-        Poles = Degree + 1
-        ReadNumbers(TokensA, BoundedProduct(Poles, Dimension + int(Rational)))
-    elif KindValue == 7:
-        Rational = IsBoolean(TokensA)
-        IsBoolean(TokensA)
-        TokensA.ReadInteger(1, KMaxGeometry)
-        Poles = TokensA.ReadInteger(2, KMaxGeometry)
-        Knots = TokensA.ReadInteger(2, KMaxGeometry)
-        ReadNumbers(TokensA, BoundedProduct(Poles, Dimension + int(Rational)))
-        for ValueName in range(Knots):
-            TokensA.ReadNumber()
-            TokensA.ReadInteger(1, KMaxGeometry)
+    elif KindValue in {6, 7}:
+        CurveSpline(TokensA, Dimension, KindValue)
     elif KindValue == 8:
         ReadNumbers(TokensA, 2)
         CurveGeometry(TokensA, Dimension, Depth + 1)
@@ -411,6 +431,32 @@ def CurveGeometry(TokensA: Tokens, Dimension: int, Depth: int = 0) -> None:
         if Dimension == 3:
             ReadNumbers(TokensA, 3)
         CurveGeometry(TokensA, Dimension, Depth + 1)
+
+
+# this definition exists because spline surface payloads need focused bounds checks
+def SurfaceSpline(TokensA: Tokens, KindValue: int) -> None:
+    URational = IsBoolean(TokensA)
+    VRational = IsBoolean(TokensA)
+    if KindValue == 8:
+        UDegree = TokensA.ReadInteger(1, KMaxGeometry - 1)
+        VDegree = TokensA.ReadInteger(1, KMaxGeometry - 1)
+        Poles = BoundedProduct(UDegree + 1, VDegree + 1)
+        ReadNumbers(TokensA, BoundedProduct(Poles, 3 + int(URational or VRational)))
+        return
+    IsBoolean(TokensA)
+    IsBoolean(TokensA)
+    TokensA.ReadInteger(1, KMaxGeometry)
+    TokensA.ReadInteger(1, KMaxGeometry)
+    UPoles = TokensA.ReadInteger(2, KMaxGeometry)
+    VPoles = TokensA.ReadInteger(2, KMaxGeometry)
+    UKnots = TokensA.ReadInteger(2, KMaxGeometry)
+    VKnots = TokensA.ReadInteger(2, KMaxGeometry)
+    Poles = BoundedProduct(UPoles, VPoles)
+    ReadNumbers(TokensA, BoundedProduct(Poles, 3 + int(URational or VRational)))
+    for Count in (UKnots, VKnots):
+        for ValueName in range(Count):
+            TokensA.ReadNumber()
+            TokensA.ReadInteger(1, KMaxGeometry)
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -424,36 +470,11 @@ def SurfaceGeometry(TokensA: Tokens, Depth: int = 0) -> None:
         ReadNumbers(TokensA, 13)
     elif KindValue in {3, 5}:
         ReadNumbers(TokensA, 14)
-    elif KindValue == 6:
-        ReadNumbers(TokensA, 3)
+    elif KindValue in {6, 7}:
+        ReadNumbers(TokensA, 3 if KindValue == 6 else 6)
         CurveGeometry(TokensA, 3, Depth + 1)
-    elif KindValue == 7:
-        ReadNumbers(TokensA, 6)
-        CurveGeometry(TokensA, 3, Depth + 1)
-    elif KindValue == 8:
-        URational = IsBoolean(TokensA)
-        VRational = IsBoolean(TokensA)
-        UDegree = TokensA.ReadInteger(1, KMaxGeometry - 1)
-        VDegree = TokensA.ReadInteger(1, KMaxGeometry - 1)
-        Poles = BoundedProduct(UDegree + 1, VDegree + 1)
-        ReadNumbers(TokensA, BoundedProduct(Poles, 3 + int(URational or VRational)))
-    elif KindValue == 9:
-        URational = IsBoolean(TokensA)
-        VRational = IsBoolean(TokensA)
-        IsBoolean(TokensA)
-        IsBoolean(TokensA)
-        TokensA.ReadInteger(1, KMaxGeometry)
-        TokensA.ReadInteger(1, KMaxGeometry)
-        UPoles = TokensA.ReadInteger(2, KMaxGeometry)
-        VPoles = TokensA.ReadInteger(2, KMaxGeometry)
-        UKnots = TokensA.ReadInteger(2, KMaxGeometry)
-        VKnots = TokensA.ReadInteger(2, KMaxGeometry)
-        Poles = BoundedProduct(UPoles, VPoles)
-        ReadNumbers(TokensA, BoundedProduct(Poles, 3 + int(URational or VRational)))
-        for Count in (UKnots, VKnots):
-            for ValueName in range(Count):
-                TokensA.ReadNumber()
-                TokensA.ReadInteger(1, KMaxGeometry)
+    elif KindValue in {8, 9}:
+        SurfaceSpline(TokensA, KindValue)
     elif KindValue == 10:
         ReadNumbers(TokensA, 4)
         SurfaceGeometry(TokensA, Depth + 1)
@@ -976,6 +997,62 @@ def IndexContinuity(TokensA: Tokens, Count: int) -> None:
     Continuity(TokensA)
 
 
+# this definition exists because curve edge representations need focused validation
+def EdgeCurveRep(
+    TokensA: Tokens,
+    KindValue: int,
+    LocationsA: int,
+    CurvesTwoD: int,
+    CurvesThreeD: int,
+    SurfacesA: int,
+) -> None:
+    if KindValue == 1:
+        PositiveIndex(TokensA, CurvesThreeD)
+        LocationIndex(TokensA, LocationsA)
+        ReadNumbers(TokensA, 2)
+    elif KindValue == 2:
+        PositiveIndex(TokensA, CurvesTwoD)
+        PositiveIndex(TokensA, SurfacesA)
+        LocationIndex(TokensA, LocationsA)
+        ReadNumbers(TokensA, 2)
+    elif KindValue == 3:
+        PositiveIndex(TokensA, CurvesTwoD)
+        IndexContinuity(TokensA, CurvesTwoD)
+        PositiveIndex(TokensA, SurfacesA)
+        LocationIndex(TokensA, LocationsA)
+        ReadNumbers(TokensA, 2)
+    else:
+        Continuity(TokensA)
+        PositiveIndex(TokensA, SurfacesA)
+        LocationIndex(TokensA, LocationsA)
+        PositiveIndex(TokensA, SurfacesA)
+        LocationIndex(TokensA, LocationsA)
+
+
+# this definition exists because polygon edge representations need focused validation
+def EdgePolygonRep(
+    TokensA: Tokens,
+    KindValue: int,
+    LocationsA: int,
+    PolygonsThreeD: int,
+    PolygonsOnTriangulations: tuple[int, ...],
+    TriangulationsA: tuple[int, ...],
+) -> None:
+    if KindValue == 5:
+        PositiveIndex(TokensA, PolygonsThreeD)
+        LocationIndex(TokensA, LocationsA)
+        return
+    PolygonIndexes = [PositiveIndex(TokensA, len(PolygonsOnTriangulations))]
+    if KindValue == 7:
+        PolygonIndexes.append(PositiveIndex(TokensA, len(PolygonsOnTriangulations)))
+    Triangulation = PositiveIndex(TokensA, len(TriangulationsA))
+    if max(PolygonsOnTriangulations[IndexA - 1] for IndexA in PolygonIndexes) > (
+        TriangulationsA[Triangulation - 1]
+    ):
+        raise DecodeFailure("BRep polygon node is out of bounds")
+    LocationIndex(TokensA, LocationsA)
+
+
 # this definition exists because focused parser behavior needs one stable owner
 def EdgeStructure(
     TokensA: Tokens,
@@ -996,52 +1073,24 @@ def EdgeStructure(
         KindValue = TokensA.ReadInteger(0, 7)
         if KindValue == 0:
             return
-        if KindValue == 1:
-            PositiveIndex(TokensA, CurvesThreeD)
-            LocationIndex(TokensA, LocationsA)
-            ReadNumbers(TokensA, 2)
-        elif KindValue == 2:
-            PositiveIndex(TokensA, CurvesTwoD)
-            PositiveIndex(TokensA, SurfacesA)
-            LocationIndex(TokensA, LocationsA)
-            ReadNumbers(TokensA, 2)
-        elif KindValue == 3:
-            PositiveIndex(TokensA, CurvesTwoD)
-            IndexContinuity(TokensA, CurvesTwoD)
-            PositiveIndex(TokensA, SurfacesA)
-            LocationIndex(TokensA, LocationsA)
-            ReadNumbers(TokensA, 2)
-        elif KindValue == 4:
-            Continuity(TokensA)
-            PositiveIndex(TokensA, SurfacesA)
-            LocationIndex(TokensA, LocationsA)
-            PositiveIndex(TokensA, SurfacesA)
-            LocationIndex(TokensA, LocationsA)
-        elif KindValue == 5:
-            PositiveIndex(TokensA, PolygonsThreeD)
-            LocationIndex(TokensA, LocationsA)
-        elif KindValue == 6:
-            Polygon = PositiveIndex(TokensA, len(PolygonsOnTriangulations))
-            Triangulation = PositiveIndex(TokensA, len(TriangulationsA))
-            if (
-                PolygonsOnTriangulations[Polygon - 1]
-                > TriangulationsA[Triangulation - 1]
-            ):
-                raise DecodeFailure("BRep polygon node is out of bounds")
-            LocationIndex(TokensA, LocationsA)
+        if KindValue <= 4:
+            EdgeCurveRep(
+                TokensA,
+                KindValue,
+                LocationsA,
+                CurvesTwoD,
+                CurvesThreeD,
+                SurfacesA,
+            )
         else:
-            FirstPolygon = PositiveIndex(TokensA, len(PolygonsOnTriangulations))
-            SecondPolygon = PositiveIndex(TokensA, len(PolygonsOnTriangulations))
-            Triangulation = PositiveIndex(TokensA, len(TriangulationsA))
-            if (
-                max(
-                    PolygonsOnTriangulations[FirstPolygon - 1],
-                    PolygonsOnTriangulations[SecondPolygon - 1],
-                )
-                > TriangulationsA[Triangulation - 1]
-            ):
-                raise DecodeFailure("BRep polygon node is out of bounds")
-            LocationIndex(TokensA, LocationsA)
+            EdgePolygonRep(
+                TokensA,
+                KindValue,
+                LocationsA,
+                PolygonsThreeD,
+                PolygonsOnTriangulations,
+                TriangulationsA,
+            )
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -1087,6 +1136,76 @@ def StructureRef(
     return Reference(Token[:1].decode("ascii"), RecordA), LocationA
 
 
+# this definition exists because structural geometry dispatch needs one focused owner
+def ReadStructGeom(
+    TokensA: Tokens,
+    KindValue: bytes,
+    LocationsA: int,
+    CurvesTwoD: int,
+    CurvesThreeD: int,
+    PolygonsThreeD: int,
+    PolygonsOnTriangulations: tuple[int, ...],
+    SurfacesA: int,
+    TriangulationsA: tuple[int, ...],
+) -> None:
+    if KindValue == b"Ve":
+        VertexStructure(TokensA, LocationsA, CurvesTwoD, CurvesThreeD, SurfacesA)
+    elif KindValue == b"Ed":
+        EdgeStructure(
+            TokensA,
+            LocationsA,
+            CurvesTwoD,
+            CurvesThreeD,
+            PolygonsThreeD,
+            PolygonsOnTriangulations,
+            SurfacesA,
+            TriangulationsA,
+        )
+    elif KindValue == b"Fa":
+        FaceStructure(TokensA, LocationsA, SurfacesA, TriangulationsA)
+
+
+# this definition exists because child topology validation needs one focused owner
+def ReadStructKids(
+    TokensA: Tokens,
+    Count: int,
+    LocationsA: int,
+    RecordA: int,
+    KindValue: bytes,
+    Kinds: Mapping[int, bytes],
+) -> tuple[int, ...]:
+    ChildRecords = []
+    while True:
+        Child = StructureRef(TokensA, Count, LocationsA)
+        if Child is None:
+            return tuple(ChildRecords)
+        ReferenceA, LocationA = Child
+        if ReferenceA.RecordA <= RecordA:
+            raise DecodeFailure("BRep topology is not ordered bottom-up")
+        ChildKind = Kinds.get(ReferenceA.RecordA)
+        if ChildKind not in KShapeChildTypes[KindValue]:
+            raise DecodeFailure("invalid BRep child shape type")
+        ChildRecords.append(ReferenceA.RecordA)
+
+
+# this definition exists because reachability validation needs one focused owner
+def AssertReachable(
+    RootRecord: int,
+    Children: Mapping[int, tuple[int, ...]],
+    Kinds: Mapping[int, bytes],
+) -> None:
+    Reachable = set()
+    Pending = [RootRecord]
+    while Pending:
+        RecordA = Pending.pop()
+        if RecordA in Reachable:
+            continue
+        Reachable.add(RecordA)
+        Pending.extend(Children[RecordA])
+    if Reachable != set(Kinds):
+        raise DecodeFailure("unreachable BRep topology")
+
+
 # this definition exists because focused parser behavior needs one stable owner
 def ShapeStructure(
     TokensA: Tokens,
@@ -1108,38 +1227,24 @@ def ShapeStructure(
         if KindValue not in KShapeTypes:
             raise DecodeFailure("unsupported BRep shape type")
         RecordA = Count - Ordinal + 1
-        if KindValue == b"Ve":
-            VertexStructure(TokensA, LocationsA, CurvesTwoD, CurvesThreeD, SurfacesA)
-        elif KindValue == b"Ed":
-            EdgeStructure(
-                TokensA,
-                LocationsA,
-                CurvesTwoD,
-                CurvesThreeD,
-                PolygonsThreeD,
-                PolygonsOnTriangulations,
-                SurfacesA,
-                TriangulationsA,
-            )
-        elif KindValue == b"Fa":
-            FaceStructure(TokensA, LocationsA, SurfacesA, TriangulationsA)
+        ReadStructGeom(
+            TokensA,
+            KindValue,
+            LocationsA,
+            CurvesTwoD,
+            CurvesThreeD,
+            PolygonsThreeD,
+            PolygonsOnTriangulations,
+            SurfacesA,
+            TriangulationsA,
+        )
         FlagBits = TokensA.TakeToken()
         if KFlagsPattern.fullmatch(FlagBits) is None:
             raise DecodeFailure("invalid BRep shape flags")
-        ChildRecords = []
-        while True:
-            Child = StructureRef(TokensA, Count, LocationsA)
-            if Child is None:
-                break
-            ReferenceA, ValueName = Child
-            if ReferenceA.RecordA <= RecordA:
-                raise DecodeFailure("BRep topology is not ordered bottom-up")
-            ChildKind = Kinds.get(ReferenceA.RecordA)
-            if ChildKind not in KShapeChildTypes[KindValue]:
-                raise DecodeFailure("invalid BRep child shape type")
-            ChildRecords.append(ReferenceA.RecordA)
         Kinds[RecordA] = KindValue
-        Children[RecordA] = tuple(ChildRecords)
+        Children[RecordA] = ReadStructKids(
+            TokensA, Count, LocationsA, RecordA, KindValue, Kinds
+        )
     RootValue = StructureRef(TokensA, Count, LocationsA)
     if (
         RootValue is None
@@ -1148,16 +1253,7 @@ def ShapeStructure(
         or TokensA.PeekToken() is not None
     ):
         raise DecodeFailure("invalid BRep root shape")
-    Reachable = set()
-    Pending = [RootValue[0].RecordA]
-    while Pending:
-        RecordA = Pending.pop()
-        if RecordA in Reachable:
-            continue
-        Reachable.add(RecordA)
-        Pending.extend(Children[RecordA])
-    if Reachable != set(Kinds):
-        raise DecodeFailure("unreachable BRep topology")
+    AssertReachable(RootValue[0].RecordA, Children, Kinds)
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -1186,25 +1282,19 @@ def VertexGeometry(TokensA: Tokens) -> VertexData:
     return VertexData(Tolerance, Point)
 
 
-# this definition exists because focused parser behavior needs one stable owner
-def EdgeGeometry(
+# this definition exists because edge representation parsing needs one focused owner
+def ReadEdgeReps(
     TokensA: Tokens,
     CurveCount: int,
     CurveTwoDCount: int,
     SurfaceCount: int,
     LocationCount: int,
-) -> EdgeData:
-    Tolerance = TokensA.ReadNumber()
-    TokensA.ReadInteger(0, 1)
-    TokensA.ReadInteger(0, 1)
-    Degenerate = TokensA.ReadInteger(0, 1)
-    if Tolerance < 0.0 or Degenerate:
-        raise DecodeFailure("unsupported BRep edge state")
+) -> list[tuple[int, float, float, int]]:
     Representations: list[tuple[int, float, float, int]] = []
     while True:
         Representation = TokensA.ReadInteger(0, 7)
         if Representation == 0:
-            break
+            return Representations
         if Representation == 1:
             Curve = TokensA.ReadInteger(1, CurveCount)
             LocationA = LocationIndex(TokensA, LocationCount)
@@ -1226,6 +1316,25 @@ def EdgeGeometry(
             TokensA.ReadNumber()
         else:
             raise DecodeFailure("unsupported BRep edge representation")
+
+
+# this definition exists because focused parser behavior needs one stable owner
+def EdgeGeometry(
+    TokensA: Tokens,
+    CurveCount: int,
+    CurveTwoDCount: int,
+    SurfaceCount: int,
+    LocationCount: int,
+) -> EdgeData:
+    Tolerance = TokensA.ReadNumber()
+    TokensA.ReadInteger(0, 1)
+    TokensA.ReadInteger(0, 1)
+    Degenerate = TokensA.ReadInteger(0, 1)
+    if Tolerance < 0.0 or Degenerate:
+        raise DecodeFailure("unsupported BRep edge state")
+    Representations = ReadEdgeReps(
+        TokensA, CurveCount, CurveTwoDCount, SurfaceCount, LocationCount
+    )
     if len(Representations) != 1:
         raise DecodeFailure("ambiguous BRep edge geometry")
     Curve, FirstValue, LastValue, LocationA = Representations[0]
@@ -1306,15 +1415,15 @@ def ApplyLocations(
     Reference,
 ]:
     if (
-        not RootRef.LocationA
+        not RootRef.KLocation
         and not any(
-            ChildRef.LocationA
+            ChildRef.KLocation
             for Record in Records.values()
             for ChildRef in Record.Children
         )
         and not any(
             isinstance(Record.GeometryA, (EdgeData, FaceData))
-            and Record.GeometryA.LocationA
+            and Record.GeometryA.KLocation
             for Record in Records.values()
         )
     ):
@@ -1405,8 +1514,8 @@ def ApplyLocations(
         for ChildRef in SourceRecord.Children:
             ChildLoc = (
                 KIdentityLocation
-                if not ChildRef.LocationA
-                else Locations[ChildRef.LocationA - 1]
+                if not ChildRef.KLocation
+                else Locations[ChildRef.KLocation - 1]
             )
             ChildMatrix = ProductLocation(ChildLoc, Location)
             ChildRecord = PlaceRecord(ChildRef.RecordA, ChildMatrix)
@@ -1422,8 +1531,8 @@ def ApplyLocations(
             SourceCurve = Curves[Geometry.Curve - 1]
             GeometryLoc = (
                 KIdentityLocation
-                if not Geometry.LocationA
-                else Locations[Geometry.LocationA - 1]
+                if not Geometry.KLocation
+                else Locations[Geometry.KLocation - 1]
             )
             CurveLoc = ProductLocation(GeometryLoc, Location)
             ParameterScale = (
@@ -1438,8 +1547,8 @@ def ApplyLocations(
         elif isinstance(Geometry, FaceData):
             GeometryLoc = (
                 KIdentityLocation
-                if not Geometry.LocationA
-                else Locations[Geometry.LocationA - 1]
+                if not Geometry.KLocation
+                else Locations[Geometry.KLocation - 1]
             )
             Geometry = FaceData(
                 Geometry.Natural,
@@ -1457,7 +1566,7 @@ def ApplyLocations(
         return PlacedIndex
 
     RootLoc = (
-        KIdentityLocation if not RootRef.LocationA else Locations[RootRef.LocationA - 1]
+        KIdentityLocation if not RootRef.KLocation else Locations[RootRef.KLocation - 1]
     )
     RootIndex = PlaceRecord(RootRef.RecordA, RootLoc)
     return (
@@ -1979,55 +2088,85 @@ def DecodeAsciiBrep(
         return None
 
 
-# this definition exists because focused parser behavior needs one stable owner
+# this definition exists because version discovery needs one bounded scanner
+def VersionPayload(DataValue: bytes) -> bytes:
+    Offset = 0
+    while Offset < len(DataValue):
+        LineEnd = DataValue.find(b"\n", Offset)
+        if LineEnd < 0:
+            LineEnd = len(DataValue)
+        BodyValue = DataValue[Offset:LineEnd]
+        if len(BodyValue) > 99:
+            break
+        while BodyValue.endswith(b"\r"):
+            BodyValue = BodyValue[:-1]
+        if BodyValue in KVersionLines:
+            if BodyValue != KVersionLine:
+                raise DecodeFailure("unsupported BRep version line")
+            return DataValue[Offset:]
+        if LineEnd == len(DataValue):
+            break
+        Offset = LineEnd + 1
+    raise DecodeFailure("invalid BRep version line")
+
+
+# this definition exists because structural validation needs one parser pipeline
+def ValidateStruct(Payload: bytes) -> None:
+    TokensA = Tokens(Payload)
+    TokensA.ExpectToken(b"CASCADE")
+    TokensA.ExpectToken(b"Topology")
+    TokensA.ExpectToken(b"V1,")
+    TokensA.ExpectToken(b"(c)")
+    TokensA.ExpectToken(b"Matra-Datavision")
+    LocationsA = ReadLocations(TokensA)
+    CurvesTwoD = ReadCurves(TokensA, b"Curve2ds", 2)
+    CurvesThreeD = ReadCurves(TokensA, b"Curves", 3)
+    PolygonsThreeD = PolygonThree(TokensA)
+    PolygonsOnTriangulations = TriPolygons(TokensA)
+    SurfacesA = ReadSurfaces(TokensA)
+    TriangulationsA = Triangulations(TokensA)
+    ShapeStructure(
+        TokensA,
+        LocationsA,
+        CurvesTwoD,
+        CurvesThreeD,
+        PolygonsThreeD,
+        PolygonsOnTriangulations,
+        SurfacesA,
+        TriangulationsA,
+    )
+
+
+# this definition exists because public callers need safe structural validation
 def IsValidBrep(DataValue: bytes) -> bool:
     if type(DataValue) is not bytes or not DataValue or len(DataValue) > KMaxBytes:
         return False
     try:
-        Offset = 0
-        Payload = None
-        while Offset < len(DataValue):
-            LineEnd = DataValue.find(b"\n", Offset)
-            if LineEnd < 0:
-                LineEnd = len(DataValue)
-            BodyValue = DataValue[Offset:LineEnd]
-            if len(BodyValue) > 99:
-                break
-            while BodyValue.endswith(b"\r"):
-                BodyValue = BodyValue[:-1]
-            if BodyValue in KVersionLines:
-                if BodyValue != KVersionLine:
-                    raise DecodeFailure("unsupported BRep version line")
-                Payload = DataValue[Offset:]
-                break
-            if LineEnd == len(DataValue):
-                break
-            Offset = LineEnd + 1
-        if Payload is None:
-            raise DecodeFailure("invalid BRep version line")
-        TokensA = Tokens(Payload)
-        TokensA.ExpectToken(b"CASCADE")
-        TokensA.ExpectToken(b"Topology")
-        TokensA.ExpectToken(b"V1,")
-        TokensA.ExpectToken(b"(c)")
-        TokensA.ExpectToken(b"Matra-Datavision")
-        LocationsA = ReadLocations(TokensA)
-        CurvesTwoD = ReadCurves(TokensA, b"Curve2ds", 2)
-        CurvesThreeD = ReadCurves(TokensA, b"Curves", 3)
-        PolygonsThreeD = PolygonThree(TokensA)
-        PolygonsOnTriangulations = TriPolygons(TokensA)
-        SurfacesA = ReadSurfaces(TokensA)
-        TriangulationsA = Triangulations(TokensA)
-        ShapeStructure(
-            TokensA,
-            LocationsA,
-            CurvesTwoD,
-            CurvesThreeD,
-            PolygonsThreeD,
-            PolygonsOnTriangulations,
-            SurfacesA,
-            TriangulationsA,
-        )
+        ValidateStruct(VersionPayload(DataValue))
         return True
     except (DecodeFailure, KeyError, TypeError, ValueError, OverflowError):
         return False
+
+
+# this definition exists because legacy callers need their keyword contract preserved
+def DecodeLegacy(DataValue: bytes, **LegacyValues: AnyValue) -> BrepModel | None:
+    IdPrefix = LegacyValues.pop("id_prefix", "occ")
+    DesignBodyId = LegacyValues.pop("design_body_id", "")
+    Attributes = LegacyValues.pop("attributes", None)
+    if LegacyValues:
+        Unexpected = next(iter(LegacyValues))
+        raise TypeError(f"decode_ascii_brep got unexpected keyword {Unexpected!r}")
+    return DecodeAsciiBrep(
+        DataValue,
+        IdPrefix=IdPrefix,
+        DesignBodyId=DesignBodyId,
+        Attributes=Attributes,
+    )
+
+
+globals()["_ShapeRecord"] = ShapeRecord
+globals()["_Tokens"] = Tokens
+globals()["_VertexData"] = VertexData
+globals()["_CanonicalVertexRecords"] = CanonicalVerts
+globals()["decode_ascii_brep"] = DecodeLegacy
+globals()["is_structurally_valid_ascii_brep"] = IsValidBrep

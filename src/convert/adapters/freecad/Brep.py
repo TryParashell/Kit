@@ -403,62 +403,83 @@ def EdgeRecord(
     ]
 
 
-# this definition exists because focused behavior needs one stable owner
-def SharedBrep(
-    Points: tuple[Point, ...],
-    Facets: tuple[Triangle, ...],
+# shape counting stays isolated because topology references depend on one exact record total
+def GetShapeCount(
+    VertexCount: int,
+    EdgeCount: int,
+    FacetCount: int,
+    ComponentCount: int,
+    Closed: tuple[bool, ...],
+) -> int:
+    return (
+        VertexCount
+        + EdgeCount
+        + 2 * FacetCount
+        + ComponentCount
+        + sum(Closed)
+        + int(ComponentCount > 1)
+    )
+
+
+# ordinal allocation stays isolated because every native record reference uses reverse numbering
+def BuildOrdinals(
+    VertexIndices: tuple[int, ...],
+    Edges: tuple[tuple[int, int], ...],
+    FacetCount: int,
     Components: tuple[tuple[int, ...], ...],
     Closed: tuple[bool, ...],
-    Tolerance: float,
-) -> bytes:
-    GeomValue = GeomAction(Points, Facets, Tolerance)
-    VertexIndices = tuple(sorted({Index for Facet in Facets for Index in Facet}))
-    Edges = tuple(sorted(EdgeUses(Facets)))
-    ComponentCount = len(Components)
-    SolidCount = sum(Closed)
-    RootCount = 1 if ComponentCount > 1 else 0
-    ShapeCount = (
-        len(VertexIndices)
-        + len(Edges)
-        + 2 * len(Facets)
-        + ComponentCount
-        + SolidCount
-        + RootCount
-    )
+):
     Ordinal = 1
-    VertexOrdinals = {}
+    VertexOrdinals: dict[int, int] = {}
     for Index in VertexIndices:
         VertexOrdinals[Index] = Ordinal
         Ordinal += 1
-    EdgeOrdinals = {}
+    EdgeOrdinals: dict[tuple[int, int], int] = {}
     for EdgeValue in Edges:
         EdgeOrdinals[EdgeValue] = Ordinal
         Ordinal += 1
-    WireOrdinals = []
-    FaceOrdinals = []
-    for Ignored in Facets:
-        WireOrdinals.append(Ordinal)
-        FaceOrdinals.append(Ordinal + 1)
-        Ordinal += 2
-    ShellOrdinals = []
-    for Ignored in Components:
-        ShellOrdinals.append(Ordinal)
-        Ordinal += 1
+    WireOrdinals = tuple(range(Ordinal, Ordinal + 2 * FacetCount, 2))
+    FaceOrdinals = tuple(Value + 1 for Value in WireOrdinals)
+    Ordinal += 2 * FacetCount
+    ShellOrdinals = tuple(range(Ordinal, Ordinal + len(Components)))
+    Ordinal += len(Components)
     SolidOrdinals: dict[int, int] = {}
     for ComponentIndex, IsClosed in enumerate(Closed):
         if IsClosed:
             SolidOrdinals[ComponentIndex] = Ordinal
             Ordinal += 1
-    if ComponentCount > 1:
-        Ordinal += 1
+    Ordinal += int(len(Components) > 1)
+    ShapeCount = GetShapeCount(
+        len(VertexIndices), len(Edges), FacetCount, len(Components), Closed
+    )
     if Ordinal != ShapeCount + 1:
         raise ValueError("BRep topology record count is inconsistent")
+    return (
+        VertexOrdinals,
+        EdgeOrdinals,
+        WireOrdinals,
+        FaceOrdinals,
+        ShellOrdinals,
+        SolidOrdinals,
+        ShapeCount,
+    )
 
-    # this callback exists because local behavior needs one focused transformation
-    RefValue = lambda Record: ShapeCount - Record + 1
-    ToleranceText = Number(Tolerance)
-    Lines = Header(Points, Facets, Edges, GeomValue)
-    Lines.append(f"TShapes {ShapeCount}")
+
+# reverse references stay centralized because native shape records are numbered from the tail
+def GetRecordRef(ShapeCount: int, RecordNum: int) -> int:
+    return ShapeCount - RecordNum + 1
+
+
+# vertex and edge emission stays isolated because geometric records precede all topology parents
+def AddBaseLinesMut(
+    Lines: list[str],
+    Points: tuple[Point, ...],
+    VertexIndices: tuple[int, ...],
+    Edges: tuple[tuple[int, int], ...],
+    VertexOrdinals: Mapping[int, int],
+    ShapeCount: int,
+    ToleranceText: str,
+) -> None:
     for Index in VertexIndices:
         Lines.extend(VertexRecord(Points[Index], ToleranceText))
     for CurveIndex, EdgeValue in enumerate(Edges, 1):
@@ -468,17 +489,29 @@ def SharedBrep(
                 ToleranceText,
                 CurveIndex,
                 GetLength(Subtract(Points[EndValue], Points[Start])),
-                RefValue(VertexOrdinals[Start]),
-                RefValue(VertexOrdinals[EndValue]),
+                GetRecordRef(ShapeCount, VertexOrdinals[Start]),
+                GetRecordRef(ShapeCount, VertexOrdinals[EndValue]),
             )
         )
+
+
+# facet emission stays isolated because each triangle owns one wire and one face record
+def AddFacetsMut(
+    Lines: list[str],
+    Facets: tuple[Triangle, ...],
+    EdgeOrdinals: Mapping[tuple[int, int], int],
+    WireOrdinals: tuple[int, ...],
+    ShapeCount: int,
+    ToleranceText: str,
+) -> None:
     for FacetIndex, Facet in enumerate(Facets):
-        EdgeValues = []
+        EdgeValues: list[str] = []
         for Index in range(3):
             PairValue = (Facet[Index], Facet[(Index + 1) % 3])
             EdgeValue = tuple(sorted(PairValue))
             SignValue = "+" if PairValue == EdgeValue else "-"
-            EdgeValues.append(f"{SignValue}{RefValue(EdgeOrdinals[EdgeValue])} 0")
+            RecordRef = GetRecordRef(ShapeCount, EdgeOrdinals[EdgeValue])
+            EdgeValues.append(f"{SignValue}{RecordRef} 0")
         Lines.extend(
             [
                 "Wi",
@@ -489,26 +522,48 @@ def SharedBrep(
                 f"0  {ToleranceText} {FacetIndex + 1} 0",
                 "",
                 "0101000",
-                f"+{RefValue(WireOrdinals[FacetIndex])} 0 *",
+                f"+{GetRecordRef(ShapeCount, WireOrdinals[FacetIndex])} 0 *",
             ]
         )
+
+
+# shell emission stays isolated because each connected component owns one closure flag
+def AddShellsMut(
+    Lines: list[str],
+    Components: tuple[tuple[int, ...], ...],
+    Closed: tuple[bool, ...],
+    FaceOrdinals: tuple[int, ...],
+    ShapeCount: int,
+) -> None:
     for ComponentIndex, Component in enumerate(Components):
+        FaceRefs = " ".join(
+            f"+{GetRecordRef(ShapeCount, FaceOrdinals[Index])} 0" for Index in Component
+        )
         Lines.extend(
             [
                 "Sh",
                 "",
                 "0101100" if Closed[ComponentIndex] else "0101000",
-                " ".join((f"+{RefValue(FaceOrdinals[Index])} 0" for Index in Component))
-                + " *",
+                FaceRefs + " *",
             ]
         )
-    for ComponentIndex, SolidOrdinal in SolidOrdinals.items():
+
+
+# root emission stays isolated because solids and compounds depend only on component closure
+def AddRootLinesMut(
+    Lines: list[str],
+    ComponentCount: int,
+    SolidOrdinals: Mapping[int, int],
+    ShellOrdinals: tuple[int, ...],
+    ShapeCount: int,
+) -> None:
+    for ComponentIndex in SolidOrdinals:
         Lines.extend(
             [
                 "So",
                 "",
                 "1100000" if ComponentCount == 1 else "0100000",
-                f"+{RefValue(ShellOrdinals[ComponentIndex])} 0 *",
+                f"+{GetRecordRef(ShapeCount, ShellOrdinals[ComponentIndex])} 0 *",
             ]
         )
     if ComponentCount > 1:
@@ -516,14 +571,41 @@ def SharedBrep(
             SolidOrdinals.get(Index, ShellOrdinals[Index])
             for Index in range(ComponentCount)
         ]
-        Lines.extend(
-            [
-                "Co",
-                "",
-                "1100000",
-                " ".join((f"+{RefValue(Record)} 0" for Record in Roots)) + " *",
-            ]
+        RootRefs = " ".join(
+            f"+{GetRecordRef(ShapeCount, RecordNum)} 0" for RecordNum in Roots
         )
+        Lines.extend(["Co", "", "1100000", RootRefs + " *"])
+
+
+# shared mesh writing composes focused record phases because ordering defines every native reference
+def SharedBrep(
+    Points: tuple[Point, ...],
+    Facets: tuple[Triangle, ...],
+    Components: tuple[tuple[int, ...], ...],
+    Closed: tuple[bool, ...],
+    Tolerance: float,
+) -> bytes:
+    GeomValue = GeomAction(Points, Facets, Tolerance)
+    VertexIndices = tuple(sorted({Index for Facet in Facets for Index in Facet}))
+    Edges = tuple(sorted(EdgeUses(Facets)))
+    OrdinalData = BuildOrdinals(VertexIndices, Edges, len(Facets), Components, Closed)
+    VertexOrdinals, EdgeOrdinals, WireOrdinals = OrdinalData[:3]
+    FaceOrdinals, ShellOrdinals, SolidOrdinals, ShapeCount = OrdinalData[3:]
+    ToleranceText = Number(Tolerance)
+    Lines = Header(Points, Facets, Edges, GeomValue)
+    Lines.append(f"TShapes {ShapeCount}")
+    AddBaseLinesMut(
+        Lines,
+        Points,
+        VertexIndices,
+        Edges,
+        VertexOrdinals,
+        ShapeCount,
+        ToleranceText,
+    )
+    AddFacetsMut(Lines, Facets, EdgeOrdinals, WireOrdinals, ShapeCount, ToleranceText)
+    AddShellsMut(Lines, Components, Closed, FaceOrdinals, ShapeCount)
+    AddRootLinesMut(Lines, len(Components), SolidOrdinals, ShellOrdinals, ShapeCount)
     Lines.extend(["", "+1 0 "])
     return ("\n".join(Lines) + "\n").encode("ascii")
 
@@ -792,10 +874,8 @@ def PcurveRecord(Value: object) -> tuple[str, float]:
     Unsupported(f"pcurve type {type(Value).__name__} is unsupported")
 
 
-# this definition exists because focused behavior needs one stable owner
-def SurfaceRecord(
-    Value: object, Surfaces: Mapping[str, object], Active: frozenset[str] = frozenset()
-) -> str:
+# elementary surface encoding stays isolated because analytic frames share one compact dispatch
+def EncodeBasic(Value: object) -> str | None:
     if isinstance(Value, PlaneSurface):
         AxisValue, RefValue, YDirection = Frame(
             Value.normal, Value.reference_direction, f"plane surface {Value.id}"
@@ -825,67 +905,87 @@ def SurfaceRecord(
         if Value.major_radius < 0.0:
             Unsupported(f"torus surface {Value.id} has a negative major radius")
         return f"5 {Values(VectorThreeA(Value.center) + AxisValue + RefValue + YDirection + (Value.major_radius, Value.minor_radius))} "
+    return None
+
+
+# nurbs validation stays isolated because pole knot and weight dimensions form one invariant
+def GetNurbsShape(Value: NurbsSurface) -> tuple[int, int, bool]:
+    UCount = len(Value.control_points)
+    VCount = len(Value.control_points[0]) if Value.control_points else 0
+    if (
+        not UCount
+        or not VCount
+        or any(len(RowValue) != VCount for RowValue in Value.control_points)
+    ):
+        Unsupported(f"NURBS surface {Value.id} has an invalid pole grid")
+    BsplineLayout(
+        Value.degree_u,
+        UCount,
+        Value.knots_u,
+        Value.multiplicities_u,
+        Value.periodic_u,
+        f"NURBS surface {Value.id} U direction",
+    )
+    BsplineLayout(
+        Value.degree_v,
+        VCount,
+        Value.knots_v,
+        Value.multiplicities_v,
+        Value.periodic_v,
+        f"NURBS surface {Value.id} V direction",
+    )
+    IsRational = bool(Value.weights)
+    HasBadWeights = (
+        len(Value.weights) != UCount
+        or any(len(RowValue) != VCount for RowValue in Value.weights)
+        or any(
+            not MathValue.isfinite(Weight) or Weight <= 0.0
+            for RowValue in Value.weights
+            for Weight in RowValue
+        )
+    )
+    if IsRational and HasBadWeights:
+        Unsupported(f"NURBS surface {Value.id} has invalid weights")
+    return UCount, VCount, IsRational
+
+
+# nurbs encoding stays isolated because validated poles and knot vectors have deterministic order
+def EncodeNurbs(Value: NurbsSurface) -> str:
+    UCount, VCount, IsRational = GetNurbsShape(Value)
+    Fields = [
+        "9",
+        "1" if IsRational else "0",
+        "1" if IsRational else "0",
+        "1" if Value.periodic_u else "0",
+        "1" if Value.periodic_v else "0",
+        str(Value.degree_u),
+        str(Value.degree_v),
+        str(UCount),
+        str(VCount),
+        str(len(Value.knots_u)),
+        str(len(Value.knots_v)),
+    ]
+    for UIndex, RowValue in enumerate(Value.control_points):
+        for VIndex, PointValue in enumerate(RowValue):
+            Fields.extend(Number(Component) for Component in VectorThreeA(PointValue))
+            if IsRational:
+                Fields.append(Number(Value.weights[UIndex][VIndex]))
+    for KnotValue, Multiplicity in zip(Value.knots_u, Value.multiplicities_u):
+        Fields.extend((Number(KnotValue), str(Multiplicity)))
+    for KnotValue, Multiplicity in zip(Value.knots_v, Value.multiplicities_v):
+        Fields.extend((Number(KnotValue), str(Multiplicity)))
+    return " ".join(Fields) + " "
+
+
+# surface dispatch stays small because each representation owns its focused encoder and validation
+def SurfaceRecord(
+    Value: object, Surfaces: Mapping[str, object], Active: frozenset[str] = frozenset()
+) -> str:
+    BasicRecord = EncodeBasic(Value)
+    if BasicRecord is not None:
+        return BasicRecord
     if isinstance(Value, NurbsSurface):
-        UCount = len(Value.control_points)
-        VCount = len(Value.control_points[0]) if Value.control_points else 0
-        if (
-            not UCount
-            or not VCount
-            or any((len(RowValue) != VCount for RowValue in Value.control_points))
-        ):
-            Unsupported(f"NURBS surface {Value.id} has an invalid pole grid")
-        BsplineLayout(
-            Value.degree_u,
-            UCount,
-            Value.knots_u,
-            Value.multiplicities_u,
-            Value.periodic_u,
-            f"NURBS surface {Value.id} U direction",
-        )
-        BsplineLayout(
-            Value.degree_v,
-            VCount,
-            Value.knots_v,
-            Value.multiplicities_v,
-            Value.periodic_v,
-            f"NURBS surface {Value.id} V direction",
-        )
-        Rational = bool(Value.weights)
-        if Rational and (
-            len(Value.weights) != UCount
-            or any((len(RowValue) != VCount for RowValue in Value.weights))
-            or any(
-                (
-                    not MathValue.isfinite(Weight) or Weight <= 0.0
-                    for RowValue in Value.weights
-                    for Weight in RowValue
-                )
-            )
-        ):
-            Unsupported(f"NURBS surface {Value.id} has invalid weights")
-        Fields = [
-            "9",
-            "1" if Rational else "0",
-            "1" if Rational else "0",
-            "1" if Value.periodic_u else "0",
-            "1" if Value.periodic_v else "0",
-            str(Value.degree_u),
-            str(Value.degree_v),
-            str(UCount),
-            str(VCount),
-            str(len(Value.knots_u)),
-            str(len(Value.knots_v)),
-        ]
-        for UIndex, RowValue in enumerate(Value.control_points):
-            for VIndex, Point in enumerate(RowValue):
-                Fields.extend((Number(Component) for Component in VectorThreeA(Point)))
-                if Rational:
-                    Fields.append(Number(Value.weights[UIndex][VIndex]))
-        for KnotValue, Multiplicity in zip(Value.knots_u, Value.multiplicities_u):
-            Fields.extend((Number(KnotValue), str(Multiplicity)))
-        for KnotValue, Multiplicity in zip(Value.knots_v, Value.multiplicities_v):
-            Fields.extend((Number(KnotValue), str(Multiplicity)))
-        return " ".join(Fields) + " "
+        return EncodeNurbs(Value)
     if isinstance(Value, OffsetSurface):
         if Value.id in Active:
             Unsupported(f"offset surface {Value.id} has a cyclic basis")
@@ -1152,6 +1252,27 @@ def PlaneConic(
     )
 
 
+# linearity checking stays isolated because sampled surface coordinates must follow one affine path
+def IsLinearUv(
+    Parameters: tuple[float, ...],
+    UvValues: tuple[tuple[float, float], ...],
+    Origin: tuple[float, float],
+    Direction: tuple[float, float],
+    Allowed: float,
+) -> bool:
+    for Param, UvValue in zip(Parameters, UvValues, strict=True):
+        Expected = (
+            Origin[0] + Param * Direction[0],
+            Origin[1] + Param * Direction[1],
+        )
+        if (
+            MathValue.hypot(UvValue[0] - Expected[0], UvValue[1] - Expected[1])
+            > Allowed
+        ):
+            return False
+    return True
+
+
 # this definition exists because focused behavior needs one stable owner
 def LinearSurface(
     Curve: object,
@@ -1192,10 +1313,8 @@ def LinearSurface(
         UvValue[0][0] - LowValue * Direction[0],
         UvValue[0][1] - LowValue * Direction[1],
     )
-    for Param, Value in zip(Parameters, UvValue, strict=True):
-        Expected = (Origin[0] + Param * Direction[0], Origin[1] + Param * Direction[1])
-        if MathValue.hypot(Value[0] - Expected[0], Value[1] - Expected[1]) > Allowed:
-            return None
+    if not IsLinearUv(Parameters, UvValue, Origin, Direction, Allowed):
+        return None
     Origin = (Origin[0] + Offset[0], Origin[1] + Offset[1])
     UnitValue = (Direction[0] / Magnitude, Direction[1] / Magnitude)
     First = LowValue * Magnitude
@@ -1231,6 +1350,132 @@ def GeneratedPcurvA(
     return Result
 
 
+# seam inputs stay isolated because only paired circular loops on ruled surfaces qualify
+def GetSeamInputs(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float):
+    Surface = Graph.surfaces[FaceValue.surface_id]
+    if not isinstance(Surface, (CylinderSurface, ConeSurface)):
+        return None
+    if len(FaceValue.loop_ids) != 2:
+        return None
+    Loops = tuple(Graph.loops[LoopId] for LoopId in FaceValue.loop_ids)
+    if any(len(LoopValue.coedge_ids) != 1 for LoopValue in Loops):
+        return None
+    Coedges = tuple(Graph.coedges[LoopValue.coedge_ids[0]] for LoopValue in Loops)
+    if any(Coedge.pcurve_id for Coedge in Coedges):
+        return None
+    Edges = tuple(Graph.edges[Coedge.edge_id] for Coedge in Coedges)
+    Curves = tuple(Graph.curves[EdgeValue.curve_id] for EdgeValue in Edges)
+    if any(not isinstance(Curve, CircleCurve) for Curve in Curves):
+        return None
+    Allowed = (
+        max(
+            Tolerance,
+            *(EdgeValue.tolerance for EdgeValue in Edges),
+            *(
+                Graph.vertices[EdgeValue.start_vertex_id].tolerance
+                for EdgeValue in Edges
+            ),
+            1e-07,
+        )
+        * 10.0
+    )
+    IsInvalid = any(
+        EdgeValue.start_vertex_id != EdgeValue.end_vertex_id
+        or abs(abs(EdgeValue.end_parameter - EdgeValue.start_parameter) - MathValue.tau)
+        > Allowed
+        for EdgeValue in Edges
+    )
+    return None if IsInvalid else (Surface, Coedges, Edges, Curves, Allowed)
+
+
+# seam alignment stays isolated because periodic pcurves must meet at matching unwrapped endpoints
+def AlignSeam(
+    Curves: tuple[object, ...],
+    Surface: object,
+    Edges: tuple[BrepEdge, ...],
+    Tolerance: float,
+    Allowed: float,
+):
+    Generated = tuple(
+        GeneratedPcurvA(Curve, Surface, EdgeValue, Tolerance, (0.0, 0.0))
+        for Curve, EdgeValue in zip(Curves, Edges, strict=True)
+    )
+    HasBadSpan = any(
+        abs(abs(Value.end[0] - Value.start[0]) - MathValue.tau) > Allowed
+        or abs(Value.end[1] - Value.start[1]) > Allowed
+        for Value in Generated
+    )
+    Means = tuple((Value.start[1] + Value.end[1]) / 2.0 for Value in Generated)
+    if HasBadSpan or abs(Means[0] - Means[1]) <= Allowed:
+        return None
+    LowIndex = 0 if Means[0] < Means[1] else 1
+    HighIndex = 1 - LowIndex
+    LowGenerated = Generated[LowIndex]
+    HighGenerated = Generated[HighIndex]
+    LowReversed = LowGenerated.end[0] < LowGenerated.start[0]
+    HighReversed = HighGenerated.end[0] > HighGenerated.start[0]
+    LowStart = LowGenerated.end if LowReversed else LowGenerated.start
+    LowEnd = LowGenerated.start if LowReversed else LowGenerated.end
+    HighStart = HighGenerated.end if HighReversed else HighGenerated.start
+    Offset = round((LowEnd[0] - HighStart[0]) / MathValue.tau) * MathValue.tau
+    HighGenerated = GeneratedPcurvA(
+        Curves[HighIndex], Surface, Edges[HighIndex], Tolerance, (Offset, 0.0)
+    )
+    HighStart = HighGenerated.end if HighReversed else HighGenerated.start
+    HighEnd = HighGenerated.start if HighReversed else HighGenerated.end
+    if (
+        abs(LowEnd[0] - HighStart[0]) > Allowed
+        or abs(HighEnd[0] - LowStart[0]) > Allowed
+    ):
+        return None
+    return (
+        LowIndex,
+        HighIndex,
+        LowGenerated,
+        HighGenerated,
+        LowReversed,
+        HighReversed,
+        Means,
+    )
+
+
+# seam span validation stays isolated because connector geometry must remain on the supporting surface
+def GetSeamSpan(
+    Graph: _ModelGraph,
+    Edges: tuple[BrepEdge, ...],
+    Surface: object,
+    LowIndex: int,
+    HighIndex: int,
+    Means: tuple[float, ...],
+    Allowed: float,
+):
+    LowPoint = VectorThreeA(Graph.vertices[Edges[LowIndex].start_vertex_id].point)
+    HighPoint = VectorThreeA(Graph.vertices[Edges[HighIndex].start_vertex_id].point)
+    SpanVector = Subtract(HighPoint, LowPoint)
+    Length = GetLength(SpanVector)
+    if (
+        Length <= Allowed
+        or abs(Length - (Means[HighIndex] - Means[LowIndex])) > Allowed
+    ):
+        return None
+    Residuals = (
+        SurfaceResidual(
+            Surface,
+            tuple(
+                LowPoint[AxisValue] + SpanVector[AxisValue] * Ratio
+                for AxisValue in range(3)
+            ),
+        )
+        or 0.0
+        for Ratio in (0.25, 0.5, 0.75)
+    )
+    return (
+        None
+        if any(Value > Allowed for Value in Residuals)
+        else (LowPoint, HighPoint, Length)
+    )
+
+
 # this definition exists because focused behavior needs one stable owner
 def SeamBandA(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float) -> (
     tuple[
@@ -1246,116 +1491,22 @@ def SeamBandA(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float) -> (
     ]
     | None
 ):
-    Surface = Graph.surfaces[FaceValue.surface_id]
-    if not isinstance(Surface, (CylinderSurface, ConeSurface)):
+    InputData = GetSeamInputs(FaceValue, Graph, Tolerance)
+    if InputData is None:
         return None
-    if len(FaceValue.loop_ids) != 2:
+    Surface, Coedges, Edges, Curves, Allowed = InputData
+    AlignData = AlignSeam(Curves, Surface, Edges, Tolerance, Allowed)
+    if AlignData is None:
         return None
-    Loops = tuple((Graph.loops[LoopId] for LoopId in FaceValue.loop_ids))
-    if any((len(LoopValue.coedge_ids) != 1 for LoopValue in Loops)):
+    LowIndex, HighIndex, LowGenerated, HighGenerated = AlignData[:4]
+    LowReversed, HighReversed, Means = AlignData[4:]
+    SpanData = GetSeamSpan(Graph, Edges, Surface, LowIndex, HighIndex, Means, Allowed)
+    if SpanData is None:
         return None
-    Coedges = tuple((Graph.coedges[LoopValue.coedge_ids[0]] for LoopValue in Loops))
-    if any((Coedge.pcurve_id for Coedge in Coedges)):
-        return None
-    Edges = tuple((Graph.edges[Coedge.edge_id] for Coedge in Coedges))
-    Curves = tuple((Graph.curves[EdgeValue.curve_id] for EdgeValue in Edges))
-    if any((not isinstance(Curve, CircleCurve) for Curve in Curves)):
-        return None
-    Allowed = (
-        max(
-            Tolerance,
-            *(EdgeValue.tolerance for EdgeValue in Edges),
-            *(
-                Graph.vertices[EdgeValue.start_vertex_id].tolerance
-                for EdgeValue in Edges
-            ),
-            1e-07,
-        )
-        * 10.0
-    )
-    if any(
-        (
-            EdgeValue.start_vertex_id != EdgeValue.end_vertex_id
-            or abs(
-                abs(EdgeValue.end_parameter - EdgeValue.start_parameter) - MathValue.tau
-            )
-            > Allowed
-            for EdgeValue in Edges
-        )
-    ):
-        return None
-    Generated = tuple(
-        (
-            GeneratedPcurvA(Curve, Surface, EdgeValue, Tolerance, (0.0, 0.0))
-            for Curve, EdgeValue in zip(Curves, Edges, strict=True)
-        )
-    )
-    if any(
-        (
-            abs(abs(Value.end[0] - Value.start[0]) - MathValue.tau) > Allowed
-            or abs(Value.end[1] - Value.start[1]) > Allowed
-            for Value in Generated
-        )
-    ):
-        return None
-    Means = tuple(((Value.start[1] + Value.end[1]) / 2.0 for Value in Generated))
-    if abs(Means[0] - Means[1]) <= Allowed:
-        return None
-    LowIndex = 0 if Means[0] < Means[1] else 1
-    HighIndex = 1 - LowIndex
-    LowCoedge = Coedges[LowIndex]
-    HighCoedge = Coedges[HighIndex]
-    LowEdge = Edges[LowIndex]
-    HighEdge = Edges[HighIndex]
-    LowGenerated = Generated[LowIndex]
-    HighGenerated = Generated[HighIndex]
-    LowReversed = LowGenerated.end[0] < LowGenerated.start[0]
-    HighReversed = HighGenerated.end[0] > HighGenerated.start[0]
-    LowStart = LowGenerated.end if LowReversed else LowGenerated.start
-    LowEnd = LowGenerated.start if LowReversed else LowGenerated.end
-    HighStart = HighGenerated.end if HighReversed else HighGenerated.start
-    Offset = round((LowEnd[0] - HighStart[0]) / MathValue.tau) * MathValue.tau
-    HighGenerated = GeneratedPcurvA(
-        Curves[HighIndex], Surface, HighEdge, Tolerance, (Offset, 0.0)
-    )
-    HighStart = HighGenerated.end if HighReversed else HighGenerated.start
-    HighEnd = HighGenerated.start if HighReversed else HighGenerated.end
-    if (
-        abs(LowEnd[0] - HighStart[0]) > Allowed
-        or abs(HighEnd[0] - LowStart[0]) > Allowed
-    ):
-        return None
-    LowPoint = VectorThreeA(Graph.vertices[LowEdge.start_vertex_id].point)
-    HighPoint = VectorThreeA(Graph.vertices[HighEdge.start_vertex_id].point)
-    Vector = Subtract(HighPoint, LowPoint)
-    Length = GetLength(Vector)
-    if (
-        Length <= Allowed
-        or abs(Length - (Means[HighIndex] - Means[LowIndex])) > Allowed
-    ):
-        return None
-    if any(
-        (
-            (
-                SurfaceResidual(
-                    Surface,
-                    tuple(
-                        (
-                            LowPoint[AxisValue] + Vector[AxisValue] * Ratio
-                            for AxisValue in range(3)
-                        )
-                    ),
-                )
-                or 0.0
-            )
-            > Allowed
-            for Ratio in (0.25, 0.5, 0.75)
-        )
-    ):
-        return None
+    LowPoint, HighPoint, Length = SpanData
     return (
-        LowCoedge,
-        HighCoedge,
+        Coedges[LowIndex],
+        Coedges[HighIndex],
         LowGenerated,
         HighGenerated,
         LowReversed,
@@ -1366,123 +1517,166 @@ def SeamBandA(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float) -> (
     )
 
 
-# this definition exists because focused behavior needs one stable owner
+# seam record emission stays isolated because one detected band expands into coordinated edge records
+def AddSeamMut(
+    Records: list[str],
+    Result: dict[str, EdgePcurve],
+    SeamBands: dict[str, SeamBand],
+    FaceValue: BrepFace,
+    Graph: _ModelGraph,
+    SeamValue: tuple,
+) -> None:
+    LowCoedge, HighCoedge, LowGenerated, HighGenerated = SeamValue[:4]
+    LowReversed, HighReversed, LowPoint, HighPoint, Length = SeamValue[4:]
+    for CoedgeValue, Generated in (
+        (LowCoedge, LowGenerated),
+        (HighCoedge, HighGenerated),
+    ):
+        Records.append(Generated.record)
+        Result[CoedgeValue.id] = EdgePcurve(
+            len(Records), Generated.first, Generated.last
+        )
+    LowStart = LowGenerated.end if LowReversed else LowGenerated.start
+    LowEnd = LowGenerated.start if LowReversed else LowGenerated.end
+    Records.append(f"1 {Values((LowEnd[0], LowStart[1], 0.0, 1.0))} ")
+    FirstIndex = len(Records)
+    Records.append(f"1 {Values((LowStart[0], LowStart[1], 0.0, 1.0))} ")
+    Direction = ScaleVector(Subtract(HighPoint, LowPoint), 1.0 / Length)
+    SeamBands[FaceValue.id] = SeamBand(
+        FaceValue.id,
+        (FaceValue.loop_ids[0], FaceValue.loop_ids[1]),
+        LowCoedge.id,
+        HighCoedge.id,
+        LowReversed,
+        HighReversed,
+        Graph.edges[LowCoedge.edge_id].start_vertex_id,
+        Graph.edges[HighCoedge.edge_id].start_vertex_id,
+        f"1 {Values(LowPoint + Direction)} ",
+        Length,
+        FirstIndex,
+        len(Records),
+    )
+
+
+# periodic offset calculation stays isolated because adjacent pcurves must share an unwrapped endpoint
+def GetUvOffset(
+    PreviousEnd: tuple[float, float] | None,
+    StartPoint: tuple[float, float],
+    Periods: tuple[float | None, float | None],
+) -> tuple[float, float]:
+    Offset = [0.0, 0.0]
+    if PreviousEnd is not None:
+        for AxisValue, PeriodValue in enumerate(Periods):
+            if PeriodValue is not None:
+                DeltaValue = PreviousEnd[AxisValue] - StartPoint[AxisValue]
+                Offset[AxisValue] = round(DeltaValue / PeriodValue) * PeriodValue
+    return Offset[0], Offset[1]
+
+
+# coedge pcurve emission stays isolated because explicit and generated records have distinct contracts
+def AddCoedgeMut(
+    Records: list[str],
+    Result: dict[str, EdgePcurve],
+    Graph: _ModelGraph,
+    Surface: object,
+    Coedge: BrepCoedge,
+    Tolerance: float,
+    ExplicitIndexes: Mapping[str, int],
+    ExplicitScales: Mapping[str, float],
+    Periods: tuple[float | None, float | None],
+    PreviousEnd: tuple[float, float] | None,
+) -> tuple[float, float] | None:
+    EdgeValue = Graph.edges[Coedge.edge_id]
+    if Coedge.pcurve_id:
+        Scale = ExplicitScales[Coedge.pcurve_id]
+        First, LastValue = sorted(
+            (EdgeValue.start_parameter * Scale, EdgeValue.end_parameter * Scale)
+        )
+        Result[Coedge.id] = EdgePcurve(
+            ExplicitIndexes[Coedge.pcurve_id], First, LastValue
+        )
+        return None
+    CurveValue = Graph.curves[EdgeValue.curve_id]
+    Generated = GeneratedPcurvA(
+        CurveValue, Surface, EdgeValue, Tolerance, (0.0, 0.0)
+    )
+    IsReversed = Coedge.reversed != (
+        EdgeValue.end_parameter < EdgeValue.start_parameter
+    )
+    StartPoint = Generated.end if IsReversed else Generated.start
+    Offset = GetUvOffset(PreviousEnd, StartPoint, Periods)
+    if Offset != (0.0, 0.0):
+        Generated = GeneratedPcurvA(
+            CurveValue, Surface, EdgeValue, Tolerance, Offset
+        )
+    Records.append(Generated.record)
+    Result[Coedge.id] = EdgePcurve(
+        len(Records), Generated.first, Generated.last
+    )
+    return Generated.start if IsReversed else Generated.end
+
+
+# loop pcurve emission stays isolated because endpoint continuity is scoped to one ordered loop
+def AddLoopMut(
+    Records: list[str],
+    Result: dict[str, EdgePcurve],
+    Graph: _ModelGraph,
+    LoopId: str,
+    Surface: object,
+    Tolerance: float,
+    ExplicitIndexes: Mapping[str, int],
+    ExplicitScales: Mapping[str, float],
+) -> None:
+    PreviousEnd: tuple[float, float] | None = None
+    Periods = SurfacePeriods(Surface)
+    for CoedgeId in Graph.loops[LoopId].coedge_ids:
+        PreviousEnd = AddCoedgeMut(
+            Records,
+            Result,
+            Graph,
+            Surface,
+            Graph.coedges[CoedgeId],
+            Tolerance,
+            ExplicitIndexes,
+            ExplicitScales,
+            Periods,
+            PreviousEnd,
+        )
+
+
+# edge pcurve assembly composes focused seam and loop writers because their continuity rules differ
 def EdgePcurveA(
     Model: BrepModel, Graph: _ModelGraph, Tolerance: float
 ) -> tuple[tuple[str, ...], Mapping[str, EdgePcurve], Mapping[str, SeamBand]]:
-    Records = [
-        Value[0] for Value in (PcurveRecord(ItemValue) for ItemValue in Model.pcurves)
-    ]
+    PcurveData = tuple(PcurveRecord(ItemValue) for ItemValue in Model.pcurves)
+    Records = [RecordText for RecordText, ScaleValue in PcurveData]
     ExplicitIndexes = {
         ItemValue.id: Index for Index, ItemValue in enumerate(Model.pcurves, 1)
     }
     ExplicitScales = {
-        ItemValue.id: PcurveRecord(ItemValue)[1] for ItemValue in Model.pcurves
+        ItemValue.id: PcurveData[Index][1]
+        for Index, ItemValue in enumerate(Model.pcurves)
     }
     Result: dict[str, EdgePcurve] = {}
     SeamBands: dict[str, SeamBand] = {}
     for FaceValue in Model.faces:
         Surface = Graph.surfaces[FaceValue.surface_id]
-        Periods = SurfacePeriods(Surface)
         SeamValue = SeamBandA(FaceValue, Graph, Tolerance)
         if SeamValue is not None:
-            (
-                LowCoedge,
-                HighCoedge,
-                LowGenerated,
-                HighGenerated,
-                LowReversed,
-                HighReversed,
-                LowPoint,
-                HighPoint,
-                Length,
-            ) = SeamValue
-            for Coedge, Generated in (
-                (LowCoedge, LowGenerated),
-                (HighCoedge, HighGenerated),
-            ):
-                Records.append(Generated.record)
-                Result[Coedge.id] = EdgePcurve(
-                    len(Records), Generated.first, Generated.last
-                )
-            LowStart = LowGenerated.end if LowReversed else LowGenerated.start
-            LowEnd = LowGenerated.start if LowReversed else LowGenerated.end
-            Records.append(f"1 {Values((LowEnd[0], LowStart[1], 0.0, 1.0))} ")
-            FirstPcurveIndex = len(Records)
-            Records.append(f"1 {Values((LowStart[0], LowStart[1], 0.0, 1.0))} ")
-            SecondPcurveIndex = len(Records)
-            Direction = ScaleVector(Subtract(HighPoint, LowPoint), 1.0 / Length)
-            SeamBands[FaceValue.id] = SeamBand(
-                FaceValue.id,
-                (FaceValue.loop_ids[0], FaceValue.loop_ids[1]),
-                LowCoedge.id,
-                HighCoedge.id,
-                LowReversed,
-                HighReversed,
-                Graph.edges[LowCoedge.edge_id].start_vertex_id,
-                Graph.edges[HighCoedge.edge_id].start_vertex_id,
-                f"1 {Values(LowPoint + Direction)} ",
-                Length,
-                FirstPcurveIndex,
-                SecondPcurveIndex,
-            )
+            AddSeamMut(Records, Result, SeamBands, FaceValue, Graph, SeamValue)
             continue
         for LoopId in FaceValue.loop_ids:
-            PreviousEnd: tuple[float, float] | None = None
-            for CoedgeId in Graph.loops[LoopId].coedge_ids:
-                Coedge = Graph.coedges[CoedgeId]
-                EdgeValue = Graph.edges[Coedge.edge_id]
-                if Coedge.pcurve_id:
-                    Scale = ExplicitScales[Coedge.pcurve_id]
-                    First, LastValue = sorted(
-                        (
-                            EdgeValue.start_parameter * Scale,
-                            EdgeValue.end_parameter * Scale,
-                        )
-                    )
-                    Result[Coedge.id] = EdgePcurve(
-                        ExplicitIndexes[Coedge.pcurve_id], First, LastValue
-                    )
-                    PreviousEnd = None
-                    continue
-                Generated = GeneratedPcurvA(
-                    Graph.curves[EdgeValue.curve_id],
-                    Surface,
-                    EdgeValue,
-                    Tolerance,
-                    (0.0, 0.0),
-                )
-                ReversedValue = Coedge.reversed != (
-                    EdgeValue.end_parameter < EdgeValue.start_parameter
-                )
-                Start = Generated.end if ReversedValue else Generated.start
-                EndValue = Generated.start if ReversedValue else Generated.end
-                Offset = [0.0, 0.0]
-                if PreviousEnd is not None:
-                    for AxisValue, Period in enumerate(Periods):
-                        if Period is not None:
-                            Offset[AxisValue] = (
-                                round(
-                                    (PreviousEnd[AxisValue] - Start[AxisValue]) / Period
-                                )
-                                * Period
-                            )
-                if Offset != [0.0, 0.0]:
-                    Generated = GeneratedPcurvA(
-                        Graph.curves[EdgeValue.curve_id],
-                        Surface,
-                        EdgeValue,
-                        Tolerance,
-                        (Offset[0], Offset[1]),
-                    )
-                    Start = Generated.end if ReversedValue else Generated.start
-                    EndValue = Generated.start if ReversedValue else Generated.end
-                Records.append(Generated.record)
-                Result[Coedge.id] = EdgePcurve(
-                    len(Records), Generated.first, Generated.last
-                )
-                PreviousEnd = EndValue
-    return (tuple(Records), Result, SeamBands)
+            AddLoopMut(
+                Records,
+                Result,
+                Graph,
+                LoopId,
+                Surface,
+                Tolerance,
+                ExplicitIndexes,
+                ExplicitScales,
+            )
+    return tuple(Records), Result, SeamBands
 
 
 # this definition exists because focused behavior needs one stable owner
