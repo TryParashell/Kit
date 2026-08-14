@@ -21,7 +21,10 @@ from convert.adapters.solidworks.programs.assembly.distinct.default.Repeat impor
     KResolvedShiftNine as ResolvedShiftLink,
     KResolvedShiftOne as ResolvedShiftUnique,
 )
-from convert.adapters.solidworks.programs.assembly.hybrid.quintuples.Program import EncodeField, StreamPrograms
+from convert.adapters.solidworks.programs.assembly.hybrid.quintuples.Program import (
+    EncodeField,
+    StreamPrograms,
+)
 from convert.adapters.solidworks.programs.assembly.default.Repeat import (
     IsIdentityBasis,
     OccurHash,
