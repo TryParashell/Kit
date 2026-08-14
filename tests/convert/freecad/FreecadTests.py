@@ -665,35 +665,7 @@ def TestEqualIs() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def AddChamfer(RootData: ET.Element) -> None:
-        ObjectsData = RootData.find('./Objects')
-        ObjectData = RootData.find('./ObjectData')
-        assert ObjectsData is not None
-        assert ObjectData is not None
-        ObjectsData.set('Count', str(int(ObjectsData.get('Count', '0')) + 1))
-        ObjectData.set('Count', str(int(ObjectData.get('Count', '0')) + 1))
-        BodyDeps = ObjectsData.find("./ObjectDeps[@Name='Body']")
-        assert BodyDeps is not None
-        XmlTree.SubElement(BodyDeps, 'Dep', {'Name': 'Chamfer'})
-        BodyDeps.set('Count', str(int(BodyDeps.get('Count', '0')) + 1))
-        ChamferDeps = XmlTree.SubElement(ObjectsData, 'ObjectDeps', {'Name': 'Chamfer', 'Count': '2'})
-        XmlTree.SubElement(ChamferDeps, 'Dep', {'Name': 'Pad'})
-        XmlTree.SubElement(ChamferDeps, 'Dep', {'Name': 'Body'})
-        XmlTree.SubElement(ObjectsData, 'Object', {'type': 'PartDesign::Chamfer', 'name': 'Chamfer', 'id': '5'})
-        BodyProperties = ObjectData.find("./Object[@name='Body']/Properties")
-        assert BodyProperties is not None
-        GroupData = BodyProperties.find("./Property[@name='Group']/LinkList")
-        TipData = BodyProperties.find("./Property[@name='Tip']/Link")
-        assert GroupData is not None
-        assert TipData is not None
-        XmlTree.SubElement(GroupData, 'Link', {'value': 'Chamfer'})
-        GroupData.set('count', str(int(GroupData.get('count', '0')) + 1))
-        TipData.set('value', 'Chamfer')
-        BaseData = NativeProp('Base', 'App::PropertyLinkSub', 'LinkSub', {'value': 'Pad', 'count': '1'})
-        XmlTree.SubElement(BaseData[0], 'Sub', {'value': 'Edge5'})
-        PropertiesData = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Chamfer'}), BaseData, NativeProp('BaseFeature', 'App::PropertyLink', 'Link', {'value': 'Pad'}), NativeProp('Size', 'App::PropertyQuantityConstraint', 'Float', {'value': '2'}), NativeProp('Size2', 'App::PropertyQuantityConstraint', 'Float', {'value': '1'}), NativeProp('Angle', 'App::PropertyAngle', 'Float', {'value': '45'}), NativeProp('ChamferType', 'App::PropertyEnumeration', 'Integer', {'value': '0'}), NativeProp('FlipDirection', 'App::PropertyBool', 'Bool', {'value': 'false'}), NativeProp('UseAllEdges', 'App::PropertyBool', 'Bool', {'value': 'false'}))
-        ChamferData = XmlTree.SubElement(ObjectData, 'Object', {'name': 'Chamfer'})
-        ChamferProperties = XmlTree.SubElement(ChamferData, 'Properties', {'Count': str(len(PropertiesData)), 'TransientCount': '0'})
-        ChamferProperties.extend(PropertiesData)
+        AddChamferMut(RootData)
     DocData = FreeCadAdapter().read(RewriteDocXml(NativePart(), AddChamfer))
     ChamferData = next((ItemData for ItemData in DocData.feature_timeline if ItemData.kind == FeatureKind.CHAMFER))
     assert isinstance(ChamferData.definition, ChamferFeature)
@@ -712,35 +684,7 @@ def TestInwardIs() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def AddThickness(RootData: ET.Element) -> None:
-        ObjectsData = RootData.find('./Objects')
-        ObjectData = RootData.find('./ObjectData')
-        assert ObjectsData is not None
-        assert ObjectData is not None
-        ObjectsData.set('Count', str(int(ObjectsData.get('Count', '0')) + 1))
-        ObjectData.set('Count', str(int(ObjectData.get('Count', '0')) + 1))
-        BodyDeps = ObjectsData.find("./ObjectDeps[@Name='Body']")
-        assert BodyDeps is not None
-        XmlTree.SubElement(BodyDeps, 'Dep', {'Name': 'Thickness'})
-        BodyDeps.set('Count', str(int(BodyDeps.get('Count', '0')) + 1))
-        ThicknessDeps = XmlTree.SubElement(ObjectsData, 'ObjectDeps', {'Name': 'Thickness', 'Count': '2'})
-        XmlTree.SubElement(ThicknessDeps, 'Dep', {'Name': 'Pad'})
-        XmlTree.SubElement(ThicknessDeps, 'Dep', {'Name': 'Body'})
-        XmlTree.SubElement(ObjectsData, 'Object', {'type': 'PartDesign::Thickness', 'name': 'Thickness', 'id': '5'})
-        BodyProperties = ObjectData.find("./Object[@name='Body']/Properties")
-        assert BodyProperties is not None
-        GroupData = BodyProperties.find("./Property[@name='Group']/LinkList")
-        TipData = BodyProperties.find("./Property[@name='Tip']/Link")
-        assert GroupData is not None
-        assert TipData is not None
-        XmlTree.SubElement(GroupData, 'Link', {'value': 'Thickness'})
-        GroupData.set('count', str(int(GroupData.get('count', '0')) + 1))
-        TipData.set('value', 'Thickness')
-        BaseData = NativeProp('Base', 'App::PropertyLinkSub', 'LinkSub', {'value': 'Pad', 'count': '1'})
-        XmlTree.SubElement(BaseData[0], 'Sub', {'value': 'Face6'})
-        PropertiesData = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Thickness'}), BaseData, NativeProp('BaseFeature', 'App::PropertyLink', 'Link', {'value': 'Pad'}), NativeProp('Value', 'App::PropertyQuantityConstraint', 'Float', {'value': '2'}), NativeProp('Reversed', 'App::PropertyBool', 'Bool', {'value': 'true'}))
-        ThicknessData = XmlTree.SubElement(ObjectData, 'Object', {'name': 'Thickness'})
-        ThicknessProperties = XmlTree.SubElement(ThicknessData, 'Properties', {'Count': str(len(PropertiesData)), 'TransientCount': '0'})
-        ThicknessProperties.extend(PropertiesData)
+        AddThicknessMut(RootData)
     DocData = FreeCadAdapter().read(RewriteDocXml(NativePart(), AddThickness))
     ShellData = next((ItemData for ItemData in DocData.feature_timeline if ItemData.kind == FeatureKind.SHELL))
     assert isinstance(ShellData.definition, ShellFeature)
