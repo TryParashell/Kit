@@ -1037,7 +1037,7 @@ def HasSegmentTouch(
 
 
 # this definition finds a union root while compressing the traversal path
-def FindRoot(Parents: list[int], Index: int) -> int:
+def FindRootMut(Parents: list[int], Index: int) -> int:
     while Parents[Index] != Index:
         Parents[Index] = Parents[Parents[Index]]
         Index = Parents[Index]
@@ -1045,9 +1045,9 @@ def FindRoot(Parents: list[int], Index: int) -> int:
 
 
 # this definition merges two endpoint clusters deterministically
-def UnionRoots(Parents: list[int], First: int, Second: int) -> None:
-    FirstRoot = FindRoot(Parents, First)
-    SecondRoot = FindRoot(Parents, Second)
+def UnionRootsMut(Parents: list[int], First: int, Second: int) -> None:
+    FirstRoot = FindRootMut(Parents, First)
+    SecondRoot = FindRootMut(Parents, Second)
     if FirstRoot != SecondRoot:
         Parents[max(FirstRoot, SecondRoot)] = min(FirstRoot, SecondRoot)
 
@@ -1058,10 +1058,10 @@ def ClusterRoots(Endpoints: tuple[VectorTwo, ...]) -> tuple[int, ...] | None:
     for First in range(len(Endpoints)):
         for Second in range(First + 1, len(Endpoints)):
             if IsPointClose(Endpoints[First], Endpoints[Second]):
-                UnionRoots(Parents, First, Second)
+                UnionRootsMut(Parents, First, Second)
     Clusters: dict[int, list[int]] = {}
     for Index in range(len(Endpoints)):
-        Clusters.setdefault(FindRoot(Parents, Index), []).append(Index)
+        Clusters.setdefault(FindRootMut(Parents, Index), []).append(Index)
     if any(
         not IsPointClose(Endpoints[First], Endpoints[Second])
         for Members in Clusters.values()
@@ -1069,7 +1069,7 @@ def ClusterRoots(Endpoints: tuple[VectorTwo, ...]) -> tuple[int, ...] | None:
         for Second in Members[Position + 1 :]
     ):
         return None
-    return tuple(FindRoot(Parents, Index) for Index in range(len(Endpoints)))
+    return tuple(FindRootMut(Parents, Index) for Index in range(len(Endpoints)))
 
 
 # this definition builds the two edge incidence contract for a closed line graph
@@ -1112,7 +1112,7 @@ def IsSimpleLoop(Vertices: list[VectorTwo], Ordered: list[int]) -> bool:
 
 
 # this definition walks one closed line component in deterministic edge order
-def TraceLoop(
+def TraceLoopMut(
     Lines: tuple[tuple[int, SketchEntity], ...],
     Endpoints: tuple[VectorTwo, ...],
     Roots: tuple[int, ...],
@@ -1214,7 +1214,7 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
     Remaining = set(range(len(Lines)))
     Profiles = []
     while Remaining:
-        Profile = TraceLoop(Lines, Endpoints, Roots, Incident, Remaining)
+        Profile = TraceLoopMut(Lines, Endpoints, Roots, Incident, Remaining)
         if Profile is None:
             return ()
         Profiles.append(Profile)
@@ -1594,7 +1594,7 @@ def BuildPlanes(
 
 
 # this definition creates a synthetic support plane when a sketch target is absent
-def EnsureSupport(
+def AddSupportMut(
     ObjValue: NativeObject,
     PlaneIds: dict[str, str],
     Planes: list[SupportPlane],
@@ -1801,7 +1801,7 @@ def NativeSketchMut(
     Consumed: set[tuple[str, str]],
 ) -> Sketch:
     SketchId = f"freecad:sketch:{ObjValue.name}"
-    SupportName, SupportId = EnsureSupport(ObjValue, PlaneIds, Planes)
+    SupportName, SupportId = AddSupportMut(ObjValue, PlaneIds, Planes)
     GeomList = FindChild(ObjValue, "Geometry", "GeometryList")
     GeomNodes = [] if GeomList is None else GeomList.findall("./Geometry")
     RuleList = FindChild(ObjValue, "Constraints", "ConstraintList")
@@ -2857,7 +2857,7 @@ def ResolveOuter(
 
 
 # this definition loads one guarded external document and updates shared limits
-def LoadOuterDoc(Choice: FilePath, State: OuterState, Depth: int) -> CadDoc:
+def ReadOuterMut(Choice: FilePath, State: OuterState, Depth: int) -> CadDoc:
     try:
         SizeValue = Choice.stat().st_size
     except OSError as ErrorInfo:
@@ -2913,7 +2913,7 @@ def OuterDocsMut(
             Resolved[FileName] = (Identity, Cached)
             continue
         try:
-            Child = LoadOuterDoc(Choice, State, Depth)
+            Child = ReadOuterMut(Choice, State, Depth)
         except (NativeFreeCad, TypeError, ValueError, RecursionError) as ErrorInfo:
             Unresolved.append({"file": FileName, "reason": str(ErrorInfo)})
             continue
