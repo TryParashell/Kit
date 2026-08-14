@@ -62,15 +62,6 @@ class AdapterInfo(ContractBase):
         Assembly = IsAssemblyFlag(NamedValues)
         return SelfValue.AssemblyExts if Assembly else SelfValue.PartExts
 
-    # immutable slot pickles require canonical storage names despite historical field reflection
-    def __getstate__(SelfValue) -> tuple[object, ...]:
-        return tuple(getattr(SelfValue, ModelName) for ModelName in KModelFields)
-
-    # canonical restoration keeps historical reflected names from becoming invalid slot targets
-    def __setstate__(SelfValue, FieldValues: tuple[object, ...]) -> None:
-        for ModelName, FieldValue in zip(KModelFields, FieldValues):
-            object.__setattr__(SelfValue, ModelName, FieldValue)
-
     # historical representation keeps logs and diagnostics comparable across package upgrades
     def __repr__(SelfValue) -> str:
         FieldValues = ", ".join(
@@ -96,6 +87,21 @@ KLegacyFields = (
 
 # canonical field order remains necessary for immutable slot pickle restoration
 KModelFields = tuple(ModelName for LegacyName, ModelName in KLegacyFields)
+
+
+# immutable slot pickles read canonical storage despite historical field reflection
+def GetPickleState(SelfValue: AdapterInfo) -> tuple[object, ...]:
+    return tuple(getattr(SelfValue, ModelName) for ModelName in KModelFields)
+
+
+# canonical restoration prevents historical reflected names from targeting invalid slots
+def SetPickleState(SelfValue: AdapterInfo, FieldValues: tuple[object, ...]) -> None:
+    for ModelName, FieldValue in zip(KModelFields, FieldValues):
+        object.__setattr__(SelfValue, ModelName, FieldValue)
+
+
+setattr(AdapterInfo, "__getstate__", GetPickleState)
+setattr(AdapterInfo, "__setstate__", SetPickleState)
 
 for LegacyName, ModelName in KLegacyFields:
     setattr(AdapterInfo.__dataclass_fields__[ModelName], "name", LegacyName)

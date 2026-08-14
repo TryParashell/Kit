@@ -23,7 +23,7 @@ from interchange import TransformMatrix
 from tests.interchange.fixtures.DocumentFixture import BuildDocument
 
 
-# the canonical assembly fixture composes the document fixture without test-module cycles
+# the canonical assembly fixture composes document data without module cycles
 def BuildAssembly() -> CadDocument:
     PartValue = BuildDocument()
     RootValue = ComponentDef("definition:root", "Engine", ComponentKind.KAssembly)

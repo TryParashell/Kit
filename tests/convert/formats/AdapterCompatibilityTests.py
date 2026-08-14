@@ -91,7 +91,9 @@ def CheckInfo() -> None:
     )
     InfoData = AdapterInfo("format.test", "Test", "1", (".test",))
     assert InfoData.format_id == "format.test"
-    assert Pickle.loads(Pickle.dumps(InfoData)) == InfoData
+    for ProtocolValue in range(Pickle.HIGHEST_PROTOCOL + 1):
+        EncodedData = Pickle.dumps(InfoData, protocol=ProtocolValue)
+        assert Pickle.loads(EncodedData) == InfoData
     assert (
         DataClasses.replace(InfoData, format_id="format.other").format_id
         == "format.other"

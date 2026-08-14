@@ -21,7 +21,7 @@ from interchange import SupportPlane
 from interchange import Transform
 
 
-# the canonical document fixture keeps cross-domain tests independent from test modules
+# the canonical document fixture keeps domain tests independent from test modules
 def BuildDocument() -> CadDocument:
     PlaneValue = SupportPlane("plane:xy", "XY", Transform())
     EntityValue = SketchEntity(

@@ -691,6 +691,49 @@ def EncodeStream(
     )
 
 
+# this binding exists because lowercase body calls retain historical keywords
+KBodyNames = (("standard", "Standard"), ("user", "UserValue"))
+
+# this binding exists because lowercase stream calls retain historical keywords
+KStreamNames = (
+    *KBodyNames,
+    ("assembly", "AsmValue"),
+    ("view", "ViewValue"),
+)
+
+# this binding exists because lowercase preamble calls retain historical keywords
+KPreambleNames = (("clsid", "Clsid"), ("view", "ViewValue"))
+
+
+# legacy keyword translation keeps public compatibility explicit
+def LegacyArgs(
+    KwargValues: dict[str, object], NamePairs: tuple[tuple[str, str], ...]
+) -> dict[str, object]:
+    NameMap = dict(NamePairs)
+    Canonical: dict[str, object] = {}
+    for NameValue, ItemValue in KwargValues.items():
+        TargetName = NameMap.get(NameValue, NameValue)
+        if TargetName in Canonical:
+            raise TypeError(f"duplicate definition keyword {TargetName}")
+        Canonical[TargetName] = ItemValue
+    return Canonical
+
+
+# the lowercase body encoder accepts historical and canonical keywords
+def EncodeBodyOld(**KwargValues: object) -> bytes:
+    return EncodeBody(**LegacyArgs(KwargValues, KBodyNames))
+
+
+# the lowercase stream encoder accepts historical and canonical keywords
+def EncodeStreamOld(**KwargValues: object) -> bytes:
+    return EncodeStream(**LegacyArgs(KwargValues, KStreamNames))
+
+
+# the lowercase preamble encoder accepts historical and canonical keywords
+def EncodePreOld(**KwargValues: object) -> bytes:
+    return EncodePreamble(**LegacyArgs(KwargValues, KPreambleNames))
+
+
 # this binding exists because shared behavior needs one stable value
 globals()["ASSEMBLY_CLSID"] = KAsmClsid
 
@@ -890,13 +933,13 @@ globals()["annotations"] = Annotations
 globals()["dataclass"] = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_body"] = EncodeBody
+globals()["encode_body"] = EncodeBodyOld
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_definition_stream"] = EncodeStream
+globals()["encode_definition_stream"] = EncodeStreamOld
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_preamble"] = EncodePreamble
+globals()["encode_preamble"] = EncodePreOld
 
 # this binding exists because shared behavior needs one stable value
 globals()["encode_string"] = EncodeString

@@ -72,6 +72,23 @@ KAssembly = KRandom / "V8_engine.SLDASM"
 # centralizes shared evidence so every related assertion uses one value
 KConrod = KRandom / "Pistons" / "Conrod.SLDASM"
 
+# identifies the external acis companion whose exact bytes define the golden evidence
+KAcisCompanion = KRandom / "ACIS" / "V8_engine.SAT"
+
+# identifies the external parasolid companion whose exact bytes define the golden evidence
+KParaCompanion = KRandom / "Parasolid" / "V8_engine.x_t"
+
+# distinguishes the canonical external corpus from locally normalized variants
+KCompanionSizes = ((KAcisCompanion, 61518735), (KParaCompanion, 8036848))
+
+
+# prevents another local corpus from being compared with canonical byte goldens
+def HasCompanions() -> bool:
+    return all(
+        (PathInfo.is_file() and PathInfo.stat().st_size == ExpectedSize)
+        for PathInfo, ExpectedSize in KCompanionSizes
+    )
+
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def MixedCoreItems() -> tuple[AsmCoreItem, ...]:
@@ -851,6 +868,9 @@ def TestNADPTOT(Document) -> None:
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.skipif(
+    not HasCompanions(), reason="canonical assembly companion corpus unavailable"
+)
 def TestRACARE() -> None:
     Payloads = CompanionPayloads(str(KAssembly))
     assert [
