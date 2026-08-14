@@ -842,19 +842,9 @@ def ComponentRef(
 def ComponentSearch(
     Label: str, Settings: ReadOptions
 ) -> tuple[tuple[FilePath, ...], tuple[DiagValue, ...]]:
-    Requested = Settings.values.get("component_search_root")
-    if Requested:
-        Candidates = (FilePath(str(Requested)).expanduser(),)
-    else:
-        Source = SourcePath(Label)
-        if Source is None:
-            return ((), ())
-        Candidates = (Source.parent,)
-        if Source.parent.name.casefold() in {
-            KProductSuffix,
-            KProductSuffix.removeprefix("."),
-        }:
-            Candidates = (*Candidates, Source.parent.parent / f".{PartDocType}")
+    Candidates = SearchRoots(Label, Settings)
+    if not Candidates:
+        return ((), ())
     Roots: list[FilePath] = []
     Diagnostics: list[DiagValue] = []
     SeenValue: set[str] = set()
@@ -871,11 +861,27 @@ def ComponentSearch(
             Diagnostics.append(SearchDiag(Resolved, "root_is_not_directory"))
             continue
         KeyValue = OsModule.path.normcase(str(Resolved))
-        if KeyValue in SeenValue:
-            continue
-        SeenValue.add(KeyValue)
-        Roots.append(Resolved)
+        if KeyValue not in SeenValue:
+            SeenValue.add(KeyValue)
+            Roots.append(Resolved)
     return (tuple(Roots), tuple(Diagnostics))
+
+
+# this definition exists because focused behavior needs one stable owner
+def SearchRoots(Label: str, Settings: ReadOptions) -> tuple[FilePath, ...]:
+    Requested = Settings.values.get("component_search_root")
+    if Requested:
+        return (FilePath(str(Requested)).expanduser(),)
+    Source = SourcePath(Label)
+    if Source is None:
+        return ()
+    Candidates = (Source.parent,)
+    if Source.parent.name.casefold() in {
+        KProductSuffix,
+        KProductSuffix.removeprefix("."),
+    }:
+        Candidates = (*Candidates, Source.parent.parent / f".{PartDocType}")
+    return Candidates
 
 
 # this definition exists because focused behavior needs one stable owner
