@@ -5416,6 +5416,71 @@ def FreeCadBossB(
     return FinishBossB(SelectionData, FilletFeatureData, PadNativeName, DocData, BoundsValue, PadDimension, RadiusNumber)
 
 
+# focused continuation isolates the remaining native serialization phase
+def FinishBoss(SelectionData, ChamferFeatureData, PadNativeName, DocData, BoundsValue, PadDimension, DistanceNumber):
+    if (
+        SelectionData.attributes.get("freecad_object")
+        != ChamferFeatureData.provenance.native_id
+        or SelectionData.attributes.get("freecad_property") != "Base"
+        or SelectionData.attributes.get("freecad_target") != PadNativeName
+        or (len(SelectionData.path) != 1)
+        or (SelectionData.path[0].entity_kind != "edge")
+        or (SelectionData.path[0].entity_id != PadNativeName)
+        or (
+            not HasFreeCadMax(
+                DocData,
+                PadNativeName,
+                SelectionData.path[0].subelement,
+                BoundsValue,
+                PadDimension.value_mm,
+            )
+        )
+    ):
+        return None
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != ChamferFeatureData.id:
+            continue
+        PathValue = ParamValueData.attributes.get("freecad_path")
+        if (
+            not isinstance(PathValue, str)
+            or not PathValue
+            or PathValue in ParamData
+            or (ParamValueData.expression is not None)
+        ):
+            return None
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {
+        "Angle": (ValueKind.ANGLE, 45.0),
+        "ChamferType": (ValueKind.INTEGER, 0),
+        "FlipDirection": (ValueKind.BOOLEAN, False),
+        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
+        "Label": (ValueKind.STRING, ChamferFeatureData.name),
+        "Label2": (ValueKind.STRING, ""),
+        "Refine": (ValueKind.BOOLEAN, True),
+        "Size": (ValueKind.QUANTITY, DistanceNumber),
+        "Size2": (ValueKind.QUANTITY, 1.0),
+        "SupportTransform": (ValueKind.BOOLEAN, False),
+        "Suppressed": (ValueKind.BOOLEAN, False),
+        "UseAllEdges": (ValueKind.BOOLEAN, False),
+        "Visibility": (ValueKind.BOOLEAN, True),
+    }
+    if set(ParamData) != set(ExpectedData) or any(
+        (
+            not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue)
+            for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
+        )
+    ):
+        return None
+    DistanceParam = ParamData["Size"]
+    return (
+        PadDimension,
+        WriteDimension(
+            "D1", DistanceNumber, format(DistanceNumber, ".15g"), DistanceParam.role
+        ),
+    )
+
+
 # this definition exists because focused behavior needs one stable owner
 def FreeCadBoss(
     DocData: CadDocument,
@@ -5512,20 +5577,24 @@ def FreeCadBoss(
         if PadFeature.provenance is not None
         else PadFeature.name
     )
+    return FinishBoss(SelectionData, ChamferFeatureData, PadNativeName, DocData, BoundsValue, PadDimension, DistanceNumber)
+
+
+# focused continuation isolates the remaining native serialization phase
+def FinishBossD(SelectionData, ShellFeatureData, PadNativeName, DocData, PadDimension, ThicknessNumber):
     if (
         SelectionData.attributes.get("freecad_object")
-        != ChamferFeatureData.provenance.native_id
+        != ShellFeatureData.provenance.native_id
         or SelectionData.attributes.get("freecad_property") != "Base"
         or SelectionData.attributes.get("freecad_target") != PadNativeName
         or (len(SelectionData.path) != 1)
-        or (SelectionData.path[0].entity_kind != "edge")
+        or (SelectionData.path[0].entity_kind != "face")
         or (SelectionData.path[0].entity_id != PadNativeName)
         or (
-            not HasFreeCadMax(
+            not HasFreeCadTop(
                 DocData,
                 PadNativeName,
                 SelectionData.path[0].subelement,
-                BoundsValue,
                 PadDimension.value_mm,
             )
         )
@@ -5533,7 +5602,7 @@ def FreeCadBoss(
         return None
     ParamData: dict[str, Param] = {}
     for ParamValueData in DocData.parameters:
-        if ParamValueData.owner_id != ChamferFeatureData.id:
+        if ParamValueData.owner_id != ShellFeatureData.id:
             continue
         PathValue = ParamValueData.attributes.get("freecad_path")
         if (
@@ -5545,18 +5614,17 @@ def FreeCadBoss(
             return None
         ParamData[PathValue] = ParamValueData
     ExpectedData = {
-        "Angle": (ValueKind.ANGLE, 45.0),
-        "ChamferType": (ValueKind.INTEGER, 0),
-        "FlipDirection": (ValueKind.BOOLEAN, False),
         "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, ChamferFeatureData.name),
+        "Intersection": (ValueKind.BOOLEAN, False),
+        "Join": (ValueKind.INTEGER, 0),
+        "Label": (ValueKind.STRING, ShellFeatureData.name),
         "Label2": (ValueKind.STRING, ""),
+        "Mode": (ValueKind.INTEGER, 0),
         "Refine": (ValueKind.BOOLEAN, True),
-        "Size": (ValueKind.QUANTITY, DistanceNumber),
-        "Size2": (ValueKind.QUANTITY, 1.0),
+        "Reversed": (ValueKind.BOOLEAN, True),
         "SupportTransform": (ValueKind.BOOLEAN, False),
         "Suppressed": (ValueKind.BOOLEAN, False),
-        "UseAllEdges": (ValueKind.BOOLEAN, False),
+        "Value": (ValueKind.LENGTH, ThicknessNumber),
         "Visibility": (ValueKind.BOOLEAN, True),
     }
     if set(ParamData) != set(ExpectedData) or any(
@@ -5566,11 +5634,11 @@ def FreeCadBoss(
         )
     ):
         return None
-    DistanceParam = ParamData["Size"]
+    ThicknessParam = ParamData["Value"]
     return (
         PadDimension,
         WriteDimension(
-            "D1", DistanceNumber, format(DistanceNumber, ".15g"), DistanceParam.role
+            "D1", ThicknessNumber, format(ThicknessNumber, ".15g"), ThicknessParam.role
         ),
     )
 
@@ -5670,27 +5738,25 @@ def FreeCadBossD(
         if PadFeature.provenance is not None
         else PadFeature.name
     )
+    return FinishBossD(SelectionData, ShellFeatureData, PadNativeName, DocData, PadDimension, ThicknessNumber)
+
+
+# focused continuation isolates the remaining native serialization phase
+def FinishBossC(SelectionData, PatternFeatureData, SketchNativeName, DocData, SpacingDimension, ItemCount, PadDimension, BoundsValue):
     if (
         SelectionData.attributes.get("freecad_object")
-        != ShellFeatureData.provenance.native_id
-        or SelectionData.attributes.get("freecad_property") != "Base"
-        or SelectionData.attributes.get("freecad_target") != PadNativeName
+        != PatternFeatureData.provenance.native_id
+        or SelectionData.attributes.get("freecad_property") != "Direction"
+        or SelectionData.attributes.get("freecad_target") != SketchNativeName
         or (len(SelectionData.path) != 1)
-        or (SelectionData.path[0].entity_kind != "face")
-        or (SelectionData.path[0].entity_id != PadNativeName)
-        or (
-            not HasFreeCadTop(
-                DocData,
-                PadNativeName,
-                SelectionData.path[0].subelement,
-                PadDimension.value_mm,
-            )
-        )
+        or (SelectionData.path[0].entity_kind != "native")
+        or (SelectionData.path[0].entity_id != SketchNativeName)
+        or (SelectionData.path[0].subelement != "N_Axis")
     ):
         return None
     ParamData: dict[str, Param] = {}
     for ParamValueData in DocData.parameters:
-        if ParamValueData.owner_id != ShellFeatureData.id:
+        if ParamValueData.owner_id != PatternFeatureData.id:
             continue
         PathValue = ParamValueData.attributes.get("freecad_path")
         if (
@@ -5701,18 +5767,25 @@ def FreeCadBossD(
         ):
             return None
         ParamData[PathValue] = ParamValueData
+    SpacingNumber = SpacingDimension.value_mm
+    LengthNumber = SpacingNumber * (ItemCount - 1)
     ExpectedData = {
         "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Intersection": (ValueKind.BOOLEAN, False),
-        "Join": (ValueKind.INTEGER, 0),
-        "Label": (ValueKind.STRING, ShellFeatureData.name),
+        "Label": (ValueKind.STRING, PatternFeatureData.name),
         "Label2": (ValueKind.STRING, ""),
+        "Length": (ValueKind.LENGTH, LengthNumber),
+        "Length2": (ValueKind.LENGTH, 100.0),
         "Mode": (ValueKind.INTEGER, 0),
+        "Mode2": (ValueKind.INTEGER, 0),
+        "Occurrences": (ValueKind.INTEGER, ItemCount),
+        "Occurrences2": (ValueKind.INTEGER, 1),
+        "Offset": (ValueKind.LENGTH, SpacingNumber),
+        "Offset2": (ValueKind.LENGTH, 10.0),
         "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, True),
-        "SupportTransform": (ValueKind.BOOLEAN, False),
+        "Reversed": (ValueKind.BOOLEAN, False),
+        "Reversed2": (ValueKind.BOOLEAN, False),
         "Suppressed": (ValueKind.BOOLEAN, False),
-        "Value": (ValueKind.LENGTH, ThicknessNumber),
+        "TransformMode": (ValueKind.INTEGER, 0),
         "Visibility": (ValueKind.BOOLEAN, True),
     }
     if set(ParamData) != set(ExpectedData) or any(
@@ -5722,11 +5795,21 @@ def FreeCadBossD(
         )
     ):
         return None
-    ThicknessParam = ParamData["Value"]
+    TerminalDepth = PadDimension.value_mm + SpacingNumber * (ItemCount - 1)
+    if not HasFreeCadGeomA(
+        DocData, PatternFeatureData.provenance.native_id, BoundsValue, TerminalDepth
+    ):
+        return None
+    CountParam = ParamData["Occurrences"]
+    SpacingParam = ParamData["Length"]
     return (
         PadDimension,
-        WriteDimension(
-            "D1", ThicknessNumber, format(ThicknessNumber, ".15g"), ThicknessParam.role
+        WriteDimension("D1", float(ItemCount), str(ItemCount), CountParam.role),
+        Replace(
+            SpacingDimension,
+            name="D3",
+            text=format(SpacingNumber, ".15g"),
+            role=SpacingParam.role,
         ),
     )
 
@@ -5824,75 +5907,7 @@ def FreeCadBossC(
         if SketchData.provenance is not None
         else SketchData.name
     )
-    if (
-        SelectionData.attributes.get("freecad_object")
-        != PatternFeatureData.provenance.native_id
-        or SelectionData.attributes.get("freecad_property") != "Direction"
-        or SelectionData.attributes.get("freecad_target") != SketchNativeName
-        or (len(SelectionData.path) != 1)
-        or (SelectionData.path[0].entity_kind != "native")
-        or (SelectionData.path[0].entity_id != SketchNativeName)
-        or (SelectionData.path[0].subelement != "N_Axis")
-    ):
-        return None
-    ParamData: dict[str, Param] = {}
-    for ParamValueData in DocData.parameters:
-        if ParamValueData.owner_id != PatternFeatureData.id:
-            continue
-        PathValue = ParamValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParamData
-            or (ParamValueData.expression is not None)
-        ):
-            return None
-        ParamData[PathValue] = ParamValueData
-    SpacingNumber = SpacingDimension.value_mm
-    LengthNumber = SpacingNumber * (ItemCount - 1)
-    ExpectedData = {
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, PatternFeatureData.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Length": (ValueKind.LENGTH, LengthNumber),
-        "Length2": (ValueKind.LENGTH, 100.0),
-        "Mode": (ValueKind.INTEGER, 0),
-        "Mode2": (ValueKind.INTEGER, 0),
-        "Occurrences": (ValueKind.INTEGER, ItemCount),
-        "Occurrences2": (ValueKind.INTEGER, 1),
-        "Offset": (ValueKind.LENGTH, SpacingNumber),
-        "Offset2": (ValueKind.LENGTH, 10.0),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, False),
-        "Reversed2": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "TransformMode": (ValueKind.INTEGER, 0),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParamData) != set(ExpectedData) or any(
-        (
-            not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue)
-            for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-        )
-    ):
-        return None
-    TerminalDepth = PadDimension.value_mm + SpacingNumber * (ItemCount - 1)
-    if not HasFreeCadGeomA(
-        DocData, PatternFeatureData.provenance.native_id, BoundsValue, TerminalDepth
-    ):
-        return None
-    CountParam = ParamData["Occurrences"]
-    SpacingParam = ParamData["Length"]
-    return (
-        PadDimension,
-        WriteDimension("D1", float(ItemCount), str(ItemCount), CountParam.role),
-        Replace(
-            SpacingDimension,
-            name="D3",
-            text=format(SpacingNumber, ".15g"),
-            role=SpacingParam.role,
-        ),
-    )
+    return FinishBossC(SelectionData, PatternFeatureData, SketchNativeName, DocData, SpacingDimension, ItemCount, PadDimension, BoundsValue)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -5941,6 +5956,76 @@ def HasFreeCadGeomA(
                 CoordinateData, ExpectedData, strict=True
             )
         )
+    )
+
+
+# focused continuation isolates the remaining native serialization phase
+def FinishBossA(SelectionData, PatternFeatureData, SketchNativeName, DocData, AngleNumber, ItemCount, BoundsValue, PadDimension):
+    if (
+        SelectionData.attributes.get("freecad_object")
+        != PatternFeatureData.provenance.native_id
+        or SelectionData.attributes.get("freecad_property") != "Axis"
+        or SelectionData.attributes.get("freecad_target") != SketchNativeName
+        or (len(SelectionData.path) != 1)
+        or (SelectionData.path[0].entity_kind != "native")
+        or (SelectionData.path[0].entity_id != SketchNativeName)
+        or (SelectionData.path[0].subelement != "N_Axis")
+    ):
+        return None
+    ParamData: dict[str, Param] = {}
+    for ParamValueData in DocData.parameters:
+        if ParamValueData.owner_id != PatternFeatureData.id:
+            continue
+        PathValue = ParamValueData.attributes.get("freecad_path")
+        if (
+            not isinstance(PathValue, str)
+            or not PathValue
+            or PathValue in ParamData
+            or (ParamValueData.expression is not None)
+        ):
+            return None
+        ParamData[PathValue] = ParamValueData
+    ExpectedData = {
+        "Angle": (ValueKind.ANGLE, float(AngleNumber)),
+        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
+        "Label": (ValueKind.STRING, PatternFeatureData.name),
+        "Label2": (ValueKind.STRING, ""),
+        "Mode": (ValueKind.INTEGER, 0),
+        "Occurrences": (ValueKind.INTEGER, ItemCount),
+        "Offset": (ValueKind.ANGLE, 120.0),
+        "Refine": (ValueKind.BOOLEAN, True),
+        "Reversed": (ValueKind.BOOLEAN, False),
+        "Suppressed": (ValueKind.BOOLEAN, False),
+        "TransformMode": (ValueKind.INTEGER, 0),
+        "Visibility": (ValueKind.BOOLEAN, True),
+    }
+    if set(ParamData) != set(ExpectedData) or any(
+        (
+            not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue)
+            for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
+        )
+    ):
+        return None
+    if not HasFreeCadGeom(
+        DocData,
+        PatternFeatureData.provenance.native_id,
+        BoundsValue,
+        ItemCount,
+        float(AngleNumber),
+        PadDimension.value_mm,
+    ):
+        return None
+    return (
+        PadDimension,
+        WriteDimension(
+            "D1", float(ItemCount), str(ItemCount), ParamData["Occurrences"].role
+        ),
+        WriteDimension(
+            "D3",
+            float(AngleNumber),
+            f"{float(AngleNumber):.15g}°",
+            ParamData["Angle"].role,
+        ),
     )
 
 
@@ -6050,72 +6135,7 @@ def FreeCadBossA(
         if SketchData.provenance is not None
         else SketchData.name
     )
-    if (
-        SelectionData.attributes.get("freecad_object")
-        != PatternFeatureData.provenance.native_id
-        or SelectionData.attributes.get("freecad_property") != "Axis"
-        or SelectionData.attributes.get("freecad_target") != SketchNativeName
-        or (len(SelectionData.path) != 1)
-        or (SelectionData.path[0].entity_kind != "native")
-        or (SelectionData.path[0].entity_id != SketchNativeName)
-        or (SelectionData.path[0].subelement != "N_Axis")
-    ):
-        return None
-    ParamData: dict[str, Param] = {}
-    for ParamValueData in DocData.parameters:
-        if ParamValueData.owner_id != PatternFeatureData.id:
-            continue
-        PathValue = ParamValueData.attributes.get("freecad_path")
-        if (
-            not isinstance(PathValue, str)
-            or not PathValue
-            or PathValue in ParamData
-            or (ParamValueData.expression is not None)
-        ):
-            return None
-        ParamData[PathValue] = ParamValueData
-    ExpectedData = {
-        "Angle": (ValueKind.ANGLE, float(AngleNumber)),
-        "FuzzyTolerance": (ValueKind.NUMBER, -1.0),
-        "Label": (ValueKind.STRING, PatternFeatureData.name),
-        "Label2": (ValueKind.STRING, ""),
-        "Mode": (ValueKind.INTEGER, 0),
-        "Occurrences": (ValueKind.INTEGER, ItemCount),
-        "Offset": (ValueKind.ANGLE, 120.0),
-        "Refine": (ValueKind.BOOLEAN, True),
-        "Reversed": (ValueKind.BOOLEAN, False),
-        "Suppressed": (ValueKind.BOOLEAN, False),
-        "TransformMode": (ValueKind.INTEGER, 0),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if set(ParamData) != set(ExpectedData) or any(
-        (
-            not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue)
-            for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()
-        )
-    ):
-        return None
-    if not HasFreeCadGeom(
-        DocData,
-        PatternFeatureData.provenance.native_id,
-        BoundsValue,
-        ItemCount,
-        float(AngleNumber),
-        PadDimension.value_mm,
-    ):
-        return None
-    return (
-        PadDimension,
-        WriteDimension(
-            "D1", float(ItemCount), str(ItemCount), ParamData["Occurrences"].role
-        ),
-        WriteDimension(
-            "D3",
-            float(AngleNumber),
-            f"{float(AngleNumber):.15g}°",
-            ParamData["Angle"].role,
-        ),
-    )
+    return FinishBossA(SelectionData, PatternFeatureData, SketchNativeName, DocData, AngleNumber, ItemCount, BoundsValue, PadDimension)
 
 
 # this definition exists because focused behavior needs one stable owner
