@@ -1192,70 +1192,7 @@ class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def SheetProperties(Instance) -> list[XmlTree.Element]:
-        Result = [
-            StringProp("Label", "Parameters"),
-            ExpressionProp([]),
-            BoolProp("Visibility", False),
-        ]
-        Sheet = PropAction("cells", "Spreadsheet::PropertySheet", Status="67108864")
-        Cells = XmlTree.SubElement(
-            Sheet, "Cells", {"Count": str(len(Instance.Parameters) * 2), "xlink": "1"}
-        )
-        XmlTree.SubElement(Cells, "XLinks", {"count": "0"})
-        for RowValue, ItemValue in enumerate(Instance.Parameters, start=1):
-            ParamId = TextAction(ItemValue.get("id"), f"parameter_{RowValue}")
-            NameValue = TextAction(ItemValue.get("name"), ParamId)
-            ValueData = ItemValue.get("value", {})
-            RawValue = (
-                ValueData.get("value") if isinstance(ValueData, Mapping) else ValueData
-            )
-            UnitValue = (
-                TextAction(ValueData.get("unit"))
-                if isinstance(ValueData, Mapping)
-                else ""
-            )
-            KindValue = (
-                TextAction(EnumAction(ValueData.get("kind")))
-                if isinstance(ValueData, Mapping)
-                else "number"
-            )
-            if isinstance(RawValue, bool):
-                Content = "=true" if RawValue else "=false"
-            elif isinstance(RawValue, (int, float)):
-                Content = "=" + (
-                    f"{RawValue:.17g}" if isinstance(RawValue, float) else str(RawValue)
-                )
-                if UnitValue:
-                    Content += f" {UnitValue}"
-            else:
-                Content = "'" + TextAction(RawValue)
-            NativeExpression = Instance.native_expression(ItemValue)
-            if NativeExpression is not None:
-                Content = "=" + NativeExpression
-            XmlTree.SubElement(
-                Cells, "Cell", {"address": f"A{RowValue}", "content": "'" + NameValue}
-            )
-            XmlTree.SubElement(
-                Cells,
-                "Cell",
-                {
-                    "address": f"B{RowValue}",
-                    "content": Content,
-                    "alias": Instance.Aliases[ParamId],
-                },
-            )
-        Result.append(Sheet)
-        Widths = PropAction(
-            "columnWidths", "Spreadsheet::PropertyColumnWidths", Status="218103808"
-        )
-        XmlTree.SubElement(Widths, "ColumnInfo", {"Count": "0"})
-        Result.append(Widths)
-        Heights = PropAction(
-            "rowHeights", "Spreadsheet::PropertyRowHeights", Status="218103808"
-        )
-        XmlTree.SubElement(Heights, "RowInfo", {"Count": "0"})
-        Result.append(Heights)
-        return Result
+        return SheetProps(Instance)
 
     locals()["__init__"] = InitAction
     locals()["expression"] = Expression
@@ -1291,7 +1228,7 @@ def ElemFromData(Value: Any) -> XmlTree.Element | None:
     )
     TextValue = Value.get("text")
     if isinstance(TextValue, str):
-        ElemValue.text = TextValue
+        setattr(ElemValue, "text", TextValue)
     Children = Value.get("children", [])
     if not isinstance(Children, (list, tuple)):
         return None
