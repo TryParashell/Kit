@@ -310,177 +310,23 @@ class CatiaWriter:
             DocValue.assert_valid()
         DocType = TargetType(DocValue, Target)
         NativeChoice = UnchangedNative(DocValue, DocType)
-        if (
-            NativeChoice is not None
-            and (not Settings.values.get("rebuild", False))
-            and (
-                not (
-                    Settings.values.get("portable") is True
-                    and DocValue.assembly is not None
-                )
-            )
-        ):
-            Native, Ignored = NativeChoice
-            Compatibility = Replay(Native)
-            NativeExact = Compatibility == "native-exact"
-            NativeBaseSaved = Compatibility == "native-base-neutral-overlay"
-            ModeValue = (
-                "exact_native_roundtrip" if NativeExact else "exact_carrier_roundtrip"
-            )
-            PathValue = WriteBytes(Target, Native, Settings.overwrite)
-            Requirements = (
-                ("referenced CATIA component files",)
-                if DocValue.assembly is not None
-                else ()
-            )
-            return WriteResult(
-                PathValue,
-                KFormatId,
-                len(Native),
-                diagnostics=DocValue.diagnostics,
-                metadata=MappingProxyType(
-                    {
-                        "mode": ModeValue,
-                        "compatibility": Compatibility,
-                        "vendor_loadable": NativeExact,
-                        "native_geometry": NativeExact,
-                        "native_history": NativeExact,
-                        "native_assembly": NativeExact
-                        and DocValue.assembly is not None,
-                        "native_self_contained": NativeExact
-                        and DocValue.assembly is None,
-                        "native_base_preserved": NativeBaseSaved,
-                        "native_streams_preserved": NativeBaseSaved,
-                        "referenced_files_written": 0,
-                        "container": "V5_CFV2",
-                        "document_type": DocType,
-                    }
-                ),
-                requirements=Requirements,
-                application_usable=NativeExact,
-                vendor_loadable=NativeExact,
-            )
+        if NativeChoice is not None and CanReplayNative(Settings, DocValue):
+            return WriteReplay(DocValue, Target, Settings, DocType, NativeChoice[0])
         if Settings.values.get("allow_non_native", True) is not True:
             raise CatiaAdapterA(
                 "generated CATIA writing requires WriteOptions(values={'allow_non_native': True})"
             )
         CarrierDoc = CarrierManifest(DocValue)
-        IsNativeBase = None
-        if not Settings.values.get("rebuild", False) and (
-            not (
-                Settings.values.get("portable") is True
-                and DocValue.assembly is not None
-            )
-        ):
-            IsNativeBase = NativeBaseA(DocValue, DocType)
-        if IsNativeBase is not None:
-            DataValue = AppendCfvTwoStream(
-                IsNativeBase, KManifestName, PackManifest(CarrierDoc)
-            )
-            Restored = Restore(DataValue)
-            if (
-                Restored != CarrierDoc
-                or Replay(DataValue) != "native-base-neutral-overlay"
-            ):
-                raise CatiaAdapterA(
-                    "CATIA native-base output failed semantic validation"
-                )
-            PathValue = WriteBytes(Target, DataValue, Settings.overwrite)
-            DiagValue = DiagnosticInfo(
-                "catia.native_base_preserved",
-                "The native CATIA streams are byte-exact; changed geometry, history, sketches, and assembly semantics remain neutral Kit data rather than native CATIA feature records.",
-                Severity.WARNING,
-            )
-            Requirements = (
-                ("referenced CATIA component files",)
-                if DocValue.assembly is not None
-                else ()
-            )
-            return WriteResult(
-                PathValue,
-                KFormatId,
-                len(DataValue),
-                diagnostics=(*DocValue.diagnostics, DiagValue),
-                metadata=MappingProxyType(
-                    {
-                        "mode": "native_base_with_neutral_edits",
-                        "compatibility": "native-base-neutral-overlay",
-                        "vendor_loadable": False,
-                        "native_geometry": False,
-                        "native_history": False,
-                        "native_assembly": False,
-                        "native_self_contained": False,
-                        "native_base_vendor_loadable": True,
-                        "native_base_preserved": True,
-                        "native_streams_preserved": True,
-                        "neutral_geometry_embedded": DocValue.brep is not None
-                        or any(
-                            (
-                                Payload.role == PayloadRole.BREP
-                                for Payload in DocValue.brep_payloads
-                            )
-                        ),
-                        "neutral_history_embedded": bool(
-                            DocValue.parameters
-                            or DocValue.support_planes
-                            or DocValue.sketches
-                            or DocValue.selections
-                            or DocValue.feature_timeline
-                            or DocValue.bodies
-                        ),
-                        "neutral_assembly_embedded": DocValue.assembly is not None,
-                        "referenced_files_written": 0,
-                        "container": "V5_CFV2",
-                        "document_type": DocType,
-                        "native_base_sha256": Hashlib.sha256(IsNativeBase).hexdigest(),
-                        "manifest_sha256": Hashlib.sha256(
-                            CarrierDoc.to_json(indent=None).encode("utf-8")
-                        ).hexdigest(),
-                    }
-                ),
-                requirements=Requirements,
-                application_usable=False,
-                vendor_loadable=False,
-            )
-        DataValue = Generated(CarrierDoc, DocType)
-        Restored = Restore(DataValue)
-        if Restored != CarrierDoc:
-            raise CatiaAdapterA("generated CATIA manifest failed semantic validation")
-        PathValue = WriteBytes(Target, DataValue, Settings.overwrite)
-        DiagValue = DiagnosticInfo(
-            "catia.native_feature_graph_embedded",
-            "Geometry and parametric data are embedded in CFV2 streams; native CATIA feature classes require exact CATIA source preservation.",
-            Severity.WARNING,
+        NativeBase = (
+            NativeBaseA(DocValue, DocType)
+            if CanReplayNative(Settings, DocValue)
+            else None
         )
-        Archive = CfvTwoArchive.from_bytes(DataValue)
-        return WriteResult(
-            PathValue,
-            KFormatId,
-            len(DataValue),
-            diagnostics=(*DocValue.diagnostics, DiagValue),
-            metadata=MappingProxyType(
-                {
-                    "mode": "generated_cfv2",
-                    "compatibility": "kit-neutral-only",
-                    "vendor_loadable": False,
-                    "native_geometry": False,
-                    "native_history": False,
-                    "native_assembly": False,
-                    "native_self_contained": False,
-                    "referenced_files_written": 0,
-                    "native_feature_graph": False,
-                    "container": "V5_CFV2",
-                    "document_type": DocType,
-                    "outer_stream_count": len(Archive.outer.streams),
-                    "nested_directory_count": len(Archive.nested),
-                    "manifest_sha256": Hashlib.sha256(
-                        CarrierDoc.to_json(indent=None).encode("utf-8")
-                    ).hexdigest(),
-                }
-            ),
-            application_usable=False,
-            vendor_loadable=False,
-        )
+        if NativeBase is not None:
+            return WriteNativeBase(
+                DocValue, Target, Settings, DocType, CarrierDoc, NativeBase
+            )
+        return WriteCarrier(DocValue, Target, Settings, DocType, CarrierDoc)
 
     locals()["write"] = Write
 
