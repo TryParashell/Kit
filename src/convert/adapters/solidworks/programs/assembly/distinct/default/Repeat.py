@@ -150,14 +150,14 @@ def PathKey(PathValue: str) -> str:
 # first occurrences define the external file record order independently
 def UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
     SeenPaths: set[str] = set()
-    UniqueItems: list[RepeatItem] = []
+    DistinctItems: list[RepeatItem] = []
     for ItemValue in CoreItems:
         PathValue = PathKey(ItemValue.CompPath)
         if PathValue in SeenPaths:
             continue
         SeenPaths.add(PathValue)
-        UniqueItems.append(ItemValue)
-    return tuple(UniqueItems)
+        DistinctItems.append(ItemValue)
+    return tuple(DistinctItems)
 
 
 # distinct configuration manager records enumerate every component occurrence
@@ -369,8 +369,8 @@ def EncodeHeader(
     CoreItems: tuple[RepeatItem, ...],
 ) -> bytes:
     ItemCount = len(CoreItems)
-    UniqueItems = UniqueItems(CoreItems)
-    UniqueCount = len(UniqueItems)
+    UniqueValues = UniqueItems(CoreItems)
+    UniqueCount = len(UniqueValues)
     BaseShift = ItemCount - KTracedCount
     InsertPos, UnitWidth = KInsertSpecs["Contents/Config-0-ModelHeader"]
     PrefixData = EncodeOps(
@@ -396,7 +396,7 @@ def EncodeHeader(
                 UnitStart,
             )
         )
-    FirstItem = UniqueItems[0]
+    FirstItem = UniqueValues[0]
     FirstStem = PureWindowsPath(FirstItem.CompPath).stem
     ExtOverrides = {
         4: 24 + ItemCount,
@@ -417,7 +417,7 @@ def EncodeHeader(
         KHeaderExtStart,
     )
     FileData = bytearray()
-    for FileIndex, ItemValue in enumerate(UniqueItems[1:], 2):
+    for FileIndex, ItemValue in enumerate(UniqueValues[1:], 2):
         TemplateIndex = min(FileIndex, KTracedCount)
         FileStart = KHeaderFileStart + ((TemplateIndex - 2) * KHeaderFileWidth)
         FileStem = PureWindowsPath(ItemValue.CompPath).stem
@@ -456,6 +456,32 @@ def EncodeHeader(
         KHeaderTailStart,
     )
     return PrefixData + bytes(OccurData) + ExtPrefix + bytes(FileData) + TailData
+
+
+# legacy aliases preserve recovered distinct helpers and existing external callers
+KLegacyAliases = {
+    "InsertSpecs": KInsertSpecs,
+    "TracedCount": KTracedCount,
+    "ConfigShift5": KConfigShiftFive,
+    "ConfigShift1": KConfigShiftOne,
+    "ResolvedShift9": KResolvedShiftNine,
+    "ResolvedShift5": KResolvedShiftFive,
+    "ResolvedShift1": KResolvedShiftOne,
+    "HeaderExtStart": KHeaderExtStart,
+    "HeaderExtWidth": KHeaderExtWidth,
+    "HeaderFileStart": KHeaderFileStart,
+    "HeaderFileWidth": KHeaderFileWidth,
+    "HeaderTailStart": KHeaderTailStart,
+    "_EmitOps": EncodeOps,
+    "_SliceOps": SliceOps,
+    "_PathKey": PathKey,
+    "_UniqueItems": UniqueItems,
+    "_EncodeCMgr": EncodeCmgr,
+    "_EncodeConfig": EncodeConfig,
+    "_EncodeResolved": EncodeResolved,
+    "_EncodeHeader": EncodeHeader,
+}
+globals().update(KLegacyAliases)
 
 
 # canonical distinct path programs scale independent component files without donors
