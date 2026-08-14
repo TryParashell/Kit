@@ -379,7 +379,9 @@ def ApplyPlaneMut(StateData, Feature):
 def ApplySketchMut(StateData, Feature):
     SketchStart = Feature.native_offset or 0
     SketchEnd = Feature.native_end or len(StateData.Resolved)
-    RefValue = SketchPlaneRef(StateData.Resolved, StateData.Classes, SketchStart, SketchEnd)
+    RefValue = SketchPlaneRef(
+        StateData.Resolved, StateData.Classes, SketchStart, SketchEnd
+    )
     Support, SupportSource, UnframedSupport = SupportPlaneRef(
         StateData.Resolved,
         SketchStart,
@@ -414,14 +416,59 @@ def DecodeExtrude(StateData, Feature):
     Record = StateData.RecordById.get(Feature.object_id)
     if Record is None:
         return None
-    Child = IntegerProp(Feature.properties.get('DissectableChildren'))
-    ProfileId = Child or (StateData.LatestSketch.object_id if StateData.LatestSketch else None)
-    Dependencies = tuple((Value for Value in (StateData.LatestOperation.object_id if StateData.LatestOperation else None, ProfileId) if Value is not None))
+    Child = IntegerProp(Feature.properties.get("DissectableChildren"))
+    ProfileId = Child or (
+        StateData.LatestSketch.object_id if StateData.LatestSketch else None
+    )
+    Dependencies = tuple(
+        (
+            Value
+            for Value in (
+                (
+                    StateData.LatestOperation.object_id
+                    if StateData.LatestOperation
+                    else None
+                ),
+                ProfileId,
+            )
+            if Value is not None
+        )
+    )
     Family, OperationCode, Schema = OperationFields(StateData.Resolved, Record)
     OperationStart = Feature.native_offset or 0
     OperationEnd = Feature.native_end or len(StateData.Resolved)
-    EndData = EndSpec(StateData.Resolved, OperationStart, OperationEnd, StateData.Classes)
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='join' if OperationCode == 0 else 'cut' if OperationCode == 2 else 'native', profile_id=ProfileId, dependencies=Dependencies, native_offset=OperationStart, native_end=ClassRecordEnd(StateData.Resolved, StateData.Classes, OperationStart) or OperationEnd, length_mm=DimensionValue(Feature.dimensions, 'length'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndData.direction_code if EndData else None, termination_code=EndData.termination_code if EndData else None, selection_offsets=(), selected_local_ids=(), native_stream=StateData.StreamName, depth_copies=DepthCopies(StateData.Resolved, OperationOffset(Feature.dimensions, 'length')), mirrored_direction_offset=EndData.mirrored_direction_offset if EndData else None, mirrored_direction_code=EndData.mirrored_direction_code if EndData else None)
+    EndData = EndSpec(
+        StateData.Resolved, OperationStart, OperationEnd, StateData.Classes
+    )
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind=(
+            "join" if OperationCode == 0 else "cut" if OperationCode == 2 else "native"
+        ),
+        profile_id=ProfileId,
+        dependencies=Dependencies,
+        native_offset=OperationStart,
+        native_end=ClassRecordEnd(StateData.Resolved, StateData.Classes, OperationStart)
+        or OperationEnd,
+        length_mm=DimensionValue(Feature.dimensions, "length"),
+        radius_mm=None,
+        family_code=Family,
+        operation_code=OperationCode,
+        schema_code=Schema,
+        direction_code=EndData.direction_code if EndData else None,
+        termination_code=EndData.termination_code if EndData else None,
+        selection_offsets=(),
+        selected_local_ids=(),
+        native_stream=StateData.StreamName,
+        depth_copies=DepthCopies(
+            StateData.Resolved, OperationOffset(Feature.dimensions, "length")
+        ),
+        mirrored_direction_offset=(
+            EndData.mirrored_direction_offset if EndData else None
+        ),
+        mirrored_direction_code=EndData.mirrored_direction_code if EndData else None,
+    )
     return Operation
 
 
@@ -429,15 +476,63 @@ def DecodeExtrude(StateData, Feature):
 def DecodeLinear(StateData, Feature):
     FeatureType = Feature.kind.casefold()
     Record = StateData.RecordById.get(Feature.object_id)
-    CountValue = DimensionValue(Feature.dimensions, 'instance_count')
-    SpacingValue = DimensionValue(Feature.dimensions, 'spacing')
-    if Record is None or StateData.LatestOperation is None or CountValue is None or (CountValue != int(CountValue)) or (SpacingValue is None):
+    CountValue = DimensionValue(Feature.dimensions, "instance_count")
+    SpacingValue = DimensionValue(Feature.dimensions, "spacing")
+    if (
+        Record is None
+        or StateData.LatestOperation is None
+        or CountValue is None
+        or (CountValue != int(CountValue))
+        or (SpacingValue is None)
+    ):
         return None
-    SelectionData = OperationA(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures)
-    FamilyValue, OperationValue, SchemaValue = OperationFields(StateData.Resolved, Record)
-    DirectionOffset = Feature.native_offset + KLinearPatternDirection if Feature.native_offset is not None else -1
-    DirectionCode = StateData.Resolved[DirectionOffset] if 0 <= DirectionOffset < (Feature.native_end or 0) and StateData.Resolved[DirectionOffset] in {0, 1} else None
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='linear_pattern', profile_id=None, dependencies=(StateData.LatestOperation.object_id,), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=FamilyValue, operation_code=OperationValue, schema_code=SchemaValue, direction_code=DirectionCode, termination_code=None, selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)), selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)), selection_kind='edge', mode='linear', native_stream=StateData.StreamName, selection_references=tuple(((ItemData[1], ItemData[2]) for ItemData in SelectionData)), instance_count=int(CountValue), spacing_mm=SpacingValue)
+    SelectionData = OperationA(
+        StateData.Resolved,
+        Feature.native_offset or 0,
+        Feature.native_end or len(StateData.Resolved),
+        Feature,
+        StateData.NativeFeatures,
+    )
+    FamilyValue, OperationValue, SchemaValue = OperationFields(
+        StateData.Resolved, Record
+    )
+    DirectionOffset = (
+        Feature.native_offset + KLinearPatternDirection
+        if Feature.native_offset is not None
+        else -1
+    )
+    DirectionCode = (
+        StateData.Resolved[DirectionOffset]
+        if 0 <= DirectionOffset < (Feature.native_end or 0)
+        and StateData.Resolved[DirectionOffset] in {0, 1}
+        else None
+    )
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind="linear_pattern",
+        profile_id=None,
+        dependencies=(StateData.LatestOperation.object_id,),
+        native_offset=Feature.native_offset or 0,
+        native_end=Feature.native_end or len(StateData.Resolved),
+        length_mm=None,
+        radius_mm=None,
+        family_code=FamilyValue,
+        operation_code=OperationValue,
+        schema_code=SchemaValue,
+        direction_code=DirectionCode,
+        termination_code=None,
+        selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)),
+        selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)),
+        selection_kind="edge",
+        mode="linear",
+        native_stream=StateData.StreamName,
+        selection_references=tuple(
+            ((ItemData[1], ItemData[2]) for ItemData in SelectionData)
+        ),
+        instance_count=int(CountValue),
+        spacing_mm=SpacingValue,
+    )
     return Operation
 
 
@@ -445,15 +540,63 @@ def DecodeLinear(StateData, Feature):
 def DecodeCircular(StateData, Feature):
     FeatureType = Feature.kind.casefold()
     Record = StateData.RecordById.get(Feature.object_id)
-    CountValue = DimensionValue(Feature.dimensions, 'instance_count')
-    AngleValue = DimensionValue(Feature.dimensions, 'angle')
-    if Record is None or StateData.LatestOperation is None or CountValue is None or (CountValue != int(CountValue)) or (AngleValue is None):
+    CountValue = DimensionValue(Feature.dimensions, "instance_count")
+    AngleValue = DimensionValue(Feature.dimensions, "angle")
+    if (
+        Record is None
+        or StateData.LatestOperation is None
+        or CountValue is None
+        or (CountValue != int(CountValue))
+        or (AngleValue is None)
+    ):
         return None
-    SelectionData = OperationA(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures)
-    FamilyValue, OperationValue, SchemaValue = OperationFields(StateData.Resolved, Record)
-    DirectionOffset = Feature.native_offset + KCircularPatternDirection if Feature.native_offset is not None else -1
-    DirectionCode = StateData.Resolved[DirectionOffset] if 0 <= DirectionOffset < (Feature.native_end or 0) and StateData.Resolved[DirectionOffset] in {0, 1} else None
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='circular_pattern', profile_id=None, dependencies=(StateData.LatestOperation.object_id,), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=FamilyValue, operation_code=OperationValue, schema_code=SchemaValue, direction_code=DirectionCode, termination_code=None, selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)), selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)), angle_degrees=AngleValue, selection_kind='edge', mode='circular', native_stream=StateData.StreamName, selection_references=tuple(((ItemData[1], ItemData[2]) for ItemData in SelectionData)), instance_count=int(CountValue))
+    SelectionData = OperationA(
+        StateData.Resolved,
+        Feature.native_offset or 0,
+        Feature.native_end or len(StateData.Resolved),
+        Feature,
+        StateData.NativeFeatures,
+    )
+    FamilyValue, OperationValue, SchemaValue = OperationFields(
+        StateData.Resolved, Record
+    )
+    DirectionOffset = (
+        Feature.native_offset + KCircularPatternDirection
+        if Feature.native_offset is not None
+        else -1
+    )
+    DirectionCode = (
+        StateData.Resolved[DirectionOffset]
+        if 0 <= DirectionOffset < (Feature.native_end or 0)
+        and StateData.Resolved[DirectionOffset] in {0, 1}
+        else None
+    )
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind="circular_pattern",
+        profile_id=None,
+        dependencies=(StateData.LatestOperation.object_id,),
+        native_offset=Feature.native_offset or 0,
+        native_end=Feature.native_end or len(StateData.Resolved),
+        length_mm=None,
+        radius_mm=None,
+        family_code=FamilyValue,
+        operation_code=OperationValue,
+        schema_code=SchemaValue,
+        direction_code=DirectionCode,
+        termination_code=None,
+        selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)),
+        selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)),
+        angle_degrees=AngleValue,
+        selection_kind="edge",
+        mode="circular",
+        native_stream=StateData.StreamName,
+        selection_references=tuple(
+            ((ItemData[1], ItemData[2]) for ItemData in SelectionData)
+        ),
+        instance_count=int(CountValue),
+    )
     return Operation
 
 
@@ -464,18 +607,72 @@ def DecodeRevolve(StateData, Feature):
     if Record is None:
         return None
     ProfileId = StateData.LatestSketch.object_id if StateData.LatestSketch else None
-    Dependencies = tuple((Value for Value in (StateData.LatestOperation.object_id if StateData.LatestOperation else None, ProfileId) if Value is not None))
+    Dependencies = tuple(
+        (
+            Value
+            for Value in (
+                (
+                    StateData.LatestOperation.object_id
+                    if StateData.LatestOperation
+                    else None
+                ),
+                ProfileId,
+            )
+            if Value is not None
+        )
+    )
     Family, OperationCode, Schema = OperationFields(StateData.Resolved, Record)
     Layout = StateData.Revolutions.get(Feature.object_id)
     AxisSketch = StateData.LatestSketch
     if Layout is not None and Layout.axis_kind == RevolutionAxisSketch:
-        AxisSketch = next((ItemValue for ItemValue in StateData.Sketches if ItemValue.object_id == Layout.axis_feature_id), None)
+        AxisSketch = next(
+            (
+                ItemValue
+                for ItemValue in StateData.Sketches
+                if ItemValue.object_id == Layout.axis_feature_id
+            ),
+            None,
+        )
     elif Layout is not None:
         AxisSketch = None
     AxisMarker = RevolutionAxis(AxisSketch)
     RevolutionStart = Feature.native_offset or 0
-    AngleOffset = OperationOffset(Feature.dimensions, 'angle')
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='revolve_cut' if FeatureType in {'cut-revolve', 'revcut'} else 'revolve_join', profile_id=ProfileId, dependencies=Dependencies, native_offset=RevolutionStart, native_end=ClassRecordEnd(StateData.Resolved, StateData.Classes, RevolutionStart) or Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=None, selection_offsets=(), selected_local_ids=(), angle_degrees=DimensionValue(Feature.dimensions, 'angle'), axis_marker_offset=AxisMarker.offset if AxisMarker else None, native_stream=StateData.StreamName, axis_source_kind=None if Layout is None else Layout.axis_kind, axis_source_id=None if Layout is None else Layout.axis_feature_id, axis_source_offset=None if Layout is None else Layout.axis_offset, end_spec_offset=None if Layout is None else Layout.end_spec_offset, angle_offset=AngleOffset, angle_copies=AngleCopies(StateData.Resolved, AngleOffset))
+    AngleOffset = OperationOffset(Feature.dimensions, "angle")
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind=(
+            "revolve_cut"
+            if FeatureType in {"cut-revolve", "revcut"}
+            else "revolve_join"
+        ),
+        profile_id=ProfileId,
+        dependencies=Dependencies,
+        native_offset=RevolutionStart,
+        native_end=ClassRecordEnd(
+            StateData.Resolved, StateData.Classes, RevolutionStart
+        )
+        or Feature.native_end
+        or len(StateData.Resolved),
+        length_mm=None,
+        radius_mm=None,
+        family_code=Family,
+        operation_code=OperationCode,
+        schema_code=Schema,
+        direction_code=None,
+        termination_code=None,
+        selection_offsets=(),
+        selected_local_ids=(),
+        angle_degrees=DimensionValue(Feature.dimensions, "angle"),
+        axis_marker_offset=AxisMarker.offset if AxisMarker else None,
+        native_stream=StateData.StreamName,
+        axis_source_kind=None if Layout is None else Layout.axis_kind,
+        axis_source_id=None if Layout is None else Layout.axis_feature_id,
+        axis_source_offset=None if Layout is None else Layout.axis_offset,
+        end_spec_offset=None if Layout is None else Layout.end_spec_offset,
+        angle_offset=AngleOffset,
+        angle_copies=AngleCopies(StateData.Resolved, AngleOffset),
+    )
     return Operation
 
 
@@ -485,71 +682,302 @@ def DecodeHole(StateData, Feature):
     Record = StateData.RecordById.get(Feature.object_id)
     if Record is None:
         return None
-    Child = IntegerProp(Feature.properties.get('DissectableChildren'))
+    Child = IntegerProp(Feature.properties.get("DissectableChildren"))
     Family, OperationCode, Schema = OperationFields(StateData.Resolved, Record)
-    Dependencies = tuple((Value for Value in (StateData.LatestOperation.object_id if StateData.LatestOperation else None, Child) if Value is not None))
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='hole', profile_id=Child, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=DimensionValue(Feature.dimensions, 'depth'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=0, selection_offsets=(), selected_local_ids=(), selection_kind='face', native_stream=StateData.StreamName)
+    Dependencies = tuple(
+        (
+            Value
+            for Value in (
+                (
+                    StateData.LatestOperation.object_id
+                    if StateData.LatestOperation
+                    else None
+                ),
+                Child,
+            )
+            if Value is not None
+        )
+    )
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind="hole",
+        profile_id=Child,
+        dependencies=Dependencies,
+        native_offset=Feature.native_offset or 0,
+        native_end=Feature.native_end or len(StateData.Resolved),
+        length_mm=DimensionValue(Feature.dimensions, "depth"),
+        radius_mm=None,
+        family_code=Family,
+        operation_code=OperationCode,
+        schema_code=Schema,
+        direction_code=None,
+        termination_code=0,
+        selection_offsets=(),
+        selected_local_ids=(),
+        selection_kind="face",
+        native_stream=StateData.StreamName,
+    )
     return Operation
 
 
 # focused operation decoder preserves one native feature family
 def DecodeDome(StateData, Feature):
     FeatureType = Feature.kind.casefold()
-    Selections = OperationAfter(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures, 'moCompFace_c')
-    Height = DimensionValue(Feature.dimensions, 'height')
+    Selections = OperationAfter(
+        StateData.Resolved,
+        Feature.native_offset or 0,
+        Feature.native_end or len(StateData.Resolved),
+        Feature,
+        StateData.NativeFeatures,
+        "moCompFace_c",
+    )
+    Height = DimensionValue(Feature.dimensions, "height")
     if Height is None or not Selections:
         return None
     ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
-    Dependencies = tuple(dict.fromkeys((*((StateData.LatestOperation.object_id,) if StateData.LatestOperation else ()), *ProducerIds)))
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='dome', profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=Height, radius_mm=None, family_code=None, operation_code=None, schema_code=None, direction_code=None, termination_code=None, selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)), selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)), selection_kind='face', native_stream=StateData.StreamName, selection_references=tuple(((ItemValue[1], ItemValue[2]) for ItemValue in Selections)))
+    Dependencies = tuple(
+        dict.fromkeys(
+            (
+                *(
+                    (StateData.LatestOperation.object_id,)
+                    if StateData.LatestOperation
+                    else ()
+                ),
+                *ProducerIds,
+            )
+        )
+    )
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind="dome",
+        profile_id=None,
+        dependencies=Dependencies,
+        native_offset=Feature.native_offset or 0,
+        native_end=Feature.native_end or len(StateData.Resolved),
+        length_mm=Height,
+        radius_mm=None,
+        family_code=None,
+        operation_code=None,
+        schema_code=None,
+        direction_code=None,
+        termination_code=None,
+        selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)),
+        selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)),
+        selection_kind="face",
+        native_stream=StateData.StreamName,
+        selection_references=tuple(
+            ((ItemValue[1], ItemValue[2]) for ItemValue in Selections)
+        ),
+    )
     return Operation
 
 
 # focused operation decoder preserves one native feature family
 def DecodeMoveBody(StateData, Feature):
     FeatureType = Feature.kind.casefold()
-    Selections = OperationAfter(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures, 'moCompSolidBody_c')
+    Selections = OperationAfter(
+        StateData.Resolved,
+        Feature.native_offset or 0,
+        Feature.native_end or len(StateData.Resolved),
+        Feature,
+        StateData.NativeFeatures,
+        "moCompSolidBody_c",
+    )
     Translation = Native(Feature.dimensions)
     if Translation is None or not Selections:
         return None
     ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
-    Dependencies = tuple(dict.fromkeys((*((StateData.LatestOperation.object_id,) if StateData.LatestOperation else ()), *ProducerIds)))
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='move_body', profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=None, operation_code=None, schema_code=None, direction_code=None, termination_code=None, selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)), selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)), selection_kind='body', native_stream=StateData.StreamName, selection_references=tuple(((ItemValue[1], ItemValue[2]) for ItemValue in Selections)), translation_mm=Translation)
+    Dependencies = tuple(
+        dict.fromkeys(
+            (
+                *(
+                    (StateData.LatestOperation.object_id,)
+                    if StateData.LatestOperation
+                    else ()
+                ),
+                *ProducerIds,
+            )
+        )
+    )
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind="move_body",
+        profile_id=None,
+        dependencies=Dependencies,
+        native_offset=Feature.native_offset or 0,
+        native_end=Feature.native_end or len(StateData.Resolved),
+        length_mm=None,
+        radius_mm=None,
+        family_code=None,
+        operation_code=None,
+        schema_code=None,
+        direction_code=None,
+        termination_code=None,
+        selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)),
+        selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)),
+        selection_kind="body",
+        native_stream=StateData.StreamName,
+        selection_references=tuple(
+            ((ItemValue[1], ItemValue[2]) for ItemValue in Selections)
+        ),
+        translation_mm=Translation,
+    )
     return Operation
 
 
 # focused operation decoder preserves one native feature family
 def DecodeCombine(StateData, Feature):
     FeatureType = Feature.kind.casefold()
-    Selections = OperationAfter(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures, 'moSolidRef_w')
+    Selections = OperationAfter(
+        StateData.Resolved,
+        Feature.native_offset or 0,
+        Feature.native_end or len(StateData.Resolved),
+        Feature,
+        StateData.NativeFeatures,
+        "moSolidRef_w",
+    )
     if len(Selections) < 2:
         return None
     ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
-    Dependencies = tuple(dict.fromkeys((*((StateData.LatestOperation.object_id,) if StateData.LatestOperation else ()), *ProducerIds)))
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='combine_join', profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=None, operation_code=0, schema_code=None, direction_code=None, termination_code=None, selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)), selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)), selection_kind='body', mode='join', native_stream=StateData.StreamName, selection_references=tuple(((ItemValue[1], ItemValue[2]) for ItemValue in Selections)))
+    Dependencies = tuple(
+        dict.fromkeys(
+            (
+                *(
+                    (StateData.LatestOperation.object_id,)
+                    if StateData.LatestOperation
+                    else ()
+                ),
+                *ProducerIds,
+            )
+        )
+    )
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind="combine_join",
+        profile_id=None,
+        dependencies=Dependencies,
+        native_offset=Feature.native_offset or 0,
+        native_end=Feature.native_end or len(StateData.Resolved),
+        length_mm=None,
+        radius_mm=None,
+        family_code=None,
+        operation_code=0,
+        schema_code=None,
+        direction_code=None,
+        termination_code=None,
+        selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)),
+        selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)),
+        selection_kind="body",
+        mode="join",
+        native_stream=StateData.StreamName,
+        selection_references=tuple(
+            ((ItemValue[1], ItemValue[2]) for ItemValue in Selections)
+        ),
+    )
     return Operation
 
 
 # focused operation decoder preserves one native feature family
 def DecodeScale(StateData, Feature):
     FeatureType = Feature.kind.casefold()
-    Factors = NativeScale(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved))
+    Factors = NativeScale(
+        StateData.Resolved,
+        Feature.native_offset or 0,
+        Feature.native_end or len(StateData.Resolved),
+    )
     if Factors is None or StateData.LatestOperation is None:
         return None
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='scale', profile_id=None, dependencies=(StateData.LatestOperation.object_id,), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=None, radius_mm=None, family_code=None, operation_code=None, schema_code=None, direction_code=None, termination_code=None, selection_offsets=(), selected_local_ids=(), native_stream=StateData.StreamName, scale_factors=Factors)
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind="scale",
+        profile_id=None,
+        dependencies=(StateData.LatestOperation.object_id,),
+        native_offset=Feature.native_offset or 0,
+        native_end=Feature.native_end or len(StateData.Resolved),
+        length_mm=None,
+        radius_mm=None,
+        family_code=None,
+        operation_code=None,
+        schema_code=None,
+        direction_code=None,
+        termination_code=None,
+        selection_offsets=(),
+        selected_local_ids=(),
+        native_stream=StateData.StreamName,
+        scale_factors=Factors,
+    )
     return Operation
 
 
 # focused operation decoder preserves one native feature family
 def DecodeFinish(StateData, Feature):
     FeatureType = Feature.kind.casefold()
-    Selections = OperationA(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), Feature, StateData.NativeFeatures)
+    Selections = OperationA(
+        StateData.Resolved,
+        Feature.native_offset or 0,
+        Feature.native_end or len(StateData.Resolved),
+        Feature,
+        StateData.NativeFeatures,
+    )
     ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
-    Dependencies = tuple(dict.fromkeys((*((StateData.LatestOperation.object_id,) if StateData.LatestOperation else ()), *ProducerIds)))
+    Dependencies = tuple(
+        dict.fromkeys(
+            (
+                *(
+                    (StateData.LatestOperation.object_id,)
+                    if StateData.LatestOperation
+                    else ()
+                ),
+                *ProducerIds,
+            )
+        )
+    )
     Record = StateData.RecordById.get(Feature.object_id)
-    Fields = OperationFields(StateData.Resolved, Record) if Record is not None else (None, None, None)
-    DimensionKind = {'fillet': 'radius', 'chamfer': 'distance', 'shell': 'thickness'}[FeatureType]
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind=FeatureType, profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=DimensionValue(Feature.dimensions, DimensionKind) if FeatureType != 'fillet' else None, radius_mm=DimensionValue(Feature.dimensions, DimensionKind) if FeatureType == 'fillet' else None, family_code=Fields[0], operation_code=Fields[1], schema_code=Fields[2], direction_code=None, termination_code=None, selection_offsets=tuple((Selection[0] for Selection in Selections)), selected_local_ids=tuple((Selection[2] for Selection in Selections)), selection_kind='face' if FeatureType == 'shell' else 'edge', mode='equal_distance' if FeatureType == 'chamfer' and Fields[0] == 1 else None, native_stream=StateData.StreamName, selection_references=tuple(((Selection[1], Selection[2]) for Selection in Selections)))
+    Fields = (
+        OperationFields(StateData.Resolved, Record)
+        if Record is not None
+        else (None, None, None)
+    )
+    DimensionKind = {"fillet": "radius", "chamfer": "distance", "shell": "thickness"}[
+        FeatureType
+    ]
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind=FeatureType,
+        profile_id=None,
+        dependencies=Dependencies,
+        native_offset=Feature.native_offset or 0,
+        native_end=Feature.native_end or len(StateData.Resolved),
+        length_mm=(
+            DimensionValue(Feature.dimensions, DimensionKind)
+            if FeatureType != "fillet"
+            else None
+        ),
+        radius_mm=(
+            DimensionValue(Feature.dimensions, DimensionKind)
+            if FeatureType == "fillet"
+            else None
+        ),
+        family_code=Fields[0],
+        operation_code=Fields[1],
+        schema_code=Fields[2],
+        direction_code=None,
+        termination_code=None,
+        selection_offsets=tuple((Selection[0] for Selection in Selections)),
+        selected_local_ids=tuple((Selection[2] for Selection in Selections)),
+        selection_kind="face" if FeatureType == "shell" else "edge",
+        mode="equal_distance" if FeatureType == "chamfer" and Fields[0] == 1 else None,
+        native_stream=StateData.StreamName,
+        selection_references=tuple(
+            ((Selection[1], Selection[2]) for Selection in Selections)
+        ),
+    )
     return Operation
 
 
@@ -561,9 +989,39 @@ def DecodeSurface(StateData, Feature):
         return None
     ProfileId = StateData.LatestSketch.object_id if StateData.LatestSketch else None
     Family, OperationCode, Schema = OperationFields(StateData.Resolved, Record)
-    EndData = EndSpec(StateData.Resolved, Feature.native_offset or 0, Feature.native_end or len(StateData.Resolved), StateData.Classes)
-    Lengths = tuple((Dimension.value_mm for Dimension in Feature.dimensions if Dimension.kind in {'length', 'second_length'}))
-    Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='surface', profile_id=ProfileId, dependencies=(ProfileId,) if ProfileId is not None else (), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(StateData.Resolved), length_mm=Lengths[0] if Lengths else None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndData.direction_code if EndData else None, termination_code=EndData.termination_code if EndData else None, selection_offsets=(), selected_local_ids=(), second_length_mm=Lengths[1] if len(Lengths) > 1 else None, native_stream=StateData.StreamName)
+    EndData = EndSpec(
+        StateData.Resolved,
+        Feature.native_offset or 0,
+        Feature.native_end or len(StateData.Resolved),
+        StateData.Classes,
+    )
+    Lengths = tuple(
+        (
+            Dimension.value_mm
+            for Dimension in Feature.dimensions
+            if Dimension.kind in {"length", "second_length"}
+        )
+    )
+    Operation = NativeOperation(
+        object_id=Feature.object_id,
+        name=Feature.name,
+        kind="surface",
+        profile_id=ProfileId,
+        dependencies=(ProfileId,) if ProfileId is not None else (),
+        native_offset=Feature.native_offset or 0,
+        native_end=Feature.native_end or len(StateData.Resolved),
+        length_mm=Lengths[0] if Lengths else None,
+        radius_mm=None,
+        family_code=Family,
+        operation_code=OperationCode,
+        schema_code=Schema,
+        direction_code=EndData.direction_code if EndData else None,
+        termination_code=EndData.termination_code if EndData else None,
+        selection_offsets=(),
+        selected_local_ids=(),
+        second_length_mm=Lengths[1] if len(Lengths) > 1 else None,
+        native_stream=StateData.StreamName,
+    )
     return Operation
 
 
@@ -1067,18 +1525,18 @@ class VendorResolved:
     locals()["annotation_view_count"] = 1
     __annotations__["terminal_parent_tree_id"] = "int | None"
     locals()["terminal_parent_tree_id"] = None
-    __annotations__['HeaderBounds'] = 'tuple[float, ...] | None'
-    locals()['HeaderBounds'] = None
-    __annotations__['HeaderCreation'] = 'int | None'
-    locals()['HeaderCreation'] = None
+    __annotations__["HeaderBounds"] = "tuple[float, ...] | None"
+    locals()["HeaderBounds"] = None
+    __annotations__["HeaderCreation"] = "int | None"
+    locals()["HeaderCreation"] = None
     __annotations__["cmgr_parent_tree_id"] = "int | None"
     locals()["cmgr_parent_tree_id"] = None
     __annotations__["annotation_view_variant"] = "str"
     locals()["annotation_view_variant"] = "default"
     __annotations__["Config0Payload"] = "bytes | None"
     locals()["Config0Payload"] = None
-    __annotations__['HeaderPayload'] = 'bytes | None'
-    locals()['HeaderPayload'] = None
+    __annotations__["HeaderPayload"] = "bytes | None"
+    locals()["HeaderPayload"] = None
 
 
 # this binding exists because shared behavior needs one stable value
@@ -1753,74 +2211,202 @@ def RouteVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | 
 
 
 # box specialization isolates primitive profile serialization behavior
-def BuildBoxTree(SketchObject, PadObject, PlaneObjectId, BoundsValue, DepthValue, DirectionCode, TerminationCode, EndCodes):
-    IsDimensionedBox = PadObject.properties and ('KitPrimitive', 'Box') in PadObject.properties and (len(SketchObject.dimensions) == 2)
+def BuildBoxTree(
+    SketchObject,
+    PadObject,
+    PlaneObjectId,
+    BoundsValue,
+    DepthValue,
+    DirectionCode,
+    TerminationCode,
+    EndCodes,
+):
+    IsDimensionedBox = (
+        PadObject.properties
+        and ("KitPrimitive", "Box") in PadObject.properties
+        and (len(SketchObject.dimensions) == 2)
+    )
     ExpectedFeatureId = 34 if IsDimensionedBox else 32
     if PadObject.object_id != ExpectedFeatureId:
         return None
-    ProgramValue = (EncodeBoxProgram(), KBoxHeaderStamps) if PlaneObjectId == 2 and IsDimensionedBox else (EncodeProgram(), KFrontBossHeaderStamps) if PlaneObjectId == 2 else (EncodeTopProgram(), KTopBossHeaderStamps) if PlaneObjectId == 3 else (EncodeRightProgram(), KRightBossHeaderStamps) if PlaneObjectId == 4 else None
+    ProgramValue = (
+        (EncodeBoxProgram(), KBoxHeaderStamps)
+        if PlaneObjectId == 2 and IsDimensionedBox
+        else (
+            (EncodeProgram(), KFrontBossHeaderStamps)
+            if PlaneObjectId == 2
+            else (
+                (EncodeTopProgram(), KTopBossHeaderStamps)
+                if PlaneObjectId == 3
+                else (
+                    (EncodeRightProgram(), KRightBossHeaderStamps)
+                    if PlaneObjectId == 4
+                    else None
+                )
+            )
+        )
+    )
     if ProgramValue is None:
         return None
     ProgramData, HeaderStamps = ProgramValue
     ConfigZeroData = EncodeBoxConfigProgram() if IsDimensionedBox else None
-    EditData = FeatureEdit(corners_mm=RectangleCornersMm(*BoundsValue), depth_mm=DepthValue, reversed=bool(DirectionCode), end_condition_code=TerminationCode, update_depth_copies=EndCodes == (0, 0) or PlaneObjectId in {3, 4}, SketchDimensionsMm=tuple((ItemData.value_mm for ItemData in SketchObject.dimensions)) if IsDimensionedBox else None)
-    return VendorResolved(PatchFeatures(ProgramData, {0: EditData}), HeaderStamps, Config0Payload=ConfigZeroData)
+    EditData = FeatureEdit(
+        corners_mm=RectangleCornersMm(*BoundsValue),
+        depth_mm=DepthValue,
+        reversed=bool(DirectionCode),
+        end_condition_code=TerminationCode,
+        update_depth_copies=EndCodes == (0, 0) or PlaneObjectId in {3, 4},
+        SketchDimensionsMm=(
+            tuple((ItemData.value_mm for ItemData in SketchObject.dimensions))
+            if IsDimensionedBox
+            else None
+        ),
+    )
+    return VendorResolved(
+        PatchFeatures(ProgramData, {0: EditData}),
+        HeaderStamps,
+        Config0Payload=ConfigZeroData,
+    )
+
 
 # circle specialization isolates radial profile serialization behavior
-def BuildCircleTree(PadObject, PlaneObjectId, CircleValue, DepthValue, DirectionCode, EndCodes):
-    if EndCodes not in {(0, 0), (1, 0)} or PlaneObjectId != 2 or PadObject.object_id != 33:
+def BuildCircleTree(
+    PadObject, PlaneObjectId, CircleValue, DepthValue, DirectionCode, EndCodes
+):
+    if (
+        EndCodes not in {(0, 0), (1, 0)}
+        or PlaneObjectId != 2
+        or PadObject.object_id != 33
+    ):
         return None
     CenterX, CenterY, RadiusValue = CircleValue
-    if not MathValue.isclose(CenterX, 0.0, rel_tol=0.0, abs_tol=1e-10) or not MathValue.isclose(CenterY, 0.0, rel_tol=0.0, abs_tol=1e-10):
+    if not MathValue.isclose(
+        CenterX, 0.0, rel_tol=0.0, abs_tol=1e-10
+    ) or not MathValue.isclose(CenterY, 0.0, rel_tol=0.0, abs_tol=1e-10):
         return None
     IsReverseCircle = DirectionCode == 1
-    ProgramData = EncodeReverseA(DepthValue) if IsReverseCircle else EncodeCircleProgram()
+    ProgramData = (
+        EncodeReverseA(DepthValue) if IsReverseCircle else EncodeCircleProgram()
+    )
     HeaderStamps = KCircleBossHeaderStamps
     CenterXMetres = CenterX / KMillimetres
     CenterYMetres = CenterY / KMillimetres
     RadiusMetres = RadiusValue / KMillimetres
     DepthMetres = DepthValue / KMillimetres
     CenterZMetres = DepthMetres * (-0.5 if IsReverseCircle else 0.5)
-    HeaderBoundsData = (CenterXMetres, CenterYMetres, CenterZMetres, CenterXMetres + RadiusMetres, CenterYMetres + RadiusMetres, 0.0 if IsReverseCircle else DepthMetres, CenterXMetres - RadiusMetres, CenterYMetres - RadiusMetres, -DepthMetres if IsReverseCircle else 0.0, MathValue.sqrt(RadiusMetres ** 2 * 2.0 + CenterZMetres ** 2))
+    HeaderBoundsData = (
+        CenterXMetres,
+        CenterYMetres,
+        CenterZMetres,
+        CenterXMetres + RadiusMetres,
+        CenterYMetres + RadiusMetres,
+        0.0 if IsReverseCircle else DepthMetres,
+        CenterXMetres - RadiusMetres,
+        CenterYMetres - RadiusMetres,
+        -DepthMetres if IsReverseCircle else 0.0,
+        MathValue.sqrt(RadiusMetres**2 * 2.0 + CenterZMetres**2),
+    )
     HeaderCreationData = HeaderStamps[0][0] - 1
-    ConfigZeroData = EncodeReverse(CenterX, CenterY, RadiusValue, DepthValue) if IsReverseCircle else EncodeCircCfg(CenterX, CenterY, RadiusValue, DepthValue)
-    EditData = FeatureEdit(radii_mm=(RadiusValue,), arc_centres_mm=((CenterX, CenterY),), depth_mm=DepthValue, update_depth_copies=not IsReverseCircle, SketchDimensionsMm=(RadiusValue * 2.0,))
-    return VendorResolved(PatchFeatures(ProgramData, {0: EditData}), HeaderStamps, HeaderBounds=HeaderBoundsData, HeaderCreation=HeaderCreationData, Config0Payload=ConfigZeroData)
+    ConfigZeroData = (
+        EncodeReverse(CenterX, CenterY, RadiusValue, DepthValue)
+        if IsReverseCircle
+        else EncodeCircCfg(CenterX, CenterY, RadiusValue, DepthValue)
+    )
+    EditData = FeatureEdit(
+        radii_mm=(RadiusValue,),
+        arc_centres_mm=((CenterX, CenterY),),
+        depth_mm=DepthValue,
+        update_depth_copies=not IsReverseCircle,
+        SketchDimensionsMm=(RadiusValue * 2.0,),
+    )
+    return VendorResolved(
+        PatchFeatures(ProgramData, {0: EditData}),
+        HeaderStamps,
+        HeaderBounds=HeaderBoundsData,
+        HeaderCreation=HeaderCreationData,
+        Config0Payload=ConfigZeroData,
+    )
+
 
 # polyline specialization isolates polygon profile serialization behavior
-def BuildPolyTree(SketchObject, PadObject, PlaneObjectId, PolylineValue, DepthValue, EndCodes):
-    if PolylineValue is None or EndCodes != (0, 0) or PlaneObjectId != 2 or (PadObject.object_id != 32) or SketchObject.dimensions:
+def BuildPolyTree(
+    SketchObject, PadObject, PlaneObjectId, PolylineValue, DepthValue, EndCodes
+):
+    if (
+        PolylineValue is None
+        or EndCodes != (0, 0)
+        or PlaneObjectId != 2
+        or (PadObject.object_id != 32)
+        or SketchObject.dimensions
+    ):
         return None
     try:
-        ProgramData = EncodePolylineSixProgram(PolylineSixFieldMap(PolylineValue, DepthValue))
+        ProgramData = EncodePolylineSixProgram(
+            PolylineSixFieldMap(PolylineValue, DepthValue)
+        )
     except SldprtFormatError:
         return None
     HeaderStamps = KFrontBossHeaderStamps
     return VendorResolved(ProgramData, HeaderStamps)
+
 
 # this definition exists because focused behavior needs one stable owner
 def BuildVendorTree(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     if len(AuthoredObjs) != 2:
         return RouteVendorTree(AuthoredObjs)
     SketchObject, PadObject = AuthoredObjs
-    if PadObject.class_name == 'moRevolution_c':
+    if PadObject.class_name == "moRevolution_c":
         return BuildSingleTree(AuthoredObjs)
-    PlaneObjectId = Struct.unpack_from('<I', SketchObject.payload)[0] if len(SketchObject.payload) >= 4 else 0
+    PlaneObjectId = (
+        Struct.unpack_from("<I", SketchObject.payload)[0]
+        if len(SketchObject.payload) >= 4
+        else 0
+    )
     BoundsValue = WriteRectangle(SketchObject)
     CircleValue = WriteCircle(SketchObject)
     PolylineValue = PolySixPoints(SketchObject)
     EndCodes = ExtrusionEdit(PadObject.payload)
-    if SketchObject.class_name != 'moProfileFeature_c' or SketchObject.object_id != 26 or SketchObject.name != 'Sketch1' or (PadObject.class_name != 'moExtrusion_c') or (PadObject.name != 'Boss-Extrude1') or (sum((ItemValue is not None for ItemValue in (BoundsValue, CircleValue, PolylineValue))) != 1) or (EndCodes is None) or (len(PadObject.dimensions) != 1):
+    if (
+        SketchObject.class_name != "moProfileFeature_c"
+        or SketchObject.object_id != 26
+        or SketchObject.name != "Sketch1"
+        or (PadObject.class_name != "moExtrusion_c")
+        or (PadObject.name != "Boss-Extrude1")
+        or (
+            sum(
+                (
+                    ItemValue is not None
+                    for ItemValue in (BoundsValue, CircleValue, PolylineValue)
+                )
+            )
+            != 1
+        )
+        or (EndCodes is None)
+        or (len(PadObject.dimensions) != 1)
+    ):
         return None
     DepthValue = PadObject.dimensions[0].value_mm
     if not MathValue.isfinite(DepthValue) or DepthValue <= 0.0:
         return None
     DirectionCode, TerminationCode = EndCodes
     if BoundsValue is not None:
-        return BuildBoxTree(SketchObject, PadObject, PlaneObjectId, BoundsValue, DepthValue, DirectionCode, TerminationCode, EndCodes)
+        return BuildBoxTree(
+            SketchObject,
+            PadObject,
+            PlaneObjectId,
+            BoundsValue,
+            DepthValue,
+            DirectionCode,
+            TerminationCode,
+            EndCodes,
+        )
     if CircleValue is not None:
-        return BuildCircleTree(PadObject, PlaneObjectId, CircleValue, DepthValue, DirectionCode, EndCodes)
-    return BuildPolyTree(SketchObject, PadObject, PlaneObjectId, PolylineValue, DepthValue, EndCodes)
+        return BuildCircleTree(
+            PadObject, PlaneObjectId, CircleValue, DepthValue, DirectionCode, EndCodes
+        )
+    return BuildPolyTree(
+        SketchObject, PadObject, PlaneObjectId, PolylineValue, DepthValue, EndCodes
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2330,7 +2916,16 @@ def BuildBossShell(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | N
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishLinear(PadDepth, SpacingValue, MinimumX, MinimumY, MaximumX, MaximumY, ItemCount, BoundsValue):
+def FinishLinear(
+    PadDepth,
+    SpacingValue,
+    MinimumX,
+    MinimumY,
+    MaximumX,
+    MaximumY,
+    ItemCount,
+    BoundsValue,
+):
     PadDepthMetres = PadDepth / KMillimetres
     SpacingMetres = SpacingValue / KMillimetres
     MinimumXMetres = MinimumX / KMillimetres
@@ -2451,7 +3046,16 @@ def BuildBossLinear(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | 
         or (SpacingValue > PadDepth)
     ):
         return None
-    return FinishLinear(PadDepth, SpacingValue, MinimumX, MinimumY, MaximumX, MaximumY, ItemCount, BoundsValue)
+    return FinishLinear(
+        PadDepth,
+        SpacingValue,
+        MinimumX,
+        MinimumY,
+        MaximumX,
+        MaximumY,
+        ItemCount,
+        BoundsValue,
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -4339,7 +4943,9 @@ def IsonicalBosDMut(
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishSingleMut(DocValue, SourceSketch, SourceFeature, Sketch, Extrusion, Objects, Circle, ObjectIds):
+def FinishSingleMut(
+    DocValue, SourceSketch, SourceFeature, Sketch, Extrusion, Objects, Circle, ObjectIds
+):
     FreecadDimension = FreecadSingle(DocValue, SourceSketch, SourceFeature)
     if FreecadDimension is None:
         if (
@@ -4465,11 +5071,22 @@ def IsonicalSinAMut(
         or SourceFeature.configuration_states
     ):
         return Objects
-    return FinishSingleMut(DocValue, SourceSketch, SourceFeature, Sketch, Extrusion, Objects, Circle, ObjectIds)
+    return FinishSingleMut(
+        DocValue,
+        SourceSketch,
+        SourceFeature,
+        Sketch,
+        Extrusion,
+        Objects,
+        Circle,
+        ObjectIds,
+    )
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishPairMut(SecondIsBoss, SketchOne, FeatureOne, SketchTwo, FeatureTwo, ObjectIds, DimensionData):
+def FinishPairMut(
+    SecondIsBoss, SketchOne, FeatureOne, SketchTwo, FeatureTwo, ObjectIds, DimensionData
+):
     TargetIds = (26, 32, 33, 40)
     TargetNames = (
         "Sketch1",
@@ -4656,11 +5273,27 @@ def IsonicalTwoMut(
         )
     ):
         return ObjectsData
-    return FinishPairMut(SecondIsBoss, SketchOne, FeatureOne, SketchTwo, FeatureTwo, ObjectIds, DimensionData)
+    return FinishPairMut(
+        SecondIsBoss,
+        SketchOne,
+        FeatureOne,
+        SketchTwo,
+        FeatureTwo,
+        ObjectIds,
+        DimensionData,
+    )
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishCutMut(NormalizedObjects, FeatureCount, DocData, ResolvedSketches, ResolvedFeatures, ObjectsData, ObjectIds):
+def FinishCutMut(
+    NormalizedObjects,
+    FeatureCount,
+    DocData,
+    ResolvedSketches,
+    ResolvedFeatures,
+    ObjectsData,
+    ObjectIds,
+):
     SketchObjects = tuple(NormalizedObjects[0::2])
     FeatureObjects = tuple(NormalizedObjects[1::2])
     BoundsData = tuple((WriteRectangle(ItemData) for ItemData in SketchObjects))
@@ -4841,7 +5474,15 @@ def IsonicalCutMut(
                 Replace(FeatureObject, payload=EncodeExtrude(FeatureData)),
             )
         )
-    return FinishCutMut(NormalizedObjects, FeatureCount, DocData, ResolvedSketches, ResolvedFeatures, ObjectsData, ObjectIds)
+    return FinishCutMut(
+        NormalizedObjects,
+        FeatureCount,
+        DocData,
+        ResolvedSketches,
+        ResolvedFeatures,
+        ObjectsData,
+        ObjectIds,
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -5449,7 +6090,15 @@ def FreeCadPad(
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishBossB(SelectionData, FilletFeatureData, PadNativeName, DocData, BoundsValue, PadDimension, RadiusNumber):
+def FinishBossB(
+    SelectionData,
+    FilletFeatureData,
+    PadNativeName,
+    DocData,
+    BoundsValue,
+    PadDimension,
+    RadiusNumber,
+):
     if (
         SelectionData.attributes.get("freecad_object")
         != FilletFeatureData.provenance.native_id
@@ -5604,11 +6253,27 @@ def FreeCadBossB(
         if PadFeature.provenance is not None
         else PadFeature.name
     )
-    return FinishBossB(SelectionData, FilletFeatureData, PadNativeName, DocData, BoundsValue, PadDimension, RadiusNumber)
+    return FinishBossB(
+        SelectionData,
+        FilletFeatureData,
+        PadNativeName,
+        DocData,
+        BoundsValue,
+        PadDimension,
+        RadiusNumber,
+    )
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishBoss(SelectionData, ChamferFeatureData, PadNativeName, DocData, BoundsValue, PadDimension, DistanceNumber):
+def FinishBoss(
+    SelectionData,
+    ChamferFeatureData,
+    PadNativeName,
+    DocData,
+    BoundsValue,
+    PadDimension,
+    DistanceNumber,
+):
     if (
         SelectionData.attributes.get("freecad_object")
         != ChamferFeatureData.provenance.native_id
@@ -5768,11 +6433,26 @@ def FreeCadBoss(
         if PadFeature.provenance is not None
         else PadFeature.name
     )
-    return FinishBoss(SelectionData, ChamferFeatureData, PadNativeName, DocData, BoundsValue, PadDimension, DistanceNumber)
+    return FinishBoss(
+        SelectionData,
+        ChamferFeatureData,
+        PadNativeName,
+        DocData,
+        BoundsValue,
+        PadDimension,
+        DistanceNumber,
+    )
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishBossD(SelectionData, ShellFeatureData, PadNativeName, DocData, PadDimension, ThicknessNumber):
+def FinishBossD(
+    SelectionData,
+    ShellFeatureData,
+    PadNativeName,
+    DocData,
+    PadDimension,
+    ThicknessNumber,
+):
     if (
         SelectionData.attributes.get("freecad_object")
         != ShellFeatureData.provenance.native_id
@@ -5929,11 +6609,27 @@ def FreeCadBossD(
         if PadFeature.provenance is not None
         else PadFeature.name
     )
-    return FinishBossD(SelectionData, ShellFeatureData, PadNativeName, DocData, PadDimension, ThicknessNumber)
+    return FinishBossD(
+        SelectionData,
+        ShellFeatureData,
+        PadNativeName,
+        DocData,
+        PadDimension,
+        ThicknessNumber,
+    )
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishBossC(SelectionData, PatternFeatureData, SketchNativeName, DocData, SpacingDimension, ItemCount, PadDimension, BoundsValue):
+def FinishBossC(
+    SelectionData,
+    PatternFeatureData,
+    SketchNativeName,
+    DocData,
+    SpacingDimension,
+    ItemCount,
+    PadDimension,
+    BoundsValue,
+):
     if (
         SelectionData.attributes.get("freecad_object")
         != PatternFeatureData.provenance.native_id
@@ -6098,7 +6794,16 @@ def FreeCadBossC(
         if SketchData.provenance is not None
         else SketchData.name
     )
-    return FinishBossC(SelectionData, PatternFeatureData, SketchNativeName, DocData, SpacingDimension, ItemCount, PadDimension, BoundsValue)
+    return FinishBossC(
+        SelectionData,
+        PatternFeatureData,
+        SketchNativeName,
+        DocData,
+        SpacingDimension,
+        ItemCount,
+        PadDimension,
+        BoundsValue,
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -6151,7 +6856,16 @@ def HasFreeCadGeomA(
 
 
 # focused continuation isolates the remaining native serialization phase
-def FinishBossA(SelectionData, PatternFeatureData, SketchNativeName, DocData, AngleNumber, ItemCount, BoundsValue, PadDimension):
+def FinishBossA(
+    SelectionData,
+    PatternFeatureData,
+    SketchNativeName,
+    DocData,
+    AngleNumber,
+    ItemCount,
+    BoundsValue,
+    PadDimension,
+):
     if (
         SelectionData.attributes.get("freecad_object")
         != PatternFeatureData.provenance.native_id
@@ -6326,7 +7040,16 @@ def FreeCadBossA(
         if SketchData.provenance is not None
         else SketchData.name
     )
-    return FinishBossA(SelectionData, PatternFeatureData, SketchNativeName, DocData, AngleNumber, ItemCount, BoundsValue, PadDimension)
+    return FinishBossA(
+        SelectionData,
+        PatternFeatureData,
+        SketchNativeName,
+        DocData,
+        AngleNumber,
+        ItemCount,
+        BoundsValue,
+        PadDimension,
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -7568,9 +8291,7 @@ def EncodeSketch(
         if UpdatedId is None:
             UpdatedId = EncodePolyMut(Selected, Profile, Payload, Consumed, LocalId)
         if UpdatedId is None:
-            UpdatedId = EncodeCircleMut(
-                Selected, Payload, Generated, Consumed, LocalId
-            )
+            UpdatedId = EncodeCircleMut(Selected, Payload, Generated, Consumed, LocalId)
         LocalId = LocalId if UpdatedId is None else UpdatedId
     for Entity in Sketch.entities:
         if Entity.id not in Consumed:
@@ -8439,7 +9160,13 @@ def HeaderObjsMut(Output, Identity, Objects, ObjectStampsA, LegacyStamp):
 
 # header reference assembly owns document and configuration identity records
 def HeaderRefMut(
-    Output, Identity, ConfigName, DocPath, CStringHandleClassIndex, Watermark, LegacyStamp
+    Output,
+    Identity,
+    ConfigName,
+    DocPath,
+    CStringHandleClassIndex,
+    Watermark,
+    LegacyStamp,
 ):
     Output.extend(
         LegacyStamp
@@ -10438,13 +11165,40 @@ def BuildNativeList(XmlFeatures, Names, Resolved, Classes, Scalars, ResolvedStre
     NativeFeatures: list[NativeFeature] = []
     for Feature in XmlFeatures:
         Record = RecordById.get(Feature.object_id)
-        NameValue = Feature.name or (Record.name if Record is not None else '')
+        NameValue = Feature.name or (Record.name if Record is not None else "")
         if not NameValue:
-            NameValue = f'{Feature.kind or Feature.xml_tag} {Feature.object_id}'
+            NameValue = f"{Feature.kind or Feature.xml_tag} {Feature.object_id}"
         Owned = ScalarOwner.get(Feature.object_id, ())
-        Dimensions = tuple((BindDimension(ItemValue, Owned) for ItemValue in Semantic(Feature.kind, tuple(Feature.dimensions))))
+        Dimensions = tuple(
+            (
+                BindDimension(ItemValue, Owned)
+                for ItemValue in Semantic(Feature.kind, tuple(Feature.dimensions))
+            )
+        )
         NativeEnd = EndsValue.get(Record.offset) if Record is not None else None
-        NativeFeatures.append(NativeFeature(object_id=Feature.object_id, name=NameValue, kind=Feature.kind, xml_tag=Feature.xml_tag, native_offset=Record.offset if Record else None, native_end=NativeEnd, properties=dict(Feature.properties), dimensions=Dimensions, data=Resolved[Record.offset:NativeEnd] if Record is not None and NativeEnd is not None else b'', class_name=RecordClassName(Classes, Record.offset) if Record is not None else '', native_stream=ResolvedStream))
+        NativeFeatures.append(
+            NativeFeature(
+                object_id=Feature.object_id,
+                name=NameValue,
+                kind=Feature.kind,
+                xml_tag=Feature.xml_tag,
+                native_offset=Record.offset if Record else None,
+                native_end=NativeEnd,
+                properties=dict(Feature.properties),
+                dimensions=Dimensions,
+                data=(
+                    Resolved[Record.offset : NativeEnd]
+                    if Record is not None and NativeEnd is not None
+                    else b""
+                ),
+                class_name=(
+                    RecordClassName(Classes, Record.offset)
+                    if Record is not None
+                    else ""
+                ),
+                native_stream=ResolvedStream,
+            )
+        )
     return (RecordById, ScalarOwner, NativeFeatures)
 
 
@@ -10454,11 +11208,20 @@ def RebindDimsMut(NativeFeatures, ScalarOwner):
         Feature.object_id: Index for Index, Feature in enumerate(NativeFeatures)
     }
     for Index, Feature in enumerate(NativeFeatures):
-        ChildId = IntegerProp(Feature.properties.get('DissectableChildren'))
+        ChildId = IntegerProp(Feature.properties.get("DissectableChildren"))
         ChildScalars = ScalarOwner.get(ChildId or -1, ())
         if not ChildScalars:
             continue
-        Rebound = tuple((BindDimension(Dimension, ChildScalars) if Dimension.native_offset is None else Dimension for Dimension in Feature.dimensions))
+        Rebound = tuple(
+            (
+                (
+                    BindDimension(Dimension, ChildScalars)
+                    if Dimension.native_offset is None
+                    else Dimension
+                )
+                for Dimension in Feature.dimensions
+            )
+        )
         NativeFeatures[Index] = Replace(Feature, dimensions=Rebound)
     return FeatureIndexes
 
@@ -10621,9 +11384,7 @@ def DecodeNative(
         names=Names,
         classes=Classes,
         scalars=Scalars,
-        diagnostics=DecodeNotices(
-            NativeFeatures, UnframedPlanes, StateData.Sketches
-        ),
+        diagnostics=DecodeNotices(NativeFeatures, UnframedPlanes, StateData.Sketches),
         equations=Equations,
         active_configuration_id=ActiveConfigId,
         bounding_box=BoundingBox(Resolved, Classes),
@@ -11776,9 +12537,7 @@ def ParseOneMarker(DataValue: bytes, Offsets, Index: int, EndValue: int):
         else 4294967295
     )
     ObjectIndex = None if ObjectIndex == 4294967295 else ObjectIndex
-    Semantic = MarkerSemantic(
-        NativeKind, Locus, Coordinates, Endpoints, ProfileRole
-    )
+    Semantic = MarkerSemantic(NativeKind, Locus, Coordinates, Endpoints, ProfileRole)
     return NativeMarker(
         offset=Offset,
         length=Length,
@@ -12219,9 +12978,11 @@ def DecodeProfiles(
     CircleProfileValues, CircleDimensions = CircleSet(RemainingMarkers, Dimensions)
     CircleDimensions.update(StructuralDimensions)
     Normalized = tuple(
-        Replace(Dimension, kind=CircleDimensions[Index])
-        if Index in CircleDimensions
-        else Dimension
+        (
+            Replace(Dimension, kind=CircleDimensions[Index])
+            if Index in CircleDimensions
+            else Dimension
+        )
         for Index, Dimension in enumerate(Dimensions)
     )
     Points = [
@@ -12239,9 +13000,7 @@ def DecodeProfiles(
         *StructuralPolylines,
     ]
     UsedValue: set[int] = ExcludedMarkers | {
-        Offset
-        for Profile in CircleProfileValues
-        for Offset in Profile.marker_offsets
+        Offset for Profile in CircleProfileValues for Offset in Profile.marker_offsets
     }
     AppendRectsMut(
         Profiles,
@@ -12298,8 +13057,7 @@ def StructuralSides(Edges, Component, Resolved, XsValue, YsValue):
     if set(Sides) != {"bottom", "right", "top", "left"}:
         return None
     return tuple(
-        Sides[SideValue].offset
-        for SideValue in ("bottom", "right", "top", "left")
+        Sides[SideValue].offset for SideValue in ("bottom", "right", "top", "left")
     )
 
 
@@ -12511,9 +13269,7 @@ def CircleClosure(Markers, ClosureIndex, ExcludedOffsets):
 def MatchCircleMut(Dimensions, Radius, Normalized, GeomValue):
     Matches: list[tuple[int, str, float]] = []
     for Index, Dimension in enumerate(Dimensions):
-        if MathValue.isclose(
-            Dimension.value_mm, Radius, rel_tol=1e-07, abs_tol=1e-07
-        ):
+        if MathValue.isclose(Dimension.value_mm, Radius, rel_tol=1e-07, abs_tol=1e-07):
             Matches.append((Index, "radius", Dimension.value_mm))
         elif MathValue.isclose(
             Dimension.value_mm, Radius * 2.0, rel_tol=1e-07, abs_tol=1e-07
