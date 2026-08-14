@@ -2525,13 +2525,13 @@ def FreecadSingle(DocValue: CadDocument, Sketch: Sketch, Feature: FeatureStep) -
     if Dimension is None or Dimension.value_mm <= 0.0:
         return None
     Parameters: dict[str, Param] = {}
-    for Param in DocValue.parameters:
-        if Param.owner_id == Sketch.id:
+    for ParamItem in DocValue.parameters:
+        if ParamItem.owner_id == Sketch.id:
             continue
-        PathValue = Param.attributes.get('freecad_path')
-        if Param.owner_id != Feature.id or not isinstance(PathValue, str) or (not PathValue) or (PathValue in Parameters) or (Param.expression is not None):
+        PathValue = ParamItem.attributes.get('freecad_path')
+        if ParamItem.owner_id != Feature.id or not isinstance(PathValue, str) or (not PathValue) or (PathValue in Parameters) or (ParamItem.expression is not None):
             return None
-        Parameters[PathValue] = Param
+        Parameters[PathValue] = ParamItem
     Expected = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'AlongSketchNormal': (ValueKind.BOOLEAN, True), 'Label': (ValueKind.STRING, None), 'Label2': (ValueKind.STRING, None), 'Length': (ValueKind.LENGTH, Dimension.value_mm), 'Length2': (ValueKind.LENGTH, 10.0), 'Midplane': (ValueKind.BOOLEAN, Definition.symmetric), 'Offset': (ValueKind.LENGTH, 0.0), 'Offset2': (ValueKind.LENGTH, 0.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, Definition.reversed), 'SideType': (ValueKind.INTEGER, 2 if Definition.symmetric else 0), 'Suppressed': (ValueKind.BOOLEAN, False), 'TaperAngle': (ValueKind.ANGLE, 0.0), 'TaperAngle2': (ValueKind.ANGLE, 0.0), 'Type': (ValueKind.INTEGER, 0), 'Type2': (ValueKind.INTEGER, 0), 'UseCustomVector': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
     if not set(Expected) <= set(Parameters):
         return None
@@ -2594,9 +2594,9 @@ def IsFreecadParam(Param: Parameter, KindValue: ValueKind, Expected: Any) -> boo
 def IsParamValueA(Value: Any, Expected: float, KindValue: ValueKind) -> bool:
     if Value is None or Value.kind is not KindValue:
         return False
-    Param = ParamDimension(Param('', 'D1', Value))
+    Dimension = ParamDimension(Param('', 'D1', Value))
     if KindValue is ValueKind.LENGTH:
-        return Param is not None and MathValue.isclose(Param.value_mm, Expected, rel_tol=0.0, abs_tol=1e-10)
+        return Dimension is not None and MathValue.isclose(Dimension.value_mm, Expected, rel_tol=0.0, abs_tol=1e-10)
     return not isinstance(Value.value, bool) and isinstance(Value.value, (int, float)) and MathValue.isfinite(float(Value.value)) and MathValue.isclose(float(Value.value), Expected, rel_tol=0.0, abs_tol=1e-10)
 
 # this definition exists because focused behavior needs one stable owner
@@ -3867,15 +3867,15 @@ def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, Con
             OperationStart = Feature.native_offset or 0
             OperationEnd = Feature.native_end or len(Resolved)
             EndData = EndSpec(Resolved, OperationStart, OperationEnd, Classes)
-            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='join' if OperationCode == 0 else 'cut' if OperationCode == 2 else 'native', profile_id=ProfileId, dependencies=Dependencies, native_offset=OperationStart, native_end=ClassRecordEnd(Resolved, Classes, OperationStart) or OperationEnd, length_mm=Operation(Feature.dimensions, 'length'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndData.direction_code if EndData else None, termination_code=EndData.termination_code if EndData else None, selection_offsets=(), selected_local_ids=(), native_stream=ResolvedStream, depth_copies=DepthCopies(Resolved, OperationOffset(Feature.dimensions, 'length')), mirrored_direction_offset=EndData.mirrored_direction_offset if EndData else None, mirrored_direction_code=EndData.mirrored_direction_code if EndData else None)
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='join' if OperationCode == 0 else 'cut' if OperationCode == 2 else 'native', profile_id=ProfileId, dependencies=Dependencies, native_offset=OperationStart, native_end=ClassRecordEnd(Resolved, Classes, OperationStart) or OperationEnd, length_mm=DimensionValue(Feature.dimensions, 'length'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndData.direction_code if EndData else None, termination_code=EndData.termination_code if EndData else None, selection_offsets=(), selected_local_ids=(), native_stream=ResolvedStream, depth_copies=DepthCopies(Resolved, OperationOffset(Feature.dimensions, 'length')), mirrored_direction_offset=EndData.mirrored_direction_offset if EndData else None, mirrored_direction_code=EndData.mirrored_direction_code if EndData else None)
             Operations.append(Operation)
             LatestOperation = Operation
             continue
         FeatureType = Feature.kind.casefold()
         if FeatureType in {'lpattern', 'linearpattern'}:
             Record = RecordById.get(Feature.object_id)
-            CountValue = Operation(Feature.dimensions, 'instance_count')
-            SpacingValue = Operation(Feature.dimensions, 'spacing')
+            CountValue = DimensionValue(Feature.dimensions, 'instance_count')
+            SpacingValue = DimensionValue(Feature.dimensions, 'spacing')
             if Record is None or LatestOperation is None or CountValue is None or (CountValue != int(CountValue)) or (SpacingValue is None):
                 continue
             SelectionData = OperationA(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Feature, NativeFeatures)
@@ -3888,8 +3888,8 @@ def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, Con
             continue
         if FeatureType in {'cirpattern', 'circularpattern'}:
             Record = RecordById.get(Feature.object_id)
-            CountValue = Operation(Feature.dimensions, 'instance_count')
-            AngleValue = Operation(Feature.dimensions, 'angle')
+            CountValue = DimensionValue(Feature.dimensions, 'instance_count')
+            AngleValue = DimensionValue(Feature.dimensions, 'angle')
             if Record is None or LatestOperation is None or CountValue is None or (CountValue != int(CountValue)) or (AngleValue is None):
                 continue
             SelectionData = OperationA(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Feature, NativeFeatures)
@@ -3916,7 +3916,7 @@ def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, Con
             AxisMarker = RevolutionAxis(AxisSketch)
             RevolutionStart = Feature.native_offset or 0
             AngleOffset = OperationOffset(Feature.dimensions, 'angle')
-            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='revolve_cut' if FeatureType in {'cut-revolve', 'revcut'} else 'revolve_join', profile_id=ProfileId, dependencies=Dependencies, native_offset=RevolutionStart, native_end=ClassRecordEnd(Resolved, Classes, RevolutionStart) or Feature.native_end or len(Resolved), length_mm=None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=None, selection_offsets=(), selected_local_ids=(), angle_degrees=Operation(Feature.dimensions, 'angle'), axis_marker_offset=AxisMarker.offset if AxisMarker else None, native_stream=ResolvedStream, axis_source_kind=None if Layout is None else Layout.axis_kind, axis_source_id=None if Layout is None else Layout.axis_feature_id, axis_source_offset=None if Layout is None else Layout.axis_offset, end_spec_offset=None if Layout is None else Layout.end_spec_offset, angle_offset=AngleOffset, angle_copies=AngleCopies(Resolved, AngleOffset))
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='revolve_cut' if FeatureType in {'cut-revolve', 'revcut'} else 'revolve_join', profile_id=ProfileId, dependencies=Dependencies, native_offset=RevolutionStart, native_end=ClassRecordEnd(Resolved, Classes, RevolutionStart) or Feature.native_end or len(Resolved), length_mm=None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=None, selection_offsets=(), selected_local_ids=(), angle_degrees=DimensionValue(Feature.dimensions, 'angle'), axis_marker_offset=AxisMarker.offset if AxisMarker else None, native_stream=ResolvedStream, axis_source_kind=None if Layout is None else Layout.axis_kind, axis_source_id=None if Layout is None else Layout.axis_feature_id, axis_source_offset=None if Layout is None else Layout.axis_offset, end_spec_offset=None if Layout is None else Layout.end_spec_offset, angle_offset=AngleOffset, angle_copies=AngleCopies(Resolved, AngleOffset))
             Operations.append(Operation)
             LatestOperation = Operation
             continue
@@ -3927,13 +3927,13 @@ def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, Con
             Child = IntegerProp(Feature.properties.get('DissectableChildren'))
             Family, OperationCode, Schema = OperationFields(Resolved, Record)
             Dependencies = tuple((Value for Value in (LatestOperation.object_id if LatestOperation else None, Child) if Value is not None))
-            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='hole', profile_id=Child, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=Operation(Feature.dimensions, 'depth'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=0, selection_offsets=(), selected_local_ids=(), selection_kind='face', native_stream=ResolvedStream)
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='hole', profile_id=Child, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=DimensionValue(Feature.dimensions, 'depth'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=None, termination_code=0, selection_offsets=(), selected_local_ids=(), selection_kind='face', native_stream=ResolvedStream)
             Operations.append(Operation)
             LatestOperation = Operation
             continue
         if FeatureType == 'dome':
             Selections = OperationAfter(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Feature, NativeFeatures, 'moCompFace_c')
-            Height = Operation(Feature.dimensions, 'height')
+            Height = DimensionValue(Feature.dimensions, 'height')
             if Height is None or not Selections:
                 continue
             ProducerIds = tuple(dict.fromkeys((Selection[1] for Selection in Selections)))
@@ -3978,7 +3978,7 @@ def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, Con
             Record = RecordById.get(Feature.object_id)
             Fields = OperationFields(Resolved, Record) if Record is not None else (None, None, None)
             DimensionKind = {'fillet': 'radius', 'chamfer': 'distance', 'shell': 'thickness'}[FeatureType]
-            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind=FeatureType, profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=Operation(Feature.dimensions, DimensionKind) if FeatureType != 'fillet' else None, radius_mm=Operation(Feature.dimensions, DimensionKind) if FeatureType == 'fillet' else None, family_code=Fields[0], operation_code=Fields[1], schema_code=Fields[2], direction_code=None, termination_code=None, selection_offsets=tuple((Selection[0] for Selection in Selections)), selected_local_ids=tuple((Selection[2] for Selection in Selections)), selection_kind='face' if FeatureType == 'shell' else 'edge', mode='equal_distance' if FeatureType == 'chamfer' and Fields[0] == 1 else None, native_stream=ResolvedStream, selection_references=tuple(((Selection[1], Selection[2]) for Selection in Selections)))
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind=FeatureType, profile_id=None, dependencies=Dependencies, native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=DimensionValue(Feature.dimensions, DimensionKind) if FeatureType != 'fillet' else None, radius_mm=DimensionValue(Feature.dimensions, DimensionKind) if FeatureType == 'fillet' else None, family_code=Fields[0], operation_code=Fields[1], schema_code=Fields[2], direction_code=None, termination_code=None, selection_offsets=tuple((Selection[0] for Selection in Selections)), selected_local_ids=tuple((Selection[2] for Selection in Selections)), selection_kind='face' if FeatureType == 'shell' else 'edge', mode='equal_distance' if FeatureType == 'chamfer' and Fields[0] == 1 else None, native_stream=ResolvedStream, selection_references=tuple(((Selection[1], Selection[2]) for Selection in Selections)))
             Operations.append(Operation)
             LatestOperation = Operation
             continue

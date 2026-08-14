@@ -428,20 +428,21 @@ def ScanStreams(
     Streams: list[CfvTwoStream] = []
     SeenOffsets: set[int] = set()
     for CountOffset in range(len(KFolderMagic), len(Folder) - 3):
-        Stream = ParseDescriptor(
+        Stream = ReadDescMut(
             DataValue, Folder, PhysicalBase, FolderOffset, CountOffset, SeenOffsets
         )
         if Stream is not None:
             Streams.append(Stream)
     if not Streams:
         raise CfvTwoFormat("CFV2 directory has no valid stream descriptors")
+
     # this callback exists because local behavior needs one focused transformation
     Streams.sort(key=lambda Stream: Stream.descriptor_offset)
     return tuple(Streams)
 
 
 # this definition exists because focused behavior needs one stable owner
-def ParseDescriptor(
+def ReadDescMut(
     DataValue: bytes,
     Folder: bytes,
     PhysicalBase: int,
@@ -457,7 +458,10 @@ def ParseDescriptor(
         return None
     LogicalLength = UThreeTwobe(Folder, DescriptorOffset + 12)
     Extents = DecodeExtents(DataValue, Folder, PhysicalBase, CountOffset, Count)
-    if Extents is None or sum(Extent.physical_length for Extent in Extents) != LogicalLength:
+    if (
+        Extents is None
+        or sum(Extent.physical_length for Extent in Extents) != LogicalLength
+    ):
         return None
     NameValue = DescriptorName(Folder, DescriptorOffset)
     if len(NameValue) < 3:
@@ -488,7 +492,9 @@ def DecodeExtents(
             return None
         if StoredOffset != LogicalOffset or PhysicalEnd > len(DataValue):
             return None
-        Extents.append(CfvTwoExtent(PhysicalOffset, PhysicalLength, StoredOffset, Flags))
+        Extents.append(
+            CfvTwoExtent(PhysicalOffset, PhysicalLength, StoredOffset, Flags)
+        )
         LogicalOffset += PartLength
     return tuple(Extents)
 
