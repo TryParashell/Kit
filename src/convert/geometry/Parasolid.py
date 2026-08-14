@@ -7,7 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
-from dataclasses import dataclass as Dataclass, replace as Replace
+from dataclasses import dataclass as Dataclass, field as Field, replace as Replace
 import hashlib as Hashlib
 import math as MathValue
 import re as RegexLib
