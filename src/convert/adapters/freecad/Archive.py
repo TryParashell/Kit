@@ -919,6 +919,242 @@ class ObjectGraph:
     locals()["unique"] = Unique
 
 
+# this definition exists because parameter aliases need deterministic collision handling
+def InitCatalogMut(Instance, Parameters: list[dict[str, Any]]) -> None:
+    Instance.Parameters = Parameters
+    Instance.ById = {
+        TextAction(ItemValue.get("id")): ItemValue for ItemValue in Parameters
+    }
+    Instance.Aliases = {}
+    UsedValue: set[str] = set()
+    for Index, ItemValue in enumerate(Parameters, start=1):
+        ParamId = TextAction(ItemValue.get("id"), f"parameter_{Index}")
+        BaseValue = SafeAction(ParamId, "p")
+        if BaseValue[0].isdigit():
+            BaseValue = f"p_{BaseValue}"
+        Alias = BaseValue
+        Suffix = 2
+        while Alias in UsedValue:
+            Alias = f"{BaseValue}_{Suffix}"
+            Suffix += 1
+        UsedValue.add(Alias)
+        Instance.Aliases[ParamId] = Alias
+
+
+# this definition exists because feature properties reference spreadsheet aliases
+def ParamExpression(
+    Instance, ParamId: str, Divisor: float | None = None
+) -> str | None:
+    Alias = Instance.Aliases.get(ParamId)
+    if not Alias:
+        return None
+    Result = f"Parameters.{Alias}"
+    if Divisor and Divisor != 1.0:
+        Result += f" / {Number(Divisor):.16g}"
+    return Result
+
+
+# this predicate exists because source expressions alter feature carrier behavior
+def HasParamSource(Instance, ParamId: str) -> bool:
+    Param = Instance.ById.get(ParamId, {})
+    Expression = Param.get("expression", {}) if isinstance(Param, Mapping) else {}
+    return isinstance(Expression, Mapping) and bool(TextAction(Expression.get("source")))
+
+
+# this definition exists because native expression paths survive neutral translation
+def ParamSource(Instance, ParamId: str) -> str:
+    Param = Instance.ById.get(ParamId, {})
+    Attributes = Param.get("attributes", {}) if isinstance(Param, Mapping) else {}
+    return (
+        TextAction(Attributes.get("freecad_path"))
+        if isinstance(Attributes, Mapping)
+        else ""
+    )
+
+
+# this definition exists because feature writers need normalized parameter values
+def ParamValue(Instance, ParamId: str, Default: float = 0.0) -> float:
+    Param = Instance.ById.get(ParamId)
+    if not Param:
+        return Default
+    Value = Param.get("value", {})
+    if isinstance(Value, Mapping):
+        return Number(Value.get("value"), Default)
+    return Number(Value, Default)
+
+
+# this definition exists because feature writers need normalized parameter kinds
+def ParamKind(Instance, ParamId: str) -> str:
+    Param = Instance.ById.get(ParamId, {})
+    Value = Param.get("value", {}) if isinstance(Param, Mapping) else {}
+    return TextAction(
+        EnumAction(Value.get("kind")) if isinstance(Value, Mapping) else "number",
+        "number",
+    )
+
+
+# this definition exists because expression validation needs a closed identifier set
+def AllowedExpr() -> set[str]:
+    return {
+        "abs",
+        "acos",
+        "asin",
+        "atan",
+        "atan2",
+        "ceil",
+        "cos",
+        "e",
+        "exp",
+        "false",
+        "floor",
+        "log",
+        "log10",
+        "max",
+        "min",
+        "pi",
+        "pow",
+        "round",
+        "sin",
+        "sqrt",
+        "tan",
+        "true",
+    }
+
+
+# this definition exists because neutral references need spreadsheet alias substitution
+def ReplaceRefsMut(
+    Instance,
+    References: list[str],
+    Translated: str,
+    AllowedNamesMut: set[str],
+) -> str | None:
+    for ParamId in References:
+        Alias = Instance.Aliases.get(ParamId)
+        if not Alias:
+            return None
+        Param = Instance.ById.get(ParamId, {})
+        NameValue = TextAction(Param.get("name")) if isinstance(Param, Mapping) else ""
+        Replaced = False
+        for Token in (ParamId, NameValue):
+            if Token and Token in Translated:
+                Translated = Translated.replace(Token, Alias)
+                Replaced = True
+        if not Replaced and Alias not in Translated:
+            return None
+        AllowedNamesMut.add(Alias)
+    return Translated
+
+
+# this definition exists because safe expressions preserve native parametric behavior
+def NativeExpr(Instance, ItemValue: Mapping[str, Any]) -> str | None:
+    Expression = ItemValue.get("expression", {})
+    if not isinstance(Expression, Mapping):
+        return None
+    Source = TextAction(Expression.get("source")).strip()
+    if not Source or "\n" in Source or "\r" in Source or ";" in Source:
+        return None
+    Language = TextAction(Expression.get("language"), "kit").casefold()
+    if Language == "freecad":
+        return Source
+    if Language != "kit":
+        return None
+    References = [
+        TextAction(Value) for Value in Sequence(Expression.get("parameter_ids", []))
+    ]
+    AllowedNames = AllowedExpr()
+    Translated = ReplaceRefsMut(Instance, References, Source, AllowedNames)
+    if Translated is None:
+        return None
+    Translated = Translated.replace("^", "**")
+    Identifiers = set(RegexLib.findall("[A-Za-z_][A-Za-z0-9_]*", Translated))
+    if Identifiers - AllowedNames:
+        return None
+    if RegexLib.search("[^A-Za-z0-9_.,+\-*/%<>=!&|() \t]", Translated):
+        return None
+    return Translated
+
+
+# this definition exists because transfer reporting separates native expressions from carriers
+def ExprParts(Instance) -> tuple[int, int]:
+    NativeCount = 0
+    CarrierCount = 0
+    for ItemValue in Instance.Parameters:
+        if not isinstance(ItemValue.get("expression"), Mapping):
+            continue
+        if NativeExpr(Instance, ItemValue) is None:
+            CarrierCount += 1
+        else:
+            NativeCount += 1
+    return (NativeCount, CarrierCount)
+
+
+# this definition exists because spreadsheet cells need normalized value syntax
+def ParamContent(Instance, ItemValue: Mapping[str, Any]) -> str:
+    ValueData = ItemValue.get("value", {})
+    RawValue = ValueData.get("value") if isinstance(ValueData, Mapping) else ValueData
+    UnitValue = TextAction(ValueData.get("unit")) if isinstance(ValueData, Mapping) else ""
+    if isinstance(RawValue, bool):
+        Content = "=true" if RawValue else "=false"
+    elif isinstance(RawValue, (int, float)):
+        Content = "=" + (
+            f"{RawValue:.17g}" if isinstance(RawValue, float) else str(RawValue)
+        )
+        if UnitValue:
+            Content += f" {UnitValue}"
+    else:
+        Content = "'" + TextAction(RawValue)
+    NativeExpression = NativeExpr(Instance, ItemValue)
+    return "=" + NativeExpression if NativeExpression is not None else Content
+
+
+# this definition exists because each parameter owns a label and value cell
+def AppendParamMut(
+    CellsMut: XmlTree.Element, Instance, RowValue: int, ItemValue: Mapping[str, Any]
+) -> None:
+    ParamId = TextAction(ItemValue.get("id"), f"parameter_{RowValue}")
+    NameValue = TextAction(ItemValue.get("name"), ParamId)
+    XmlTree.SubElement(
+        CellsMut, "Cell", {"address": f"A{RowValue}", "content": "'" + NameValue}
+    )
+    XmlTree.SubElement(
+        CellsMut,
+        "Cell",
+        {
+            "address": f"B{RowValue}",
+            "content": ParamContent(Instance, ItemValue),
+            "alias": Instance.Aliases[ParamId],
+        },
+    )
+
+
+# this definition exists because parameter spreadsheets need canonical layout properties
+def SheetProps(Instance) -> list[XmlTree.Element]:
+    Result = [
+        StringProp("Label", "Parameters"),
+        ExpressionProp([]),
+        BoolProp("Visibility", False),
+    ]
+    Sheet = PropAction("cells", "Spreadsheet::PropertySheet", Status="67108864")
+    Cells = XmlTree.SubElement(
+        Sheet, "Cells", {"Count": str(len(Instance.Parameters) * 2), "xlink": "1"}
+    )
+    XmlTree.SubElement(Cells, "XLinks", {"count": "0"})
+    for RowValue, ItemValue in enumerate(Instance.Parameters, start=1):
+        AppendParamMut(Cells, Instance, RowValue, ItemValue)
+    Result.append(Sheet)
+    Widths = PropAction(
+        "columnWidths", "Spreadsheet::PropertyColumnWidths", Status="218103808"
+    )
+    XmlTree.SubElement(Widths, "ColumnInfo", {"Count": "0"})
+    Result.append(Widths)
+    Heights = PropAction(
+        "rowHeights", "Spreadsheet::PropertyRowHeights", Status="218103808"
+    )
+    XmlTree.SubElement(Heights, "RowInfo", {"Count": "0"})
+    Result.append(Heights)
+    return Result
+
+
 # this definition exists because focused behavior needs one stable owner
 class ParamCatalog:
 
