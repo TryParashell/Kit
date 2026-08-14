@@ -250,6 +250,73 @@ def HashProgram(ProgramData: ProgramData) -> str:
     return HashText(RenderValue(CanonicalData))
 
 
+# manifest records preserve every program identity and its reproducible evidence
+def BuildStat(ProgramItem: ProgramData, FacadeTexts: dict[str, str]) -> tuple:
+    return (
+        ProgramItem.VariantPath,
+        ProgramItem.OwnerName,
+        ProgramItem.OpsName,
+        tuple((StreamName for StreamName, SpareValue in ProgramItem.Streams)),
+        sum((len(Operations) for SpareValue, Operations in ProgramItem.Streams)),
+        HashProgram(ProgramItem),
+        ProgramItem.PublicNames,
+        ProgramItem.ByteStats,
+        HashText(FacadeTexts[ProgramItem.VariantPath]),
+    )
+
+
+# each generated variant separates public and stream evidence into reviewable declarations
+def AppendStatMut(
+    SourceLines: list[str],
+    ProgramItem: ProgramData,
+    FacadeTexts: dict[str, str],
+    ItemIndex: int,
+) -> str:
+    StatRecord = BuildStat(ProgramItem, FacadeTexts)
+    SuffixText = MakeAlias(ItemIndex)[len("KMethod") :]
+    StreamName = "KStreams" + SuffixText
+    PublicName = "KPublic" + SuffixText
+    VariantName = "KVariant" + SuffixText
+    SourceLines.extend(
+        (
+            "",
+            "# stream fingerprints preserve byte lengths and hashes for one generated variant",
+            f"{StreamName} = {RenderValue(StatRecord[7])}",
+            "",
+            "# public symbols preserve the exact callable surface for one generated variant",
+            f"{PublicName} = {RenderValue(StatRecord[6])}",
+            "",
+            "# variant evidence preserves public surfaces logical tables and encoded byte identities",
+            f"{VariantName} = ({', '.join((*map(RenderValue, StatRecord[:6]), PublicName, StreamName, RenderValue(StatRecord[8])))})",
+        )
+    )
+    return VariantName
+
+
+# grouped manifest declarations keep aggregate evidence below structural size limits
+def AppendGroupsMut(SourceLines: list[str], VariantNames: tuple[str, ...]) -> None:
+    GroupNames = []
+    for GroupIndex, StartPos in enumerate(range(0, len(VariantNames), 20)):
+        SuffixText = MakeAlias(GroupIndex)[len("KMethod") :]
+        GroupName = "KStats" + SuffixText
+        GroupNames.append(GroupName)
+        SourceLines.extend(
+            (
+                "",
+                "# grouped variant evidence keeps generated manifest declarations within reviewable boundaries",
+                f"{GroupName} = ({', '.join(VariantNames[StartPos:StartPos + 20])})",
+            )
+        )
+    SourceLines.extend(
+        (
+            "",
+            "# complete variant evidence preserves the deterministic generated program order",
+            f"KProgramStats = {' + '.join(GroupNames)}",
+            "",
+        )
+    )
+
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def RenderManifest(
     Programs: tuple[ProgramData, ...],
@@ -264,23 +331,10 @@ def RenderManifest(
         "",
         "# global counts catch missing variants streams owners methods or recovered operations",
         f"KGlobalStats = {RenderValue(GlobalStats)}",
-        "",
-        "",
-        "# variant evidence preserves public surfaces logical tables and encoded byte identities",
-        "KProgramStats = (",
     ]
-    for ProgramItem in Programs:
-        StatRecord = (
-            ProgramItem.VariantPath,
-            ProgramItem.OwnerName,
-            ProgramItem.OpsName,
-            tuple((StreamName for StreamName, SpareValue in ProgramItem.Streams)),
-            sum((len(Operations) for SpareValue, Operations in ProgramItem.Streams)),
-            HashProgram(ProgramItem),
-            ProgramItem.PublicNames,
-            ProgramItem.ByteStats,
-            HashText(FacadeTexts[ProgramItem.VariantPath]),
-        )
-        SourceLines.append(f"    {RenderValue(StatRecord)},")
-    SourceLines.extend((")", ""))
+    VariantNames = tuple(
+        AppendStatMut(SourceLines, ProgramItem, FacadeTexts, ItemIndex)
+        for ItemIndex, ProgramItem in enumerate(Programs)
+    )
+    AppendGroupsMut(SourceLines, VariantNames)
     return FormatSource("\n".join(SourceLines))
