@@ -8,18 +8,18 @@
 
 from __future__ import annotations
 
-import binascii
+import binascii as BinaryAscii
 from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
-from typing import Any
+from typing import Any as AnyValue
 
 from convert.adapters.solidworks.programs.assembly.quintuples.Program import EncodeField, StreamPrograms
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
 
 # recovered insertion boundaries split stable fields from occurrence records
-InsertSpecs = MappingProxyType(
+KInsertSpecs = MappingProxyType(
     {
         "Contents/CMgr": (1766, 424),
         "Contents/Config-0": (760, 594),
@@ -29,10 +29,10 @@ InsertSpecs = MappingProxyType(
 )
 
 # five traced occurrences provide four complete canonical repeat templates
-TracedCount = 5
+KTracedCount = 5
 
 # config suffix references advance four map entries for every occurrence
-ConfigShiftRefs = frozenset(
+KConfigShiftRefs = frozenset(
     {
         297,
         3337,
@@ -61,13 +61,13 @@ ConfigShiftRefs = frozenset(
 )
 
 # resolved suffix targets after insertion advance eight combined map entries
-ResolvedShift8 = frozenset({1115, 1310, 1344, 2424, 2747, 2990, 3317})
+KResolvedShiftEight = frozenset({1115, 1310, 1344, 2424, 2747, 2990, 3317})
 
-# resolved suffix targets before insertion advance by the four-entry base map
-ResolvedShift4 = frozenset({1493, 4069, 4243, 4330})
+# resolved suffix targets before insertion advance by the four entry base map
+KResolvedShiftFour = frozenset({1493, 4069, 4243, 4330})
 
 # header suffix references advance two map entries for every occurrence stamp
-HeaderShiftRefs = frozenset({257, 382, 384, 390})
+KHeaderShiftRefs = frozenset({257, 382, 384, 390})
 
 
 # one repeated item supplies semantic identity and display translation fields
@@ -85,7 +85,7 @@ class RepeatItem:
 
     # immutable initialization keeps one occurrence coherent across all streams
     def __init__(
-        self,
+        Instance,
         OccurName: str,
         CompPath: str,
         TransX: float = 0.0,
@@ -107,31 +107,31 @@ class RepeatItem:
     ) -> None:
         if len(BasisVals) != 9:
             raise SldprtFormatError("assembly transform basis requires nine values")
-        self.OccurName = OccurName
-        self.CompPath = CompPath
-        self.TransX = TransX
-        self.TransY = TransY
-        self.TransZ = TransZ
-        self.ConfigName = ConfigName
-        self.FileStamp = FileStamp
-        self.BasisVals = BasisVals
+        Instance.OccurName = OccurName
+        Instance.CompPath = CompPath
+        Instance.TransX = TransX
+        Instance.TransY = TransY
+        Instance.TransZ = TransZ
+        Instance.ConfigName = ConfigName
+        Instance.FileStamp = FileStamp
+        Instance.BasisVals = BasisVals
 
 
-# identity transforms retain the compact native mgXform representation
-def _IsIdentityBasis(BasisVals: tuple[float, ...]) -> bool:
+# identity transforms retain the compact native transform representation
+def IsIdentityBasis(BasisVals: tuple[float, ...]) -> bool:
     return BasisVals == (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 
 
 # one operation tuple retains its typed serializer owner and native field value
-def _EmitOps(
-    Operations: Sequence[tuple[int, int, int, str, Any]],
-    Overrides: Mapping[int, Any],
+def EncodeOps(
+    Operations: Sequence[tuple[int, int, int, str, AnyValue]],
+    Overrides: Mapping[int, AnyValue],
     BasePos: int = 0,
     BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
     OutputData = bytearray()
     BasisMap = BasisValues or {}
-    for StartPos, _FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
+    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
         FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
         OutputData.extend(EncodeField(KindName, FieldValue))
         BasisValue = BasisMap.get(StartPos - BasePos)
@@ -143,11 +143,11 @@ def _EmitOps(
 
 
 # logical slicing ignores variable string widths while preserving field order
-def _SliceOps(
+def SliceOps(
     StreamName: str,
     StartPos: int,
     EndPos: int | None = None,
-) -> tuple[tuple[int, int, int, str, Any], ...]:
+) -> tuple[tuple[int, int, int, str, AnyValue], ...]:
     return tuple(
         Operation
         for Operation in StreamPrograms[StreamName]
@@ -156,13 +156,13 @@ def _SliceOps(
 
 
 # stable occurrence hashes give later records unique recovered identifier fields
-def _OccurHash(OccurName: str) -> int:
-    CheckValue = binascii.crc32(OccurName.encode("utf-16le")) & 0x0FFFFFFF
+def OccurHash(OccurName: str) -> int:
+    CheckValue = BinaryAscii.crc32(OccurName.encode("utf-16le")) & 0x0FFFFFFF
     return 0x50000000 | CheckValue
 
 
-# repeated configuration-manager objects advance eight archive map entries
-def _EncodeCMgr(
+# repeated configuration manager objects advance eight archive map entries
+def EncodeCmgr(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
@@ -215,7 +215,7 @@ def _EncodeCMgr(
 
 
 # repeated configuration objects carry occurrence identity and display placement
-def _EncodeConfig(
+def EncodeConfig(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
@@ -303,7 +303,7 @@ def _EncodeConfig(
 
 
 # resolved occurrence links advance from the final occurrence back to the first
-def _EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
+def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
     ItemCount = len(CoreItems)
     BaseShift = 4 * (ItemCount - TracedCount)
     InsertPos, UnitWidth = InsertSpecs["Contents/Config-0-ResolvedFeatures"]
@@ -350,8 +350,8 @@ def _EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
     return PrefixData + bytes(UnitData) + SuffixData
 
 
-# model-header stamps enumerate every occurrence and one shared component file
-def _EncodeHeader(
+# model header stamps enumerate every occurrence and one shared component file
+def EncodeHeader(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],

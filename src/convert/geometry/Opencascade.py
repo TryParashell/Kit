@@ -2384,20 +2384,128 @@ def DecodeLegacy(DataValue: bytes, **LegacyValues: AnyValue) -> BrepModel | None
     )
 
 
-# this alias exists because private shape record consumers need compatibility
-globals()["_ShapeRecord"] = ShapeRecord
+# this definition exists because parser constants and records need compatibility
+def InstallLimits() -> None:
+    globals().update(
+        {
+            "_MAX_BYTES": KMaxBytes,
+            "_MAX_GEOMETRY": KMaxGeometry,
+            "_MAX_SHAPES": KMaxShapes,
+            "_MAX_TOKENS": KMaxTokens,
+            "_MIN_INT32": KMinIntThreeTwo,
+            "_MAX_INT32": KMaxIntThreeTwo,
+            "_TOKEN_PATTERN": KTokenPattern,
+            "_INTEGER_PATTERN": KIntegerPattern,
+            "_FLAGS_PATTERN": KFlagsPattern,
+            "_CONTINUITY_PATTERN": KContinuityPattern,
+            "_INDEXED_CONTINUITY_PATTERN": KIndexedPattern,
+            "_VERSION_LINE": KVersionLine,
+            "_VERSION_LINES": KVersionLines,
+            "_SHAPE_TYPES": KShapeTypes,
+            "_SHAPE_CHILD_TYPES": KShapeChildTypes,
+            "_MAX_RECURSION": KMaxRecursion,
+            "_MAX_VERTEX_EQUIVALENCE_BUCKET": KMaxVertexBucket,
+            "_VERTEX_EQUIVALENCE_DIGITS": KVertexDigits,
+            "_IDENTITY_LOCATION": KIdentityLocation,
+            "_DecodeFailure": DecodeFailure,
+            "_Tokens": Tokens,
+            "_Reference": Reference,
+            "_VertexData": VertexData,
+            "_EdgeData": EdgeData,
+            "_FaceData": FaceData,
+            "_ShapeRecord": ShapeRecord,
+        }
+    )
 
-# this alias exists because private token consumers need compatibility
-globals()["_Tokens"] = Tokens
 
-# this alias exists because private vertex data consumers need compatibility
-globals()["_VertexData"] = VertexData
+# this definition exists because primitive parser helpers need compatibility
+def InstallParser() -> None:
+    globals().update(
+        {
+            "_vector": VectorValue,
+            "_dot": DotValue,
+            "_length": LengthValue,
+            "_cross": CrossValue,
+            "_unit": IsUnit,
+            "_IsFrame": IsFrame,
+            "_count": ReadCount,
+            "_zero_table": ZeroTable,
+            "_reference": ReadReference,
+            "_boolean": IsBoolean,
+            "_numbers": ReadNumbers,
+            "_bounded_product": BoundedProduct,
+            "_positive_index": PositiveIndex,
+            "_location_index": LocationIndex,
+            "_continuity": Continuity,
+            "_curve_geometry": CurveGeometry,
+            "_surface_geometry": SurfaceGeometry,
+            "_curves": ReadCurves,
+            "_polygon3d": PolygonThree,
+            "_polygons_on_triangulations": TriPolygons,
+            "_surfaces": ReadSurfaces,
+            "_triangulations": Triangulations,
+            "_vertex_structure": VertexStructure,
+            "_indexed_continuity": IndexContinuity,
+        }
+    )
 
-# this alias exists because private canonical vertex consumers need compatibility
-globals()["_CanonicalVertexRecords"] = CanonicalVerts
 
-# this alias exists because public decoder consumers need compatibility
-globals()["decode_ascii_brep"] = DecodeLegacy
+# this definition exists because location parser helpers need compatibility
+def InstallLocals() -> None:
+    globals().update(
+        {
+            "_location_multiply": LocationProduct,
+            "_location_power": LocationPower,
+            "_normalized_vector": NormalizeVector,
+            "_orthogonalized_vectors": OrthoVectors,
+            "_location_transform": ParseTransform,
+            "_location_product": ProductLocation,
+            "_location_inverse": InverseLocation,
+            "_location_matrix_power": MatrixPower,
+            "_model_locations": ModelLocations,
+            "_location_scale": LocationScale,
+            "_location_point": LocationPoint,
+            "_location_direction": ApplyDirection,
+            "_located_model_inputs": LocatedInputs,
+            "_locations": ReadLocations,
+        }
+    )
 
-# this alias exists because public validator consumers need compatibility
-globals()["is_structurally_valid_ascii_brep"] = IsValidBrep
+
+# this definition exists because topology parser helpers need compatibility
+def InstallShapes() -> None:
+    globals().update(
+        {
+            "_edge_structure": EdgeStructure,
+            "_face_structure": FaceStructure,
+            "_structural_reference": StructureRef,
+            "_shape_structure": ShapeStructure,
+            "_vertex_geometry": VertexGeometry,
+            "_edge_geometry": EdgeGeometry,
+            "_face_geometry": FaceGeometry,
+            "_shape_records": ShapeRecords,
+            "_ApplyLocations": ApplyLocations,
+            "_CanonicalVertexRecords": CanonicalVerts,
+            "_OrderWireUses": OrderWireUses,
+        }
+    )
+
+
+# this definition exists because model entry points need compatibility
+def InstallModels() -> None:
+    globals().update(
+        {
+            "_opposite": Opposite,
+            "_compose": Compose,
+            "_model": BuildModel,
+            "decode_ascii_brep": DecodeLegacy,
+            "is_structurally_valid_ascii_brep": IsValidBrep,
+        }
+    )
+
+
+InstallLimits()
+InstallParser()
+InstallLocals()
+InstallShapes()
+InstallModels()
