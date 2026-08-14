@@ -1826,145 +1826,220 @@ def FaceUnchanged(Records: Mapping[int, tuple[int, int, int, int]], ValueRecords
         Unchanged.pop(Owner, None)
     return Unchanged
 
-# this declaration exists because focused behavior needs one stable owner
+# scan record storage separates discovered records from topology destination tables
+@Dataclass(slots=True)
+class ScanRecords:
+    KLoopCandidates: list[TopologyRecord] = Field(default_factory=list)
+    KIntersections: dict[int, IntersectRecord] = Field(default_factory=dict)
+    KCharts: dict[int, ChartRecord] = Field(default_factory=dict)
+    KTerms: dict[int, TermRecord] = Field(default_factory=dict)
+    KSupportUv: dict[int, SupportUvRecord] = Field(default_factory=dict)
+    KCompactSupportUv: dict[int, CompactUvRecord] = Field(default_factory=dict)
+    KBSurfaces: dict[int, BSurfaceRecord] = Field(default_factory=dict)
+    KNurbsSurfaces: dict[int, NurbsSurfRecord] = Field(default_factory=dict)
+    KSurfData: dict[int, SurfaceRecord] = Field(default_factory=dict)
+    KBCurves: dict[int, BCurveRecord] = Field(default_factory=dict)
+    KNurbsCurves: dict[int, NurbsCurveRec] = Field(default_factory=dict)
+    KCurveData: dict[int, CurveRecord] = Field(default_factory=dict)
+    KTrimmedCurves: dict[int, TrimCurveRecord] = Field(default_factory=dict)
+    KFloatArrays: dict[int, FloatArray] = Field(default_factory=dict)
+    KShortArrays: dict[int, ShortArray] = Field(default_factory=dict)
+
+
+# ambiguity storage tracks duplicate identifiers without polluting parsed record ownership
+@Dataclass(slots=True)
+class ScanAmbiguous:
+    KIntersections: set[int] = Field(default_factory=set)
+    KCharts: set[int] = Field(default_factory=set)
+    KTerms: set[int] = Field(default_factory=set)
+    KSupportUv: set[int] = Field(default_factory=set)
+    KCompactSupportUv: set[int] = Field(default_factory=set)
+    KBSurfaces: set[int] = Field(default_factory=set)
+    KNurbsSurfaces: set[int] = Field(default_factory=set)
+    KSurfData: set[int] = Field(default_factory=set)
+    KBCurves: set[int] = Field(default_factory=set)
+    KNurbsCurves: set[int] = Field(default_factory=set)
+    KCurveData: set[int] = Field(default_factory=set)
+    KTrimmedCurves: set[int] = Field(default_factory=set)
+    KFloatArrays: set[int] = Field(default_factory=set)
+    KShortArrays: set[int] = Field(default_factory=set)
+
+
+# scan budget storage enforces bounded work across sampled and spline records
+@Dataclass(slots=True)
+class ScanBudget:
+    KChartPointCount: int = 0
+    KSplineScalarCount: int = 0
+    KIsValid: bool = True
+
+
+# partition scanning coordinates focused record phases and final geometry resolution
 def ScanPartRecords(BodyData: bytes) -> RecordTables | None:
-    Tables = RecordTables({}, {}, {}, {}, {}, {}, {}, {}, {}, BodyData.startswith(b'\x00\x00\x00\x00\x00e\x00\x02') or BodyData.startswith(b'\x00\x00\x00\x00\x00\x0c\x00\x02'))
-    LoopCandidates: list[TopologyRecord] = []
-    Intersections: dict[int, IntersectRecord] = {}
-    Charts: dict[int, ChartRecord] = {}
-    Terms: dict[int, TermRecord] = {}
-    SupportUv: dict[int, SupportUvRecord] = {}
-    CompactSupportUv: dict[int, CompactUvRecord] = {}
-    BSurfaces: dict[int, BSurfaceRecord] = {}
-    NurbsSurfaces: dict[int, NurbsSurfRecord] = {}
-    SurfData: dict[int, SurfaceRecord] = {}
-    BCurves: dict[int, BCurveRecord] = {}
-    NurbsCurves: dict[int, NurbsCurveRec] = {}
-    CurveData: dict[int, CurveRecord] = {}
-    TrimmedCurves: dict[int, TrimCurveRecord] = {}
-    FloatArrays: dict[int, FloatArray] = {}
-    ShortArrays: dict[int, ShortArray] = {}
-    AmbiguousIntersections: set[int] = set()
-    AmbiguousCharts: set[int] = set()
-    AmbiguousTerms: set[int] = set()
-    AmbiguousSupportUv: set[int] = set()
-    AmbiguousCompactSupportUv: set[int] = set()
-    AmbiguousBSurfaces: set[int] = set()
-    AmbiguousNurbsSurfaces: set[int] = set()
-    AmbiguousSurfData: set[int] = set()
-    AmbiguousBCurves: set[int] = set()
-    AmbiguousNurbsCurves: set[int] = set()
-    AmbiguousCurveData: set[int] = set()
-    AmbiguousTrimmedCurves: set[int] = set()
-    AmbiguousFloatArrays: set[int] = set()
-    AmbiguousShortArrays: set[int] = set()
-    ChartPointCount = 0
-    SplineScalarCount = 0
+    IsVtwelve = BodyData.startswith(b'\x00\x00\x00\x00\x00e\x00\x02') or BodyData.startswith(b'\x00\x00\x00\x00\x00\x0c\x00\x02')
+    Tables = RecordTables({}, {}, {}, {}, {}, {}, {}, {}, {}, IsVtwelve)
+    Records, Ambiguous, Budget = ScanRecords(), ScanAmbiguous(), ScanBudget()
     for OffsetData in range(max(0, len(BodyData) - 1)):
         if BodyData[OffsetData] != 0:
             continue
-        KindValueData = BodyData[OffsetData + 1]
-        Topology: tuple[dict[int, TopologyRecord], TopologyRecord | None] | None = None
-        if KindValueData == 14:
-            Topology = (Tables.bridges, ParseBridge(BodyData, OffsetData, AllowNullOwner=Tables.v12_partition, AllowTolerance=Tables.v12_partition))
-        elif KindValueData == 15:
-            Record = ParseLoop(BodyData, OffsetData)
-            if Record is not None:
-                LoopCandidates.append(Record)
-        elif KindValueData == 16:
-            Topology = (Tables.edge_uses, ParseEdgeUse(BodyData, OffsetData, AllowTolerance=Tables.v12_partition))
-        elif KindValueData == 17:
-            Topology = (Tables.coedges, ParseCoedge(BodyData, OffsetData))
-        elif KindValueData == 18:
-            Topology = (Tables.vertex_uses, ParseVertexUse(BodyData, OffsetData))
-        elif KindValueData == 29:
-            Topology = (Tables.points, ParsePoint(BodyData, OffsetData) or ParsePoint(BodyData, OffsetData, True))
-        if Topology is not None:
-            Target, Record = Topology
-            if Record is not None:
-                Target.setdefault(Record.attribute, Record)
-        Record = ParseCompactUv(BodyData, OffsetData)
-        if Record is not None:
-            StoreUniqueMut(CompactSupportUv, AmbiguousCompactSupportUv, Record.attribute, Record)
-        if KindValueData == 38:
-            Record = ParseInterRec(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(Intersections, AmbiguousIntersections, Record.attribute, Record)
-        if KindValueData == 40:
-            Record = ParseChart(BodyData, OffsetData)
-            if Record is not None:
-                ChartPointCount += len(Record.points)
-                if ChartPointCount > 4000000:
-                    return None
-                StoreUniqueMut(Charts, AmbiguousCharts, Record.attribute, Record)
-        if KindValueData == 41:
-            Record = ParseTermRecord(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(Terms, AmbiguousTerms, Record.attribute, Record)
-        if KindValueData in {30, 31, 32, 50, 51, 52, 53, 54}:
-            Carrier = ParseCarrier(BodyData, OffsetData)
-            if Carrier is not None:
-                Target = Tables.curves if KindValueData < 50 else Tables.surfaces
-                Target[Carrier[0]] = Carrier[1]
-        if KindValueData == 81:
-            Entity = ParseEntity(BodyData, OffsetData)
-            if Entity is not None:
-                Tables.entities[Entity.attribute] = Entity
-        if KindValueData == 204:
-            Record = ParseSupportRec(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(SupportUv, AmbiguousSupportUv, Record.attribute, Record)
-        if KindValueData == 124:
-            Record = ParseBSurface(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(BSurfaces, AmbiguousBSurfaces, Record.attribute, Record)
-        if KindValueData == 126:
-            Record = ParseNurbsSurf(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(NurbsSurfaces, AmbiguousNurbsSurfaces, Record.attribute, Record)
-        if KindValueData == 125:
-            Record = ParseSurfaceDat(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(SurfData, AmbiguousSurfData, Record.attribute, Record)
-        if KindValueData == 134:
-            Record = ParseBCurve(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(BCurves, AmbiguousBCurves, Record.attribute, Record)
-        if KindValueData == 136:
-            Record = ParseNurbsCurve(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(NurbsCurves, AmbiguousNurbsCurves, Record.attribute, Record)
-        if KindValueData == 135:
-            Record = ParseCurveData(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(CurveData, AmbiguousCurveData, Record.attribute, Record)
-        if KindValueData == 133:
-            Record = ParseTrimCurve(BodyData, OffsetData)
-            if Record is not None:
-                StoreUniqueMut(TrimmedCurves, AmbiguousTrimmedCurves, Record.attribute, Record)
-        if KindValueData in {45, 128}:
-            Record = ParseFloatArray(BodyData, OffsetData, KindValueData)
-            if Record is not None:
-                SplineScalarCount += len(Record.values)
-                if SplineScalarCount > 8000000:
-                    return None
-                StoreUniqueMut(FloatArrays, AmbiguousFloatArrays, Record.attribute, Record)
-        if KindValueData == 127:
-            Record = ParseShortArray(BodyData, OffsetData)
-            if Record is not None:
-                SplineScalarCount += len(Record.values)
-                if SplineScalarCount > 8000000:
-                    return None
-                StoreUniqueMut(ShortArrays, AmbiguousShortArrays, Record.attribute, Record)
-        if sum((len(Values) for Values in (Tables.bridges, Tables.loops, Tables.edge_uses, Tables.coedges, Tables.vertex_uses, Tables.points, Tables.curves, Tables.surfaces, Tables.entities, Intersections, Charts, Terms, SupportUv, CompactSupportUv, BSurfaces, NurbsSurfaces, SurfData, BCurves, NurbsCurves, CurveData, TrimmedCurves, FloatArrays, ShortArrays))) > 1000000:
+        ScanRecordMut(BodyData, OffsetData, Tables, Records, Ambiguous, Budget)
+        if not Budget.KIsValid:
             return None
+    ScanInlineMut(BodyData, Records, Ambiguous)
+    ResolveScansMut(BodyData, Tables, Records)
+    Loops = {Record.attribute: Record for Record in Records.KLoopCandidates if Record.references[2] in Tables.bridges and (First := Tables.coedges.get(Record.references[1])) is not None and First.references[1] == Record.attribute}
+    setattr(Tables, 'loops', Loops)
+    return Tables
+
+
+# record scanning delegates each binary family while enforcing shared capacity limits
+def ScanRecordMut(BodyData: bytes, OffsetData: int, Tables: RecordTables, Records: ScanRecords, Ambiguous: ScanAmbiguous, Budget: ScanBudget) -> None:
+    KindValueData = BodyData[OffsetData + 1]
+    ScanTopoMut(BodyData, OffsetData, KindValueData, Tables, Records)
+    ScanChartMut(BodyData, OffsetData, KindValueData, Records, Ambiguous, Budget)
+    if not Budget.KIsValid:
+        return
+    ScanCarrierMut(BodyData, OffsetData, KindValueData, Tables)
+    ScanSurfMut(BodyData, OffsetData, KindValueData, Records, Ambiguous)
+    ScanCurveMut(BodyData, OffsetData, KindValueData, Records, Ambiguous)
+    ScanArrayMut(BodyData, OffsetData, KindValueData, Records, Ambiguous, Budget)
+    if Budget.KIsValid and not HasScanCapacity(Tables, Records):
+        Budget.KIsValid = False
+
+
+# topology scanning routes fixed entity kinds into their dedicated ownership tables
+def ScanTopoMut(BodyData: bytes, OffsetData: int, KindValueData: int, Tables: RecordTables, Records: ScanRecords) -> None:
+    Topology: tuple[dict[int, TopologyRecord], TopologyRecord | None] | None = None
+    if KindValueData == 14:
+        Topology = (Tables.bridges, ParseBridge(BodyData, OffsetData, AllowNullOwner=Tables.v12_partition, AllowTolerance=Tables.v12_partition))
+    elif KindValueData == 15:
+        Record = ParseLoop(BodyData, OffsetData)
+        if Record is not None:
+            Records.KLoopCandidates.append(Record)
+    elif KindValueData == 16:
+        Topology = (Tables.edge_uses, ParseEdgeUse(BodyData, OffsetData, AllowTolerance=Tables.v12_partition))
+    elif KindValueData == 17:
+        Topology = (Tables.coedges, ParseCoedge(BodyData, OffsetData))
+    elif KindValueData == 18:
+        Topology = (Tables.vertex_uses, ParseVertexUse(BodyData, OffsetData))
+    elif KindValueData == 29:
+        Topology = (Tables.points, ParsePoint(BodyData, OffsetData) or ParsePoint(BodyData, OffsetData, True))
+    if Topology is not None:
+        Target, Record = Topology
+        if Record is not None:
+            Target.setdefault(Record.attribute, Record)
+
+
+# chart scanning owns intersection samples terms and support parameter records
+def ScanChartMut(BodyData: bytes, OffsetData: int, KindValueData: int, Records: ScanRecords, Ambiguous: ScanAmbiguous, Budget: ScanBudget) -> None:
+    Record = ParseCompactUv(BodyData, OffsetData)
+    if Record is not None:
+        StoreUniqueMut(Records.KCompactSupportUv, Ambiguous.KCompactSupportUv, Record.attribute, Record)
+    if KindValueData == 38:
+        Record = ParseInterRec(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KIntersections, Ambiguous.KIntersections, Record.attribute, Record)
+    if KindValueData == 40:
+        Record = ParseChart(BodyData, OffsetData)
+        if Record is not None:
+            Budget.KChartPointCount += len(Record.points)
+            if Budget.KChartPointCount > 4000000:
+                Budget.KIsValid = False
+                return
+            StoreUniqueMut(Records.KCharts, Ambiguous.KCharts, Record.attribute, Record)
+    if KindValueData == 41:
+        Record = ParseTermRecord(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KTerms, Ambiguous.KTerms, Record.attribute, Record)
+
+
+# analytic carrier scanning restores direct curves surfaces and entity hierarchy records
+def ScanCarrierMut(BodyData: bytes, OffsetData: int, KindValueData: int, Tables: RecordTables) -> None:
+    if KindValueData in {30, 31, 32, 50, 51, 52, 53, 54}:
+        Carrier = ParseCarrier(BodyData, OffsetData)
+        if Carrier is not None:
+            Target = Tables.curves if KindValueData < 50 else Tables.surfaces
+            Target[Carrier[0]] = Carrier[1]
+    if KindValueData == 81:
+        Entity = ParseEntity(BodyData, OffsetData)
+        if Entity is not None:
+            Tables.entities[Entity.attribute] = Entity
+
+
+# surface record scanning retains unique carriers descriptors and data records
+def ScanSurfMut(BodyData: bytes, OffsetData: int, KindValueData: int, Records: ScanRecords, Ambiguous: ScanAmbiguous) -> None:
+    if KindValueData == 204:
+        Record = ParseSupportRec(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KSupportUv, Ambiguous.KSupportUv, Record.attribute, Record)
+    if KindValueData == 124:
+        Record = ParseBSurface(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KBSurfaces, Ambiguous.KBSurfaces, Record.attribute, Record)
+    if KindValueData == 126:
+        Record = ParseNurbsSurf(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KNurbsSurfaces, Ambiguous.KNurbsSurfaces, Record.attribute, Record)
+    if KindValueData == 125:
+        Record = ParseSurfaceDat(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KSurfData, Ambiguous.KSurfData, Record.attribute, Record)
+
+
+# curve record scanning retains unique carriers descriptors data and trimming records
+def ScanCurveMut(BodyData: bytes, OffsetData: int, KindValueData: int, Records: ScanRecords, Ambiguous: ScanAmbiguous) -> None:
+    if KindValueData == 134:
+        Record = ParseBCurve(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KBCurves, Ambiguous.KBCurves, Record.attribute, Record)
+    if KindValueData == 136:
+        Record = ParseNurbsCurve(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KNurbsCurves, Ambiguous.KNurbsCurves, Record.attribute, Record)
+    if KindValueData == 135:
+        Record = ParseCurveData(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KCurveData, Ambiguous.KCurveData, Record.attribute, Record)
+    if KindValueData == 133:
+        Record = ParseTrimCurve(BodyData, OffsetData)
+        if Record is not None:
+            StoreUniqueMut(Records.KTrimmedCurves, Ambiguous.KTrimmedCurves, Record.attribute, Record)
+
+
+# spline array scanning enforces scalar budgets before retaining unique records
+def ScanArrayMut(BodyData: bytes, OffsetData: int, KindValueData: int, Records: ScanRecords, Ambiguous: ScanAmbiguous, Budget: ScanBudget) -> None:
+    if KindValueData in {45, 128}:
+        Record = ParseFloatArray(BodyData, OffsetData, KindValueData)
+        if Record is not None:
+            Budget.KSplineScalarCount += len(Record.values)
+            if Budget.KSplineScalarCount > 8000000:
+                Budget.KIsValid = False
+                return
+            StoreUniqueMut(Records.KFloatArrays, Ambiguous.KFloatArrays, Record.attribute, Record)
+    if KindValueData == 127:
+        Record = ParseShortArray(BodyData, OffsetData)
+        if Record is not None:
+            Budget.KSplineScalarCount += len(Record.values)
+            if Budget.KSplineScalarCount > 8000000:
+                Budget.KIsValid = False
+                return
+            StoreUniqueMut(Records.KShortArrays, Ambiguous.KShortArrays, Record.attribute, Record)
+
+
+# scan capacity bounds aggregate topology and geometry records against resource exhaustion
+def HasScanCapacity(Tables: RecordTables, Records: ScanRecords) -> bool:
+    Groups = (Tables.bridges, Tables.loops, Tables.edge_uses, Tables.coedges, Tables.vertex_uses, Tables.points, Tables.curves, Tables.surfaces, Tables.entities, Records.KIntersections, Records.KCharts, Records.KTerms, Records.KSupportUv, Records.KCompactSupportUv, Records.KBSurfaces, Records.KNurbsSurfaces, Records.KSurfData, Records.KBCurves, Records.KNurbsCurves, Records.KCurveData, Records.KTrimmedCurves, Records.KFloatArrays, Records.KShortArrays)
+    return sum((len(Values) for Values in Groups)) <= 1000000
+
+
+# inline scanning recovers embedded term support and intersection data records
+def ScanInlineMut(BodyData: bytes, Records: ScanRecords, Ambiguous: ScanAmbiguous) -> None:
     Cursor = 0
     TermDescriptor = b'term_use' + KInlineTermTail
     while (Position := BodyData.find(TermDescriptor, Cursor)) >= 0:
         BaseValue = Position + len(TermDescriptor)
         Record = ParseTermPayloa(BodyData, BaseValue, BaseValue)
         if Record is not None:
-            StoreUniqueMut(Terms, AmbiguousTerms, Record.attribute, Record)
+            StoreUniqueMut(Records.KTerms, Ambiguous.KTerms, Record.attribute, Record)
         Cursor = Position + 1
     Cursor = 0
     UvDescriptor = b'values' + KInlineUvTail
@@ -1972,40 +2047,42 @@ def ScanPartRecords(BodyData: bytes) -> RecordTables | None:
         BaseValue = Position + len(UvDescriptor)
         Record = ParseSupportUv(BodyData, BaseValue, BaseValue)
         if Record is not None:
-            StoreUniqueMut(SupportUv, AmbiguousSupportUv, Record.attribute, Record)
+            StoreUniqueMut(Records.KSupportUv, Ambiguous.KSupportUv, Record.attribute, Record)
         Cursor = Position + 1
     Cursor = 0
     while (Position := BodyData.find(b'Z', Cursor)) >= 0:
         Record = ParseInterData(BodyData, Position)
         if Record is not None:
-            StoreUniqueMut(Intersections, AmbiguousIntersections, Record.attribute, Record)
+            StoreUniqueMut(Records.KIntersections, Ambiguous.KIntersections, Record.attribute, Record)
         Cursor = Position + 1
-    for AttrValue, Record in BSurfaces.items():
+
+
+# geometry resolution builds surfaces curves intersections and trims in dependency order
+def ResolveScansMut(BodyData: bytes, Tables: RecordTables, Records: ScanRecords) -> None:
+    for AttrValue, Record in Records.KBSurfaces.items():
         if AttrValue in Tables.surfaces:
             continue
-        SurfValue = ResolveNurbSurf(Record, NurbsSurfaces, SurfData, FloatArrays, ShortArrays)
+        SurfValue = ResolveNurbSurf(Record, Records.KNurbsSurfaces, Records.KSurfData, Records.KFloatArrays, Records.KShortArrays)
         if SurfValue is not None:
             Tables.surfaces[AttrValue] = SurfValue
-    for AttrValue, Record in BCurves.items():
+    for AttrValue, Record in Records.KBCurves.items():
         if AttrValue in Tables.curves:
             continue
-        Curve = ResolveNurbCurv(Record, NurbsCurves, CurveData, FloatArrays, ShortArrays)
+        Curve = ResolveNurbCurv(Record, Records.KNurbsCurves, Records.KCurveData, Records.KFloatArrays, Records.KShortArrays)
         if Curve is not None:
             Tables.curves[AttrValue] = Curve
-    for AttrValue, Record in Intersections.items():
+    for AttrValue, Record in Records.KIntersections.items():
         if AttrValue in Tables.curves:
             continue
-        Curve = ResolveInter(BodyData, Record, Charts, Terms, SupportUv, CompactSupportUv, Tables.surfaces)
+        Curve = ResolveInter(BodyData, Record, Records.KCharts, Records.KTerms, Records.KSupportUv, Records.KCompactSupportUv, Tables.surfaces)
         if Curve is not None:
             Tables.curves[AttrValue] = Curve
-    for AttrValue, Record in TrimmedCurves.items():
+    for AttrValue, Record in Records.KTrimmedCurves.items():
         if AttrValue in Tables.curves:
             continue
         Curve = ResolveTrimCurv(Record, Tables.curves)
         if Curve is not None:
             Tables.curves[AttrValue] = Curve
-    setattr(Tables, 'loops', {Record.attribute: Record for Record in LoopCandidates if Record.references[2] in Tables.bridges and (First := Tables.coedges.get(Record.references[1])) is not None and (First.references[1] == Record.attribute)})
-    return Tables
 
 # this declaration exists because focused behavior needs one stable owner
 def StoreUniqueMut(Target: dict[int, object], Ambiguous: set[int], AttrValue: int, Record: object) -> None:
@@ -3914,6 +3991,8 @@ def BuildBodyTree(Entities: Mapping[int, EntityRecord], OwnerFaces: Mapping[int,
     ShellUses: list[BrepShellUse] = []
     Regions: list[BrepRegion] = []
     Bodies: list[BrepBody] = []
+
+    # this callback exists because local behavior needs one focused transformation
     for RootValue in sorted(Roots, key=lambda ValueData: ValueData.attribute):
         BuildRootMut(RootValue, Entities, OwnerFaces, AssignedFaces, FaceUses, Shells, ShellUses, Regions, Bodies)
     if AssignedFaces != ExpectedFaces:
