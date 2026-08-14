@@ -233,16 +233,10 @@ def StoredCount(NodeValue: ET.Element, NameValue: str, Actual: int, Label: str) 
         raise NativeFreeCad(f"FreeCAD {Label} count does not match its data")
 
 
-# this definition exists because focused behavior needs one stable owner
-def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
-    ObjectsNode = RootValue.find("./Objects")
-    DataNode = RootValue.find("./ObjectData")
-    if ObjectsNode is None or DataNode is None:
-        raise NativeFreeCad("FreeCAD Document.xml has no object graph")
+# this definition validates and indexes native object declarations
+def ParseDecls(ObjectsNode: ET.Element) -> dict[str, tuple[str, int, str, bool]]:
     Declarations = ObjectsNode.findall("./Object")
-    ObjectData = DataNode.findall("./Object")
     DeclaredCount(ObjectsNode, len(Declarations), "object")
-    DeclaredCount(DataNode, len(ObjectData), "object data")
     DeclByName: dict[str, tuple[str, int, str, bool]] = {}
     IdsValue: set[str] = set()
     for Index, NodeValue in enumerate(Declarations):
@@ -265,14 +259,26 @@ def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
             ObjectId,
             NodeValue.get("Touched") == "1",
         )
+    return DeclByName
+
+
+# this definition validates and indexes native object data records
+def ParseDataMap(DataNode: ET.Element) -> dict[str, ET.Element]:
+    ObjectData = DataNode.findall("./Object")
+    DeclaredCount(DataNode, len(ObjectData), "object data")
     DataByName: dict[str, XmlTree.Element] = {}
     for NodeValue in ObjectData:
         NameValue = NodeValue.get("name", "")
         if not NameValue or NameValue in DataByName:
             raise NativeFreeCad("FreeCAD object data contains duplicate names")
         DataByName[NameValue] = NodeValue
-    if set(DeclByName) != set(DataByName):
-        raise NativeFreeCad("FreeCAD object declarations and data do not match")
+    return DataByName
+
+
+# this definition validates native object dependency relationships
+def ParseDeps(
+    ObjectsNode: ET.Element, DeclByName: Mapping[str, AnyValue]
+) -> dict[str, tuple[str, ...]]:
     Dependencies: dict[str, tuple[str, ...]] = {}
     for NodeValue in ObjectsNode.findall("./ObjectDeps"):
         NameValue = NodeValue.get("Name", "")
@@ -285,29 +291,44 @@ def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
             raise NativeFreeCad("FreeCAD dependency graph has missing objects")
         DeclaredCount(NodeValue, len(Values), "dependency")
         Dependencies[NameValue] = Values
+    return Dependencies
+
+
+# this definition validates and indexes one native objects persistent properties
+def ParseProps(
+    NameValue: str, ObjectElem: ET.Element
+) -> tuple[tuple[ET.Element, ...], dict[str, ET.Element]]:
+    PropertiesElem = ObjectElem.find("./Properties")
+    if PropertiesElem is None:
+        raise NativeFreeCad(f"FreeCAD object {NameValue!r} has no properties")
+    Properties = PropertiesElem.findall("./Property")
+    Transient = tuple(PropertiesElem.findall("./_Property"))
+    StoredCount(PropertiesElem, "Count", len(Properties), "property")
+    StoredCount(PropertiesElem, "TransientCount", len(Transient), "transient property")
+    PropNodes: dict[str, ET.Element] = {}
+    for NodeValue in Properties:
+        PropName = NodeValue.get("name", "")
+        if not PropName or PropName in PropNodes:
+            raise NativeFreeCad(f"FreeCAD object {NameValue!r} has malformed properties")
+        PropNodes[PropName] = NodeValue
+    return (Transient, PropNodes)
+
+
+# this definition combines validated declarations data dependencies and properties
+def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
+    ObjectsNode = RootValue.find("./Objects")
+    DataNode = RootValue.find("./ObjectData")
+    if ObjectsNode is None or DataNode is None:
+        raise NativeFreeCad("FreeCAD Document.xml has no object graph")
+    DeclByName = ParseDecls(ObjectsNode)
+    DataByName = ParseDataMap(DataNode)
+    if set(DeclByName) != set(DataByName):
+        raise NativeFreeCad("FreeCAD object declarations and data do not match")
+    Dependencies = ParseDeps(ObjectsNode, DeclByName)
     Result: list[NativeObject] = []
     for NameValue, (TypeId, Index, ObjectId, Touched) in DeclByName.items():
-        PropNodes: dict[str, XmlTree.Element] = {}
         ObjectElem = DataByName[NameValue]
-        PropertiesElem = ObjectElem.find("./Properties")
-        if PropertiesElem is None:
-            raise NativeFreeCad(f"FreeCAD object {NameValue!r} has no properties")
-        Properties = PropertiesElem.findall("./Property")
-        TransientProperties = tuple(PropertiesElem.findall("./_Property"))
-        StoredCount(PropertiesElem, "Count", len(Properties), "property")
-        StoredCount(
-            PropertiesElem,
-            "TransientCount",
-            len(TransientProperties),
-            "transient property",
-        )
-        for NodeValue in Properties:
-            PropName = NodeValue.get("name", "")
-            if not PropName or PropName in PropNodes:
-                raise NativeFreeCad(
-                    f"FreeCAD object {NameValue!r} has malformed properties"
-                )
-            PropNodes[PropName] = NodeValue
+        TransientProperties, PropNodes = ParseProps(NameValue, ObjectElem)
         Result.append(
             NativeObject(
                 NameValue,
