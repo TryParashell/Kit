@@ -31,14 +31,8 @@ from interchange import (
     frozen_mapping,
 )
 
-from .container import Cfv2Archive, Cfv2FormatError, Cfv2Stream
-from .format import (
-    DOCUMENT_TYPE_BY_SUFFIX,
-    INFO,
-    PART_DOCUMENT_TYPE,
-    PRODUCT_DOCUMENT_TYPE,
-    SUFFIX_BY_DOCUMENT_TYPE,
-)
+from convert.adapters.catia.Container import Cfv2Archive, Cfv2FormatError, Cfv2Stream
+from convert.adapters.catia.Format import DOCUMENT_TYPE_BY_SUFFIX, INFO, PART_DOCUMENT_TYPE, PRODUCT_DOCUMENT_TYPE, SUFFIX_BY_DOCUMENT_TYPE
 
 _FORMAT_ID = INFO.format_id
 _PART_SUFFIX = SUFFIX_BY_DOCUMENT_TYPE[PART_DOCUMENT_TYPE]

@@ -11,7 +11,7 @@ for candidate in (HERE, ROOT, ROOT / "src"):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
 
-from convert.adapters.solidworks.container import SldprtArchive, _template_fields
+from convert.adapters.solidworks.container.Container import SldprtArchive, _template_fields
 from convert.adapters.solidworks import resolved as resolvedlib
 
 import carchive
@@ -85,7 +85,7 @@ def rebuild(
     *,
     drop: frozenset[str] = frozenset({PARTITION}),
 ) -> bytes:
-    from convert.adapters.solidworks.container import build_sldprt
+    from convert.adapters.solidworks.container.Container import build_sldprt
 
     items: list[tuple[str, bytes]] = []
     for name in donor.order:

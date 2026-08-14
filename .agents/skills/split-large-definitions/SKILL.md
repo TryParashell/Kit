@@ -3,7 +3,7 @@ name: split-large-definitions
 description: "Split substantial declarations into focused files with exact symbol imports. Use when adding or changing code structure, modules, classes, functions, variables, registries, or imports."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/split-large-definitions.md"
+  source: ".kiro/steering/SplitLargeDefinitions.md"
   kiro-inclusion: "always"
 ---
 
@@ -39,8 +39,9 @@ Small declarations may share a file only when they form one inseparable concept 
 
 ## Explicit imports
 
-- Import the exact symbol from its defining module such as `from package.feature_writer import FeatureWriter`.
-- Never use wildcard imports.
+- Import the exact symbol from its defining module such as `from Package.FeatureWriter import FeatureWriter`.
+- Never use wildcard imports in production tests scripts generated code or package facades.
+- Treat the steering checkers `IMP001` diagnostic as a merge blocking failure.
 - Never import a broad package or module when only one or two symbols are required.
 - Never depend on accidental transitive imports.
 - Never create convenience barrel modules that re export unrelated implementation symbols.

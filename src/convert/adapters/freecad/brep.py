@@ -2331,7 +2331,7 @@ def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
 def proven_ascii_brep(data: bytes) -> bytes | None:
     if not isinstance(data, bytes):
         raise TypeError("data must be bytes")
-    from convert.opencascade import decode_ascii_brep
+    from convert.geometry.Opencascade import decode_ascii_brep
 
     model = decode_ascii_brep(data, id_prefix="freecad:proof")
     if model is None:

@@ -6,15 +6,8 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from .adapter import (
-    FreeCADAdapter,
-    FreeCADAdapterError,
-    document_to_manifest,
-    extract_freecad_manifest,
-    read_freecad,
-    write_freecad,
-)
-from .archive import build_fcstd_archive, extract_manifest_from_fcstd
+from convert.adapters.freecad.Adapter import FreeCADAdapter, FreeCADAdapterError, document_to_manifest, extract_freecad_manifest, read_freecad, write_freecad
+from convert.adapters.freecad.Archive import build_fcstd_archive, extract_manifest_from_fcstd
 
 __all__ = [
     "FreeCADAdapter",

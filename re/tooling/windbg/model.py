@@ -220,7 +220,7 @@ def node_offsets(model: Model) -> list[int]:
 def main() -> int:
     arguments = sys.argv[1:]
     if len(arguments) % 3:
-        raise SystemExit("usage: model.py <label> <part> <log> [...]")
+        raise SystemExit("usage: Model.py <label> <part> <log> [...]")
     for position in range(0, len(arguments), 3):
         label = arguments[position]
         part = Path(arguments[position + 1]).resolve()

@@ -92,7 +92,7 @@ from .brep import (
     SphereSurface,
     TorusSurface,
 )
-from .common import FreezeMapping, KJsonScalar, KJsonValue
+from interchange.core.Common import FreezeMapping, KJsonScalar, KJsonValue
 from .document import (
     AddWrapperMeta,
     CadDocument,
@@ -103,30 +103,16 @@ from .document import (
     GetSemanticMeta,
     InferCaps,
 )
-from .enum_document import Capability, Severity
-from .enum_features import BooleanOp, FeatureKind
-from .enum_geometry import ConstraintKind, GeometryKind
-from .enum_units import UnitSystem
-from .enum_values import ParameterRole, ValueKind
-from .feature_body import DesignBody
-from .feature_contract import FeatureDef
-from .feature_extrude import ExtrudeEnd, ExtrudeFeature
-from .feature_kinds import (
-    ChamferFeature,
-    CirclePattern,
-    CombineFeature,
-    DomeFeature,
-    FilletFeature,
-    HoleFeature,
-    LinearPattern,
-    MoveBodyFeature,
-    NativeFeature,
-    RefPlaneFeature,
-    RevolveFeature,
-    ScaleFeature,
-    ShellFeature,
-)
-from .feature_step import FeatureCfgState, FeatureStep
+from interchange.enums.EnumDocument import Capability, Severity
+from interchange.enums.EnumFeatures import BooleanOp, FeatureKind
+from interchange.enums.EnumGeometry import ConstraintKind, GeometryKind
+from interchange.enums.EnumUnits import UnitSystem
+from interchange.enums.EnumValues import ParameterRole, ValueKind
+from interchange.features.FeatureBody import DesignBody
+from interchange.features.FeatureContract import FeatureDef
+from interchange.features.FeatureExtrude import ExtrudeEnd, ExtrudeFeature
+from interchange.features.FeatureKinds import ChamferFeature, CirclePattern, CombineFeature, DomeFeature, FilletFeature, HoleFeature, LinearPattern, MoveBodyFeature, NativeFeature, RefPlaneFeature, RevolveFeature, ScaleFeature, ShellFeature
+from interchange.features.FeatureStep import FeatureCfgState, FeatureStep
 from .geometry import (
     ArcEllipseGeom,
     ArcGeometry,
@@ -150,19 +136,19 @@ from .geometry import (
 )
 from .history import AdapterCaps
 from .mesh import SurfaceMesh
-from .payload_migrate import MigratePayload
-from .payload_record import BrepPayload
-from .payload_roles import PayloadRole
-from .package_exports import KPackageExports
-from .python_compat import BindTypeGlobals
-from .record_config import Configuration, ParamOverride
-from .record_diagnostic import Diagnostic
-from .record_parameter import Expression, Parameter, ParameterValue
-from .record_provenance import Provenance, ProvenanceSpan
-from .record_source import CadSource
-from .record_topology import TopologyCounts
+from interchange.payloads.PayloadMigrate import MigratePayload
+from interchange.payloads.PayloadRecord import BrepPayload
+from interchange.payloads.PayloadRoles import PayloadRole
+from interchange.core.PackageExports import KPackageExports
+from interchange.compatibility.PythonCompat import BindTypeGlobals
+from interchange.records.RecordConfig import Configuration, ParamOverride
+from interchange.records.RecordDiagnostic import Diagnostic
+from interchange.records.RecordParameter import Expression, Parameter, ParameterValue
+from interchange.records.RecordProvenance import Provenance, ProvenanceSpan
+from interchange.records.RecordSource import CadSource
+from interchange.records.RecordTopology import TopologyCounts
 from .serialization import RegMigration, RegisterTypes
-from .vectors import BoundingBox, PlaneVector, SpaceVector, Transform
+from interchange.geometry.models.Vectors import BoundingBox, PlaneVector, SpaceVector, Transform
 
 globals().update(
     {

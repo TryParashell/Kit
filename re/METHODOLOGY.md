@@ -61,7 +61,7 @@ initialiser into a map.
 > **Generalisable lesson:** when a value looks like a hash of another value and every mixer search
 > fails, stop searching for arithmetic and go look for a table. Search the binaries for the known
 > constants and see what references them. Ten minutes of `findstr`-equivalent beats a week of
-> cryptanalysis. `re/tooling/ghidra/scan_consts.py` and `findtable.py` are that ten minutes,
+> cryptanalysis. `re/tooling/ghidra/Generation/ScanConsts.py` and `Findtable.py` are that ten minutes,
 > generalised.
 
 ---
@@ -87,7 +87,7 @@ Build this before you need it. Everything downstream is measured against it.
    stacked crash handlers were what actually broke the install.
 5. **Kill the modal dialogs.** The app showed a *"Toolbar information is inconsistent"* startup
    modal that blocked COM registration entirely. A 40-line watchdog thread that enumerates windows
-   and clicks OK (`re/tooling/harness/dismiss.py`) unblocked the entire measurement programme.
+   and clicks OK (`re/tooling/harness/Dismiss.py`) unblocked the entire measurement programme.
 6. **Absolute paths.** Relative paths silently returned a null model rather than erroring.
 
 **Automation surface, in preference order:** the vendor's COM/.NET/scripting API → a headless CLI →
@@ -144,7 +144,7 @@ app. No amount of static diffing recovers that arithmetic; you need to watch the
 1. Install console debugging tools (`cdb`, not the GUI — it must be scriptable and unattended).
 2. Find the reader's entry points **in the export tables**. This is the step to try before any
    decompilation: our target exported its entire archive API by name, so breakpoints needed no
-   symbols at all. `re/tooling/ghidra/exports.py` dumps PE exports.
+   symbols at all. `re/tooling/ghidra/Exports.py` dumps PE exports.
 3. Breakpoint the object-read entry, and log the stream position and the map counter at every hit.
    Those two numbers are the entire prize: differencing consecutive positions gives every object's
    byte span, and the counter column gives the renumbering table.
@@ -194,11 +194,11 @@ out a dot-prefixed scratch directory. A directory junction fixes it without movi
    Untouched, a `double` read and a `char` read look identical. A script that renames each overload
    and import thunk to `get_<type>` using the demangled parameter type makes every field width
    unambiguous at a glance. This one script is the difference between usable and useless output.
-   (`re/tooling/ghidra/scripts/RenameArchiveApi.java`)
+   (`re/tooling/ghidra/Java/RenameArchiveApi.java`)
 2. **Find the real virtual slot.** The reader dispatched **vtable slot 5**, the vendor's own
    `Serialize`, not the framework's slot 2. Dump every RTTI-named vftable, map class → slot-5
    address, and you get an index of 2607 classes to their serialisers. From then on, any class is
-   one lookup away. (`DumpVtableSlot.java`, `serialize_map.py`)
+   one lookup away. (`DumpVtableSlot.java`, `SerializeMap.py`)
 3. **Read the *write* path to get field names.** The store branch often writes a string key
    alongside the value for a database/debug path. That is how `Value`, `EntIndex` and others got
    authoritative names instead of guesses. Exported accessors (`getFoo`) decompile to one

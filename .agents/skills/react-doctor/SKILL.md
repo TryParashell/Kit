@@ -3,7 +3,7 @@ name: react-doctor
 description: "Run React Doctor and resolve introduced regressions. Use when changing React source files, components, hooks, or JSX."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/react-doctor.md"
+  source: ".kiro/steering/ReactDoctor.md"
   kiro-inclusion: "always"
 ---
 

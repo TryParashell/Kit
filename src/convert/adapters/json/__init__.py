@@ -6,6 +6,6 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from .adapter import JsonAdapter
+from convert.adapters.json.Adapter import JsonAdapter
 
 __all__ = ["JsonAdapter"]

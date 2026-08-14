@@ -3,7 +3,7 @@ name: no-cad-runtime
 description: "Keep CAD applications and vendor automation out of production runtime paths. Use when implementing, testing, or reviewing CAD parsing, conversion, or writing workflows."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/no-cad-runtime.md"
+  source: ".kiro/steering/NoCadRuntime.md"
   kiro-inclusion: "always"
 ---
 
@@ -26,7 +26,7 @@ CAD software may be used only in isolated development and test workflows as an o
 - open generated output and measure loadability, bodies, mass properties, feature trees, editability, and rebuild behavior;
 - collect debugger, decompiler, or runtime traces needed to reverse engineer a format.
 
-Oracle execution must remain outside production code paths and must be explicitly invoked as testing or reverse-engineering tooling. Oracle-produced vendor bytes must never be embedded, copied, patched, packaged, or used as runtime templates. The writer must emit every byte from first-principles format knowledge under `no-donor-blocks.md`.
+Oracle execution must remain outside production code paths and must be explicitly invoked as testing or reverse-engineering tooling. Oracle-produced vendor bytes must never be embedded, copied, patched, packaged, or used as runtime templates. The writer must emit every byte from first-principles format knowledge under `NoDonorBlocks.md`.
 
 ## FORBIDDEN RUNTIME DEPENDENCIES
 

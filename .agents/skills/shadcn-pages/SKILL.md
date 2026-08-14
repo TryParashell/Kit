@@ -3,7 +3,7 @@ name: shadcn-pages
 description: "Follow the shadcn UI CLI-first composition method. Use when adding UI primitives or building React and Next.js pages."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/shadcn-pages.md"
+  source: ".kiro/steering/ShadcnPages.md"
   kiro-inclusion: "always"
 ---
 
@@ -69,9 +69,9 @@ shadcn's "Open Code" principle means the `components/ui/*` source is yours to OW
 
 This does NOT override the workspace boundary rules:
 
-- Do NOT silently patch `components/ui/*` to work around a bug, to "fix" a React Doctor / lint finding, or for convenience. The `react-doctor.md` boundary and `component-architecture.md` Rule 2 still apply: treat generated primitives as protected.
+- Do NOT silently patch `components/ui/*` to work around a bug, to "fix" a React Doctor / lint finding, or for convenience. The `ReactDoctor.md` boundary and `ComponentArchitecture.md` Rule 2 still apply: treat generated primitives as protected.
 - Default to composition: wrap the primitive in your OWN dedicated component file and extend via props / `className` / `cn()`.
-- Only edit `components/ui/*` source for the legitimate shadcn extension pattern (adding a variant/token to the design system), and when doing so get explicit user approval first per `component-architecture.md`. State the file and the exact change, then wait for a clear yes.
+- Only edit `components/ui/*` source for the legitimate shadcn extension pattern (adding a variant/token to the design system), and when doing so get explicit user approval first per `ComponentArchitecture.md`. State the file and the exact change, then wait for a clear yes.
 - Never reformat, restyle, or refactor generated primitives.
 
 ## Rule 6: Page Anatomy
@@ -80,7 +80,7 @@ Every page is composed, not pasted:
 
 1. Identify the use case and pick the primitives from the "Reach for this first" table.
 2. Install missing primitives via the CLI.
-3. Build each distinct UI unit as its own dedicated component file (per `component-architecture.md` — no inline/nested components).
+3. Build each distinct UI unit as its own dedicated component file (per `ComponentArchitecture.md` — no inline/nested components).
 4. Lay out surfaces with tokens and one density system.
 5. Design the empty, loading, and error states — not just the happy path.
 6. Use `AlertDialog` for anything destructive.
@@ -100,7 +100,7 @@ Before considering any page or React view complete, confirm:
 2. Surfaces use theme tokens; no ad-hoc hex or arbitrary palette classes for foundational surfaces.
 3. One accent, consistent radius, one density system, consistent icon sizing.
 4. Empty/loading/error states are designed; destructive flows use `AlertDialog`.
-5. Every component lives in its own dedicated file (per `component-architecture.md`).
+5. Every component lives in its own dedicated file (per `ComponentArchitecture.md`).
 6. No generated `components/ui/*` source was modified without explicit approval.
 
 If any check fails, the work is not done. Fix it before reporting completion.

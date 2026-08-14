@@ -31,7 +31,7 @@ SOLIDWORKS. Claims marked PARTIAL or OPAQUE are called out as such.
 | `moCompFeature_c` is the feature tree: a fixed-stride array, one entry per tree node, carrying the `KeyWords` id | **CONFIRMED**, 51/51 corpus files           |
 | The `xx aa 70 6a` / `xx af 70 6a` "object-index noise" of report 2 §11 is a `u32` Unix `time_t`                  | **CONFIRMED**                               |
 | `ff ff 01 00` is `wNewClassTag` (`0xFFFF`) + `u16` schema; schema is 1 for every class in every corpus file      | **CONFIRMED**                               |
-| The reader is not MFC's `CArchive`; it is SOLIDWORKS' own `su_CArchive`, exported by name from `swccu.dll`       | **CONFIRMED** (see `WINDBG.md`)             |
+| The reader is not MFC's `CArchive`; it is SOLIDWORKS' own `su_CArchive`, exported by name from `swccu.dll`       | **CONFIRMED** (see `Windbg.md`)             |
 | `swXmlContents/KeyWords` starts with a `0x86` tag byte and uses CRLF, not a UTF-8 BOM                            | **CONFIRMED**, and a BOM crashes SOLIDWORKS |
 | boss ↔ cut is **not** selected by the tree flags word — it is opaque                                             | measured, corrects report 2 §7.2            |
 | end condition (blind ↔ MidPlane) and direction are writable in place for any feature                             | measured, exact                             |
@@ -45,7 +45,7 @@ SOLIDWORKS. Claims marked PARTIAL or OPAQUE are called out as such.
 ## 1. Container framing (context, unchanged)
 
 The `.SLDPRT` is a SOLIDWORKS-proprietary archive of raw-deflate streams with a nibble-swapped
-name encoding. `src/convert/adapters/solidworks/container.py` reads and writes it;
+name encoding. `src/convert/adapters/solidworks/container/Container.py` reads and writes it;
 `build_sldprt(streams, template=<donor bytes>)` must be given a template because the
 `(file_id, local/central/end signature)` triplet has not been inverted. A wrong triplet
 hard-crashes SOLIDWORKS.
@@ -62,7 +62,7 @@ so every volume quoted is a genuine rebuild from the feature stream.
 ### 2.1 Tag grammar — CONFIRMED
 
 The stream is a byte-compatible clone of MFC `CArchive` object serialization. Runtime
-confirmation is in `WINDBG.md`; the tags are:
+confirmation is in `Windbg.md`; the tags are:
 
 | bytes                                                 | meaning                                                                                                    |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -72,7 +72,7 @@ confirmation is in `WINDBG.md`; the tags are:
 | `<u16 t>` with `t & 0x8000 == 0`, `t != 0`            | object _reference_: object map index `t`                                                                   |
 | `7f ff` then `<u32>`                                  | `wBigObjectTag` escape for indices ≥ 0x7fff (not seen in this corpus)                                      |
 
-So the constant `CLASS_MARKER = ff ff 01 00` in `src/convert/adapters/solidworks/format.py` is
+So the constant `CLASS_MARKER = ff ff 01 00` in `src/convert/adapters/solidworks/container/Format.py` is
 really `wNewClassTag` followed by **schema 1**. `probe_tags.py` scanned for `ff ff <any schema>`
 across seven representative files and found schema 1 for all 41–48 classes in each — so the
 existing 4-byte constant is safe for this SOLIDWORKS version, but it is a schema filter, not
@@ -111,7 +111,7 @@ the same class, three different indices, because more objects precede its defini
 
 Renumbering is mechanical _if_ you can enumerate the tokens, and enumerating them needs the
 object segmentation, which needs per-class `Serialize` layouts. That is the remaining blocker
-(§8). `WINDBG.md` describes the runtime route that lifts it.
+(§8). `Windbg.md` describes the runtime route that lifts it.
 
 ---
 
@@ -132,7 +132,7 @@ so `record_length == 93 + 119 * (n - 1)` where `n` is the number of tree nodes i
 `sketch1, feature1, sketch2, feature2, …`. That is **2 entries per feature, not one per tree
 node**: the 20-node single-feature baseline carries exactly two entries, for node ids 26 and 32,
 and the folders, the three planes and the Origin get no entry at all
-(`../records/RESOLVEDFEATURES.md` §5).
+(`../records/Resolvedfeatures.md` §5).
 
 Verified by `probe_entries.py` on all 51 corpus files: the length equation holds in every file,
 and the id sequence read out of the array equals the `feature_id` field of the corresponding
@@ -203,7 +203,7 @@ unmarked features 2+ are reachable.
 ### 4.1 Flag words
 
 Mask `0x7FFFFFFF`; bit `0x80000000` is the tree-expanded UI state and carries no geometry
-meaning. Values enumerated across the V8 production corpus (`.rescratch/v8/flagmap.json`) and
+meaning. Values enumerated across the V8 production corpus (`.rescratch/v8/Flagmap.json`) and
 the two authored corpora:
 
 | flags                      | node kind                                   | name stems seen                                     |
@@ -228,7 +228,7 @@ the operation; the operation itself lives in the `moExtrusion_c` / `moICE_c` bod
 `swXmlContents/KeyWords`.
 
 The feature _name_ string is a label. It is variable-length, so changing it moves every
-subsequent offset; `serialize.py` deliberately keeps the skeleton's name and makes `KeyWords`
+subsequent offset; `Serialize.py` deliberately keeps the skeleton's name and makes `KeyWords`
 agree with it rather than the other way round.
 
 ---
@@ -254,7 +254,7 @@ record before it partitions them per sketch exactly (report 2 §6.4, re-verified
 - **Rectangle**: four free points, corner order `(min,min) (max,max) (min,max) (max,min)`,
   strides `178, 162, 162` — the first gap is 16 bytes longer than the other two, so the uniform
   162-byte stride this section used to claim is right for the last two gaps and wrong for the
-  first (`../records/RESOLVEDFEATURES.md` §5). **AUTHORED**.
+  first (`../records/Resolvedfeatures.md` §5). **AUTHORED**.
 - **Circle**: one free point (the centre) plus one on-curve point at exactly **17°**. There is
   no radius field; radius is `hypot(dx, dy)`. **AUTHORED** as
   `centre + r·(cos 17°, sin 17°)`.
@@ -269,7 +269,7 @@ Locate by ordinal among dimension-scalar records, not by class marker.
 Six copies at scalar `+{0, +72, +398, +422, +560, +584}` with signs `(+,+,−,−,+,+)`.
 Copy `+0` is the authored parameter; the other five are the annotation's derived geometry. For a
 plane-supported feature `+72` equals the depth; for a feature sketched on a face at height `h`
-it equals `h + depth`. `serialize.py` writes all six with the plane-supported convention.
+it equals `h + depth`. `Serialize.py` writes all six with the plane-supported convention.
 
 A **ThroughAll** feature has **no** dimension-scalar record at all, and its `<Extrusion>` element
 in `KeyWords` has no `<Dimension>` child.
@@ -329,7 +329,7 @@ prior round-trip proofs left them stale and still got exact volumes.
 | `moLengthParameter_c` (and its unmarked copies) | annotation witness points at scalar `+32/+40/+56/+64/+229/+245`, and scalar `+318 = (extent/2)/5` | derived from the profile's max corner   |
 | the embedded Parasolid                          | the supporting face surface                                                                       | re-resolved on rebuild                  |
 
-`serialize.py` leaves all of these stale by default. That is not laziness — it is a measured
+`Serialize.py` leaves all of these stale by default. That is not laziness — it is a measured
 requirement. Writing the six depth copies with the blind-forward sign pattern
 `(+,+,−,−,+,+)` onto a reversed or MidPlane feature produced 0 bodies, a crash on open, and one
 silently wrong volume (`results.md` §2.2). The sign of scalar `+72` depends on the end condition
@@ -347,7 +347,7 @@ across all 51 files.
 
 ## 7. The XML side streams — fully AUTHORED
 
-Both are plain XML and `serialize.py` emits them from scratch.
+Both are plain XML and `Serialize.py` emits them from scratch.
 
 ### `swXmlContents/KeyWords`
 
@@ -364,7 +364,7 @@ endings are CRLF. Writing a BOM instead of `0x86` makes SOLIDWORKS crash on open
    `Type`. A blind or MidPlane feature has a `<Dimension Name="D1">depth_mm</Dimension>` child;
    a ThroughAll feature has none.
 3. 23 boilerplate `<Feature>` elements (the folders, the three planes, the lights) — a fixed
-   table, reproduced verbatim in `serialize.py::_BOILERPLATE_FEATURES`
+   table, reproduced verbatim in `Serialize.py::_BOILERPLATE_FEATURES`
 4. one `<Sketch id=… Name="Sketch<n>" Dissectable="true"/>` per feature
 5. `<Sketch id="5" Name="Origin" Type="Origin"/>`
 
@@ -380,7 +380,7 @@ line endings, trailing CRLF. `swVersion="18000"`, `swConfigurationFlags="-214328
 ### Ids
 
 The corpus convention is sketch 26 → feature 32 → sketch 33 → feature 40 → sketch 41 →
-feature 47. `serialize.py` can author that sequence (`Part(author_ids=True)`) but defaults to
+feature 47. `Serialize.py` can author that sequence (`Part(author_ids=True)`) but defaults to
 **inheriting** the skeleton's ids, because other inherited streams (`Contents/Config-0`,
 `Contents/CnfgObjs`, `Contents/DisplayLists`) also reference them and were not audited. Ids are
 understood; renumbering them is not proven safe.
@@ -390,8 +390,8 @@ understood; renumbering them is not proven safe.
 ## 8. Historical blocker inventory for an arbitrary feature tree
 
 This list records the state when the grammar study ended. Segmentation, renumbering, container
-signatures, and the supported feature families were subsequently closed by `SEGMENTATION.md`,
-`MULTISTREAM.md`, and the typed programs in `src/convert/adapters/solidworks`. Items describing
+signatures, and the supported feature families were subsequently closed by `Segmentation.md`,
+`Multistream.md`, and the typed programs in `src/convert/adapters/solidworks`. Items describing
 unrecovered arbitrary profiles, supports, end conditions, and feature classes remain real coverage
 limits; they do not permit a donor fallback.
 
@@ -400,12 +400,12 @@ limits; they do not permit a donor fallback.
 2. **Map-index renumbering** (§2.3). Adding or removing a feature changes the object count and
    therefore the class-reference tokens. Without segmentation the tokens cannot be enumerated,
    so they cannot be renumbered.
-3. **Feature count** is therefore bounded by the available skeletons. `serialize.py` covers
+3. **Feature count** is therefore bounded by the available skeletons. `Serialize.py` covers
    1, 2 and 3 features and _refuses_ a 4-feature request with an explicit error rather than
    emitting something that would crash SOLIDWORKS.
 4. **Profile type beyond rectangle and circle.** Polygon, slot and spline profiles use `sg*`
    classes not present in either authored corpus. The V8 production corpus contains them
-   (`.rescratch/v8/vocabulary.txt`, 185 classes) but they were not decoded.
+   (`.rescratch/v8/Vocabulary.txt`, 185 classes) but they were not decoded.
 5. **Sketch support choice.** A writer can pick Front/Top/Right; it cannot pick a face or a user
    reference plane, because that changes the class set and adds the Parasolid blob.
 6. **Boss versus cut.** The tree flags word is an annotation, not the selector (§4.1). The
@@ -425,7 +425,7 @@ limits; they do not permit a donor fallback.
 9. **The container signature triplet.** Superseded: `build_sldprt` now computes the complete
    container from the recovered signature vocabulary and needs no donor template.
 
-Item 1 is the keystone. `WINDBG.md` sets out the runtime route to it and how far it got.
+Item 1 is the keystone. `Windbg.md` sets out the runtime route to it and how far it got.
 
 ---
 
@@ -433,24 +433,24 @@ Item 1 is the keystone. `WINDBG.md` sets out the runtime route to it and how far
 
 ```
 .rescratch/grammar/
-  GRAMMAR.md              this document
-  WINDBG.md               runtime instrumentation
+  Grammar.md              this document
+  Windbg.md               runtime instrumentation
   results.md              every SOLIDWORKS measurement, including failures
-  carchive.py             su_CArchive tag scanner: class definitions, references, strings
-  streamlib.py            donor load / container rebuild / moCompFeature_c parsing
-  serialize.py            the from-scratch writer
+  CArchive.py             su_CArchive tag scanner: class definitions, references, strings
+  Streamlib.py            donor load / container rebuild / moCompFeature_c parsing
+  Serialize.py            the from-scratch writer
   build_skeletons.py      validates and registers the topology skeletons
   author_parts.py         emits the from-scratch parts
   experiments.py          the byte-level capability experiments
   build_experiments.py    builds them
-  measure.py              one fresh SOLIDWORKS subprocess per file
-  measure_one.py          the subprocess: open, rebuild, GetMassProperties
+  Measure.py              one fresh SOLIDWORKS subprocess per file
+  MeasureOne.py          the subprocess: open, rebuild, GetMassProperties
   probe_tags.py           schema survey, class-reference histogram, timestamp identification
   probe_compfeature.py    moCompFeature_c self-similarity and hex dump
   probe_entries.py        moCompFeature_c entry ids vs tree nodes, all 51 files
   probe_xml.py            KeyWords / Features dumps
-  probe_exports.py        PE export table reader
-  probe_su_archive.py     locates su_CArchive across the SOLIDWORKS install
+  probe_Exports.py        PE export table reader
+  probe_su_Archive.py     locates su_CArchive across the SOLIDWORKS install
   probe_modules.py        confirms which MFC runtime SOLIDWORKS loads
   diagnose_a1.py          isolates a single write by building four one-boss variants
   cdb_*.txt               the cdb scripts, verbatim

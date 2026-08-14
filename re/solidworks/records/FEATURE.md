@@ -13,23 +13,23 @@ to you under it immediately and permanently.
 The record that every feature in `Contents/Config-0-ResolvedFeatures` opens with, recovered from
 Ghidra 12.1.2 headless decompilation of `sldmodu.dll` (SOLIDWORKS 2025, licensed install). No
 SOLIDWORKS process, no COM, no debugger. Dump: `.rescratch/ghidra/out/task2.c`, produced by
-`run_dump_task2.ps1` with `spec_task2.txt`; `RenameArchiveApi.java` was already applied and saved
+`RunDumpTaskTwo.ps1` with `SpecTaskTwo.txt`; `RenameArchiveApi.java` was already applied and saved
 to the project, so widths come from `AR_get_<type>` names rather than from guesses.
 
-Confidence words as in `SERIALIZE.md`: **confirmed** = decompiled _and_ the arithmetic reproduces
+Confidence words as in `Serialize.md`: **confirmed** = decompiled _and_ the arithmetic reproduces
 real traced bytes; **partial** = decompiled but no data checks it; **not found**.
 
 ---
 
 ## 0. The actual inheritance chain
 
-`SERIALIZE.md` §4 recorded `moExtrusion_c::Serialize` → `moBodyFeature_c::Serialize` →
+`Serialize.md` §4 recorded `moExtrusion_c::Serialize` → `moBodyFeature_c::Serialize` →
 `FUN_4bb886c0` (unnamed) and stopped there. `FUN_4bb886c0` opens with
 `moModelFeature_c::Serialize(param_1, param_2)`, which resolves the chain in full:
 
 ```
-moExtrusion_c::Serialize        0x4bb8eba0   3 fields   (SERIALIZE.md §4)
- └ moBodyFeature_c::Serialize   0x4bb8aa10   5 fields   (SERIALIZE.md §4)
+moExtrusion_c::Serialize        0x4bb8eba0   3 fields   (Serialize.md §4)
+ └ moBodyFeature_c::Serialize   0x4bb8aa10   5 fields   (Serialize.md §4)
     └ FUN_4bb886c0              (unnamed)    1218 lines, many fields
        └ moModelFeature_c::Ser. 0x4bb96700   1 field
           └ moFeature_c::Ser.   0x4bb8efe0   647 lines, many fields
@@ -38,7 +38,7 @@ moExtrusion_c::Serialize        0x4bb8eba0   3 fields   (SERIALIZE.md §4)
 
 Because each level calls its base **first**, the bytes come out of the stream in the reverse of
 that list: `moNode_c` first, `moExtrusion_c` last. The two `moExtrusion_c` doubles that
-`SERIALIZE.md` §2 uses to close the tail budget are genuinely the last 12 bytes of the whole
+`Serialize.md` §2 uses to close the tail budget are genuinely the last 12 bytes of the whole
 record, and **the first bytes of the whole record are `moNode_c`'s**.
 
 `moNode_c::Serialize` (`0x4c1db8f0`) is not the function that runs for a modern file. Its first
@@ -134,14 +134,14 @@ byte 8274:
  8349 +2   00 00                                  next traced object (null)
 ```
 
-`8329` is byte-for-byte the offset `ANSWERS.md` Q1 reported for `0x40000140` in this part, and
+`8329` is byte-for-byte the offset `Answers.md` Q1 reported for `0x40000140` in this part, and
 `13586` for the second feature is the same layout with a one-character-longer name. The traced
 child span for the `moNodeName_c` class reference is `8293..8349` = **56 bytes**, and
 `2 + 4 + 26 + 16 + 4 + 4 = 56` closes exactly — the tracer over-attributes `moNode_c`'s and
 `moFeature_c`'s leading scalars to the name object because it derives `scope_end` from the next
 sibling's start.
 
-`verify_feature.py` then applies the table to **every** traced `mo*` object in all 9 segmented
+`VerifyFeature.py` then applies the table to **every** traced `mo*` object in all 9 segmented
 parts:
 
 ```
@@ -170,7 +170,7 @@ into four groups:
 Bit `0x80000000` is orthogonal to boss/cut: the authored corpus writes `0x40000140` for a boss and
 the two V8 production parts write `0xc0000140` for the same operation, so bit 31 is a per-file or
 per-build property, not an operation selector. The low half — `0x0140` boss versus `0x01CA` cut —
-is the operation-typed part, exactly as `ANSWERS.md` Q1 concluded, and it now has a class, an
+is the operation-typed part, exactly as `Answers.md` Q1 concluded, and it now has a class, an
 offset and a width: `moNode_c + 0x28`, `u32`.
 
 ---
@@ -272,5 +272,5 @@ several orderings fit the same byte count.
 * The historical field study stopped after `moFeature_c + 0x290`; flipping the flags word alone
   still leaves the derived face-identity records (`moEndFaceSurfIdRep_c`,
   `moFromSktEntSurfIdRep_c`, the `moFR_c` id words) describing the wrong faces. Subsequent
-  family-specific programs in `../archive/MULTISTREAM.md` construct those regions from typed fields.
+  family-specific programs in `../archive/Multistream.md` construct those regions from typed fields.
   Families without a complete program are rejected; no region is borrowed from a donor.

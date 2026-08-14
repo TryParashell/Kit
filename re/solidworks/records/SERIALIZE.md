@@ -137,7 +137,7 @@ each.
 
 ### Evidence
 
-`verify_layout.py` walks the table against the real object segmentation in
+`VerifyLayout.py` walks the table against the real object segmentation in
 `.rescratch/trace/out/segments_*.json`. It consumes the object's traced children in order and the
 scalar bytes between them, and fails if any gap is not exactly filled.
 
@@ -153,7 +153,7 @@ with, notably, values never produced by the authored corpus:
 | `Piston Ring KF.SLDPRT` (V8 production) | 908 | **1 ThroughAll** | 1 |
 | `PADPLANE_rev_d5` / `CUTBASE_cd5` / `THREEFEATURE` | 495/495/505 | 0 Blind | **1 reversed** |
 
-`scan_endspec.py` then decodes the first `moEndSpec_c` of **every** part statically, using only the
+`ScanEndspec.py` then decodes the first `moEndSpec_c` of **every** part statically, using only the
 fixed offsets above plus the two null-token checks:
 
 ```
@@ -272,12 +272,12 @@ Data starts at `marker + 20` for a definition (`ff ff 01 00 0e 00` + `"moRevEndS
 
 Total data length `4 + 4 + 4 + 4 + 4 + 2 + 2 + 2 + 2 + 8 + 8 + 4 + 4 = 52`, then four null
 dimension tokens. **This is byte-for-byte the 52-byte constant record that
-`.rescratch/revolve/REVOLVE.md` §4.1 measured** — `01 00 00 00`, 24 zero bytes, two `0.01`
+`.rescratch/revolve/Revolve.md` §4.1 measured** — `01 00 00 00`, 24 zero bytes, two `0.01`
 doubles, 8 zero bytes — and it now decomposes as five `i32` plus four null object tokens, then the
-two doubles, then two `i32`. `REVOLVE.md` §3.4's observation that in 22 of 40 parts the class
+two doubles, then two `i32`. `Revolve.md` §3.4's observation that in 22 of 40 parts the class
 defined immediately after the record is `moDisplayAngularDim_c` is item 14.
 
-`scan_revendspec.py`:
+`ScanRevendspec.py`:
 
 ```
 parts with a moRevEndSpec_c definition: 37
@@ -306,7 +306,7 @@ classes have **identical record layouts**. `moICE_c` adds only a constructor
 In every traced part `0x7d0 = 0.0` and `0x7a8 = 0xffffffff`. Those are the last 12 bytes of the
 `moExtrusion_c` scope, and they are what makes the tail budget in §2 close.
 
-**There is no boss/cut field and no operation code in this function.** See `ANSWERS.md` Q1.
+**There is no boss/cut field and no operation code in this function.** See `Answers.md` Q1.
 
 ### The base chain
 
@@ -353,7 +353,7 @@ Reader fixup a writer must respect: if the owning parameter reports "not signed"
 `0x518`) and `Value < 0`, the reader negates it. So a negative depth cannot be stored here — the
 direction lives in `moEndSpec_c::getDirection()`.
 
-This is the record `.rescratch/grammar/GRAMMAR.md` §5.2 calls the "dimension-scalar" whose `D1`
+This is the record `.rescratch/grammar/Grammar.md` §5.2 calls the "dimension-scalar" whose `D1`
 copy at `+0` is the authored depth: `+0` is `Value`.
 
 ---
@@ -361,7 +361,7 @@ copy at `+0` is the authored depth: `+0` is `Value`.
 ## 6. `sgEntHandle` (and its 20 subclasses, including `sgArcHandle`, `sgLineHandle`) — PARTIAL
 
 Function: `sldmodu.dll` `0x4c5c91a0` = `sgEntHandle::Serialize`, shared by 20 classes per
-`out/serialize_map.json`. The store branch names the field:
+`out/SerializeMap.json`. The store branch names the field:
 
 ```c
 CStringT(&local_res18, "EntIndex");
@@ -376,7 +376,7 @@ and 99 bytes rather than one constant. The remainder of the record (the parts th
 
 `sgArcHandle` has no `Serialize` of its own — slot 5 of its vftable is `sgEntHandle::Serialize`.
 The `sg*` geometry classes that do have their own serialisers, with addresses, are listed in
-`out/serialize_map.json` (`sgArc` `0x4c5c6b10`, `sgLine` `0x4c5cc540`, `sgSketch`, `sgDim`,
+`out/SerializeMap.json` (`sgArc` `0x4c5c6b10`, `sgLine` `0x4c5cc540`, `sgSketch`, `sgDim`,
 `sgLogDim`, …). Their layouts are **unresolved** here.
 
 ---
@@ -393,7 +393,7 @@ against the traced 24-byte-header / 2200-byte-scope profile records. **unresolve
 
 ## 8. The class → `Serialize` address map
 
-`out/serialize_map.json` maps **2607** RTTI-named classes in `sldmodu.dll` to their vtable slot-5
+`out/SerializeMap.json` maps **2607** RTTI-named classes in `sldmodu.dll` to their vtable slot-5
 function: 1437 distinct functions, plus 549 classes that do not override it and inherit
 `su_CObject::Serialize`. This is the index to use for any further class: look the class up, feed
 the address to `DumpFunctions.java`, read the linear sequence of `AR_get_*` calls.

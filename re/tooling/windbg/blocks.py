@@ -117,7 +117,7 @@ def compare(stream: str, rows: list[tuple[str, Path, Path]]) -> dict[str, object
 def main() -> int:
     arguments = sys.argv[1:]
     if len(arguments) < 4 or (len(arguments) - 1) % 3:
-        raise SystemExit("usage: blocks.py <stream> <label> <part> <log> [...]")
+        raise SystemExit("usage: Blocks.py <stream> <label> <part> <log> [...]")
     stream = arguments[0]
     rows: list[tuple[str, Path, Path]] = []
     for position in range(1, len(arguments), 3):

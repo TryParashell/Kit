@@ -10,7 +10,7 @@ to you under it immediately and permanently.
 
 # Direct answers to the seven open questions
 
-Confidence words are used exactly as in `SERIALIZE.md`: **confirmed** = decompiled _and_
+Confidence words are used exactly as in `Serialize.md`: **confirmed** = decompiled _and_
 cross-checked against real bytes; **partial** = decompiled but not exercised by any available file;
 **not found** = not recovered.
 
@@ -31,9 +31,9 @@ Three independent lines of evidence.
    → `+0x7a8`. Nothing else. `moICE_c` does not override it — slot 5 of both classes' vftables is
    the same address — so `moICE_c` cannot carry an operation field that `moExtrusion_c` lacks
    either.
-2. `moEndSpec_c` is **byte-identical** between a boss and a cut. `classdiff.py padplane cutbase`
+2. `moEndSpec_c` is **byte-identical** between a boss and a cut. `Classdiff.py padplane cutbase`
    reports **zero** class-count differences between `PADPLANE_rev_d5` (boss + boss) and
-   `CUTBASE_cd5` (boss + cut), and `bytediff.py moEndSpec_c padplane cutbase` reports zero byte
+   `CUTBASE_cd5` (boss + cut), and `Bytediff.py moEndSpec_c padplane cutbase` reports zero byte
    differences for both the definition and the class-reference instance. A boss and a cut produce
    the same class set and the same end-spec bytes.
 3. Scanning both streams for the tree-flags constants:
@@ -47,13 +47,13 @@ Three independent lines of evidence.
    it is the only place the two differ structurally. `13586` versus `13584` is the two-byte shift
    from `"Boss-Extrude2"` being one character longer than `"Cut-Extrude1"`.
 
-Why flipping it alone still fails, which the measured evidence in `GRAMMAR.md` §4 reports: the
+Why flipping it alone still fails, which the measured evidence in `Grammar.md` §4 reports: the
 boss/cut pair also differs inside the same `moICE_c` object in the surface-identity records that
 follow — `moEndFaceSurfIdRep_c`, `moFromSktEntSurfIdRep_c`, `moEndFace3IntSurfIdRep_c` and the
-`moFR_c` id words (`bytediff.py` lists ~40 changed bytes in the 873-byte run, all of them
+`moFR_c` id words (`Bytediff.py` lists ~40 changed bytes in the 873-byte run, all of them
 face/edge id hashes and small indices). Those describe the faces the operation created. Flipping
 the flag without regenerating them leaves the record self-inconsistent, which is consistent with
-the observed crash. So the honest position is unchanged from `GRAMMAR.md`: **boss ↔ cut must come
+the observed crash. So the honest position is unchanged from `Grammar.md`: **boss ↔ cut must come
 from a donor of the right operation**, and the reason is now known — it is not a hidden opcode, it
 is the derived face-identity records.
 
@@ -73,11 +73,11 @@ of the reported separate body.**
 The offset comes from decompiling the export `?getMerge@moEndSpec_c@@QEAAHXZ` at
 `0x4b3233a0`, which is `return *(int *)(this + 0x128);`. (Ghidra names that address
 `moDimPoint_c::getAttachAlignH` because the linker folded the two identical one-instruction
-getters; the address is the one from `sldmodu.dll`'s export table, resolved by `exports.py`.)
+getters; the address is the one from `sldmodu.dll`'s export table, resolved by `Exports.py`.)
 
-In the field order that is item 31 of §1 in `SERIALIZE.md`: it is the first of three `i32`s in the
+In the field order that is item 31 of §1 in `Serialize.md`: it is the first of three `i32`s in the
 32-byte scalar run that sits between the two draft-angle dimension reads and the
-`moFromEndSpec_c` read, i.e. run offset +20. Read back by `verify_layout.py`, it is **1 in all 13
+`moFromEndSpec_c` read, i.e. run offset +20. Read back by `VerifyLayout.py`, it is **1 in all 13
 `moEndSpec_c` objects of all 9 traced parts**, including the two V8 production parts.
 
 So a written file that produces a separate body is _not_ doing so because merge is 0 — merge is
@@ -98,7 +98,7 @@ throughout, and the reader clamps it: `if ((uint)this->0x12c > 1) this->0x12c = 
 end-condition/direction offsets; the "second angle" and "thin thickness" are not in this record
 at all.**
 
-Full table in `SERIALIZE.md` §3. The four things asked for:
+Full table in `Serialize.md` §3. The four things asked for:
 
 - **End-condition code**: `+0x0c` for direction 0, `+0x10` for direction 1, both `i32`.
   `moRevEndSpec_c::getType(int i)` is _the same machine code_ as `moEndSpec_c::getType(int i)` —
@@ -126,9 +126,9 @@ Full table in `SERIALIZE.md` §3. The four things asked for:
   offset). Thin-feature revolves use a different class: `moRevolutionThin_c`, whose own
   `Serialize` is `0x4bb9b920` (dumped, not analysed). **Thin thickness: not found.**
 
-The record was validated two ways: `SERIALIZE.md` §3 shows the field widths sum to exactly the
-52 bytes `REVOLVE.md` §4.1 measured, with the two `0.01` doubles landing exactly where observed,
-and `scan_revendspec.py` decodes 37 parts with a consistent result.
+The record was validated two ways: `Serialize.md` §3 shows the field widths sum to exactly the
+52 bytes `Revolve.md` §4.1 measured, with the two `0.01` doubles landing exactly where observed,
+and `ScanRevendspec.py` decodes 37 parts with a consistent result.
 
 ---
 
@@ -160,15 +160,15 @@ What each code changes in the record, straight from the branches:
 So exactly **two** codes add records — 3 and 7 — and both add a single object read at a known
 position. Codes 4 and 5 need no new record: the surface reference is carried by the
 `uchar` + `suObArray` pair that is present unconditionally in every record (items 11–12 and 14–15
-of `SERIALIZE.md` §1), which is why `getISurfRef(i)` exists for every end spec.
+of `Serialize.md` §1), which is why `getISurfRef(i)` exists for every end spec.
 
 There is also a legacy remap the reader applies for files below version 318, which a writer of
 modern files never needs but which explains why old files renumber: `3→4, 4→5, 5→6`.
 
-Cross-checked on data: `scan_endspec.py` decodes the first `moEndSpec_c` of all **158** corpus and
+Cross-checked on data: `ScanEndspec.py` decodes the first `moEndSpec_c` of all **158** corpus and
 example parts, all 158 consistently, and finds codes `0` (150 parts, 17 of them with
 `getDirection() = 1`), `6` (6 parts) and **`9` with `getType(1) = 1`** (2 parts:
-`Cam_roller.SLDPRT`, `Piston.SLDPRT`). `verify_layout.py` additionally decodes `1` (ThroughAll,
+`Cam_roller.SLDPRT`, `Piston.SLDPRT`). `VerifyLayout.py` additionally decodes `1` (ThroughAll,
 reversed) in `Piston Ring KF.SLDPRT` and `6` in `COJINETE INFERIOR.SLDPRT` while proving the whole
 record tiles the traced spans. Codes 3, 4, 5, 7, 10 and 11 appear in **no** available file, so
 their branches are code-only. **partial** for those.
@@ -183,7 +183,7 @@ is confirmed, the true owner of `moExtrusion_c + 114` is not.**
 - `moFromEndSpec_c + 140`: **`moFromEndSpec_c` owns only 4 bytes** in this corpus. Its whole record
   is one `i32` type code, and every branch that would extend it requires that code to be 3, 4 or 5;
   it is 0 (sketch plane) in all 9 traced parts. Byte 140 past the marker is therefore inside
-  another object entirely. The tail budget in `SERIALIZE.md` §2 accounts for every byte after
+  another object entirely. The tail budget in `Serialize.md` §2 accounts for every byte after
   `moFromEndSpec_c` in all 9 traced parts — 4 for `moFromEndSpec_c`, 16 or 20 for `moEndSpec_c`,
   12 for `moExtrusion_c`, plus a 4-byte driver trailer when the extrusion is last — with nothing
   left over, so there is no unexplained double in that region at all. The `0.0` / `0.016` value the
@@ -194,7 +194,7 @@ is confirmed, the true owner of `moExtrusion_c + 114` is not.**
   `FUN_4bb886c0` below `moBodyFeature_c::Serialize` — not recovered here.
 
 A general observation from the tail that is worth recording because it explains several "scratch"
-values. `verify_layout.py` now decodes the shared tail run of all 9 traced parts, and three
+values. `VerifyLayout.py` now decodes the shared tail run of all 9 traced parts, and three
 `moEndSpec_c` tail fields behave like uninitialised memory rather than parameters:
 
 | field                                               | seven authored parts                                  | `Piston Ring KF`     | `COJINETE INFERIOR` |
@@ -219,7 +219,7 @@ variant is rejected.
 ## Q6 — Profile geometry classes and the sketch-coordinate role/class trailer
 
 **Answer: partially superseded.** This pass recovered one structural fact. Later work in
-`../features/ARC_LAYOUT.md` located line, circle, and partial-arc coordinate roles, and the supported
+`../features/ArcLayout.md` located line, circle, and partial-arc coordinate roles, and the supported
 typed feature programs construct their exact sketch families. Polygon, slot, spline, and arbitrary
 mixed-profile layouts remain unrecovered.
 
@@ -233,7 +233,7 @@ than one constant.
 Not recovered: the polygon / slot / spline profile layouts, and the meaning of the observed
 `role ∈ {0, 2, 6, 8, 14, 24, 29}` and `class ∈ {0, 1, 2, 3, 5}` trailer values. `sgSpline` has no
 RTTI vftable in `sldmodu.dll` at all, so it is either in another module or spelled differently.
-The classes that do have their own serialisers are indexed in `out/serialize_map.json` with
+The classes that do have their own serialisers are indexed in `out/SerializeMap.json` with
 addresses (`sgArc` `0x4c5c6b10`, `sgLine` `0x4c5cc540`, `sgSketch`, `sgDim`, `sgLogDim`, …). This
 checkpoint had not yet run `DumpFunctions.java` against them; retain that fact as history, not as the
 current status of the recovered line/circle/arc families.
@@ -257,7 +257,7 @@ signatures is removed. Status: confirmed, 184 of 184 real files.**
 
 Both have exactly **1000** entries and the arrays are parallel: entry `i` of the id array pairs
 with entry `i` of the signature array. The initialiser `FUN_3cc4e200` (decompiled in
-`out/sldmfcu_sigtable_refs.c`, the only function that references either array) walks them once and
+`out/SldmfcuSigtableRefs.txt`, the only function that references either array) walks them once and
 builds a red-black-tree map keyed by the id:
 
 ```c
@@ -287,7 +287,7 @@ header **in the order they appear in the DLL**; each signature's four bytes go i
 `u32` little-endian.
 
 The table is byte-identical in three shipped modules — `sldmfcu.dll`, `slwstep30.dll` and
-`sldsetdocprop.exe` — which is why the two hardcoded pairs in `container.py` are entries **711**
+`sldsetdocprop.exe` — which is why the two hardcoded pairs in `Container.py` are entries **711**
 (`0xEC6E2386`) and **750** (`0x715BE98F`).
 
 ### Why every mixer search failed
@@ -335,9 +335,9 @@ Reproduction: `.rescratch/para417_sigrel/` holds 23 scripts, one family per file
 
 ### Verification
 
-`sigtable.py` extracts all 1000 pairs, then reads every `.SLDPRT` / `.SLDASM` under `examples/`,
+`Sigtable.py` extracts all 1000 pairs, then reads every `.SLDPRT` / `.SLDASM` under `examples/`,
 `.rescratch/corpus/parts`, `.rescratch/corpus2`, `.rescratch/trace/parts` and `.rescratch/re/parts`
-with the project's own `container.py` (`SldprtArchive` plus `_template_fields`, so the signatures
+with the project's own `Container.py` (`SldprtArchive` plus `_template_fields`, so the signatures
 are the ones the real parser extracts, not a guess) and compares:
 
 ```
@@ -347,20 +347,20 @@ parts=184 match=184 mismatch=0 unknown=0 unreadable=0
 
 **184 of 184 real SOLIDWORKS files — every file id present in the table, every one of the three
 signatures exactly the parallel entry.** The full extraction, with the host digest and the two
-array offsets, is written to `re/data/signature_table.json`.
+array offsets, is written to `re/data/Serialization/SignatureTable.json`.
 
 ### How the table is stored and regenerated
 
 Because the relation is irreducible, the 16,000 bytes have to be carried as data. They are _not_
-hand-written source. `re/tooling/ghidra/gen_signature_table.py` reads the tracked vendor DLL
-`re/binaries/sldmfcu.dll`, checks its SHA-256 against `re/binaries/manifest.json`, extracts the two
+hand-written source. `re/tooling/ghidra/Generation/GenSignatureTable.py` reads the tracked vendor DLL
+`re/binaries/sldmfcu.dll`, checks its SHA-256 against `re/binaries/Manifest.json`, extracts the two
 parallel arrays at file offsets `0x566C40` and `0x567BE0`, and writes both the shipped resource
 `src/convert/adapters/solidworks/data/sldprt_signature_table.bin` and the human-readable
-provenance record `re/data/signature_table.json`. `container.py` loads that resource through
+provenance record `re/data/Serialization/SignatureTable.json`. `Container.py` loads that resource through
 `importlib.resources`; it holds no signature bytes of its own.
 
-`gen_signature_table.py --check` re-extracts from the DLL and compares against the shipped resource
-byte for byte. `tests/convert/test_solidworks_signature_table.py` performs the same reproduction as
+`GenSignatureTable.py --check` re-extracts from the DLL and compares against the shipped resource
+byte for byte. `tests/convert/solidworks/container/SolidworksSignatureTableTests.py` performs the same reproduction as
 a test, so the resource cannot drift from the DLL it came from.
 
 ### What this changes

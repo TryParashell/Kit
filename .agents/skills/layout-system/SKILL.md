@@ -3,7 +3,7 @@ name: layout-system
 description: "Use existing global layout primitives and avoid hand-rolled layout. Use when changing React or Next.js page layout, shells, or spacing."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/layout-system.md"
+  source: ".kiro/steering/LayoutSystem.md"
   kiro-inclusion: "always"
 ---
 
@@ -49,7 +49,7 @@ Constraining inner content (e.g. `max-w-2xl` on a heading or `max-w-prose` on a 
 ## Rule 3: Spacing & Type Come From Tokens
 
 - Vertical rhythm uses token spacing (`py-24`, the `--spacing-g*` scale), consistent with sibling pages — not arbitrary one-off values picked by feel.
-- Headings use `font-heading`; surfaces use theme tokens (`text-foreground`, `text-muted-foreground`, `bg-background`) per `design-system-discipline.md` and `shadcn-pages.md`.
+- Headings use `font-heading`; surfaces use theme tokens (`text-foreground`, `text-muted-foreground`, `bg-background`) per `DesignSystemDiscipline.md` and `ShadcnPages.md`.
 
 ## Rule 4: Match Sibling Pages
 

@@ -5,7 +5,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
-from convert.adapters.solidworks.container import SldprtArchive
+from convert.adapters.solidworks.container.Container import SldprtArchive
 
 
 def main():

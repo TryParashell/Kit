@@ -13,13 +13,7 @@ from types import MappingProxyType
 from convert.adapters.base import AdapterInfo, CarrierReason
 from interchange import Capability
 
-from .protocol import (
-    ASSEMBLY_JOINT_GROUP_TYPE_ID,
-    ASSEMBLY_LINK_TYPE_ID,
-    ASSEMBLY_ROOT_TYPE_ID,
-    FEATURE_WRITE_TYPE_IDS,
-    SKETCH_TYPE_ID,
-)
+from convert.adapters.freecad.Protocol import ASSEMBLY_JOINT_GROUP_TYPE_ID, ASSEMBLY_LINK_TYPE_ID, ASSEMBLY_ROOT_TYPE_ID, FEATURE_WRITE_TYPE_IDS, SKETCH_TYPE_ID
 
 SUFFIX = ".FCStd"
 CAPABILITY_WRITE_TYPE_IDS = MappingProxyType(

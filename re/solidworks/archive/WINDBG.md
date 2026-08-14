@@ -1,6 +1,6 @@
 # Runtime instrumentation of the SOLIDWORKS feature-stream reader
 
-Goal: confirm the record boundaries and field order derived statically in `GRAMMAR.md`, and
+Goal: confirm the record boundaries and field order derived statically in `Grammar.md`, and
 recover the object segmentation that static diffing cannot give (report 1 §10, report 2 §11).
 
 Everything below is reproducible from the commands as written. Logs are in
@@ -132,7 +132,7 @@ cdbX64.exe -logo out\cdb_classload.log -c "$$<cdb_classload.txt" `
    +0x06c m_nHashSize      : Uint4B
 ```
 
-This is the direct confirmation of the archive model in `GRAMMAR.md` §2: stream position is
+This is the direct confirmation of the archive model in `Grammar.md` §2: stream position is
 `m_lpBufCur - m_lpBufStart`, and `m_nMapCount` is the single counter that assigns the combined
 class/object indices which the `0x8000|i` reference tokens encode.
 
@@ -175,7 +175,7 @@ a *format*, but the implementation is SOLIDWORKS' own.
 
 ## 6. `su_CArchive` — the real reader, and it is exported by name
 
-`probe_exports.py` / `probe_su_archive.py` read the PE export tables of the whole SOLIDWORKS
+`probe_Exports.py` / `probe_su_Archive.py` read the PE export tables of the whole SOLIDWORKS
 install. `sldarchiveu.dll` exports `operator>>` overloads whose parameter type is
 `su_CArchive`:
 
@@ -252,7 +252,7 @@ filtered on the 11 075-byte (`0x2b43`) buffer span so only our stream is logged.
 list of `(stream offset, map index)` pairs — i.e. the start offset of every object and the index
 it was assigned. Differencing consecutive offsets gives each object's byte length, which is the
 per-class record segmentation, and the map column gives the renumbering table directly. That
-closes blockers 1 and 2 in `GRAMMAR.md` §8.
+closes blockers 1 and 2 in `Grammar.md` §8.
 
 **This trace was not executed in this session.** The debugger and SOLIDWORKS contend for the same
 single SOLIDWORKS installation, and the volume measurements in `results.md` were given priority.
@@ -263,7 +263,7 @@ Everything needed to run it is above and in `cdb_su_calibrate.txt`.
 ## 7. What runtime instrumentation confirmed that static diffing could not
 
 1. The archive object model is exactly MFC's, including the single combined class/object map
-   counter — so the `0x8000|i` reference-token reading in `GRAMMAR.md` §2 is not a guess, and the
+   counter — so the `0x8000|i` reference-token reading in `Grammar.md` §2 is not a guess, and the
    renumbering constraint is real rather than inferred.
 2. The reader is **not** MFC. Every static conclusion survives, but any plan that hooked
    `mfc140u` would have failed silently. This is the finding that only a runtime probe gives.

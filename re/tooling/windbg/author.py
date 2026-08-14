@@ -151,7 +151,7 @@ def main() -> int:
     group = sys.argv[1]
     counts = [int(item) for item in sys.argv[2:]] or [4]
     records = [build(count, group) for count in counts]
-    (OUT / "author.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
+    (OUT / "Author.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
     for record in records:
         print(f"{record['label']}: {record['path']}")
     return 0

@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+name: Workflow pins
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-workflow-pins:
+    name: Verify immutable workflow dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.9.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --python 3.11
+
+      - name: Verify action and runner pins
+        run: |
+          uv run python - <<'PYTHON'
+          import os as OsTools
+          import re as Regex
+          import subprocess as Subprocess
+          from pathlib import Path as FilePath
+
+          PathData = Subprocess.check_output(
+              [
+                  "git",
+                  "ls-files",
+                  "-z",
+                  "--",
+                  ".github/workflows/*.yml",
+                  ".github/workflows/*.yaml",
+              ]
+          )
+          WorkflowPaths = sorted(
+              FilePath(OsTools.fsdecode(PathBytes))
+              for PathBytes in PathData.split(b"\0")
+              if PathBytes
+          )
+          UsePattern = Regex.compile(
+              r"^\s*uses:\s*([^\s#]+)\s*(?:#\s*(.+))?$"
+          )
+          RunnerPattern = Regex.compile(r"^\s*runs-on:\s*([^\s#]+)")
+          VersionPattern = Regex.compile(
+              r"^v[0-9]+(?:\.[0-9]+)*(?:[-+][A-Za-z0-9.-]+)?$"
+          )
+          AllowedRunner = Regex.compile(
+              r"^(?:ubuntu-[0-9]{2}\.[0-9]{2}|windows-[0-9]{4}|macos-[0-9]+|self-hosted)$"
+          )
+          FindingList = []
+          for WorkflowPath in WorkflowPaths:
+              SourceLines = WorkflowPath.read_text(encoding="utf-8").splitlines()
+              for LineNumber, LineText in enumerate(SourceLines, start=1):
+                  UseMatch = UsePattern.match(LineText)
+                  if UseMatch is not None:
+                      UseText, VersionText = UseMatch.groups()
+                      if not UseText.startswith("./"):
+                          ActionText, MarkerText, RefText = UseText.rpartition("@")
+                          if (
+                              not ActionText
+                              or MarkerText != "@"
+                              or Regex.fullmatch(r"[0-9a-f]{40}", RefText) is None
+                              or VersionText is None
+                              or VersionPattern.fullmatch(VersionText) is None
+                          ):
+                              FindingList.append(
+                                  f"{WorkflowPath.as_posix()}:{LineNumber}: unpinned action {UseText}"
+                              )
+                  RunnerMatch = RunnerPattern.match(LineText)
+                  if RunnerMatch is not None and AllowedRunner.fullmatch(
+                      RunnerMatch.group(1)
+                  ) is None:
+                      FindingList.append(
+                          f"{WorkflowPath.as_posix()}:{LineNumber}: unpinned runner {RunnerMatch.group(1)}"
+                      )
+          for FindingText in FindingList:
+              print(FindingText)
+          if FindingList:
+              raise SystemExit(1)
+          print(f"workflow pins passed for {len(WorkflowPaths)} files")
+          PYTHON

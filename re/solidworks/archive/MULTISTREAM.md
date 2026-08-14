@@ -17,7 +17,7 @@ interoperability. No SOLIDWORKS binary was modified.
 
 ## 1. One launch, five streams
 
-`multitrace.py` writes a single cdb script whose `ReadObject` / `ReadClass` breakpoints fire when
+`Multitrace.py` writes a single cdb script whose `ReadObject` / `ReadClass` breakpoints fire when
 the archive's buffer span equals **any** of the five target stream lengths, and logs the span
 alongside the buffer base, the offset, the map counter and `@rsp`:
 
@@ -89,7 +89,7 @@ does not apply to it as written. It is left alone; see §4.
 
 ## 3. The per-feature block, per stream
 
-`nodediff.py` aligns the node sequences of the three same-family parts on
+`Nodediff.py` aligns the node sequences of the three same-family parts on
 `(kind, class name)` and prints each node's body length in all three, which separates a node that
 is _inserted_ per feature from a node whose _body grows_ per feature.
 
@@ -227,7 +227,7 @@ bytes:
 | `Contents/Config-0`                  | 25,470 |     128 | exact                                                 |
 | `ThirdPtyStore/VisualStates`         |  1,593 |       — | intentionally omitted; independently proved droppable |
 
-`resolved_bosschamfer_program.py` emits the resolved-feature stream from 3,722 typed primitive
+`Program.py` emits the resolved-feature stream from 3,722 typed primitive
 operations owned by 515 traced objects. The generated 15,811-byte stream has SHA-256
 `d8b6f859a0e60e5e6307833ce502723123663bc9e25ca2b46e74f608dd5b9450`. The last previously
 unknown 24-byte region is the `Chamfer_c` direct surface-selection array: a tag, a `long`, a
@@ -263,7 +263,7 @@ The multi-stream trace covers every load-bearing byte without retaining any cont
 | `Contents/Config-0`                  | 25,212 |     123 | exact                                                 |
 | `ThirdPtyStore/VisualStates`         |  1,593 |       — | intentionally omitted; independently proved droppable |
 
-`resolved_bossshell_program.py` emits the resolved-feature stream from 3,326 typed primitive
+`Program.py` emits the resolved-feature stream from 3,326 typed primitive
 operations owned by 497 traced serializer callsites. Its 13,868-byte default has SHA-256
 `19572f2d262a02c450ac66315089598074f506880ac0df03f8a74670ffac0191`. The program contains no
 opaque span, encoded block, donor-file read, or CAD application call.
@@ -292,7 +292,7 @@ The controlled `PartDesign::LinearPattern` source repeats a 10 × 10 × 5 mm pad
 seed and direction selections as `(Boss-Extrude1, Edge4)` and `(Boss-Extrude1, Edge3)`, and has
 the native tree `Sketch1 → Boss-Extrude1 → LPattern1`.
 
-`resolved_bosslinearpattern_program.py` emits the 22,264-byte resolved-feature stream from 5,161
+`Program.py` emits the 22,264-byte resolved-feature stream from 5,161
 typed operations owned by 598 traced serializers. Its default SHA-256 is
 `fa69899e0a0d5f3271f2e1a9fff8e8eae396c7492f8910ef3ba470b3f53bb370`; there are no unknown
 spans or copied vendor blocks. The recovered `Config-0` pattern annotation manager contributes
@@ -324,7 +324,7 @@ The recovered stream set is complete and independently re-emittable:
 | `Contents/Config-0-ModelHeader`      |  2,379 |      69 | exact                      |
 | `Contents/Config-0`                  | 25,520 |     131 | exact                      |
 
-`resolved_bosscircularpattern_program.py` emits the resolved-feature stream from 4,578 typed
+`Program.py` emits the resolved-feature stream from 4,578 typed
 operations owned by 600 recovered serializer callsites. Its default SHA-256 is
 `ced6aec7dd5b4bc323416dfd89afe75d684aa8ad9010b54438ec516798f91be3`; there are no opaque
 spans, encoded blocks, donor bytes, or conversion-time CAD calls. Occurrence count is stored in
@@ -351,7 +351,7 @@ isolated oracles; production conversion and native stream emission remain Python
 
 ## 4. Which streams are load-critical
 
-Measured through `.rescratch/sw/measure.py`, control before and after, one fresh subprocess per
+Measured through `.rescratch/sw/Measure.py`, control before and after, one fresh subprocess per
 candidate, absolute paths, dialog dismisser running. Every batch reported `control healthy: True`
 with the control at 8000.000000000001 mm³ on both sides.
 
@@ -366,7 +366,7 @@ stream-specific decoders shows which records are load-critical and how each is n
 | `Contents/Config-0`                                 | typed field program          | load-critical  | view, annotation and pattern managers are selected from explicit source semantics; zero opaque bytes remain                                   |
 | `Contents/Definition`                               | typed primitive fields       | load-critical  | all 3,618 reference-body bytes are accounted for and arbitrary residual injection is rejected                                                 |
 | `Contents/Config-0-Partition`                       | Kit-synthesised blank        | **droppable**  | every §5 volume is a genuine rebuild from the records, not a cached body                                                                      |
-| `Contents/Config-0-LWDATA`, `Contents/DisplayLists` | Kit-synthesised              | **stale-safe** | present but never feature-count-shaped; 17 correct volumes across 1 to 6 features, plus `cvB` / `cvC` in `.rescratch/sw/out/measure_cv1.json` |
+| `Contents/Config-0-LWDATA`, `Contents/DisplayLists` | Kit-synthesised              | **stale-safe** | present but never feature-count-shaped; 17 correct volumes across 1 to 6 features, plus `cvB` / `cvC` in `.rescratch/sw/out/MeasureCvOne.json` |
 | `_MO_VERSION_18000/Biography`                       | Kit-synthesised              | **stale-safe** | same: one fixed shape, 1 to 6 features all build correctly                                                                                    |
 | `ThirdPtyStore/VisualStates`                        | **absent**                   | **droppable**  | the writer never emits it and every measured write opens and rebuilds                                                                         |
 
@@ -405,13 +405,13 @@ rectangular pads on the front plane; `kit_*` are authored FreeCAD sources. The c
 `kit_boss_boss` now opens without errors or warnings, rebuilds, and exposes
 `Sketch1 → Boss-Extrude1 → Sketch2 → Boss-Extrude2` as a single fused body. See §6.
 
-Records: `.rescratch/sw/out/measure_nboss.json`, `measure_nboss56.json`, `measure_merge.json`.
+Records: `.rescratch/sw/out/MeasureNboss.json`, `MeasureNbossFiveSix.json`, `MeasureMerge.json`.
 
 ## 6. Merge-result closure
 
 The historical experiment correctly showed that merge was not a standalone boolean: the native
 records also own the resolved feature scope. That gap is now closed by a first-principles typed
-program, not by selecting or patching a source part. `resolved_bossboss_program.py` emits 16,474
+program, not by selecting or patching a source part. `Program.py` emits 16,474
 bytes with SHA-256
 `9292aa8eb59293e1983cdde1cda36aeba60c1b5e6b55ebf036bdac91519047a9`, while the writer derives
 both sketches, depths, source links, merge scope, model-header bounds, atom graph and Parasolid
@@ -426,12 +426,12 @@ by the editable SOLIDWORKS history rather than a cached or flattened body.
 
 ## 7. Files
 
-New in this directory: `multitrace.py` (multi-span trace driver), `blocks.py` (insertion-run
-diff), `nodediff.py` (aligned per-node body-length table), `bodydump.py` (hex of chosen node
-bodies), `growstream.py` (count-field relocation across a growth plan), `spans.py`, `ids.py`,
-`libcheck.py`. `tracelog.py` gained the span field; `segment.py` and `model.py` gained a stream
+New in this directory: `Multitrace.py` (multi-span trace driver), `Blocks.py` (insertion-run
+diff), `Nodediff.py` (aligned per-node body-length table), `Bodydump.py` (hex of chosen node
+bodies), `Growstream.py` (count-field relocation across a growth plan), `Spans.py`, `Ids.py`,
+`Libcheck.py`. `Tracelog.py` gained the span field; `Segment.py` and `Model.py` gained a stream
 argument and span filtering, with the previous defaults unchanged — the nine parts of
 `REPORT.md` still segment and re-emit byte-identically through the modified code.
 
-Logs: `out/cdb_multi_<label>.log`. Machine-readable: `out/multitrace.json`,
+Logs: `out/cdb_multi_<label>.log`. Machine-readable: `out/Multitrace.json`,
 `out/blocks_*.json`, `out/nodediff_*.json`.

@@ -256,7 +256,7 @@ def report(
 def main() -> int:
     arguments = sys.argv[1:]
     if len(arguments) % 3:
-        raise SystemExit("usage: segment.py <label> <part> <log> [...]")
+        raise SystemExit("usage: Segment.py <label> <part> <log> [...]")
     for position in range(0, len(arguments), 3):
         label = arguments[position]
         part = Path(arguments[position + 1]).resolve()

@@ -3,7 +3,7 @@
 Everything durable that came out of reverse-engineering the SOLIDWORKS part format, organised so a
 new agent can pick it up, trust the right parts, and repeat the exercise on a different CAD format.
 
-`METHODOLOGY.md` is the reusable playbook — read it first if your target is AutoCAD, CATIA, NX or
+`Methodology.md` is the reusable playbook — read it first if your target is AutoCAD, CATIA, NX or
 Creo. Everything else in this directory is the SOLIDWORKS worked example that the playbook was
 distilled from.
 
@@ -18,7 +18,7 @@ distilled from.
 The DLLs are **tracked**, deliberately, so that a cloud agent with no SOLIDWORKS install can run
 Ghidra against them. Read `binaries/README.md` for the licensing position before this repository is
 shared with anyone outside Parashell — they are unmodified proprietary Dassault Systèmes binaries
-from a licensed local install, and `binaries/fetch.ps1` reproduces them from that install if you
+from a licensed local install, and `binaries/Fetch.ps1` reproduces them from that install if you
 would rather not carry them.
 
 The bulk of the tracked bytes is machine-readable evidence: `re/data/` (~4.6 MB, dominated by the
@@ -29,7 +29,7 @@ static container census and the traced object segmentations) and `re/solidworks/
 
 | directory | what is in it |
 |---|---|
-| `binaries/` | the four SOLIDWORKS DLLs every finding was derived from, plus `manifest.json` (SHA-256 and version of each) and `fetch.ps1` (re-copies them from a local install). Tracked. Read `binaries/README.md` first. |
+| `binaries/` | the four SOLIDWORKS DLLs every finding was derived from, plus `Manifest.json` (SHA-256 and version of each) and `Fetch.ps1` (re-copies them from a local install). Tracked. Read `binaries/README.md` first. |
 | `solidworks/` | the findings. Layered: `container/` (file framing + the signature table), `archive/` (the `su_CArchive` grammar, the reader's identity, object segmentation), `records/` (per-class field layouts), `features/` (extrude, revolve, sketch, arc, bodies), `corpus/` (what corpora exist and what each proves), `measurements/` (every volume measurement, with controls). |
 | `tooling/` | how the work was done and how to redo it: `ghidra/` (headless decompilation), `windbg/` (the cdb runtime trace), `harness/` (the COM measurement loop). |
 | `data/` | the extracted tables and traced artefacts the findings cite: the 1000-entry signature table, the 2607-class `Serialize` map, the object segmentations, the class vocabulary. |
@@ -39,18 +39,18 @@ static container census and the traced object segmentations) and `re/solidworks/
 | you want to know | start at |
 |---|---|
 | how a `.SLDPRT` file is framed, and how to write a valid header | `solidworks/container/README.md` |
-| how objects are tagged inside a stream, and why byte edits renumber | `solidworks/archive/GRAMMAR.md` §2, then `archive/SEGMENTATION.md` |
-| what class owns a given byte | `solidworks/records/SERIALIZE.md`, then `data/serialize_map.json` |
+| how objects are tagged inside a stream, and why byte edits renumber | `solidworks/archive/Grammar.md` §2, then `archive/Segmentation.md` |
+| what class owns a given byte | `solidworks/records/Serialize.md`, then `data/SerializeMap.json` |
 | whether a specific field is trustworthy | the confidence column of the table that declares it — see below |
 | what has been *measured* rather than inferred | `solidworks/measurements/README.md` |
 | what does not work, and the traps | `solidworks/README.md` "Negative results and traps" |
-| how to reproduce the decompilation | `tooling/ghidra/SETUP.md` |
+| how to reproduce the decompilation | `tooling/ghidra/Setup.md` |
 | how to reproduce the runtime trace | `tooling/windbg/README.md` |
 
 ## Confidence vocabulary
 
 Every field table in `re/solidworks/` labels each row. The vocabulary is defined in
-`solidworks/records/SERIALIZE.md` and used consistently everywhere:
+`solidworks/records/Serialize.md` and used consistently everywhere:
 
 * **confirmed** — read out of the decompiled `Serialize` *and* the byte arithmetic reproduces a real
   traced object span, a real corpus record, or a measured volume exactly.
@@ -68,14 +68,14 @@ Everything here was produced on Windows with PowerShell, `uv` for Python, a lice
 install, Ghidra 12.1.2 headless, and `cdbX64.exe` from the WinDbg MSIX package.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File re\binaries\fetch.ps1
-uv run python re\tooling\ghidra\sigtable.py
-uv run python re\tooling\ghidra\serialize_map.py
-uv run python re\tooling\ghidra\verify_layout.py
+powershell -NoProfile -ExecutionPolicy Bypass -File re\binaries\Fetch.ps1
+uv run python re\tooling\ghidra\Sigtable.py
+uv run python re\tooling\ghidra\Generation\SerializeMap.py
+uv run python re\tooling\ghidra\Validation\VerifyLayout.py
 ```
 
-The first re-fetches and verifies the binaries. The other three re-derive `data/signature_table.json`,
-`data/serialize_map.json` and `data/verify_layout.json` from the binaries plus the traced
+The first re-fetches and verifies the binaries. The other three re-derive `data/SignatureTable.json`,
+`data/SerializeMap.json` and `data/VerifyLayout.json` from the binaries plus the traced
 segmentations, and they rewrite those files in place — a clean `git diff` after running them is the
 cheapest end-to-end check that the recorded tables really do come out of the recorded bytes.
 
@@ -84,7 +84,7 @@ cheapest end-to-end check that the recorded tables really do come out of the rec
 
 ## What is deliberately not here
 
-* The Ghidra 12.1.2 distribution (3.4 GB) and its release zip (573 MB). `tooling/ghidra/SETUP.md`
+* The Ghidra 12.1.2 distribution (3.4 GB) and its release zip (573 MB). `tooling/ghidra/Setup.md`
   has the download URL, the exact filename and its byte size.
 * The portable FreeCAD used to author `.FCStd` inputs (2.2 GB).
 * The `.SLDPRT` / `.SLDASM` corpora. The real-world corpus already lives in the repository at

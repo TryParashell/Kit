@@ -63,33 +63,11 @@ from interchange import (
 )
 from interchange.serialization import ToData
 
-from .archive import (
-    DOCUMENT_ENTRY,
-    MANIFEST_ENTRY,
-    NATIVE_DOCUMENT_SHA256_ATTRIBUTE,
-    NativeBrepKey,
-    _MAX_ENTRY_SIZE,
-    _MAX_EXTERNAL_FILES,
-    _MAX_TOTAL_SIZE,
-    _native_brep_key as _manifest_native_brep_key,
-    _validated_archive_members,
-    _validated_document_xml,
-    build_fcstd_archive,
-    extract_manifest_from_fcstd,
-    native_expression_parts,
-    native_shape_feature_count,
-    native_sketch_carrier_reasons,
-    native_sketch_parts,
-)
-from .brep import FreeCADBrepWriteError, brep_model_brep, proven_ascii_brep
-from .format import CAPABILITY_CARRIER_REASONS, INFO, SUFFIX
-from .native import NativeFreeCADError, probe_native_fcstd, read_native_fcstd
-from .protocol import (
-    FEATURE_WRITE_KINDS,
-    FREECAD_BREP_FORMAT_IDS,
-    MATE_WRITE_KINDS,
-    XML_TRUE_VALUES,
-)
+from convert.adapters.freecad.Archive import DOCUMENT_ENTRY, MANIFEST_ENTRY, NATIVE_DOCUMENT_SHA256_ATTRIBUTE, NativeBrepKey, _MAX_ENTRY_SIZE, _MAX_EXTERNAL_FILES, _MAX_TOTAL_SIZE, _native_brep_key as _manifest_native_brep_key, _validated_archive_members, _validated_document_xml, build_fcstd_archive, extract_manifest_from_fcstd, native_expression_parts, native_shape_feature_count, native_sketch_carrier_reasons, native_sketch_parts
+from convert.adapters.freecad.Brep import FreeCADBrepWriteError, brep_model_brep, proven_ascii_brep
+from convert.adapters.freecad.Format import CAPABILITY_CARRIER_REASONS, INFO, SUFFIX
+from convert.adapters.freecad.Native import NativeFreeCADError, probe_native_fcstd, read_native_fcstd
+from convert.adapters.freecad.Protocol import FEATURE_WRITE_KINDS, FREECAD_BREP_FORMAT_IDS, MATE_WRITE_KINDS, XML_TRUE_VALUES
 
 _NATIVE_DOCUMENT_ID = "freecad:native-document"
 _NATIVE_DOCUMENT_BINDING_ID = "freecad:native-document-binding"

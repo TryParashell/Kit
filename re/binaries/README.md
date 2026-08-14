@@ -14,14 +14,14 @@ That is a real convenience and it has a real cost:
 - They add **~52.6 MB** to the repository, against ~6.9 MB for everything else in `re/`.
 
 **If you would rather not carry them,** nothing in `re/` depends on their presence except re-running
-the decompilation. Delete them, add `*.dll` to a `.gitignore` in this directory, and use `fetch.ps1`
+the decompilation. Delete them, add `*.dll` to a `.gitignore` in this directory, and use `Fetch.ps1`
 to reproduce them byte for byte from a local install:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File re\binaries\fetch.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File re\binaries\Fetch.ps1
 ```
 
-`manifest.json` records the byte size, SHA-256 and PE file version of each, so a fetched copy is
+`Manifest.json` records the byte size, SHA-256 and PE file version of each, so a fetched copy is
 verifiable against the one these findings were derived from.
 
 Everything else here — the manifest, the fetch script, the offsets in `re/solidworks/`, the
@@ -30,10 +30,10 @@ extracted tables in `re/data/` — is our own work.
 ## Getting the binaries
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File re\binaries\fetch.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File re\binaries\Fetch.ps1
 ```
 
-Copies all four out of the install named in `manifest.json` (`install_root`), then checks byte
+Copies all four out of the install named in `Manifest.json` (`install_root`), then checks byte
 size, SHA-256 and the PE file version of each. Exit code 0 means all four match.
 
 | flag | effect |
@@ -54,8 +54,8 @@ other build.
 |---|---|---|
 | `swccu.dll` | 251 776 | Implements **`su_CArchive`** — the archive class SOLIDWORKS actually reads with. `su_CArchive::ReadObject` `0x31eda570`, `su_CArchive::ReadClass` `0x31eda2f0`. Both, and `MapObject`/`ftell`/`getMapCount`/`setMapCount`/`ReadCount`/`ReadString`, are exported **undecorated by name**, which is the single fact that makes the whole runtime trace possible with no PDB. |
 | `sldarchiveu.dll` | 229 760 | Exports the `su_CArchive::operator>>` overloads. `RenameArchiveApi.java` renames each to `AR_get_<type>` before decompiling; without that pass every overload prints as `operator>>` and a `double` read is indistinguishable from a `char` read. |
-| `sldmodu.dll` | 45 877 632 | 219 exported per-class `Serialize` symbols, 9395 RTTI vftables, and the 2607-class vtable-slot-5 map extracted to `re/data/serialize_map.json`. Every `mo*` and `sg*` field layout in `re/solidworks/records/` came out of this file. |
-| `sldmfcu.dll` | 8 094 592 | Holds the **1000-entry `file_id` -> signature-triplet lookup table** in `.rdata`. Extracted to `re/data/signature_table.json`; see `re/solidworks/container/README.md`. |
+| `sldmodu.dll` | 45 877 632 | 219 exported per-class `Serialize` symbols, 9395 RTTI vftables, and the 2607-class vtable-slot-5 map extracted to `re/data/Serialization/SerializeMap.json`. Every `mo*` and `sg*` field layout in `re/solidworks/records/` came out of this file. |
+| `sldmfcu.dll` | 8 094 592 | Holds the **1000-entry `file_id` -> signature-triplet lookup table** in `.rdata`. Extracted to `re/data/Serialization/SignatureTable.json`; see `re/solidworks/container/README.md`. |
 
 ## SOLIDWORKS does not use MFC's `CArchive`
 
@@ -71,5 +71,5 @@ offsets were then confirmed against `su_CArchive` instances at runtime with `can
 ## Not in this directory
 
 The Ghidra 12.1.2 distribution (3.4 GB) and its release zip (573 MB) are not migrated. The zip is a
-public download; `re/tooling/ghidra/SETUP.md` has the URL, the exact filename, its byte size and
+public download; `re/tooling/ghidra/Setup.md` has the URL, the exact filename, its byte size and
 the expand command.

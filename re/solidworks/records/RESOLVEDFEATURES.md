@@ -42,25 +42,25 @@ Everything below is measured. Controls measured 8000.000000000001 mm³, centre `
 
 | change                                                      | file                                         | effect                                     |
 | ----------------------------------------------------------- | -------------------------------------------- | ------------------------------------------ |
-| `moCompRefPlane_c` run 1 becomes a `conditional` rule       | `re/data/class_layouts_versioned.json`       | unblocks all 32 donor fixtures             |
-| `moProfileFeature_c` gets ten fixed child slots             | `re/data/class_layouts_decompiled.json`      | `boss1_front_rect_blind` 148 → 223 objects |
-| `moExtrusion_c` gets the sixteen children the traces record | `re/data/class_layouts_versioned.json`       | replaces a nine-slot absorption            |
-| `moCompSketchEntHandle_c` run 0 gets the 89/85 version gate | `re/data/class_layouts_decompiled.json`      | its `sgPointHandle` was 89 bytes early     |
-| `moFR_c` gets its modern 8-byte inline data record          | `re/data/class_layouts_decompiled.json`      | advances 23 donors to `moFaceRef_c`        |
-| `ParallelPlaneDistanceDim_c` gets its transform predicate   | `re/data/class_layouts_versioned.json`       | closes the 403/474/475-byte split          |
+| `moCompRefPlane_c` run 1 becomes a `conditional` rule       | `re/data/Layouts/ClassLayoutsVersioned.json`       | unblocks all 32 donor fixtures             |
+| `moProfileFeature_c` gets ten fixed child slots             | `re/data/Layouts/ClassLayoutsDecompiled.json`      | `boss1_front_rect_blind` 148 → 223 objects |
+| `moExtrusion_c` gets the sixteen children the traces record | `re/data/Layouts/ClassLayoutsVersioned.json`       | replaces a nine-slot absorption            |
+| `moCompSketchEntHandle_c` run 0 gets the 89/85 version gate | `re/data/Layouts/ClassLayoutsDecompiled.json`      | its `sgPointHandle` was 89 bytes early     |
+| `moFR_c` gets its modern 8-byte inline data record          | `re/data/Layouts/ClassLayoutsDecompiled.json`      | advances 23 donors to `moFaceRef_c`        |
+| `ParallelPlaneDistanceDim_c` gets its transform predicate   | `re/data/Layouts/ClassLayoutsVersioned.json`       | closes the 403/474/475-byte split          |
 | `moFromEndSpec_c` and `moEndSpec_c` get owned tails         | both authored layout tables                  | separates nested feature tails             |
-| the four-byte stream footer becomes archive framing         | `src/convert/adapters/solidworks/archive.py` | three exact donor round trips              |
-| `moICE_c` gets its complete conditional child graph         | `re/data/class_layouts_decompiled.json`      | removes the former 9.6 KB content wall     |
-| `moPerBodyChooserData_c` gets three counted object arrays   | `re/data/class_layouts_decompiled.json`      | replaces a fitted fixed three-child shape  |
-| native `su_CDWordArray` count replaces a boolean guess      | `re/data/class_layouts_decompiled.json`      | accepts every chooser DWord count          |
-| native ANSI and Unicode CString framing                     | `src/convert/adapters/solidworks/archive.py` | decodes all four native length forms       |
-| guarded primitive trace for the 1437-byte lightweight lane  | `re/tooling/windbg/field_cdb_lwdata.txt`     | confirms it is not read on normal open     |
-| donor object floor                                          | `tests/convert/test_solidworks_archive.py`   | 5244 → **18761**                           |
-| exact donor round-trip floor                                | `tests/convert/test_solidworks_archive.py`   | 0 → **17**                                 |
-| `_name_record` flag word per node kind                      | `src/convert/adapters/solidworks/native.py`  | correct for planes, Origin and cuts        |
-| `_resolved_payload` first `u32`                             | `src/convert/adapters/solidworks/native.py`  | base map index, not the object count       |
+| the four-byte stream footer becomes archive framing         | `src/convert/adapters/solidworks/container/Archive.py` | three exact donor round trips              |
+| `moICE_c` gets its complete conditional child graph         | `re/data/Layouts/ClassLayoutsDecompiled.json`      | removes the former 9.6 KB content wall     |
+| `moPerBodyChooserData_c` gets three counted object arrays   | `re/data/Layouts/ClassLayoutsDecompiled.json`      | replaces a fitted fixed three-child shape  |
+| native `su_CDWordArray` count replaces a boolean guess      | `re/data/Layouts/ClassLayoutsDecompiled.json`      | accepts every chooser DWord count          |
+| native ANSI and Unicode CString framing                     | `src/convert/adapters/solidworks/container/Archive.py` | decodes all four native length forms       |
+| guarded primitive trace for the 1437-byte lightweight lane  | `re/tooling/windbg/Commands/Fields/FieldCdbLwdata.txt`     | confirms it is not read on normal open     |
+| donor object floor                                          | `tests/convert/solidworks/container/SolidworksArchiveTests.py`   | 5244 → **18761**                           |
+| exact donor round-trip floor                                | `tests/convert/solidworks/container/SolidworksArchiveTests.py`   | 0 → **17**                                 |
+| `_name_record` flag word per node kind                      | `src/convert/adapters/solidworks/core/Native.py`  | correct for planes, Origin and cuts        |
+| `_resolved_payload` first `u32`                             | `src/convert/adapters/solidworks/core/Native.py`  | base map index, not the object count       |
 
-`archive.py` now mirrors the native `swccu.dll` CString reader and writer: short ANSI strings use a
+`Archive.py` now mirrors the native `swccu.dll` CString reader and writer: short ANSI strings use a
 single length prefix; Unicode strings use `ff fe ff` followed by the same 8/16/32-bit length
 grammar. Empty ANSI (`00`) and empty Unicode (`ff fe ff 00`) are both valid and lossless.
 
@@ -74,8 +74,8 @@ result-body graph and the sketch-side counted records advances it again to **187
 donor streams now segment, tile and rebuild through `Model.emit()` byte for byte. The focused suite
 has **100 passing tests** with no recorded-layout failures. No remaining blocker is `moICE_c@7`.
 
-The `moCompRefPlane_c` finding lives in `class_layouts_versioned.json` rather than
-`class_layouts_decompiled.json` because `gen_class_layouts.py` merges the versioned table **after**
+The `moCompRefPlane_c` finding lives in `ClassLayoutsVersioned.json` rather than
+`ClassLayoutsDecompiled.json` because `GenClassLayouts.py` merges the versioned table **after**
 the decompiled one and replaces whole class entries, so a decompiled entry for a class the versioned
 table owns is silently dropped. `moCompRefPlane_c` is owned there for its `runs_by_version` gate.
 
@@ -115,7 +115,7 @@ So run 1 is 42 bytes when the flag is clear and 114 when it is set:
 ```
 
 The predicate sits at a **fixed offset inside the run itself**, `+4`, so it is read before the
-length it selects is computed. This is the same 72-byte basis `../archive/GRAMMAR.md` §5.4 records
+length it selects is computed. This is the same 72-byte basis `../archive/Grammar.md` §5.4 records
 for `moSketchChain_c` as "omitted entirely for Front", now with its discriminator named.
 
 The measured bases, read out of the vendor streams at 7973:
@@ -158,10 +158,10 @@ direction is fatal. That pins the 20-node reading of the baseline exactly — 14
 Origin, Sketch1, Boss-Extrude1.
 
 The `u32` is **not reader-critical**. 110 in place of 109 opens with the correct volume. It is the
-`Contents/Config-0` final map counter — `re/data/external_classes.json::config0_continuation`
+`Contents/Config-0` final map counter — `re/data/Layouts/ExternalClasses.json::config0_continuation`
 measures 109 for `boss1`, 110 for `boss2` and 111 for `boss3`, so it is `109 + features - 1` — and
 `resolve_base()` needs it to walk the stream statically, but SOLIDWORKS tolerates it being wrong.
-`native.py` writes it because a static walk of Kit's own output has to work, not because the reader
+`Native.py` writes it because a static walk of Kit's own output has to work, not because the reader
 demands it.
 
 ## 4. The reader cannot be grown incrementally
@@ -232,11 +232,11 @@ Field-level facts gated against the vendor stream while getting there:
   there is byte-correct for folders only by coincidence, because `2.0` is
   `00 00 00 00 00 00 00 40` and therefore reads back as `u32 0` then `u32 0x40000000`.
 - The four rectangle coordinate records occur verbatim at measured strides **`178, 162, 162`**, so
-  `../archive/GRAMMAR.md` §5.1's uniform 162 is right for the last two gaps and wrong for the first.
+  `../archive/Grammar.md` §5.1's uniform 162 is right for the last two gaps and wrong for the first.
 - `moCompFeature_c` holds **2 entries per feature**, one sketch and one extrusion — two entries in
   the 20-node baseline, for ids 26 and 32 — and its 93-byte body opens
   `2b 80` classref, `02 00` objectref, then 41 zero bytes. The `02 00 00 00` that
-  `../archive/GRAMMAR.md` §3.1 read as a `u32` = 2 is an object-reference tag plus the first two
+  `../archive/Grammar.md` §3.1 read as a `u32` = 2 is an object-reference tag plus the first two
   bytes of that zero run. The other two 89-byte hits in the baseline are `moCompRefPlane_c`
   instances, which carry the identical run because `moCompRefPlane_c::Serialize`
   (`sldmodu.dll 0x4bc22e00`) calls `moCompFeature_c::Serialize` (`0x4bc222f0`) as its base.
@@ -267,7 +267,7 @@ nine node bodies, one byte at `+85` in two `objectref` runs, and 12 bytes inside
 **50 bytes.**
 
 The 224 parameter-varying bytes sit in 33 of the 321 nodes and are exactly the fields
-`../archive/GRAMMAR.md` already documents: nodes 158/162/166/170 are the four sketch coordinates,
+`../archive/Grammar.md` already documents: nodes 158/162/166/170 are the four sketch coordinates,
 93/95/96/106/108/109/119/121/122 are the three plane display rectangles (`moDefaultRefPlnData_c`, a
 derived cache), and 245/247/249/257/261/262 are the depth scalar and its five annotation copies.
 
@@ -317,7 +317,7 @@ objects, counted arrays, conditional branches and scalar tails; the former 9.6 K
 fully traversable and re-emittable. What remains is semantic debt: several scalar fields are still
 named only by their in-memory offsets, and no first-principles constructor derives the entire graph
 from FCStd features. Copying the invariant bytes would still violate
-`.kiro/steering/no-donor-blocks.md`. The highest-leverage semantic item outside the result body is
+`.kiro/steering/NoDonorBlocks.md`. The highest-leverage semantic item outside the result body is
 the folder tail: 139 bytes identical across 13 different folder classes except for a `u32` `time_t`
 pair and one byte, so decoding `moNode_c` / `moModelNode_c` once names roughly 1800 bytes.
 
@@ -337,11 +337,11 @@ Each of these was believed, tested and killed. They are recorded so nobody pays 
    Refuted, §2: a `u8` flag at run offset `+4` selects a 9-double basis.
 5. **`moCompFeature_c` holds one entry per tree node.** Refuted, §5: two entries in the 20-node
    baseline, one per sketch and one per extrusion. An encoder that emitted 20 was caught by the gate.
-6. **`../archive/GRAMMAR.md` §3.1's `02 00 00 00` is a `u32` = 2.** Refuted, §5: an object-reference
+6. **`../archive/Grammar.md` §3.1's `02 00 00 00` is a `u32` = 2.** Refuted, §5: an object-reference
    tag plus the first two bytes of a 41-byte zero run.
-7. **The rectangle coordinate stride is a uniform 162 bytes** (`../archive/GRAMMAR.md` §5.1).
+7. **The rectangle coordinate stride is a uniform 162 bytes** (`../archive/Grammar.md` §5.1).
    Refuted, §5: the measured strides are `178, 162, 162`.
-8. **The 72-byte basis block holds the same matrix as `native.py::_principal_plane_ids`.** Refuted
+8. **The 72-byte basis block holds the same matrix as `Native.py::_principal_plane_ids`.** Refuted
    by the vendor bytes at 7973: the block is Top `((1,0,0),(0,0,1),(0,-1,0))` and Right
    `((-0,0,1),(-0,1,0),(-1,0,0))`, negative zeros included, while the matching table carries Top
    `x=(1,0,0), y=(0,0,-1), z=(0,1,0)` and Right `x=(0,0,-1), y=(0,1,0), z=(1,0,0)`.
@@ -369,7 +369,7 @@ Each of these was believed, tested and killed. They are recorded so nobody pays 
     and it is deliberately not shipped.** The class has more child slots than the nine declared, and
     splitting run 5 at that boundary is the next move: it unblocks 23 of the 32 donors.
     `moExtrusion_c::Serialize` and the `moBodyFeature_c` / `FUN_4bb886c0` base chain named in
-    `external_classes.json::pmark_record` are the entry points.
+    `ExternalClasses.json::pmark_record` are the entry points.
 11. **One `moDisplayDistanceDim_c@6` length closes the three stalling parts.** Refuted: no value in
     `{0, 4, …, 80, 91}` segments the historical under-walk of `PLANE_TOP`; the fitted 19 is
     refuted for `PLANE_TOP`, `PLANE_RIGHT` and `MIDPLANE_d10`. The record is the depth dimension's
@@ -387,7 +387,7 @@ Each of these was believed, tested and killed. They are recorded so nobody pays 
     every object it produced after that was at an offset the trace contradicts.
 14. **The blocker is `sgSketch@tail` ×32 at 4892 objects**, as an earlier brief recorded. Not
     reproducible: the measured blocker on the shipped table was `moCompRefPlane_c@1` ×32 at 5244
-    objects, and the `groups` rule that brief asked for already existed in `archive.py` and was
+    objects, and the `groups` rule that brief asked for already existed in `Archive.py` and was
     already wired into `sgSketch`.
 
 ## 8. What is deliberately not shipped
@@ -407,13 +407,13 @@ Each of these was believed, tested and killed. They are recorded so nobody pays 
 ## 9. Reproduction
 
 ```powershell
-uv run python re\tooling\ghidra\gen_class_layouts.py
-uv run python re\tooling\harness\segment_fixtures.py --out <out.json>
-uv run python -m pytest tests\convert\test_solidworks_archive.py -q
+uv run python re\tooling\ghidra\Generation\GenClassLayouts.py
+uv run python re\tooling\harness\SegmentFixtures.py --out <out.json>
+uv run python -m pytest tests\convert\solidworks\container\SolidworksArchiveTests.py -q
 ```
 
-The primitive traces use `re\tooling\windbg\field_cdb_resolved.txt` for the 11075-byte resolved
-stream and `re\tooling\windbg\field_cdb_lwdata.txt` for the 1437-byte lightweight lane. Both launch
+The primitive traces use `re\tooling\windbg\Commands\Fields\FieldCdbResolved.txt` for the 11075-byte resolved
+stream and `re\tooling\windbg\Commands\Fields\FieldCdbLwdata.txt` for the 1437-byte lightweight lane. Both launch
 the visible application under cdb and use no SOLIDWORKS COM API.
 
 The fixture harness prints the per-donor blockers; the object total is the sum of `object_count`

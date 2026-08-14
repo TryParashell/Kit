@@ -29,8 +29,8 @@ from convert.adapters.base import (
     WriteResult,
     is_binary_destination,
 )
-from convert.opencascade import decode_ascii_brep as decode_opencascade_brep
-from convert.parasolid import decode_brep_model as decode_parasolid_brep
+from convert.geometry.Opencascade import decode_ascii_brep as decode_opencascade_brep
+from convert.geometry.Parasolid import decode_brep_model as decode_parasolid_brep
 from interchange import (
     Body,
     BrepModel,
@@ -56,27 +56,9 @@ from interchange import (
     with_wrapper_metadata,
 )
 
-from .assembly import decode_product_table, native_product_assembly
-from .container import (
-    Cfv2Archive,
-    Cfv2Declaration,
-    Cfv2Directory,
-    Cfv2FormatError,
-    Cfv2Stream,
-    OsmxArchive,
-    OsmxFormatError,
-    OsmxSymbol,
-    append_cfv2_stream,
-    build_cfv2,
-    build_declaration,
-)
-from .format import (
-    DOCUMENT_TYPE_BY_SUFFIX,
-    INFO,
-    PART_DOCUMENT_TYPE,
-    PRODUCT_DOCUMENT_TYPE,
-    SUFFIX_BY_DOCUMENT_TYPE,
-)
+from convert.adapters.catia.Assembly import decode_product_table, native_product_assembly
+from convert.adapters.catia.Container import Cfv2Archive, Cfv2Declaration, Cfv2Directory, Cfv2FormatError, Cfv2Stream, OsmxArchive, OsmxFormatError, OsmxSymbol, append_cfv2_stream, build_cfv2, build_declaration
+from convert.adapters.catia.Format import DOCUMENT_TYPE_BY_SUFFIX, INFO, PART_DOCUMENT_TYPE, PRODUCT_DOCUMENT_TYPE, SUFFIX_BY_DOCUMENT_TYPE
 
 _FORMAT_ID = INFO.format_id
 _MANIFEST_NAME = "KitInterchange"

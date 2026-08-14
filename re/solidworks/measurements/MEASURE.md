@@ -26,7 +26,7 @@ the streams to measure can be produced without touching `src/`.
 1. **The boss in `boss_revcut` is declared `blind` but the donor stream holds a mid-plane boss**
    (end condition code 6). The donor key says `blind` on purpose, because `donor_key()` folds a
    mid-plane target onto a blind key and a `mid-plane` donor key is unreachable. Patching writes
-   code 0 over code 6. GRAMMAR.md §5.3 measured blind → mid-plane; mid-plane → blind is the same
+   code 0 over code 6. Grammar.md §5.3 measured blind → mid-plane; mid-plane → blind is the same
    byte in the other direction and is **not** yet measured. Confirm the boss rebuilds 12 mm one
    sided, not 6 mm either side.
 2. **A partial angle.** `patch_donor` accepts any angle in `(0, 360]` and writes it as radians at

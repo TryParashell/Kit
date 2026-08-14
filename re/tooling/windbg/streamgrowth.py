@@ -15,7 +15,7 @@ import streamlib
 def main() -> int:
     parts = [Path(item).resolve() for item in sys.argv[1:]]
     if not parts:
-        raise SystemExit("usage: streamgrowth.py <part> <part> [...]")
+        raise SystemExit("usage: Streamgrowth.py <part> <part> [...]")
     table: dict[str, list[int]] = {}
     for part in parts:
         donor = streamlib.load_donor(part)

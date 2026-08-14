@@ -2,12 +2,12 @@
 
 Source: Ghidra 12.1.2 headless decompilation of `sldmodu.dll` from the licensed SOLIDWORKS 2025
 install. No SOLIDWORKS process, no COM, no debugger. The dump is
-`.rescratch/ghidra/out/task2.c` (325 functions, `run_dump_task2.ps1` + `spec_task2.txt`);
+`.rescratch/ghidra/out/task2.c` (325 functions, `RunDumpTaskTwo.ps1` + `SpecTaskTwo.txt`);
 `RenameArchiveApi.java` had already been applied and saved to the project, so every
 `su_CArchive::operator>>` overload appears as `AR_get_<type>` and the widths below are read, not
 guessed.
 
-Confidence words are used exactly as in `SERIALIZE.md`:
+Confidence words are used exactly as in `Serialize.md`:
 
 * **confirmed** — read out of the decompiled `Serialize` *and* the byte arithmetic reproduces a
   real traced object span exactly.
@@ -45,7 +45,7 @@ there is no `su_DBKey` framing and `RefId`/`DimOnCM` are absent entirely.
 
 ### Evidence
 
-`verify_sketch.py` walks every traced handle object in the 9 segmented parts, takes the object's
+`VerifySketch.py` walks every traced handle object in the 9 segmented parts, takes the object's
 first scalar gap (children excluded by `layout.gaps`) and decodes it with the escape rule:
 
 ```
@@ -195,7 +195,7 @@ a different spelling.
 
 ## 7. Addresses for the rest of the `sg*` family
 
-From `out/serialize_map.json`, the `sg*` classes that own a slot-5 serialiser:
+From `out/SerializeMap.json`, the `sg*` classes that own a slot-5 serialiser:
 
 | class | `Serialize` | status here |
 |---|---|---|

@@ -10,7 +10,7 @@ for candidate in (ROOT, ROOT / "src"):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
 
-from convert.adapters.solidworks.container import SldprtArchive
+from convert.adapters.solidworks.container.Container import SldprtArchive
 
 RESOLVED = "Contents/Config-0-ResolvedFeatures"
 KEYWORDS = "swXmlContents/KeyWords"

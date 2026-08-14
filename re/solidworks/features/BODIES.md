@@ -93,7 +93,7 @@ for the right reason — a CAM tool bit is not part of the designed part — not
 
 ```
 .rescratch/bodies/
-  BODIES.md    this document
+  Bodies.md    this document
   probe.py     compact bodies / timeline / sketches / planes dump for an FCStd
   attrs.py     raw FreeCAD attributes carried on bodies and timeline steps
   params.py    the Parameter records a single feature owns

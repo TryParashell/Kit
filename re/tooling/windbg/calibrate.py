@@ -141,7 +141,7 @@ def main() -> int:
     hits = int(sys.argv[1]) if len(sys.argv) > 1 else 200
     mode = sys.argv[2] if len(sys.argv) > 2 else "run"
     OUT.mkdir(parents=True, exist_ok=True)
-    script = HERE / "cdb_calibrate.txt"
+    script = HERE / "CdbCalibrate.txt"
     log = OUT / "cdb_calibrate.log"
     write_script(script, hits)
     if mode == "run":
@@ -171,7 +171,7 @@ def main() -> int:
         "layout": layout,
         "checks": checks,
     }
-    (OUT / "calibrate.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    (OUT / "Calibrate.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(json.dumps(payload, indent=2))
     return 0
 

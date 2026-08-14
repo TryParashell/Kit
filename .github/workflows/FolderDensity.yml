@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+name: Folder density
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-folder-density:
+    name: Verify direct file limits
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.9.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize the locked environment
+        run: uv sync --frozen --python 3.11
+
+      - name: Verify folder density policy
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || '' }}
+        run: |
+          Arguments=()
+          if [ -n "$BASE_REF" ]; then
+            Arguments=(--base "$BASE_REF" --head "$HEAD_REF")
+          fi
+          set +e
+          OutputText="$(uv run python -m tools.Policy.CheckPaths "${Arguments[@]}" 2>&1)"
+          StatusCode=$?
+          set -e
+          if [ "$StatusCode" -eq 2 ]; then
+            printf '%s\n' "$OutputText"
+            exit 2
+          fi
+          FindingText="$(printf '%s\n' "$OutputText" | grep ': PTH002:' || true)"
+          if [ -n "$FindingText" ]; then
+            printf '%s\n' "$FindingText"
+            exit 1
+          fi
+          echo "folder density policy passed"

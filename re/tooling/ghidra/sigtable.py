@@ -34,7 +34,7 @@ def locate(path=HOST):
 
 def scan_parts(roots):
     sys.path.insert(0, str(ROOT / "src"))
-    from convert.adapters.solidworks.container import SldprtArchive, _template_fields
+    from convert.adapters.solidworks.container.Container import SldprtArchive, _template_fields
 
     found = []
     for root in roots:

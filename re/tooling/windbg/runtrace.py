@@ -47,9 +47,9 @@ g
 
 
 def layout() -> dict[str, int]:
-    path = OUT / "calibrate.json"
+    path = OUT / "Calibrate.json"
     if not path.is_file():
-        raise SystemExit(f"run calibrate.py first: {path} is missing")
+        raise SystemExit(f"run Calibrate.py first: {path} is missing")
     return json.loads(path.read_text(encoding="utf-8"))["layout"]
 
 
@@ -144,7 +144,7 @@ def main() -> int:
     arguments = sys.argv[1:]
     if not arguments:
         raise SystemExit(
-            "usage: runtrace.py <mode> <label> <part> [<label> <part> ...]"
+            "usage: Runtrace.py <mode> <label> <part> [<label> <part> ...]"
         )
     mode = arguments[0]
     pairs = arguments[1:]
@@ -164,7 +164,7 @@ def main() -> int:
             f"agree={(record.get('cross_check') or {}).get('agree')}",
             flush=True,
         )
-        (OUT / "runtrace.json").write_text(
+        (OUT / "Runtrace.json").write_text(
             json.dumps(records, indent=2), encoding="utf-8"
         )
     return 0

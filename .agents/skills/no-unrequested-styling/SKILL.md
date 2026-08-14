@@ -3,7 +3,7 @@ name: no-unrequested-styling
 description: "Limit UI changes to the requested scope. Use when changing pages, visual styling, layout, or components."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/no-unrequested-styling.md"
+  source: ".kiro/steering/NoUnrequestedStyling.md"
   kiro-inclusion: "always"
 ---
 
@@ -28,7 +28,7 @@ If the user said "add the title X pushed to the left," you add the text, left-al
 
 ## Rule 2: Inheriting From Siblings Is Not License To Add Style
 
-Mirroring sibling pages (per `layout-system.md` Rule 4) applies to the LAYOUT FRAME (`page-shell`, token spacing, structure). It does NOT mean copying every typographic class a sibling chose. Do not justify an unrequested `font-semibold` / `tracking-tight` / `text-4xl` by saying "the sibling page does it." Copy the frame, not the unrequested decoration.
+Mirroring sibling pages (per `LayoutSystem.md` Rule 4) applies to the LAYOUT FRAME (`page-shell`, token spacing, structure). It does NOT mean copying every typographic class a sibling chose. Do not justify an unrequested `font-semibold` / `tracking-tight` / `text-4xl` by saying "the sibling page does it." Copy the frame, not the unrequested decoration.
 
 ## Rule 3: When In Doubt, Less Is Correct
 

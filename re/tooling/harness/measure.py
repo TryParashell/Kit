@@ -13,7 +13,7 @@ from dismiss import start as start_dismisser
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 OUT = ROOT / ".rescratch" / "sw" / "out"
-RUNNER = HERE / "measure_one.py"
+RUNNER = HERE / "MeasureOne.py"
 CONTROL = ROOT / ".rescratch" / "corpus" / "parts" / "BASELINE_40x20x10.SLDPRT"
 TIMEOUT_SECONDS = 420.0
 MARKER = "@@RESULT@@"

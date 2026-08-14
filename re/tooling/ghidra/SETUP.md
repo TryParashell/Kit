@@ -69,9 +69,9 @@ executed.
 Three projects, one per workload, so they do not contend for the project lock:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\run_import_swccu.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\run_import_sldmodu.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\run_import_sldmfcu.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\RunImportSwccu.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\RunImportSldmodu.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\RunImportSldmfcu.ps1
 ```
 
 Each script is a thin wrapper around
@@ -89,9 +89,9 @@ directory must already exist; `analyzeHeadless` does not create it.
 Decompilation is driven by scripts, never the GUI:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\run_dump_swccu.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\run_dump_sldmodu.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\run_dump_sldmfcu.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\RunDumpSwccu.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\RunDumpSldmodu.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\odin\kitgh\RunDumpSldmfcu.ps1
 ```
 
 These re-open the saved project with `-process <file> -noanalysis` and run, in order:
@@ -124,22 +124,22 @@ All four analyses reported `Analysis succeeded` / `Import succeeded` and exit co
 
 ```powershell
 # analysis, once per DLL
-powershell -File C:\Users\odin\kitgh\run_import_swccu.ps1
-powershell -File C:\Users\odin\kitgh\run_import_sldmodu.ps1
-powershell -File C:\Users\odin\kitgh\run_import_sldmfcu.ps1
+powershell -File C:\Users\odin\kitgh\RunImportSwccu.ps1
+powershell -File C:\Users\odin\kitgh\RunImportSldmodu.ps1
+powershell -File C:\Users\odin\kitgh\RunImportSldmfcu.ps1
 
 # extraction
-powershell -File C:\Users\odin\kitgh\run_dump_swccu.ps1        # out\swccu_archive.c, out\sldarchiveu_ops.c
-powershell -File C:\Users\odin\kitgh\run_dump_sldmodu.ps1      # out\sldmodu_vtslots.txt, out\sldmodu_serialize.c
-powershell -File C:\Users\odin\kitgh\run_dump_accessors.ps1    # out\sldmodu_accessors.c
-powershell -File C:\Users\odin\kitgh\run_dump_accessors2.ps1   # out\sldmodu_accessors2.c
-powershell -File C:\Users\odin\kitgh\run_dump_accessors3.ps1   # out\sldmodu_accessors3.c
-powershell -File C:\Users\odin\kitgh\run_dump_sldmfcu.ps1      # out\sldmfcu_sigtable_refs.c
+powershell -File C:\Users\odin\kitgh\RunDumpSwccu.ps1        # out\swccu_archive.c, out\sldarchiveu_ops.c
+powershell -File C:\Users\odin\kitgh\RunDumpSldmodu.ps1      # out\sldmodu_vtslots.txt, out\sldmodu_serialize.c
+powershell -File C:\Users\odin\kitgh\RunDumpAccessors.ps1    # out\sldmodu_accessors.c
+powershell -File C:\Users\odin\kitgh\RunDumpAccessorsTwo.ps1   # out\sldmodu_accessors2.c
+powershell -File C:\Users\odin\kitgh\RunDumpAccessorsThree.ps1   # out\sldmodu_accessors3.c
+powershell -File C:\Users\odin\kitgh\RunDumpSldmfcu.ps1      # out\SldmfcuSigtableRefs.txt
 ```
 
-Each `run_dump_*.ps1` names a spec file; regenerate `spec_sldmodu.txt` from the class list with
-`uv run python .rescratch\ghidra\make_spec.py`, and get any further class's `Serialize` address from
-`out\serialize_map.json` (built by `serialize_map.py` from `out\sldmodu_vtslots.txt`).
+Each `run_dump_*.ps1` names a spec file; regenerate `SpecSldmodu.txt` from the class list with
+`uv run python .rescratch\ghidra\MakeSpec.py`, and get any further class's `Serialize` address from
+`out\SerializeMap.json` (built by `SerializeMap.py` from `out\sldmodu_vtslots.txt`).
 
 ## 9. Analysis and cross-check scripts
 
@@ -147,22 +147,22 @@ Run from anywhere; they resolve paths from the repository root.
 
 | script | what it does |
 |---|---|
-| `serialize_map.py` | vtable slot 5 → per-class `Serialize` address, for 2607 RTTI-named classes |
-| `make_spec.py` | turns the classes observed in the traced streams into a `DumpFunctions` spec |
-| `exports.py` | PE export table: mangled name → RVA → virtual address (needed when Ghidra folded a getter under another class's name) |
-| `pemap.py` | PE sections; file offset → RVA → virtual address |
-| `vtab.py` | queries a vtable dump by class or by slot |
-| `getfn.py` | pulls one function out of a `DumpFunctions` output |
-| `offsets.py` | summarises the `this + off` accesses of each dumped accessor |
-| `layout.py` | loads a `segments_*.json` plus the real stream bytes and produces, per object, the exact interleaving of nested object reads and own scalar runs |
-| `compare.py`, `bytediff.py`, `threeway.py`, `classdiff.py`, `segspans.py`, `segtree.py` | shape and byte comparisons of one class across parts |
-| **`verify_layout.py`** | walks a declared field table against the traced spans; fails if any scalar gap is not exactly filled. Also decodes the shared tail run. |
-| **`scan_endspec.py`** | decodes the first `moEndSpec_c` of every corpus/example part statically |
-| **`scan_revendspec.py`** | same for `moRevEndSpec_c` |
-| **`sigtable.py`** | extracts the 1000-entry `file_id` → signature table from `sldmfcu.dll` and checks it against every real part |
-| `scan_consts.py` | locates the signature constants across every SOLIDWORKS module |
-| `findtable.py` | derives the table geometry from the constants by entropy bounds |
-| `dumpbytes.py`, `kwdump.py` | hex window into a DLL; `swXmlContents/KeyWords` dump |
+| `SerializeMap.py` | vtable slot 5 → per-class `Serialize` address, for 2607 RTTI-named classes |
+| `MakeSpec.py` | turns the classes observed in the traced streams into a `DumpFunctions` spec |
+| `Exports.py` | PE export table: mangled name → RVA → virtual address (needed when Ghidra folded a getter under another class's name) |
+| `Pemap.py` | PE sections; file offset → RVA → virtual address |
+| `Vtab.py` | queries a vtable dump by class or by slot |
+| `Getfn.py` | pulls one function out of a `DumpFunctions` output |
+| `Offsets.py` | summarises the `this + off` accesses of each dumped accessor |
+| `Layout.py` | loads a `segments_*.json` plus the real stream bytes and produces, per object, the exact interleaving of nested object reads and own scalar runs |
+| `Compare.py`, `Bytediff.py`, `Threeway.py`, `Classdiff.py`, `SegSpans.py`, `Segtree.py` | shape and byte comparisons of one class across parts |
+| **`VerifyLayout.py`** | walks a declared field table against the traced spans; fails if any scalar gap is not exactly filled. Also decodes the shared tail run. |
+| **`ScanEndspec.py`** | decodes the first `moEndSpec_c` of every corpus/example part statically |
+| **`ScanRevendspec.py`** | same for `moRevEndSpec_c` |
+| **`Sigtable.py`** | extracts the 1000-entry `file_id` → signature table from `sldmfcu.dll` and checks it against every real part |
+| `ScanConsts.py` | locates the signature constants across every SOLIDWORKS module |
+| `Findtable.py` | derives the table geometry from the constants by entropy bounds |
+| `Dumpbytes.py`, `Kwdump.py` | hex window into a DLL; `swXmlContents/KeyWords` dump |
 
 All are `black`-clean and comment-free; `black --check .rescratch\ghidra\*.py` exits 0.
 

@@ -17,9 +17,9 @@ The stream is document-level. It carries **no geometry, no feature, no sketch an
 data**. It is a scalar preamble followed by a seven-class `su_CArchive` object graph holding the
 drafting standard, the line-style table, the annotation-to-line-font bindings, the user model
 environment, the BOM manager and the design-journal record. Kit emits it from
-`src/convert/adapters/solidworks/definition.py`.
+`src/convert/adapters/solidworks/container/Definition.py`.
 
-`../measurements/MEASURE.md` classes this stream load-critical: deleting it from a vendor file
+`../measurements/Measure.md` classes this stream load-critical: deleting it from a vendor file
 crashes SOLIDWORKS on open. Before this work it was the only load-critical stream with no recorded
 grammar at all.
 
@@ -61,10 +61,10 @@ is what makes it emittable.
 
 ## 2. The preamble
 
-The stream does **not** begin with an MFC tag, which is why `archive.py`'s `segment()` and
+The stream does **not** begin with an MFC tag, which is why `Archive.py`'s `segment()` and
 `resolve_base()` cannot walk it and why **there is no base value for this stream**. Every base 1–19
 against every header size 100–130 fails; with the shipped 6-byte header the walk dies at byte 8
-reading `u32@8` as a tag. None of the stream's seven classes appear in `re/data/class_layouts.json`.
+reading `u32@8` as a tag. None of the stream's seven classes appear in `re/data/Layouts/ClassLayouts.json`.
 
 The first class-definition tag sits at byte 120 or 192. Everything before it:
 
@@ -137,7 +137,7 @@ literal in sldmodu at VA `0x4ce9987c`, and `DumpRefs` reports **0 functions** re
 sldmfcu occurrence sits inside a table of stream names alongside `eModelLic`, `Config-0-LWDATA`,
 `Config-0-Partition`, `Config-0-ResolvedFeatures`, `CMgr`, `Header2` and the rest, so storages are
 opened by table index. This is the same table-indexed pattern as the container signature table in
-`ANSWERS.md` Q7.
+`Answers.md` Q7.
 
 ### 3.2 The settings tables
 
@@ -158,7 +158,7 @@ pairs, then `u16 1`. The bindings are settings: `Visible` takes line weight 1, `
 `ViewArrow` and `EmphasizedOutline` take 2, every other annotation takes the default 0;
 `Centerlines` binds to `CENTER`, `TanVisible` and `Explodelines` to `PHANTOM`, `CosmeticThread` to
 `DUMMYTHREAD` (a font key with no `moLineStyle_c` record of its own), and no annotation overrides
-the custom width. The full ordered list is in `definition.py`.
+the custom width. The full ordered list is in `Definition.py`.
 
 Note for anyone reading the first draft of this work: there are **40** bindings, not 48, and
 `Sketch` is the first map key binding to `CONTINUOUS`, not a separate "active configuration name"
@@ -183,7 +183,7 @@ These six ranges were the last residuals. They are now emitted as primitive fiel
 session words; two `u32` window coordinates, six `u16` placement fields and one `i32` sentinel;
 reserved-zero environment ranges, one capacity, two sentinels, a build stamp and trailing flag; an
 empty-BOM schema/build tail; and sparse typed journal option tables with explicit reserved gaps.
-No raw range or vendor byte block remains in `definition.py`.
+No raw range or vendor byte block remains in `Definition.py`.
 
 ## 4. The oracle
 
@@ -237,7 +237,7 @@ document, not from the stream**. A body serialised at one generation and read ba
 generation's gates is parsed with the wrong field widths and the read runs off the end.
 
 Kit authors `_MO_VERSION_18000` and the recorded tables came from an 18000 part, so this is
-satisfied by construction. `definition.py` states it as `DOCUMENT_GENERATION = 18000`. **The tables
+satisfied by construction. `Definition.py` states it as `DOCUMENT_GENERATION = 18000`. **The tables
 must be re-recorded if Kit ever targets another generation.**
 
 One confound, stated plainly: both refusing donors are also Spanish-locale vendor files, so UI
@@ -261,7 +261,7 @@ rejection, not session flakiness.
 
 ## 5. How Kit emits it
 
-`src/convert/adapters/solidworks/definition.py`. The preamble is built from named fields with
+`src/convert/adapters/solidworks/container/Definition.py`. The preamble is built from named fields with
 `view_count = 0` and a zeroed camera, which is honest for a freshly written document and is the
 branch measured opening. The body is written from the declared tables with two parameterised holes,
 the drafting-standard class name and the user name. Default output is deterministic:
@@ -273,7 +273,7 @@ the drafting-standard class name and the user name. Default output is determinis
 Do **not** copy a donor's `Definition` and do **not** substitute one from an arbitrary corpus file —
 that is measured as a crash whenever the donor's generation differs from the host's.
 
-`tests/convert/test_solidworks_definition.py` pins the byte-identity of the body against the
+`tests/convert/solidworks/configuration/SolidworksDefinitionTests.py` pins the byte-identity of the body against the
 recorded digest, the default stream digest, all three drafting standards, four user-name lengths,
 the assembly CLSID, the view block, complete typed-byte accounting, and the absence of encoded
 vendor blocks.

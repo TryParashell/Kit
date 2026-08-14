@@ -45,7 +45,7 @@
     "file_description": "sldmod",
     "legal_copyright": "(c) 2025 Dassault Systemes SolidWorks Corporation"
    },
-   "why": "219 exported per-class Serialize symbols, 9395 RTTI vftables, and the 2607-class vtable-slot-5 map in ../../data/serialize_map.json. Every mo* and sg* field layout came out of here."
+   "why": "219 exported per-class Serialize symbols, 9395 RTTI vftables, and the 2607-class vtable-slot-5 map in ../../data/SerializeMap.json. Every mo* and sg* field layout came out of here."
   },
   {
    "name": "sldmfcu.dll",
@@ -59,7 +59,7 @@
     "file_description": "sldmfc",
     "legal_copyright": "(c) 2025 Dassault Systemes SolidWorks Corporation"
    },
-   "why": "holds the 1000-entry file_id -> signature-triplet lookup table in .rdata: ids at file offset 0x566c40, triplets at 0x567be0, big-endian u32, parallel arrays, initialiser FUN_3cc4e200 with a literal loop bound of 1000. Extracted to ../../data/signature_table.json and verified 184/184."
+   "why": "holds the 1000-entry file_id -> signature-triplet lookup table in .rdata: ids at file offset 0x566c40, triplets at 0x567be0, big-endian u32, parallel arrays, initialiser FUN_3cc4e200 with a literal loop bound of 1000. Extracted to ../../data/SignatureTable.json and verified 184/184."
   }
  ]
 }

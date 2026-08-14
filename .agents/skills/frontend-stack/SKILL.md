@@ -3,7 +3,7 @@ name: frontend-stack
 description: "Use the required Next.js, React, shadcn, and frontend stack. Use when scaffolding, upgrading, or changing frontend applications."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/frontend-stack.md"
+  source: ".kiro/steering/FrontendStack.md"
   kiro-inclusion: "always"
 ---
 

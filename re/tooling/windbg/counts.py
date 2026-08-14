@@ -66,7 +66,7 @@ def main() -> int:
     mode = sys.argv[1]
     arguments = sys.argv[2:]
     if not arguments or len(arguments) % 3:
-        raise SystemExit("usage: counts.py <items|features> <label> <part> <log> [...]")
+        raise SystemExit("usage: Counts.py <items|features> <label> <part> <log> [...]")
     loaded: list[tuple[str, Path, bytes, modellib.Model, int]] = []
     for position in range(0, len(arguments), 3):
         label = arguments[position]

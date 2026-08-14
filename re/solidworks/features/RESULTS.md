@@ -2,11 +2,11 @@
 
 Every number below is `IModelDocExtension::GetMassProperties(1, status)[3] × 1e9` (volume, mm³)
 after `ForceRebuild3(False)`, read in a **fresh SOLIDWORKS subprocess per file** via
-`tests/oracle/session.py`. Every file was built with **`Contents/Config-0-Partition` deleted**, so
+`tests/oracle/Session.py`. Every file was built with **`Contents/Config-0-Partition` deleted**, so
 every volume is a genuine rebuild from `Contents/Config-0-ResolvedFeatures` +
 `swXmlContents/KeyWords`, not a cached body.
 
-Harness: `measure.py` → `measure_one.py`. Raw JSON in `out/measure_*.json`.
+Harness: `Measure.py` → `MeasureOne.py`. Raw JSON in `out/measure_*.json`.
 `status` values:
 
 * `measured` — SOLIDWORKS opened and reported mass properties
@@ -24,7 +24,7 @@ crashes on open, so crash results are only trustworthy from the runs where a con
 ## 1. Capability experiments — byte edits to donors (`experiments.py`, `parts/`)
 
 These attack what donor-patching could not do. All are same-length byte overwrites except `E10`.
-Taken from `out/measure_experiments.json` and `out/measure_retry2.json`, both from the healthy
+Taken from `out/MeasureExperiments.json` and `out/MeasureRetryTwo.json`, both from the healthy
 part of the session (adjacent cases in the same batches measured correctly).
 
 | # | edit | donor | predicted mm³ | measured mm³ | bodies | verdict |
@@ -50,14 +50,14 @@ sketch's support as needing real serialization.
 
 **Tree order comes from `moCompFeature_c`.** E9 reordered the array; SOLIDWORKS returned the tree
 in the new order with one body and the correct volume. With the 51/51 id agreement in
-`GRAMMAR.md` §3, that record is fully specified.
+`Grammar.md` §3, that record is fully specified.
 
 **boss ↔ cut is NOT the tree flags word.** E1 and E2 both kill the process. `A3` below goes
 further: in the first authored batch, writing *cut* flags onto a **boss** skeleton did not
 crash — SOLIDWORKS silently **ignored** it and rebuilt a boss, measuring 18000 mm³ where a cut
 would have given 14800. So `0x40000140` / `0x400201CA` is a tree annotation that has to *agree*
 with the operation; it does not select it. The operation lives in the `moExtrusion_c` / `moICE_c`
-body, which was not decoded. `serialize.py` now refuses an operation its skeleton does not have.
+body, which was not decoded. `Serialize.py` now refuses an operation its skeleton does not have.
 This corrects the natural reading of report 2 §7.2.
 
 **blind → ThroughAll is not a byte flip.** E3 crashes, confirming report 2 §5.5: ThroughAll
@@ -67,7 +67,7 @@ feature needs a ThroughAll skeleton — which `A6` uses successfully.
 **Length changes need index renumbering.** E10 is the only length-changing edit and the only crash
 predicted by theory: removing two objects shifts `su_CArchive`'s combined class/object map index
 for every class defined later, so every `0x8000|i` class-reference token after `moCompFeature_c`
-becomes wrong. This is direct experimental confirmation of `GRAMMAR.md` §2.3 and is exactly why
+becomes wrong. This is direct experimental confirmation of `Grammar.md` §2.3 and is exactly why
 feature *count* is still blocked.
 
 **Front → Top (E5).** The bare id+axis edit opened with no body, while the same change as part of
@@ -77,9 +77,9 @@ reorient; Right survives the bare edit (E6) and Top does not.
 
 ---
 
-## 2. From-scratch authored parts (`serialize.py`, `author_parts.py`, `authored/`)
+## 2. From-scratch authored parts (`Serialize.py`, `author_parts.py`, `authored/`)
 
-`serialize.py` takes a feature-tree description, selects a topology skeleton, and writes every
+`Serialize.py` takes a feature-tree description, selects a topology skeleton, and writes every
 authored field: tree-node flags and ids, `moCompFeature_c` entry ids and timestamps, sketch corner
 / circle-point coordinates, the depth scalar, the direction and end-condition bytes, and the sketch
 plane id + axis. `swXmlContents/KeyWords` and `swXmlContents/Features` are **generated as XML from
@@ -99,7 +99,7 @@ Best measurement per case, with the batch it came from:
 | A8 | 1 boss, **MidPlane** 10 | `BASELINE_40x20x10` | 8000 | **8000.000000000001**, centre `(0, 0, 0)` mm | 1.2e-16 | 1 | `authored2`, `authored4` |
 | A9 | **4** bosses on the Front plane | — | — | **refused at emit time** | | | |
 
-A9 is the honest limit. `serialize.py` raises
+A9 is the honest limit. `Serialize.py` raises
 
 ```
 SerializeError: no skeleton matches shape (('boss','rectangle','plane',True) x 4);
@@ -187,7 +187,7 @@ therefore not a serialization failure but it is also not proven.
 
 Built to find why A1 crashed while A7 and A8, on the same skeleton, measured exactly. Four
 variants of the single-boss part, all measured after the `0x86`/CRLF fix
-(`out/measure_diagnose.json`):
+(`out/MeasureDiagnose.json`):
 
 | variant | change | authored XML | predicted mm³ | measured mm³ | bodies |
 |---|---|---|---|---|---|
@@ -216,7 +216,7 @@ CONTROL: .rescratch/corpus/parts/BASELINE_40x20x10.SLDPRT   (pristine, SOLIDWORK
 repeated after a 150-second settle and a full process sweep. That donor had opened and measured
 correctly many times earlier in the session. So:
 
-* every `crashed-on-open` in `out/measure_authored3.json` and the final single-file runs is
+* every `crashed-on-open` in `out/MeasureAuthoredThree.json` and the final single-file runs is
   **environmental** and carries no information about the files
 * the crash verdicts in §1 (E1, E2, E3, E10) are from `measure_experiments` and `measure_retry2`,
   in which neighbouring cases measured correctly, so they stand

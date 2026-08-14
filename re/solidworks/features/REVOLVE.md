@@ -8,7 +8,7 @@ Corpus: **111 `.SLDPRT`** under `examples/Single Turbo Dual Overhead Cam V8 - KD
 `examples/Random/**` (53 parts) and `examples/.SLDPRT` (1 part). **40 parts** contain revolves,
 **67 revolve features** in total (**39** revolved bosses, **28** revolved cuts).
 
-Everything here builds on `.rescratch/grammar/GRAMMAR.md`, `.rescratch/corpus/REPORT.md` (report 1)
+Everything here builds on `.rescratch/grammar/Grammar.md`, `.rescratch/corpus/REPORT.md` (report 1)
 and `.rescratch/corpus2/REPORT.md` (report 2) and does not restate them.
 
 Reproduce with `uv run python .rescratch/revolve/probe_revolve.py`; it writes
@@ -61,7 +61,7 @@ be pinned is the absolute value, because 2π and 360.0 are trivially distinguish
 
 ## 2. Tree-flag word — CONFIRMED, and it refutes a distinct revolve flag
 
-Every revolve tree node is the ordinary tree-node name record of GRAMMAR.md §4:
+Every revolve tree node is the ordinary tree-node name record of Grammar.md §4:
 
 ```
 <u16 class-ref> ff fe ff <u8 units> <utf16le name> 00 00 00 00 <u32 flags> <u32 feature id>
@@ -71,7 +71,7 @@ Across all 67 revolve features the flags word at `name_text_end + 4` is **`0x400
 exceptions** (`inventory.json` → `summary.distinct_tree_flags`), and the id at `name_text_end + 8`
 equals the `KeyWords` `id` in **67/67**.
 
-Compare the extrudes in the same corpus (`.rescratch/v8/flagmap.txt`): boss `0xC0000140`,
+Compare the extrudes in the same corpus (`.rescratch/v8/Flagmap.txt`): boss `0xC0000140`,
 cut `0xC00201CA`. Masked with `0x7FFFFFFF` those are `0x40000140` and `0x400201CA`.
 
 So the brief's suspicion is **confirmed, not refuted**: a revolve gets the same masked flag word as
@@ -83,7 +83,7 @@ a folder or a sketch. Two consequences:
    node as a *sketch*. See §8 defect 1.
 
 Observed but not load-bearing: the `0x80000000` UI-expanded bit is **clear** on every revolve node
-while it is set on the extrude nodes in the same parts. GRAMMAR.md §4.1 already establishes that
+while it is set on the extrude nodes in the same parts. Grammar.md §4.1 already establishes that
 bit as UI state with no geometry meaning, so this is a coincidence of how these documents were
 saved, not a field.
 
@@ -158,7 +158,7 @@ those parts also contain full-circle circular patterns — so counting 2π is no
 scalar-record rule is.
 
 `+513` and `+537` are **DERIVED CACHE**: the angular annotation's own geometry. Per the measured
-extrude rule in GRAMMAR.md §6, a stale derived cache is safe and a wrong one is not, so a writer
+extrude rule in Grammar.md §6, a stale derived cache is safe and a wrong one is not, so a writer
 that changes the angle should leave both copies alone until they have been characterised against a
 non-360° revolve.
 
@@ -240,7 +240,7 @@ Two **mutually exclusive** slots, each holding a `<u32 feature id><u32 unix time
 56 + 11 = 67. Every revolve matches exactly one slot; none matches both; none matches neither
 (`summary.axis_kinds`). The two offsets are 18 bytes apart, and 18 is the size difference between
 the two sub-object encodings — the same "first instance carries the class declaration" effect
-GRAMMAR.md §2.1 describes.
+Grammar.md §2.1 describes.
 
 Evidence:
 
@@ -259,7 +259,7 @@ Evidence:
 
 * **Authorable / patchable:** the `u32` id itself. Repointing a revolve at a *different existing*
   reference axis or a *different existing* sketch is a 4-byte write at a locatable offset. The
-  companion `time_t` is the same "any plausible value works" field GRAMMAR.md §3.1 documents.
+  companion `time_t` is the same "any plausible value works" field Grammar.md §3.1 documents.
 * **Not authorable:** *which* entity inside the referenced sketch is the centerline. That is an
   intra-sketch entity reference and nothing in this analysis reaches it. A writer can only inherit
   the donor's choice.
@@ -308,7 +308,7 @@ operation lives in an opaque flags word inside the body.
 
 **Stated explicitly, because it drives the donor design:** boss ↔ cut for a revolve changes the
 class set, therefore it changes the class-definition sequence, therefore it changes every
-`su_CArchive` map index after the insertion point (GRAMMAR.md §2.3). **A revolved boss and a
+`su_CArchive` map index after the insertion point (Grammar.md §2.3). **A revolved boss and a
 revolved cut need separate donors. There is no byte flip between them.**
 
 One honest caveat: I did not find a per-feature operation code. In a part that contains *both*
@@ -360,7 +360,7 @@ and `Spark_plug.SLDPRT` have 1). Any donor candidate must be screened for this.
 
 ## 8. Read-path defects in `decode_native_model` — not fixed, `src/` is another agent's
 
-Full write-up with per-feature evidence in **`DECODER_DEFECTS.md`**; this is the summary.
+Full write-up with per-feature evidence in **`DecoderDefects.md`**; this is the summary.
 
 Measured by `probe_revolve.py`, which runs `decode_native_model` on all 40 parts and compares each
 revolve against the stream. Counters are in `inventory.json` → `decoder.counters`; the 54 itemised
@@ -378,7 +378,7 @@ patchable through the public write path today.
 
 **Defect 2 — `moRevEndSpec_c` is never read. 67/67.**
 The revolve branch of `decode_native_model` hardcodes `direction_code=None` and
-`termination_code=None` (`native.py`, the `_REVOLUTION_FEATURE_TYPES` block). `end-spec-not-read: 67`.
+`termination_code=None` (`Native.py`, the `_REVOLUTION_FEATURE_TYPES` block). `end-spec-not-read: 67`.
 Given §4 this currently costs nothing semantic, but the record is not even located, so there is
 nowhere to attach the end condition once it is decoded.
 
@@ -397,7 +397,7 @@ by heuristic, and I have no static way to confirm the line it picked is the cent
 **Defect 4 — the two derived angle copies are invisible. 67/67.**
 `NativeOperation.depth_copies` is empty for every revolve (`_depth_copies` is only called on the
 extrude branch), so `scalar+513` and `scalar+537` are not modelled at all
-(`angle-copies-not-modelled: 67`). Leaving them stale is the correct behaviour per GRAMMAR.md §6,
+(`angle-copies-not-modelled: 67`). Leaving them stale is the correct behaviour per Grammar.md §6,
 but the write path cannot see them, so it cannot even assert that it left them stale.
 
 **Defect 5 — `native_end` runs to end-of-stream for 6 of 67 revolve operations.**
@@ -434,7 +434,7 @@ preceding sketch node in 67/67 — no defect there. Finally, `_REVOLUTION_FEATUR
 6. **Thin-feature, two-direction and mid-plane revolves are unrepresented.**
 7. **No revolve profile is a rectangle or a COM-authored circle**, so the two profile shapes the
    extrude writer can author do not exist for revolves in this corpus.
-8. Everything in GRAMMAR.md §8 still blocks adding a revolve to an arbitrary tree: object
+8. Everything in Grammar.md §8 still blocks adding a revolve to an arbitrary tree: object
    segmentation is unsolved, so map-index renumbering is unsolved, so feature count is bounded by
    the available donors.
 
@@ -442,8 +442,8 @@ preceding sketch node in 67/67 — no defect there. Finally, `_REVOLUTION_FEATUR
 
 ```
 .rescratch/revolve/
-  REVOLVE.md            this document
-  DECODER_DEFECTS.md    the read-path bug list, with file and feature evidence
+  Revolve.md            this document
+  DecoderDefects.md    the read-path bug list, with file and feature evidence
   inventory.md          the inventory, human-readable
   inventory.json        the inventory plus the decoder comparison, machine-readable
   donor_spec.md         the donor specification for donor_library.py
@@ -456,7 +456,7 @@ preceding sketch node in 67/67 — no defect there. Finally, `_REVOLUTION_FEATUR
   scan_records.py       per-part class, tree-node and dimension-scalar tables
   scan_fields.py        per-revolve angle, copies and end-spec pairing
   scan_report.py        renders the field report
-  scan_endspec.py       moRevEndSpec_c constancy proof and 2pi counting
+  ScanEndspec.py       moRevEndSpec_c constancy proof and 2pi counting
   scan_axis.py          axis class sets and the end-spec signature locator
   scan_anchor.py        anchor-distance histograms
   scan_hex.py           annotated hex dumps around the end-spec object

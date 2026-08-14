@@ -2,7 +2,7 @@
 
 Read-only analysis of a licensed SOLIDWORKS 2025 install and of the `examples/` corpus. No
 SOLIDWORKS binary was modified. Everything below is reproduced by
-`.rescratch/eqn_layout.py`, `.rescratch/eqn_census.py` and `.rescratch/eqn_relation.py`, whose
+`.rescratch/eqn_Layout.py`, `.rescratch/eqn_census.py` and `.rescratch/eqn_relation.py`, whose
 raw output is `.rescratch/eqn_layout.txt`, `.rescratch/eqn_census.json` /
 `.rescratch/eqn_census.txt` and `.rescratch/eqn_relation.txt`.
 
@@ -67,7 +67,7 @@ The donor `arcboss_cut_cut_cut_through_rev` has no equations, and the same field
 
 Only **one** `moRelation_c` class definition exists per part no matter how many equations there
 are — `Camshaft` has 25 relations and 1 definition. Relations 2..n are `0x8000|i` class
-references, which is the increment rule `archive/SEGMENTATION.md` §3 records (`+2` for a
+references, which is the increment rule `archive/Segmentation.md` §3 records (`+2` for a
 definition, `+1` for a reference).
 
 ## 3. The relation record
@@ -151,9 +151,9 @@ Not recovered, and blocking a from-scratch equation writer:
   dimension are not decoded, and there is no corpus pair that isolates them.
 * **inserting a relation where there was none.** Adding a `moRelation_c` adds class definitions
   and objects to `Contents/Config-0`, which shifts every later map index in that stream.
-  `archive/SEGMENTATION.md` §3 and `archive/MULTISTREAM.md` §2 show the renumbering is solved
+  `archive/Segmentation.md` §3 and `archive/Multistream.md` §2 show the renumbering is solved
   **only** for streams that have been traced under cdb; a runtime trace is required per stream,
-  and `Contents/Config-0` is load-critical (`MULTISTREAM.md` §4). So growing the relation list of
+  and `Contents/Config-0` is load-critical (`Multistream.md` §4). So growing the relation list of
   an arbitrary donor's `Config-0` statically is not currently sound.
 
 The consequence for the write path: an equation can be carried natively today only by a donor

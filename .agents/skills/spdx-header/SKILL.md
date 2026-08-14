@@ -3,7 +3,7 @@ name: spdx-header
 description: "Apply the repository's required SPDX headers. Use when creating project files; Agent Skills use schema-required license frontmatter instead."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/spdx-header.md"
+  source: ".kiro/steering/SpdxHeader.md"
   kiro-inclusion: "always"
 ---
 

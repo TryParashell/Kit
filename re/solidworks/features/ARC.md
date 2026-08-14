@@ -15,7 +15,7 @@ located and read statically from the resolved-features lane, so that
 `resolved.sketch_arcs()` / `patch_sketch_arcs()` can decode one and a donor can carry an
 arc-bearing profile?
 
-**Historical answer: no; superseded in part by `ARC_LAYOUT.md`.** This static pass did not locate the
+**Historical answer: no; superseded in part by `ArcLayout.md`.** This static pass did not locate the
 partial arc's radius, centre, and endpoints in the record family it could segment. The later authored
 differential located the arc representation. Kit still has no arbitrary partial-arc feature program,
 so those source histories fail closed; there is no donor library or donor fallback.
@@ -29,7 +29,7 @@ investigation itself.
 
 ## 1. What the coordinate record is, and what it is not
 
-`GRAMMAR.md` §5.1 fixes the record: an 18-byte prefix (`double 1.0`, `double 0.0`, `u16 30`), then
+`Grammar.md` §5.1 fixes the record: an 18-byte prefix (`double 1.0`, `double 0.0`, `u16 30`), then
 `double x`, `double y` in metres, then a 4-byte trailer read as `u16 role`, `u16 class`.
 `resolved.sketch_coordinates()` enumerates them.
 
@@ -120,7 +120,7 @@ radius alone does not place an arc. Writing one blind would move geometry.
 
 ## 4. Where the arc actually lives, and why that is out of reach
 
-`classes.py` inventories the class definitions in every lane. `.rescratch/v8/vocabulary.txt` lists
+`classes.py` inventories the class definitions in every lane. `.rescratch/v8/Vocabulary.txt` lists
 185 `mo*` classes and no `sg*` classes at all, because that census filtered on the `mo` prefix. The
 lane also carries **1134** `sg*` class definitions:
 
@@ -138,7 +138,7 @@ base-class data followed by a nested `ff ff 1f 00 03` entity record; the coordin
 `sketch_coordinates()` finds sits _inside_ that nested record. The arc's own parameters are in the
 `sgArcHandle` body, whose byte extent cannot be computed without the per-class `Serialize` layout.
 
-That is exactly the keystone `GRAMMAR.md` §8 item 1 records as unsolved: without object
+That is exactly the keystone `Grammar.md` §8 item 1 records as unsolved: without object
 segmentation the object boundaries are unknown, so a field at a fixed offset inside `sgArcHandle`
 cannot be located, and the su_CArchive class-reference token that would let the _second_ and later
 `sgArcHandle` objects be found cannot be computed either (§2.3 — the map index depends on the
@@ -163,7 +163,7 @@ In priority order, and all of it needs a SOLIDWORKS session, not more static wor
    same arc at two radii and two centres, on an otherwise identical part. Diffing those pins the
    arc record's field layout relative to the `sgArcHandle` definition directly, the way
    `.rescratch/corpus2` pinned the extrude depth. Six parts is enough.
-2. **Object segmentation** (`WINDBG.md`), which lifts this and items 2, 6 and 7 of `GRAMMAR.md` §8
+2. **Object segmentation** (`Windbg.md`), which lifts this and items 2, 6 and 7 of `Grammar.md` §8
    at the same time.
 
 Until one of those lands, an arc profile has no decoder and no donor, and Kit should keep saying so.
@@ -172,7 +172,7 @@ Until one of those lands, an arc profile has no decoder and no donor, and Kit sh
 
 ```
 .rescratch/arc/
-  ARC.md                    this document
+  Arc.md                    this document
   classes.py  classes.txt   class-definition inventory per prefix, all 110 parts
   pick.py     pick.txt      arc-bearing parts by lane size
   markers.py                entity-record dump via native._parse_markers

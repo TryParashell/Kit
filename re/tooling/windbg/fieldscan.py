@@ -54,7 +54,7 @@ def main() -> int:
     rule = FORMULAS[formula]
     parts = [Path(item).resolve() for item in sys.argv[2:]]
     if len(parts) < 2:
-        raise SystemExit("usage: fieldscan.py <formula> <part> <part> [...]")
+        raise SystemExit("usage: Fieldscan.py <formula> <part> <part> [...]")
     per_stream: dict[str, list[set[tuple[int, int]]]] = {}
     counts: list[int] = []
     for part in parts:

@@ -8,10 +8,10 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$manifestPath = Join-Path $here 'manifest.json'
+$manifestPath = Join-Path $here 'Manifest.json'
 
 if (-not (Test-Path -LiteralPath $manifestPath)) {
-    throw "manifest.json not found beside fetch.ps1 at $here"
+    throw "Manifest.json not found beside Fetch.ps1 at $here"
 }
 
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json

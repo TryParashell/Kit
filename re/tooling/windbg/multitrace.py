@@ -59,9 +59,9 @@ BREAKPOINT = (
 
 
 def layout() -> dict[str, int]:
-    path = OUT / "calibrate.json"
+    path = OUT / "Calibrate.json"
     if not path.is_file():
-        raise SystemExit(f"run calibrate.py first: {path} is missing")
+        raise SystemExit(f"run Calibrate.py first: {path} is missing")
     return json.loads(path.read_text(encoding="utf-8"))["layout"]
 
 
@@ -179,7 +179,7 @@ def trace_one(
 def main() -> int:
     arguments = sys.argv[1:]
     if len(arguments) < 3:
-        raise SystemExit("usage: multitrace.py <mode> <label> <part> [<label> <part>]")
+        raise SystemExit("usage: Multitrace.py <mode> <label> <part> [<label> <part>]")
     mode = arguments[0]
     pairs = arguments[1:]
     if len(pairs) % 2:
@@ -201,7 +201,7 @@ def main() -> int:
                 f"reemit={row.get('reemit_identical')}",
                 flush=True,
             )
-        (OUT / "multitrace.json").write_text(
+        (OUT / "Multitrace.json").write_text(
             json.dumps(records, indent=2), encoding="utf-8"
         )
     return 0

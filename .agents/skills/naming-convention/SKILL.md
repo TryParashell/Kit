@@ -3,7 +3,7 @@ name: naming-convention
 description: "Apply the PascalCase identifier casing and length ranges. Use when naming or renaming classes, functions, methods, variables, globals, or constants."
 license: LicenseRef-PolyForm-Strict-1.0.0
 metadata:
-  source: ".kiro/steering/naming-convention.md"
+  source: ".kiro/steering/NamingConvention.md"
   kiro-inclusion: "always"
 ---
 
@@ -65,7 +65,7 @@ Noun or noun phrase, PascalCase. Covers locals, instance attributes, module-leve
 
 ```python
 UserName = "Jae"     # ok
-KMaxRetries = 5      # ok, K prefix per identifier-markers.md
+KMaxRetries = 5      # ok, K prefix per IdentifierMarkers.md
 Db = None            # too short (2) — invalid
 X = 1                # too short — invalid
 TotalNumberOfActiveUserConnections = 0  # too long — invalid

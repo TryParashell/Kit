@@ -7,7 +7,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
-from convert.adapters.solidworks.container import SldprtArchive
+from convert.adapters.solidworks.container.Container import SldprtArchive
 
 TRACE = ROOT / "re/data/segments"
 STREAM = "Contents/Config-0-ResolvedFeatures"
@@ -175,7 +175,7 @@ def check(label, name, spec, kind="definition"):
 
 def main():
     if len(sys.argv) < 3:
-        print("layout.py <label> <ClassName> [kind]")
+        print("Layout.py <label> <ClassName> [kind]")
         return
     kind = sys.argv[3] if len(sys.argv) > 3 else "definition"
     show(sys.argv[1], sys.argv[2], kind)
