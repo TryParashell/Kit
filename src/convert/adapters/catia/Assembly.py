@@ -1001,12 +1001,7 @@ def Component(
     Settings: ReadOptions,
     Reader: ComponentReader,
 ) -> tuple[tuple[ComponentDoc, ...], dict[str, str], tuple[DiagValue, ...]]:
-    Source = SourcePath(Label)
-    Stack = tuple((str(Value) for Value in Settings.values.get("catia_path_stack", ())))
-    Active = {Value.casefold() for Value in Stack}
-    if Source is not None:
-        Active.add(str(Source).casefold())
-    Options = NestedOptions(Settings, Stack, Source)
+    Source, Stack, Active, Options = ReadContext(Label, Settings)
     Documents: list[ComponentDoc] = []
     DocIdsByPath: dict[FilePath, str] = {}
     DocIdsByName: dict[str, str] = {}
@@ -1041,6 +1036,18 @@ def Component(
         DocIdsByPath[RefValue.path] = DocId
         DocIdsByName[NameValue] = DocId
     return (tuple(Documents), DocIdsByName, tuple(Diagnostics))
+
+
+# this definition exists because focused behavior needs one stable owner
+def ReadContext(
+    Label: str, Settings: ReadOptions
+) -> tuple[FilePath | None, tuple[str, ...], set[str], ReadOptions]:
+    Source = SourcePath(Label)
+    Stack = tuple(str(Value) for Value in Settings.values.get("catia_path_stack", ()))
+    Active = {Value.casefold() for Value in Stack}
+    if Source is not None:
+        Active.add(str(Source).casefold())
+    return (Source, Stack, Active, NestedOptions(Settings, Stack, Source))
 
 
 # this definition exists because focused behavior needs one stable owner
