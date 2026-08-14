@@ -71,8 +71,8 @@ def GeomFree(Source):
     return Replace(Source, parameters=(), support_planes=(), sketches=(), selections=(), feature_timeline=(), bodies=(), meshes=Source.meshes or (MeshValue('mesh:geometry-free', 'Geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),)),), assembly=AsmValue)
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdAsmHas(TempPath) -> None:
-    Output = TempPath / 'assembly.FCStd'
+def TestFcstdAsmHas(TmpPath) -> None:
+    Output = TmpPath / 'assembly.FCStd'
     WriteFreecad(AsmDoc(), Output)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
@@ -118,7 +118,7 @@ def TestFcstdAsmHas(TempPath) -> None:
     assert MetaGroups.isdisjoint(RootChildren)
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdMate(TempPath) -> None:
+def TestFcstdMate(TmpPath) -> None:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -126,7 +126,7 @@ def TestFcstdMate(TempPath) -> None:
     TargetPath = AsmValue.mate_entities[1].instance_path
     Entities = (Replace(AsmValue.mate_entities[0], instance_path=TargetPath, source_entity_id='Face1', frame=Frame), Replace(AsmValue.mate_entities[1], source_entity_id='', frame=Frame))
     Source = Replace(Source, assembly=Replace(AsmValue, mate_entities=Entities))
-    Output = TempPath / 'connector_state.FCStd'
+    Output = TmpPath / 'connector_state.FCStd'
     WriteFreecad(Source, Output)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
@@ -146,12 +146,12 @@ def TestFcstdMate(TempPath) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize('KindValue', (MateKind.COINCIDENT, MateKind.TANGENT, MateKind.COORDINATE, MateKind.UNIVERSAL_JOINT, MateKind.CAM, MateKind.SLOT, MateKind.WIDTH, MateKind.SYMMETRIC, MateKind.LINEAR_COUPLER, MateKind.PATH, MateKind.MAGNETIC, MateKind.PROFILE_CENTER, MateKind.NATIVE))
-def TestFcstdMates(TempPath, KindValue: MateKind) -> None:
+def TestFcstdMates(TmpPath, KindValue: MateKind) -> None:
     Source = GeomFree(AsmDoc())
     AsmValue = Source.assembly
     assert AsmValue is not None
     Source = Replace(Source, assembly=Replace(AsmValue, mates=(Replace(AsmValue.mates[0], kind=KindValue),)))
-    Output = TempPath / f'{KindValue.value}.FCStd'
+    Output = TmpPath / f'{KindValue.value}.FCStd'
     WriteFreecad(Source, Output)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
@@ -171,11 +171,11 @@ def TestFcstdMates(TempPath, KindValue: MateKind) -> None:
     assert ReadFreecad(Output) == Source
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdAsm(TempPath) -> None:
+def TestFcstdAsm(TmpPath) -> None:
     Source = MeshDoc()
-    Output = TempPath / 'mesh_assembly.FCStd'
+    Output = TmpPath / 'mesh_assembly.FCStd'
     WriteFreecad(Source, Output)
-    Component = TempPath / 'mesh_assembly' / 'Piston.FCStd'
+    Component = TmpPath / 'mesh_assembly' / 'Piston.FCStd'
     with Zipfile.ZipFile(Component) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
         MeshValue = next((ItemValue for ItemValue in RootValue.findall('./Objects/Object') if ItemValue.get('type') == 'Mesh::Feature'))
@@ -200,7 +200,7 @@ def TestFcstdAsm(TempPath) -> None:
     assert SecondTriangle == (2, 1, 3, 0, -1, -1)
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdKeeps(TempPath) -> None:
+def TestFcstdKeeps(TmpPath) -> None:
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -209,7 +209,7 @@ def TestFcstdKeeps(TempPath) -> None:
     Entities = tuple((Replace(Entity, owner_definition_id='definition:subassembly', instance_path=('instance:part',) if Index else ()) for Index, Entity in enumerate(AsmValue.mate_entities)))
     MateValue = Replace(AsmValue.mates[0], owner_definition_id='definition:subassembly')
     Source = Replace(Source, assembly=Replace(AsmValue, instances=(FirstSubassembly, SecondSubassembly, AsmValue.instances[1]), mate_entities=Entities, mates=(MateValue,)))
-    Output = TempPath / 'repeated.FCStd'
+    Output = TmpPath / 'repeated.FCStd'
     WriteFreecad(Source, Output)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
@@ -224,7 +224,7 @@ def TestFcstdKeeps(TempPath) -> None:
     assert Restored.assembly.mate_entities == Entities
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdNesteA(TempPath) -> None:
+def TestFcstdNesteA(TmpPath) -> None:
     Source = GeomFree(NestedAsmDoc())
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -238,7 +238,7 @@ def TestFcstdNesteA(TempPath) -> None:
     NestedDoc = Replace(NestedDoc, assembly=Replace(NestedAsm, instances=(CustomInstance,)))
     Documents[NestedIndex] = Replace(Documents[NestedIndex], document=NestedDoc)
     Source = Replace(Source, assembly=Replace(AsmValue, documents=tuple(Documents)))
-    Output = TempPath / 'structural_links.FCStd'
+    Output = TmpPath / 'structural_links.FCStd'
     WriteFreecad(Source, Output)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
@@ -251,10 +251,10 @@ def TestFcstdNesteA(TempPath) -> None:
     assert DeclValue.get('name') in {ItemValue.get('value') for ItemValue in Group}
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdNested(TempPath) -> None:
-    Output = TempPath / 'nested_history.FCStd'
+def TestFcstdNested(TmpPath) -> None:
+    Output = TmpPath / 'nested_history.FCStd'
     WriteFreecad(NestedAsmDoc(), Output)
-    Component = TempPath / 'nested_history' / 'Piston.FCStd'
+    Component = TmpPath / 'nested_history' / 'Piston.FCStd'
     with Zipfile.ZipFile(Component) as Archive:
         ComponentRoot = XmlTree.fromstring(Archive.read('Document.xml'))
     ComponentObjects = ComponentRoot.findall('./Objects/Object')
@@ -315,8 +315,8 @@ def TestFcstdNested(TempPath) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason='KIT_FREECAD_ORACLE is unavailable')
-def TestLoadsAsm(TempPath) -> None:
-    Output = TempPath / 'assembly.FCStd'
+def TestLoadsAsm(TmpPath) -> None:
+    Output = TmpPath / 'assembly.FCStd'
     WriteFreecad(MeshDoc(), Output)
     CodeValue = f"import FreeCAD as App;d=App.open(r'{Output}');d.recompute();d.recompute();links=[o for o in d.Objects if o.TypeId=='App::Link'];mates=[o for o in d.Objects if hasattr(o,'MateId')];shapelinks=[o for o in links if o.LinkedObject is not None and hasattr(o.LinkedObject,'Shape') and not o.LinkedObject.Shape.isNull()];documents=tuple(App.listDocuments().values());sources=[o for document in documents for o in document.Objects if o.TypeId=='Mesh::Feature'];target=shapelinks[0].LinkedObject;print('KIT_ASSEMBLY',len(links),len(mates),links[0].Placement.Base.x,links[0].Placement.Base.y,links[0].Placement.Base.z,links[0].LinkedObject is not None,len(shapelinks),len(target.Shape.Faces),target.Shape.BoundBox.XLength,target.TypeId,getattr(target,'Representation',''),len(sources),all(o.Visibility for o in sources),not any('Touched' in o.State for o in d.Objects))"
     Completed = Subprocess.run([str(KOracle), '-c', CodeValue], check=True, capture_output=True, text=True, timeout=120)
@@ -333,8 +333,8 @@ def TestLoadsAsm(TempPath) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason='KIT_FREECAD_ORACLE is unavailable')
-def TestLoadsNested(TempPath) -> None:
-    Output = TempPath / 'nested.FCStd'
+def TestLoadsNested(TmpPath) -> None:
+    Output = TmpPath / 'nested.FCStd'
     WriteFreecad(NestedAsmDoc(), Output)
     CodeValue = f"import FreeCAD as App;d=App.open(r'{Output}');links=[o for o in d.Objects if o.TypeId=='Assembly::AssemblyLink'];a=links[0];before=tuple(o.Name for o in a.Group);d.recompute();first=tuple(o.Name for o in a.Group);d.recompute();second=tuple(o.Name for o in a.Group);children=[o for o in a.Group if o.TypeId=='App::Link'];c=children[0];print('KIT_NESTED',len(links),a.Origin is not None,len(children),before==first==second,c.getParentGeoFeatureGroup()==a,c.LinkedObject in a.LinkedObject.Group,c.LinkedObject.Document==a.LinkedObject.Document,a.Placement.Base.x,a.Placement.Base.y,a.Placement.Base.z,c.Placement.Base.x,c.Placement.Base.y,c.Placement.Base.z,c.LinkedObject is not None,a.LinkedObject is not None,a.Visibility,c.Visibility)"
     Completed = Subprocess.run([str(KOracle), '-c', CodeValue], check=True, capture_output=True, text=True, timeout=120)

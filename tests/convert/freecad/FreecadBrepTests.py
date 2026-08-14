@@ -202,11 +202,11 @@ def TestSupportedIs() -> None:
     assert any((Value.get('type') == 'Part::Feature' and Value.get('name') == 'BRep' for Value in RootValue.findall('./Objects/Object')))
 
 # this definition exists because focused behavior needs one stable owner
-def TestPublicSdkAs(TempPath: Path) -> None:
+def TestPublicSdkAs(TmpPath: Path) -> None:
     Model = TriangleBrep()
     Model = Replace(Model, bodies=(Replace(Model.bodies[0], design_body_id=''),))
     DocValue = CadDoc(source=CadSource('json', 'triangle.json', ''), configurations=(Config('default', 'Default', active=True),), parameters=(), support_planes=(), sketches=(), selections=(), feature_timeline=(), bodies=(), brep=Model, capabilities=frozenset({Capability.BREP}))
-    Target = TempPath / 'triangle.FCStd'
+    Target = TmpPath / 'triangle.FCStd'
     Result = WriteDoc(DocValue, Target)
     assert Result.near_lossless is True
     assert Capability.BREP in Result.native_capabilities
@@ -243,16 +243,16 @@ def TestUnprovenTo() -> None:
     assert Restored.meshes == (MeshValue,)
 
 # this definition exists because focused behavior needs one stable owner
-def TestPublicSdkA(TempPath: Path) -> None:
+def TestPublicSdkA(TmpPath: Path) -> None:
     DataValue = b'DBRep_DrawableShape\n\nCASCADE Topology V1, (c) Open Cascade\nnot-a-brep\n'
     DocValue = RawBrepDoc(DataValue)
-    Blocked = TempPath / 'blocked.FCStd'
+    Blocked = TmpPath / 'blocked.FCStd'
     with Pytest.raises(AppUsabilityError) as Captured:
         WriteDoc(DocValue, Blocked, allow_carrier=False)
     assert Captured.value.carrier_reasons[Capability.BREP] is CarrierReason.SOURCE_OPAQUE
     assert Captured.value.carrier_reasons[Capability.NATIVE_PAYLOADS] is CarrierReason.SOURCE_OPAQUE
     assert not Blocked.exists()
-    Explicit = TempPath / 'explicit.FCStd'
+    Explicit = TmpPath / 'explicit.FCStd'
     Result = WriteDoc(DocValue, Explicit, allow_carrier=True)
     assert Result.near_lossless is False
     Restored = OpenDoc(Explicit)
@@ -292,10 +292,10 @@ def TestForgedThe() -> None:
     assert FreeCadAdapter().read(Output.getvalue()).brep_payloads[0].data == DataValue
 
 # this definition exists because focused behavior needs one stable owner
-def TestPublicSdk(TempPath: Path) -> None:
+def TestPublicSdk(TmpPath: Path) -> None:
     DataValue = BrepModelBrep(TriangleBrep())
     DocValue = RawBrepDoc(DataValue)
-    Target = TempPath / 'valid.FCStd'
+    Target = TmpPath / 'valid.FCStd'
     Result = WriteDoc(DocValue, Target)
     assert Result.near_lossless is False
     assert Capability.BREP in Result.native_capabilities
@@ -326,8 +326,8 @@ def TestUnsupported() -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason='KIT_FREECAD_ORACLE is unavailable')
-def TestPeriodicIs(TempPath: Path) -> None:
-    PathValue = TempPath / 'cylinder-band.brp'
+def TestPeriodicIs(TmpPath: Path) -> None:
+    PathValue = TmpPath / 'cylinder-band.brp'
     PathValue.write_bytes(BrepModelBrep(CylinderBand()))
     CodeValue = f"import Part;s=Part.Shape();s.read(r'{PathValue}');print('KIT_SEAM',s.ShapeType,len(s.Faces),len(s.Wires),len(s.Edges),len(s.Vertexes),s.isValid())"
     Completed = Subprocess.run([str(KOracle), '-c', CodeValue], check=True, capture_output=True, text=True, timeout=60)
@@ -336,10 +336,10 @@ def TestPeriodicIs(TempPath: Path) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason='KIT_FREECAD_ORACLE is unavailable')
-def TestTriangleAs(TempPath: Path) -> None:
-    Tetrahedron = TempPath / 'tetrahedron.brp'
+def TestTriangleAs(TmpPath: Path) -> None:
+    Tetrahedron = TmpPath / 'tetrahedron.brp'
     Tetrahedron.write_bytes(TriangleMeshBrep(((0, 0, 0), (2, 0, 0), (0, 3, 0), (0, 0, 4)), ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3))))
-    Square = TempPath / 'square.brp'
+    Square = TmpPath / 'square.brp'
     Square.write_bytes(TriangleMeshBrep(((0, 0, 0), (2, 0, 0), (2, 3, 0), (0, 3, 0)), ((0, 1, 2), (0, 2, 3))))
     CodeValue = f"import Part;t=Part.Shape();t.read(r'{Tetrahedron}');s=Part.Shape();s.read(r'{Square}');print('KIT_BREP',t.ShapeType,len(t.Solids),len(t.Faces),len(t.Edges),len(t.Vertexes),t.isValid(),t.Volume,t.BoundBox.XLength,t.BoundBox.YLength,t.BoundBox.ZLength,s.ShapeType,len(s.Faces),len(s.Edges),len(s.Vertexes),s.isValid())"
     Completed = Subprocess.run([str(KOracle), '-c', CodeValue], check=True, capture_output=True, text=True, timeout=60)

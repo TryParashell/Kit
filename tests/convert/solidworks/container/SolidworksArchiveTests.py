@@ -1034,9 +1034,8 @@ def TestARCOZRNC() -> None:
     assert Verify(BackBlob, 109, BackLayouts).identical
 
 
-# keeps this focused behavior isolated so regressions remain immediately visible
-def TestTSTDSSFRG() -> None:
-    Layout = Layouts()["sgSketch"]
+# keeps sketch metadata checks separate so grammar regressions remain easy to diagnose
+def CheckSketchMeta(Layout) -> None:
     assert Layout.walks_groups
     assert Layout.child_slots == ()
     assert Layout.repeat_count is None
@@ -1046,6 +1045,10 @@ def TestTSTDSSFRG() -> None:
     assert Layout.run_keys() == ("lead", "tail")
     assert Layout.constant_run("lead", 18000) == 49
     assert Layout.variable_runs["tail"][0].predicate == "NextParentToken"
+
+
+# keeps entity geometry checks separate so recovered offsets remain independently reviewable
+def CheckSketchGeom(Layout) -> None:
     assert [Group.name for Group in Layout.groups] == [
         "entity",
         "point",
@@ -1064,6 +1067,11 @@ def TestTSTDSSFRG() -> None:
     assert Shape["point"].CountByChildClass["null"].Lead == 12
     assert Shape["point"].trailer == 13
     assert len(Shape["point"].ElementRunVariants) == 12
+
+
+# keeps relation grammar checks separate so later recovery cannot obscure stable evidence
+def CheckSketchRels(Layout) -> None:
+    Shape = {Group.name: Group for Group in Layout.groups}
     assert Shape["relation"].element_runs(18000) == (0, 16, 17, 4)
     assert Shape["relation"].element_runs(14000) == (0, 16, 16, 4)
     assert len(Shape["relation"].ElementRunVariants) == 8
@@ -1082,6 +1090,14 @@ def TestTSTDSSFRG() -> None:
     for Group in Layout.groups:
         assert Group.note
         assert len(Group.slots) == len(Group.element)
+
+
+# protects every shipped sketch grammar group through one focused integration test
+def TestTSTDSSFRG() -> None:
+    Layout = Layouts()["sgSketch"]
+    CheckSketchMeta(Layout)
+    CheckSketchGeom(Layout)
+    CheckSketchRels(Layout)
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

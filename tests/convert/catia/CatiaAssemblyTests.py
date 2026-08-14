@@ -91,11 +91,11 @@ def TestCatproductI() -> None:
     assert 'catia.product.root_ambiguous' in {ItemValue.code for ItemValue in DocValue.diagnostics}
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductG(TempPath: Path) -> None:
+def TestCatproductG(TmpPath: Path) -> None:
     Source = KRootValue / 'examples' / '.CATPart' / '4876.CATPart'
-    Renamed = TempPath / 'unrelated-name.CATPart'
+    Renamed = TmpPath / 'unrelated-name.CATPart'
     Renamed.write_bytes(Source.read_bytes())
-    DocValue = CatiaAdapter().read(KCatproducts / 'Tilton_Set.CATProduct', ReadOptions(include_brep=False, values=FrozenMapping({'component_search_root': TempPath})))
+    DocValue = CatiaAdapter().read(KCatproducts / 'Tilton_Set.CATProduct', ReadOptions(include_brep=False, values=FrozenMapping({'component_search_root': TmpPath})))
     AsmValue = DocValue.assembly
     assert AsmValue is not None
     Definition = next((ItemValue for ItemValue in AsmValue.definitions if ItemValue.name == '4876'))
@@ -103,13 +103,13 @@ def TestCatproductG(TempPath: Path) -> None:
     assert Definition.document_id
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductJ(TempPath: Path) -> None:
+def TestCatproductJ(TmpPath: Path) -> None:
     Source = KRootValue / 'examples' / '.CATPart' / '4876.CATPart'
-    First = TempPath / 'a.CATPart'
-    Second = TempPath / 'b.CATPart'
+    First = TmpPath / 'a.CATPart'
+    Second = TmpPath / 'b.CATPart'
     First.write_bytes(Source.read_bytes())
     Second.write_bytes(Source.read_bytes())
-    DocValue = CatiaAdapter().read(KCatproducts / 'Tilton_Set.CATProduct', ReadOptions(include_brep=False, values=FrozenMapping({'component_search_root': TempPath})))
+    DocValue = CatiaAdapter().read(KCatproducts / 'Tilton_Set.CATProduct', ReadOptions(include_brep=False, values=FrozenMapping({'component_search_root': TmpPath})))
     AsmValue = DocValue.assembly
     assert AsmValue is not None
     Definition = next((ItemValue for ItemValue in AsmValue.definitions if ItemValue.name == '4876'))
@@ -179,23 +179,23 @@ def TestCatproductP() -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize('NameValue', ('Brake_Pedal_Assembly - Backup 1.CATProduct', 'Brake_Pedal_Assembly - Backup 2.CATProduct', 'Tilton_Set.CATProduct'))
-def TestEveryByte(NameValue: str, TempPath: Path) -> None:
+def TestEveryByte(NameValue: str, TmpPath: Path) -> None:
     Source = KCatproducts / NameValue
     DocValue = CatiaAdapter().read(Source)
-    Output = TempPath / NameValue
+    Output = TmpPath / NameValue
     Result = WriteCatia(DocValue, Output)
     assert Result.metadata['mode'] == 'exact_native_roundtrip'
     assert Output.read_bytes() == Source.read_bytes()
 
 # this definition exists because focused behavior needs one stable owner
-def TestChangedBase(TempPath: Path) -> None:
+def TestChangedBase(TmpPath: Path) -> None:
     Source = KCatproducts / 'Tilton_Set.CATProduct'
     Original = CfvTwoArchive.from_bytes(Source.read_bytes())
     DocValue = CatiaAdapter().read(Source)
     assert DocValue.assembly is not None
     ChangedAsm = Replace(DocValue.assembly, attributes=FrozenMapping({**DocValue.assembly.attributes, 'user.edit': 'changed'}))
     Changed = Replace(DocValue, assembly=ChangedAsm)
-    Output = TempPath / 'Changed.CATProduct'
+    Output = TmpPath / 'Changed.CATProduct'
     Result = WriteCatia(Changed, Output)
     assert Result.metadata['mode'] == 'native_base_with_neutral_edits'
     assert Result.metadata['compatibility'] == 'native-base-neutral-overlay'
@@ -231,13 +231,13 @@ def TestCatproductB(Values: dict[str, object], Limit: str) -> None:
     assert DiagValue.attributes['limit'] == Limit
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductC(TempPath: Path) -> None:
-    LinkValue = TempPath / 'outside-parts'
+def TestCatproductC(TmpPath: Path) -> None:
+    LinkValue = TmpPath / 'outside-parts'
     try:
         LinkValue.symlink_to(KRootValue / 'examples' / '.CATPart', target_is_directory=True)
     except OSError:
         Pytest.skip('directory symlinks are unavailable')
-    DocValue = CatiaAdapter().read(KCatproducts / 'Tilton_Set.CATProduct', ReadOptions(include_brep=False, strict=False, values=FrozenMapping({'component_search_root': TempPath})))
+    DocValue = CatiaAdapter().read(KCatproducts / 'Tilton_Set.CATProduct', ReadOptions(include_brep=False, strict=False, values=FrozenMapping({'component_search_root': TmpPath})))
     AsmValue = DocValue.assembly
     assert AsmValue is not None
     assert AsmValue.documents == ()
@@ -245,11 +245,11 @@ def TestCatproductC(TempPath: Path) -> None:
     assert any((ItemValue.attributes['reason'] == 'reparse_point' for ItemValue in Rejected))
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductA(TempPath: Path) -> None:
-    RootValue = TempPath / 'components'
+def TestCatproductA(TmpPath: Path) -> None:
+    RootValue = TmpPath / 'components'
     RootValue.mkdir()
     Inside = RootValue / 'inside.CATPart'
-    Outside = TempPath / 'outside.CATPart'
+    Outside = TmpPath / 'outside.CATPart'
     Inside.touch()
     Outside.touch()
     assert UnderRoot(Inside.resolve(), RootValue.resolve())
@@ -274,14 +274,14 @@ def TestCatproduct() -> None:
     assert all((ItemValue.attributes['indexed_sha256'] != '0' * 64 for ItemValue in Changed))
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatproductO(TempPath: Path) -> None:
+def TestCatproductO(TmpPath: Path) -> None:
     Source = KCatproducts / 'Brake_Pedal_Assembly - Backup 1.CATProduct'
-    Output = TempPath / 'Brake.FCStd'
+    Output = TmpPath / 'Brake.FCStd'
     with Pytest.raises(AppUsabilityError) as Captured:
         Convert(Source, Output, allow_carrier=False)
     assert 'opaque_source_data' in Captured.value.issues
     assert not Output.exists()
-    assert tuple(TempPath.iterdir()) == ()
+    assert tuple(TmpPath.iterdir()) == ()
     Result = Convert(Source, Output, allow_carrier=True)
     assert Result.application_usable is False
     assert Result.vendor_loadable is True

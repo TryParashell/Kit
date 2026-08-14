@@ -52,11 +52,11 @@ def MeshSource(Linked: bool):
     return (Replace(Source, meshes=(MeshValue,), assembly=Replace(AsmValue, definitions=Definitions, instances=Instances, documents=AsmValue.documents if Linked else (), mate_entities=MateEntities)), MeshValue)
 
 # this definition exists because focused behavior needs one stable owner
-def TestPathAsmWith(TempPath: Path) -> None:
+def TestPathAsmWith(TmpPath: Path) -> None:
     Source, MeshValue = MeshSource(Linked=True)
-    Output = TempPath / 'assembly.FCStd'
+    Output = TmpPath / 'assembly.FCStd'
     Result = WriteFreecad(Source, Output)
-    Component = TempPath / 'assembly' / 'Piston.FCStd'
+    Component = TmpPath / 'assembly' / 'Piston.FCStd'
     assert Component.is_file()
     RootValue = XmlAction(Output)
     LinkValue = LinkedObject(RootValue)
@@ -83,7 +83,7 @@ def TestPathAsmWith(TempPath: Path) -> None:
     assert Result.metadata['component_bytes_written'] == Component.stat().st_size
 
 # this definition exists because focused behavior needs one stable owner
-def TestPathAsmOne(TempPath: Path, MonkeyPatch) -> None:
+def TestPathAsmOne(TmpPath: Path, MonkeyPatch) -> None:
     Fixed = Datetime(2026, 8, 1, 18, 0, 0, tzinfo=Timezone.utc)
 
     # this definition exists because focused behavior needs one stable owner
@@ -96,8 +96,8 @@ def TestPathAsmOne(TempPath: Path, MonkeyPatch) -> None:
         locals()['now'] = NowAction
     MonkeyPatch.setattr(FreecadAdapter, 'datetime', FixedDateTime)
     Source, Ignored = MeshSource(Linked=True)
-    Output = TempPath / 'assembly.FCStd'
-    Component = TempPath / 'assembly' / 'Piston.FCStd'
+    Output = TmpPath / 'assembly.FCStd'
+    Component = TmpPath / 'assembly' / 'Piston.FCStd'
     WriteFreecad(Source, Output)
     FirstRoot = XmlAction(Output)
     FirstComponent = XmlAction(Component)
@@ -119,7 +119,7 @@ def TestPathAsmOne(TempPath: Path, MonkeyPatch) -> None:
     assert Component.stat().st_mtime == SecondEpoch
 
 # this definition exists because focused behavior needs one stable owner
-def TestNestedAsmTo(TempPath: Path) -> None:
+def TestNestedAsmTo(TmpPath: Path) -> None:
     Source, Ignored = MeshSource(Linked=True)
     AsmValue = Source.assembly
     assert AsmValue is not None
@@ -129,10 +129,10 @@ def TestNestedAsmTo(TempPath: Path) -> None:
     Nested = Replace(Nested, meshes=(), assembly=Replace(NestedAsm, definitions=tuple((Replace(Definition, mesh_ids=()) if Definition.id == 'definition:part' else Definition for Definition in NestedAsm.definitions))))
     Definitions = tuple((Replace(Definition, document_id='document:subassembly') if Definition.id == 'definition:subassembly' else Definition for Definition in AsmValue.definitions))
     Source = Replace(Source, assembly=Replace(AsmValue, definitions=Definitions, documents=(*AsmValue.documents, ComponentDoc('document:subassembly', Nested))))
-    Output = TempPath / 'nested.FCStd'
+    Output = TmpPath / 'nested.FCStd'
     WriteFreecad(Source, Output)
-    AsmComponent = TempPath / 'nested' / 'Piston.FCStd'
-    PartComponent = TempPath / 'nested' / 'Piston_2.FCStd'
+    AsmComponent = TmpPath / 'nested' / 'Piston.FCStd'
+    PartComponent = TmpPath / 'nested' / 'Piston_2.FCStd'
     AsmRoot = XmlAction(AsmComponent)
     PartRoot = XmlAction(PartComponent)
     LinkValue = LinkedObject(AsmRoot)
@@ -149,11 +149,11 @@ def TestNestedAsmTo(TempPath: Path) -> None:
     assert AsmObject.get('type') == 'Assembly::AssemblyObject'
 
 # this definition exists because focused behavior needs one stable owner
-def TestPathAsmMesh(TempPath: Path) -> None:
+def TestPathAsmMesh(TmpPath: Path) -> None:
     Source, MeshValue = MeshSource(Linked=False)
-    Output = TempPath / 'toolbox.FCStd'
+    Output = TmpPath / 'toolbox.FCStd'
     WriteFreecad(Source, Output)
-    Component = TempPath / 'toolbox' / 'Piston.FCStd'
+    Component = TmpPath / 'toolbox' / 'Piston.FCStd'
     RootValue = XmlAction(Output)
     LinkValue = LinkedObject(RootValue)
     assert LinkValue.get('file') == 'toolbox/Piston.FCStd'

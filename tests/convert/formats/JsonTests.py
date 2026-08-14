@@ -140,11 +140,11 @@ def TestAdapter() -> None:
     assert JsonAdapter().info.capabilities == frozenset(Capability)
 
 # this definition exists because focused behavior needs one stable owner
-def TestRegistryA(TempPath) -> None:
+def TestRegistryA(TmpPath) -> None:
     Adapter = JsonAdapter()
     Registry = AdapterRegistry()
     Registry.register(Adapter)
-    Output = TempPath / 'model.json'
+    Output = TmpPath / 'model.json'
     Written = Registry.write(DocValue(), Output)
     Restored = Registry.read(Output)
     assert Written.path == Output.resolve()
@@ -207,10 +207,10 @@ def TestPublicSdkA(Binary) -> None:
     assert JsonAdapter().read(StringIo(Target.getvalue())) == Value
 
 # this definition exists because focused behavior needs one stable owner
-def TestExplicitNon(TempPath) -> None:
+def TestExplicitNon(TmpPath) -> None:
     Source = StringIo(DocValue().to_json())
     with Pytest.raises(AdapterNotFoundError, match='does not support'):
-        Convert(Source, TempPath / 'contradiction.SLDPRT', destination_format='interchange.json')
+        Convert(Source, TmpPath / 'contradiction.SLDPRT', destination_format='interchange.json')
 
 # this definition exists because focused behavior needs one stable owner
 def TestRegistry() -> None:

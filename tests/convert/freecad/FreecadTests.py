@@ -1365,16 +1365,16 @@ def TestExplicit() -> None:
     assert not MateValue.driving
 
 # this definition exists because focused behavior needs one stable owner
-def TestStrictTo(TempPath) -> None:
-    Output = TempPath / 'blocked.FCStd'
+def TestStrictTo(TmpPath) -> None:
+    Output = TmpPath / 'blocked.FCStd'
     with Pytest.raises(AppUsabilityError) as Captured:
         Convert(KSample, Output, allow_carrier=False)
     assert 'opaque_source_data' in Captured.value.issues
     assert not Output.exists()
 
 # this definition exists because focused behavior needs one stable owner
-def TestDirectFcstd(TempPath) -> None:
-    Output = TempPath / 'example.FCStd'
+def TestDirectFcstd(TmpPath) -> None:
+    Output = TmpPath / 'example.FCStd'
     Result = Convert(KSample, Output, allow_carrier=True)
     Restored = OpenDoc(Output)
     assert Restored == Result.document
@@ -1392,8 +1392,8 @@ def TestDirectFcstd(TempPath) -> None:
             assert Hashlib.sha256(Archive.read(Entry)).hexdigest() == Payload.sha256
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstd(TempPath) -> None:
-    Output = TempPath / 'example.FCStd'
+def TestFcstd(TmpPath) -> None:
+    Output = TmpPath / 'example.FCStd'
     Convert(KSample, Output, allow_carrier=True)
     with Zipfile.ZipFile(Output) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
@@ -1439,16 +1439,16 @@ def TestFcstdEmits() -> None:
     assert FreeCadAdapter().read(DataValue) == Source
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdOutput(TempPath) -> None:
-    First = TempPath / 'first.FCStd'
-    Second = TempPath / 'second.FCStd'
+def TestFcstdOutput(TmpPath) -> None:
+    First = TmpPath / 'first.FCStd'
+    Second = TmpPath / 'second.FCStd'
     Convert(KSample, First, allow_carrier=True)
     Convert(KSample, Second, allow_carrier=True)
     assert First.read_bytes() == Second.read_bytes()
 
 # this definition exists because focused behavior needs one stable owner
-def TestFcstdStream(TempPath) -> None:
-    Output = TempPath / 'example.FCStd'
+def TestFcstdStream(TmpPath) -> None:
+    Output = TmpPath / 'example.FCStd'
     Result = Convert(KSample, Output, allow_carrier=True)
     Stream = IoStream.BytesIO(Output.read_bytes())
     assert FreeCadAdapter().probe(Stream).confidence == 1.0
@@ -1499,11 +1499,11 @@ def TestOpaqueOnly() -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize('CarrierSuffix', ('.SLDPRT', '.CATPart'))
-def TestUnknownData(CarrierSuffix: str, TempPath: Path) -> None:
+def TestUnknownData(CarrierSuffix: str, TmpPath: Path) -> None:
     SourceData = NativeArchive((('FutureResult', 'FutureWorkbench::SolverResult', (), (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Future Result'}), NativeProp('SolverState', 'FutureWorkbench::PropertyState', 'FutureState', {'encoding': 'opaque', 'value': 'future-state'}))),), {'FutureWorkbench/state.bin': b'future opaque state\x00\xff'})
-    Source = TempPath / 'Future.FCStd'
+    Source = TmpPath / 'Future.FCStd'
     Source.write_bytes(SourceData)
-    Carrier = TempPath / f'Future{CarrierSuffix}'
+    Carrier = TmpPath / f'Future{CarrierSuffix}'
     Convert(Source, Carrier, allow_carrier=True)
     Carried = OpenDoc(Carrier)
     NativeDoc = next((Payload for Payload in Carried.brep_payloads if Payload.id == 'freecad:native-document'))
@@ -1512,7 +1512,7 @@ def TestUnknownData(CarrierSuffix: str, TempPath: Path) -> None:
     assert NativeBinding.data == Hashlib.sha256(SourceData).digest()
     FutureObject = next((Value for Value in Carried.metadata['freecad']['objects'] if Value['name'] == 'FutureResult'))
     assert FutureObject['properties']['SolverState']['children'][0]['attributes'] == {'encoding': 'opaque', 'value': 'future-state'}
-    Restored = TempPath / 'Restored.FCStd'
+    Restored = TmpPath / 'Restored.FCStd'
     Result = Convert(Carrier, Restored)
     assert Result.output.metadata['compatibility'] == 'native-exact'
     assert Restored.read_bytes() == SourceData
@@ -1856,12 +1856,12 @@ def TestAsmWrites() -> None:
     assert Restored.validate() == ()
 
 # this definition exists because focused behavior needs one stable owner
-def TestOuterSource(TempPath) -> None:
-    First = TempPath / 'First.FCStd'
-    Second = TempPath / 'Second.FCStd'
+def TestOuterSource(TmpPath) -> None:
+    First = TmpPath / 'First.FCStd'
+    Second = TmpPath / 'Second.FCStd'
     First.write_bytes(NativePart())
     Second.write_bytes(NativePart())
-    AsmValue = TempPath / 'Assembly.FCStd'
+    AsmValue = TmpPath / 'Assembly.FCStd'
     AsmValue.write_bytes(NativeOuterAsm((('First', 'App::Link', First.name, 'Body'), ('Second', 'App::Link', Second.name, 'Body'))))
     DocValue = FreeCadAdapter().read(AsmValue)
     assert DocValue.assembly is not None
@@ -1871,19 +1871,19 @@ def TestOuterSource(TempPath) -> None:
     assert not any((DiagValue.code == 'freecad.unresolved_external_documents' for DiagValue in DocValue.diagnostics))
 
 # this definition exists because focused behavior needs one stable owner
-def TestAsmGrouped(TempPath) -> None:
-    First = TempPath / 'First.FCStd'
-    Second = TempPath / 'Second.FCStd'
+def TestAsmGrouped(TmpPath) -> None:
+    First = TmpPath / 'First.FCStd'
+    Second = TmpPath / 'Second.FCStd'
     First.write_bytes(NativePart())
     Second.write_bytes(NativePart())
-    Source = TempPath / 'Mixed.FCStd'
+    Source = TmpPath / 'Mixed.FCStd'
     Source.write_bytes(NativeOuterAsm((('Grouped', 'App::Link', First.name, 'Body'), ('Standalone', 'App::Link', Second.name, 'Body')), GroupedNames=('Grouped',)))
     Adapter = FreeCadAdapter()
     DocValue = Adapter.read(Source)
     assert DocValue.assembly is not None
     assert [ItemValue.name for ItemValue in DocValue.assembly.instances] == ['Grouped', 'Standalone']
     assert len(DocValue.assembly.documents) == 2
-    Output = TempPath / 'portable' / 'Mixed.FCStd'
+    Output = TmpPath / 'portable' / 'Mixed.FCStd'
     Result = Adapter.write(DocValue, Output)
     assert Result.metadata['component_file_count'] == 2
     with Zipfile.ZipFile(Output) as Archive:
@@ -1899,8 +1899,8 @@ def TestAsmGrouped(TempPath) -> None:
     assert len(Restored.assembly.documents) == 2
 
 # this definition exists because focused behavior needs one stable owner
-def TestLinkOnlyDoc(TempPath) -> None:
-    SourceFolder = TempPath / 'source'
+def TestLinkOnlyDoc(TmpPath) -> None:
+    SourceFolder = TmpPath / 'source'
     Child = SourceFolder / 'nested' / 'Child.FCStd'
     Child.parent.mkdir(parents=True)
     Child.write_bytes(NativePart())
@@ -1913,11 +1913,11 @@ def TestLinkOnlyDoc(TempPath) -> None:
     WithoutBrep = Adapter.read(RootValue, ReadOptions(include_brep=False))
     LinkedWithoutBrep = WithoutBrep.metadata['freecad']['external_documents'][0]['document']
     assert not any((Payload.role == PayloadRole.BREP for Payload in LinkedWithoutBrep.brep_payloads))
-    Staging = TempPath / 'staging'
+    Staging = TmpPath / 'staging'
     Target = Staging / 'Portable.FCStd'
     Result = Adapter.write(DocValue, Target)
-    Staging.rename(TempPath / 'relocated')
-    Target = TempPath / 'relocated' / 'Portable.FCStd'
+    Staging.rename(TmpPath / 'relocated')
+    Target = TmpPath / 'relocated' / 'Portable.FCStd'
     Bundled = Target.parent / 'Portable' / 'Child.FCStd'
     assert Bundled.is_file()
     assert Result.metadata['external_document_file_count'] == 1
@@ -1952,19 +1952,19 @@ def TestLinkOnlyDoc(TempPath) -> None:
     assert OriginalLink.get('file') == 'nested/Child.FCStd'
 
 # this definition exists because focused behavior needs one stable owner
-def TestNonportable(TempPath) -> None:
-    Child = TempPath / 'nested' / 'Child.FCStd'
+def TestNonportable(TmpPath) -> None:
+    Child = TmpPath / 'nested' / 'Child.FCStd'
     Child.parent.mkdir()
     Child.write_bytes(NativePart())
-    Source = TempPath / 'LinkOnly.FCStd'
+    Source = TmpPath / 'LinkOnly.FCStd'
     Source.write_bytes(NativeLinkOnly('nested/Child.FCStd'))
     DocValue = OpenDoc(Source)
-    Blocked = TempPath / 'blocked.FCStd'
+    Blocked = TmpPath / 'blocked.FCStd'
     with Pytest.raises(AppUsabilityError) as Captured:
         Registry.write(DocValue, Blocked, options=WriteOptions(values={'portable': False}))
     assert Captured.value.requirements == ('referenced FreeCAD component files',)
     assert not Blocked.exists()
-    Explicit = TempPath / 'explicit.FCStd'
+    Explicit = TmpPath / 'explicit.FCStd'
     Result = Registry.write(DocValue, Explicit, options=WriteOptions(values={'portable': False, 'allow_carrier': True, 'require_self_contained': False}))
     assert Result.requirements == ('referenced FreeCAD component files',)
     assert Result.metadata['native_self_contained'] is False
@@ -1973,10 +1973,10 @@ def TestNonportable(TempPath) -> None:
     assert Explicit.read_bytes() == Source.read_bytes()
 
 # this definition exists because focused behavior needs one stable owner
-def TestPartExact(TempPath) -> None:
-    Source = TempPath / 'source.FCStd'
+def TestPartExact(TmpPath) -> None:
+    Source = TmpPath / 'source.FCStd'
     Source.write_bytes(NativePart())
-    Target = TempPath / 'replay.FCStd'
+    Target = TmpPath / 'replay.FCStd'
     Result = WriteDoc(OpenDoc(Source), Target)
     assert Result.metadata['mode'] == 'exact_native_roundtrip'
     assert Result.metadata['native_self_contained'] is True
@@ -2015,10 +2015,10 @@ def TestRecomputed(Rebuild: bool) -> None:
     assert RestoredPayload.data == ForgedData
 
 # this definition exists because focused behavior needs one stable owner
-def TestRootCannot(TempPath) -> None:
-    Child = TempPath / 'Child.FCStd'
+def TestRootCannot(TmpPath) -> None:
+    Child = TmpPath / 'Child.FCStd'
     Child.write_bytes(NativePart())
-    Parent = TempPath / 'Parent.FCStd'
+    Parent = TmpPath / 'Parent.FCStd'
     Parent.write_bytes(NativeOuterAsm((('Child', 'Assembly::AssemblyLink', Child.name, 'Body'),)))
     DocValue = FreeCadAdapter().read(Parent)
     assert DocValue.assembly is not None
@@ -2027,7 +2027,7 @@ def TestRootCannot(TempPath) -> None:
     ForgedNested = ForgedNativeDoc(NestedEntry.document, ForgedData)
     AsmValue = Replace(DocValue.assembly, documents=tuple((Replace(Value, document=ForgedNested) if Value.id == NestedEntry.id else Value for Value in DocValue.assembly.documents)))
     Forged = FreecadAdapterModule._annotate_native_sources(Replace(DocValue, assembly=AsmValue))
-    Target = TempPath / 'rebuilt' / 'Parent.FCStd'
+    Target = TmpPath / 'rebuilt' / 'Parent.FCStd'
     Result = WriteDoc(Forged, Target, values={'rebuild': True})
     Transfers = {Value.capability: Value for Value in Result.transfers}
     assert Transfers[Capability.BREP].mode is TransferMode.CARRIER
@@ -2043,10 +2043,10 @@ def TestRootCannot(TempPath) -> None:
             assert all((Archive.read(NameValue) != ForgedData for NameValue in NativeShapeFiles))
 
 # this definition exists because focused behavior needs one stable owner
-def TestAsmLink(TempPath) -> None:
-    Child = TempPath / 'Child.FCStd'
+def TestAsmLink(TmpPath) -> None:
+    Child = TmpPath / 'Child.FCStd'
     Child.write_bytes(NativeAsm())
-    Parent = TempPath / 'Parent.FCStd'
+    Parent = TmpPath / 'Parent.FCStd'
     Parent.write_bytes(NativeOuterAsm((('Child', 'Assembly::AssemblyLink', Child.name, 'Assembly'),)))
     DocValue = FreeCadAdapter().read(Parent)
     assert DocValue.assembly is not None
@@ -2398,7 +2398,7 @@ def TestExample(NameValue: str) -> None:
     assert DocValue.validate() == ()
 
 # this definition exists because focused behavior needs one stable owner
-def TestAsmFcstdAnd(TempPath) -> None:
+def TestAsmFcstdAnd(TmpPath) -> None:
     Source = KFreecadExamples / 'AssemblyExample.FCStd'
     if not Source.is_file():
         Pytest.skip('bundled FreeCAD assembly example is unavailable')
@@ -2420,13 +2420,13 @@ def TestAsmFcstdAnd(TempPath) -> None:
     Entities = {Entity.id: Entity for Entity in DocValue.assembly.mate_entities}
     assert [Entities[EntityId].source_entity_id for EntityId in Revolute.entity_ids] == ['Face1', 'Edge2', 'Edge107', 'Edge107']
     assert str(Revolute.kind) == 'hinge'
-    Output = TempPath / 'Assembly.FCStd'
+    Output = TmpPath / 'Assembly.FCStd'
     Result = Convert(Source, Output)
     assert Result.near_lossless
     Transfers = {Transfer.capability: Transfer for Transfer in Result.transfers}
     assert Transfers[Capability.BREP].mode is TransferMode.NATIVE
     assert Transfers[Capability.NATIVE_PAYLOADS].mode is TransferMode.NATIVE
-    ComponentFiles = sorted((TempPath / 'Assembly').glob('*.FCStd'))
+    ComponentFiles = sorted((TmpPath / 'Assembly').glob('*.FCStd'))
     assert len(ComponentFiles) == 13
     EmittedShapes = []
     for ComponentFile in ComponentFiles:

@@ -21,8 +21,8 @@ KOracle = PathValue(OsModule.environ.get('KIT_FREECAD_ORACLE', ''))
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason='KIT_FREECAD_ORACLE is unavailable')
-def TestRecomputes(TempPath) -> None:
-    Output = TempPath / 'example.FCStd'
+def TestRecomputes(TmpPath) -> None:
+    Output = TmpPath / 'example.FCStd'
     Convert(KSample, Output)
     CodeValue = f"import FreeCAD as App;d=App.open(r'{Output}');[o.touch() for o in d.Objects];d.recompute();p=d.getObject('Parameters');s=d.getObject('Sketch1');f=d.getObject('Fillet1');before_volume=f.Shape.Volume;before_area=f.Shape.Area;before_width=s.Shape.BoundBox.XLength;before_bounds=(f.Shape.BoundBox.XMin,f.Shape.BoundBox.YMin,f.Shape.BoundBox.ZMin,f.Shape.BoundBox.XMax,f.Shape.BoundBox.YMax,f.Shape.BoundBox.ZMax);p.set(p.getCellFromAlias('sldprt_parameter_26_D1'),'250 mm');[o.touch() for o in d.Objects];d.recompute();print('KIT_RESULT',before_volume,before_area,before_width,*before_bounds,f.Shape.Volume,s.Shape.BoundBox.XLength,f.Shape.isValid(),len(f.Shape.Solids))"
     Completed = Subprocess.run([str(KOracle), '-c', CodeValue], check=True, capture_output=True, text=True, timeout=120)

@@ -120,7 +120,7 @@ def TestCarrierOr() -> None:
         assert tuple((ItemValue for ItemValue in Restored.brep_payloads if ItemValue.id in {Payload.id for Payload in Payloads})) == Payloads
 
 # this definition exists because focused behavior needs one stable owner
-def TestPrePayload(TempPath: Path) -> None:
+def TestPrePayload(TmpPath: Path) -> None:
     NativeData = b'legacy CATPart envelope'
     NativeDigest = Hashlib.sha256(NativeData).digest()
     Source = Replace(DocValue(), brep_payloads=(BrepPayload('catia:native-document', 'catia.v5.cfv2', 'native_document', 'CATPart', Hashlib.sha256(NativeData).hexdigest(), data=NativeData, source_stream='V5_CFV2', role=PayloadRole.DOCUMENT, file_extension='.catpart'), BrepPayload('catia:native-document-binding', 'catia.v5.sha256', 'native_document_binding', 'sha256', Hashlib.sha256(NativeDigest).hexdigest(), data=NativeDigest, source_stream='V5_CFV2', role=PayloadRole.VERIFICATION, file_extension='.sha256'), BrepPayload('catia:native-cgm', 'catia.cgm', 'native_brep', 'CGMGeom', Hashlib.sha256(b'legacy CGM').hexdigest(), data=b'legacy CGM', source_stream='1000_00000003_3', role=PayloadRole.BREP, file_extension='.cgm')))
@@ -129,7 +129,7 @@ def TestPrePayload(TempPath: Path) -> None:
         Payload.pop('role')
         Payload.pop('file_extension')
     Carrier = BuildCfvTwo((('KitInterchange', PackedManifest(JsonValue.dumps(Manifest).encode('utf-8'))),))
-    PathValue = TempPath / 'legacy.CATPart'
+    PathValue = TmpPath / 'legacy.CATPart'
     PathValue.write_bytes(Carrier)
     Restored = ReadCatia(PathValue)
     ByKind = {Payload.kind: Payload for Payload in Restored.brep_payloads}
@@ -220,9 +220,9 @@ def TestCfvTwoEvery() -> None:
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize('Source', (KCatparts / 'Banjo.CATPart', KCatproducts / 'Tilton_Set.CATProduct'))
-def TestRoundtripIs(Source: Path, TempPath: Path) -> None:
+def TestRoundtripIs(Source: Path, TmpPath: Path) -> None:
     DocValue = OpenDoc(Source)
-    Output = TempPath / Source.name
+    Output = TmpPath / Source.name
     if DocValue.assembly is not None:
         with Pytest.raises(AppUsabilityError) as Captured:
             Registry.write(DocValue, Output, options=WriteOptions(values={'portable': False}))
@@ -241,25 +241,25 @@ def TestRoundtripIs(Source: Path, TempPath: Path) -> None:
     assert Output.read_bytes() == Source.read_bytes()
 
 # this definition exists because focused behavior needs one stable owner
-def TestPublicSdkTo(TempPath: Path) -> None:
+def TestPublicSdkTo(TmpPath: Path) -> None:
     Source = KCatproducts / 'Tilton_Set.CATProduct'
     DocValue = OpenDoc(Source)
-    Output = TempPath / Source.name
+    Output = TmpPath / Source.name
     Result = WriteDoc(DocValue, Output)
     assert Result.metadata['mode'] == 'generated_cfv2'
     assert Result.metadata['compatibility'] == 'kit-neutral-only'
     assert Result.metadata['vendor_loadable'] is False
     assert Result.metadata['native_self_contained'] is False
     assert OpenDoc(Output).assembly == DocValue.assembly
-    Blocked = TempPath / f'blocked{Source.suffix}'
+    Blocked = TmpPath / f'blocked{Source.suffix}'
     with Pytest.raises(AppUsabilityError):
         WriteDoc(DocValue, Blocked, allow_carrier=False)
     assert not Blocked.exists()
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize(('Source', 'WriteValues'), ((KCatparts / 'Banjo.CATPart', {'rebuild': True}), (KCatproducts / 'Tilton_Set.CATProduct', {})))
-def TestGeneratedC(Source: Path, WriteValues: dict[str, bool], TempPath: Path) -> None:
-    Carrier = TempPath / f'carrier{Source.suffix}'
+def TestGeneratedC(Source: Path, WriteValues: dict[str, bool], TmpPath: Path) -> None:
+    Carrier = TmpPath / f'carrier{Source.suffix}'
     Result = WriteDoc(OpenDoc(Source), Carrier, allow_carrier=True, values=WriteValues)
     assert Result.metadata['mode'] == 'generated_cfv2'
     Restored = OpenDoc(Carrier)
@@ -273,34 +273,34 @@ def TestGeneratedC(Source: Path, WriteValues: dict[str, bool], TempPath: Path) -
     assert SavedBinding.data == NativeDigest
     assert SavedBinding.sha256 == Hashlib.sha256(NativeDigest).hexdigest()
     assert isinstance(SavedDoc.attributes['catia.replay_semantic_sha256'], str)
-    Replay = TempPath / f'replay{Source.suffix}'
+    Replay = TmpPath / f'replay{Source.suffix}'
     ReplayResult = Registry.write(Restored, Replay, options=WriteOptions(values={'portable': False, 'allow_carrier': Source.suffix.casefold() == '.catproduct', 'require_self_contained': Source.suffix.casefold() != '.catproduct'}))
     assert ReplayResult.metadata['mode'] == 'exact_native_roundtrip'
     assert ReplayResult.requirements == (('referenced CATIA component files',) if Source.suffix.casefold() == '.catproduct' else ())
     assert Replay.read_bytes() == NativeData
     if Source.suffix.casefold() == '.catproduct':
-        Regenerated = TempPath / 'regenerated.CATProduct'
+        Regenerated = TmpPath / 'regenerated.CATProduct'
         WriteDoc(Restored, Regenerated, allow_carrier=True)
         RegeneratedDoc = OpenDoc(Regenerated)
         assert tuple((Payload for Payload in RegeneratedDoc.brep_payloads if Payload.id.startswith('catia:preserved-native-document'))) == (SavedDoc, SavedBinding)
 
 # this definition exists because focused behavior needs one stable owner
-def TestStripped(TempPath: Path) -> None:
+def TestStripped(TmpPath: Path) -> None:
     Original = OpenDoc(KCatparts / 'Banjo.CATPart')
     Changed = Replace(Original, metadata=FrozenMapping({**Original.metadata, 'audit_change': True}))
-    Carrier = TempPath / 'carrier.CATPart'
+    Carrier = TmpPath / 'carrier.CATPart'
     First = WriteDoc(Changed, Carrier, allow_carrier=True)
     assert First.vendor_loadable is False
     Restored = OpenDoc(Carrier)
     MetaValue = dict(Restored.metadata)
     assert MetaValue.pop('catia.container_compatibility') == 'native-base-neutral-overlay'
     Stripped = Replace(Restored, metadata=FrozenMapping(MetaValue))
-    Blocked = TempPath / 'blocked.CATPart'
+    Blocked = TmpPath / 'blocked.CATPart'
     with Pytest.raises(AppUsabilityError) as Captured:
         WriteDoc(Stripped, Blocked, allow_carrier=False)
     assert Captured.value.vendor_loadable is False
     assert not Blocked.exists()
-    Explicit = TempPath / 'explicit.CATPart'
+    Explicit = TmpPath / 'explicit.CATPart'
     Result = WriteDoc(Stripped, Explicit, allow_carrier=True)
     assert Result.vendor_loadable is False
     assert Result.near_lossless is False
@@ -526,10 +526,10 @@ def TestCatpartCgr() -> None:
     assert Capability.BREP not in DocValue.capabilities
 
 # this definition exists because focused behavior needs one stable owner
-def TestUnresolved(TempPath: Path) -> None:
+def TestUnresolved(TmpPath: Path) -> None:
     Source = KCatparts / 'Banjo.CATPart'
     Original = OpenDoc(Source)
-    Output = TempPath / 'Banjo.FCStd'
+    Output = TmpPath / 'Banjo.FCStd'
     Result = Convert(Source, Output)
     Transfers = {Value.capability: Value for Value in Result.transfers}
     assert Result.application_usable is False
@@ -547,16 +547,16 @@ def TestUnresolved(TempPath: Path) -> None:
         assert not RootValue.findall('.//Part[@file]')
         assert not RootValue.findall('.//Mesh[@file]')
     assert OpenDoc(Output) == Original
-    ReversedPart = TempPath / 'Banjo.CATPart'
+    ReversedPart = TmpPath / 'Banjo.CATPart'
     ReversedResult = Convert(Output, ReversedPart)
     assert ReversedResult.application_usable is True
     assert ReversedResult.vendor_loadable is True
     assert ReversedPart.read_bytes() == Source.read_bytes()
 
 # this definition exists because focused behavior needs one stable owner
-def TestSolidworksA(TempPath: Path) -> None:
+def TestSolidworksA(TmpPath: Path) -> None:
     Source = OpenDoc(KSldprt)
-    Output = TempPath / 'example.CATPart'
+    Output = TmpPath / 'example.CATPart'
     with Pytest.raises(AppUsabilityError):
         Convert(KSldprt, Output, allow_carrier=False)
     Result = Convert(KSldprt, Output, allow_carrier=True)
@@ -587,9 +587,9 @@ def TestSolidworksA(TempPath: Path) -> None:
     assert sum((Payload.kind == 'native_document' for Payload in Restored.brep_payloads)) == 1
 
 # this definition exists because focused behavior needs one stable owner
-def TestSolidworks(TempPath: Path) -> None:
+def TestSolidworks(TmpPath: Path) -> None:
     Source = OpenDoc(KSldasm)
-    Output = TempPath / 'Piston.CATProduct'
+    Output = TmpPath / 'Piston.CATProduct'
     Result = Convert(KSldasm, Output, allow_carrier=True)
     assert Result.source_format == 'solidworks.sldasm'
     assert Result.destination_format == 'catia.v5'
@@ -603,42 +603,42 @@ def TestSolidworks(TempPath: Path) -> None:
     assert len(Restored.assembly.mates) == 6
 
 # this definition exists because focused behavior needs one stable owner
-def TestEnforceDoc(TempPath: Path) -> None:
+def TestEnforceDoc(TmpPath: Path) -> None:
     Adapter = CatiaAdapter()
     PartValue = OpenDoc(KSldprt)
     AsmValue = OpenDoc(KSldasm)
-    assert Adapter.supports(PartValue, TempPath / 'part.CATPart')
-    assert not Adapter.supports(PartValue, TempPath / 'part.CATProduct')
-    assert Adapter.supports(AsmValue, TempPath / 'assembly.CATProduct')
-    assert not Adapter.supports(AsmValue, TempPath / 'assembly.CATPart')
+    assert Adapter.supports(PartValue, TmpPath / 'part.CATPart')
+    assert not Adapter.supports(PartValue, TmpPath / 'part.CATProduct')
+    assert Adapter.supports(AsmValue, TmpPath / 'assembly.CATProduct')
+    assert not Adapter.supports(AsmValue, TmpPath / 'assembly.CATPart')
     assert Adapter.supports(PartValue, BytesIo())
     assert not Adapter.supports(PartValue, StringIo())
     with Pytest.raises(ValueError, match='\\.CATPart'):
-        WriteCatia(PartValue, TempPath / 'part.CATProduct')
+        WriteCatia(PartValue, TmpPath / 'part.CATProduct')
     with Pytest.raises(ValueError, match='\\.CATProduct'):
-        WriteCatia(AsmValue, TempPath / 'assembly.CATPart')
+        WriteCatia(AsmValue, TmpPath / 'assembly.CATPart')
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize(('Source', 'WrongSuffix'), ((KCatparts / 'Banjo.CATPart', '.CATProduct'), (KCatproducts / 'Tilton_Set.CATProduct', '.CATPart')))
-def TestReaderKindA(Source: Path, WrongSuffix: str, TempPath: Path) -> None:
-    Renamed = TempPath / f'renamed{WrongSuffix}'
+def TestReaderKindA(Source: Path, WrongSuffix: str, TmpPath: Path) -> None:
+    Renamed = TmpPath / f'renamed{WrongSuffix}'
     Renamed.write_bytes(Source.read_bytes())
     with Pytest.raises(CatiaAdapterError, match='content requires'):
         ReadCatia(Renamed)
 
 # this definition exists because focused behavior needs one stable owner
-def TestReaderKind(TempPath: Path) -> None:
-    Valid = TempPath / 'valid.CATPart'
+def TestReaderKind(TmpPath: Path) -> None:
+    Valid = TmpPath / 'valid.CATPart'
     Convert(KSldprt, Valid, allow_carrier=True)
-    Renamed = TempPath / 'renamed.CATProduct'
+    Renamed = TmpPath / 'renamed.CATProduct'
     Renamed.write_bytes(Valid.read_bytes())
     with Pytest.raises(CatiaAdapterError, match='content requires'):
         ReadCatia(Renamed)
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.parametrize(('Marker', 'WrongSuffix'), ((b'CATPart', '.CATProduct'), (b'CATProduct', '.CATPart')))
-def TestReaderUses(Marker: bytes, WrongSuffix: str, TempPath: Path) -> None:
-    Renamed = TempPath / f'declarationless{WrongSuffix}'
+def TestReaderUses(Marker: bytes, WrongSuffix: str, TmpPath: Path) -> None:
+    Renamed = TmpPath / f'declarationless{WrongSuffix}'
     Renamed.write_bytes(BuildCfvTwo((('Format', Marker),)))
     with Pytest.raises(CatiaAdapterError, match='content requires'):
         ReadCatia(Renamed)
@@ -653,11 +653,11 @@ def TestReaderPart() -> None:
         CatiaAdapter().read(DataValue)
 
 # this definition exists because focused behavior needs one stable owner
-def TestModifiedDoc(TempPath: Path) -> None:
+def TestModifiedDoc(TmpPath: Path) -> None:
     Source = KCatparts / 'Banjo.CATPart'
     DocValue = OpenDoc(Source)
     Changed = Replace(DocValue, configurations=(Config('catia:changed', 'Changed', active=True),))
-    Output = TempPath / 'Changed.CATPart'
+    Output = TmpPath / 'Changed.CATPart'
     Result = WriteDoc(Changed, Output, allow_carrier=True)
     assert Result.metadata['mode'] == 'native_base_with_neutral_edits'
     assert Result.metadata['compatibility'] == 'native-base-neutral-overlay'
@@ -682,7 +682,7 @@ def TestModifiedDoc(TempPath: Path) -> None:
     assert sum((Payload.kind == 'native_document' for Payload in Restored.brep_payloads)) == 2
     Saved = next((Payload for Payload in Restored.brep_payloads if Payload.id.startswith('catia:preserved-native-document:')))
     assert 'catia.replay_semantic_sha256' not in Saved.attributes
-    Replay = TempPath / 'ChangedReplay.CATPart'
+    Replay = TmpPath / 'ChangedReplay.CATPart'
     ReplayResult = WriteDoc(Restored, Replay, allow_carrier=True)
     assert ReplayResult.metadata['mode'] == 'exact_carrier_roundtrip'
     assert ReplayResult.metadata['compatibility'] == 'native-base-neutral-overlay'
@@ -696,9 +696,9 @@ def TestModifiedDoc(TempPath: Path) -> None:
     assert TamperedDoc.metadata['catia.container_compatibility'] == 'kit-neutral-only'
 
 # this definition exists because focused behavior needs one stable owner
-def TestEmbeddedAnd(TempPath: Path) -> None:
+def TestEmbeddedAnd(TmpPath: Path) -> None:
     Source = OpenDoc(KSldprt)
-    Output = TempPath / 'Filtered.CATPart'
+    Output = TmpPath / 'Filtered.CATPart'
     Convert(KSldprt, Output, allow_carrier=True)
     Config = Source.configurations[0]
     Filtered = CatiaAdapter().read(Output, ReadOptions(configuration=Config.id, include_brep=False))
@@ -714,7 +714,7 @@ def TestEmbeddedAnd(TempPath: Path) -> None:
     assert Filtered.capabilities == Source.capabilities - {Capability.BREP}
     assert [ItemValue.id for ItemValue in Filtered.configurations if ItemValue.active] == [Config.id]
     Complete = OpenDoc(Output)
-    Replay = TempPath / 'Replay.CATPart'
+    Replay = TmpPath / 'Replay.CATPart'
     Result = WriteCatia(Complete, Replay)
     assert Result.metadata['mode'] == 'exact_carrier_roundtrip'
     assert Replay.read_bytes() == Output.read_bytes()
@@ -728,12 +728,12 @@ def TestGeneratedB() -> None:
     assert Restored.capabilities == Source.capabilities
 
 # this definition exists because focused behavior needs one stable owner
-def TestEmbeddedDoc(TempPath: Path) -> None:
+def TestEmbeddedDoc(TmpPath: Path) -> None:
     Source = OpenDoc(KSldprt)
     ForeignDoc = BrepPayload('future:document', 'future.cad', 'native_document', 'future', Hashlib.sha256(b'foreign-document').hexdigest(), data=b'foreign-document', role=PayloadRole.DOCUMENT, file_extension='.future')
     UnknownAuxiliary = BrepPayload('future:declaration', 'catia.v5.cfv2.stream', 'native_container', 'CustomerContainer', Hashlib.sha256(b'customer-container').hexdigest(), data=b'customer-container', role=PayloadRole.AUXILIARY, file_extension='.bin')
     Carried = Replace(Source, brep_payloads=(*Source.brep_payloads, ForeignDoc, UnknownAuxiliary))
-    Output = TempPath / 'ForeignPayloads.CATPart'
+    Output = TmpPath / 'ForeignPayloads.CATPart'
     WriteCatia(Carried, Output, allow_non_native=True)
     Restored = CatiaAdapter().read(Output, ReadOptions(include_brep=False))
     ByIdValue = {Payload.id: Payload for Payload in Restored.brep_payloads}
@@ -742,8 +742,8 @@ def TestEmbeddedDoc(TempPath: Path) -> None:
     assert all((Payload.data is None for Payload in Restored.brep_payloads if Payload.role == PayloadRole.BREP))
 
 # this definition exists because focused behavior needs one stable owner
-def TestEmbedded(TempPath: Path) -> None:
-    Output = TempPath / 'Configured.CATPart'
+def TestEmbedded(TmpPath: Path) -> None:
+    Output = TmpPath / 'Configured.CATPart'
     Convert(KSldprt, Output, allow_carrier=True)
     with Pytest.raises(CatiaAdapterError, match='configuration'):
         CatiaAdapter().read(Output, ReadOptions(configuration='missing-configuration'))
@@ -754,9 +754,9 @@ def TestCatpartA() -> None:
         CatiaAdapter().read(KCatparts / 'Banjo.CATPart', ReadOptions(configuration='missing-configuration'))
 
 # this definition exists because focused behavior needs one stable owner
-def TestConversion(TempPath: Path) -> None:
-    Catpart = TempPath / 'Reader.CATPart'
-    Output = TempPath / 'Reader.json'
+def TestConversion(TmpPath: Path) -> None:
+    Catpart = TmpPath / 'Reader.CATPart'
+    Output = TmpPath / 'Reader.json'
     Convert(KSldprt, Catpart, allow_carrier=True)
     Result = Convert(Catpart, Output)
     assert Result.source_format == 'catia.v5'
@@ -764,11 +764,11 @@ def TestConversion(TempPath: Path) -> None:
     assert Result.document.metadata['catia.embedded_source_format_id'] == 'solidworks.sldprt'
 
 # this definition exists because focused behavior needs one stable owner
-def TestChangedCgm(TempPath: Path) -> None:
+def TestChangedCgm(TmpPath: Path) -> None:
     DocValue = OpenDoc(KCatparts / 'Banjo.CATPart')
     CgmValue = next((Payload for Payload in DocValue.brep_payloads if Payload.id == 'catia:native-cgm'))
     Changed = Replace(DocValue, brep_payloads=tuple((Replace(Payload, data=(CgmValue.data or b'') + b'\x00') if Payload.id == CgmValue.id else Payload for Payload in DocValue.brep_payloads)))
-    Output = TempPath / 'ChangedGeometry.CATPart'
+    Output = TmpPath / 'ChangedGeometry.CATPart'
     Result = WriteCatia(Changed, Output, allow_non_native=True)
     assert Result.metadata['mode'] == 'native_base_with_neutral_edits'
     assert Result.metadata['native_base_preserved'] is True
@@ -934,11 +934,11 @@ def TestForeign() -> None:
     assert Payload.attributes == {'user.tag': 'changed'}
 
 # this definition exists because focused behavior needs one stable owner
-def TestCatpartB(TempPath: Path) -> None:
+def TestCatpartB(TmpPath: Path) -> None:
     SourcePath = KCatparts / 'Banjo.CATPart'
     Source = OpenDoc(SourcePath)
-    Carrier = TempPath / 'Banjo.SLDPRT'
-    Output = TempPath / 'Banjo.CATPart'
+    Carrier = TmpPath / 'Banjo.SLDPRT'
+    Output = TmpPath / 'Banjo.CATPart'
     WriteSldprt(Source, Carrier, allow_non_native=True)
     Restored = ReadSldprt(Carrier)
     Result = WriteCatia(Restored, Output)
@@ -946,8 +946,8 @@ def TestCatpartB(TempPath: Path) -> None:
     assert Output.read_bytes() == SourcePath.read_bytes()
 
 # this definition exists because focused behavior needs one stable owner
-def TestEngineAlias(TempPath: Path) -> None:
-    Output = TempPath / 'Piston.SLDASM'
+def TestEngineAlias(TmpPath: Path) -> None:
+    Output = TmpPath / 'Piston.SLDASM'
     Result = Convert(KSldasm, Output)
     assert Result.source_format == 'solidworks.sldasm'
     assert Result.destination_format == 'solidworks.sldasm'
