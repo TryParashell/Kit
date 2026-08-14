@@ -345,7 +345,42 @@ def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
     return tuple(Result)
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition validates every sidecar name referenced by document xml
+def ReferencedNames(
+    RootValue: ET.Element, Members: Mapping[str, Zipfile.ZipInfo]
+) -> set[str]:
+    Referenced: set[str] = set()
+    for NodeValue in RootValue.findall(".//*[@file]"):
+        if NodeValue.tag == "XLink":
+            continue
+        FileName = NodeValue.get("file", "")
+        if FileName:
+            Referenced.add(EntryName(FileName))
+    Missing = sorted(Referenced.difference(Members))
+    if Missing:
+        raise NativeFreeCad(
+            "FCStd archive is missing referenced data: " + ", ".join(Missing)
+        )
+    return Referenced
+
+
+# this definition reads validated sidecars while normalizing archive errors
+def ReadEntries(
+    Archive: Zipfile.ZipFile,
+    Members: Mapping[str, Zipfile.ZipInfo],
+    Referenced: set[str],
+) -> dict[str, bytes]:
+    try:
+        return {
+            NameValue: Archive.read(Members[NameValue]) for NameValue in Referenced
+        }
+    except (OSError, RuntimeError, NotImplementedError, Zipfile.BadZipFile) as ErrorInfo:
+        raise NativeFreeCad(
+            "FCStd archive contains unreadable referenced data"
+        ) from ErrorInfo
+
+
+# this definition loads and validates a native freecad object graph
 def LoadNative(DataValue: bytes, *, LoadEntries: bool = True) -> NativeArchive:
     Archive, Members = ArchiveMembers(DataValue)
     with Archive:
@@ -360,34 +395,8 @@ def LoadNative(DataValue: bytes, *, LoadEntries: bool = True) -> NativeArchive:
         if SchemaVersion < KMinObjectGraphSchema:
             raise NativeFreeCad("FreeCAD schema version is not supported")
         Objects = ParseObjects(RootValue)
-        Referenced: set[str] = set()
-        for NodeValue in RootValue.findall(".//*[@file]"):
-            if NodeValue.tag == "XLink":
-                continue
-            FileName = NodeValue.get("file", "")
-            if FileName:
-                Referenced.add(EntryName(FileName))
-        Missing = sorted(Referenced.difference(Members))
-        if Missing:
-            raise NativeFreeCad(
-                "FCStd archive is missing referenced data: " + ", ".join(Missing)
-            )
-        Entries: dict[str, bytes] = {}
-        if LoadEntries:
-            try:
-                Entries = {
-                    NameValue: Archive.read(Members[NameValue])
-                    for NameValue in Referenced
-                }
-            except (
-                OSError,
-                RuntimeError,
-                NotImplementedError,
-                Zipfile.BadZipFile,
-            ) as ErrorInfo:
-                raise NativeFreeCad(
-                    "FCStd archive contains unreadable referenced data"
-                ) from ErrorInfo
+        Referenced = ReferencedNames(RootValue, Members)
+        Entries = ReadEntries(Archive, Members, Referenced) if LoadEntries else {}
     return NativeArchive(
         RootValue,
         Objects,

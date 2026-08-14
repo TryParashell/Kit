@@ -1727,29 +1727,36 @@ def TestStringRoot() -> None:
     assert HasherTable is not None
     assert HasherTable.attrib == {'file': 'StringHasher.Table.txt'}
 
-# this definition exists because focused behavior needs one stable owner
-def TestPartGraph() -> None:
+# this definition exists because part-graph shape properties share one sidecar encoding
+def PartGraphShapeProp(NameValue: str, Source: str, Mapped: bool=False) -> ET.Element:
+    NodeValue = NativeProp(NameValue, 'Part::PropertyPartShape', 'Part', {'ElementMap': '1.15.70200.5', 'file': Source})
+    XmlTree.SubElement(NodeValue, 'ElementMap')
+    if Mapped:
+        XmlTree.SubElement(NodeValue, 'ElementMap2', {'file': Source + '.Map.txt'})
+    return NodeValue
 
-    # this definition exists because focused behavior needs one stable owner
-    def ShapeProp(NameValue: str, Source: str, Mapped: bool=False) -> XmlTree.Element:
-        NodeValue = NativeProp(NameValue, 'Part::PropertyPartShape', 'Part', {'ElementMap': '1.15.70200.5', 'file': Source})
-        XmlTree.SubElement(NodeValue, 'ElementMap')
-        if Mapped:
-            XmlTree.SubElement(NodeValue, 'ElementMap2', {'file': Source + '.Map.txt'})
-        return NodeValue
+
+# this definition exists because the part-graph fixture has one coherent native object graph
+def PartGraphFixture() -> tuple[bytes, dict[str, bytes]]:
     Attachment = NativeProp('AttachmentSupport', 'App::PropertyLinkSubList', 'LinkSubList', {'count': '1'})
     XmlTree.SubElement(Attachment[0], 'Link', {'obj': 'XY_Plane', 'sub': ''})
     Profile = NativeProp('Profile', 'App::PropertyLinkSub', 'LinkSub', {'value': 'Sketch', 'count': '0'})
-    BodyProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Body'}), NativeLinkList('Group', ('Sketch', 'Pad')), ShapeProp('Shape', 'Body.Shape.brp', True), NativeProp('Tip', 'App::PropertyLink', 'Link', {'value': 'Pad'}), NativeProp('Visibility', 'App::PropertyBool', 'Bool', {'value': 'true'}))
+    BodyProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Body'}), NativeLinkList('Group', ('Sketch', 'Pad')), PartGraphShapeProp('Shape', 'Body.Shape.brp', True), NativeProp('Tip', 'App::PropertyLink', 'Link', {'value': 'Pad'}), NativeProp('Visibility', 'App::PropertyBool', 'Bool', {'value': 'true'}))
     OpaqueProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Opaque'}), NativeProp('Token', 'App::PropertyString', 'String', {'value': 'retained'}), NativeProp('Blob', 'App::PropertyFileIncluded', 'FileIncluded', {'file': 'Blob.bin'}))
     PlaneProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'XY_Plane'}), NativePlacement(), NativeProp('Visibility', 'App::PropertyBool', 'Bool', {'value': 'false'}))
-    SketchProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Sketch'}), Attachment, NativeProp('Geometry', 'Part::PropertyGeometryList', 'GeometryList', {'count': '0'}), NativeProp('Constraints', 'Sketcher::PropertyConstraintList', 'ConstraintList', {'count': '0'}), ShapeProp('InternalShape', 'Sketch.InternalShape.brp'), NativePlacement(), ShapeProp('Shape', 'Sketch.Shape.brp', True), NativeProp('Visibility', 'App::PropertyBool', 'Bool', {'value': 'false'}))
-    PadProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Pad'}), ShapeProp('AddSubShape', 'Pad.AddSubShape.brp', True), Profile, NativeProp('Length', 'App::PropertyLength', 'Float', {'value': '25'}), NativeProp('Type', 'App::PropertyEnumeration', 'Integer', {'value': '0'}), NativeProp('Reversed', 'App::PropertyBool', 'Bool', {'value': 'false'}), NativeProp('Midplane', 'App::PropertyBool', 'Bool', {'value': 'false'}), ShapeProp('Shape', 'Pad.Shape.brp', True), ShapeProp('SuppressedShape', 'Pad.SuppressedShape.brp'), NativeProp('Suppressed', 'App::PropertyBool', 'Bool', {'value': 'false'}), NativeProp('Visibility', 'App::PropertyBool', 'Bool', {'value': 'true'}))
+    SketchProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Sketch'}), Attachment, NativeProp('Geometry', 'Part::PropertyGeometryList', 'GeometryList', {'count': '0'}), NativeProp('Constraints', 'Sketcher::PropertyConstraintList', 'ConstraintList', {'count': '0'}), PartGraphShapeProp('InternalShape', 'Sketch.InternalShape.brp'), NativePlacement(), PartGraphShapeProp('Shape', 'Sketch.Shape.brp', True), NativeProp('Visibility', 'App::PropertyBool', 'Bool', {'value': 'false'}))
+    PadProperties = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Pad'}), PartGraphShapeProp('AddSubShape', 'Pad.AddSubShape.brp', True), Profile, NativeProp('Length', 'App::PropertyLength', 'Float', {'value': '25'}), NativeProp('Type', 'App::PropertyEnumeration', 'Integer', {'value': '0'}), NativeProp('Reversed', 'App::PropertyBool', 'Bool', {'value': 'false'}), NativeProp('Midplane', 'App::PropertyBool', 'Bool', {'value': 'false'}), PartGraphShapeProp('Shape', 'Pad.Shape.brp', True), PartGraphShapeProp('SuppressedShape', 'Pad.SuppressedShape.brp'), NativeProp('Suppressed', 'App::PropertyBool', 'Bool', {'value': 'false'}), NativeProp('Visibility', 'App::PropertyBool', 'Bool', {'value': 'true'}))
     BodyTransient = XmlTree.Element('_Property', {'name': '_ElementMapVersion', 'type': 'App::PropertyString', 'status': '234881024'})
     SketchTransient = XmlTree.Element('_Property', {'name': '_ElementMapVersion', 'type': 'App::PropertyString', 'status': '234881024'})
     PadTransients = (XmlTree.Element('_Property', {'name': 'PreviewShape', 'type': 'Part::PropertyPartShape', 'status': '152'}), XmlTree.Element('_Property', {'name': '_Body', 'type': 'App::PropertyLinkHidden', 'status': '251658240'}), XmlTree.Element('_Property', {'name': '_ElementMapVersion', 'type': 'App::PropertyString', 'status': '234881024'}))
     Entries = {'Body.Shape.brp': b'\nCASCADE Topology V1, (c) Matra-Datavision\nbody\n', 'Blob.bin': b'opaque-native-stream', 'Body.Shape.brp.Map.txt': b'Body map', 'Sketch.InternalShape.brp': b'', 'Sketch.Shape.brp': b'\nCASCADE Topology V1, (c) Matra-Datavision\nsketch\n', 'Sketch.Shape.brp.Map.txt': b'Sketch map', 'Pad.AddSubShape.brp': b'\nCASCADE Topology V1, (c) Matra-Datavision\nadd\n', 'Pad.AddSubShape.brp.Map.txt': b'Add map', 'Pad.Shape.brp': b'\nCASCADE Topology V1, (c) Matra-Datavision\npad\n', 'Pad.Shape.brp.Map.txt': b'Pad map', 'Pad.SuppressedShape.brp': b''}
     Source = NativeArchive((('Body', 'PartDesign::Body', ('Sketch', 'Pad'), BodyProperties), ('Opaque', 'App::FeaturePython', (), OpaqueProperties), ('XY_Plane', 'App::Plane', (), PlaneProperties), ('Sketch', 'Sketcher::SketchObject', ('XY_Plane',), SketchProperties), ('Pad', 'PartDesign::Pad', ('Body', 'Sketch'), PadProperties)), Entries, {'Body': {'id': '1', 'extensions': ('App::OriginGroupExtension',), 'transient_properties': (BodyTransient,)}, 'Opaque': {'id': '50'}, 'XY_Plane': {'id': '3'}, 'Sketch': {'id': '9', 'extensions': ('Part::AttachExtension',), 'transient_properties': (SketchTransient,)}, 'Pad': {'id': '12', 'touched': True, 'extensions': ('App::SuppressibleExtension', 'Part::PreviewExtension'), 'transient_properties': PadTransients}})
+    return Source, Entries
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestPartGraph() -> None:
+    Source, Entries = PartGraphFixture()
     Adapter = FreeCadAdapter()
     DocValue = Adapter.read(Source)
     assert [ItemValue['name'] for ItemValue in DocValue.metadata['freecad']['objects']] == ['Body', 'Opaque', 'XY_Plane', 'Sketch', 'Pad']
