@@ -264,7 +264,7 @@ def BuildNeighbors(Facets: tuple[Triangle, ...]):
 
 # component traversal stays isolated because contradictory facet parity invalidates the whole mesh
 def GetComponents(FacetCount: int, Neighbors: Mapping[int, list[tuple[int, int]]]):
-    Flips = [0] * len(Facets)
+    Flips = [0] * FacetCount
     Components: list[tuple[int, ...]] = []
     for StartIndex in range(FacetCount):
         if Flips[StartIndex]:

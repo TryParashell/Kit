@@ -36,27 +36,56 @@ from interchange import (
     Vector3 as VectorThree,
 )
 
-_MAX_BYTES = 128 * 1024 * 1024
-_MAX_GEOMETRY = 300_000
-_MAX_SHAPES = 500_000
-_MAX_TOKENS = 12_000_000
-_MIN_INT32 = -(2**31)
-_MAX_INT32 = 2**31 - 1
-_TOKEN_PATTERN = re.compile(rb"\S+")
-_INTEGER_PATTERN = re.compile(rb"[+-]?\d+")
-_FLAGS_PATTERN = re.compile(rb"[01]{7}")
-_CONTINUITY_PATTERN = re.compile(rb"C0|G1|C1|G2|C2|C3|CN")
-_INDEXED_CONTINUITY_PATTERN = re.compile(rb"([1-9]\d*)(C0|G1|C1|G2|C2|C3|CN)")
-_VERSION_LINE = b"CASCADE Topology V1, (c) Matra-Datavision"
-_VERSION_LINES = frozenset(
+# this binding exists because parser limits need one shared invariant
+KMaxBytes = 128 * 1024 * 1024
+
+# this binding exists because parser limits need one shared invariant
+KMaxGeometry = 300_000
+
+# this binding exists because parser limits need one shared invariant
+KMaxShapes = 500_000
+
+# this binding exists because parser limits need one shared invariant
+KMaxTokens = 12_000_000
+
+# this binding exists because parser limits need one shared invariant
+KMinIntThreeTwo = -(2**31)
+
+# this binding exists because parser limits need one shared invariant
+KMaxIntThreeTwo = 2**31 - 1
+
+# this binding exists because parser limits need one shared invariant
+KTokenPattern = RegexLib.compile(rb"\S+")
+
+# this binding exists because parser limits need one shared invariant
+KIntegerPattern = RegexLib.compile(rb"[+-]?\d+")
+
+# this binding exists because parser limits need one shared invariant
+KFlagsPattern = RegexLib.compile(rb"[01]{7}")
+
+# this binding exists because parser limits need one shared invariant
+KContinuityPattern = RegexLib.compile(rb"C0|G1|C1|G2|C2|C3|CN")
+
+# this binding exists because parser limits need one shared invariant
+KIndexedPattern = RegexLib.compile(rb"([1-9]\d*)(C0|G1|C1|G2|C2|C3|CN)")
+
+# this binding exists because parser limits need one shared invariant
+KVersionLine = b"CASCADE Topology V1, (c) Matra-Datavision"
+
+# this binding exists because parser limits need one shared invariant
+KVersionLines = frozenset(
     {
-        _VERSION_LINE,
+        KVersionLine,
         b"CASCADE Topology V2, (c) Matra-Datavision",
         b"CASCADE Topology V3, (c) Open Cascade",
     }
 )
-_SHAPE_TYPES = frozenset({b"Ve", b"Ed", b"Wi", b"Fa", b"Sh", b"So", b"CS", b"Co"})
-_SHAPE_CHILD_TYPES = {
+
+# this binding exists because parser limits need one shared invariant
+KShapeTypes = frozenset({b"Ve", b"Ed", b"Wi", b"Fa", b"Sh", b"So", b"CS", b"Co"})
+
+# this binding exists because parser limits need one shared invariant
+KShapeChildTypes = {
     b"Ve": frozenset(),
     b"Ed": frozenset({b"Ve"}),
     b"Wi": frozenset({b"Ed"}),
@@ -64,426 +93,465 @@ _SHAPE_CHILD_TYPES = {
     b"Sh": frozenset({b"Fa"}),
     b"So": frozenset({b"Sh"}),
     b"CS": frozenset({b"So"}),
-    b"Co": _SHAPE_TYPES,
+    b"Co": KShapeTypes,
 }
-_MAX_RECURSION = 64
-# bounded equivalence buckets prevent adversarial coincident-vertex scans from growing
-_MAX_VERTEX_EQUIVALENCE_BUCKET = 64
-# fifteen significant digits isolate transform round-off without merging real geometry
-_VERTEX_EQUIVALENCE_DIGITS = 15
+
+# this binding exists because parser limits need one shared invariant
+KMaxRecursion = 64
+
+# this binding exists because parser limits need one shared invariant
+KMaxVertexBucket = 64
+
+# this binding exists because parser limits need one shared invariant
+KVertexDigits = 15
 
 
-class _DecodeFailure(ValueError):
-    __slots__ = ()
+# this class exists because related parser state needs one focused owner
+class DecodeFailure(ValueError):
+    Slots = ()
 
 
-class _Tokens:
-    __slots__ = ("_data", "_iterator", "_lookahead", "_last_end", "count")
+# this class exists because related parser state needs one focused owner
+class Tokens:
+    Slots = ('DataValueA', 'Iterator', 'Lookahead', 'LastEnd', 'Count')
 
-    def __init__(self, data: bytes) -> None:
-        self._data = data
-        self._iterator = iter(_TOKEN_PATTERN.finditer(data))
-        self._lookahead: re.Match[bytes] | None = None
-        self._last_end = 0
-        self.count = 0
+    # this definition exists because focused parser behavior needs one stable owner
+    def __init__(SelfValue, DataValue: bytes) -> None:
+        SelfValue.DataValueA = DataValue
+        SelfValue.Iterator = iter(KTokenPattern.finditer(DataValue))
+        SelfValue.Lookahead: RegexLib.Match[bytes] | None = None
+        SelfValue.LastEnd = 0
+        SelfValue.Count = 0
 
-    def take(self) -> bytes:
-        if self._lookahead is None:
+    # this definition exists because focused parser behavior needs one stable owner
+    def TakeToken(SelfValue) -> bytes:
+        if SelfValue.Lookahead is None:
             try:
-                match = next(self._iterator)
-            except StopIteration as exc:
-                raise _DecodeFailure("unexpected end of BRep data") from exc
+                MatchValue = next(SelfValue.Iterator)
+            except StopIteration as ErrorValue:
+                raise DecodeFailure("unexpected end of BRep data") from ErrorValue
         else:
-            match = self._lookahead
-            self._lookahead = None
-        token = match.group(0)
-        self._last_end = match.end()
-        self.count += 1
-        if self.count > _MAX_TOKENS or len(token) > 128:
-            raise _DecodeFailure("BRep token bounds exceeded")
-        return token
+            MatchValue = SelfValue.Lookahead
+            SelfValue.Lookahead = None
+        Token = MatchValue.group(0)
+        SelfValue.LastEnd = MatchValue.end()
+        SelfValue.Count += 1
+        if SelfValue.Count > KMaxTokens or len(Token) > 128:
+            raise DecodeFailure("BRep token bounds exceeded")
+        return Token
 
-    def peek(self) -> bytes | None:
-        if self._lookahead is None:
+    # this definition exists because focused parser behavior needs one stable owner
+    def PeekToken(SelfValue) -> bytes | None:
+        if SelfValue.Lookahead is None:
             try:
-                self._lookahead = next(self._iterator)
+                SelfValue.Lookahead = next(SelfValue.Iterator)
             except StopIteration:
                 return None
-        return self._lookahead.group(0)
+        return SelfValue.Lookahead.group(0)
 
-    def face_triangulation_starts_next_line(self) -> bool:
-        current_end = self._data.find(b"\n", self._last_end)
-        if current_end < 0:
+    # this definition exists because focused parser behavior needs one stable owner
+    def IsFaceTriNext(SelfValue) -> bool:
+        CurrentEnd = SelfValue.DataValueA.find(b"\n", SelfValue.LastEnd)
+        if CurrentEnd < 0:
             return False
-        current_tail = self._data[self._last_end : current_end]
-        if re.fullmatch(rb"[ \t]*\r?", current_tail) is None:
+        CurrentTail = SelfValue.DataValueA[SelfValue.LastEnd : CurrentEnd]
+        if RegexLib.fullmatch(rb"[ \t]*\r?", CurrentTail) is None:
             return False
-        next_start = current_end + 1
-        next_end = self._data.find(b"\n", next_start)
-        if next_end < 0:
-            next_end = len(self._data)
-        line = self._data[next_start:next_end]
-        return re.fullmatch(rb"2[ \t]+[1-9]\d*[ \t]*\r?", line) is not None
+        NextStart = CurrentEnd + 1
+        NextEnd = SelfValue.DataValueA.find(b"\n", NextStart)
+        if NextEnd < 0:
+            NextEnd = len(SelfValue.DataValueA)
+        LineValue = SelfValue.DataValueA[NextStart:NextEnd]
+        return RegexLib.fullmatch(rb"2[ \t]+[1-9]\d*[ \t]*\r?", LineValue) is not None
 
-    def expect(self, expected: bytes) -> None:
-        if self.take() != expected:
-            raise _DecodeFailure("unexpected BRep token")
+    # this definition exists because focused parser behavior needs one stable owner
+    def ExpectToken(SelfValue, Expected: bytes) -> None:
+        if SelfValue.TakeToken() != Expected:
+            raise DecodeFailure("unexpected BRep token")
 
-    def integer(self, minimum: int = 0, maximum: int = _MAX_SHAPES) -> int:
-        token = self.take()
-        if _INTEGER_PATTERN.fullmatch(token) is None:
-            raise _DecodeFailure("invalid BRep integer")
-        value = int(token)
-        if value < minimum or value > maximum:
-            raise _DecodeFailure("BRep integer is out of bounds")
-        return value
+    # this definition exists because focused parser behavior needs one stable owner
+    def ReadInteger(SelfValue, Minimum: int = 0, Maximum: int = KMaxShapes) -> int:
+        Token = SelfValue.TakeToken()
+        if KIntegerPattern.fullmatch(Token) is None:
+            raise DecodeFailure("invalid BRep integer")
+        Value = int(Token)
+        if Value < Minimum or Value > Maximum:
+            raise DecodeFailure("BRep integer is out of bounds")
+        return Value
 
-    def signed_integer(
-        self, minimum: int = -_MAX_SHAPES, maximum: int = _MAX_SHAPES
+    # this definition exists because focused parser behavior needs one stable owner
+    def SignedInteger(
+        SelfValue, Minimum: int = -KMaxShapes, Maximum: int = KMaxShapes
     ) -> int:
-        token = self.take()
-        if _INTEGER_PATTERN.fullmatch(token) is None:
-            raise _DecodeFailure("invalid BRep integer")
-        value = int(token)
-        if value < minimum or value > maximum:
-            raise _DecodeFailure("BRep integer is out of bounds")
-        return value
+        Token = SelfValue.TakeToken()
+        if KIntegerPattern.fullmatch(Token) is None:
+            raise DecodeFailure("invalid BRep integer")
+        Value = int(Token)
+        if Value < Minimum or Value > Maximum:
+            raise DecodeFailure("BRep integer is out of bounds")
+        return Value
 
-    def number(self) -> float:
-        token = self.take()
-        if len(token) > 30:
-            raise _DecodeFailure("BRep number is out of bounds")
+    # this definition exists because focused parser behavior needs one stable owner
+    def ReadNumber(SelfValue) -> float:
+        Token = SelfValue.TakeToken()
+        if len(Token) > 30:
+            raise DecodeFailure("BRep number is out of bounds")
         try:
-            value = float(token)
-        except ValueError as exc:
-            raise _DecodeFailure("invalid BRep number") from exc
-        if not isfinite(value):
-            raise _DecodeFailure("non-finite BRep number")
-        return value
+            Value = float(Token)
+        except ValueError as ErrorValue:
+            raise DecodeFailure("invalid BRep number") from ErrorValue
+        if not IsFinite(Value):
+            raise DecodeFailure("non-finite BRep number")
+        return Value
 
 
-@dataclass(frozen=True, slots=True)
-class _Reference:
-    orientation: str
-    record: int
-    location: int = 0
+# this class exists because related parser state needs one focused owner
+@Dataclass(frozen=True, slots=True)
+class Reference:
+    Orientation: str
+    RecordA: int
+    LocationA: int = 0
 
 
-@dataclass(frozen=True, slots=True)
-class _VertexData:
-    tolerance: float
-    point: Vector3
+# this class exists because related parser state needs one focused owner
+@Dataclass(frozen=True, slots=True)
+class VertexData:
+    Tolerance: float
+    Point: VectorThree
 
 
-# edge records retain curve placements until topology placements are composed
-@dataclass(frozen=True, slots=True)
-class _EdgeData:
-    tolerance: float
-    curve: int
-    first: float
-    last: float
-    location: int = 0
+# this class exists because related parser state needs one focused owner
+@Dataclass(frozen=True, slots=True)
+class EdgeData:
+    Tolerance: float
+    Curve: int
+    FirstValue: float
+    LastValue: float
+    LocationA: int = 0
 
 
-# face records retain surface placements until topology placements are composed
-@dataclass(frozen=True, slots=True)
-class _FaceData:
-    natural: bool
-    tolerance: float
-    surface: int
-    location: int = 0
+# this class exists because related parser state needs one focused owner
+@Dataclass(frozen=True, slots=True)
+class FaceData:
+    Natural: bool
+    Tolerance: float
+    Surface: int
+    LocationA: int = 0
 
 
-@dataclass(frozen=True, slots=True)
-class _ShapeRecord:
-    kind: bytes
-    flags: str
-    children: tuple[_Reference, ...]
-    geometry: _VertexData | _EdgeData | _FaceData | None
+# this class exists because related parser state needs one focused owner
+@Dataclass(frozen=True, slots=True)
+class ShapeRecord:
+    KindValue: bytes
+    FlagBits: str
+    Children: tuple[Reference, ...]
+    GeometryA: VertexData | EdgeData | FaceData | None
 
 
-def _vector(tokens: _Tokens) -> Vector3:
-    return Vector3(tokens.number(), tokens.number(), tokens.number())
+# this definition exists because focused parser behavior needs one stable owner
+def VectorValue(TokensA: Tokens) -> VectorThree:
+    return VectorThree(TokensA.ReadNumber(), TokensA.ReadNumber(), TokensA.ReadNumber())
 
 
-def _dot(left: Vector3, right: Vector3) -> float:
-    return left.x * right.x + left.y * right.y + left.z * right.z
+# this definition exists because focused parser behavior needs one stable owner
+def DotValue(LeftValue: VectorThree, RightValue: VectorThree) -> float:
+    return LeftValue.x * RightValue.x + LeftValue.y * RightValue.y + LeftValue.z * RightValue.z
 
 
-def _length(value: Vector3) -> float:
-    return sqrt(_dot(value, value))
+# this definition exists because focused parser behavior needs one stable owner
+def LengthValue(Value: VectorThree) -> float:
+    return SquareRoot(DotValue(Value, Value))
 
 
-def _cross(left: Vector3, right: Vector3) -> Vector3:
-    return Vector3(
-        left.y * right.z - left.z * right.y,
-        left.z * right.x - left.x * right.z,
-        left.x * right.y - left.y * right.x,
+# this definition exists because focused parser behavior needs one stable owner
+def CrossValue(LeftValue: VectorThree, RightValue: VectorThree) -> VectorThree:
+    return VectorThree(
+        LeftValue.y * RightValue.z - LeftValue.z * RightValue.y,
+        LeftValue.z * RightValue.x - LeftValue.x * RightValue.z,
+        LeftValue.x * RightValue.y - LeftValue.y * RightValue.x,
     )
 
 
-def _unit(value: Vector3) -> bool:
-    return isclose(_length(value), 1.0, rel_tol=1e-10, abs_tol=1e-10)
+# this definition exists because focused parser behavior needs one stable owner
+def IsUnit(Value: VectorThree) -> bool:
+    return IsClose(LengthValue(Value), 1.0, rel_tol=1e-10, abs_tol=1e-10)
 
 
-# analytic axes may use either direct or indirect OpenCascade parameter frames
-def _IsFrame(normal: Vector3, x_direction: Vector3, y_direction: Vector3) -> bool:
-    expected_y = _cross(normal, x_direction)
-    Handedness = _dot(expected_y, y_direction)
+# this definition exists because focused parser behavior needs one stable owner
+def IsFrame(Normal: VectorThree, XDirection: VectorThree, YDirection: VectorThree) -> bool:
+    ExpectedY = CrossValue(Normal, XDirection)
+    Handedness = DotValue(ExpectedY, YDirection)
     return (
-        _unit(normal)
-        and _unit(x_direction)
-        and _unit(y_direction)
-        and isclose(_dot(normal, x_direction), 0.0, abs_tol=1e-10)
-        and isclose(_dot(normal, y_direction), 0.0, abs_tol=1e-10)
-        and isclose(_dot(x_direction, y_direction), 0.0, abs_tol=1e-10)
-        and isclose(abs(Handedness), 1.0, rel_tol=1e-10, abs_tol=1e-10)
+        IsUnit(Normal)
+        and IsUnit(XDirection)
+        and IsUnit(YDirection)
+        and IsClose(DotValue(Normal, XDirection), 0.0, abs_tol=1e-10)
+        and IsClose(DotValue(Normal, YDirection), 0.0, abs_tol=1e-10)
+        and IsClose(DotValue(XDirection, YDirection), 0.0, abs_tol=1e-10)
+        and IsClose(abs(Handedness), 1.0, rel_tol=1e-10, abs_tol=1e-10)
     )
 
 
-def _count(tokens: _Tokens, label: bytes, maximum: int) -> int:
-    tokens.expect(label)
-    return tokens.integer(0, maximum)
+# this definition exists because focused parser behavior needs one stable owner
+def ReadCount(TokensA: Tokens, Label: bytes, Maximum: int) -> int:
+    TokensA.ExpectToken(Label)
+    return TokensA.ReadInteger(0, Maximum)
 
 
-def _zero_table(tokens: _Tokens, label: bytes) -> None:
-    if _count(tokens, label, 0) != 0:
-        raise _DecodeFailure("unsupported BRep table")
+# this definition exists because focused parser behavior needs one stable owner
+def ZeroTable(TokensA: Tokens, Label: bytes) -> None:
+    if ReadCount(TokensA, Label, 0) != 0:
+        raise DecodeFailure("unsupported BRep table")
 
 
-def _reference(
-    tokens: _Tokens, shape_count: int, location_count: int = 0
-) -> _Reference | None:
-    token = tokens.take()
-    if token == b"*":
+# this definition exists because focused parser behavior needs one stable owner
+def ReadReference(
+    TokensA: Tokens, ShapeCount: int, LocationCount: int = 0
+) -> Reference | None:
+    Token = TokensA.TakeToken()
+    if Token == b"*":
         return None
-    if len(token) < 2 or token[:1] not in {b"+", b"-", b"i", b"e"}:
-        raise _DecodeFailure("invalid BRep shape reference")
-    number = token[1:]
-    if _INTEGER_PATTERN.fullmatch(number) is None:
-        raise _DecodeFailure("invalid BRep shape reference")
-    record = int(number)
-    if record < 1 or record > shape_count:
-        raise _DecodeFailure("unsupported BRep shape location")
-    location = tokens.integer(0, location_count)
-    return _Reference(token[:1].decode("ascii"), record, location)
+    if len(Token) < 2 or Token[:1] not in {b"+", b"-", b"i", b"e"}:
+        raise DecodeFailure("invalid BRep shape reference")
+    ReadNumber = Token[1:]
+    if KIntegerPattern.fullmatch(ReadNumber) is None:
+        raise DecodeFailure("invalid BRep shape reference")
+    RecordA = int(ReadNumber)
+    if RecordA < 1 or RecordA > ShapeCount:
+        raise DecodeFailure("unsupported BRep shape location")
+    LocationA = TokensA.ReadInteger(0, LocationCount)
+    return Reference(Token[:1].decode("ascii"), RecordA, LocationA)
 
 
-def _boolean(tokens: _Tokens) -> bool:
-    return bool(tokens.integer(0, 1))
+# this definition exists because focused parser behavior needs one stable owner
+def IsBoolean(TokensA: Tokens) -> bool:
+    return bool(TokensA.ReadInteger(0, 1))
 
 
-def _numbers(tokens: _Tokens, count: int) -> None:
-    if count < 0 or count > _MAX_GEOMETRY:
-        raise _DecodeFailure("BRep numeric record is out of bounds")
-    for _ in range(count):
-        tokens.number()
+# this definition exists because focused parser behavior needs one stable owner
+def ReadNumbers(TokensA: Tokens, Count: int) -> None:
+    if Count < 0 or Count > KMaxGeometry:
+        raise DecodeFailure("BRep numeric record is out of bounds")
+    for ValueName in range(Count):
+        TokensA.ReadNumber()
 
 
-def _bounded_product(left: int, right: int) -> int:
-    if left < 0 or right < 0 or (left and right > _MAX_GEOMETRY // left):
-        raise _DecodeFailure("BRep array dimensions are out of bounds")
-    value = left * right
-    if value > _MAX_GEOMETRY:
-        raise _DecodeFailure("BRep array dimensions are out of bounds")
-    return value
+# this definition exists because focused parser behavior needs one stable owner
+def BoundedProduct(LeftValue: int, RightValue: int) -> int:
+    if LeftValue < 0 or RightValue < 0 or (LeftValue and RightValue > KMaxGeometry // LeftValue):
+        raise DecodeFailure("BRep array dimensions are out of bounds")
+    Value = LeftValue * RightValue
+    if Value > KMaxGeometry:
+        raise DecodeFailure("BRep array dimensions are out of bounds")
+    return Value
 
 
-def _positive_index(tokens: _Tokens, count: int) -> int:
-    if count < 1:
-        raise _DecodeFailure("BRep references an empty table")
-    return tokens.integer(1, count)
+# this definition exists because focused parser behavior needs one stable owner
+def PositiveIndex(TokensA: Tokens, Count: int) -> int:
+    if Count < 1:
+        raise DecodeFailure("BRep references an empty table")
+    return TokensA.ReadInteger(1, Count)
 
 
-def _location_index(tokens: _Tokens, count: int) -> int:
-    return tokens.integer(0, count)
+# this definition exists because focused parser behavior needs one stable owner
+def LocationIndex(TokensA: Tokens, Count: int) -> int:
+    return TokensA.ReadInteger(0, Count)
 
 
-def _continuity(tokens: _Tokens) -> bytes:
-    value = tokens.take()
-    if _CONTINUITY_PATTERN.fullmatch(value) is None:
-        raise _DecodeFailure("invalid BRep continuity")
-    return value
+# this definition exists because focused parser behavior needs one stable owner
+def Continuity(TokensA: Tokens) -> bytes:
+    Value = TokensA.TakeToken()
+    if KContinuityPattern.fullmatch(Value) is None:
+        raise DecodeFailure("invalid BRep continuity")
+    return Value
 
 
-def _curve_geometry(tokens: _Tokens, dimension: int, depth: int = 0) -> None:
-    if depth > _MAX_RECURSION or dimension not in {2, 3}:
-        raise _DecodeFailure("BRep curve recursion is out of bounds")
-    kind = tokens.integer(1, 9)
-    frame_size = 6 if dimension == 2 else 12
-    if kind == 1:
-        _numbers(tokens, dimension * 2)
-    elif kind in {2, 4}:
-        _numbers(tokens, frame_size + 1)
-    elif kind in {3, 5}:
-        _numbers(tokens, frame_size + 2)
-    elif kind == 6:
-        rational = _boolean(tokens)
-        degree = tokens.integer(1, _MAX_GEOMETRY - 1)
-        poles = degree + 1
-        _numbers(tokens, _bounded_product(poles, dimension + int(rational)))
-    elif kind == 7:
-        rational = _boolean(tokens)
-        _boolean(tokens)
-        tokens.integer(1, _MAX_GEOMETRY)
-        poles = tokens.integer(2, _MAX_GEOMETRY)
-        knots = tokens.integer(2, _MAX_GEOMETRY)
-        _numbers(tokens, _bounded_product(poles, dimension + int(rational)))
-        for _ in range(knots):
-            tokens.number()
-            tokens.integer(1, _MAX_GEOMETRY)
-    elif kind == 8:
-        _numbers(tokens, 2)
-        _curve_geometry(tokens, dimension, depth + 1)
+# this definition exists because focused parser behavior needs one stable owner
+def CurveGeometry(TokensA: Tokens, Dimension: int, Depth: int = 0) -> None:
+    if Depth > KMaxRecursion or Dimension not in {2, 3}:
+        raise DecodeFailure("BRep curve recursion is out of bounds")
+    KindValue = TokensA.ReadInteger(1, 9)
+    FrameSize = 6 if Dimension == 2 else 12
+    if KindValue == 1:
+        ReadNumbers(TokensA, Dimension * 2)
+    elif KindValue in {2, 4}:
+        ReadNumbers(TokensA, FrameSize + 1)
+    elif KindValue in {3, 5}:
+        ReadNumbers(TokensA, FrameSize + 2)
+    elif KindValue == 6:
+        Rational = IsBoolean(TokensA)
+        Degree = TokensA.ReadInteger(1, KMaxGeometry - 1)
+        Poles = Degree + 1
+        ReadNumbers(TokensA, BoundedProduct(Poles, Dimension + int(Rational)))
+    elif KindValue == 7:
+        Rational = IsBoolean(TokensA)
+        IsBoolean(TokensA)
+        TokensA.ReadInteger(1, KMaxGeometry)
+        Poles = TokensA.ReadInteger(2, KMaxGeometry)
+        Knots = TokensA.ReadInteger(2, KMaxGeometry)
+        ReadNumbers(TokensA, BoundedProduct(Poles, Dimension + int(Rational)))
+        for ValueName in range(Knots):
+            TokensA.ReadNumber()
+            TokensA.ReadInteger(1, KMaxGeometry)
+    elif KindValue == 8:
+        ReadNumbers(TokensA, 2)
+        CurveGeometry(TokensA, Dimension, Depth + 1)
     else:
-        tokens.number()
-        if dimension == 3:
-            _numbers(tokens, 3)
-        _curve_geometry(tokens, dimension, depth + 1)
+        TokensA.ReadNumber()
+        if Dimension == 3:
+            ReadNumbers(TokensA, 3)
+        CurveGeometry(TokensA, Dimension, Depth + 1)
 
 
-def _surface_geometry(tokens: _Tokens, depth: int = 0) -> None:
-    if depth > _MAX_RECURSION:
-        raise _DecodeFailure("BRep surface recursion is out of bounds")
-    kind = tokens.integer(1, 11)
-    if kind == 1:
-        _numbers(tokens, 12)
-    elif kind in {2, 4}:
-        _numbers(tokens, 13)
-    elif kind in {3, 5}:
-        _numbers(tokens, 14)
-    elif kind == 6:
-        _numbers(tokens, 3)
-        _curve_geometry(tokens, 3, depth + 1)
-    elif kind == 7:
-        _numbers(tokens, 6)
-        _curve_geometry(tokens, 3, depth + 1)
-    elif kind == 8:
-        u_rational = _boolean(tokens)
-        v_rational = _boolean(tokens)
-        u_degree = tokens.integer(1, _MAX_GEOMETRY - 1)
-        v_degree = tokens.integer(1, _MAX_GEOMETRY - 1)
-        poles = _bounded_product(u_degree + 1, v_degree + 1)
-        _numbers(tokens, _bounded_product(poles, 3 + int(u_rational or v_rational)))
-    elif kind == 9:
-        u_rational = _boolean(tokens)
-        v_rational = _boolean(tokens)
-        _boolean(tokens)
-        _boolean(tokens)
-        tokens.integer(1, _MAX_GEOMETRY)
-        tokens.integer(1, _MAX_GEOMETRY)
-        u_poles = tokens.integer(2, _MAX_GEOMETRY)
-        v_poles = tokens.integer(2, _MAX_GEOMETRY)
-        u_knots = tokens.integer(2, _MAX_GEOMETRY)
-        v_knots = tokens.integer(2, _MAX_GEOMETRY)
-        poles = _bounded_product(u_poles, v_poles)
-        _numbers(tokens, _bounded_product(poles, 3 + int(u_rational or v_rational)))
-        for count in (u_knots, v_knots):
-            for _ in range(count):
-                tokens.number()
-                tokens.integer(1, _MAX_GEOMETRY)
-    elif kind == 10:
-        _numbers(tokens, 4)
-        _surface_geometry(tokens, depth + 1)
+# this definition exists because focused parser behavior needs one stable owner
+def SurfaceGeometry(TokensA: Tokens, Depth: int = 0) -> None:
+    if Depth > KMaxRecursion:
+        raise DecodeFailure("BRep surface recursion is out of bounds")
+    KindValue = TokensA.ReadInteger(1, 11)
+    if KindValue == 1:
+        ReadNumbers(TokensA, 12)
+    elif KindValue in {2, 4}:
+        ReadNumbers(TokensA, 13)
+    elif KindValue in {3, 5}:
+        ReadNumbers(TokensA, 14)
+    elif KindValue == 6:
+        ReadNumbers(TokensA, 3)
+        CurveGeometry(TokensA, 3, Depth + 1)
+    elif KindValue == 7:
+        ReadNumbers(TokensA, 6)
+        CurveGeometry(TokensA, 3, Depth + 1)
+    elif KindValue == 8:
+        URational = IsBoolean(TokensA)
+        VRational = IsBoolean(TokensA)
+        UDegree = TokensA.ReadInteger(1, KMaxGeometry - 1)
+        VDegree = TokensA.ReadInteger(1, KMaxGeometry - 1)
+        Poles = BoundedProduct(UDegree + 1, VDegree + 1)
+        ReadNumbers(TokensA, BoundedProduct(Poles, 3 + int(URational or VRational)))
+    elif KindValue == 9:
+        URational = IsBoolean(TokensA)
+        VRational = IsBoolean(TokensA)
+        IsBoolean(TokensA)
+        IsBoolean(TokensA)
+        TokensA.ReadInteger(1, KMaxGeometry)
+        TokensA.ReadInteger(1, KMaxGeometry)
+        UPoles = TokensA.ReadInteger(2, KMaxGeometry)
+        VPoles = TokensA.ReadInteger(2, KMaxGeometry)
+        UKnots = TokensA.ReadInteger(2, KMaxGeometry)
+        VKnots = TokensA.ReadInteger(2, KMaxGeometry)
+        Poles = BoundedProduct(UPoles, VPoles)
+        ReadNumbers(TokensA, BoundedProduct(Poles, 3 + int(URational or VRational)))
+        for Count in (UKnots, VKnots):
+            for ValueName in range(Count):
+                TokensA.ReadNumber()
+                TokensA.ReadInteger(1, KMaxGeometry)
+    elif KindValue == 10:
+        ReadNumbers(TokensA, 4)
+        SurfaceGeometry(TokensA, Depth + 1)
     else:
-        tokens.number()
-        _surface_geometry(tokens, depth + 1)
+        TokensA.ReadNumber()
+        SurfaceGeometry(TokensA, Depth + 1)
 
 
-def _location_multiply(
-    left: tuple[tuple[int, int], ...], right: tuple[tuple[int, int], ...]
+# this definition exists because focused parser behavior needs one stable owner
+def LocationProduct(
+    LeftValue: tuple[tuple[int, int], ...], RightValue: tuple[tuple[int, int], ...]
 ) -> tuple[tuple[int, int], ...]:
-    result: list[tuple[int, int]] = []
-    for datum, power in chain(right, left):
-        if result and result[-1][0] == datum:
-            combined = result[-1][1] + power
-            if combined < _MIN_INT32 or combined > _MAX_INT32:
-                raise _DecodeFailure("BRep location power is out of bounds")
-            result.pop()
-            if combined:
-                result.append((datum, combined))
+    Result: list[tuple[int, int]] = []
+    for Datum, Power in Chain(RightValue, LeftValue):
+        if Result and Result[-1][0] == Datum:
+            Combined = Result[-1][1] + Power
+            if Combined < KMinIntThreeTwo or Combined > KMaxIntThreeTwo:
+                raise DecodeFailure("BRep location power is out of bounds")
+            Result.pop()
+            if Combined:
+                Result.append((Datum, Combined))
         else:
-            result.append((datum, power))
-        if len(result) > _MAX_GEOMETRY:
-            raise _DecodeFailure("BRep location chain is out of bounds")
-    return tuple(result)
+            Result.append((Datum, Power))
+        if len(Result) > KMaxGeometry:
+            raise DecodeFailure("BRep location chain is out of bounds")
+    return tuple(Result)
 
 
-def _location_power(
-    value: tuple[tuple[int, int], ...], power: int
+# this definition exists because focused parser behavior needs one stable owner
+def LocationPower(
+    Value: tuple[tuple[int, int], ...], Power: int
 ) -> tuple[tuple[int, int], ...]:
-    if power == 0 or not value:
+    if Power == 0 or not Value:
         return ()
-    if power < 0:
-        value = tuple((datum, -datum_power) for datum, datum_power in reversed(value))
-        power = -power
-    result: tuple[tuple[int, int], ...] = ()
-    factor = value
-    while power:
-        if power & 1:
-            result = _location_multiply(result, factor)
-        power >>= 1
-        if power:
-            factor = _location_multiply(factor, factor)
-    return result
+    if Power < 0:
+        Value = tuple((Datum, -DatumPower) for Datum, DatumPower in reversed(Value))
+        Power = -Power
+    Result: tuple[tuple[int, int], ...] = ()
+    Factor = Value
+    while Power:
+        if Power & 1:
+            Result = LocationProduct(Result, Factor)
+        Power >>= 1
+        if Power:
+            Factor = LocationProduct(Factor, Factor)
+    return Result
 
 
-def _normalized_vector(value: tuple[float, float, float]) -> tuple[float, float, float]:
-    magnitude = sqrt(sum(component * component for component in value))
-    if not isfinite(magnitude) or magnitude <= float_info.min:
-        raise _DecodeFailure("invalid BRep location transform")
-    result = tuple(component / magnitude for component in value)
-    if not all(isfinite(component) for component in result):
-        raise _DecodeFailure("invalid BRep location transform")
-    return result
+# this definition exists because focused parser behavior needs one stable owner
+def NormalizeVector(Value: tuple[float, float, float]) -> tuple[float, float, float]:
+    Magnitude = SquareRoot(sum(Component * Component for Component in Value))
+    if not IsFinite(Magnitude) or Magnitude <= FloatInfo.min:
+        raise DecodeFailure("invalid BRep location transform")
+    Result = tuple(Component / Magnitude for Component in Value)
+    if not all(IsFinite(Component) for Component in Result):
+        raise DecodeFailure("invalid BRep location transform")
+    return Result
 
 
-def _orthogonalized_vectors(
-    values: tuple[tuple[float, float, float], ...],
+# this definition exists because focused parser behavior needs one stable owner
+def OrthoVectors(
+    Values: tuple[tuple[float, float, float], ...],
 ) -> tuple[tuple[float, float, float], ...]:
-    first = _normalized_vector(values[0])
-    projection = sum(values[1][index] * first[index] for index in range(3))
-    second = _normalized_vector(
-        tuple(values[1][index] - projection * first[index] for index in range(3))
+    FirstValue = NormalizeVector(Values[0])
+    Projection = sum(Values[1][IndexA] * FirstValue[IndexA] for IndexA in range(3))
+    Second = NormalizeVector(
+        tuple(Values[1][IndexA] - Projection * FirstValue[IndexA] for IndexA in range(3))
     )
-    first_projection = sum(values[2][index] * first[index] for index in range(3))
-    second_projection = sum(values[2][index] * second[index] for index in range(3))
-    third = _normalized_vector(
+    FirstProjection = sum(Values[2][IndexA] * FirstValue[IndexA] for IndexA in range(3))
+    SecondProjection = sum(Values[2][IndexA] * Second[IndexA] for IndexA in range(3))
+    Third = NormalizeVector(
         tuple(
-            values[2][index]
-            - first_projection * first[index]
-            - second_projection * second[index]
-            for index in range(3)
+            Values[2][IndexA]
+            - FirstProjection * FirstValue[IndexA]
+            - SecondProjection * Second[IndexA]
+            for IndexA in range(3)
         )
     )
-    return first, second, third
+    return FirstValue, Second, Third
 
 
-def _location_transform(tokens: _Tokens) -> tuple[float, ...]:
-    values = tuple(tokens.number() for _ in range(12))
-    determinant = (
-        values[0] * (values[5] * values[10] - values[6] * values[9])
-        - values[1] * (values[4] * values[10] - values[6] * values[8])
-        + values[2] * (values[4] * values[9] - values[5] * values[8])
+# this definition exists because focused parser behavior needs one stable owner
+def ParseTransform(TokensA: Tokens) -> tuple[float, ...]:
+    Values = tuple(TokensA.ReadNumber() for ValueName in range(12))
+    Determinant = (
+        Values[0] * (Values[5] * Values[10] - Values[6] * Values[9])
+        - Values[1] * (Values[4] * Values[10] - Values[6] * Values[8])
+        + Values[2] * (Values[4] * Values[9] - Values[5] * Values[8])
     )
-    if not isfinite(determinant) or abs(determinant) < float_info.min:
-        raise _DecodeFailure("singular BRep location transform")
-    scale = abs(determinant) ** (1.0 / 3.0)
-    if determinant < 0.0:
-        scale = -scale
-    rows = (
-        tuple(values[index] / scale for index in (0, 1, 2)),
-        tuple(values[index] / scale for index in (4, 5, 6)),
-        tuple(values[index] / scale for index in (8, 9, 10)),
+    if not IsFinite(Determinant) or abs(Determinant) < FloatInfo.min:
+        raise DecodeFailure("singular BRep location transform")
+    Scale = abs(Determinant) ** (1.0 / 3.0)
+    if Determinant < 0.0:
+        Scale = -Scale
+    RowsValue = (
+        tuple(Values[IndexA] / Scale for IndexA in (0, 1, 2)),
+        tuple(Values[IndexA] / Scale for IndexA in (4, 5, 6)),
+        tuple(Values[IndexA] / Scale for IndexA in (8, 9, 10)),
     )
-    columns = tuple(tuple(rows[row][column] for row in range(3)) for column in range(3))
-    columns = _orthogonalized_vectors(columns)
-    rows = tuple(tuple(columns[column][row] for column in range(3)) for row in range(3))
-    _orthogonalized_vectors(rows)
-    return values
+    Columns = tuple(tuple(RowsValue[RowValue][Column] for RowValue in range(3)) for Column in range(3))
+    Columns = OrthoVectors(Columns)
+    RowsValue = tuple(tuple(Columns[Column][RowValue] for Column in range(3)) for RowValue in range(3))
+    OrthoVectors(RowsValue)
+    return Values
 
 
-_IDENTITY_LOCATION = (
+# this binding exists because parser limits need one shared invariant
+KIdentityLocation = (
     1.0,
     0.0,
     0.0,
@@ -499,691 +567,713 @@ _IDENTITY_LOCATION = (
 )
 
 
-def _location_product(
-    left: tuple[float, ...], right: tuple[float, ...]
+# this definition exists because focused parser behavior needs one stable owner
+def ProductLocation(
+    LeftValue: tuple[float, ...], RightValue: tuple[float, ...]
 ) -> tuple[float, ...]:
-    result: list[float] = []
-    for row in range(3):
-        for column in range(3):
-            result.append(
+    Result: list[float] = []
+    for RowValue in range(3):
+        for Column in range(3):
+            Result.append(
                 sum(
-                    left[row * 4 + inner] * right[inner * 4 + column]
-                    for inner in range(3)
+                    LeftValue[RowValue * 4 + Inner] * RightValue[Inner * 4 + Column]
+                    for Inner in range(3)
                 )
             )
-        result.append(
-            left[row * 4 + 3]
-            + sum(left[row * 4 + inner] * right[inner * 4 + 3] for inner in range(3))
+        Result.append(
+            LeftValue[RowValue * 4 + 3]
+            + sum(LeftValue[RowValue * 4 + Inner] * RightValue[Inner * 4 + 3] for Inner in range(3))
         )
-    if not all(isfinite(value) for value in result):
-        raise _DecodeFailure("invalid BRep location transform")
-    return tuple(result)
+    if not all(IsFinite(Value) for Value in Result):
+        raise DecodeFailure("invalid BRep location transform")
+    return tuple(Result)
 
 
-def _location_inverse(value: tuple[float, ...]) -> tuple[float, ...]:
-    a, b, c, tx, d, e, f, ty, g, h, i, tz = value
-    determinant = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
-    if not isfinite(determinant) or abs(determinant) < float_info.min:
-        raise _DecodeFailure("singular BRep location transform")
-    inverse = (
-        (e * i - f * h) / determinant,
-        (c * h - b * i) / determinant,
-        (b * f - c * e) / determinant,
+# this definition exists because focused parser behavior needs one stable owner
+def InverseLocation(Value: tuple[float, ...]) -> tuple[float, ...]:
+    AValue, BValue, CValue, TxValue, DValue, EValue, FValue, TyValue, GValue, HValue, Index, TzValue = Value
+    Determinant = AValue * (EValue * Index - FValue * HValue) - BValue * (DValue * Index - FValue * GValue) + CValue * (DValue * HValue - EValue * GValue)
+    if not IsFinite(Determinant) or abs(Determinant) < FloatInfo.min:
+        raise DecodeFailure("singular BRep location transform")
+    Inverse = (
+        (EValue * Index - FValue * HValue) / Determinant,
+        (CValue * HValue - BValue * Index) / Determinant,
+        (BValue * FValue - CValue * EValue) / Determinant,
         0.0,
-        (f * g - d * i) / determinant,
-        (a * i - c * g) / determinant,
-        (c * d - a * f) / determinant,
+        (FValue * GValue - DValue * Index) / Determinant,
+        (AValue * Index - CValue * GValue) / Determinant,
+        (CValue * DValue - AValue * FValue) / Determinant,
         0.0,
-        (d * h - e * g) / determinant,
-        (b * g - a * h) / determinant,
-        (a * e - b * d) / determinant,
+        (DValue * HValue - EValue * GValue) / Determinant,
+        (BValue * GValue - AValue * HValue) / Determinant,
+        (AValue * EValue - BValue * DValue) / Determinant,
         0.0,
     )
-    translated = (
-        *inverse[:3],
-        -(inverse[0] * tx + inverse[1] * ty + inverse[2] * tz),
-        *inverse[4:7],
-        -(inverse[4] * tx + inverse[5] * ty + inverse[6] * tz),
-        *inverse[8:11],
-        -(inverse[8] * tx + inverse[9] * ty + inverse[10] * tz),
+    Translated = (
+        *Inverse[:3],
+        -(Inverse[0] * TxValue + Inverse[1] * TyValue + Inverse[2] * TzValue),
+        *Inverse[4:7],
+        -(Inverse[4] * TxValue + Inverse[5] * TyValue + Inverse[6] * TzValue),
+        *Inverse[8:11],
+        -(Inverse[8] * TxValue + Inverse[9] * TyValue + Inverse[10] * TzValue),
     )
-    if not all(isfinite(component) for component in translated):
-        raise _DecodeFailure("invalid BRep location transform")
-    return translated
+    if not all(IsFinite(Component) for Component in Translated):
+        raise DecodeFailure("invalid BRep location transform")
+    return Translated
 
 
-def _location_matrix_power(value: tuple[float, ...], power: int) -> tuple[float, ...]:
-    if power < 0:
-        value = _location_inverse(value)
-        power = -power
-    result = _IDENTITY_LOCATION
-    factor = value
-    while power:
-        if power & 1:
-            result = _location_product(result, factor)
-        power >>= 1
-        if power:
-            factor = _location_product(factor, factor)
-    return result
+# this definition exists because focused parser behavior needs one stable owner
+def MatrixPower(Value: tuple[float, ...], Power: int) -> tuple[float, ...]:
+    if Power < 0:
+        Value = InverseLocation(Value)
+        Power = -Power
+    Result = KIdentityLocation
+    Factor = Value
+    while Power:
+        if Power & 1:
+            Result = ProductLocation(Result, Factor)
+        Power >>= 1
+        if Power:
+            Factor = ProductLocation(Factor, Factor)
+    return Result
 
 
-def _model_locations(tokens: _Tokens) -> tuple[tuple[float, ...], ...]:
-    count = _count(tokens, b"Locations", _MAX_GEOMETRY)
-    chains: list[tuple[tuple[int, int], ...]] = []
-    direct: dict[int, tuple[float, ...]] = {}
-    matrices: list[tuple[float, ...]] = []
-    unique_locations: set[tuple[tuple[int, int], ...]] = set()
-    for index in range(1, count + 1):
-        kind = tokens.integer(1, 2)
-        if kind == 1:
-            direct[index] = _location_transform(tokens)
-            location = ((index, 1),)
+# this definition exists because focused parser behavior needs one stable owner
+def ModelLocations(TokensA: Tokens) -> tuple[tuple[float, ...], ...]:
+    Count = ReadCount(TokensA, b"Locations", KMaxGeometry)
+    Chains: list[tuple[tuple[int, int], ...]] = []
+    Direct: dict[int, tuple[float, ...]] = {}
+    Matrices: list[tuple[float, ...]] = []
+    UniqueLocations: set[tuple[tuple[int, int], ...]] = set()
+    for IndexA in range(1, Count + 1):
+        KindValue = TokensA.ReadInteger(1, 2)
+        if KindValue == 1:
+            Direct[IndexA] = ParseTransform(TokensA)
+            LocationA = ((IndexA, 1),)
         else:
-            location = ()
-            reference = tokens.integer(0, len(chains))
-            while reference:
-                power = tokens.signed_integer()
-                location = _location_multiply(
-                    _location_power(chains[reference - 1], power), location
+            LocationA = ()
+            ReferenceA = TokensA.ReadInteger(0, len(Chains))
+            while ReferenceA:
+                Power = TokensA.SignedInteger()
+                LocationA = LocationProduct(
+                    LocationPower(Chains[ReferenceA - 1], Power), LocationA
                 )
-                reference = tokens.integer(0, len(chains))
-        if not location or location in unique_locations:
-            raise _DecodeFailure("invalid BRep location record")
-        matrix = _IDENTITY_LOCATION
-        for datum, power in location:
-            base = direct.get(datum)
-            if base is None:
-                raise _DecodeFailure("invalid BRep location record")
-            matrix = _location_product(matrix, _location_matrix_power(base, power))
-        chains.append(location)
-        matrices.append(matrix)
-        unique_locations.add(location)
-    return tuple(matrices)
+                ReferenceA = TokensA.ReadInteger(0, len(Chains))
+        if not LocationA or LocationA in UniqueLocations:
+            raise DecodeFailure("invalid BRep location record")
+        Matrix = KIdentityLocation
+        for Datum, Power in LocationA:
+            BaseValue = Direct.get(Datum)
+            if BaseValue is None:
+                raise DecodeFailure("invalid BRep location record")
+            Matrix = ProductLocation(Matrix, MatrixPower(BaseValue, Power))
+        Chains.append(LocationA)
+        Matrices.append(Matrix)
+        UniqueLocations.add(LocationA)
+    return tuple(Matrices)
 
 
-def _location_scale(value: tuple[float, ...]) -> float:
-    columns = tuple(
-        tuple(value[row * 4 + column] for row in range(3)) for column in range(3)
+# this definition exists because focused parser behavior needs one stable owner
+def LocationScale(Value: tuple[float, ...]) -> float:
+    Columns = tuple(
+        tuple(Value[RowValue * 4 + Column] for RowValue in range(3)) for Column in range(3)
     )
-    lengths = tuple(
-        sqrt(sum(component * component for component in item)) for item in columns
+    Lengths = tuple(
+        SquareRoot(sum(Component * Component for Component in ItemValue)) for ItemValue in Columns
     )
     if (
-        any(not isfinite(length) or length <= float_info.min for length in lengths)
-        or not isclose(lengths[0], lengths[1], rel_tol=1e-10, abs_tol=1e-12)
-        or not isclose(lengths[0], lengths[2], rel_tol=1e-10, abs_tol=1e-12)
+        any(not IsFinite(Length) or Length <= FloatInfo.min for Length in Lengths)
+        or not IsClose(Lengths[0], Lengths[1], rel_tol=1e-10, abs_tol=1e-12)
+        or not IsClose(Lengths[0], Lengths[2], rel_tol=1e-10, abs_tol=1e-12)
         or any(
-            not isclose(
-                sum(left[index] * right[index] for index in range(3)),
+            not IsClose(
+                sum(LeftValue[IndexA] * RightValue[IndexA] for IndexA in range(3)),
                 0.0,
                 rel_tol=0.0,
-                abs_tol=1e-10 * lengths[0] * lengths[0],
+                abs_tol=1e-10 * Lengths[0] * Lengths[0],
             )
-            for left, right in (
-                (columns[0], columns[1]),
-                (columns[0], columns[2]),
-                (columns[1], columns[2]),
+            for LeftValue, RightValue in (
+                (Columns[0], Columns[1]),
+                (Columns[0], Columns[2]),
+                (Columns[1], Columns[2]),
             )
         )
     ):
-        raise _DecodeFailure("unsupported BRep location transform")
-    determinant = (
-        value[0] * (value[5] * value[10] - value[6] * value[9])
-        - value[1] * (value[4] * value[10] - value[6] * value[8])
-        + value[2] * (value[4] * value[9] - value[5] * value[8])
+        raise DecodeFailure("unsupported BRep location transform")
+    Determinant = (
+        Value[0] * (Value[5] * Value[10] - Value[6] * Value[9])
+        - Value[1] * (Value[4] * Value[10] - Value[6] * Value[8])
+        + Value[2] * (Value[4] * Value[9] - Value[5] * Value[8])
     )
-    if determinant <= 0.0:
-        raise _DecodeFailure("unsupported BRep location transform")
-    return lengths[0]
+    if Determinant <= 0.0:
+        raise DecodeFailure("unsupported BRep location transform")
+    return Lengths[0]
 
 
-def _location_point(value: tuple[float, ...], point: Vector3) -> Vector3:
-    components = (point.x, point.y, point.z)
-    return Vector3(
+# this definition exists because focused parser behavior needs one stable owner
+def LocationPoint(Value: tuple[float, ...], Point: VectorThree) -> VectorThree:
+    Components = (Point.x, Point.y, Point.z)
+    return VectorThree(
         *(
-            value[row * 4 + 3]
-            + sum(value[row * 4 + column] * components[column] for column in range(3))
-            for row in range(3)
+            Value[RowValue * 4 + 3]
+            + sum(Value[RowValue * 4 + Column] * Components[Column] for Column in range(3))
+            for RowValue in range(3)
         )
     )
 
 
-def _location_direction(value: tuple[float, ...], direction: Vector3) -> Vector3:
-    components = (direction.x, direction.y, direction.z)
-    transformed = tuple(
-        sum(value[row * 4 + column] * components[column] for column in range(3))
-        for row in range(3)
+# this definition exists because focused parser behavior needs one stable owner
+def ApplyDirection(Value: tuple[float, ...], Direction: VectorThree) -> VectorThree:
+    Components = (Direction.x, Direction.y, Direction.z)
+    Transformed = tuple(
+        sum(Value[RowValue * 4 + Column] * Components[Column] for Column in range(3))
+        for RowValue in range(3)
     )
-    normalized = _normalized_vector(transformed)
-    return Vector3(*normalized)
+    Normalized = NormalizeVector(Transformed)
+    return VectorThree(*Normalized)
 
 
-def _located_model_inputs(
-    curves: tuple[LineCurve, ...],
-    surfaces: tuple[PlaneSurface, ...],
-    records: Mapping[int, _ShapeRecord],
-    location: tuple[float, ...],
+# this definition exists because focused parser behavior needs one stable owner
+def LocatedInputs(
+    CurvesA: tuple[LineCurve, ...],
+    SurfacesA: tuple[PlaneSurface, ...],
+    RecordsA: Mapping[int, ShapeRecord],
+    LocationA: tuple[float, ...],
 ) -> tuple[
     tuple[LineCurve, ...],
     tuple[PlaneSurface, ...],
-    dict[int, _ShapeRecord],
+    dict[int, ShapeRecord],
 ]:
-    scale = _location_scale(location)
-    transformed_curves = tuple(
+    Scale = LocationScale(LocationA)
+    TransformedCurves = tuple(
         LineCurve(
-            curve.id,
-            _location_point(location, curve.origin),
-            _location_direction(location, curve.direction),
-            provenance=curve.provenance,
-            attributes=curve.attributes,
+            Curve.id,
+            LocationPoint(LocationA, Curve.origin),
+            ApplyDirection(LocationA, Curve.direction),
+            provenance=Curve.provenance,
+            attributes=Curve.attributes,
         )
-        for curve in curves
+        for Curve in CurvesA
     )
-    transformed_surfaces = tuple(
+    TransformedSurfaces = tuple(
         PlaneSurface(
-            surface.id,
-            _location_point(location, surface.origin),
-            _location_direction(location, surface.normal),
-            _location_direction(location, surface.reference_direction),
-            provenance=surface.provenance,
-            attributes=surface.attributes,
+            Surface.id,
+            LocationPoint(LocationA, Surface.origin),
+            ApplyDirection(LocationA, Surface.normal),
+            ApplyDirection(LocationA, Surface.reference_direction),
+            provenance=Surface.provenance,
+            attributes=Surface.attributes,
         )
-        for surface in surfaces
+        for Surface in SurfacesA
     )
-    transformed_records: dict[int, _ShapeRecord] = {}
-    for number, record in records.items():
-        geometry = record.geometry
-        if isinstance(geometry, _VertexData):
-            geometry = _VertexData(
-                geometry.tolerance * scale,
-                _location_point(location, geometry.point),
+    TransformedRecords: dict[int, ShapeRecord] = {}
+    for ReadNumber, RecordA in RecordsA.items():
+        GeometryA = RecordA.GeometryA
+        if isinstance(GeometryA, VertexData):
+            GeometryA = VertexData(
+                GeometryA.Tolerance * Scale,
+                LocationPoint(LocationA, GeometryA.Point),
             )
-        elif isinstance(geometry, _EdgeData):
-            geometry = _EdgeData(
-                geometry.tolerance * scale,
-                geometry.curve,
-                geometry.first * scale,
-                geometry.last * scale,
+        elif isinstance(GeometryA, EdgeData):
+            GeometryA = EdgeData(
+                GeometryA.Tolerance * Scale,
+                GeometryA.Curve,
+                GeometryA.FirstValue * Scale,
+                GeometryA.LastValue * Scale,
             )
-        elif isinstance(geometry, _FaceData):
-            geometry = _FaceData(
-                geometry.natural,
-                geometry.tolerance * scale,
-                geometry.surface,
+        elif isinstance(GeometryA, FaceData):
+            GeometryA = FaceData(
+                GeometryA.Natural,
+                GeometryA.Tolerance * Scale,
+                GeometryA.Surface,
             )
-        transformed_records[number] = _ShapeRecord(
-            record.kind,
-            record.flags,
-            record.children,
-            geometry,
+        TransformedRecords[ReadNumber] = ShapeRecord(
+            RecordA.KindValue,
+            RecordA.FlagBits,
+            RecordA.Children,
+            GeometryA,
         )
-    return transformed_curves, transformed_surfaces, transformed_records
+    return TransformedCurves, TransformedSurfaces, TransformedRecords
 
 
-def _locations(tokens: _Tokens) -> int:
-    count = _count(tokens, b"Locations", _MAX_GEOMETRY)
-    locations: list[tuple[tuple[int, int], ...]] = []
-    unique_locations: set[tuple[tuple[int, int], ...]] = set()
-    for index in range(1, count + 1):
-        kind = tokens.integer(1, 2)
-        if kind == 1:
-            _location_transform(tokens)
-            location = ((index, 1),)
+# this definition exists because focused parser behavior needs one stable owner
+def ReadLocations(TokensA: Tokens) -> int:
+    Count = ReadCount(TokensA, b"Locations", KMaxGeometry)
+    LocationsA: list[tuple[tuple[int, int], ...]] = []
+    UniqueLocations: set[tuple[tuple[int, int], ...]] = set()
+    for IndexA in range(1, Count + 1):
+        KindValue = TokensA.ReadInteger(1, 2)
+        if KindValue == 1:
+            ParseTransform(TokensA)
+            LocationA = ((IndexA, 1),)
         else:
-            location = ()
-            reference = tokens.integer(0, len(locations))
-            while reference:
-                power = tokens.signed_integer()
-                location = _location_multiply(
-                    _location_power(locations[reference - 1], power), location
+            LocationA = ()
+            ReferenceA = TokensA.ReadInteger(0, len(LocationsA))
+            while ReferenceA:
+                Power = TokensA.SignedInteger()
+                LocationA = LocationProduct(
+                    LocationPower(LocationsA[ReferenceA - 1], Power), LocationA
                 )
-                reference = tokens.integer(0, len(locations))
-        if not location or location in unique_locations:
-            raise _DecodeFailure("invalid BRep location record")
-        locations.append(location)
-        unique_locations.add(location)
-    return count
+                ReferenceA = TokensA.ReadInteger(0, len(LocationsA))
+        if not LocationA or LocationA in UniqueLocations:
+            raise DecodeFailure("invalid BRep location record")
+        LocationsA.append(LocationA)
+        UniqueLocations.add(LocationA)
+    return Count
 
 
-def _curves(tokens: _Tokens, label: bytes, dimension: int) -> int:
-    count = _count(tokens, label, _MAX_GEOMETRY)
-    for _ in range(count):
-        _curve_geometry(tokens, dimension)
-    return count
+# this definition exists because focused parser behavior needs one stable owner
+def ReadCurves(TokensA: Tokens, Label: bytes, Dimension: int) -> int:
+    Count = ReadCount(TokensA, Label, KMaxGeometry)
+    for ValueName in range(Count):
+        CurveGeometry(TokensA, Dimension)
+    return Count
 
 
-def _polygon3d(tokens: _Tokens) -> int:
-    count = _count(tokens, b"Polygon3D", _MAX_GEOMETRY)
-    for _ in range(count):
-        nodes = tokens.integer(1, _MAX_GEOMETRY)
-        parameters = _boolean(tokens)
-        if tokens.number() < 0.0:
-            raise _DecodeFailure("negative BRep polygon deflection")
-        _numbers(tokens, _bounded_product(nodes, 3))
-        if parameters:
-            _numbers(tokens, nodes)
-    return count
+# this definition exists because focused parser behavior needs one stable owner
+def PolygonThree(TokensA: Tokens) -> int:
+    Count = ReadCount(TokensA, b"Polygon3D", KMaxGeometry)
+    for ValueName in range(Count):
+        Nodes = TokensA.ReadInteger(1, KMaxGeometry)
+        Parameters = IsBoolean(TokensA)
+        if TokensA.ReadNumber() < 0.0:
+            raise DecodeFailure("negative BRep polygon deflection")
+        ReadNumbers(TokensA, BoundedProduct(Nodes, 3))
+        if Parameters:
+            ReadNumbers(TokensA, Nodes)
+    return Count
 
 
-def _polygons_on_triangulations(tokens: _Tokens) -> tuple[int, ...]:
-    count = _count(tokens, b"PolygonOnTriangulations", _MAX_GEOMETRY)
-    maximum_nodes = []
-    for _ in range(count):
-        nodes = tokens.integer(1, _MAX_GEOMETRY)
-        maximum_node = 0
-        for _ in range(nodes):
-            maximum_node = max(maximum_node, tokens.integer(1, _MAX_GEOMETRY))
-        maximum_nodes.append(maximum_node)
-        tokens.expect(b"p")
-        if tokens.number() < 0.0:
-            raise _DecodeFailure("negative BRep polygon deflection")
-        if _boolean(tokens):
-            _numbers(tokens, nodes)
-    return tuple(maximum_nodes)
+# this definition exists because focused parser behavior needs one stable owner
+def TriPolygons(TokensA: Tokens) -> tuple[int, ...]:
+    Count = ReadCount(TokensA, b"PolygonOnTriangulations", KMaxGeometry)
+    MaximumNodes = []
+    for ValueName in range(Count):
+        Nodes = TokensA.ReadInteger(1, KMaxGeometry)
+        MaximumNode = 0
+        for ValueName in range(Nodes):
+            MaximumNode = max(MaximumNode, TokensA.ReadInteger(1, KMaxGeometry))
+        MaximumNodes.append(MaximumNode)
+        TokensA.ExpectToken(b"p")
+        if TokensA.ReadNumber() < 0.0:
+            raise DecodeFailure("negative BRep polygon deflection")
+        if IsBoolean(TokensA):
+            ReadNumbers(TokensA, Nodes)
+    return tuple(MaximumNodes)
 
 
-def _surfaces(tokens: _Tokens) -> int:
-    count = _count(tokens, b"Surfaces", _MAX_GEOMETRY)
-    for _ in range(count):
-        _surface_geometry(tokens)
-    return count
+# this definition exists because focused parser behavior needs one stable owner
+def ReadSurfaces(TokensA: Tokens) -> int:
+    Count = ReadCount(TokensA, b"Surfaces", KMaxGeometry)
+    for ValueName in range(Count):
+        SurfaceGeometry(TokensA)
+    return Count
 
 
-def _triangulations(tokens: _Tokens) -> tuple[int, ...]:
-    count = _count(tokens, b"Triangulations", _MAX_GEOMETRY)
-    node_counts = []
-    for _ in range(count):
-        nodes = tokens.integer(1, _MAX_GEOMETRY)
-        node_counts.append(nodes)
-        triangles = tokens.integer(1, _MAX_GEOMETRY)
-        parameters = _boolean(tokens)
-        if tokens.number() < 0.0:
-            raise _DecodeFailure("negative BRep triangulation deflection")
-        _numbers(tokens, _bounded_product(nodes, 3))
-        if parameters:
-            _numbers(tokens, _bounded_product(nodes, 2))
-        for _ in range(_bounded_product(triangles, 3)):
-            tokens.integer(1, nodes)
-    return tuple(node_counts)
+# this definition exists because focused parser behavior needs one stable owner
+def Triangulations(TokensA: Tokens) -> tuple[int, ...]:
+    Count = ReadCount(TokensA, b"Triangulations", KMaxGeometry)
+    NodeCounts = []
+    for ValueName in range(Count):
+        Nodes = TokensA.ReadInteger(1, KMaxGeometry)
+        NodeCounts.append(Nodes)
+        Triangles = TokensA.ReadInteger(1, KMaxGeometry)
+        Parameters = IsBoolean(TokensA)
+        if TokensA.ReadNumber() < 0.0:
+            raise DecodeFailure("negative BRep triangulation deflection")
+        ReadNumbers(TokensA, BoundedProduct(Nodes, 3))
+        if Parameters:
+            ReadNumbers(TokensA, BoundedProduct(Nodes, 2))
+        for ValueName in range(BoundedProduct(Triangles, 3)):
+            TokensA.ReadInteger(1, Nodes)
+    return tuple(NodeCounts)
 
 
-def _vertex_structure(
-    tokens: _Tokens,
-    locations: int,
-    curves2d: int,
-    curves3d: int,
-    surfaces: int,
+# this definition exists because focused parser behavior needs one stable owner
+def VertexStructure(
+    TokensA: Tokens,
+    LocationsA: int,
+    CurvesTwoD: int,
+    CurvesThreeD: int,
+    SurfacesA: int,
 ) -> None:
-    if tokens.number() < 0.0:
-        raise _DecodeFailure("negative BRep vertex tolerance")
-    _numbers(tokens, 3)
+    if TokensA.ReadNumber() < 0.0:
+        raise DecodeFailure("negative BRep vertex tolerance")
+    ReadNumbers(TokensA, 3)
     while True:
-        parameter = tokens.number()
-        kind = tokens.integer(0, 3)
-        if kind == 0:
-            if parameter != 0.0:
-                raise _DecodeFailure("invalid BRep vertex terminator")
+        Parameter = TokensA.ReadNumber()
+        KindValue = TokensA.ReadInteger(0, 3)
+        if KindValue == 0:
+            if Parameter != 0.0:
+                raise DecodeFailure("invalid BRep vertex terminator")
             return
-        if kind == 1:
-            _positive_index(tokens, curves3d)
-        elif kind == 2:
-            _positive_index(tokens, curves2d)
-            _positive_index(tokens, surfaces)
+        if KindValue == 1:
+            PositiveIndex(TokensA, CurvesThreeD)
+        elif KindValue == 2:
+            PositiveIndex(TokensA, CurvesTwoD)
+            PositiveIndex(TokensA, SurfacesA)
         else:
-            tokens.number()
-            _positive_index(tokens, surfaces)
-        _location_index(tokens, locations)
+            TokensA.ReadNumber()
+            PositiveIndex(TokensA, SurfacesA)
+        LocationIndex(TokensA, LocationsA)
 
 
-def _indexed_continuity(tokens: _Tokens, count: int) -> None:
-    value = tokens.take()
-    match = _INDEXED_CONTINUITY_PATTERN.fullmatch(value)
-    if match is not None:
-        index = int(match.group(1))
-        if index < 1 or index > count:
-            raise _DecodeFailure("BRep curve index is out of bounds")
+# this definition exists because focused parser behavior needs one stable owner
+def IndexContinuity(TokensA: Tokens, Count: int) -> None:
+    Value = TokensA.TakeToken()
+    MatchValue = KIndexedPattern.fullmatch(Value)
+    if MatchValue is not None:
+        IndexA = int(MatchValue.group(1))
+        if IndexA < 1 or IndexA > Count:
+            raise DecodeFailure("BRep curve index is out of bounds")
         return
-    if _INTEGER_PATTERN.fullmatch(value) is None:
-        raise _DecodeFailure("invalid BRep indexed continuity")
-    index = int(value)
-    if index < 1 or index > count:
-        raise _DecodeFailure("BRep curve index is out of bounds")
-    _continuity(tokens)
+    if KIntegerPattern.fullmatch(Value) is None:
+        raise DecodeFailure("invalid BRep indexed continuity")
+    IndexA = int(Value)
+    if IndexA < 1 or IndexA > Count:
+        raise DecodeFailure("BRep curve index is out of bounds")
+    Continuity(TokensA)
 
 
-def _edge_structure(
-    tokens: _Tokens,
-    locations: int,
-    curves2d: int,
-    curves3d: int,
-    polygons3d: int,
-    polygons_on_triangulations: tuple[int, ...],
-    surfaces: int,
-    triangulations: tuple[int, ...],
+# this definition exists because focused parser behavior needs one stable owner
+def EdgeStructure(
+    TokensA: Tokens,
+    LocationsA: int,
+    CurvesTwoD: int,
+    CurvesThreeD: int,
+    PolygonsThreeD: int,
+    PolygonsOnTriangulations: tuple[int, ...],
+    SurfacesA: int,
+    TriangulationsA: tuple[int, ...],
 ) -> None:
-    if tokens.number() < 0.0:
-        raise _DecodeFailure("negative BRep edge tolerance")
-    _boolean(tokens)
-    _boolean(tokens)
-    _boolean(tokens)
+    if TokensA.ReadNumber() < 0.0:
+        raise DecodeFailure("negative BRep edge tolerance")
+    IsBoolean(TokensA)
+    IsBoolean(TokensA)
+    IsBoolean(TokensA)
     while True:
-        kind = tokens.integer(0, 7)
-        if kind == 0:
+        KindValue = TokensA.ReadInteger(0, 7)
+        if KindValue == 0:
             return
-        if kind == 1:
-            _positive_index(tokens, curves3d)
-            _location_index(tokens, locations)
-            _numbers(tokens, 2)
-        elif kind == 2:
-            _positive_index(tokens, curves2d)
-            _positive_index(tokens, surfaces)
-            _location_index(tokens, locations)
-            _numbers(tokens, 2)
-        elif kind == 3:
-            _positive_index(tokens, curves2d)
-            _indexed_continuity(tokens, curves2d)
-            _positive_index(tokens, surfaces)
-            _location_index(tokens, locations)
-            _numbers(tokens, 2)
-        elif kind == 4:
-            _continuity(tokens)
-            _positive_index(tokens, surfaces)
-            _location_index(tokens, locations)
-            _positive_index(tokens, surfaces)
-            _location_index(tokens, locations)
-        elif kind == 5:
-            _positive_index(tokens, polygons3d)
-            _location_index(tokens, locations)
-        elif kind == 6:
-            polygon = _positive_index(tokens, len(polygons_on_triangulations))
-            triangulation = _positive_index(tokens, len(triangulations))
+        if KindValue == 1:
+            PositiveIndex(TokensA, CurvesThreeD)
+            LocationIndex(TokensA, LocationsA)
+            ReadNumbers(TokensA, 2)
+        elif KindValue == 2:
+            PositiveIndex(TokensA, CurvesTwoD)
+            PositiveIndex(TokensA, SurfacesA)
+            LocationIndex(TokensA, LocationsA)
+            ReadNumbers(TokensA, 2)
+        elif KindValue == 3:
+            PositiveIndex(TokensA, CurvesTwoD)
+            IndexContinuity(TokensA, CurvesTwoD)
+            PositiveIndex(TokensA, SurfacesA)
+            LocationIndex(TokensA, LocationsA)
+            ReadNumbers(TokensA, 2)
+        elif KindValue == 4:
+            Continuity(TokensA)
+            PositiveIndex(TokensA, SurfacesA)
+            LocationIndex(TokensA, LocationsA)
+            PositiveIndex(TokensA, SurfacesA)
+            LocationIndex(TokensA, LocationsA)
+        elif KindValue == 5:
+            PositiveIndex(TokensA, PolygonsThreeD)
+            LocationIndex(TokensA, LocationsA)
+        elif KindValue == 6:
+            Polygon = PositiveIndex(TokensA, len(PolygonsOnTriangulations))
+            Triangulation = PositiveIndex(TokensA, len(TriangulationsA))
             if (
-                polygons_on_triangulations[polygon - 1]
-                > triangulations[triangulation - 1]
+                PolygonsOnTriangulations[Polygon - 1]
+                > TriangulationsA[Triangulation - 1]
             ):
-                raise _DecodeFailure("BRep polygon node is out of bounds")
-            _location_index(tokens, locations)
+                raise DecodeFailure("BRep polygon node is out of bounds")
+            LocationIndex(TokensA, LocationsA)
         else:
-            first_polygon = _positive_index(tokens, len(polygons_on_triangulations))
-            second_polygon = _positive_index(tokens, len(polygons_on_triangulations))
-            triangulation = _positive_index(tokens, len(triangulations))
+            FirstPolygon = PositiveIndex(TokensA, len(PolygonsOnTriangulations))
+            SecondPolygon = PositiveIndex(TokensA, len(PolygonsOnTriangulations))
+            Triangulation = PositiveIndex(TokensA, len(TriangulationsA))
             if (
                 max(
-                    polygons_on_triangulations[first_polygon - 1],
-                    polygons_on_triangulations[second_polygon - 1],
+                    PolygonsOnTriangulations[FirstPolygon - 1],
+                    PolygonsOnTriangulations[SecondPolygon - 1],
                 )
-                > triangulations[triangulation - 1]
+                > TriangulationsA[Triangulation - 1]
             ):
-                raise _DecodeFailure("BRep polygon node is out of bounds")
-            _location_index(tokens, locations)
+                raise DecodeFailure("BRep polygon node is out of bounds")
+            LocationIndex(TokensA, LocationsA)
 
 
-def _face_structure(
-    tokens: _Tokens,
-    locations: int,
-    surfaces: int,
-    triangulations: tuple[int, ...],
+# this definition exists because focused parser behavior needs one stable owner
+def FaceStructure(
+    TokensA: Tokens,
+    LocationsA: int,
+    SurfacesA: int,
+    TriangulationsA: tuple[int, ...],
 ) -> None:
-    kind = tokens.integer(0, 2)
-    if kind in {0, 1}:
-        if tokens.number() < 0.0:
-            raise _DecodeFailure("negative BRep face tolerance")
-        surface = tokens.integer(0, surfaces)
-        _location_index(tokens, locations)
-        has_triangulation = False
-        if tokens.face_triangulation_starts_next_line():
-            tokens.expect(b"2")
-            _positive_index(tokens, len(triangulations))
-            has_triangulation = True
-        if surface == 0 and not has_triangulation:
-            raise _DecodeFailure("BRep face has no geometry")
+    KindValue = TokensA.ReadInteger(0, 2)
+    if KindValue in {0, 1}:
+        if TokensA.ReadNumber() < 0.0:
+            raise DecodeFailure("negative BRep face tolerance")
+        Surface = TokensA.ReadInteger(0, SurfacesA)
+        LocationIndex(TokensA, LocationsA)
+        HasTriangulation = False
+        if TokensA.IsFaceTriNext():
+            TokensA.ExpectToken(b"2")
+            PositiveIndex(TokensA, len(TriangulationsA))
+            HasTriangulation = True
+        if Surface == 0 and not HasTriangulation:
+            raise DecodeFailure("BRep face has no geometry")
     else:
-        _positive_index(tokens, len(triangulations))
+        PositiveIndex(TokensA, len(TriangulationsA))
 
 
-def _structural_reference(
-    tokens: _Tokens, shape_count: int, location_count: int
-) -> tuple[_Reference, int] | None:
-    token = tokens.take()
-    if token == b"*":
+# this definition exists because focused parser behavior needs one stable owner
+def StructureRef(
+    TokensA: Tokens, ShapeCount: int, LocationCount: int
+) -> tuple[Reference, int] | None:
+    Token = TokensA.TakeToken()
+    if Token == b"*":
         return None
-    if len(token) < 2 or token[:1] not in {b"+", b"-", b"i", b"e"}:
-        raise _DecodeFailure("invalid BRep shape reference")
-    number = token[1:]
-    if _INTEGER_PATTERN.fullmatch(number) is None:
-        raise _DecodeFailure("invalid BRep shape reference")
-    record = int(number)
-    if record < 1 or record > shape_count:
-        raise _DecodeFailure("BRep shape reference is out of bounds")
-    location = _location_index(tokens, location_count)
-    return _Reference(token[:1].decode("ascii"), record), location
+    if len(Token) < 2 or Token[:1] not in {b"+", b"-", b"i", b"e"}:
+        raise DecodeFailure("invalid BRep shape reference")
+    ReadNumber = Token[1:]
+    if KIntegerPattern.fullmatch(ReadNumber) is None:
+        raise DecodeFailure("invalid BRep shape reference")
+    RecordA = int(ReadNumber)
+    if RecordA < 1 or RecordA > ShapeCount:
+        raise DecodeFailure("BRep shape reference is out of bounds")
+    LocationA = LocationIndex(TokensA, LocationCount)
+    return Reference(Token[:1].decode("ascii"), RecordA), LocationA
 
 
-def _shape_structure(
-    tokens: _Tokens,
-    locations: int,
-    curves2d: int,
-    curves3d: int,
-    polygons3d: int,
-    polygons_on_triangulations: tuple[int, ...],
-    surfaces: int,
-    triangulations: tuple[int, ...],
+# this definition exists because focused parser behavior needs one stable owner
+def ShapeStructure(
+    TokensA: Tokens,
+    LocationsA: int,
+    CurvesTwoD: int,
+    CurvesThreeD: int,
+    PolygonsThreeD: int,
+    PolygonsOnTriangulations: tuple[int, ...],
+    SurfacesA: int,
+    TriangulationsA: tuple[int, ...],
 ) -> None:
-    count = _count(tokens, b"TShapes", _MAX_SHAPES)
-    if count == 0:
-        raise _DecodeFailure("empty BRep topology")
-    kinds: dict[int, bytes] = {}
-    children: dict[int, tuple[int, ...]] = {}
-    for ordinal in range(1, count + 1):
-        kind = tokens.take()
-        if kind not in _SHAPE_TYPES:
-            raise _DecodeFailure("unsupported BRep shape type")
-        record = count - ordinal + 1
-        if kind == b"Ve":
-            _vertex_structure(tokens, locations, curves2d, curves3d, surfaces)
-        elif kind == b"Ed":
-            _edge_structure(
-                tokens,
-                locations,
-                curves2d,
-                curves3d,
-                polygons3d,
-                polygons_on_triangulations,
-                surfaces,
-                triangulations,
+    Count = ReadCount(TokensA, b"TShapes", KMaxShapes)
+    if Count == 0:
+        raise DecodeFailure("empty BRep topology")
+    Kinds: dict[int, bytes] = {}
+    Children: dict[int, tuple[int, ...]] = {}
+    for Ordinal in range(1, Count + 1):
+        KindValue = TokensA.TakeToken()
+        if KindValue not in KShapeTypes:
+            raise DecodeFailure("unsupported BRep shape type")
+        RecordA = Count - Ordinal + 1
+        if KindValue == b"Ve":
+            VertexStructure(TokensA, LocationsA, CurvesTwoD, CurvesThreeD, SurfacesA)
+        elif KindValue == b"Ed":
+            EdgeStructure(
+                TokensA,
+                LocationsA,
+                CurvesTwoD,
+                CurvesThreeD,
+                PolygonsThreeD,
+                PolygonsOnTriangulations,
+                SurfacesA,
+                TriangulationsA,
             )
-        elif kind == b"Fa":
-            _face_structure(tokens, locations, surfaces, triangulations)
-        flags = tokens.take()
-        if _FLAGS_PATTERN.fullmatch(flags) is None:
-            raise _DecodeFailure("invalid BRep shape flags")
-        child_records = []
+        elif KindValue == b"Fa":
+            FaceStructure(TokensA, LocationsA, SurfacesA, TriangulationsA)
+        FlagBits = TokensA.TakeToken()
+        if KFlagsPattern.fullmatch(FlagBits) is None:
+            raise DecodeFailure("invalid BRep shape flags")
+        ChildRecords = []
         while True:
-            child = _structural_reference(tokens, count, locations)
-            if child is None:
+            Child = StructureRef(TokensA, Count, LocationsA)
+            if Child is None:
                 break
-            reference, _ = child
-            if reference.record <= record:
-                raise _DecodeFailure("BRep topology is not ordered bottom-up")
-            child_kind = kinds.get(reference.record)
-            if child_kind not in _SHAPE_CHILD_TYPES[kind]:
-                raise _DecodeFailure("invalid BRep child shape type")
-            child_records.append(reference.record)
-        kinds[record] = kind
-        children[record] = tuple(child_records)
-    root = _structural_reference(tokens, count, locations)
+            ReferenceA, ValueName = Child
+            if ReferenceA.RecordA <= RecordA:
+                raise DecodeFailure("BRep topology is not ordered bottom-up")
+            ChildKind = Kinds.get(ReferenceA.RecordA)
+            if ChildKind not in KShapeChildTypes[KindValue]:
+                raise DecodeFailure("invalid BRep child shape type")
+            ChildRecords.append(ReferenceA.RecordA)
+        Kinds[RecordA] = KindValue
+        Children[RecordA] = tuple(ChildRecords)
+    RootValue = StructureRef(TokensA, Count, LocationsA)
     if (
-        root is None
-        or root[0].record != 1
-        or root[0].record not in kinds
-        or tokens.peek() is not None
+        RootValue is None
+        or RootValue[0].RecordA != 1
+        or RootValue[0].RecordA not in Kinds
+        or TokensA.PeekToken() is not None
     ):
-        raise _DecodeFailure("invalid BRep root shape")
-    reachable = set()
-    pending = [root[0].record]
-    while pending:
-        record = pending.pop()
-        if record in reachable:
+        raise DecodeFailure("invalid BRep root shape")
+    Reachable = set()
+    Pending = [RootValue[0].RecordA]
+    while Pending:
+        RecordA = Pending.pop()
+        if RecordA in Reachable:
             continue
-        reachable.add(record)
-        pending.extend(children[record])
-    if reachable != set(kinds):
-        raise _DecodeFailure("unreachable BRep topology")
+        Reachable.add(RecordA)
+        Pending.extend(Children[RecordA])
+    if Reachable != set(Kinds):
+        raise DecodeFailure("unreachable BRep topology")
 
 
-def _vertex_geometry(tokens: _Tokens) -> _VertexData:
-    tolerance = tokens.number()
-    point = _vector(tokens)
-    if tolerance < 0.0:
-        raise _DecodeFailure("invalid BRep vertex tolerance")
+# this definition exists because focused parser behavior needs one stable owner
+def VertexGeometry(TokensA: Tokens) -> VertexData:
+    Tolerance = TokensA.ReadNumber()
+    Point = VectorValue(TokensA)
+    if Tolerance < 0.0:
+        raise DecodeFailure("invalid BRep vertex tolerance")
     while True:
-        parameter = tokens.number()
-        representation = tokens.integer(0, 3)
-        if representation == 0:
-            if parameter != 0.0:
-                raise _DecodeFailure("invalid BRep vertex representation terminator")
+        Parameter = TokensA.ReadNumber()
+        Representation = TokensA.ReadInteger(0, 3)
+        if Representation == 0:
+            if Parameter != 0.0:
+                raise DecodeFailure("invalid BRep vertex representation terminator")
             break
-        if representation == 1:
-            tokens.integer(1, _MAX_GEOMETRY)
-        elif representation == 2:
-            tokens.integer(1, _MAX_GEOMETRY)
-            tokens.integer(1, _MAX_GEOMETRY)
+        if Representation == 1:
+            TokensA.ReadInteger(1, KMaxGeometry)
+        elif Representation == 2:
+            TokensA.ReadInteger(1, KMaxGeometry)
+            TokensA.ReadInteger(1, KMaxGeometry)
         else:
-            tokens.number()
-            tokens.integer(1, _MAX_GEOMETRY)
-        if tokens.integer(0, 0) != 0:
-            raise _DecodeFailure("unsupported BRep vertex location")
-    return _VertexData(tolerance, point)
+            TokensA.ReadNumber()
+            TokensA.ReadInteger(1, KMaxGeometry)
+        if TokensA.ReadInteger(0, 0) != 0:
+            raise DecodeFailure("unsupported BRep vertex location")
+    return VertexData(Tolerance, Point)
 
 
-# edge geometry binds one spatial curve while retaining auxiliary pcurves
-def _edge_geometry(
-    tokens: _Tokens,
-    curve_count: int,
-    curve2d_count: int,
-    surface_count: int,
-    location_count: int,
-) -> _EdgeData:
-    tolerance = tokens.number()
-    tokens.integer(0, 1)
-    tokens.integer(0, 1)
-    degenerate = tokens.integer(0, 1)
-    if tolerance < 0.0 or degenerate:
-        raise _DecodeFailure("unsupported BRep edge state")
-    representations: list[tuple[int, float, float, int]] = []
+# this definition exists because focused parser behavior needs one stable owner
+def EdgeGeometry(
+    TokensA: Tokens,
+    CurveCount: int,
+    CurveTwoDCount: int,
+    SurfaceCount: int,
+    LocationCount: int,
+) -> EdgeData:
+    Tolerance = TokensA.ReadNumber()
+    TokensA.ReadInteger(0, 1)
+    TokensA.ReadInteger(0, 1)
+    Degenerate = TokensA.ReadInteger(0, 1)
+    if Tolerance < 0.0 or Degenerate:
+        raise DecodeFailure("unsupported BRep edge state")
+    Representations: list[tuple[int, float, float, int]] = []
     while True:
-        representation = tokens.integer(0, 7)
-        if representation == 0:
+        Representation = TokensA.ReadInteger(0, 7)
+        if Representation == 0:
             break
-        if representation == 1:
-            curve = tokens.integer(1, curve_count)
-            location = _location_index(tokens, location_count)
-            representations.append((curve, tokens.number(), tokens.number(), location))
-        elif representation == 2:
-            tokens.integer(1, curve2d_count)
-            tokens.integer(1, surface_count)
-            _location_index(tokens, location_count)
-            tokens.number()
-            tokens.number()
-        elif representation == 3:
-            tokens.integer(1, curve2d_count)
-            _indexed_continuity(tokens, curve2d_count)
-            tokens.integer(1, surface_count)
-            _location_index(tokens, location_count)
-            tokens.number()
-            tokens.number()
+        if Representation == 1:
+            Curve = TokensA.ReadInteger(1, CurveCount)
+            LocationA = LocationIndex(TokensA, LocationCount)
+            Representations.append((Curve, TokensA.ReadNumber(), TokensA.ReadNumber(), LocationA))
+        elif Representation == 2:
+            TokensA.ReadInteger(1, CurveTwoDCount)
+            TokensA.ReadInteger(1, SurfaceCount)
+            LocationIndex(TokensA, LocationCount)
+            TokensA.ReadNumber()
+            TokensA.ReadNumber()
+        elif Representation == 3:
+            TokensA.ReadInteger(1, CurveTwoDCount)
+            IndexContinuity(TokensA, CurveTwoDCount)
+            TokensA.ReadInteger(1, SurfaceCount)
+            LocationIndex(TokensA, LocationCount)
+            TokensA.ReadNumber()
+            TokensA.ReadNumber()
         else:
-            raise _DecodeFailure("unsupported BRep edge representation")
-    if len(representations) != 1:
-        raise _DecodeFailure("ambiguous BRep edge geometry")
-    curve, first, last, location = representations[0]
-    return _EdgeData(tolerance, curve, first, last, location)
+            raise DecodeFailure("unsupported BRep edge representation")
+    if len(Representations) != 1:
+        raise DecodeFailure("ambiguous BRep edge geometry")
+    Curve, FirstValue, LastValue, LocationA = Representations[0]
+    return EdgeData(Tolerance, Curve, FirstValue, LastValue, LocationA)
 
 
-# face geometry binds its analytic surface and reusable location
-def _face_geometry(
-    tokens: _Tokens, surface_count: int, location_count: int
-) -> _FaceData:
-    natural = tokens.integer(0, 1)
-    tolerance = tokens.number()
-    surface = tokens.integer(1, surface_count)
-    location = _location_index(tokens, location_count)
-    if tolerance < 0.0:
-        raise _DecodeFailure("unsupported BRep face geometry")
-    return _FaceData(bool(natural), tolerance, surface, location)
+# this definition exists because focused parser behavior needs one stable owner
+def FaceGeometry(
+    TokensA: Tokens, SurfaceCount: int, LocationCount: int
+) -> FaceData:
+    Natural = TokensA.ReadInteger(0, 1)
+    Tolerance = TokensA.ReadNumber()
+    Surface = TokensA.ReadInteger(1, SurfaceCount)
+    LocationA = LocationIndex(TokensA, LocationCount)
+    if Tolerance < 0.0:
+        raise DecodeFailure("unsupported BRep face geometry")
+    return FaceData(bool(Natural), Tolerance, Surface, LocationA)
 
 
-def _shape_records(
-    tokens: _Tokens,
-    shape_count: int,
-    curve_count: int,
-    curve2d_count: int,
-    surface_count: int,
-    location_count: int = 0,
-) -> dict[int, _ShapeRecord]:
-    records: dict[int, _ShapeRecord] = {}
-    for ordinal in range(1, shape_count + 1):
-        kind = tokens.take()
-        if kind not in _SHAPE_TYPES:
-            raise _DecodeFailure("unsupported BRep shape type")
-        geometry: _VertexData | _EdgeData | _FaceData | None = None
-        if kind == b"Ve":
-            geometry = _vertex_geometry(tokens)
-        elif kind == b"Ed":
-            geometry = _edge_geometry(
-                tokens,
-                curve_count,
-                curve2d_count,
-                surface_count,
-                location_count,
+# this definition exists because focused parser behavior needs one stable owner
+def ShapeRecords(
+    TokensA: Tokens,
+    ShapeCount: int,
+    CurveCount: int,
+    CurveTwoDCount: int,
+    SurfaceCount: int,
+    LocationCount: int = 0,
+) -> dict[int, ShapeRecord]:
+    RecordsA: dict[int, ShapeRecord] = {}
+    for Ordinal in range(1, ShapeCount + 1):
+        KindValue = TokensA.TakeToken()
+        if KindValue not in KShapeTypes:
+            raise DecodeFailure("unsupported BRep shape type")
+        GeometryA: VertexData | EdgeData | FaceData | None = None
+        if KindValue == b"Ve":
+            GeometryA = VertexGeometry(TokensA)
+        elif KindValue == b"Ed":
+            GeometryA = EdgeGeometry(
+                TokensA,
+                CurveCount,
+                CurveTwoDCount,
+                SurfaceCount,
+                LocationCount,
             )
-        elif kind == b"Fa":
-            geometry = _face_geometry(tokens, surface_count, location_count)
-        flag_token = tokens.take()
-        if _FLAGS_PATTERN.fullmatch(flag_token) is None:
-            raise _DecodeFailure("invalid BRep shape flags")
-        children: list[_Reference] = []
+        elif KindValue == b"Fa":
+            GeometryA = FaceGeometry(TokensA, SurfaceCount, LocationCount)
+        FlagToken = TokensA.TakeToken()
+        if KFlagsPattern.fullmatch(FlagToken) is None:
+            raise DecodeFailure("invalid BRep shape flags")
+        Children: list[Reference] = []
         while True:
-            child = _reference(tokens, shape_count, location_count)
-            if child is None:
+            Child = ReadReference(TokensA, ShapeCount, LocationCount)
+            if Child is None:
                 break
-            children.append(child)
-        record_number = shape_count - ordinal + 1
-        if any(child.record <= record_number for child in children):
-            raise _DecodeFailure("BRep topology is not ordered bottom-up")
-        records[record_number] = _ShapeRecord(
-            kind,
-            flag_token.decode("ascii"),
-            tuple(children),
-            geometry,
+            Children.append(Child)
+        RecordNumber = ShapeCount - Ordinal + 1
+        if any(Child.RecordA <= RecordNumber for Child in Children):
+            raise DecodeFailure("BRep topology is not ordered bottom-up")
+        RecordsA[RecordNumber] = ShapeRecord(
+            KindValue,
+            FlagToken.decode("ascii"),
+            tuple(Children),
+            GeometryA,
         )
-    return records
+    return RecordsA
 
 
-# required because freecad stores reusable topology under nested shape placements
-def _ApplyLocations(
+# this definition exists because focused parser behavior needs one stable owner
+def ApplyLocations(
     Curves: tuple[BrepCurve, ...],
     Surfaces: tuple[BrepSurface, ...],
-    Records: Mapping[int, _ShapeRecord],
-    RootRef: _Reference,
+    Records: Mapping[int, ShapeRecord],
+    RootRef: Reference,
     Locations: tuple[tuple[float, ...], ...],
     NamePrefix: str,
 ) -> tuple[
     tuple[BrepCurve, ...],
     tuple[BrepSurface, ...],
-    dict[int, _ShapeRecord],
-    _Reference,
+    dict[int, ShapeRecord],
+    Reference,
 ]:
     if (
-        not RootRef.location
+        not RootRef.LocationA
         and not any(
-            ChildRef.location
+            ChildRef.LocationA
             for Record in Records.values()
-            for ChildRef in Record.children
+            for ChildRef in Record.Children
         )
         and not any(
-            isinstance(Record.geometry, (_EdgeData, _FaceData))
-            and Record.geometry.location
+            isinstance(Record.GeometryA, (EdgeData, FaceData))
+            and Record.GeometryA.LocationA
             for Record in Records.values()
         )
     ):
@@ -1191,12 +1281,12 @@ def _ApplyLocations(
 
     PlacedCurves: list[BrepCurve] = []
     PlacedSurfaces: list[BrepSurface] = []
-    PlacedRecords: dict[int, _ShapeRecord] = {}
+    PlacedRecords: dict[int, ShapeRecord] = {}
     RecordCache: dict[tuple[int, tuple[float, ...]], int] = {}
     CurveCache: dict[tuple[int, tuple[float, ...]], int] = {}
     SurfaceCache: dict[tuple[int, tuple[float, ...]], int] = {}
 
-    # reused curves need distinct coordinates whenever their occurrences move
+    # this definition exists because focused parser behavior needs one stable owner
     def PlaceCurve(CurveIndex: int, Location: tuple[float, ...]) -> int:
         CurveKey = (CurveIndex, Location)
         CachedIndex = CurveCache.get(CurveKey)
@@ -1207,28 +1297,28 @@ def _ApplyLocations(
         if isinstance(BaseCurve, LineCurve):
             PlacedCurve: BrepCurve = LineCurve(
                 f"{NamePrefix}:curve:{PlacedIndex}",
-                _location_point(Location, BaseCurve.origin),
-                _location_direction(Location, BaseCurve.direction),
+                LocationPoint(Location, BaseCurve.origin),
+                ApplyDirection(Location, BaseCurve.direction),
                 provenance=BaseCurve.provenance,
                 attributes=BaseCurve.attributes,
             )
         elif isinstance(BaseCurve, CircleCurve):
             PlacedCurve = CircleCurve(
                 f"{NamePrefix}:curve:{PlacedIndex}",
-                _location_point(Location, BaseCurve.center),
-                _location_direction(Location, BaseCurve.axis),
-                _location_direction(Location, BaseCurve.reference_direction),
-                BaseCurve.radius * _location_scale(Location),
+                LocationPoint(Location, BaseCurve.center),
+                ApplyDirection(Location, BaseCurve.axis),
+                ApplyDirection(Location, BaseCurve.reference_direction),
+                BaseCurve.radius * LocationScale(Location),
                 provenance=BaseCurve.provenance,
                 attributes=BaseCurve.attributes,
             )
         else:
-            raise _DecodeFailure("unsupported located BRep curve")
+            raise DecodeFailure("unsupported located BRep curve")
         PlacedCurves.append(PlacedCurve)
         CurveCache[CurveKey] = PlacedIndex
         return PlacedIndex
 
-    # reused surfaces need distinct frames whenever their occurrences move
+    # this definition exists because focused parser behavior needs one stable owner
     def PlaceSurface(SurfaceIndex: int, Location: tuple[float, ...]) -> int:
         SurfaceKey = (SurfaceIndex, Location)
         CachedIndex = SurfaceCache.get(SurfaceKey)
@@ -1239,88 +1329,88 @@ def _ApplyLocations(
         if isinstance(BaseSurface, PlaneSurface):
             PlacedSurface: BrepSurface = PlaneSurface(
                 f"{NamePrefix}:surface:{PlacedIndex}",
-                _location_point(Location, BaseSurface.origin),
-                _location_direction(Location, BaseSurface.normal),
-                _location_direction(Location, BaseSurface.reference_direction),
+                LocationPoint(Location, BaseSurface.origin),
+                ApplyDirection(Location, BaseSurface.normal),
+                ApplyDirection(Location, BaseSurface.reference_direction),
                 provenance=BaseSurface.provenance,
                 attributes=BaseSurface.attributes,
             )
         elif isinstance(BaseSurface, CylinderSurface):
             PlacedSurface = CylinderSurface(
                 f"{NamePrefix}:surface:{PlacedIndex}",
-                _location_point(Location, BaseSurface.origin),
-                _location_direction(Location, BaseSurface.axis),
-                _location_direction(Location, BaseSurface.reference_direction),
-                BaseSurface.radius * _location_scale(Location),
+                LocationPoint(Location, BaseSurface.origin),
+                ApplyDirection(Location, BaseSurface.axis),
+                ApplyDirection(Location, BaseSurface.reference_direction),
+                BaseSurface.radius * LocationScale(Location),
                 provenance=BaseSurface.provenance,
                 attributes=BaseSurface.attributes,
             )
         else:
-            raise _DecodeFailure("unsupported located BRep surface")
+            raise DecodeFailure("unsupported located BRep surface")
         PlacedSurfaces.append(PlacedSurface)
         SurfaceCache[SurfaceKey] = PlacedIndex
         return PlacedIndex
 
-    # topology occurrences must inherit every placement in their parent chain
+    # this definition exists because focused parser behavior needs one stable owner
     def PlaceRecord(RecordIndex: int, Location: tuple[float, ...]) -> int:
         RecordKey = (RecordIndex, Location)
         CachedIndex = RecordCache.get(RecordKey)
         if CachedIndex is not None:
             return CachedIndex
-        if len(PlacedRecords) >= _MAX_SHAPES:
-            raise _DecodeFailure("located BRep topology exceeds shape bounds")
+        if len(PlacedRecords) >= KMaxShapes:
+            raise DecodeFailure("located BRep topology exceeds shape bounds")
         SourceRecord = Records[RecordIndex]
-        ChildRefs: list[_Reference] = []
-        for ChildRef in SourceRecord.children:
+        ChildRefs: list[Reference] = []
+        for ChildRef in SourceRecord.Children:
             ChildLoc = (
-                _IDENTITY_LOCATION
-                if not ChildRef.location
-                else Locations[ChildRef.location - 1]
+                KIdentityLocation
+                if not ChildRef.LocationA
+                else Locations[ChildRef.LocationA - 1]
             )
-            ChildMatrix = _location_product(ChildLoc, Location)
-            ChildRecord = PlaceRecord(ChildRef.record, ChildMatrix)
-            ChildRefs.append(_Reference(ChildRef.orientation, ChildRecord))
-        ScaleValue = _location_scale(Location)
-        Geometry = SourceRecord.geometry
-        if isinstance(Geometry, _VertexData):
-            Geometry = _VertexData(
-                Geometry.tolerance * ScaleValue,
-                _location_point(Location, Geometry.point),
+            ChildMatrix = ProductLocation(ChildLoc, Location)
+            ChildRecord = PlaceRecord(ChildRef.RecordA, ChildMatrix)
+            ChildRefs.append(Reference(ChildRef.Orientation, ChildRecord))
+        ScaleValue = LocationScale(Location)
+        Geometry = SourceRecord.GeometryA
+        if isinstance(Geometry, VertexData):
+            Geometry = VertexData(
+                Geometry.Tolerance * ScaleValue,
+                LocationPoint(Location, Geometry.Point),
             )
-        elif isinstance(Geometry, _EdgeData):
-            SourceCurve = Curves[Geometry.curve - 1]
+        elif isinstance(Geometry, EdgeData):
+            SourceCurve = Curves[Geometry.Curve - 1]
             GeometryLoc = (
-                _IDENTITY_LOCATION
-                if not Geometry.location
-                else Locations[Geometry.location - 1]
+                KIdentityLocation
+                if not Geometry.LocationA
+                else Locations[Geometry.LocationA - 1]
             )
-            CurveLoc = _location_product(GeometryLoc, Location)
+            CurveLoc = ProductLocation(GeometryLoc, Location)
             ParameterScale = (
-                _location_scale(CurveLoc) if isinstance(SourceCurve, LineCurve) else 1.0
+                LocationScale(CurveLoc) if isinstance(SourceCurve, LineCurve) else 1.0
             )
-            Geometry = _EdgeData(
-                Geometry.tolerance * ScaleValue,
-                PlaceCurve(Geometry.curve, CurveLoc),
-                Geometry.first * ParameterScale,
-                Geometry.last * ParameterScale,
+            Geometry = EdgeData(
+                Geometry.Tolerance * ScaleValue,
+                PlaceCurve(Geometry.Curve, CurveLoc),
+                Geometry.FirstValue * ParameterScale,
+                Geometry.LastValue * ParameterScale,
             )
-        elif isinstance(Geometry, _FaceData):
+        elif isinstance(Geometry, FaceData):
             GeometryLoc = (
-                _IDENTITY_LOCATION
-                if not Geometry.location
-                else Locations[Geometry.location - 1]
+                KIdentityLocation
+                if not Geometry.LocationA
+                else Locations[Geometry.LocationA - 1]
             )
-            Geometry = _FaceData(
-                Geometry.natural,
-                Geometry.tolerance * ScaleValue,
+            Geometry = FaceData(
+                Geometry.Natural,
+                Geometry.Tolerance * ScaleValue,
                 PlaceSurface(
-                    Geometry.surface, _location_product(GeometryLoc, Location)
+                    Geometry.Surface, ProductLocation(GeometryLoc, Location)
                 ),
             )
         PlacedIndex = len(PlacedRecords) + 1
-        PlacedRecords[PlacedIndex] = _ShapeRecord(
-            SourceRecord.kind,
-            SourceRecord.flags,
+        PlacedRecords[PlacedIndex] = ShapeRecord(
+            SourceRecord.KindValue,
+            SourceRecord.FlagBits,
             tuple(ChildRefs),
             Geometry,
         )
@@ -1328,60 +1418,62 @@ def _ApplyLocations(
         return PlacedIndex
 
     RootLoc = (
-        _IDENTITY_LOCATION if not RootRef.location else Locations[RootRef.location - 1]
+        KIdentityLocation if not RootRef.LocationA else Locations[RootRef.LocationA - 1]
     )
-    RootIndex = PlaceRecord(RootRef.record, RootLoc)
+    RootIndex = PlaceRecord(RootRef.RecordA, RootLoc)
     return (
         tuple(PlacedCurves),
         tuple(PlacedSurfaces),
         PlacedRecords,
-        _Reference(RootRef.orientation, RootIndex),
+        Reference(RootRef.Orientation, RootIndex),
     )
 
 
-def _opposite(orientation: str) -> str:
-    if orientation == "+":
+# this definition exists because focused parser behavior needs one stable owner
+def Opposite(Orientation: str) -> str:
+    if Orientation == "+":
         return "-"
-    if orientation == "-":
+    if Orientation == "-":
         return "+"
-    raise _DecodeFailure("unsupported BRep topology orientation")
+    raise DecodeFailure("unsupported BRep topology orientation")
 
 
-def _compose(outer: str, inner: str) -> str:
-    if outer == "+":
-        return inner
-    if outer == "-":
-        return _opposite(inner)
-    raise _DecodeFailure("unsupported BRep topology orientation")
+# this definition exists because focused parser behavior needs one stable owner
+def Compose(Outer: str, Inner: str) -> str:
+    if Outer == "+":
+        return Inner
+    if Outer == "-":
+        return Opposite(Inner)
+    raise DecodeFailure("unsupported BRep topology orientation")
 
 
-# Boolean results may join tolerance-equivalent coordinates through distinct vertex records
-def _CanonicalVertexRecords(
-    records: Mapping[int, _ShapeRecord],
+# this definition exists because focused parser behavior needs one stable owner
+def CanonicalVerts(
+    RecordsA: Mapping[int, ShapeRecord],
 ) -> dict[int, int]:
     ResultData: dict[int, int] = {}
     BucketData: dict[tuple[str, str, str], list[int]] = {}
-    for NumberValue, RecordData in sorted(records.items(), reverse=True):
-        if RecordData.kind != b"Ve":
+    for NumberValue, RecordData in sorted(RecordsA.items(), reverse=True):
+        if RecordData.KindValue != b"Ve":
             continue
-        GeometryData = RecordData.geometry
-        if not isinstance(GeometryData, _VertexData):
-            raise _DecodeFailure("invalid BRep vertex topology")
-        PointData = GeometryData.point
+        GeometryData = RecordData.GeometryA
+        if not isinstance(GeometryData, VertexData):
+            raise DecodeFailure("invalid BRep vertex topology")
+        PointData = GeometryData.Point
         BucketKey = tuple(
-            format(ItemData, f".{_VERTEX_EQUIVALENCE_DIGITS}g")
+            format(ItemData, f".{KVertexDigits}g")
             for ItemData in (PointData.x, PointData.y, PointData.z)
         )
         CandidateData = BucketData.setdefault(BucketKey, [])
         RepresentativeValue = NumberValue
         for CandidateValue in CandidateData:
-            CandidateGeometry = records[CandidateValue].geometry
-            if not isinstance(CandidateGeometry, _VertexData):
-                raise _DecodeFailure("invalid BRep vertex topology")
-            CandidatePoint = CandidateGeometry.point
+            CandidateGeometry = RecordsA[CandidateValue].GeometryA
+            if not isinstance(CandidateGeometry, VertexData):
+                raise DecodeFailure("invalid BRep vertex topology")
+            CandidatePoint = CandidateGeometry.Point
             ToleranceValue = max(
-                GeometryData.tolerance,
-                CandidateGeometry.tolerance,
+                GeometryData.Tolerance,
+                CandidateGeometry.Tolerance,
             )
             if (PointData.x - CandidatePoint.x) ** 2 + (
                 PointData.y - CandidatePoint.y
@@ -1389,37 +1481,38 @@ def _CanonicalVertexRecords(
                 RepresentativeValue = CandidateValue
                 break
         else:
-            if len(CandidateData) >= _MAX_VERTEX_EQUIVALENCE_BUCKET:
-                raise _DecodeFailure("BRep vertex equivalence bucket is too large")
+            if len(CandidateData) >= KMaxVertexBucket:
+                raise DecodeFailure("BRep vertex equivalence bucket is too large")
             CandidateData.append(NumberValue)
         ResultData[NumberValue] = RepresentativeValue
     return ResultData
 
 
-# Eulerian ordering handles seam edges that occur in both directions in one wire
-def _OrderWireUses(
-    uses: list[_Reference], edge_vertices: Mapping[int, tuple[int, int]]
-) -> list[_Reference]:
-    # oriented endpoints expose the directed multigraph consumed by Hierholzer's walk
-    def Endpoints(reference: _Reference) -> tuple[int, int]:
-        start, end = edge_vertices[reference.record]
-        return (end, start) if reference.orientation == "-" else (start, end)
+# this definition exists because focused parser behavior needs one stable owner
+def OrderWireUses(
+    UsesValue: list[Reference], EdgeVertices: Mapping[int, tuple[int, int]]
+) -> list[Reference]:
 
-    if not uses:
-        raise _DecodeFailure("BRep wire is disconnected or open")
-    Adjacency: dict[int, list[tuple[_Reference, int]]] = {}
-    for Use in reversed(uses):
-        StartVertex, EndVertex = Endpoints(Use)
-        Adjacency.setdefault(StartVertex, []).append((Use, EndVertex))
-    StartVertex = Endpoints(uses[0])[0]
+    # this definition exists because focused parser behavior needs one stable owner
+    def Endpoints(ReferenceA: Reference) -> tuple[int, int]:
+        Start, EndValue = EdgeVertices[ReferenceA.RecordA]
+        return (EndValue, Start) if ReferenceA.Orientation == "-" else (Start, EndValue)
+
+    if not UsesValue:
+        raise DecodeFailure("BRep wire is disconnected or open")
+    Adjacency: dict[int, list[tuple[Reference, int]]] = {}
+    for UseValue in reversed(UsesValue):
+        StartVertex, EndVertex = Endpoints(UseValue)
+        Adjacency.setdefault(StartVertex, []).append((UseValue, EndVertex))
+    StartVertex = Endpoints(UsesValue[0])[0]
     VertexStack = [StartVertex]
-    EdgeStack: list[_Reference] = []
-    Circuit: list[_Reference] = []
+    EdgeStack: list[Reference] = []
+    Circuit: list[Reference] = []
     while VertexStack:
         Outgoing = Adjacency.get(VertexStack[-1])
         if Outgoing:
-            Use, EndVertex = Outgoing.pop()
-            EdgeStack.append(Use)
+            UseValue, EndVertex = Outgoing.pop()
+            EdgeStack.append(UseValue)
             VertexStack.append(EndVertex)
             continue
         VertexStack.pop()
@@ -1427,465 +1520,467 @@ def _OrderWireUses(
             Circuit.append(EdgeStack.pop())
     Circuit.reverse()
     if (
-        len(Circuit) != len(uses)
+        len(Circuit) != len(UsesValue)
         or Endpoints(Circuit[0])[0] != Endpoints(Circuit[-1])[1]
         or any(
             Endpoints(LeftUse)[1] != Endpoints(RightUse)[0]
             for LeftUse, RightUse in zip(Circuit, Circuit[1:])
         )
     ):
-        raise _DecodeFailure("BRep wire is disconnected or open")
+        raise DecodeFailure("BRep wire is disconnected or open")
     return Circuit
 
 
-# parsed analytic records become the format-neutral BREP topology graph
-def _model(
-    curves: tuple[BrepCurve, ...],
-    surfaces: tuple[BrepSurface, ...],
-    records: Mapping[int, _ShapeRecord],
-    root: _Reference,
-    id_prefix: str,
-    design_body_id: str,
-    attributes: Mapping[str, Any],
+# this definition exists because focused parser behavior needs one stable owner
+def BuildModel(
+    CurvesA: tuple[BrepCurve, ...],
+    SurfacesA: tuple[BrepSurface, ...],
+    RecordsA: Mapping[int, ShapeRecord],
+    RootValue: Reference,
+    IdPrefix: str,
+    DesignBodyId: str,
+    Attributes: Mapping[str, AnyValue],
 ) -> BrepModel:
-    vertices: list[BrepVertex] = []
-    edges: list[BrepEdge] = []
-    vertex_ids: dict[int, str] = {}
-    edge_ids: dict[int, str] = {}
-    edge_vertices: dict[int, tuple[int, int]] = {}
-    CanonicalVertexData = _CanonicalVertexRecords(records)
-    for number, record in sorted(records.items(), reverse=True):
-        if record.kind == b"Ve":
-            geometry = record.geometry
-            if not isinstance(geometry, _VertexData) or record.children:
-                raise _DecodeFailure("invalid BRep vertex topology")
-            identifier = f"{id_prefix}:vertex:{number}"
-            vertex_ids[number] = identifier
-            vertices.append(BrepVertex(identifier, geometry.point, geometry.tolerance))
-    for number, record in sorted(records.items(), reverse=True):
-        if record.kind != b"Ed":
+    Vertices: list[BrepVertex] = []
+    Edges: list[BrepEdge] = []
+    VertexIds: dict[int, str] = {}
+    EdgeIds: dict[int, str] = {}
+    EdgeVertices: dict[int, tuple[int, int]] = {}
+    CanonicalVertexData = CanonicalVerts(RecordsA)
+    for ReadNumber, RecordA in sorted(RecordsA.items(), reverse=True):
+        if RecordA.KindValue == b"Ve":
+            GeometryA = RecordA.GeometryA
+            if not isinstance(GeometryA, VertexData) or RecordA.Children:
+                raise DecodeFailure("invalid BRep vertex topology")
+            Identifier = f"{IdPrefix}:vertex:{ReadNumber}"
+            VertexIds[ReadNumber] = Identifier
+            Vertices.append(BrepVertex(Identifier, GeometryA.Point, GeometryA.Tolerance))
+    for ReadNumber, RecordA in sorted(RecordsA.items(), reverse=True):
+        if RecordA.KindValue != b"Ed":
             continue
-        geometry = record.geometry
-        if not isinstance(geometry, _EdgeData) or len(record.children) != 2:
-            raise _DecodeFailure("invalid BRep edge topology")
-        forward = [child for child in record.children if child.orientation == "+"]
-        reversed_values = [
-            child for child in record.children if child.orientation == "-"
+        GeometryA = RecordA.GeometryA
+        if not isinstance(GeometryA, EdgeData) or len(RecordA.Children) != 2:
+            raise DecodeFailure("invalid BRep edge topology")
+        Forward = [Child for Child in RecordA.Children if Child.Orientation == "+"]
+        ReversedValues = [
+            Child for Child in RecordA.Children if Child.Orientation == "-"
         ]
-        if len(forward) != 1 or len(reversed_values) != 1:
-            raise _DecodeFailure("ambiguous BRep edge vertices")
-        if any(records[child.record].kind != b"Ve" for child in record.children):
-            raise _DecodeFailure("BRep edge references a non-vertex")
-        identifier = f"{id_prefix}:edge:{number}"
-        edge_ids[number] = identifier
-        StartVertex = CanonicalVertexData[forward[0].record]
-        EndVertex = CanonicalVertexData[reversed_values[0].record]
-        edge_vertices[number] = (StartVertex, EndVertex)
-        edges.append(
+        if len(Forward) != 1 or len(ReversedValues) != 1:
+            raise DecodeFailure("ambiguous BRep edge vertices")
+        if any(RecordsA[Child.RecordA].KindValue != b"Ve" for Child in RecordA.Children):
+            raise DecodeFailure("BRep edge references a non-vertex")
+        Identifier = f"{IdPrefix}:edge:{ReadNumber}"
+        EdgeIds[ReadNumber] = Identifier
+        StartVertex = CanonicalVertexData[Forward[0].RecordA]
+        EndVertex = CanonicalVertexData[ReversedValues[0].RecordA]
+        EdgeVertices[ReadNumber] = (StartVertex, EndVertex)
+        Edges.append(
             BrepEdge(
-                identifier,
-                vertex_ids[StartVertex],
-                vertex_ids[EndVertex],
-                f"{id_prefix}:curve:{geometry.curve}",
-                geometry.first,
-                geometry.last,
-                geometry.tolerance,
+                Identifier,
+                VertexIds[StartVertex],
+                VertexIds[EndVertex],
+                f"{IdPrefix}:curve:{GeometryA.Curve}",
+                GeometryA.FirstValue,
+                GeometryA.LastValue,
+                GeometryA.Tolerance,
             )
         )
-    coedges: list[BrepCoedge] = []
-    loops: list[BrepLoop] = []
-    faces: list[BrepFace] = []
-    face_ids: dict[int, str] = {}
-    for number, record in sorted(records.items(), reverse=True):
-        if record.kind != b"Fa":
+    Coedges: list[BrepCoedge] = []
+    Loops: list[BrepLoop] = []
+    Faces: list[BrepFace] = []
+    FaceIds: dict[int, str] = {}
+    for ReadNumber, RecordA in sorted(RecordsA.items(), reverse=True):
+        if RecordA.KindValue != b"Fa":
             continue
-        geometry = record.geometry
-        if not isinstance(geometry, _FaceData) or not record.children:
-            raise _DecodeFailure("ambiguous BRep face boundary")
-        loop_ids: list[str] = []
-        for wire_index, wire_reference in enumerate(record.children, 1):
-            if wire_reference.orientation not in {"+", "-"}:
-                raise _DecodeFailure("unsupported BRep wire orientation")
-            wire = records[wire_reference.record]
-            if wire.kind != b"Wi" or not wire.children:
-                raise _DecodeFailure("BRep face references an invalid wire")
-            uses = list(wire.children)
-            if wire_reference.orientation == "-":
-                uses = [
-                    _Reference(_opposite(use.orientation), use.record)
-                    for use in reversed(uses)
+        GeometryA = RecordA.GeometryA
+        if not isinstance(GeometryA, FaceData) or not RecordA.Children:
+            raise DecodeFailure("ambiguous BRep face boundary")
+        LoopIds: list[str] = []
+        for WireIndex, WireReference in enumerate(RecordA.Children, 1):
+            if WireReference.Orientation not in {"+", "-"}:
+                raise DecodeFailure("unsupported BRep wire orientation")
+            WireValue = RecordsA[WireReference.RecordA]
+            if WireValue.KindValue != b"Wi" or not WireValue.Children:
+                raise DecodeFailure("BRep face references an invalid wire")
+            UsesValue = list(WireValue.Children)
+            if WireReference.Orientation == "-":
+                UsesValue = [
+                    Reference(Opposite(UseValueA.Orientation), UseValueA.RecordA)
+                    for UseValueA in reversed(UsesValue)
                 ]
-            uses = _OrderWireUses(uses, edge_vertices)
-            coedge_ids: list[str] = []
-            for use_index, use in enumerate(uses, 1):
-                if use.orientation not in {"+", "-"}:
-                    raise _DecodeFailure("unsupported BRep coedge orientation")
-                if records[use.record].kind != b"Ed":
-                    raise _DecodeFailure("BRep wire references a non-edge")
-                suffix = (
-                    f"{wire_index}:{use_index}"
-                    if len(record.children) > 1
-                    else str(use_index)
+            UsesValue = OrderWireUses(UsesValue, EdgeVertices)
+            CoedgeIds: list[str] = []
+            for UseIndex, UseValueA in enumerate(UsesValue, 1):
+                if UseValueA.Orientation not in {"+", "-"}:
+                    raise DecodeFailure("unsupported BRep coedge orientation")
+                if RecordsA[UseValueA.RecordA].KindValue != b"Ed":
+                    raise DecodeFailure("BRep wire references a non-edge")
+                Suffix = (
+                    f"{WireIndex}:{UseIndex}"
+                    if len(RecordA.Children) > 1
+                    else str(UseIndex)
                 )
-                identifier = f"{id_prefix}:coedge:{number}:{suffix}"
-                coedges.append(
+                Identifier = f"{IdPrefix}:coedge:{ReadNumber}:{Suffix}"
+                Coedges.append(
                     BrepCoedge(
-                        identifier,
-                        edge_ids[use.record],
-                        reversed=use.orientation == "-",
+                        Identifier,
+                        EdgeIds[UseValueA.RecordA],
+                        reversed=UseValueA.Orientation == "-",
                     )
                 )
-                coedge_ids.append(identifier)
-            suffix = f":{wire_index}" if len(record.children) > 1 else ""
-            loop_id = f"{id_prefix}:loop:{number}{suffix}"
-            loops.append(BrepLoop(loop_id, tuple(coedge_ids), wire_index == 1))
-            loop_ids.append(loop_id)
-        face_id = f"{id_prefix}:face:{number}"
-        face_ids[number] = face_id
-        faces.append(
+                CoedgeIds.append(Identifier)
+            Suffix = f":{WireIndex}" if len(RecordA.Children) > 1 else ""
+            LoopId = f"{IdPrefix}:loop:{ReadNumber}{Suffix}"
+            Loops.append(BrepLoop(LoopId, tuple(CoedgeIds), WireIndex == 1))
+            LoopIds.append(LoopId)
+        FaceId = f"{IdPrefix}:face:{ReadNumber}"
+        FaceIds[ReadNumber] = FaceId
+        Faces.append(
             BrepFace(
-                face_id,
-                f"{id_prefix}:surface:{geometry.surface}",
-                tuple(loop_ids),
+                FaceId,
+                f"{IdPrefix}:surface:{GeometryA.Surface}",
+                tuple(LoopIds),
                 True,
-                geometry.tolerance,
-                attributes={"natural_restriction": geometry.natural},
+                GeometryA.Tolerance,
+                attributes={"natural_restriction": GeometryA.Natural},
             )
         )
-    face_uses: list[BrepFaceUse] = []
-    shells: list[BrepShell] = []
-    shell_ids: dict[int, str] = {}
-    for number, record in sorted(records.items(), reverse=True):
-        if record.kind != b"Sh":
+    FaceUses: list[BrepFaceUse] = []
+    Shells: list[BrepShell] = []
+    ShellIds: dict[int, str] = {}
+    for ReadNumber, RecordA in sorted(RecordsA.items(), reverse=True):
+        if RecordA.KindValue != b"Sh":
             continue
-        if not record.children:
-            raise _DecodeFailure("empty BRep shell")
-        use_ids: list[str] = []
-        for index, child in enumerate(record.children, 1):
-            if child.orientation not in {"+", "-"}:
-                raise _DecodeFailure("unsupported BRep face orientation")
-            if records[child.record].kind != b"Fa":
-                raise _DecodeFailure("BRep shell references a non-face")
-            identifier = f"{id_prefix}:face-use:{number}:{index}"
-            face_uses.append(
+        if not RecordA.Children:
+            raise DecodeFailure("empty BRep shell")
+        UseIds: list[str] = []
+        for IndexA, Child in enumerate(RecordA.Children, 1):
+            if Child.Orientation not in {"+", "-"}:
+                raise DecodeFailure("unsupported BRep face orientation")
+            if RecordsA[Child.RecordA].KindValue != b"Fa":
+                raise DecodeFailure("BRep shell references a non-face")
+            Identifier = f"{IdPrefix}:face-use:{ReadNumber}:{IndexA}"
+            FaceUses.append(
                 BrepFaceUse(
-                    identifier,
-                    face_ids[child.record],
-                    reversed=child.orientation == "-",
+                    Identifier,
+                    FaceIds[Child.RecordA],
+                    reversed=Child.Orientation == "-",
                 )
             )
-            use_ids.append(identifier)
-        shell_id = f"{id_prefix}:shell:{number}"
-        shell_ids[number] = shell_id
-        shells.append(BrepShell(shell_id, tuple(use_ids), record.flags[4] == "1"))
-    shell_uses: list[BrepShellUse] = []
-    regions: list[BrepRegion] = []
-    region_ids: dict[int, str] = {}
-    for number, record in sorted(records.items(), reverse=True):
-        if record.kind != b"So":
+            UseIds.append(Identifier)
+        ShellId = f"{IdPrefix}:shell:{ReadNumber}"
+        ShellIds[ReadNumber] = ShellId
+        Shells.append(BrepShell(ShellId, tuple(UseIds), RecordA.FlagBits[4] == "1"))
+    ShellUses: list[BrepShellUse] = []
+    Regions: list[BrepRegion] = []
+    RegionIds: dict[int, str] = {}
+    for ReadNumber, RecordA in sorted(RecordsA.items(), reverse=True):
+        if RecordA.KindValue != b"So":
             continue
-        if not record.children:
-            raise _DecodeFailure("empty BRep solid")
-        use_ids: list[str] = []
-        for index, child in enumerate(record.children, 1):
-            if child.orientation not in {"+", "-"}:
-                raise _DecodeFailure("unsupported BRep shell orientation")
-            if records[child.record].kind != b"Sh":
-                raise _DecodeFailure("BRep solid references a non-shell")
-            identifier = f"{id_prefix}:shell-use:{number}:{index}"
-            shell_uses.append(
+        if not RecordA.Children:
+            raise DecodeFailure("empty BRep solid")
+        UseIds: list[str] = []
+        for IndexA, Child in enumerate(RecordA.Children, 1):
+            if Child.Orientation not in {"+", "-"}:
+                raise DecodeFailure("unsupported BRep shell orientation")
+            if RecordsA[Child.RecordA].KindValue != b"Sh":
+                raise DecodeFailure("BRep solid references a non-shell")
+            Identifier = f"{IdPrefix}:shell-use:{ReadNumber}:{IndexA}"
+            ShellUses.append(
                 BrepShellUse(
-                    identifier,
-                    shell_ids[child.record],
-                    reversed=child.orientation == "-",
+                    Identifier,
+                    ShellIds[Child.RecordA],
+                    reversed=Child.Orientation == "-",
                 )
             )
-            use_ids.append(identifier)
-        region_id = f"{id_prefix}:region:{number}"
-        region_ids[number] = region_id
-        regions.append(BrepRegion(region_id, tuple(use_ids), True))
-    root_regions: list[str] = []
-    root_vertices: list[str] = []
-    seen: set[tuple[int, str]] = set()
+            UseIds.append(Identifier)
+        RegionId = f"{IdPrefix}:region:{ReadNumber}"
+        RegionIds[ReadNumber] = RegionId
+        Regions.append(BrepRegion(RegionId, tuple(UseIds), True))
+    RootRegions: list[str] = []
+    RootVertices: list[str] = []
+    SeenValue: set[tuple[int, str]] = set()
 
-    def collect(reference: _Reference) -> None:
-        key = (reference.record, reference.orientation)
-        if key in seen:
-            raise _DecodeFailure("ambiguous repeated BRep root topology")
-        seen.add(key)
-        record = records[reference.record]
-        if record.kind in {b"Co", b"CS"}:
-            if not record.children:
-                raise _DecodeFailure("empty BRep aggregate")
-            for child in record.children:
-                collect(
-                    _Reference(
-                        _compose(reference.orientation, child.orientation),
-                        child.record,
+    # this definition exists because focused parser behavior needs one stable owner
+    def CollectShape(ReferenceA: Reference) -> None:
+        KeyValue = (ReferenceA.RecordA, ReferenceA.Orientation)
+        if KeyValue in SeenValue:
+            raise DecodeFailure("ambiguous repeated BRep root topology")
+        SeenValue.add(KeyValue)
+        RecordA = RecordsA[ReferenceA.RecordA]
+        if RecordA.KindValue in {b"Co", b"CS"}:
+            if not RecordA.Children:
+                raise DecodeFailure("empty BRep aggregate")
+            for Child in RecordA.Children:
+                CollectShape(
+                    Reference(
+                        Compose(ReferenceA.Orientation, Child.Orientation),
+                        Child.RecordA,
                     )
                 )
             return
-        if record.kind == b"So":
-            if reference.orientation != "+":
-                raise _DecodeFailure("unsupported reversed BRep solid")
-            root_regions.append(region_ids[reference.record])
+        if RecordA.KindValue == b"So":
+            if ReferenceA.Orientation != "+":
+                raise DecodeFailure("unsupported reversed BRep solid")
+            RootRegions.append(RegionIds[ReferenceA.RecordA])
             return
-        if record.kind == b"Sh":
-            use_id = f"{id_prefix}:shell-use:root:{len(root_regions) + 1}"
-            shell_uses.append(
+        if RecordA.KindValue == b"Sh":
+            UseId = f"{IdPrefix}:shell-use:root:{len(RootRegions) + 1}"
+            ShellUses.append(
                 BrepShellUse(
-                    use_id,
-                    shell_ids[reference.record],
-                    reversed=reference.orientation == "-",
+                    UseId,
+                    ShellIds[ReferenceA.RecordA],
+                    reversed=ReferenceA.Orientation == "-",
                 )
             )
-            region_id = f"{id_prefix}:region:root:{len(root_regions) + 1}"
-            regions.append(BrepRegion(region_id, (use_id,), False))
-            root_regions.append(region_id)
+            RegionId = f"{IdPrefix}:region:root:{len(RootRegions) + 1}"
+            Regions.append(BrepRegion(RegionId, (UseId,), False))
+            RootRegions.append(RegionId)
             return
-        if record.kind == b"Fa" and reference.orientation in {"+", "-"}:
-            ordinal = len(root_regions) + 1
-            face_use_id = f"{id_prefix}:face-use:root:{ordinal}"
-            face_uses.append(
+        if RecordA.KindValue == b"Fa" and ReferenceA.Orientation in {"+", "-"}:
+            Ordinal = len(RootRegions) + 1
+            FaceUseId = f"{IdPrefix}:face-use:root:{Ordinal}"
+            FaceUses.append(
                 BrepFaceUse(
-                    face_use_id,
-                    face_ids[reference.record],
-                    reversed=reference.orientation == "-",
+                    FaceUseId,
+                    FaceIds[ReferenceA.RecordA],
+                    reversed=ReferenceA.Orientation == "-",
                 )
             )
-            shell_id = f"{id_prefix}:shell:root:{ordinal}"
-            shells.append(BrepShell(shell_id, (face_use_id,), False))
-            shell_use_id = f"{id_prefix}:shell-use:root:{ordinal}"
-            shell_uses.append(BrepShellUse(shell_use_id, shell_id))
-            region_id = f"{id_prefix}:region:root:{ordinal}"
-            regions.append(BrepRegion(region_id, (shell_use_id,), False))
-            root_regions.append(region_id)
+            ShellId = f"{IdPrefix}:shell:root:{Ordinal}"
+            Shells.append(BrepShell(ShellId, (FaceUseId,), False))
+            ShellUseId = f"{IdPrefix}:shell-use:root:{Ordinal}"
+            ShellUses.append(BrepShellUse(ShellUseId, ShellId))
+            RegionId = f"{IdPrefix}:region:root:{Ordinal}"
+            Regions.append(BrepRegion(RegionId, (ShellUseId,), False))
+            RootRegions.append(RegionId)
             return
-        if record.kind == b"Ve" and reference.orientation == "+":
-            root_vertices.append(vertex_ids[reference.record])
+        if RecordA.KindValue == b"Ve" and ReferenceA.Orientation == "+":
+            RootVertices.append(VertexIds[ReferenceA.RecordA])
             return
-        raise _DecodeFailure("unsupported BRep root topology")
+        raise DecodeFailure("unsupported BRep root topology")
 
-    collect(root)
-    body = BrepBody(
-        f"{id_prefix}:body:1",
-        tuple(root_regions),
-        design_body_id=design_body_id,
-        vertex_ids=tuple(root_vertices),
-        attributes=dict(attributes),
+    CollectShape(RootValue)
+    BodyValue = BrepBody(
+        f"{IdPrefix}:body:1",
+        tuple(RootRegions),
+        design_body_id=DesignBodyId,
+        vertex_ids=tuple(RootVertices),
+        attributes=dict(Attributes),
     )
-    result = BrepModel(
-        curves=curves,
-        surfaces=surfaces,
-        vertices=tuple(vertices),
-        edges=tuple(edges),
-        coedges=tuple(coedges),
-        loops=tuple(loops),
-        faces=tuple(faces),
-        face_uses=tuple(face_uses),
-        shells=tuple(shells),
-        shell_uses=tuple(shell_uses),
-        regions=tuple(regions),
-        bodies=(body,),
+    Result = BrepModel(
+        curves=CurvesA,
+        surfaces=SurfacesA,
+        vertices=tuple(Vertices),
+        edges=tuple(Edges),
+        coedges=tuple(Coedges),
+        loops=tuple(Loops),
+        faces=tuple(Faces),
+        face_uses=tuple(FaceUses),
+        shells=tuple(Shells),
+        shell_uses=tuple(ShellUses),
+        regions=tuple(Regions),
+        bodies=(BodyValue,),
     )
-    body_ids = frozenset({design_body_id}) if design_body_id else frozenset()
-    if result.validate(body_ids):
-        raise _DecodeFailure("decoded BRep model is invalid")
-    return result
+    BodyIds = frozenset({DesignBodyId}) if DesignBodyId else frozenset()
+    if Result.validate(BodyIds):
+        raise DecodeFailure("decoded BRep model is invalid")
+    return Result
 
 
-# strict decoding returns typed geometry only when every byte and topology link is proved
-def decode_ascii_brep(
-    data: bytes,
+# this definition exists because focused parser behavior needs one stable owner
+def DecodeAsciiBrep(
+    DataValue: bytes,
     *,
-    id_prefix: str = "occ",
-    design_body_id: str = "",
-    attributes: Mapping[str, Any] | None = None,
+    IdPrefix: str = "occ",
+    DesignBodyId: str = "",
+    Attributes: Mapping[str, AnyValue] | None = None,
 ) -> BrepModel | None:
     if (
-        type(data) is not bytes
-        or not data
-        or len(data) > _MAX_BYTES
-        or not isinstance(id_prefix, str)
-        or not id_prefix
-        or id_prefix != id_prefix.strip()
-        or len(id_prefix) > 256
-        or not isinstance(design_body_id, str)
-        or len(design_body_id) > 512
-        or (attributes is not None and not isinstance(attributes, Mapping))
+        type(DataValue) is not bytes
+        or not DataValue
+        or len(DataValue) > KMaxBytes
+        or not isinstance(IdPrefix, str)
+        or not IdPrefix
+        or IdPrefix != IdPrefix.strip()
+        or len(IdPrefix) > 256
+        or not isinstance(DesignBodyId, str)
+        or len(DesignBodyId) > 512
+        or (Attributes is not None and not isinstance(Attributes, Mapping))
     ):
         return None
     try:
-        tokens = _Tokens(data)
-        if tokens.peek() == b"DBRep_DrawableShape":
-            tokens.take()
-        tokens.expect(b"CASCADE")
-        tokens.expect(b"Topology")
-        tokens.expect(b"V1,")
-        tokens.expect(b"(c)")
-        tokens.expect(b"Matra-Datavision")
-        locations = _model_locations(tokens)
-        curve2d_count = _curves(tokens, b"Curve2ds", 2)
-        curve_count = _count(tokens, b"Curves", _MAX_GEOMETRY)
-        curves: list[BrepCurve] = []
-        for index in range(1, curve_count + 1):
-            kind = tokens.integer(1, 9)
-            if kind not in {1, 2}:
-                raise _DecodeFailure("unsupported BRep curve type")
-            origin = _vector(tokens)
-            axis = _vector(tokens)
-            if kind == 1:
-                if not _unit(axis):
-                    raise _DecodeFailure("invalid BRep line direction")
-                curves.append(
+        TokensA = Tokens(DataValue)
+        if TokensA.PeekToken() == b"DBRep_DrawableShape":
+            TokensA.TakeToken()
+        TokensA.ExpectToken(b"CASCADE")
+        TokensA.ExpectToken(b"Topology")
+        TokensA.ExpectToken(b"V1,")
+        TokensA.ExpectToken(b"(c)")
+        TokensA.ExpectToken(b"Matra-Datavision")
+        LocationsA = ModelLocations(TokensA)
+        CurveTwoDCount = ReadCurves(TokensA, b"Curve2ds", 2)
+        CurveCount = ReadCount(TokensA, b"Curves", KMaxGeometry)
+        CurvesA: list[BrepCurve] = []
+        for IndexA in range(1, CurveCount + 1):
+            KindValue = TokensA.ReadInteger(1, 9)
+            if KindValue not in {1, 2}:
+                raise DecodeFailure("unsupported BRep curve type")
+            Origin = VectorValue(TokensA)
+            AxisValue = VectorValue(TokensA)
+            if KindValue == 1:
+                if not IsUnit(AxisValue):
+                    raise DecodeFailure("invalid BRep line direction")
+                CurvesA.append(
                     LineCurve(
-                        f"{id_prefix}:curve:{index}",
-                        origin,
-                        axis,
-                        attributes={"opencascade_index": index},
+                        f"{IdPrefix}:curve:{IndexA}",
+                        Origin,
+                        AxisValue,
+                        attributes={"opencascade_index": IndexA},
                     )
                 )
                 continue
-            x_direction = _vector(tokens)
-            y_direction = _vector(tokens)
-            radius = tokens.number()
-            if not _IsFrame(axis, x_direction, y_direction) or radius <= 0.0:
-                raise _DecodeFailure("invalid BRep circle")
-            curves.append(
+            XDirection = VectorValue(TokensA)
+            YDirection = VectorValue(TokensA)
+            Radius = TokensA.ReadNumber()
+            if not IsFrame(AxisValue, XDirection, YDirection) or Radius <= 0.0:
+                raise DecodeFailure("invalid BRep circle")
+            CurvesA.append(
                 CircleCurve(
-                    f"{id_prefix}:curve:{index}",
-                    origin,
-                    axis,
-                    x_direction,
-                    radius,
-                    attributes={"opencascade_index": index},
+                    f"{IdPrefix}:curve:{IndexA}",
+                    Origin,
+                    AxisValue,
+                    XDirection,
+                    Radius,
+                    attributes={"opencascade_index": IndexA},
                 )
             )
-        _zero_table(tokens, b"Polygon3D")
-        _zero_table(tokens, b"PolygonOnTriangulations")
-        surface_count = _count(tokens, b"Surfaces", _MAX_GEOMETRY)
-        surfaces: list[BrepSurface] = []
-        for index in range(1, surface_count + 1):
-            kind = tokens.integer(1, 11)
-            if kind not in {1, 2}:
-                raise _DecodeFailure("unsupported BRep surface type")
-            origin = _vector(tokens)
-            normal = _vector(tokens)
-            x_direction = _vector(tokens)
-            y_direction = _vector(tokens)
-            if not _IsFrame(normal, x_direction, y_direction):
-                raise _DecodeFailure("invalid BRep surface frame")
-            properties = {
-                "opencascade_index": index,
+        ZeroTable(TokensA, b"Polygon3D")
+        ZeroTable(TokensA, b"PolygonOnTriangulations")
+        SurfaceCount = ReadCount(TokensA, b"Surfaces", KMaxGeometry)
+        SurfacesA: list[BrepSurface] = []
+        for IndexA in range(1, SurfaceCount + 1):
+            KindValue = TokensA.ReadInteger(1, 11)
+            if KindValue not in {1, 2}:
+                raise DecodeFailure("unsupported BRep surface type")
+            Origin = VectorValue(TokensA)
+            Normal = VectorValue(TokensA)
+            XDirection = VectorValue(TokensA)
+            YDirection = VectorValue(TokensA)
+            if not IsFrame(Normal, XDirection, YDirection):
+                raise DecodeFailure("invalid BRep surface frame")
+            Properties = {
+                "opencascade_index": IndexA,
                 "reference_y": (
-                    y_direction.x,
-                    y_direction.y,
-                    y_direction.z,
+                    YDirection.x,
+                    YDirection.y,
+                    YDirection.z,
                 ),
             }
-            if kind == 1:
-                surfaces.append(
+            if KindValue == 1:
+                SurfacesA.append(
                     PlaneSurface(
-                        f"{id_prefix}:surface:{index}",
-                        origin,
-                        normal,
-                        x_direction,
-                        attributes=properties,
+                        f"{IdPrefix}:surface:{IndexA}",
+                        Origin,
+                        Normal,
+                        XDirection,
+                        attributes=Properties,
                     )
                 )
                 continue
-            radius = tokens.number()
-            if radius <= 0.0:
-                raise _DecodeFailure("invalid BRep cylinder")
-            surfaces.append(
+            Radius = TokensA.ReadNumber()
+            if Radius <= 0.0:
+                raise DecodeFailure("invalid BRep cylinder")
+            SurfacesA.append(
                 CylinderSurface(
-                    f"{id_prefix}:surface:{index}",
-                    origin,
-                    normal,
-                    x_direction,
-                    radius,
-                    attributes=properties,
+                    f"{IdPrefix}:surface:{IndexA}",
+                    Origin,
+                    Normal,
+                    XDirection,
+                    Radius,
+                    attributes=Properties,
                 )
             )
-        _zero_table(tokens, b"Triangulations")
-        shape_count = _count(tokens, b"TShapes", _MAX_SHAPES)
-        if shape_count == 0:
-            raise _DecodeFailure("empty BRep topology")
-        records = _shape_records(
-            tokens,
-            shape_count,
-            curve_count,
-            curve2d_count,
-            surface_count,
-            len(locations),
+        ZeroTable(TokensA, b"Triangulations")
+        ShapeCount = ReadCount(TokensA, b"TShapes", KMaxShapes)
+        if ShapeCount == 0:
+            raise DecodeFailure("empty BRep topology")
+        RecordsA = ShapeRecords(
+            TokensA,
+            ShapeCount,
+            CurveCount,
+            CurveTwoDCount,
+            SurfaceCount,
+            len(LocationsA),
         )
-        root = _reference(tokens, shape_count, len(locations))
-        if root is None or root.orientation != "+" or tokens.peek() is not None:
-            raise _DecodeFailure("unsupported BRep root")
-        curves, surfaces, records, root = _ApplyLocations(
-            tuple(curves), tuple(surfaces), records, root, locations, id_prefix
+        RootValue = ReadReference(TokensA, ShapeCount, len(LocationsA))
+        if RootValue is None or RootValue.Orientation != "+" or TokensA.PeekToken() is not None:
+            raise DecodeFailure("unsupported BRep root")
+        CurvesA, SurfacesA, RecordsA, RootValue = ApplyLocations(
+            tuple(CurvesA), tuple(SurfacesA), RecordsA, RootValue, LocationsA, IdPrefix
         )
-        return _model(
-            tuple(curves),
-            tuple(surfaces),
-            records,
-            root,
-            id_prefix,
-            design_body_id,
-            attributes or {},
+        return BuildModel(
+            tuple(CurvesA),
+            tuple(SurfacesA),
+            RecordsA,
+            RootValue,
+            IdPrefix,
+            DesignBodyId,
+            Attributes or {},
         )
-    except (_DecodeFailure, KeyError, TypeError, ValueError, OverflowError):
+    except (DecodeFailure, KeyError, TypeError, ValueError, OverflowError):
         return None
 
 
-def is_structurally_valid_ascii_brep(data: bytes) -> bool:
-    if type(data) is not bytes or not data or len(data) > _MAX_BYTES:
+# this definition exists because focused parser behavior needs one stable owner
+def IsValidBrep(DataValue: bytes) -> bool:
+    if type(DataValue) is not bytes or not DataValue or len(DataValue) > KMaxBytes:
         return False
     try:
-        offset = 0
-        payload = None
-        while offset < len(data):
-            line_end = data.find(b"\n", offset)
-            if line_end < 0:
-                line_end = len(data)
-            body = data[offset:line_end]
-            if len(body) > 99:
+        Offset = 0
+        Payload = None
+        while Offset < len(DataValue):
+            LineEnd = DataValue.find(b"\n", Offset)
+            if LineEnd < 0:
+                LineEnd = len(DataValue)
+            BodyValue = DataValue[Offset:LineEnd]
+            if len(BodyValue) > 99:
                 break
-            while body.endswith(b"\r"):
-                body = body[:-1]
-            if body in _VERSION_LINES:
-                if body != _VERSION_LINE:
-                    raise _DecodeFailure("unsupported BRep version line")
-                payload = data[offset:]
+            while BodyValue.endswith(b"\r"):
+                BodyValue = BodyValue[:-1]
+            if BodyValue in KVersionLines:
+                if BodyValue != KVersionLine:
+                    raise DecodeFailure("unsupported BRep version line")
+                Payload = DataValue[Offset:]
                 break
-            if line_end == len(data):
+            if LineEnd == len(DataValue):
                 break
-            offset = line_end + 1
-        if payload is None:
-            raise _DecodeFailure("invalid BRep version line")
-        tokens = _Tokens(payload)
-        tokens.expect(b"CASCADE")
-        tokens.expect(b"Topology")
-        tokens.expect(b"V1,")
-        tokens.expect(b"(c)")
-        tokens.expect(b"Matra-Datavision")
-        locations = _locations(tokens)
-        curves2d = _curves(tokens, b"Curve2ds", 2)
-        curves3d = _curves(tokens, b"Curves", 3)
-        polygons3d = _polygon3d(tokens)
-        polygons_on_triangulations = _polygons_on_triangulations(tokens)
-        surfaces = _surfaces(tokens)
-        triangulations = _triangulations(tokens)
-        _shape_structure(
-            tokens,
-            locations,
-            curves2d,
-            curves3d,
-            polygons3d,
-            polygons_on_triangulations,
-            surfaces,
-            triangulations,
+            Offset = LineEnd + 1
+        if Payload is None:
+            raise DecodeFailure("invalid BRep version line")
+        TokensA = Tokens(Payload)
+        TokensA.ExpectToken(b"CASCADE")
+        TokensA.ExpectToken(b"Topology")
+        TokensA.ExpectToken(b"V1,")
+        TokensA.ExpectToken(b"(c)")
+        TokensA.ExpectToken(b"Matra-Datavision")
+        LocationsA = ReadLocations(TokensA)
+        CurvesTwoD = ReadCurves(TokensA, b"Curve2ds", 2)
+        CurvesThreeD = ReadCurves(TokensA, b"Curves", 3)
+        PolygonsThreeD = PolygonThree(TokensA)
+        PolygonsOnTriangulations = TriPolygons(TokensA)
+        SurfacesA = ReadSurfaces(TokensA)
+        TriangulationsA = Triangulations(TokensA)
+        ShapeStructure(
+            TokensA,
+            LocationsA,
+            CurvesTwoD,
+            CurvesThreeD,
+            PolygonsThreeD,
+            PolygonsOnTriangulations,
+            SurfacesA,
+            TriangulationsA,
         )
         return True
-    except (_DecodeFailure, KeyError, TypeError, ValueError, OverflowError):
+    except (DecodeFailure, KeyError, TypeError, ValueError, OverflowError):
         return False
