@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any as AnyValue, Callable
 
+
 # mate type construction stays independent because classification data has one focused owner
 def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
     return (
@@ -42,7 +43,11 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             ("parallel",),
         ),
         MateType(
-            4, "swMateTANGENT", "tangent", ("MateTangent", "moMateTangent"), ("tangent",)
+            4,
+            "swMateTANGENT",
+            "tangent",
+            ("MateTangent", "moMateTangent"),
+            ("tangent",),
         ),
         MateType(
             5,
@@ -100,7 +105,11 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             "ratio",
         ),
         MateType(
-            11, "swMateWIDTH", "width", ("MateWidth", "moMateWidth"), ("width", "widthmate")
+            11,
+            "swMateWIDTH",
+            "width",
+            ("MateWidth", "moMateWidth"),
+            ("width", "widthmate"),
         ),
         MateType(
             12,
@@ -162,9 +171,7 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
         MateType(
             21, "swMateSLOT", "slot", ("MateSlot", "moMateSlot"), ("slot", "slotmate")
         ),
-        MateType(
-            22, "swMateHINGE", "hinge", ("MateHinge", "moMateHinge"), ("hinge",)
-        ),
+        MateType(22, "swMateHINGE", "hinge", ("MateHinge", "moMateHinge"), ("hinge",)),
         MateType(
             23, "swMateSLIDER", "slider", ("MateSlider", "moMateSlider"), ("slider",)
         ),
@@ -184,12 +191,11 @@ def BuildMateTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
         ),
     )
 
+
 # entity reference construction stays independent because geometry classification has one focused owner
 def BuildRefTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
     return (
-        MateType(
-            0, "swMateEntity2ReferenceType_Point", "point", ("refpoint", "point")
-        ),
+        MateType(0, "swMateEntity2ReferenceType_Point", "point", ("refpoint", "point")),
         MateType(1, "swMateEntity2ReferenceType_Line", "line", ("line",)),
         MateType(2, "swMateEntity2ReferenceType_Circle", "circle", ("circle",)),
         MateType(3, "swMateEntity2ReferenceType_Plane", "plane", ("plane",)),
@@ -206,7 +212,10 @@ def BuildRefTypes(MateType: Callable[..., AnyValue]) -> tuple[AnyValue, ...]:
             8, "swMateEntity2ReferenceType_SweptSurface", "surface", ("sweptsurface",)
         ),
         MateType(
-            9, "swMateEntity2ReferenceType_MultipleSurface", "surface", ("multiplesurface",)
+            9,
+            "swMateEntity2ReferenceType_MultipleSurface",
+            "surface",
+            ("multiplesurface",),
         ),
         MateType(
             10,
