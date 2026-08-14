@@ -2395,7 +2395,9 @@ def AddEdgesMut(
             (f"vertex:{LastVertexId}", True),
         )
         Shapes.append(
-            ShapeRecord(f"edge:{EdgeValue.id}", "Ed", GeometryLines, "0101000", Children)
+            ShapeRecord(
+                f"edge:{EdgeValue.id}", "Ed", GeometryLines, "0101000", Children
+            )
         )
 
 
@@ -2448,7 +2450,9 @@ def AddLoopsMut(
     Shapes: list[ShapeRecord], Model: BrepModel, State: BrepWriteState
 ) -> None:
     SeamLoopIds = {
-        LoopId for BandValue in State.SeamBands.values() for LoopId in BandValue.loop_ids
+        LoopId
+        for BandValue in State.SeamBands.values()
+        for LoopId in BandValue.loop_ids
     }
     for LoopValue in Model.loops:
         if LoopValue.id in SeamLoopIds:
@@ -2472,16 +2476,12 @@ def AddSeamLoopsMut(Shapes: list[ShapeRecord], State: BrepWriteState) -> None:
             (f"edge:seam:{BandValue.face_id}", True),
         )
         Shapes.append(
-            ShapeRecord(
-                f"loop:seam:{BandValue.face_id}", "Wi", (), "0101100", Children
-            )
+            ShapeRecord(f"loop:seam:{BandValue.face_id}", "Wi", (), "0101100", Children)
         )
 
 
 # wire emission mutates the ordered shape list because bodies reference standalone wire records
-def AddWiresMut(
-    Shapes: list[ShapeRecord], Model: BrepModel, Graph: ModelGraph
-) -> None:
+def AddWiresMut(Shapes: list[ShapeRecord], Model: BrepModel, Graph: ModelGraph) -> None:
     for WireValue in Model.wires:
         FlagsText = "0101100" if WireValue.closed else "0101000"
         Children = GetEdgeChildren(Graph, WireValue.coedge_ids)
@@ -2532,9 +2532,7 @@ def AddShellRecsMut(
             )
         FlagsText = "0101100" if ShellValue.closed else "0101000"
         Shapes.append(
-            ShapeRecord(
-                f"shell:{ShellValue.id}", "Sh", (), FlagsText, tuple(Children)
-            )
+            ShapeRecord(f"shell:{ShellValue.id}", "Sh", (), FlagsText, tuple(Children))
         )
 
 
@@ -2581,7 +2579,9 @@ def AddBodiesMut(
     for BodyValue in Model.bodies:
         Children = [RegionRoots[ValueId] for ValueId in BodyValue.region_ids]
         Children.extend((f"wire:{ValueId}", False) for ValueId in BodyValue.wire_ids)
-        Children.extend((f"vertex:{ValueId}", False) for ValueId in BodyValue.vertex_ids)
+        Children.extend(
+            (f"vertex:{ValueId}", False) for ValueId in BodyValue.vertex_ids
+        )
         if len(Children) == 1:
             BodyRoots.append(Children[0])
         else:
@@ -2609,51 +2609,8 @@ def BrepModelBrep(Model: BrepModel, Tolerance: float = 1e-07) -> bytes:
     AddWiresMut(Shapes, Model, State.Graph)
     AddFacesMut(Shapes, Model, State, Tolerance)
     AddShellRecsMut(Shapes, Model, State)
-    RegionRoots: dict[str, tuple[str, bool]] = {}
-    for Region in Model.regions:
-        ShellChildren = tuple(
-            (
-                (
-                    f"shell:{Graph.shell_uses[ShellUseId].shell_id}",
-                    ShellUseReversals[ShellUseId],
-                )
-                for ShellUseId in Region.shell_use_ids
-            )
-        )
-        if Region.solid:
-            if any(
-                (
-                    not Graph.shells[Graph.shell_uses[Value].shell_id].closed
-                    for Value in Region.shell_use_ids
-                )
-            ):
-                Unsupported(f"solid region {Region.id} contains an open shell")
-            KeyValue = f"region:{Region.id}"
-            Shapes.append(ShapeRecord(KeyValue, "So", (), "0100000", ShellChildren))
-            RegionRoots[Region.id] = (KeyValue, False)
-        elif len(ShellChildren) == 1:
-            RegionRoots[Region.id] = ShellChildren[0]
-        else:
-            KeyValue = f"region:{Region.id}"
-            Shapes.append(ShapeRecord(KeyValue, "Co", (), "0100000", ShellChildren))
-            RegionRoots[Region.id] = (KeyValue, False)
-    BodyRoots: list[tuple[str, bool]] = []
-    for BodyValue in Model.bodies:
-        Children = [RegionRoots[Value] for Value in BodyValue.region_ids]
-        Children.extend(((f"wire:{Value}", False) for Value in BodyValue.wire_ids))
-        Children.extend(((f"vertex:{Value}", False) for Value in BodyValue.vertex_ids))
-        if len(Children) == 1:
-            BodyRoots.append(Children[0])
-        else:
-            KeyValue = f"body:{BodyValue.id}"
-            Shapes.append(ShapeRecord(KeyValue, "Co", (), "0100000", tuple(Children)))
-            BodyRoots.append((KeyValue, False))
-    if len(BodyRoots) == 1:
-        RootValue = BodyRoots[0]
-    else:
-        RootKey = "model:root"
-        Shapes.append(ShapeRecord(RootKey, "Co", (), "1100000", tuple(BodyRoots)))
-        RootValue = (RootKey, False)
+    RegionRoots = AddRegionsMut(Shapes, Model, State)
+    RootValue = AddBodiesMut(Shapes, Model, RegionRoots)
     Lines.extend(ShapeLines(Shapes, RootValue))
     return ("\n".join(Lines) + "\n").encode("ascii")
 

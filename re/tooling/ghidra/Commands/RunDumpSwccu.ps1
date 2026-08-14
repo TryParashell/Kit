@@ -16,3 +16,10 @@ $log = Join-Path $root "logs\dump_swccu.log"
     -postScript DumpFunctions.java (Join-Path $root "out\sldarchiveu_ops.c") (Join-Path $root "SpecSldarchiveu.txt") 1 240 `
     *>&1 | Out-File -Encoding utf8 -Append $log
 "EXIT $LASTEXITCODE" | Out-File -Encoding utf8 -Append $log
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.

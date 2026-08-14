@@ -19,7 +19,7 @@ from .Registry import (
 # the source interval records where the reusable manager was observed
 KSourceRange = (24360, 24944)
 
-# exact closure rejects any future field-width or ordering drift
+# exact closure rejects any future field width or ordering drift
 KReferenceLength = 584
 
 # legacy source range access remains available for recovered stream diagnostics
@@ -29,6 +29,11 @@ globals()["SourceRange"] = KSourceRange
 globals()["ReferenceLength"] = KReferenceLength
 
 
-# typed field replay emits the two-view manager without retaining vendor byte spans
-def EncodeTwoViewAnnotationManager() -> bytes:
+# typed field replay emits the two view manager without retaining vendor byte spans
+def EncodeViews() -> bytes:
     return ReplayFixed(AnnotationOps, KReferenceLength, "annotation")
+
+
+# legacy annotation entry preserves existing configuration writer callers
+KLegacyAliases = {"EncodeTwoViewAnnotationManager": EncodeViews}
+globals().update(KLegacyAliases)
