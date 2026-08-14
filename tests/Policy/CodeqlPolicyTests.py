@@ -6,7 +6,6 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from ast import literal_eval as LiteralEval
 from pathlib import Path as PathInfo
 import re as Regex
 
@@ -56,8 +55,16 @@ def QueryIds(SourceText: str) -> frozenset[str]:
 
 # model extraction verifies every sanitizer row without accepting broader predicates
 def ModelRows(SourceText: str) -> frozenset[tuple[str, str, str]]:
-    RowTexts = Regex.findall(r"^\s+- (\[.*\])$", SourceText, Regex.M)
-    return frozenset((tuple(LiteralEval(RowText)) for RowText in RowTexts))
+    Matches = Regex.findall(
+        r'-\s+\[\s*"([^"]+)",\s*"Member\[([^]]+)\]\.ReturnValue",\s*"([^"]+)",?\s*\]',
+        SourceText,
+    )
+    return frozenset(
+        (
+            (ModuleName, f"Member[{FunctionName}].ReturnValue", KindName)
+            for ModuleName, FunctionName, KindName in Matches
+        )
+    )
 
 
 # workflow configuration must run every suite and supported repository language
