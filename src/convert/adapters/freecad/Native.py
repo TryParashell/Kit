@@ -1023,148 +1023,123 @@ def HasSegmentTouch(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], ...]:
-    Candidates = tuple((Entity for Entity in Entities if not Entity.construction))
-    if not Candidates:
-        return ()
-    Closed = tuple(
-        (
-            Entity
-            for Entity in Candidates
-            if isinstance(Entity.geometry, (CircleGeom, EllipseGeom))
-        )
-    )
-    Lines = tuple(
-        (
-            (Index, Entity)
-            for Index, Entity in enumerate(Candidates)
-            if isinstance(Entity.geometry, LineGeom)
-        )
-    )
-    if len(Closed) + len(Lines) != len(Candidates):
-        return ()
-    if Closed:
-        if Lines or any(
-            (
-                isinstance(Entity.geometry, CircleGeom)
-                and Entity.geometry.radius <= 1e-09
-                or (
-                    isinstance(Entity.geometry, EllipseGeom)
-                    and min(Entity.geometry.major_radius, Entity.geometry.minor_radius)
-                    <= 1e-09
-                )
-                for Entity in Closed
-            )
-        ):
-            return ()
-        return tuple(((Entity.id,) for Entity in Closed))
-    Endpoints = tuple(
-        (
-            Point
-            for Ignored, Entity in Lines
-            for Point in (Entity.geometry.start, Entity.geometry.end)
-        )
-    )
+# this definition finds a union root while compressing the traversal path
+def FindRoot(Parents: list[int], Index: int) -> int:
+    while Parents[Index] != Index:
+        Parents[Index] = Parents[Parents[Index]]
+        Index = Parents[Index]
+    return Index
+
+
+# this definition merges two endpoint clusters deterministically
+def UnionRoots(Parents: list[int], First: int, Second: int) -> None:
+    FirstRoot = FindRoot(Parents, First)
+    SecondRoot = FindRoot(Parents, Second)
+    if FirstRoot != SecondRoot:
+        Parents[max(FirstRoot, SecondRoot)] = min(FirstRoot, SecondRoot)
+
+
+# this definition clusters coincident endpoints and rejects inconsistent clusters
+def ClusterRoots(Endpoints: tuple[VectorTwo, ...]) -> tuple[int, ...] | None:
     Parents = list(range(len(Endpoints)))
-
-    # this definition exists because focused behavior needs one stable owner
-    def RootAction(Index: int) -> int:
-        while Parents[Index] != Index:
-            Parents[Index] = Parents[Parents[Index]]
-            Index = Parents[Index]
-        return Index
-
-    # this definition exists because focused behavior needs one stable owner
-    def Union(First: int, Second: int) -> None:
-        FirstRoot = RootAction(First)
-        SecondRoot = RootAction(Second)
-        if FirstRoot != SecondRoot:
-            Parents[max(FirstRoot, SecondRoot)] = min(FirstRoot, SecondRoot)
-
     for First in range(len(Endpoints)):
         for Second in range(First + 1, len(Endpoints)):
             if IsPointClose(Endpoints[First], Endpoints[Second]):
-                Union(First, Second)
+                UnionRoots(Parents, First, Second)
     Clusters: dict[int, list[int]] = {}
     for Index in range(len(Endpoints)):
-        Clusters.setdefault(RootAction(Index), []).append(Index)
+        Clusters.setdefault(FindRoot(Parents, Index), []).append(Index)
     if any(
-        (
-            not IsPointClose(Endpoints[First], Endpoints[Second])
-            for Members in Clusters.values()
-            for Position, First in enumerate(Members)
-            for Second in Members[Position + 1 :]
-        )
+        not IsPointClose(Endpoints[First], Endpoints[Second])
+        for Members in Clusters.values()
+        for Position, First in enumerate(Members)
+        for Second in Members[Position + 1 :]
     ):
-        return ()
-    Roots = tuple((RootAction(Index) for Index in range(len(Endpoints))))
+        return None
+    return tuple(FindRoot(Parents, Index) for Index in range(len(Endpoints)))
+
+
+# this definition builds the two edge incidence contract for a closed line graph
+def BuildIncident(Roots: tuple[int, ...], EdgeCount: int) -> dict[int, list[int]] | None:
     Incident: dict[int, list[int]] = {}
-    for EdgeIndex in range(len(Lines)):
+    for EdgeIndex in range(EdgeCount):
         Start = Roots[EdgeIndex * 2]
         EndValue = Roots[EdgeIndex * 2 + 1]
         if Start == EndValue:
-            return ()
+            return None
         Incident.setdefault(Start, []).append(EdgeIndex)
         Incident.setdefault(EndValue, []).append(EdgeIndex)
     if any((len(Values) != 2 for Values in Incident.values())):
-        return ()
-    Remaining = set(range(len(Lines)))
-    Profiles: list[tuple[int, tuple[str, ...], tuple[VectorTwo, ...]]] = []
-    while Remaining:
+        return None
+    return Incident
 
-        # this callback exists because local behavior needs one focused transformation
-        FirstEdge = min(Remaining, key=lambda Value: Lines[Value][0])
-        StartVertex = Roots[FirstEdge * 2]
-        CurrentVertex = Roots[FirstEdge * 2 + 1]
-        Ordered = [FirstEdge]
-        Vertices = [Endpoints[FirstEdge * 2], Endpoints[FirstEdge * 2 + 1]]
-        Remaining.remove(FirstEdge)
-        while CurrentVertex != StartVertex:
-            NextEdges = [
-                Value for Value in Incident[CurrentVertex] if Value in Remaining
-            ]
-            if len(NextEdges) != 1:
-                return ()
-            EdgeIndex = NextEdges[0]
-            EdgeStart = Roots[EdgeIndex * 2]
-            EdgeEnd = Roots[EdgeIndex * 2 + 1]
-            if CurrentVertex == EdgeStart:
-                CurrentVertex = EdgeEnd
-                Vertices.append(Endpoints[EdgeIndex * 2 + 1])
-            elif CurrentVertex == EdgeEnd:
-                CurrentVertex = EdgeStart
-                Vertices.append(Endpoints[EdgeIndex * 2])
-            else:
-                return ()
-            Ordered.append(EdgeIndex)
-            Remaining.remove(EdgeIndex)
-        if len(Ordered) < 3 or len(set(Vertices[:-1])) != len(Vertices) - 1:
-            return ()
-        AreaValue = abs(
-            sum(
-                (
-                    First.x * Second.y - Second.x * First.y
-                    for First, Second in zip(Vertices[:-1], Vertices[1:], strict=True)
-                )
-            )
+
+# this definition rejects degenerate or self intersecting line loops
+def IsSimpleLoop(Vertices: list[VectorTwo], Ordered: list[int]) -> bool:
+    if len(Ordered) < 3 or len(set(Vertices[:-1])) != len(Vertices) - 1:
+        return False
+    AreaValue = abs(
+        sum(
+            First.x * Second.y - Second.x * First.y
+            for First, Second in zip(Vertices[:-1], Vertices[1:], strict=True)
         )
-        if AreaValue <= 1e-09:
-            return ()
-        Segments = list(zip(Vertices[:-1], Vertices[1:], strict=True))
-        for FirstIndex, FirstSegment in enumerate(Segments):
-            for SecondIndex in range(FirstIndex + 1, len(Segments)):
-                if SecondIndex in {FirstIndex + 1, (FirstIndex - 1) % len(Segments)}:
-                    continue
-                if HasSegmentTouch(*FirstSegment, *Segments[SecondIndex]):
-                    return ()
-        Profiles.append(
-            (
-                min((Lines[Index][0] for Index in Ordered)),
-                tuple((Lines[Index][1].id for Index in Ordered)),
-                tuple(Vertices[:-1]),
-            )
-        )
+    )
+    if AreaValue <= 1e-09:
+        return False
+    Segments = list(zip(Vertices[:-1], Vertices[1:], strict=True))
+    for FirstIndex, FirstSegment in enumerate(Segments):
+        for SecondIndex in range(FirstIndex + 1, len(Segments)):
+            if SecondIndex in {FirstIndex + 1, (FirstIndex - 1) % len(Segments)}:
+                continue
+            if HasSegmentTouch(*FirstSegment, *Segments[SecondIndex]):
+                return False
+    return True
+
+
+# this definition walks one closed line component in deterministic edge order
+def TraceLoop(
+    Lines: tuple[tuple[int, SketchEntity], ...],
+    Endpoints: tuple[VectorTwo, ...],
+    Roots: tuple[int, ...],
+    Incident: Mapping[int, list[int]],
+    Remaining: set[int],
+) -> tuple[int, tuple[str, ...], tuple[VectorTwo, ...]] | None:
+    EdgeOrder = {Index: Lines[Index][0] for Index in Remaining}
+    FirstEdge = min(Remaining, key=EdgeOrder.__getitem__)
+    StartVertex = Roots[FirstEdge * 2]
+    CurrentVertex = Roots[FirstEdge * 2 + 1]
+    Ordered = [FirstEdge]
+    Vertices = [Endpoints[FirstEdge * 2], Endpoints[FirstEdge * 2 + 1]]
+    Remaining.remove(FirstEdge)
+    while CurrentVertex != StartVertex:
+        NextEdges = [Value for Value in Incident[CurrentVertex] if Value in Remaining]
+        if len(NextEdges) != 1:
+            return None
+        EdgeIndex = NextEdges[0]
+        EdgeStart, EdgeEnd = Roots[EdgeIndex * 2 : EdgeIndex * 2 + 2]
+        if CurrentVertex == EdgeStart:
+            CurrentVertex = EdgeEnd
+            Vertices.append(Endpoints[EdgeIndex * 2 + 1])
+        elif CurrentVertex == EdgeEnd:
+            CurrentVertex = EdgeStart
+            Vertices.append(Endpoints[EdgeIndex * 2])
+        else:
+            return None
+        Ordered.append(EdgeIndex)
+        Remaining.remove(EdgeIndex)
+    if not IsSimpleLoop(Vertices, Ordered):
+        return None
+    return (
+        min(Lines[Index][0] for Index in Ordered),
+        tuple(Lines[Index][1].id for Index in Ordered),
+        tuple(Vertices[:-1]),
+    )
+
+
+# this definition detects contact between otherwise independent profile loops
+def HasLoopTouch(
+    Profiles: Sequence[tuple[int, tuple[str, ...], tuple[VectorTwo, ...]]],
+) -> bool:
     for FirstIndex, (Ignored, Ignored, FirstVertices) in enumerate(Profiles):
         FirstSegments = tuple(
             zip(FirstVertices, (*FirstVertices[1:], FirstVertices[0]), strict=True)
@@ -1178,14 +1153,56 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
                 )
             )
             if any(
-                (
-                    HasSegmentTouch(*FirstSegment, *SecondSegment)
-                    for FirstSegment in FirstSegments
-                    for SecondSegment in SecondSegments
-                )
+                HasSegmentTouch(*FirstSegment, *SecondSegment)
+                for FirstSegment in FirstSegments
+                for SecondSegment in SecondSegments
             ):
-                return ()
-    return tuple((Profile for Ignored, Profile, Ignored in sorted(Profiles)))
+                return True
+    return False
+
+
+# this definition derives closed profile identifiers from supported sketch geometry
+def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], ...]:
+    Candidates = tuple(Entity for Entity in Entities if not Entity.construction)
+    if not Candidates:
+        return ()
+    Closed = tuple(
+        Entity for Entity in Candidates if isinstance(Entity.geometry, (CircleGeom, EllipseGeom))
+    )
+    Lines = tuple(
+        (Index, Entity)
+        for Index, Entity in enumerate(Candidates)
+        if isinstance(Entity.geometry, LineGeom)
+    )
+    if len(Closed) + len(Lines) != len(Candidates):
+        return ()
+    if Closed:
+        Invalid = Lines or any(
+            isinstance(Entity.geometry, CircleGeom) and Entity.geometry.radius <= 1e-09
+            or isinstance(Entity.geometry, EllipseGeom)
+            and min(Entity.geometry.major_radius, Entity.geometry.minor_radius) <= 1e-09
+            for Entity in Closed
+        )
+        return () if Invalid else tuple((Entity.id,) for Entity in Closed)
+    Endpoints = tuple(
+        Point
+        for Ignored, Entity in Lines
+        for Point in (Entity.geometry.start, Entity.geometry.end)
+    )
+    Roots = ClusterRoots(Endpoints)
+    Incident = BuildIncident(Roots, len(Lines)) if Roots is not None else None
+    if Roots is None or Incident is None:
+        return ()
+    Remaining = set(range(len(Lines)))
+    Profiles = []
+    while Remaining:
+        Profile = TraceLoop(Lines, Endpoints, Roots, Incident, Remaining)
+        if Profile is None:
+            return ()
+        Profiles.append(Profile)
+    if HasLoopTouch(Profiles):
+        return ()
+    return tuple(Profile for Ignored, Profile, Ignored in sorted(Profiles))
 
 
 # this binding exists because shared behavior needs one stable value
