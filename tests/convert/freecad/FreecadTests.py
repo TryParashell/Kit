@@ -2508,12 +2508,8 @@ def TestExample(NameValue: str) -> None:
     DocValue = FreeCadAdapter().read(Source)
     assert DocValue.validate() == ()
 
-# this definition exists because focused behavior needs one stable owner
-def TestAsmFcstdAnd(TmpPath) -> None:
-    Source = KFreecadExamples / 'AssemblyExample.FCStd'
-    if not Source.is_file():
-        Pytest.skip('bundled FreeCAD assembly example is unavailable')
-    DocValue = FreeCadAdapter().read(Source)
+# this definition exists because the bundled assembly has one stable native-read contract
+def VerifyBundledAssemblyRead(DocValue) -> tuple[bytes, ...]:
     assert DocValue.validate() == ()
     assert DocValue.assembly is not None
     assert len(DocValue.assembly.definitions) == 14
@@ -2531,14 +2527,11 @@ def TestAsmFcstdAnd(TmpPath) -> None:
     Entities = {Entity.id: Entity for Entity in DocValue.assembly.mate_entities}
     assert [Entities[EntityId].source_entity_id for EntityId in Revolute.entity_ids] == ['Face1', 'Edge2', 'Edge107', 'Edge107']
     assert str(Revolute.kind) == 'hinge'
-    Output = TmpPath / 'Assembly.FCStd'
-    Result = Convert(Source, Output)
-    assert Result.near_lossless
-    Transfers = {Transfer.capability: Transfer for Transfer in Result.transfers}
-    assert Transfers[Capability.BREP].mode is TransferMode.NATIVE
-    assert Transfers[Capability.NATIVE_PAYLOADS].mode is TransferMode.NATIVE
-    ComponentFiles = sorted((TmpPath / 'Assembly').glob('*.FCStd'))
-    assert len(ComponentFiles) == 13
+    return SourceShapes
+
+
+# this definition exists because each emitted component must contain loadable native shape data
+def EmittedAssemblyShapes(ComponentFiles: list[FilePath]) -> list[bytes]:
     EmittedShapes = []
     for ComponentFile in ComponentFiles:
         with Zipfile.ZipFile(ComponentFile) as Archive:
@@ -2548,6 +2541,25 @@ def TestAsmFcstdAnd(TmpPath) -> None:
             assert ShapeEntries
             assert all((Archive.read(NameValue) for NameValue in ShapeEntries))
             EmittedShapes.extend((Archive.read(NameValue) for NameValue in ShapeEntries))
+    return EmittedShapes
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestAsmFcstdAnd(TmpPath) -> None:
+    Source = KFreecadExamples / 'AssemblyExample.FCStd'
+    if not Source.is_file():
+        Pytest.skip('bundled FreeCAD assembly example is unavailable')
+    DocValue = FreeCadAdapter().read(Source)
+    SourceShapes = VerifyBundledAssemblyRead(DocValue)
+    Output = TmpPath / 'Assembly.FCStd'
+    Result = Convert(Source, Output)
+    assert Result.near_lossless
+    Transfers = {Transfer.capability: Transfer for Transfer in Result.transfers}
+    assert Transfers[Capability.BREP].mode is TransferMode.NATIVE
+    assert Transfers[Capability.NATIVE_PAYLOADS].mode is TransferMode.NATIVE
+    ComponentFiles = sorted((TmpPath / 'Assembly').glob('*.FCStd'))
+    assert len(ComponentFiles) == 13
+    EmittedShapes = EmittedAssemblyShapes(ComponentFiles)
     assert sorted((Hashlib.sha256(DataValue).digest() for DataValue in EmittedShapes)) == sorted((Hashlib.sha256(DataValue).digest() for DataValue in SourceShapes))
     assert FreeCadAdapter().read(Output) == DocValue
 

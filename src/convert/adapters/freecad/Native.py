@@ -763,170 +763,186 @@ def PropParamValue(NodeValue: ET.Element) -> ParamValue | None:
     return ParamValue(Value, KindValue, UnitValue)
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition decodes one line segment geometry record
+def LineAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
+    Value = NodeValue.find("./LineSegment")
+    if Value is None:
+        return None
+    StartValue = VectorTwo(Number(Value.get("StartX")), Number(Value.get("StartY")))
+    EndValue = VectorTwo(Number(Value.get("EndX")), Number(Value.get("EndY")))
+    return (GeomKind.LINE, LineGeom(StartValue, EndValue))
+
+
+# this definition decodes one circle geometry record
+def CircleAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
+    Value = NodeValue.find("./Circle")
+    if Value is None:
+        return None
+    Center = VectorTwo(Number(Value.get("CenterX")), Number(Value.get("CenterY")))
+    return (GeomKind.CIRCLE, CircleGeom(Center, abs(Number(Value.get("Radius")))))
+
+
+# this definition decodes one circular arc geometry record
+def ArcAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
+    Value = NodeValue.find("./ArcOfCircle")
+    if Value is None:
+        return None
+    Center = VectorTwo(Number(Value.get("CenterX")), Number(Value.get("CenterY")))
+    return (
+        GeomKind.ARC,
+        ArcGeom(
+            Center,
+            abs(Number(Value.get("Radius"))),
+            Number(Value.get("StartAngle")),
+            Number(Value.get("EndAngle")),
+        ),
+    )
+
+
+# this definition decodes one point geometry record
+def PointAction(NodeValue: ET.Element) -> tuple[GeomKind, AnyValue] | None:
+    Value = NodeValue.find("./GeomPoint")
+    if Value is None:
+        Value = NodeValue.find("./Point")
+    if Value is None:
+        return None
+    PointValue = VectorTwo(Number(Value.get("X")), Number(Value.get("Y")))
+    return (GeomKind.POINT, PointGeom(PointValue))
+
+
+# this definition decodes complete and trimmed ellipse geometry records
+def EllipseAction(
+    NodeValue: ET.Element, TypeId: str
+) -> tuple[GeomKind, AnyValue] | None:
+    IsArc = TypeId == "Part::GeomArcOfEllipse"
+    Value = NodeValue.find("./ArcOfEllipse" if IsArc else "./Ellipse")
+    if Value is None:
+        return None
+    Arguments = (
+        VectorTwo(Number(Value.get("CenterX")), Number(Value.get("CenterY"))),
+        GeomAxis(Value),
+        abs(Number(Value.get("MajorRadius"))),
+        abs(Number(Value.get("MinorRadius"))),
+    )
+    if not IsArc:
+        return (GeomKind.ELLIPSE, EllipseGeom(*Arguments))
+    return (
+        GeomKind.ARC_ELLIPSE,
+        ArcEllipseGeom(
+            *Arguments,
+            Number(Value.get("StartAngle")),
+            Number(Value.get("EndAngle")),
+        ),
+    )
+
+
+# this definition decodes complete and trimmed hyperbola geometry records
+def HyperbolaAction(
+    NodeValue: ET.Element, TypeId: str
+) -> tuple[GeomKind, AnyValue] | None:
+    IsArc = TypeId == "Part::GeomArcOfHyperbola"
+    Value = NodeValue.find("./ArcOfHyperbola" if IsArc else "./Hyperbola")
+    if Value is None:
+        return None
+    Arguments = (
+        VectorTwo(Number(Value.get("CenterX")), Number(Value.get("CenterY"))),
+        GeomAxis(Value),
+        abs(Number(Value.get("MajorRadius"))),
+        abs(Number(Value.get("MinorRadius"))),
+    )
+    if not IsArc:
+        return (GeomKind.HYPERBOLA, HyperbolaGeom(*Arguments))
+    return (
+        GeomKind.ARC_HYPERBOLA,
+        ArcHyperbolaGeom(
+            *Arguments,
+            Number(Value.get("StartAngle")),
+            Number(Value.get("EndAngle")),
+        ),
+    )
+
+
+# this definition decodes complete and trimmed parabola geometry records
+def ParabolaAction(
+    NodeValue: ET.Element, TypeId: str
+) -> tuple[GeomKind, AnyValue] | None:
+    IsArc = TypeId == "Part::GeomArcOfParabola"
+    Value = NodeValue.find("./ArcOfParabola" if IsArc else "./Parabola")
+    if Value is None:
+        return None
+    Arguments = (
+        VectorTwo(Number(Value.get("CenterX")), Number(Value.get("CenterY"))),
+        GeomAxis(Value),
+        abs(Number(Value.get("Focal"))),
+    )
+    if not IsArc:
+        return (GeomKind.PARABOLA, ParabolaGeom(*Arguments))
+    return (
+        GeomKind.ARC_PARABOLA,
+        ArcParabolaGeom(
+            *Arguments,
+            Number(Value.get("StartAngle")),
+            Number(Value.get("EndAngle")),
+        ),
+    )
+
+
+# this definition decodes bezier and spline geometry records
+def SplineAction(
+    NodeValue: ET.Element, TypeId: str
+) -> tuple[GeomKind, AnyValue] | None:
+    Value = NodeValue.find("./BSplineCurve")
+    if Value is None:
+        Value = NodeValue.find("./BezierCurve")
+    if Value is None:
+        return None
+    Points = tuple(
+        VectorTwo(Number(ItemValue.get("X")), Number(ItemValue.get("Y")))
+        for ItemValue in Value.findall(".//*[@X][@Y]")
+    )
+    if not Points:
+        return None
+    Degree = (
+        max(1, len(Points) - 1)
+        if TypeId == "Part::GeomBezierCurve"
+        else max(1, Integer(Value.get("Degree"), 3))
+    )
+    return (
+        GeomKindByTypeId[TypeId],
+        SplineGeom(
+            Points,
+            Degree,
+            knots=tuple(Number(ItemValue.get("Value")) for ItemValue in Value.findall("./Knot")),
+            multiplicities=tuple(Integer(ItemValue.get("Mult"), 1) for ItemValue in Value.findall("./Knot")),
+            weights=tuple(Number(ItemValue.get("Weight"), 1.0) for ItemValue in Value.findall("./Pole")),
+            periodic=Value.get("IsPeriodic", Value.get("Periodic", "false")).casefold()
+            in XmlTrueValues,
+        ),
+    )
+
+
+# this definition dispatches each supported geometry record to its focused decoder
 def GeomAction(NodeValue: ET.Element, EntityId: str) -> tuple[GeomKind, AnyValue]:
     TypeId = NodeValue.get("type", "")
+    Result = None
     if TypeId == "Part::GeomLineSegment":
-        Value = NodeValue.find("./LineSegment")
-        if Value is not None:
-            return (
-                GeomKind.LINE,
-                LineGeom(
-                    VectorTwo(Number(Value.get("StartX")), Number(Value.get("StartY"))),
-                    VectorTwo(Number(Value.get("EndX")), Number(Value.get("EndY"))),
-                ),
-            )
-    if TypeId == "Part::GeomCircle":
-        Value = NodeValue.find("./Circle")
-        if Value is not None:
-            return (
-                GeomKind.CIRCLE,
-                CircleGeom(
-                    VectorTwo(
-                        Number(Value.get("CenterX")), Number(Value.get("CenterY"))
-                    ),
-                    abs(Number(Value.get("Radius"))),
-                ),
-            )
-    if TypeId == "Part::GeomArcOfCircle":
-        Value = NodeValue.find("./ArcOfCircle")
-        if Value is not None:
-            return (
-                GeomKind.ARC,
-                ArcGeom(
-                    VectorTwo(
-                        Number(Value.get("CenterX")), Number(Value.get("CenterY"))
-                    ),
-                    abs(Number(Value.get("Radius"))),
-                    Number(Value.get("StartAngle")),
-                    Number(Value.get("EndAngle")),
-                ),
-            )
-    if TypeId == "Part::GeomPoint":
-        Value = NodeValue.find("./GeomPoint")
-        if Value is None:
-            Value = NodeValue.find("./Point")
-        if Value is not None:
-            return (
-                GeomKind.POINT,
-                PointGeom(VectorTwo(Number(Value.get("X")), Number(Value.get("Y")))),
-            )
-    if TypeId == "Part::GeomEllipse":
-        Value = NodeValue.find("./Ellipse")
-        if Value is not None:
-            Center = VectorTwo(
-                Number(Value.get("CenterX")), Number(Value.get("CenterY"))
-            )
-            AxisValue = GeomAxis(Value)
-            return (
-                GeomKind.ELLIPSE,
-                EllipseGeom(
-                    Center,
-                    AxisValue,
-                    abs(Number(Value.get("MajorRadius"))),
-                    abs(Number(Value.get("MinorRadius"))),
-                ),
-            )
-    if TypeId == "Part::GeomArcOfEllipse":
-        Value = NodeValue.find("./ArcOfEllipse")
-        if Value is not None:
-            return (
-                GeomKind.ARC_ELLIPSE,
-                ArcEllipseGeom(
-                    VectorTwo(
-                        Number(Value.get("CenterX")), Number(Value.get("CenterY"))
-                    ),
-                    GeomAxis(Value),
-                    abs(Number(Value.get("MajorRadius"))),
-                    abs(Number(Value.get("MinorRadius"))),
-                    Number(Value.get("StartAngle")),
-                    Number(Value.get("EndAngle")),
-                ),
-            )
-    if TypeId in {"Part::GeomHyperbola", "Part::GeomArcOfHyperbola"}:
-        TagValue = "Hyperbola" if TypeId == "Part::GeomHyperbola" else "ArcOfHyperbola"
-        Value = NodeValue.find(f"./{TagValue}")
-        if Value is not None:
-            Arguments = (
-                VectorTwo(Number(Value.get("CenterX")), Number(Value.get("CenterY"))),
-                GeomAxis(Value),
-                abs(Number(Value.get("MajorRadius"))),
-                abs(Number(Value.get("MinorRadius"))),
-            )
-            if TypeId == "Part::GeomHyperbola":
-                return (GeomKind.HYPERBOLA, HyperbolaGeom(*Arguments))
-            return (
-                GeomKind.ARC_HYPERBOLA,
-                ArcHyperbolaGeom(
-                    *Arguments,
-                    Number(Value.get("StartAngle")),
-                    Number(Value.get("EndAngle")),
-                ),
-            )
-    if TypeId in {"Part::GeomParabola", "Part::GeomArcOfParabola"}:
-        TagValue = "Parabola" if TypeId == "Part::GeomParabola" else "ArcOfParabola"
-        Value = NodeValue.find(f"./{TagValue}")
-        if Value is not None:
-            Arguments = (
-                VectorTwo(Number(Value.get("CenterX")), Number(Value.get("CenterY"))),
-                GeomAxis(Value),
-                abs(Number(Value.get("Focal"))),
-            )
-            if TypeId == "Part::GeomParabola":
-                return (GeomKind.PARABOLA, ParabolaGeom(*Arguments))
-            return (
-                GeomKind.ARC_PARABOLA,
-                ArcParabolaGeom(
-                    *Arguments,
-                    Number(Value.get("StartAngle")),
-                    Number(Value.get("EndAngle")),
-                ),
-            )
-    if TypeId in SplineGeomTypeIds:
-        Value = NodeValue.find("./BSplineCurve")
-        if Value is None:
-            Value = NodeValue.find("./BezierCurve")
-        if Value is not None:
-            Points = tuple(
-                (
-                    VectorTwo(Number(ItemValue.get("X")), Number(ItemValue.get("Y")))
-                    for ItemValue in Value.findall(".//*[@X][@Y]")
-                )
-            )
-            if Points:
-                return (
-                    GeomKindByTypeId[TypeId],
-                    SplineGeom(
-                        Points,
-                        (
-                            max(1, len(Points) - 1)
-                            if TypeId == "Part::GeomBezierCurve"
-                            else max(1, Integer(Value.get("Degree"), 3))
-                        ),
-                        knots=tuple(
-                            (
-                                Number(ItemValue.get("Value"))
-                                for ItemValue in Value.findall("./Knot")
-                            )
-                        ),
-                        multiplicities=tuple(
-                            (
-                                Integer(ItemValue.get("Mult"), 1)
-                                for ItemValue in Value.findall("./Knot")
-                            )
-                        ),
-                        weights=tuple(
-                            (
-                                Number(ItemValue.get("Weight"), 1.0)
-                                for ItemValue in Value.findall("./Pole")
-                            )
-                        ),
-                        periodic=Value.get(
-                            "IsPeriodic", Value.get("Periodic", "false")
-                        ).casefold()
-                        in XmlTrueValues,
-                    ),
-                )
+        Result = LineAction(NodeValue)
+    elif TypeId == "Part::GeomCircle":
+        Result = CircleAction(NodeValue)
+    elif TypeId == "Part::GeomArcOfCircle":
+        Result = ArcAction(NodeValue)
+    elif TypeId == "Part::GeomPoint":
+        Result = PointAction(NodeValue)
+    elif TypeId in {"Part::GeomEllipse", "Part::GeomArcOfEllipse"}:
+        Result = EllipseAction(NodeValue, TypeId)
+    elif TypeId in {"Part::GeomHyperbola", "Part::GeomArcOfHyperbola"}:
+        Result = HyperbolaAction(NodeValue, TypeId)
+    elif TypeId in {"Part::GeomParabola", "Part::GeomArcOfParabola"}:
+        Result = ParabolaAction(NodeValue, TypeId)
+    elif TypeId in SplineGeomTypeIds:
+        Result = SplineAction(NodeValue, TypeId)
+    if Result is not None:
+        return Result
     return (
         GeomKindByTypeId.get(TypeId, GeomKind.NATIVE),
         NativeGeom(FormatId, TypeId or "unknown", ElemData(NodeValue)),
