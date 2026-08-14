@@ -16,10 +16,27 @@ import pytest
 
 from convert import write_document
 from convert.adapters.freecad import read_freecad
-from convert.adapters.solidworks.container.Container import SldprtArchive, SldprtFormatError
-from convert.adapters.solidworks.container.Format import KIT_RESOLVED_STREAM, RESOLVED_FEATURES_STREAM
-from convert.adapters.solidworks.resolved.Core import BOSS_KIND, CUT_KIND, FeatureEdit, locate_features, patch_features, rectangle_corners_mm
-from convert.adapters.solidworks.programs.resolved.boss.cut.circle.Program import EncodeProgram, KFieldOwners, KResolvedOps
+from convert.adapters.solidworks.container.Container import (
+    SldprtArchive,
+    SldprtFormatError,
+)
+from convert.adapters.solidworks.container.Format import (
+    KIT_RESOLVED_STREAM,
+    RESOLVED_FEATURES_STREAM,
+)
+from convert.adapters.solidworks.resolved.Core import (
+    BOSS_KIND,
+    CUT_KIND,
+    FeatureEdit,
+    locate_features,
+    patch_features,
+    rectangle_corners_mm,
+)
+from convert.adapters.solidworks.programs.resolved.boss.cut.circle.Program import (
+    EncodeProgram,
+    KFieldOwners,
+    KResolvedOps,
+)
 
 
 # the repository root anchors controlled evidence outside production modules
@@ -202,12 +219,7 @@ def test_boss_cut_circle_program_rejects_variable_width_overrides() -> None:
 # source inspection ensures production carries typed vocabulary rather than payloads
 def test_boss_cut_circle_program_contains_no_vendor_blocks() -> None:
     ProgramPath = (
-        KRepoRoot
-        / "src"
-        / "convert"
-        / "adapters"
-        / "solidworks"
-        / "Program.py"
+        KRepoRoot / "src" / "convert" / "adapters" / "solidworks" / "Program.py"
     )
     SourceText = ProgramPath.read_text(encoding="utf-8")
     assert "bytes.fromhex" not in SourceText

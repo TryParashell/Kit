@@ -19,9 +19,23 @@ from convert import write_document
 from convert.adapters.freecad import read_freecad
 from convert.adapters.solidworks import SldprtArchive
 from convert.adapters.solidworks.container.Container import SldprtFormatError
-from convert.adapters.solidworks.container.Format import CONFIGURATION_STREAM, KEYWORDS_STREAM, RESOLVED_FEATURES_STREAM
-from convert.adapters.solidworks.core.Native import HasVendorPartEncoding, decode_native_model
-from convert.adapters.solidworks.programs.resolved.polyline.sixpoint.Program import EncodeProgram, KDepthOffset, KFieldOwners, KPointOffsets, KResolvedOps, PadFieldMap
+from convert.adapters.solidworks.container.Format import (
+    CONFIGURATION_STREAM,
+    KEYWORDS_STREAM,
+    RESOLVED_FEATURES_STREAM,
+)
+from convert.adapters.solidworks.core.Native import (
+    HasVendorPartEncoding,
+    decode_native_model,
+)
+from convert.adapters.solidworks.programs.resolved.polyline.sixpoint.Program import (
+    EncodeProgram,
+    KDepthOffset,
+    KFieldOwners,
+    KPointOffsets,
+    KResolvedOps,
+    PadFieldMap,
+)
 
 
 # the repository root keeps controlled corpus evidence outside production modules

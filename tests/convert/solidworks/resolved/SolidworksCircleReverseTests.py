@@ -14,9 +14,21 @@ from pathlib import Path
 import pytest
 
 from convert.adapters.solidworks.container.Archive import encode_string, read_string
-from convert.adapters.solidworks.programs.configuration.circle.reverse.Program import ConfigOps, EncodeProgram as EncodeConfig, FieldOwners as ConfigOwners, ReferenceLength
-from convert.adapters.solidworks.container.Container import SldprtArchive, SldprtFormatError
-from convert.adapters.solidworks.programs.resolved.circle.reverse.Program import EncodeProgram as EncodeResolved, FieldOwners as ResolvedOwners, ResolvedOps
+from convert.adapters.solidworks.programs.configuration.circle.reverse.Program import (
+    ConfigOps,
+    EncodeProgram as EncodeConfig,
+    FieldOwners as ConfigOwners,
+    ReferenceLength,
+)
+from convert.adapters.solidworks.container.Container import (
+    SldprtArchive,
+    SldprtFormatError,
+)
+from convert.adapters.solidworks.programs.resolved.circle.reverse.Program import (
+    EncodeProgram as EncodeResolved,
+    FieldOwners as ResolvedOwners,
+    ResolvedOps,
+)
 
 
 # the repository root anchors optional oracle verification outside production paths

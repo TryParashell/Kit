@@ -8,7 +8,11 @@
 
 from __future__ import annotations
 
-from tests.oracle.Session import SolidWorksSession, SolidWorksUnavailable, solidworks_available
+from tests.oracle.Session import (
+    SolidWorksSession,
+    SolidWorksUnavailable,
+    solidworks_available,
+)
 
 __all__ = [
     "SolidWorksSession",

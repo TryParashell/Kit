@@ -37,6 +37,9 @@ Each kebab-case skill is generated from its mapped PascalCase source file in
 - Use `uv` rather than `pip` for Python dependency management, except in the
   explicitly exempt `Parashell/` and `modules/` workspaces.
 - New non-skill text files must start with the exact notice in `HEADER_NOTICE`.
+- Treat every unknown commit, branch, staged change, unstaged change, untracked
+  file, and background Git operation as user-owned state. Preserve it and work
+  around it unless the user explicitly says otherwise.
 
 ## Skill routing
 
@@ -46,6 +49,7 @@ Each kebab-case skill is generated from its mapped PascalCase source file in
 | Any code or related text change                                                | `code-formatting`, `no-stubs`, `spdx-header`                                                                                                      |
 | Any source-code structure, declaration, module, or import change               | `split-large-definitions`                                                                                                                         |
 | Any file creation, rename, move, import, extension, or security-quality change | `repository-structure`                                                                                                                            |
+| Shared workspace state or unknown concurrent Git and file changes               | `user-owned-workspace`                                                                                                                            |
 | A reported error, stack trace, failed test, or broken behavior                 | `fix-errors-dont-ask`                                                                                                                             |
 | Git history or a write-capable Git operation                                   | `git-never-touch-main`                                                                                                                            |
 | Python dependencies, `pyproject.toml`, `uv.lock`, or Python CI                 | `python-package-manager`                                                                                                                          |

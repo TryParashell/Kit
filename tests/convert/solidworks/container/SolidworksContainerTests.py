@@ -7,161 +7,119 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import struct as StructLib
+import pytest as PytestLib
+from convert.adapters.solidworks import SldprtArchive, build_sldprt as BuildSldprt
+from convert.adapters.solidworks.container.Container import container_signatures as ContainerSignatures
 
-import struct
+# centralizes shared evidence so every related assertion uses one value
+KMarker = bytes.fromhex('140006000800')
 
-import pytest
+# centralizes shared evidence so every related assertion uses one value
+KSignatureB = bytes.fromhex('a1909b1f')
 
-from convert.adapters.solidworks import SldprtArchive, build_sldprt
-from convert.adapters.solidworks.container.Container import container_signatures
+# centralizes shared evidence so every related assertion uses one value
+KSignature = bytes.fromhex('a576970f')
 
-_MARKER = bytes.fromhex("140006000800")
-_LOCAL_SIGNATURE = bytes.fromhex("a1909b1f")
-_CENTRAL_SIGNATURE = bytes.fromhex("a576970f")
-_END_SIGNATURE = bytes.fromhex("7a004720")
-_VENDOR_FILE_ID = 0x715BE98F
-_VENDOR_SIGNATURES = (_LOCAL_SIGNATURE, _CENTRAL_SIGNATURE, _END_SIGNATURE)
+# centralizes shared evidence so every related assertion uses one value
+KSignatureA = bytes.fromhex('7a004720')
 
+# centralizes shared evidence so every related assertion uses one value
+KIdInfo = 1901848975
 
-def _decoded_name(value: bytes) -> str:
-    return bytes((byte >> 4) | ((byte & 0x0F) << 4) for byte in value).decode("utf-8")
+# centralizes shared evidence so every related assertion uses one value
+KSignatures = (KSignatureB, KSignature, KSignatureA)
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+def DecodedName(ItemValue: bytes) -> str:
+    return bytes((ByteInfo >> 4 | (ByteInfo & 15) << 4 for ByteInfo in ItemValue)).decode('utf-8')
 
-def test_generated_container_has_complete_native_directory() -> None:
-    streams = (
-        ("Contents/Config-0-Partition", b"PS\0\0native body"),
-        ("swXmlContents/KeyWords", b"<?xml version='1.0'?><KeyWords/>"),
-        ("Contents/OleItems", b""),
-    )
-    blob = build_sldprt(streams, file_id=_VENDOR_FILE_ID, signatures=_VENDOR_SIGNATURES)
-    archive = SldprtArchive.from_bytes(blob)
-    assert archive.file_id == _VENDOR_FILE_ID
-    assert archive.streams == dict(streams)
-    end_offset = len(blob) - 22
-    (
-        disk_number,
-        directory_disk,
-        disk_entries,
-        total_entries,
-        directory_size,
-        directory_offset,
-        comment_size,
-    ) = struct.unpack_from("<HHHHIIH", blob, end_offset + 4)
-    assert blob[end_offset : end_offset + 4] == _END_SIGNATURE
-    assert disk_number == 0
-    assert directory_disk == 0
-    assert disk_entries == len(streams)
-    assert total_entries == len(streams)
-    assert comment_size == 0
-    assert 8 + directory_offset + directory_size == end_offset
-    cursor = 8 + directory_offset
-    timestamps = set()
-    for expected_name, expected_data in streams:
-        assert blob[cursor : cursor + 4] == _CENTRAL_SIGNATURE
-        assert blob[cursor + 6 : cursor + 12] == _MARKER
-        type_id, crc32_value, compressed_size, size = struct.unpack_from(
-            "<IIII", blob, cursor + 12
-        )
-        timestamps.add(type_id)
-        name_size, extra_size = struct.unpack_from("<HH", blob, cursor + 28)
-        (
-            entry_comment_size,
-            entry_disk,
-            internal_attributes,
-            external_attributes,
-            local_offset,
-        ) = struct.unpack_from("<HHHII", blob, cursor + 32)
-        encoded_name = blob[cursor + 46 : cursor + 46 + name_size]
-        assert _decoded_name(encoded_name) == expected_name
-        assert extra_size == 0
-        assert entry_comment_size == 0
-        assert entry_disk == 0
-        assert internal_attributes == int(expected_name.startswith("swXmlContents/"))
-        assert external_attributes == 0
-        local_cursor = 8 + local_offset
-        assert blob[local_cursor : local_cursor + 4] == _LOCAL_SIGNATURE
-        assert blob[local_cursor + 4 : local_cursor + 10] == _MARKER
-        assert struct.unpack_from("<I", blob, local_cursor + 10)[0] == type_id
-        assert struct.unpack_from("<I", blob, local_cursor + 14)[0] == crc32_value
-        assert struct.unpack_from("<I", blob, local_cursor + 18)[0] == compressed_size
-        assert struct.unpack_from("<I", blob, local_cursor + 22)[0] == size
-        assert struct.unpack_from("<H", blob, local_cursor + 26)[0] == name_size
-        assert struct.unpack_from("<H", blob, local_cursor + 28)[0] == 0
-        assert (
-            _decoded_name(blob[local_cursor + 30 : local_cursor + 30 + name_size])
-            == expected_name
-        )
-        assert archive.require(expected_name) == expected_data
-        cursor += 46 + name_size
-    assert cursor == end_offset
-    assert timestamps == {0x1C34D281}
+# keeps this focused behavior isolated so regressions remain immediately visible
+def TestGCHCND() -> None:
+    Streams = (('Contents/Config-0-Partition', b'PS\x00\x00native body'), ('swXmlContents/KeyWords', b"<?xml version='1.0'?><KeyWords/>"), ('Contents/OleItems', b''))
+    BlobInfo = BuildSldprt(Streams, file_id=KIdInfo, signatures=KSignatures)
+    Archive = SldprtArchive.from_bytes(BlobInfo)
+    assert Archive.file_id == KIdInfo
+    assert Archive.streams == dict(Streams)
+    EndOffset = len(BlobInfo) - 22
+    DiskNumber, DirectoryDisk, DiskEntries, TotalEntries, DirectorySize, DirectoryOffset, CommentSize = StructLib.unpack_from('<HHHHIIH', BlobInfo, EndOffset + 4)
+    assert BlobInfo[EndOffset:EndOffset + 4] == KSignatureA
+    assert DiskNumber == 0
+    assert DirectoryDisk == 0
+    assert DiskEntries == len(Streams)
+    assert TotalEntries == len(Streams)
+    assert CommentSize == 0
+    assert 8 + DirectoryOffset + DirectorySize == EndOffset
+    Cursor = 8 + DirectoryOffset
+    Timestamps = set()
+    for ExpectedName, ExpectedData in Streams:
+        assert BlobInfo[Cursor:Cursor + 4] == KSignature
+        assert BlobInfo[Cursor + 6:Cursor + 12] == KMarker
+        TypeId, CrcThreeTwoValue, CompressedSize, SizeInfo = StructLib.unpack_from('<IIII', BlobInfo, Cursor + 12)
+        Timestamps.add(TypeId)
+        NameSize, ExtraSize = StructLib.unpack_from('<HH', BlobInfo, Cursor + 28)
+        EntryCommentSize, EntryDisk, InternalAttributes, ExternalAttributes, LocalOffset = StructLib.unpack_from('<HHHII', BlobInfo, Cursor + 32)
+        EncodedName = BlobInfo[Cursor + 46:Cursor + 46 + NameSize]
+        assert DecodedName(EncodedName) == ExpectedName
+        assert ExtraSize == 0
+        assert EntryCommentSize == 0
+        assert EntryDisk == 0
+        assert InternalAttributes == int(ExpectedName.startswith('swXmlContents/'))
+        assert ExternalAttributes == 0
+        LocalCursor = 8 + LocalOffset
+        assert BlobInfo[LocalCursor:LocalCursor + 4] == KSignatureB
+        assert BlobInfo[LocalCursor + 4:LocalCursor + 10] == KMarker
+        assert StructLib.unpack_from('<I', BlobInfo, LocalCursor + 10)[0] == TypeId
+        assert StructLib.unpack_from('<I', BlobInfo, LocalCursor + 14)[0] == CrcThreeTwoValue
+        assert StructLib.unpack_from('<I', BlobInfo, LocalCursor + 18)[0] == CompressedSize
+        assert StructLib.unpack_from('<I', BlobInfo, LocalCursor + 22)[0] == SizeInfo
+        assert StructLib.unpack_from('<H', BlobInfo, LocalCursor + 26)[0] == NameSize
+        assert StructLib.unpack_from('<H', BlobInfo, LocalCursor + 28)[0] == 0
+        assert DecodedName(BlobInfo[LocalCursor + 30:LocalCursor + 30 + NameSize]) == ExpectedName
+        assert Archive.require(ExpectedName) == ExpectedData
+        Cursor += 46 + NameSize
+    assert Cursor == EndOffset
+    assert Timestamps == {473223809}
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+def TestGCID() -> None:
+    Streams = {'Contents/SolidWorks': b'<swSolidWorks/>', 'Contents/Config-0-Partition': b'PS\x00\x00body'}
+    assert BuildSldprt(Streams) == BuildSldprt(Streams)
 
-def test_generated_container_is_deterministic() -> None:
-    streams = {
-        "Contents/SolidWorks": b"<swSolidWorks/>",
-        "Contents/Config-0-Partition": b"PS\0\0body",
-    }
-    assert build_sldprt(streams) == build_sldprt(streams)
+# keeps this focused behavior isolated so regressions remain immediately visible
+def TestGCUCSLI() -> None:
+    BlobInfo = BuildSldprt({'Contents/SolidWorks': b'<swSolidWorks/>'})
+    assert BlobInfo[:8] == bytes.fromhex('ec6e238600000004')
+    Archive = SldprtArchive.from_bytes(BlobInfo)
+    RecordInfo = Archive.records[0]
+    assert BlobInfo[RecordInfo.offset - 4:RecordInfo.offset] == bytes.fromhex('64d80045')
+    assert BlobInfo[-22:-18] == bytes.fromhex('54ce179a')
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+def TestGCUNHSTI() -> None:
+    BlobInfo = BuildSldprt({'Header2': b'header', 'Preview': b'preview', 'Contents/SolidWorks': b'model'})
+    Archive = SldprtArchive.from_bytes(BlobInfo)
+    TypeIds = {RecordInfo.name: StructLib.unpack_from('<I', BlobInfo, RecordInfo.offset + 6)[0] for RecordInfo in Archive.records}
+    assert TypeIds == {'Header2': 477418028, 'Preview': 477418028, 'Contents/SolidWorks': 473223809}
 
-def test_generated_container_uses_coherent_source_less_identity() -> None:
-    blob = build_sldprt({"Contents/SolidWorks": b"<swSolidWorks/>"})
-    assert blob[:8] == bytes.fromhex("ec6e238600000004")
-    archive = SldprtArchive.from_bytes(blob)
-    record = archive.records[0]
-    assert blob[record.offset - 4 : record.offset] == bytes.fromhex("64d80045")
-    assert blob[-22:-18] == bytes.fromhex("54ce179a")
+# keeps this focused behavior isolated so regressions remain immediately visible
+def TestGCSVSSAC() -> None:
+    Streams = {'Contents/SolidWorks': b'<swSolidWorks/>' + b'x' * 4096, 'ThirdPty/KitData': bytes(range(256)) * 3, 'swXmlContents/KeyWords': b'<KeyWords/>' + b'y' * 127}
+    BlobInfo = BuildSldprt(Streams)
+    assert SldprtArchive.from_bytes(BlobInfo).streams == Streams
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+def TestGCRTI() -> None:
+    Template = BuildSldprt({'Contents/SolidWorks': b'<swSolidWorks/>'}, file_id=KIdInfo, signatures=KSignatures)
+    assert ContainerSignatures(Template) == KSignatures
+    Streams = {'Contents/SolidWorks': b"<swSolidWorks version='2'/>", 'ThirdPty/KitData': b'kit'}
+    BlobInfo = BuildSldprt(Streams, template=Template)
+    assert BlobInfo[:4] == Template[:4]
+    assert BlobInfo[8:12] == Template[8:12]
+    assert BlobInfo[-22:-18] == Template[-22:-18]
+    assert SldprtArchive.from_bytes(BlobInfo).streams == Streams
 
-def test_generated_container_uses_native_header_stream_type_ids() -> None:
-    blob = build_sldprt(
-        {
-            "Header2": b"header",
-            "Preview": b"preview",
-            "Contents/SolidWorks": b"model",
-        }
-    )
-    archive = SldprtArchive.from_bytes(blob)
-    type_ids = {
-        record.name: struct.unpack_from("<I", blob, record.offset + 6)[0]
-        for record in archive.records
-    }
-    assert type_ids == {
-        "Header2": 0x1C74D22C,
-        "Preview": 0x1C74D22C,
-        "Contents/SolidWorks": 0x1C34D281,
-    }
-
-
-def test_generated_container_supports_variable_stream_sizes_and_counts() -> None:
-    streams = {
-        "Contents/SolidWorks": b"<swSolidWorks/>" + b"x" * 4096,
-        "ThirdPty/KitData": bytes(range(256)) * 3,
-        "swXmlContents/KeyWords": b"<KeyWords/>" + b"y" * 127,
-    }
-    blob = build_sldprt(streams)
-    assert SldprtArchive.from_bytes(blob).streams == streams
-
-
-def test_generated_container_reuses_template_identity() -> None:
-    template = build_sldprt(
-        {"Contents/SolidWorks": b"<swSolidWorks/>"},
-        file_id=_VENDOR_FILE_ID,
-        signatures=_VENDOR_SIGNATURES,
-    )
-    assert container_signatures(template) == _VENDOR_SIGNATURES
-    streams = {
-        "Contents/SolidWorks": b"<swSolidWorks version='2'/>",
-        "ThirdPty/KitData": b"kit",
-    }
-    blob = build_sldprt(streams, template=template)
-    assert blob[:4] == template[:4]
-    assert blob[8:12] == template[8:12]
-    assert blob[-22:-18] == template[-22:-18]
-    assert SldprtArchive.from_bytes(blob).streams == streams
-
-
-def test_generated_container_rejects_unpaired_file_identity() -> None:
-    with pytest.raises(ValueError, match="native template"):
-        build_sldprt({"Contents/SolidWorks": b"<swSolidWorks/>"}, file_id=1)
+# keeps this focused behavior isolated so regressions remain immediately visible
+def TestGCRUFI() -> None:
+    with PytestLib.raises(ValueError, match='native template'):
+        BuildSldprt({'Contents/SolidWorks': b'<swSolidWorks/>'}, file_id=1)

@@ -16,27 +16,113 @@ import xml.etree.ElementTree as ElementTree
 
 import pytest
 
-from convert.adapters.solidworks.container.Container import SldprtArchive, SldprtFormatError
-from convert.adapters.solidworks.container.Format import KEYWORDS_STREAM, RESOLVED_FEATURES_STREAM
-from convert.adapters.solidworks.resolved.Core import BLIND_END_CONDITION, BOSS_FLAGS, BOSS_KIND, CIRCLE_POINT_ANGLE_DEGREES, CUT_FLAGS, CUT_KIND, FEATURE_FLAGS_MASK, FEATURE_KIND_BY_FLAGS, FIRST_FEATURE_END_CONDITION_DISTANCE, FIRST_FEATURE_REVERSE_DISTANCE, FULL_CIRCLE_DEGREES, LATER_FEATURE_END_CONDITION_DISTANCE, LATER_FEATURE_REVERSE_DISTANCE, LOFT_FLAGS, LOFT_KIND, MID_PLANE_END_CONDITION, PLANE_FLAGS, ROUND_FLAGS, ROUND_KIND, SKETCH_FLAGS, SKETCH_ON_CURVE_ROLE, SKETCH_POINT_CLASS, SWEEP_FLAGS, SWEEP_KIND, SWEEP_SINGLE_PROFILE_FLAGS, TREE_NODE_FLAGS, FeatureEdit, PatchSketchPlane, circle_circumference_point_mm, circle_radius_mm, class_records, dimension_scalars, feature_kind, is_tree_node_flags, locate_features, locate_rectangle_pad, name_records, patch_features, patch_sketch_arcs, rectangle_corners_mm, sketch_arcs, sketch_coordinates, sketch_plane_object_id, sketch_points, tree_nodes
+from convert.adapters.solidworks.container.Container import (
+    SldprtArchive,
+    SldprtFormatError,
+)
+from convert.adapters.solidworks.container.Format import (
+    KEYWORDS_STREAM,
+    RESOLVED_FEATURES_STREAM,
+)
+from convert.adapters.solidworks.resolved.Core import (
+    BLIND_END_CONDITION,
+    BOSS_FLAGS,
+    BOSS_KIND,
+    CIRCLE_POINT_ANGLE_DEGREES,
+    CUT_FLAGS,
+    CUT_KIND,
+    FEATURE_FLAGS_MASK,
+    FEATURE_KIND_BY_FLAGS,
+    FIRST_FEATURE_END_CONDITION_DISTANCE,
+    FIRST_FEATURE_REVERSE_DISTANCE,
+    FULL_CIRCLE_DEGREES,
+    LATER_FEATURE_END_CONDITION_DISTANCE,
+    LATER_FEATURE_REVERSE_DISTANCE,
+    LOFT_FLAGS,
+    LOFT_KIND,
+    MID_PLANE_END_CONDITION,
+    PLANE_FLAGS,
+    ROUND_FLAGS,
+    ROUND_KIND,
+    SKETCH_FLAGS,
+    SKETCH_ON_CURVE_ROLE,
+    SKETCH_POINT_CLASS,
+    SWEEP_FLAGS,
+    SWEEP_KIND,
+    SWEEP_SINGLE_PROFILE_FLAGS,
+    TREE_NODE_FLAGS,
+    FeatureEdit,
+    PatchSketchPlane,
+    circle_circumference_point_mm,
+    circle_radius_mm,
+    class_records,
+    dimension_scalars,
+    feature_kind,
+    is_tree_node_flags,
+    locate_features,
+    locate_rectangle_pad,
+    name_records,
+    patch_features,
+    patch_sketch_arcs,
+    rectangle_corners_mm,
+    sketch_arcs,
+    sketch_coordinates,
+    sketch_plane_object_id,
+    sketch_points,
+    tree_nodes,
+)
 from convert.adapters.solidworks.programs.resolved.default.Program import EncodeProgram
-from convert.adapters.solidworks.programs.resolved.circle.default.Program import EncodeProgram as EncodeCircleProgram
-from convert.adapters.solidworks.programs.resolved.boss.cut.default.Program import EncodeProgram as EncodeBossCutProgram
-from convert.adapters.solidworks.programs.resolved.boss.cut.pair.Program import EncodeProgram as EncodeBossCutCutProgram
-from convert.adapters.solidworks.programs.resolved.boss.cut.triple.Program import EncodeProgram as EncodeBossCutCutCutProgram
-from convert.adapters.solidworks.programs.resolved.boss.cut.through.Program import EncodeProgram as EncodeBossCutThroughProgram
-from convert.adapters.solidworks.programs.resolved.boss.repeated.Program import EncodeProgram as EncodeBossBossProgram
-from convert.adapters.solidworks.programs.resolved.boss.chamfer.Program import EncodeProgram as EncodeBossChamferProgram
-from convert.adapters.solidworks.programs.resolved.boss.pattern.circular.Program import EncodeProgram as EncodeBossCircularPatternProgram
-from convert.adapters.solidworks.programs.resolved.boss.fillet.Program import EncodeProgram as EncodeBossFilletProgram
-from convert.adapters.solidworks.programs.resolved.boss.pattern.linear.Program import EncodeProgram as EncodeBossLinearPatternProgram
-from convert.adapters.solidworks.programs.resolved.boss.revolvecut.Program import EncodeProgram as EncodeBossRevCutProgram
-from convert.adapters.solidworks.programs.resolved.boss.shell.Program import EncodeProgram as EncodeBossShellProgram
-from convert.adapters.solidworks.programs.resolved.box.Program import EncodeProgram as EncodeBoxProgram
-from convert.adapters.solidworks.programs.resolved.cut.base.Program import EncodeProgram as EncodeCutBaseProgram
-from convert.adapters.solidworks.programs.resolved.planes.right.Program import EncodeProgram as EncodeRightProgram
-from convert.adapters.solidworks.programs.resolved.revolve.default.Program import EncodeProgram as EncodeRevolveProgram
-from convert.adapters.solidworks.programs.resolved.planes.top.Program import EncodeProgram as EncodeTopProgram
+from convert.adapters.solidworks.programs.resolved.circle.default.Program import (
+    EncodeProgram as EncodeCircleProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.cut.default.Program import (
+    EncodeProgram as EncodeBossCutProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.cut.pair.Program import (
+    EncodeProgram as EncodeBossCutCutProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.cut.triple.Program import (
+    EncodeProgram as EncodeBossCutCutCutProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.cut.through.Program import (
+    EncodeProgram as EncodeBossCutThroughProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.repeated.Program import (
+    EncodeProgram as EncodeBossBossProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.chamfer.Program import (
+    EncodeProgram as EncodeBossChamferProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.pattern.circular.Program import (
+    EncodeProgram as EncodeBossCircularPatternProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.fillet.Program import (
+    EncodeProgram as EncodeBossFilletProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.pattern.linear.Program import (
+    EncodeProgram as EncodeBossLinearPatternProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.revolvecut.Program import (
+    EncodeProgram as EncodeBossRevCutProgram,
+)
+from convert.adapters.solidworks.programs.resolved.boss.shell.Program import (
+    EncodeProgram as EncodeBossShellProgram,
+)
+from convert.adapters.solidworks.programs.resolved.box.Program import (
+    EncodeProgram as EncodeBoxProgram,
+)
+from convert.adapters.solidworks.programs.resolved.cut.base.Program import (
+    EncodeProgram as EncodeCutBaseProgram,
+)
+from convert.adapters.solidworks.programs.resolved.planes.right.Program import (
+    EncodeProgram as EncodeRightProgram,
+)
+from convert.adapters.solidworks.programs.resolved.revolve.default.Program import (
+    EncodeProgram as EncodeRevolveProgram,
+)
+from convert.adapters.solidworks.programs.resolved.planes.top.Program import (
+    EncodeProgram as EncodeTopProgram,
+)
 
 CORPUS = Path(__file__).resolve().parents[4] / ".rescratch" / "corpus2"
 PARTS = CORPUS / "parts"

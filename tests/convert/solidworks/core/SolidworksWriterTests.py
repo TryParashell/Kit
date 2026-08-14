@@ -43,13 +43,46 @@ from convert.adapters.solidworks import (
 )
 from convert.adapters.solidworks.container.Archive import encode_class_definition
 from convert.adapters.solidworks.container.Container import container_signatures
-from convert.adapters.solidworks.core.Adapter import _ASSEMBLY_DONOR_CARRIED_STREAMS, _document_without_source, _native_stream_sha256, _semantic_sha256
+from convert.adapters.solidworks.core.Adapter import (
+    _ASSEMBLY_DONOR_CARRIED_STREAMS,
+    _document_without_source,
+    _native_stream_sha256,
+    _semantic_sha256,
+)
 from convert.adapters.solidworks.container.Cmgr import CONFIGURATION_MANAGER_STREAM
-from convert.adapters.solidworks.container.Format import COMPONENT_TREE_STREAM, CONFIGURATION_STREAM, CONTENT_TYPES_STREAM, FEATURES_STREAM, KEYWORDS_STREAM, KIT_DOCUMENT_STREAM, KIT_NATIVE_STREAM, KIT_RESOLVED_STREAM, PARTITION_STREAM, RELATIONSHIPS_STREAM, RESOLVED_FEATURES_STREAM
-from convert.adapters.solidworks.core.Native import HasVendorPartEncoding, VENDOR_UNLOADABLE_NOTES, decode_native_model_header, encode_native_part, native_axis_bindings
-from convert.adapters.solidworks.resolved.Core import BLIND_END_CONDITION, locate_features
-from convert.adapters.solidworks.programs.resolved.revolve.pin.default.Program import EncodeProgram as EncodeRevolvePinProgram, FieldOwners as RevolvePinOwners, ResolvedOps as RevolvePinOps
-from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import BuildEnvelope as BuildRevolvePinEnvelope, KPinPointsMm
+from convert.adapters.solidworks.container.Format import (
+    COMPONENT_TREE_STREAM,
+    CONFIGURATION_STREAM,
+    CONTENT_TYPES_STREAM,
+    FEATURES_STREAM,
+    KEYWORDS_STREAM,
+    KIT_DOCUMENT_STREAM,
+    KIT_NATIVE_STREAM,
+    KIT_RESOLVED_STREAM,
+    PARTITION_STREAM,
+    RELATIONSHIPS_STREAM,
+    RESOLVED_FEATURES_STREAM,
+)
+from convert.adapters.solidworks.core.Native import (
+    HasVendorPartEncoding,
+    VENDOR_UNLOADABLE_NOTES,
+    decode_native_model_header,
+    encode_native_part,
+    native_axis_bindings,
+)
+from convert.adapters.solidworks.resolved.Core import (
+    BLIND_END_CONDITION,
+    locate_features,
+)
+from convert.adapters.solidworks.programs.resolved.revolve.pin.default.Program import (
+    EncodeProgram as EncodeRevolvePinProgram,
+    FieldOwners as RevolvePinOwners,
+    ResolvedOps as RevolvePinOps,
+)
+from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import (
+    BuildEnvelope as BuildRevolvePinEnvelope,
+    KPinPointsMm,
+)
 from convert.geometry.Parasolid import _parasolid_header, _scan_partition_records
 from interchange import (
     BooleanOperation,

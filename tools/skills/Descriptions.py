@@ -40,5 +40,6 @@ KDescriptions = {
     "shadcn-pages": "Follow the shadcn UI CLI-first composition method. Use when adding UI primitives or building React and Next.js pages.",
     "split-large-definitions": "Split substantial declarations into focused files with exact symbol imports. Use when adding or changing code structure, modules, classes, functions, variables, registries, or imports.",
     "spdx-header": "Apply the repository's required SPDX headers. Use when creating project files; Agent Skills use schema-required license frontmatter instead.",
+    "user-owned-workspace": "Preserve user-owned workspace state. Use whenever inspecting or modifying a shared worktree, especially when unknown commits, branches, staged changes, unstaged changes, untracked files, or background Git activity appear.",
     "workos-token-verification": "Verify WorkOS user-management JWT access tokens with the client-specific issuer. Use when changing Python backend authentication, token validation, or backend files.",
 }

@@ -7,330 +7,277 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
-
-import math
-from pathlib import Path
-
-import pytest
-
+import math as MathInfo
+from pathlib import Path as FilePath
+import pytest as PytestLib
 from convert.adapters.solidworks.container.Container import SldprtArchive
-from convert.adapters.solidworks.container.Format import KEYWORDS_STREAM, RESOLVED_FEATURES_STREAM
-from convert.adapters.solidworks.core.Native import DERIVED_SUPPORT_KIND, FACE_SUPPORT_KIND, PLANE_SUPPORT_KIND, NativeModel, NativeProfile, NativeSketch, decode_native_model
-from convert.adapters.solidworks.resolved.Core import CIRCLE_POINT_ANGLE_DEGREES, DEPTH_COPY_DELTAS, DEPTH_COPY_SIGNS, FROM_END_SPEC_CLASS, FROM_REVERSE_RELATIVE, class_records, first_class_offset
+from convert.adapters.solidworks.container.Format import KEYWORDS_STREAM as Stream, RESOLVED_FEATURES_STREAM as StreamA
+from convert.adapters.solidworks.core.Native import DERIVED_SUPPORT_KIND as KindInfo, FACE_SUPPORT_KIND as KindInfoA, PLANE_SUPPORT_KIND as KindInfoB, NativeModel, NativeProfile, NativeSketch, decode_native_model as DecodeNativeModel
+from convert.adapters.solidworks.resolved.Core import CIRCLE_POINT_ANGLE_DEGREES as Degrees, DEPTH_COPY_DELTAS as Deltas, DEPTH_COPY_SIGNS as Signs, FROM_END_SPEC_CLASS as Class, FROM_REVERSE_RELATIVE as Relative, class_records as ClassRecords, first_class_offset as FirstClassOffset
 
-ROOT = Path(__file__).resolve().parents[4]
-CORPUS_PARTS = ROOT / ".rescratch" / "corpus" / "parts"
-CORPUS2_PARTS = ROOT / ".rescratch" / "corpus2" / "parts"
+# centralizes shared evidence so every related assertion uses one value
+KRootInfo = FilePath(__file__).resolve().parents[4]
 
-corpus_parts = pytest.mark.skipif(
-    not CORPUS_PARTS.is_dir(),
-    reason="the SOLIDWORKS single-feature corpus is not present in this checkout",
-)
-corpus2_parts = pytest.mark.skipif(
-    not CORPUS2_PARTS.is_dir(),
-    reason="the SOLIDWORKS multi-feature corpus is not present in this checkout",
-)
+# centralizes shared evidence so every related assertion uses one value
+KParts = KRootInfo / '.rescratch' / 'corpus' / 'parts'
 
-FRONT_PLANE_OBJECT_ID = 2
-TOP_PLANE_OBJECT_ID = 3
-RIGHT_PLANE_OBJECT_ID = 4
+# centralizes shared evidence so every related assertion uses one value
+KCorpusTwoParts = KRootInfo / '.rescratch' / 'corpus2' / 'parts'
 
-FRONT_BASIS = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
-TOP_BASIS = ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0))
-RIGHT_BASIS = ((0.0, 0.0, -1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0))
+# centralizes shared evidence so every related assertion uses one value
+KCorpusParts = PytestLib.mark.skipif(not KParts.is_dir(), reason='the SOLIDWORKS single-feature corpus is not present in this checkout')
 
-PLANE_SUPPORTS = (
-    ("PLANE_FRONT", FRONT_PLANE_OBJECT_ID, 3, FRONT_BASIS),
-    ("PLANE_TOP", TOP_PLANE_OBJECT_ID, 2, TOP_BASIS),
-    ("PLANE_RIGHT", RIGHT_PLANE_OBJECT_ID, 1, RIGHT_BASIS),
-)
+# centralizes shared evidence so every related assertion uses one value
+KCorpusTwoPartsA = PytestLib.mark.skipif(not KCorpusTwoParts.is_dir(), reason='the SOLIDWORKS multi-feature corpus is not present in this checkout')
 
-CIRCLE_RADII = (("CIRCLE_r10", 10.0), ("CIRCLE_r11", 11.0), ("CIRCLE_r20", 20.0))
-CIRCLE_CUT_RADII = (("CIRCLECUT_r4", 4.0), ("CIRCLECUT_r6", 6.0))
+# centralizes shared evidence so every related assertion uses one value
+KIdInfo = 2
 
-FRONT_DEPTH_PARTS = (
-    ("BASELINE_40x20x10", 10.0),
-    ("DEPTH_d11", 11.0),
-    ("DEPTH_d20", 20.0),
-    ("DEPTH_d50", 50.0),
-)
+# centralizes shared evidence so every related assertion uses one value
+KIdInfoB = 3
 
-BOUNDING_BOXES = (
-    ("BASELINE_40x20x10", (0.0, 0.0, 5.0), 45.82575694955841),
-    ("OFFSET_x10_y7", (10.0, 7.0, 5.0), 45.82575694955841),
-    ("DEPTH_d50", (0.0, 0.0, 25.0), 67.08203932499369),
-    ("MIDPLANE_d10", (0.0, 0.0, 0.0), 45.82575694955841),
-    ("REVERSED_d10", (0.0, 0.0, -5.0), 45.82575694955841),
-    ("PLANE_TOP", (0.0, 5.0, 0.0), 45.82575694955841),
-    ("PLANE_RIGHT", (5.0, 0.0, 0.0), 45.82575694955841),
-    ("CIRCLE_r10", (0.0, 0.0, 5.0), 30.0),
-)
+# centralizes shared evidence so every related assertion uses one value
+KIdInfoA = 4
 
-FACE_SUPPORTED_SKETCHES = (
-    ("TWOFEATURES_pad_pad", "Sketch2", CORPUS_PARTS),
-    ("TWOPAD_d5", "Sketch2", CORPUS2_PARTS),
-    ("CUTFACE_d5", "Sketch2", CORPUS2_PARTS),
-    ("THREEFEATURE_pad_cut_pad", "Sketch3", CORPUS2_PARTS),
-)
+# centralizes shared evidence so every related assertion uses one value
+KBasis = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 
-PLANE_SUPPORTED_SECOND_SKETCHES = (
-    ("CUTBASE_cd5", "Sketch2"),
-    ("CUTMID_d5", "Sketch2"),
-    ("PADPLANE_rev_d5", "Sketch2"),
-    ("CIRCLECUT_r4", "Sketch2"),
-    ("THREEFEATURE_pad_cut_pad", "Sketch2"),
-)
+# centralizes shared evidence so every related assertion uses one value
+KBasisB = ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0))
 
+# centralizes shared evidence so every related assertion uses one value
+KBasisA = ((0.0, 0.0, -1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0))
 
-def _decode(directory: Path, name: str) -> tuple[NativeModel, bytes]:
-    archive = SldprtArchive.from_bytes((directory / f"{name}.SLDPRT").read_bytes())
-    resolved = archive.require(RESOLVED_FEATURES_STREAM)
-    return decode_native_model(archive.require(KEYWORDS_STREAM), resolved), resolved
+# centralizes shared evidence so every related assertion uses one value
+KSupports = (('PLANE_FRONT', KIdInfo, 3, KBasis), ('PLANE_TOP', KIdInfoB, 2, KBasisB), ('PLANE_RIGHT', KIdInfoA, 1, KBasisA))
 
+# centralizes shared evidence so every related assertion uses one value
+KRadiiA = (('CIRCLE_r10', 10.0), ('CIRCLE_r11', 11.0), ('CIRCLE_r20', 20.0))
 
-def _sketch(model: NativeModel, name: str) -> NativeSketch:
-    return next(sketch for sketch in model.sketches if sketch.name == name)
+# centralizes shared evidence so every related assertion uses one value
+KRadii = (('CIRCLECUT_r4', 4.0), ('CIRCLECUT_r6', 6.0))
 
+# centralizes shared evidence so every related assertion uses one value
+KPartsA = (('BASELINE_40x20x10', 10.0), ('DEPTH_d11', 11.0), ('DEPTH_d20', 20.0), ('DEPTH_d50', 50.0))
 
-def _circles(sketch: NativeSketch) -> tuple[NativeProfile, ...]:
-    return tuple(profile for profile in sketch.profiles if profile.kind == "circle")
+# centralizes shared evidence so every related assertion uses one value
+KBoxes = (('BASELINE_40x20x10', (0.0, 0.0, 5.0), 45.82575694955841), ('OFFSET_x10_y7', (10.0, 7.0, 5.0), 45.82575694955841), ('DEPTH_d50', (0.0, 0.0, 25.0), 67.08203932499369), ('MIDPLANE_d10', (0.0, 0.0, 0.0), 45.82575694955841), ('REVERSED_d10', (0.0, 0.0, -5.0), 45.82575694955841), ('PLANE_TOP', (0.0, 5.0, 0.0), 45.82575694955841), ('PLANE_RIGHT', (5.0, 0.0, 0.0), 45.82575694955841), ('CIRCLE_r10', (0.0, 0.0, 5.0), 30.0))
 
+# centralizes shared evidence so every related assertion uses one value
+KSketches = (('TWOFEATURES_pad_pad', 'Sketch2', KParts), ('TWOPAD_d5', 'Sketch2', KCorpusTwoParts), ('CUTFACE_d5', 'Sketch2', KCorpusTwoParts), ('THREEFEATURE_pad_cut_pad', 'Sketch3', KCorpusTwoParts))
 
-@corpus_parts
-@pytest.mark.parametrize(("name", "plane_id", "axis_code", "basis"), PLANE_SUPPORTS)
-def test_principal_plane_sketches_report_the_stored_support_plane(
-    name: str,
-    plane_id: int,
-    axis_code: int,
-    basis: tuple[tuple[float, float, float], ...],
-) -> None:
-    model, _ = _decode(CORPUS_PARTS, name)
-    sketch = _sketch(model, "Sketch1")
-    assert sketch.support_plane_id == plane_id
-    assert sketch.support_kind == PLANE_SUPPORT_KIND
-    reference = sketch.support_plane
-    assert reference is not None
-    assert reference.plane_object_id == plane_id
-    assert reference.axis_code == axis_code
-    assert (reference.u_axis, reference.v_axis, reference.normal) == basis
-    assert {plane.object_id for plane in model.planes} >= {plane_id}
+# centralizes shared evidence so every related assertion uses one value
+KSketchesA = (('CUTBASE_cd5', 'Sketch2'), ('CUTMID_d5', 'Sketch2'), ('PADPLANE_rev_d5', 'Sketch2'), ('CIRCLECUT_r4', 'Sketch2'), ('THREEFEATURE_pad_cut_pad', 'Sketch2'))
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+def Decode(Directory: FilePath, NameText: str) -> tuple[NativeModel, bytes]:
+    Archive = SldprtArchive.from_bytes((Directory / f'{NameText}.SLDPRT').read_bytes())
+    Resolved = Archive.require(StreamA)
+    return (DecodeNativeModel(Archive.require(Stream), Resolved), Resolved)
 
-@corpus_parts
-def test_top_and_right_plane_sketches_no_longer_collapse_onto_the_front_plane() -> None:
-    reported = {}
-    for name, plane_id, _, _ in PLANE_SUPPORTS:
-        model, _ = _decode(CORPUS_PARTS, name)
-        reported[name] = _sketch(model, "Sketch1").support_plane_id
-        assert reported[name] == plane_id
-    assert len(set(reported.values())) == len(PLANE_SUPPORTS)
+# keeps this focused behavior isolated so regressions remain immediately visible
+def Sketch(ModelDoc: NativeModel, NameText: str) -> NativeSketch:
+    return next((SketchA for SketchA in ModelDoc.sketches if SketchA.name == NameText))
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+def Circles(SketchA: NativeSketch) -> tuple[NativeProfile, ...]:
+    return tuple((Profile for Profile in SketchA.profiles if Profile.kind == 'circle'))
 
-@corpus_parts
-def test_the_support_plane_reference_is_read_from_the_sketch_chain_record() -> None:
-    model, resolved = _decode(CORPUS_PARTS, "PLANE_TOP")
-    reference = _sketch(model, "Sketch1").support_plane
-    assert reference is not None
-    chain = first_class_offset(class_records(resolved), "moSketchChain_c")
-    assert chain is not None
-    assert reference.offset == chain + 209
-    assert reference.basis_offset == chain + 224
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+@PytestLib.mark.parametrize(('name', 'plane_id', 'axis_code', 'basis'), KSupports)
+def TestPPSRTSSP(NameText: str, PlaneId: int, AxisCode: int, Basis: tuple[tuple[float, float, float], ...]) -> None:
+    ModelDoc, IgnoredValue = Decode(KParts, NameText)
+    SketchA = Sketch(ModelDoc, 'Sketch1')
+    assert SketchA.support_plane_id == PlaneId
+    assert SketchA.support_kind == KindInfoB
+    Reference = SketchA.support_plane
+    assert Reference is not None
+    assert Reference.plane_object_id == PlaneId
+    assert Reference.axis_code == AxisCode
+    assert (Reference.u_axis, Reference.v_axis, Reference.normal) == Basis
+    assert {Plane.object_id for Plane in ModelDoc.planes} >= {PlaneId}
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+def NamedTTARPSNLCO() -> None:
+    Reported = {}
+    for NameText, PlaneId, IgnoredValue, IgnoredValue in KSupports:
+        ModelDoc, IgnoredValue = Decode(KParts, NameText)
+        Reported[NameText] = Sketch(ModelDoc, 'Sketch1').support_plane_id
+        assert Reported[NameText] == PlaneId
+    assert len(set(Reported.values())) == len(KSupports)
 
-@corpus_parts
-@pytest.mark.parametrize(("name", "radius_mm"), CIRCLE_RADII)
-def test_circle_radii_are_reconstructed_from_the_stored_circumference_point(
-    name: str, radius_mm: float
-) -> None:
-    model, _ = _decode(CORPUS_PARTS, name)
-    circles = _circles(_sketch(model, "Sketch1"))
-    assert len(circles) == 1
-    center_x, center_y, decoded = circles[0].coordinates
-    assert (center_x, center_y) == (0.0, 0.0)
-    assert abs(decoded - radius_mm) <= 1.8e-15
-    assert circles[0].start_angle_degrees is not None
-    assert circles[0].start_angle_degrees == pytest.approx(
-        CIRCLE_POINT_ANGLE_DEGREES, abs=1e-12
-    )
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+def TestTSPRIRFTSCR() -> None:
+    ModelDoc, Resolved = Decode(KParts, 'PLANE_TOP')
+    Reference = Sketch(ModelDoc, 'Sketch1').support_plane
+    assert Reference is not None
+    Chain = FirstClassOffset(ClassRecords(Resolved), 'moSketchChain_c')
+    assert Chain is not None
+    assert Reference.offset == Chain + 209
+    assert Reference.basis_offset == Chain + 224
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+@PytestLib.mark.parametrize(('name', 'radius_mm'), KRadiiA)
+def TestCRARFTSCP(NameText: str, RadiusMm: float) -> None:
+    ModelDoc, IgnoredValue = Decode(KParts, NameText)
+    CirclesA = Circles(Sketch(ModelDoc, 'Sketch1'))
+    assert len(CirclesA) == 1
+    CenterX, CenterY, Decoded = CirclesA[0].coordinates
+    assert (CenterX, CenterY) == (0.0, 0.0)
+    assert abs(Decoded - RadiusMm) <= 1.8e-15
+    assert CirclesA[0].start_angle_degrees is not None
+    assert CirclesA[0].start_angle_degrees == PytestLib.approx(Degrees, abs=1e-12)
 
-@corpus2_parts
-@pytest.mark.parametrize(("name", "radius_mm"), CIRCLE_CUT_RADII)
-def test_second_feature_circle_radii_are_exact(name: str, radius_mm: float) -> None:
-    model, _ = _decode(CORPUS2_PARTS, name)
-    circles = _circles(_sketch(model, "Sketch2"))
-    assert len(circles) == 1
-    assert abs(circles[0].coordinates[2] - radius_mm) <= 1.8e-15
-    assert circles[0].start_angle_degrees == pytest.approx(
-        CIRCLE_POINT_ANGLE_DEGREES, abs=1e-12
-    )
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusTwoPartsA
+@PytestLib.mark.parametrize(('name', 'radius_mm'), KRadii)
+def TestSFCRAE(NameText: str, RadiusMm: float) -> None:
+    ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, NameText)
+    CirclesA = Circles(Sketch(ModelDoc, 'Sketch2'))
+    assert len(CirclesA) == 1
+    assert abs(CirclesA[0].coordinates[2] - RadiusMm) <= 1.8e-15
+    assert CirclesA[0].start_angle_degrees == PytestLib.approx(Degrees, abs=1e-12)
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+def TestRPCNASA() -> None:
+    ModelDoc, IgnoredValue = Decode(KParts, 'BASELINE_40x20x10')
+    Profiles = Sketch(ModelDoc, 'Sketch1').profiles
+    assert [Profile.kind for Profile in Profiles] == ['rectangle']
+    assert Profiles[0].start_angle_degrees is None
 
-@corpus_parts
-def test_rectangular_profiles_carry_no_arc_start_angle() -> None:
-    model, _ = _decode(CORPUS_PARTS, "BASELINE_40x20x10")
-    profiles = _sketch(model, "Sketch1").profiles
-    assert [profile.kind for profile in profiles] == ["rectangle"]
-    assert profiles[0].start_angle_degrees is None
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+@PytestLib.mark.parametrize(('name', 'depth_mm'), KPartsA)
+def TestASDCAM(NameText: str, DepthMm: float) -> None:
+    ModelDoc, IgnoredValue = Decode(KParts, NameText)
+    Operation = ModelDoc.operations[0]
+    assert Operation.length_mm == PytestLib.approx(DepthMm)
+    Copies = Operation.depth_copies
+    assert len(Copies) == len(Deltas)
+    Anchor = Copies[0].offset
+    assert tuple((CopyInfo.offset - Anchor for CopyInfo in Copies)) == Deltas
+    assert tuple((CopyInfo.sign for CopyInfo in Copies)) == Signs
+    for CopyInfo in Copies:
+        assert CopyInfo.value_mm == PytestLib.approx(CopyInfo.sign * DepthMm, abs=1e-09)
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusTwoPartsA
+def TestTSFDCUTSL() -> None:
+    ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, 'CUTBASE_cd7')
+    Second = ModelDoc.operations[1]
+    assert Second.length_mm == PytestLib.approx(7.0)
+    Copies = Second.depth_copies
+    Anchor = Copies[0].offset
+    assert tuple((CopyInfo.offset - Anchor for CopyInfo in Copies)) == Deltas
+    assert tuple((CopyInfo.sign for CopyInfo in Copies)) == Signs
+    for CopyInfo in Copies:
+        assert CopyInfo.value_mm == PytestLib.approx(CopyInfo.sign * 7.0, abs=1e-09)
 
-@corpus_parts
-@pytest.mark.parametrize(("name", "depth_mm"), FRONT_DEPTH_PARTS)
-def test_all_six_depth_copies_are_modelled(name: str, depth_mm: float) -> None:
-    model, _ = _decode(CORPUS_PARTS, name)
-    operation = model.operations[0]
-    assert operation.length_mm == pytest.approx(depth_mm)
-    copies = operation.depth_copies
-    assert len(copies) == len(DEPTH_COPY_DELTAS)
-    anchor = copies[0].offset
-    assert tuple(copy.offset - anchor for copy in copies) == DEPTH_COPY_DELTAS
-    assert tuple(copy.sign for copy in copies) == DEPTH_COPY_SIGNS
-    for copy in copies:
-        assert copy.value_mm == pytest.approx(copy.sign * depth_mm, abs=1e-9)
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusTwoPartsA
+def TestAFSSFSTAEPC() -> None:
+    ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, 'TWOPAD_d8')
+    Second = ModelDoc.operations[1]
+    Anchor = Second.depth_copies[0].offset
+    ByDelta = {CopyInfo.offset - Anchor: CopyInfo for CopyInfo in Second.depth_copies}
+    assert set(ByDelta) == set(Deltas)
+    assert ByDelta[0].value_mm == PytestLib.approx(8.0, abs=1e-09)
+    assert ByDelta[72].value_mm == PytestLib.approx(18.0, abs=1e-09)
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+@PytestLib.mark.parametrize(('name', 'center_mm', 'diameter_mm'), KBoxes)
+def TestTBBCID(NameText: str, CenterMm: tuple[float, float, float], DiameterMm: float) -> None:
+    ModelDoc, Resolved = Decode(KParts, NameText)
+    BoxInfo = ModelDoc.bounding_box
+    assert BoxInfo is not None
+    Offset = FirstClassOffset(ClassRecords(Resolved), 'moBBoxCenterData_c')
+    assert Offset is not None
+    assert BoxInfo.offset == Offset + 28
+    assert BoxInfo.center_mm == PytestLib.approx(CenterMm, abs=1e-09)
+    assert BoxInfo.diameter_mm == PytestLib.approx(DiameterMm, abs=1e-06)
 
-@corpus2_parts
-def test_the_second_feature_depth_copies_use_the_same_layout() -> None:
-    model, _ = _decode(CORPUS2_PARTS, "CUTBASE_cd7")
-    second = model.operations[1]
-    assert second.length_mm == pytest.approx(7.0)
-    copies = second.depth_copies
-    anchor = copies[0].offset
-    assert tuple(copy.offset - anchor for copy in copies) == DEPTH_COPY_DELTAS
-    assert tuple(copy.sign for copy in copies) == DEPTH_COPY_SIGNS
-    for copy in copies:
-        assert copy.value_mm == pytest.approx(copy.sign * 7.0, abs=1e-9)
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+def TestTBSDMTBHE() -> None:
+    ModelDoc, IgnoredValue = Decode(KParts, 'WIDTH_w100')
+    BoxInfo = ModelDoc.bounding_box
+    assert BoxInfo is not None
+    assert BoxInfo.diameter_mm == PytestLib.approx(2.0 * MathInfo.sqrt(50.0 ** 2 + 10.0 ** 2 + 5.0 ** 2), abs=1e-09)
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+@PytestLib.mark.parametrize(('name', 'mirrored'), (('BASELINE_40x20x10', 0), ('REVERSED_d10', 1), ('MIDPLANE_d10', 0)))
+def TestTMDFIR(NameText: str, Mirrored: int) -> None:
+    ModelDoc, Resolved = Decode(KParts, NameText)
+    Operation = ModelDoc.operations[0]
+    Offset = FirstClassOffset(ClassRecords(Resolved), Class)
+    assert Offset is not None
+    assert Operation.mirrored_direction_offset == Offset + Relative
+    assert Operation.mirrored_direction_code == Mirrored
+    assert Operation.mirrored_direction_code == Operation.direction_code
 
-@corpus2_parts
-def test_a_face_supported_second_feature_stores_the_absolute_end_plane_copy() -> None:
-    model, _ = _decode(CORPUS2_PARTS, "TWOPAD_d8")
-    second = model.operations[1]
-    anchor = second.depth_copies[0].offset
-    by_delta = {copy.offset - anchor: copy for copy in second.depth_copies}
-    assert set(by_delta) == set(DEPTH_COPY_DELTAS)
-    assert by_delta[0].value_mm == pytest.approx(8.0, abs=1e-9)
-    assert by_delta[72].value_mm == pytest.approx(18.0, abs=1e-9)
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+@PytestLib.mark.parametrize(('name', 'record_end'), (('BASELINE_40x20x10', 8280), ('PLANE_TOP', 8352), ('PLANE_RIGHT', 8352), ('CIRCLE_r10', 7881)))
+def TestTEORTRE(NameText: str, RecordEnd: int) -> None:
+    ModelDoc, Resolved = Decode(KParts, NameText)
+    Operation = ModelDoc.operations[0]
+    assert Operation.native_end == RecordEnd
+    assert Operation.native_end < len(Resolved)
+    assert Operation.native_offset < Operation.native_end
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+def TestTEREITNCM() -> None:
+    ModelDoc, Resolved = Decode(KParts, 'BASELINE_40x20x10')
+    Operation = ModelDoc.operations[0]
+    RecordList = ClassRecords(Resolved)
+    Extrusion = next((RecordInfo for RecordInfo in RecordList if RecordInfo.name == 'moExtrusion_c'))
+    Following = min((RecordInfo.offset for RecordInfo in RecordList if RecordInfo.offset > Extrusion.offset))
+    assert Operation.native_offset == Extrusion.data_offset
+    assert Operation.native_end == Following
 
-@corpus_parts
-@pytest.mark.parametrize(("name", "center_mm", "diameter_mm"), BOUNDING_BOXES)
-def test_the_bounding_box_cache_is_decoded(
-    name: str, center_mm: tuple[float, float, float], diameter_mm: float
-) -> None:
-    model, resolved = _decode(CORPUS_PARTS, name)
-    box = model.bounding_box
-    assert box is not None
-    offset = first_class_offset(class_records(resolved), "moBBoxCenterData_c")
-    assert offset is not None
-    assert box.offset == offset + 28
-    assert box.center_mm == pytest.approx(center_mm, abs=1e-9)
-    assert box.diameter_mm == pytest.approx(diameter_mm, abs=1e-6)
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusTwoPartsA
+@PytestLib.mark.parametrize(('name', 'sketch_name'), KSketchesA)
+def TestPSSSRAPS(NameText: str, SketchName: str) -> None:
+    ModelDoc, IgnoredValue = Decode(KCorpusTwoParts, NameText)
+    SketchA = Sketch(ModelDoc, SketchName)
+    assert SketchA.support_kind == KindInfoB
+    assert SketchA.support_plane_id == KIdInfo
+    Reference = SketchA.support_plane
+    assert Reference is not None
+    assert Reference.plane_object_id == KIdInfo
+    assert Reference.axis_code == 3
+    assert Reference.basis_offset is None
+    assert SketchA.native_offset < Reference.offset < SketchA.native_end
 
+# keeps this focused behavior isolated so regressions remain immediately visible
+@PytestLib.mark.parametrize(('name', 'sketch_name', 'directory'), KSketches)
+def TestFSSANRAPS(NameText: str, SketchName: str, Directory: FilePath) -> None:
+    if not Directory.is_dir():
+        PytestLib.skip('the SOLIDWORKS corpus is not present in this checkout')
+    ModelDoc, IgnoredValue = Decode(Directory, NameText)
+    SketchA = Sketch(ModelDoc, SketchName)
+    assert SketchA.support_kind == KindInfoA
+    assert SketchA.support_plane is None
 
-@corpus_parts
-def test_the_bounding_sphere_diameter_matches_the_body_half_extents() -> None:
-    model, _ = _decode(CORPUS_PARTS, "WIDTH_w100")
-    box = model.bounding_box
-    assert box is not None
-    assert box.diameter_mm == pytest.approx(
-        2.0 * math.sqrt(50.0**2 + 10.0**2 + 5.0**2), abs=1e-9
-    )
-
-
-@corpus_parts
-@pytest.mark.parametrize(
-    ("name", "mirrored"),
-    (("BASELINE_40x20x10", 0), ("REVERSED_d10", 1), ("MIDPLANE_d10", 0)),
-)
-def test_the_mirrored_direction_flag_is_read(name: str, mirrored: int) -> None:
-    model, resolved = _decode(CORPUS_PARTS, name)
-    operation = model.operations[0]
-    offset = first_class_offset(class_records(resolved), FROM_END_SPEC_CLASS)
-    assert offset is not None
-    assert operation.mirrored_direction_offset == offset + FROM_REVERSE_RELATIVE
-    assert operation.mirrored_direction_code == mirrored
-    assert operation.mirrored_direction_code == operation.direction_code
-
-
-@corpus_parts
-@pytest.mark.parametrize(
-    ("name", "record_end"),
-    (
-        ("BASELINE_40x20x10", 8280),
-        ("PLANE_TOP", 8352),
-        ("PLANE_RIGHT", 8352),
-        ("CIRCLE_r10", 7881),
-    ),
-)
-def test_the_extrusion_operation_reports_the_record_end(
-    name: str, record_end: int
-) -> None:
-    model, resolved = _decode(CORPUS_PARTS, name)
-    operation = model.operations[0]
-    assert operation.native_end == record_end
-    assert operation.native_end < len(resolved)
-    assert operation.native_offset < operation.native_end
-
-
-@corpus_parts
-def test_the_extrusion_record_end_is_the_next_class_marker() -> None:
-    model, resolved = _decode(CORPUS_PARTS, "BASELINE_40x20x10")
-    operation = model.operations[0]
-    records = class_records(resolved)
-    extrusion = next(record for record in records if record.name == "moExtrusion_c")
-    following = min(
-        record.offset for record in records if record.offset > extrusion.offset
-    )
-    assert operation.native_offset == extrusion.data_offset
-    assert operation.native_end == following
-
-
-@corpus2_parts
-@pytest.mark.parametrize(("name", "sketch_name"), PLANE_SUPPORTED_SECOND_SKETCHES)
-def test_plane_supported_second_sketches_report_a_plane_support(
-    name: str, sketch_name: str
-) -> None:
-    model, _ = _decode(CORPUS2_PARTS, name)
-    sketch = _sketch(model, sketch_name)
-    assert sketch.support_kind == PLANE_SUPPORT_KIND
-    assert sketch.support_plane_id == FRONT_PLANE_OBJECT_ID
-    reference = sketch.support_plane
-    assert reference is not None
-    assert reference.plane_object_id == FRONT_PLANE_OBJECT_ID
-    assert reference.axis_code == 3
-    assert reference.basis_offset is None
-    assert sketch.native_offset < reference.offset < sketch.native_end
-
-
-@pytest.mark.parametrize(("name", "sketch_name", "directory"), FACE_SUPPORTED_SKETCHES)
-def test_face_supported_sketches_are_not_reported_as_plane_supported(
-    name: str, sketch_name: str, directory: Path
-) -> None:
-    if not directory.is_dir():
-        pytest.skip("the SOLIDWORKS corpus is not present in this checkout")
-    model, _ = _decode(directory, name)
-    sketch = _sketch(model, sketch_name)
-    assert sketch.support_kind == FACE_SUPPORT_KIND
-    assert sketch.support_plane is None
-
-
-@corpus_parts
-def test_every_corpus_part_decodes_without_diagnostics() -> None:
-    for path in sorted(CORPUS_PARTS.glob("*.SLDPRT")):
-        if path.name.startswith("~$"):
+# keeps this focused behavior isolated so regressions remain immediately visible
+@KCorpusParts
+def TestECPDWD() -> None:
+    for TargetPath in sorted(KParts.glob('*.SLDPRT')):
+        if TargetPath.name.startswith('~$'):
             continue
-        archive = SldprtArchive.from_bytes(path.read_bytes())
-        model = decode_native_model(
-            archive.require(KEYWORDS_STREAM),
-            archive.require(RESOLVED_FEATURES_STREAM),
-        )
-        assert model.diagnostics == ()
-        assert model.bounding_box is not None
-        assert model.sketches
-        for sketch in model.sketches:
-            assert sketch.support_kind in {
-                PLANE_SUPPORT_KIND,
-                FACE_SUPPORT_KIND,
-                DERIVED_SUPPORT_KIND,
-            }
+        Archive = SldprtArchive.from_bytes(TargetPath.read_bytes())
+        ModelDoc = DecodeNativeModel(Archive.require(Stream), Archive.require(StreamA))
+        assert ModelDoc.diagnostics == ()
+        assert ModelDoc.bounding_box is not None
+        assert ModelDoc.sketches
+        for SketchA in ModelDoc.sketches:
+            assert SketchA.support_kind in {KindInfoB, KindInfoA, KindInfo}
