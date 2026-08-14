@@ -1183,6 +1183,207 @@ def Required(DocValue: CadDocument) -> frozenset[Capability]:
     )
 
 
+# this state exists because bundle planning and emission share mutable results
+@DataClass(slots=True)
+class BundleState:
+    Names: dict[str, str]
+    Payloads: dict[PathValue, bytes]
+    Stamps: dict[str, int]
+    UsedNames: set[str]
+    Complete: bool
+    Capabilities: set[Capability]
+    Targets: list[tuple[ComponentDefinition, CadDoc, str, PathValue, PathValue]]
+
+
+# this definition exists because component documents may require nested extraction
+def BundleComponent(
+    DocValue: CadDocument,
+    Definition: ComponentDefinition,
+    Documents: Mapping[str, AnyValue],
+) -> CadDoc | None:
+    Component = Documents.get(Definition.document_id)
+    if (
+        not isinstance(Component, CadDoc)
+        and str(Definition.kind) == ComponentKind.ASSEMBLY.value
+    ):
+        Component = NestedAsmDoc(DocValue, Definition.id)
+    return Component if isinstance(Component, CadDoc) else None
+
+
+# this definition exists because bundle members need unique vendor suffix names
+def BundleNameMut(
+    Definition: ComponentDefinition,
+    Component: CadDocument,
+    KeyValue: str,
+    UsedNamesMut: set[str],
+) -> str:
+    Suffix = SuffixByFormatId[
+        KAsmFormatId if Component.assembly is not None else KFormatId
+    ]
+    SourceName = PureWindowsPath(
+        str(
+            Definition.attributes.get("native_source_path")
+            or Definition.source_path
+            or Component.source.path
+        )
+    ).name
+    Choice = PathValue(SourceName).name if SourceName else ""
+    if PathValue(Choice).suffix.casefold() != Suffix:
+        Choice = f"{Definition.name or KeyValue}{Suffix}"
+    StemValue = PathValue(Choice).stem or "component"
+    Index = 1
+    while Choice.casefold() in UsedNamesMut:
+        Index += 1
+        Choice = f"{StemValue}-{Index}{Suffix}"
+    UsedNamesMut.add(Choice.casefold())
+    return Choice
+
+
+# this definition exists because bundle planning assigns all cross document paths
+def PlanBundleMut(
+    DocValue: CadDocument,
+    Definitions: Sequence[ComponentDefinition],
+    Documents: Mapping[str, AnyValue],
+    Target: PathValue,
+    FinalPath: PathValue,
+    StateMut: BundleState,
+) -> None:
+    for Definition in Definitions:
+        KeyValue = Definition.document_id or Definition.id
+        if KeyValue in StateMut.Names:
+            StateMut.Names[Definition.id] = StateMut.Names[KeyValue]
+            continue
+        Component = BundleComponent(DocValue, Definition, Documents)
+        if Component is None:
+            StateMut.Complete = False
+            continue
+        Choice = BundleNameMut(Definition, Component, KeyValue, StateMut.UsedNames)
+        TargetValue = (Target.parent / Choice).resolve()
+        FinalTarget = (FinalPath.parent / Choice).resolve()
+        TargetName = str(FinalTarget)
+        StateMut.Names[KeyValue] = TargetName
+        StateMut.Names[Definition.id] = TargetName
+        if Definition.document_id:
+            StateMut.Names[Definition.document_id] = TargetName
+        StateMut.Targets.append(
+            (Definition, Component, Choice, TargetValue, FinalTarget)
+        )
+
+
+# this predicate exists because nested members require emitted child stamps first
+def IsBundleReady(
+    TargetValue: tuple[ComponentDefinition, CadDoc, str, PathValue, PathValue],
+    Names: Mapping[str, str],
+    Stamps: Mapping[str, int],
+) -> bool:
+    Component = TargetValue[1]
+    if Component.assembly is None:
+        return True
+    for ChildValue in Component.assembly.definitions:
+        if ChildValue.id == Component.assembly.root_definition_id:
+            continue
+        ChildName = Names.get(ChildValue.document_id or ChildValue.id) or Names.get(
+            ChildValue.id
+        )
+        if not ChildName or str(PureWindowsPath(ChildName)).casefold() not in Stamps:
+            return False
+    return True
+
+
+# this definition exists because bundle member writes need isolated options
+def BundleMember(
+    Component: CadDocument,
+    Choice: str,
+    Settings: WriteOptions,
+    Names: Mapping[str, str],
+    Stamps: Mapping[str, int],
+) -> tuple[AnyValue, bytes]:
+    Buffer = BytesIo()
+    Values = dict(Settings.values)
+    Values["portable"] = False
+    Values["bundle_member"] = Component.assembly is not None
+    Values["bundle_names"] = FrozenMapping(Names)
+    Values["bundle_stamps"] = FrozenMapping(Stamps)
+    Values["model_name"] = PathValue(Choice).stem
+    Result = SldprtAdapter().write(
+        Component,
+        Buffer,
+        WriteOptions(
+            overwrite=True, validate=Settings.validate, values=FrozenMapping(Values)
+        ),
+    )
+    return (Result, Buffer.getvalue())
+
+
+# this definition exists because bundle member bytes and stamps must stay atomic
+def StoreMemberMut(
+    Payload: bytes,
+    TargetValue: PathValue,
+    FinalTarget: PathValue,
+    FinalOverwrite: bool,
+    StateMut: BundleState,
+) -> None:
+    MemberArchive = SldprtArchive.from_bytes(Payload)
+    StampData = MemberArchive.streams.get("ModelStamps", b"")
+    if len(StampData) >= 4:
+        StampKey = str(PureWindowsPath(FinalTarget)).casefold()
+        StateMut.Stamps[StampKey] = Struct.unpack_from("<I", StampData)[0]
+    if not FinalTarget.exists():
+        StateMut.Payloads[TargetValue] = Payload
+        return
+    if FinalTarget.read_bytes() == Payload:
+        return
+    if not FinalOverwrite:
+        raise FileExistsError(FinalTarget)
+    StateMut.Payloads[TargetValue] = Payload
+
+
+# this definition exists because dependency ordering needs deterministic selection
+def FindReadyTarget(
+    PendingTargets: Sequence[
+        tuple[ComponentDefinition, CadDoc, str, PathValue, PathValue]
+    ],
+    State: BundleState,
+) -> int | None:
+    for TargetIndex, TargetValue in enumerate(PendingTargets):
+        if IsBundleReady(TargetValue, State.Names, State.Stamps):
+            return TargetIndex
+    return None
+
+
+# this definition exists because bundle emission mutates one accumulated result
+def BuildBundleMut(
+    Settings: WriteOptions,
+    AvailableNames: set[str],
+    FinalOverwrite: bool,
+    StateMut: BundleState,
+) -> None:
+    PendingTargets = list(StateMut.Targets)
+    while PendingTargets:
+        ReadyIndex = FindReadyTarget(PendingTargets, StateMut)
+        if ReadyIndex is None:
+            StateMut.Complete = False
+            ReadyIndex = 0
+        Ignored, Component, Choice, TargetValue, FinalTarget = PendingTargets.pop(
+            ReadyIndex
+        )
+        Result, Payload = BundleMember(
+            Component, Choice, Settings, StateMut.Names, StateMut.Stamps
+        )
+        StoreMemberMut(
+            Payload, TargetValue, FinalTarget, FinalOverwrite, StateMut
+        )
+        NativeResult = (
+            Result.application_usable
+            and Result.vendor_loadable
+            and (not Result.requirements or IsBundleSatisfi(Component, AvailableNames))
+        )
+        if NativeResult:
+            StateMut.Capabilities.update(Result.native_capabilities)
+        else:
+            StateMut.Complete = False
+
+
 # this definition exists because focused behavior needs one stable owner
 def AsmBundleA(
     DocValue: CadDocument, Target: Path, Settings: WriteOptions
@@ -1190,7 +1391,6 @@ def AsmBundleA(
     AsmValue = DocValue.assembly
     if AsmValue is None:
         return AsmBundle({}, {}, {}, False)
-    Documents = {Component.id: Component.document for Component in AsmValue.documents}
     Definitions = tuple(
         (
             Definition
@@ -1198,158 +1398,36 @@ def AsmBundleA(
             if Definition.id != AsmValue.root_definition_id
         )
     )
-    Names: dict[str, str] = {}
-    Payloads: dict[PathValue, bytes] = {}
-    StampValues: dict[str, int] = {}
-    UsedValue = {Target.name.casefold()}
-    Complete = True
-    BundleCaps: set[Capability] = set()
-    Targets: list[tuple[ComponentDefinition, CadDoc, str, PathValue, PathValue]] = []
     FinalValue = Settings.values.get("final_destination")
     FinalPath = (
         PathValue(FinalValue).expanduser().resolve()
         if isinstance(FinalValue, (str, PathValue))
         else Target
     )
-    for Definition in Definitions:
-        KeyValue = Definition.document_id or Definition.id
-        if KeyValue in Names:
-            Names[Definition.id] = Names[KeyValue]
-            continue
-        Component = Documents.get(Definition.document_id)
-        if (
-            not isinstance(Component, CadDoc)
-            and str(Definition.kind) == ComponentKind.ASSEMBLY.value
-        ):
-            Component = NestedAsmDoc(DocValue, Definition.id)
-        if not isinstance(Component, CadDoc):
-            Complete = False
-            continue
-        Suffix = SuffixByFormatId[
-            KAsmFormatId if Component.assembly is not None else KFormatId
-        ]
-        SourceName = PureWindowsPath(
-            str(
-                Definition.attributes.get("native_source_path")
-                or Definition.source_path
-                or Component.source.path
-            )
-        ).name
-        Choice = PathValue(SourceName).name if SourceName else ""
-        if PathValue(Choice).suffix.casefold() != Suffix:
-            Choice = f"{Definition.name or KeyValue}{Suffix}"
-        StemValue = PathValue(Choice).stem or "component"
-        Index = 1
-        while Choice.casefold() in UsedValue:
-            Index += 1
-            Choice = f"{StemValue}-{Index}{Suffix}"
-        UsedValue.add(Choice.casefold())
-        TargetA = (Target.parent / Choice).resolve()
-        FinalTarget = (FinalPath.parent / Choice).resolve()
-        TargetName = str(FinalTarget)
-        Names[KeyValue] = TargetName
-        Names[Definition.id] = TargetName
-        if Definition.document_id:
-            Names[Definition.document_id] = TargetName
-        Targets.append((Definition, Component, Choice, TargetA, FinalTarget))
+    StateMut = BundleState({}, {}, {}, {Target.name.casefold()}, True, set(), [])
+    Documents = {Component.id: Component.document for Component in AsmValue.documents}
+    PlanBundleMut(DocValue, Definitions, Documents, Target, FinalPath, StateMut)
     AvailableNames = {
-        PureWindowsPath(NameValue).name.casefold() for NameValue in Names.values()
+        PureWindowsPath(NameValue).name.casefold()
+        for NameValue in StateMut.Names.values()
     }
     FinalOverwrite = (
         Settings.overwrite or Settings.values.get("final_overwrite") is True
     )
-
-    # this definition exists because focused behavior needs one stable owner
-    def IsTargetReady(
-        TargetValue: tuple[ComponentDefinition, CadDocument, str, Path, Path],
-    ) -> bool:
-        ComponentValue = TargetValue[1]
-        if ComponentValue.assembly is None:
-            return True
-        ChildDefs = tuple(
-            (
-                DefinitionValue
-                for DefinitionValue in ComponentValue.assembly.definitions
-                if DefinitionValue.id != ComponentValue.assembly.root_definition_id
-            )
-        )
-        for ChildValue in ChildDefs:
-            ChildName = Names.get(ChildValue.document_id or ChildValue.id)
-            if not ChildName:
-                ChildName = Names.get(ChildValue.id)
-            if not ChildName:
-                return False
-            ChildKey = str(PureWindowsPath(ChildName)).casefold()
-            if ChildKey not in StampValues:
-                return False
-        return True
-
-    PendingTargets = list(Targets)
-    while PendingTargets:
-        ReadyIndex = next(
-            (
-                TargetIndex
-                for TargetIndex, TargetValue in enumerate(PendingTargets)
-                if IsTargetReady(TargetValue)
-            ),
-            None,
-        )
-        if ReadyIndex is None:
-            Complete = False
-            ReadyIndex = 0
-        Definition, Component, Choice, TargetA, FinalTarget = PendingTargets.pop(
-            ReadyIndex
-        )
-        Buffer = BytesIo()
-        Values = dict(Settings.values)
-        Values["portable"] = False
-        Values["bundle_member"] = Component.assembly is not None
-        Values["bundle_names"] = FrozenMapping(Names)
-        Values["bundle_stamps"] = FrozenMapping(StampValues)
-        Values["model_name"] = PathValue(Choice).stem
-        Result = SldprtAdapter().write(
-            Component,
-            Buffer,
-            WriteOptions(
-                overwrite=True, validate=Settings.validate, values=FrozenMapping(Values)
-            ),
-        )
-        Payload = Buffer.getvalue()
-        MemberArchive = SldprtArchive.from_bytes(Payload)
-        StampData = MemberArchive.streams.get("ModelStamps", b"")
-        if len(StampData) >= 4:
-            StampKey = str(PureWindowsPath(FinalTarget)).casefold()
-            StampValues[StampKey] = Struct.unpack_from("<I", StampData)[0]
-        if FinalTarget.exists():
-            if FinalTarget.read_bytes() != Payload:
-                if FinalOverwrite:
-                    Payloads[TargetA] = Payload
-                else:
-                    raise FileExistsError(FinalTarget)
-        else:
-            Payloads[TargetA] = Payload
-        NativeResult = (
-            Result.application_usable
-            and Result.vendor_loadable
-            and (not Result.requirements or IsBundleSatisfi(Component, AvailableNames))
-        )
-        if not NativeResult:
-            Complete = False
-        else:
-            BundleCaps.update(Result.native_capabilities)
+    BuildBundleMut(Settings, AvailableNames, FinalOverwrite, StateMut)
     if any(
         (
-            (Definition.document_id or Definition.id) not in Names
+            (Definition.document_id or Definition.id) not in StateMut.Names
             for Definition in Definitions
         )
     ):
-        Complete = False
+        StateMut.Complete = False
     return AsmBundle(
-        FrozenMapping(Names),
-        FrozenMapping(Payloads),
-        FrozenMapping(StampValues),
-        Complete,
-        frozenset(BundleCaps),
+        FrozenMapping(StateMut.Names),
+        FrozenMapping(StateMut.Payloads),
+        FrozenMapping(StateMut.Stamps),
+        StateMut.Complete,
+        frozenset(StateMut.Capabilities),
     )
 
 
