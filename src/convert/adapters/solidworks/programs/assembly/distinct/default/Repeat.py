@@ -13,7 +13,10 @@ from pathlib import PureWindowsPath
 from types import MappingProxyType
 from typing import Any as AnyValue
 
-from convert.adapters.solidworks.programs.assembly.distinct.quintuples.Program import EncodeField, StreamPrograms
+from convert.adapters.solidworks.programs.assembly.distinct.quintuples.Program import (
+    EncodeField,
+    StreamPrograms,
+)
 from convert.adapters.solidworks.programs.assembly.default.Repeat import (
     IsIdentityBasis,
     OccurHash,
@@ -502,8 +505,6 @@ def EncodePathCore(
         "Contents/Definition": EncodeOps(
             StreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
         ),
-        "Contents/Config-0-ModelHeader": EncodeHeader(
-            ModelName, ConfigName, CoreItems
-        ),
+        "Contents/Config-0-ModelHeader": EncodeHeader(ModelName, ConfigName, CoreItems),
     }
     return MappingProxyType(StreamsMap)

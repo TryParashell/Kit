@@ -12,16 +12,26 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import PureWindowsPath
 from types import MappingProxyType
-from typing import Any
+from typing import Any as AnyValue
 
-from convert.adapters.solidworks.programs.assembly.distinct.default.Repeat import ConfigShift1 as ConfigShiftUnique, ConfigShift5 as ConfigShiftMap, ResolvedShift1 as ResolvedShiftUnique, ResolvedShift5 as ResolvedShiftMap, ResolvedShift9 as ResolvedShiftLink
+from convert.adapters.solidworks.programs.assembly.distinct.default.Repeat import (
+    KConfigShiftFive as ConfigShiftMap,
+    KConfigShiftOne as ConfigShiftUnique,
+    KResolvedShiftFive as ResolvedShiftMap,
+    KResolvedShiftNine as ResolvedShiftLink,
+    KResolvedShiftOne as ResolvedShiftUnique,
+)
 from convert.adapters.solidworks.programs.assembly.hybrid.quintuples.Program import EncodeField, StreamPrograms
-from convert.adapters.solidworks.programs.assembly.default.Repeat import RepeatItem, _IsIdentityBasis, _OccurHash
+from convert.adapters.solidworks.programs.assembly.default.Repeat import (
+    IsIdentityBasis,
+    OccurHash,
+    RepeatItem,
+)
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
 
 # recovered boundaries separate stable fields from hybrid occurrence records
-InsertSpecs = MappingProxyType(
+KInsertSpecs = MappingProxyType(
     {
         "Contents/CMgr": (1720, 378),
         "Contents/Config-0": (668, 502),
@@ -30,38 +40,38 @@ InsertSpecs = MappingProxyType(
     }
 )
 
-# five traced occurrences isolate occurrence growth from file-class growth
-TracedCount = 5
+# five traced occurrences isolate occurrence growth from file class growth
+KTracedCount = 5
 
-# three traced component files anchor the independent unique-file dimension
-TracedUnique = 3
+# three traced component files anchor the independent unique file dimension
+KTracedUnique = 3
 
-# header boundaries isolate occurrences, the first file, repeated files, and tail
-HeaderExtStart = 1960
+# header external start separates occurrences from the first component file
+KHeaderExtStart = 1960
 
-# the first file record includes the external-object list framing
-HeaderExtWidth = 300
+# the first file record includes the external object list framing
+KHeaderExtWidth = 300
 
 # subsequent file records share one fixed typed field sequence
-HeaderFileStart = 2260
+KHeaderFileStart = 2260
 
-# equal-width oracle paths expose the physical repeated-file record boundary
-HeaderFileWidth = 229
+# equal width oracle paths expose the physical repeated file record boundary
+KHeaderFileWidth = 229
 
 # the stable header tail follows the two traced subsequent file records
-HeaderTailStart = 2718
+KHeaderTailStart = 2718
 
 
 # operation emission preserves typed ownership while applying semantic values
-def _EmitOps(
-    Operations: Sequence[tuple[int, int, int, str, Any]],
-    Overrides: Mapping[int, Any],
+def EncodeOps(
+    Operations: Sequence[tuple[int, int, int, str, AnyValue]],
+    Overrides: Mapping[int, AnyValue],
     BasePos: int = 0,
     BasisValues: Mapping[int, tuple[float, ...]] | None = None,
 ) -> bytes:
     OutputData = bytearray()
     BasisMap = BasisValues or {}
-    for StartPos, _FieldWidth, _OwnerIndex, KindName, DefaultValue in Operations:
+    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in Operations:
         FieldValue = Overrides.get(StartPos - BasePos, DefaultValue)
         OutputData.extend(EncodeField(KindName, FieldValue))
         BasisValue = BasisMap.get(StartPos - BasePos)
@@ -73,11 +83,11 @@ def _EmitOps(
 
 
 # logical slicing remains stable when semantic strings change physical width
-def _SliceOps(
+def SliceOps(
     StreamName: str,
     StartPos: int,
     EndPos: int | None = None,
-) -> tuple[tuple[int, int, int, str, Any], ...]:
+) -> tuple[tuple[int, int, int, str, AnyValue], ...]:
     return tuple(
         Operation
         for Operation in StreamPrograms[StreamName]
@@ -85,13 +95,13 @@ def _SliceOps(
     )
 
 
-# windows path keys identify repeated component documents case-insensitively
-def _PathKey(PathValue: str) -> str:
+# windows path keys identify repeated component documents case insensitively
+def PathKey(PathValue: str) -> str:
     return str(PureWindowsPath(PathValue)).casefold()
 
 
-# first occurrences define unique component-file ordering independently
-def _UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
+# first occurrences define unique component file ordering independently
+def UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
     SeenPaths: set[str] = set()
     UniqueItems: list[RepeatItem] = []
     for ItemValue in CoreItems:
@@ -104,7 +114,7 @@ def _UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
 
 
 # path ordinals reconnect every occurrence to its unique external file
-def _PathIndex(UniqueItems: tuple[RepeatItem, ...]) -> Mapping[str, int]:
+def PathIndex(UniqueItems: tuple[RepeatItem, ...]) -> Mapping[str, int]:
     return MappingProxyType(
         {
             _PathKey(ItemValue.CompPath): ItemIndex
@@ -113,8 +123,8 @@ def _PathIndex(UniqueItems: tuple[RepeatItem, ...]) -> Mapping[str, int]:
     )
 
 
-# hybrid configuration-manager records enumerate every component occurrence
-def _EncodeCMgr(
+# hybrid configuration manager records enumerate every component occurrence
+def EncodeCmgr(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
@@ -164,7 +174,7 @@ def _EncodeCMgr(
 
 
 # hybrid configuration records bind occurrence maps to unique file classes
-def _EncodeConfig(
+def EncodeConfig(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
@@ -265,7 +275,7 @@ def _EncodeConfig(
 
 
 # resolved records reconnect occurrence maps and unique component classes
-def _EncodeResolved(
+def EncodeResolved(
     CoreItems: tuple[RepeatItem, ...],
     UniqueItems: tuple[RepeatItem, ...],
 ) -> bytes:
@@ -328,8 +338,8 @@ def _EncodeResolved(
     return PrefixData + bytes(UnitData) + SuffixData
 
 
-# model-header records separate occurrence stamps from unique component files
-def _EncodeHeader(
+# model header records separate occurrence stamps from unique component files
+def EncodeHeader(
     ModelName: str,
     ConfigName: str,
     CoreItems: tuple[RepeatItem, ...],
