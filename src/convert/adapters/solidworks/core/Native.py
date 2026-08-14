@@ -12588,110 +12588,111 @@ def DecodeProfiles(
     return (tuple(Profiles), UsedValue, Normalized)
 
 
+# graph traversal owns extraction of one connected edge component
+def TakeComponentMut(Edges, Remaining):
+    Component = {Remaining.pop()}
+    Vertices = set(Edges[next(iter(Component))].endpoint_indices or ())
+    Changed = True
+    while Changed:
+        Changed = False
+        for Index in tuple(Remaining):
+            Endpoints = set(Edges[Index].endpoint_indices or ())
+            if Vertices & Endpoints:
+                Remaining.remove(Index)
+                Component.add(Index)
+                Vertices.update(Endpoints)
+                Changed = True
+    return (Component, Vertices)
+
+
+# structural side parsing owns rectangle edge orientation and uniqueness
+def StructuralSides(Edges, Component, Resolved, XsValue, YsValue):
+    Sides: dict[str, NativeMarker] = {}
+    for Index in Component:
+        Marker = Edges[Index]
+        Start, EndValue = Marker.endpoint_indices or (-1, -1)
+        LeftValue = Resolved[Start]
+        Right = Resolved[EndValue]
+        if MathValue.isclose(LeftValue[1], Right[1], abs_tol=1e-09):
+            SideValue = (
+                "bottom" if MathValue.isclose(LeftValue[1], YsValue[0]) else "top"
+            )
+        elif MathValue.isclose(LeftValue[0], Right[0], abs_tol=1e-09):
+            SideValue = (
+                "left" if MathValue.isclose(LeftValue[0], XsValue[0]) else "right"
+            )
+        else:
+            return None
+        if SideValue in Sides:
+            return None
+        Sides[SideValue] = Marker
+    if set(Sides) != {"bottom", "right", "top", "left"}:
+        return None
+    return tuple(
+        Sides[SideValue].offset
+        for SideValue in ("bottom", "right", "top", "left")
+    )
+
+
+# rectangle component parsing owns topology and coordinate validation
+def RectComponent(Edges, Markers, Component, Vertices):
+    if len(Component) != 4 or len(Vertices) != 4:
+        return None
+    Degrees = {Vertex: 0 for Vertex in Vertices}
+    for Index in Component:
+        for Vertex in Edges[Index].endpoint_indices or ():
+            Degrees[Vertex] += 1
+    Coordinates = {Vertex: Markers[Vertex].coordinates_mm for Vertex in Vertices}
+    if set(Degrees.values()) != {2} or any(
+        Value is None for Value in Coordinates.values()
+    ):
+        return None
+    Resolved = {
+        Vertex: Value for Vertex, Value in Coordinates.items() if Value is not None
+    }
+    XsValue = sorted({Value[0] for Value in Resolved.values()})
+    YsValue = sorted({Value[1] for Value in Resolved.values()})
+    Corners = {(First, Second) for First in XsValue for Second in YsValue}
+    if len(XsValue) != 2 or len(YsValue) != 2 or set(Resolved.values()) != Corners:
+        return None
+    LineOffsets = StructuralSides(Edges, Component, Resolved, XsValue, YsValue)
+    if LineOffsets is None:
+        return None
+    return NativeProfile(
+        "rectangle",
+        (XsValue[0], YsValue[0], XsValue[1], YsValue[1]),
+        LineOffsets,
+    )
+
+
 # this definition exists because focused behavior needs one stable owner
 def StructuralA(
     Markers: list[NativeMarker], ExcludedOffsets: set[int]
 ) -> tuple[tuple[NativeProfile, ...], set[int]]:
     Edges = tuple(
-        (
-            Marker
-            for Marker in Markers
-            if Marker.offset not in ExcludedOffsets
-            and Marker.profile_role == 1
-            and (Marker.native_kind in {1, 2})
-            and (Marker.coordinates_mm is None)
-            and (Marker.endpoint_indices is not None)
-            and (Marker.endpoint_indices[0] != Marker.endpoint_indices[1])
-            and all(
-                (
-                    0 <= Endpoint < len(Markers)
-                    and Markers[Endpoint].coordinates_mm is not None
-                    for Endpoint in Marker.endpoint_indices
-                )
-            )
+        Marker
+        for Marker in Markers
+        if Marker.offset not in ExcludedOffsets
+        and Marker.profile_role == 1
+        and Marker.native_kind in {1, 2}
+        and Marker.coordinates_mm is None
+        and Marker.endpoint_indices is not None
+        and Marker.endpoint_indices[0] != Marker.endpoint_indices[1]
+        and all(
+            0 <= Endpoint < len(Markers)
+            and Markers[Endpoint].coordinates_mm is not None
+            for Endpoint in Marker.endpoint_indices
         )
     )
     Remaining = set(range(len(Edges)))
     Profiles: list[NativeProfile] = []
     UsedValue: set[int] = set()
     while Remaining:
-        Component = {Remaining.pop()}
-        Vertices = set(Edges[next(iter(Component))].endpoint_indices or ())
-        Changed = True
-        while Changed:
-            Changed = False
-            for Index in tuple(Remaining):
-                Endpoints = set(Edges[Index].endpoint_indices or ())
-                if Vertices & Endpoints:
-                    Remaining.remove(Index)
-                    Component.add(Index)
-                    Vertices.update(Endpoints)
-                    Changed = True
-        if len(Component) != 4 or len(Vertices) != 4:
-            continue
-        Degrees = {Vertex: 0 for Vertex in Vertices}
-        for Index in Component:
-            for Vertex in Edges[Index].endpoint_indices or ():
-                Degrees[Vertex] += 1
-        if set(Degrees.values()) != {2}:
-            continue
-        Coordinates = {Vertex: Markers[Vertex].coordinates_mm for Vertex in Vertices}
-        if any((Value is None for Value in Coordinates.values())):
-            continue
-        Resolved = {
-            Vertex: Value for Vertex, Value in Coordinates.items() if Value is not None
-        }
-        XsValue = sorted({Value[0] for Value in Resolved.values()})
-        YsValue = sorted({Value[1] for Value in Resolved.values()})
-        if (
-            len(XsValue) != 2
-            or len(YsValue) != 2
-            or set(Resolved.values())
-            != {
-                (FirstCoord, SecondCoord)
-                for FirstCoord in XsValue
-                for SecondCoord in YsValue
-            }
-        ):
-            continue
-        Sides: dict[str, NativeMarker] = {}
-        Valid = True
-        for Index in Component:
-            Marker = Edges[Index]
-            Start, EndValue = Marker.endpoint_indices or (-1, -1)
-            LeftValue = Resolved[Start]
-            Right = Resolved[EndValue]
-            if MathValue.isclose(LeftValue[1], Right[1], abs_tol=1e-09):
-                SideValue = (
-                    "bottom" if MathValue.isclose(LeftValue[1], YsValue[0]) else "top"
-                )
-            elif MathValue.isclose(LeftValue[0], Right[0], abs_tol=1e-09):
-                SideValue = (
-                    "left" if MathValue.isclose(LeftValue[0], XsValue[0]) else "right"
-                )
-            else:
-                Valid = False
-                break
-            if SideValue in Sides:
-                Valid = False
-                break
-            Sides[SideValue] = Marker
-        if not Valid or set(Sides) != {"bottom", "right", "top", "left"}:
-            continue
-        LineOffsets = tuple(
-            (
-                Sides[SideValue].offset
-                for SideValue in ("bottom", "right", "top", "left")
-            )
-        )
-        UsedValue.update(LineOffsets)
-        Profiles.append(
-            NativeProfile(
-                "rectangle",
-                (XsValue[0], YsValue[0], XsValue[1], YsValue[1]),
-                LineOffsets,
-            )
-        )
+        Component, Vertices = TakeComponentMut(Edges, Remaining)
+        Profile = RectComponent(Edges, Markers, Component, Vertices)
+        if Profile is not None:
+            Profiles.append(Profile)
+            UsedValue.update(Profile.marker_offsets)
     return (tuple(Profiles), UsedValue)
 
 
