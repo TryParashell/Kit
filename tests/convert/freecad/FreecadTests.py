@@ -945,7 +945,7 @@ def TestSchemaTwoIs() -> None:
         RootValue.remove(ObjectData)
         RootValue.append(Features)
         RootValue.append(FeatureData)
-    DocValue = FreeCadAdapter().read(RewriteDocXml(NativePart(), SchemaTwo))
+    DocValue = FreeCadAdapter().read(RewriteDocXml(NativePart(), SchemaTwoMut))
     assert DocValue.validate() == ()
     assert DocValue.source.attributes['freecad_schema_version'] == '2'
 
@@ -1643,16 +1643,21 @@ def TestReplayProp() -> None:
     assert Suppressed is not None
     assert Suppressed.get('value') == 'true'
 
+# this definition exists because mapped shape fixtures share one sidecar structure
+def FixtureShapeProp(Owner: str, ElemMap: str) -> ET.Element:
+    NodeValue = NativeProp('Shape', 'Part::PropertyPartShape', 'Part', {'ElementMap': ElemMap, 'file': f'{Owner}.Shape.brp'})
+    ElemMapNode = XmlTree.SubElement(NodeValue, 'ElementMap', {'new': '1', 'count': '1'})
+    XmlTree.SubElement(ElemMapNode, 'Element', {'key': 'Dummy', 'value': 'Dummy'})
+    XmlTree.SubElement(NodeValue, 'ElementMap2', {'file': f'{Owner}.Shape.Map.txt'})
+    return NodeValue
+
+
 # this definition exists because focused behavior needs one stable owner
 def TestSketchShape() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def ShapeProp(Owner: str, ElemMap: str) -> XmlTree.Element:
-        NodeValue = NativeProp('Shape', 'Part::PropertyPartShape', 'Part', {'ElementMap': ElemMap, 'file': f'{Owner}.Shape.brp'})
-        ElemMapNode = XmlTree.SubElement(NodeValue, 'ElementMap', {'new': '1', 'count': '1'})
-        XmlTree.SubElement(ElemMapNode, 'Element', {'key': 'Dummy', 'value': 'Dummy'})
-        XmlTree.SubElement(NodeValue, 'ElementMap2', {'file': f'{Owner}.Shape.Map.txt'})
-        return NodeValue
+        return FixtureShapeProp(Owner, ElemMap)
     SketchBrep = b'\nCASCADE Topology V1, (c) Matra-Datavision\nsketch\n'
     FinalBrep = b'\nCASCADE Topology V1, (c) Matra-Datavision\nfinal\n'
     SketchMap = b'BeginElementMap v1\nSketch map\nEndMap\n'

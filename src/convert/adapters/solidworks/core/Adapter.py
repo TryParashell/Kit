@@ -3727,71 +3727,95 @@ def PatchTemplatMut(
     return ("patched", True, PayloadsNative)
 
 
-# this definition exists because focused behavior needs one stable owner
-def PatchNativeAMut(
-    DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]
-) -> AsmTemplate:
-    if DocValue.assembly is None or ComponentTreeStream not in Streams:
-        return AsmTemplate(frozenset(), ("donor_component_tree_absent",))
-    if BundleNames:
-        Prefix, RootValue, Trailing = KeywordsRoot(Streams[ComponentTreeStream])
-        PathByFileId = {
-            int(Definition.attributes["native_file_id"]): BundleNames.get(
-                Definition.document_id
-            )
-            or BundleNames[Definition.id]
-            for Definition in DocValue.assembly.definitions
-            if (Definition.document_id in BundleNames or Definition.id in BundleNames)
-            and isinstance(Definition.attributes.get("native_file_id"), int)
-        }
-        Changed = False
-        for ElemValue in RootValue.iter():
-            if ElemValue.tag.rsplit("}", 1)[-1] != "swFile":
-                continue
-            try:
-                FileId = int(ElemValue.attrib.get("id", ""))
-            except ValueError:
-                continue
-            Target = PathByFileId.get(FileId)
-            if Target is not None and ElemValue.attrib.get("swPath") != Target:
-                ElemValue.attrib["swPath"] = Target
-                Changed = True
-        if Changed:
-            Streams[ComponentTreeStream] = KeywordsBytes(Prefix, RootValue, Trailing)
+# this definition exists because bundled assemblies need rewritten component paths
+def PatchAsmPathsMut(
+    AsmValue: AssemblyData,
+    StreamsMut: dict[str, bytes],
+    BundleNames: Mapping[str, str],
+) -> None:
+    if not BundleNames:
+        return
+    Prefix, RootValue, Trailing = KeywordsRoot(StreamsMut[ComponentTreeStream])
+    PathByFileId = {
+        int(Definition.attributes["native_file_id"]): BundleNames.get(
+            Definition.document_id
+        )
+        or BundleNames[Definition.id]
+        for Definition in AsmValue.definitions
+        if (Definition.document_id in BundleNames or Definition.id in BundleNames)
+        and isinstance(Definition.attributes.get("native_file_id"), int)
+    }
+    Changed = False
+    for ElemValue in RootValue.iter():
+        if ElemValue.tag.rsplit("}", 1)[-1] != "swFile":
+            continue
+        try:
+            FileId = int(ElemValue.attrib.get("id", ""))
+        except ValueError:
+            continue
+        Target = PathByFileId.get(FileId)
+        if Target is not None and ElemValue.attrib.get("swPath") != Target:
+            ElemValue.attrib["swPath"] = Target
+            Changed = True
+    if Changed:
+        StreamsMut[ComponentTreeStream] = KeywordsBytes(Prefix, RootValue, Trailing)
+
+
+# this definition exists because patched assembly streams need one guarded decoder
+def DecodePatchedAsm(
+    Streams: Mapping[str, bytes],
+) -> tuple[SldprtArchive, NativeAssembly] | None:
     try:
-        Archive = SldprtArchive.from_bytes(BuildSldprt(Streams))
+        Archive = SldprtArchive.from_bytes(BuildSldprt(dict(Streams)))
         Native = DecodeNativeAsm(Archive, include_tessellation=True)
     except SldprtFormatError:
-        return AsmTemplate(frozenset(), ("donor_component_tree_unreadable",))
-    DonorDivergences = DivergedDonor(DocValue.assembly, Native)
-    RewrittenInstances = PatchAsmMut(DocValue.assembly, Native, Streams)
+        return None
+    return (Archive, Native)
+
+
+# this definition exists because donor assembly patches require staged redecoding
+def PatchAsmDataMut(
+    DocValue: CadDocument, StreamsMut: dict[str, bytes]
+) -> tuple[SldprtArchive, NativeAssembly, tuple[str, ...], tuple[str, ...]] | None:
+    AsmValue = DocValue.assembly
+    Decoded = DecodePatchedAsm(StreamsMut)
+    if AsmValue is None or Decoded is None:
+        return None
+    Archive, Native = Decoded
+    DonorDivergences = DivergedDonor(AsmValue, Native)
+    RewrittenInstances = PatchAsmMut(AsmValue, Native, StreamsMut)
     if RewrittenInstances:
-        try:
-            Archive = SldprtArchive.from_bytes(BuildSldprt(Streams))
-            Native = DecodeNativeAsm(Archive, include_tessellation=True)
-        except SldprtFormatError:
-            return AsmTemplate(frozenset(), ("donor_component_tree_unreadable",))
+        Decoded = DecodePatchedAsm(StreamsMut)
+        if Decoded is None:
+            return None
+        Archive, Native = Decoded
     RewrittenMates = PatchAsmMateMut(
-        DocValue.assembly, Native, Streams, DocValue.source.path
+        AsmValue, Native, StreamsMut, DocValue.source.path
     )
     if RewrittenMates:
-        try:
-            Archive = SldprtArchive.from_bytes(BuildSldprt(Streams))
-            Native = DecodeNativeAsm(Archive, include_tessellation=True)
-        except SldprtFormatError:
-            return AsmTemplate(frozenset(), ("donor_component_tree_unreadable",))
+        Decoded = DecodePatchedAsm(StreamsMut)
+        if Decoded is None:
+            return None
+        Archive, Native = Decoded
+    return (Archive, Native, DonorDivergences, RewrittenMates)
+
+
+# this definition exists because assembly structure and documents prove base capabilities
+def AsmBaseCaps(
+    AsmValue: AssemblyData,
+    Native: NativeAssembly,
+    BundleNames: Mapping[str, str],
+) -> set[Capability]:
     Result: set[Capability] = set()
-    if AsmStructure(DocValue.assembly) == NativeAsmValues(Native):
+    if AsmStructure(AsmValue) == NativeAsmValues(Native):
         Result.add(Capability.ASSEMBLIES)
-    Definitions = {
-        Definition.id: Definition for Definition in DocValue.assembly.definitions
-    }
-    DocIds = {Component.id for Component in DocValue.assembly.documents}
+    Definitions = {Definition.id: Definition for Definition in AsmValue.definitions}
+    DocIds = {Component.id for Component in AsmValue.documents}
     SavedDocuments = all(
         (
             isinstance(Component.document, CadDoc)
             and SavedSource(Component.document, None) is not None
-            for Component in DocValue.assembly.documents
+            for Component in AsmValue.documents
         )
     )
     BundledDocuments = bool(DocIds) and DocIds <= set(BundleNames)
@@ -3801,13 +3825,26 @@ def PatchNativeAMut(
             (
                 not Component.document.bodies
                 or Capability.BODY_STRUCTURE in Component.document.capabilities
-                for Component in DocValue.assembly.documents
+                for Component in AsmValue.documents
                 if isinstance(Component.document, CadDoc)
             )
         ):
             Result.add(Capability.BODY_STRUCTURE)
     if any((Definition.source_path for Definition in Definitions.values())):
         Result.add(Capability.EXTERNAL_REFERENCES)
+    return Result
+
+
+# this predicate exists because root mate records need exact neutral equivalence
+def IsRootMates(
+    DocValue: CadDocument,
+    Native: NativeAssembly,
+    Archive: SldprtArchive,
+    HasDocuments: bool,
+) -> bool:
+    AsmValue = DocValue.assembly
+    if AsmValue is None:
+        return False
     IdentityDefinitions = {
         Definition.object_id: Definition.object_id for Definition in Native.definitions
     }
@@ -3826,7 +3863,7 @@ def PatchNativeAMut(
             ),
         ),
     )
-    DesiredEntities = {Entity.id: Entity for Entity in DocValue.assembly.mate_entities}
+    DesiredEntities = {Entity.id: Entity for Entity in AsmValue.mate_entities}
     RootEntityIds = {
         EntityId for MateValue in Mates for EntityId in MateValue.entity_ids
     }
@@ -3837,7 +3874,7 @@ def PatchNativeAMut(
             if Entity.id in RootEntityIds and Entity.id in DesiredEntities
         )
     )
-    DesiredMates = {MateValue.id: MateValue for MateValue in DocValue.assembly.mates}
+    DesiredMates = {MateValue.id: MateValue for MateValue in AsmValue.mates}
     SelectedMates = tuple(
         (
             DesiredMates[MateValue.id]
@@ -3845,7 +3882,7 @@ def PatchNativeAMut(
             if MateValue.id in DesiredMates
         )
     )
-    DesiredGroups = {Group.id: Group for Group in DocValue.assembly.mate_groups}
+    DesiredGroups = {Group.id: Group for Group in AsmValue.mate_groups}
     SelectedGroups = tuple(
         (DesiredGroups[Group.id] for Group in Groups if Group.id in DesiredGroups)
     )
@@ -3857,19 +3894,47 @@ def PatchNativeAMut(
         and len(SelectedMates) == len(Mates)
         and (len(SelectedGroups) == len(Groups))
     )
-    NestedMatesNative = (
-        len(DocValue.assembly.mates) == len(Mates)
-        or Capability.COMPONENT_DOCUMENTS in Result
-    )
-    if RootMatesNative and AllRootRecordsFound and NestedMatesNative:
-        Result.add(Capability.ASSEMBLY_MATES)
+    NestedMatesNative = len(AsmValue.mates) == len(Mates) or HasDocuments
+    return RootMatesNative and AllRootRecordsFound and NestedMatesNative
+
+
+# this definition exists because mates and tessellation extend assembly capabilities
+def AsmFinalCapsMut(
+    DocValue: CadDocument,
+    Native: NativeAssembly,
+    Archive: SldprtArchive,
+    ResultMut: set[Capability],
+) -> None:
+    if IsRootMates(
+        DocValue,
+        Native,
+        Archive,
+        Capability.COMPONENT_DOCUMENTS in ResultMut,
+    ):
+        ResultMut.add(Capability.ASSEMBLY_MATES)
     NativeMeshes, Ignored = AsmMeshes(Native)
     if MeshValues(DocValue.meshes) == MeshValues(NativeMeshes):
-        Result.add(Capability.TESSELLATION)
+        ResultMut.add(Capability.TESSELLATION)
+
+
+# this definition exists because focused behavior needs one stable owner
+def PatchNativeAMut(
+    DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]
+) -> AsmTemplate:
+    AsmValue = DocValue.assembly
+    if AsmValue is None or ComponentTreeStream not in Streams:
+        return AsmTemplate(frozenset(), ("donor_component_tree_absent",))
+    PatchAsmPathsMut(AsmValue, Streams, BundleNames)
+    Patched = PatchAsmDataMut(DocValue, Streams)
+    if Patched is None:
+        return AsmTemplate(frozenset(), ("donor_component_tree_unreadable",))
+    Archive, Native, DonorDivergences, RewrittenMates = Patched
+    Result = AsmBaseCaps(AsmValue, Native, BundleNames)
+    AsmFinalCapsMut(DocValue, Native, Archive, Result)
     Divergences = DonorDivergences + tuple(
         (f"donor_mate_diverged:{ItemValue}" for ItemValue in RewrittenMates)
     )
-    if Capability.ASSEMBLIES not in Result and (not Divergences):
+    if Capability.ASSEMBLIES not in Result and not Divergences:
         Divergences = ("donor_structure_diverged",)
     return AsmTemplate(frozenset(Result), Divergences)
 
