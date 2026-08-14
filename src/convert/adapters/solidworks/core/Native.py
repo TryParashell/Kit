@@ -8408,6 +8408,78 @@ def StableCreation(DocValue: CadDocument, ModelName: str, Domain: bytes = b"") -
     return KCreationStampLow + StableUThreeTwo(DocValue, ModelName, Domain) % SpanValue
 
 
+# focused continuation isolates the remaining native serialization phase
+def FinishProofMut(Parsed, ExpectedPlanes, DocValue, Result, ObjectIds, Authored):
+    ActualPlanes = {
+        Plane.object_id: (
+            FrameVector(Plane.origin_mm),
+            FrameVector(Plane.u_axis),
+            FrameVector(Plane.v_axis),
+            FrameVector(Plane.normal),
+        )
+        for Plane in Parsed.planes
+    }
+    if len(ExpectedPlanes) == len(DocValue.support_planes) and all(
+        (
+            ObjectId in ActualPlanes and ActualPlanes[ObjectId] == Frame
+            for ObjectId, Frame in ExpectedPlanes.items()
+        )
+    ):
+        Result.add(Capability.SUPPORT_PLANES)
+    ExpectedAxes = DocAxisBindings(DocValue, ObjectIds)
+    if ExpectedAxes is not None:
+        ActualAxes = NativeAxis(Parsed)
+        if ExpectedAxes and ExpectedAxes <= ActualAxes:
+            Result.add(Capability.SELECTIONS)
+    ExpectedEquations = ExpressionTexts(DocValue)
+    if ExpectedEquations is not None:
+        ActualEquations = tuple((Equation.source for Equation in Parsed.equations))
+        if ActualEquations[: len(ExpectedEquations)] == ExpectedEquations and all(
+            (
+                Source.startswith(f'"{KEquationReservedPrefix}')
+                for Source in ActualEquations[len(ExpectedEquations) :]
+            )
+        ):
+            Result.add(Capability.EXPRESSIONS)
+    HasGrooveData = HasPadGroove(DocValue, Authored, Parsed)
+    HasFilletData = HasBossFillet(DocValue, Authored, Parsed)
+    HasChamferData = HasBossChamfer(DocValue, Authored, Parsed)
+    HasShellData = HasBossShell(DocValue, Authored, Parsed)
+    HasLinearPatternData = HasBossLinear(DocValue, Authored, Parsed)
+    HasCircularPatternData = HasBossCircular(DocValue, Authored, Parsed)
+    if (
+        HasPadProof(DocValue, Authored, Parsed)
+        or HasSingleProof(DocValue, Authored, Parsed)
+        or HasGrooveData
+        or HasFilletData
+        or HasChamferData
+        or HasShellData
+        or HasLinearPatternData
+        or HasCircularPatternData
+        or HasTwoFeature(DocValue, Authored, Parsed)
+        or HasCutChain(DocValue, Authored, Parsed)
+    ):
+        Result.update(
+            {
+                Capability.BREP,
+                Capability.PARAMETERS,
+                Capability.PARAMETRIC_HISTORY,
+                Capability.EDITABLE_SKETCHES,
+                Capability.BODY_STRUCTURE,
+            }
+        )
+    if (
+        HasGrooveData
+        or HasFilletData
+        or HasChamferData
+        or HasShellData
+        or HasLinearPatternData
+        or HasCircularPatternData
+    ):
+        Result.add(Capability.SELECTIONS)
+    return frozenset(Result)
+
+
 # this definition exists because focused behavior needs one stable owner
 def ProvedWrite(
     DocValue: CadDocument,
@@ -8506,74 +8578,7 @@ def ProvedWrite(
         for PlaneData in DocValue.support_planes
         for PlaneObjectId in (ObjectIds[f"plane:{PlaneData.id}"],)
     }
-    ActualPlanes = {
-        Plane.object_id: (
-            FrameVector(Plane.origin_mm),
-            FrameVector(Plane.u_axis),
-            FrameVector(Plane.v_axis),
-            FrameVector(Plane.normal),
-        )
-        for Plane in Parsed.planes
-    }
-    if len(ExpectedPlanes) == len(DocValue.support_planes) and all(
-        (
-            ObjectId in ActualPlanes and ActualPlanes[ObjectId] == Frame
-            for ObjectId, Frame in ExpectedPlanes.items()
-        )
-    ):
-        Result.add(Capability.SUPPORT_PLANES)
-    ExpectedAxes = DocAxisBindings(DocValue, ObjectIds)
-    if ExpectedAxes is not None:
-        ActualAxes = NativeAxis(Parsed)
-        if ExpectedAxes and ExpectedAxes <= ActualAxes:
-            Result.add(Capability.SELECTIONS)
-    ExpectedEquations = ExpressionTexts(DocValue)
-    if ExpectedEquations is not None:
-        ActualEquations = tuple((Equation.source for Equation in Parsed.equations))
-        if ActualEquations[: len(ExpectedEquations)] == ExpectedEquations and all(
-            (
-                Source.startswith(f'"{KEquationReservedPrefix}')
-                for Source in ActualEquations[len(ExpectedEquations) :]
-            )
-        ):
-            Result.add(Capability.EXPRESSIONS)
-    HasGrooveData = HasPadGroove(DocValue, Authored, Parsed)
-    HasFilletData = HasBossFillet(DocValue, Authored, Parsed)
-    HasChamferData = HasBossChamfer(DocValue, Authored, Parsed)
-    HasShellData = HasBossShell(DocValue, Authored, Parsed)
-    HasLinearPatternData = HasBossLinear(DocValue, Authored, Parsed)
-    HasCircularPatternData = HasBossCircular(DocValue, Authored, Parsed)
-    if (
-        HasPadProof(DocValue, Authored, Parsed)
-        or HasSingleProof(DocValue, Authored, Parsed)
-        or HasGrooveData
-        or HasFilletData
-        or HasChamferData
-        or HasShellData
-        or HasLinearPatternData
-        or HasCircularPatternData
-        or HasTwoFeature(DocValue, Authored, Parsed)
-        or HasCutChain(DocValue, Authored, Parsed)
-    ):
-        Result.update(
-            {
-                Capability.BREP,
-                Capability.PARAMETERS,
-                Capability.PARAMETRIC_HISTORY,
-                Capability.EDITABLE_SKETCHES,
-                Capability.BODY_STRUCTURE,
-            }
-        )
-    if (
-        HasGrooveData
-        or HasFilletData
-        or HasChamferData
-        or HasShellData
-        or HasLinearPatternData
-        or HasCircularPatternData
-    ):
-        Result.add(Capability.SELECTIONS)
-    return frozenset(Result)
+    return FinishProofMut(Parsed, ExpectedPlanes, DocValue, Result, ObjectIds, Authored)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -12854,6 +12859,47 @@ def Structural(
     return (tuple(Profiles), UsedValue, Normalized)
 
 
+# focused continuation isolates the remaining native serialization phase
+def FinishCircleMut(Dimensions, Candidates):
+    Result: list[NativeProfile] = []
+    Geometries: set[tuple[float, float, float]] = set()
+    Normalized: dict[int, str] = {}
+    for Index, Dimension in enumerate(Dimensions):
+        Matches = Candidates.get(Index, {})
+        if len(Matches) != 1:
+            continue
+        GeomValue, Records = next(iter(Matches.items()))
+        if GeomValue in Geometries:
+            continue
+        Semantics = {Semantic for Ignored, Ignored, Semantic, Ignored in Records}
+        if len(Semantics) != 1:
+            continue
+        Geometries.add(GeomValue)
+        Normalized[Index] = next(iter(Semantics))
+        Result.append(
+            NativeProfile(
+                "circle",
+                GeomValue,
+                tuple(
+                    sorted(
+                        {
+                            Offset
+                            for Center, Following, Ignored, Ignored in Records
+                            for Offset in (Center.offset, Following.offset)
+                        }
+                    )
+                ),
+                Dimension.name,
+                Normalized[Index],
+                Records[0][3],
+            )
+        )
+
+    # this callback exists because local behavior needs one focused transformation
+    Result.sort(key=lambda Profile: min(Profile.marker_offsets))
+    return (tuple(Result), Normalized)
+
+
 # this definition exists because focused behavior needs one stable owner
 def CircleSet(
     Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...]
@@ -12943,43 +12989,7 @@ def CircleSet(
                 Candidates.setdefault(Index, {}).setdefault(GeomValue, []).append(
                     (CenterMarker, RimMarker, Semantic, StartAngle)
                 )
-    Result: list[NativeProfile] = []
-    Geometries: set[tuple[float, float, float]] = set()
-    Normalized: dict[int, str] = {}
-    for Index, Dimension in enumerate(Dimensions):
-        Matches = Candidates.get(Index, {})
-        if len(Matches) != 1:
-            continue
-        GeomValue, Records = next(iter(Matches.items()))
-        if GeomValue in Geometries:
-            continue
-        Semantics = {Semantic for Ignored, Ignored, Semantic, Ignored in Records}
-        if len(Semantics) != 1:
-            continue
-        Geometries.add(GeomValue)
-        Normalized[Index] = next(iter(Semantics))
-        Result.append(
-            NativeProfile(
-                "circle",
-                GeomValue,
-                tuple(
-                    sorted(
-                        {
-                            Offset
-                            for Center, Following, Ignored, Ignored in Records
-                            for Offset in (Center.offset, Following.offset)
-                        }
-                    )
-                ),
-                Dimension.name,
-                Normalized[Index],
-                Records[0][3],
-            )
-        )
-
-    # this callback exists because local behavior needs one focused transformation
-    Result.sort(key=lambda Profile: min(Profile.marker_offsets))
-    return (tuple(Result), Normalized)
+    return FinishCircleMut(Dimensions, Candidates)
 
 
 # this definition exists because focused behavior needs one stable owner

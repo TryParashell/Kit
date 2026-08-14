@@ -1754,6 +1754,24 @@ def PartGraphFixture() -> tuple[bytes, dict[str, bytes]]:
     return Source, Entries
 
 
+# this definition exists because part-graph declarations and transient properties must round-trip together
+def VerifyPartGraphXml(RootValue: ET.Element) -> None:
+    Declarations = RootValue.findall('./Objects/Object')
+    assert [ItemValue.get('name') for ItemValue in Declarations[:5]] == ['Body', 'Opaque', 'XY_Plane', 'Sketch', 'Pad']
+    assert [ItemValue.get('type') for ItemValue in Declarations[:5]] == ['PartDesign::Body', 'App::FeaturePython', 'App::Plane', 'Sketcher::SketchObject', 'PartDesign::Pad']
+    assert [ItemValue.get('id') for ItemValue in Declarations[:5]] == ['1', '50', '3', '9', '12']
+    assert Declarations[4].get('Touched') == '1'
+    Objects = {ItemValue.get('name', ''): ItemValue for ItemValue in RootValue.findall('./ObjectData/Object')}
+    assert [ItemValue.get('name') for ItemValue in Objects['Opaque'].findall('./Properties/Property')] == ['Label', 'Token', 'Blob']
+    assert Objects['Opaque'].find("./Properties/Property[@name='Token']/String").get('value') == 'retained'
+    assert [ItemValue.get('type') for ItemValue in Objects['Pad'].findall('./Extensions/Extension')] == ['App::SuppressibleExtension', 'Part::PreviewExtension']
+    assert [ItemValue.get('name') for ItemValue in Objects['Pad'].findall('./Properties/_Property')] == ['PreviewShape', '_Body', '_ElementMapVersion']
+    BodyShape = Objects['Body'].find("./Properties/Property[@name='Shape']/Part")
+    assert BodyShape is not None
+    assert BodyShape.get('file') == 'Body.Shape.brp'
+    assert Objects['Pad'].find("./Properties/Property[@name='Sketches']") is None
+
+
 # this definition exists because focused behavior needs one stable owner
 def TestPartGraph() -> None:
     Source, Entries = PartGraphFixture()
@@ -1771,20 +1789,7 @@ def TestPartGraph() -> None:
         assert Archive.read('Sketch.InternalShape.brp') == b''
         assert Archive.read('Pad.SuppressedShape.brp') == b''
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
-    Declarations = RootValue.findall('./Objects/Object')
-    assert [ItemValue.get('name') for ItemValue in Declarations[:5]] == ['Body', 'Opaque', 'XY_Plane', 'Sketch', 'Pad']
-    assert [ItemValue.get('type') for ItemValue in Declarations[:5]] == ['PartDesign::Body', 'App::FeaturePython', 'App::Plane', 'Sketcher::SketchObject', 'PartDesign::Pad']
-    assert [ItemValue.get('id') for ItemValue in Declarations[:5]] == ['1', '50', '3', '9', '12']
-    assert Declarations[4].get('Touched') == '1'
-    Objects = {ItemValue.get('name', ''): ItemValue for ItemValue in RootValue.findall('./ObjectData/Object')}
-    assert [ItemValue.get('name') for ItemValue in Objects['Opaque'].findall('./Properties/Property')] == ['Label', 'Token', 'Blob']
-    assert Objects['Opaque'].find("./Properties/Property[@name='Token']/String").get('value') == 'retained'
-    assert [ItemValue.get('type') for ItemValue in Objects['Pad'].findall('./Extensions/Extension')] == ['App::SuppressibleExtension', 'Part::PreviewExtension']
-    assert [ItemValue.get('name') for ItemValue in Objects['Pad'].findall('./Properties/_Property')] == ['PreviewShape', '_Body', '_ElementMapVersion']
-    BodyShape = Objects['Body'].find("./Properties/Property[@name='Shape']/Part")
-    assert BodyShape is not None
-    assert BodyShape.get('file') == 'Body.Shape.brp'
-    assert Objects['Pad'].find("./Properties/Property[@name='Sketches']") is None
+    VerifyPartGraphXml(RootValue)
 
 # this definition exists because focused behavior needs one stable owner
 def TestSelfAsmAnd() -> None:
@@ -1799,20 +1804,25 @@ def TestSelfAsmAnd() -> None:
     Entities = {Entity.id: Entity for Entity in DocValue.assembly.mate_entities}
     assert [Entities[EntityId].source_entity_id for EntityId in Revolute.entity_ids] == ['Face1', 'Edge1', 'Face2']
 
+# this definition exists because custom assembly fixtures need one reusable type mutation
+def CustomTypesMut(RootValue: ET.Element) -> None:
+    Declarations = {ItemValue.get('name', ''): ItemValue for ItemValue in RootValue.findall('./Objects/Object')}
+    Declarations['Assembly'].set('type', 'Vendor::FutureAssemblyRoot')
+    Declarations['Joints'].set('type', 'Vendor::FutureConstraintCollection')
+    Declarations['PartLink'].set('type', 'Vendor::FutureOccurrenceLink')
+    Declarations['Grounded'].set('type', 'Vendor::FutureFixedObject')
+    Declarations['Revolute'].set('type', 'Vendor::FutureKinematicObject')
+    Linked = RootValue.find("./ObjectData/Object[@name='PartLink']/Properties/Property[@name='LinkedObject']")
+    assert Linked is not None
+    Linked.set('name', 'ComponentLink')
+
+
 # this definition exists because focused behavior needs one stable owner
 def TestCustomAsm() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def CustomTypes(RootValue: ET.Element) -> None:
-        Declarations = {ItemValue.get('name', ''): ItemValue for ItemValue in RootValue.findall('./Objects/Object')}
-        Declarations['Assembly'].set('type', 'Vendor::FutureAssemblyRoot')
-        Declarations['Joints'].set('type', 'Vendor::FutureConstraintCollection')
-        Declarations['PartLink'].set('type', 'Vendor::FutureOccurrenceLink')
-        Declarations['Grounded'].set('type', 'Vendor::FutureFixedObject')
-        Declarations['Revolute'].set('type', 'Vendor::FutureKinematicObject')
-        Linked = RootValue.find("./ObjectData/Object[@name='PartLink']/Properties/Property[@name='LinkedObject']")
-        assert Linked is not None
-        Linked.set('name', 'ComponentLink')
+        CustomTypesMut(RootValue)
     Adapter = FreeCadAdapter()
     DocValue = Adapter.read(RewriteDocXml(NativeAsm(), CustomTypes))
     assert DocValue.assembly is not None

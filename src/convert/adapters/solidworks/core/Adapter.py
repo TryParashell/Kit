@@ -2759,6 +2759,19 @@ def PatchModelsMut(
     return (OriginalModel, PatchedModel)
 
 
+# this definition exists because parameter parity contributes two native capabilities
+def AddParamCapsMut(
+    DocValue: CadDocument,
+    PatchedParameters: Sequence[Parameter],
+    NativeMut: set[Capability],
+) -> None:
+    if ParamValues(DocValue.parameters) != ParamValues(PatchedParameters):
+        return
+    NativeMut.add(Capability.PARAMETERS)
+    if not any((Param.expression is not None for Param in DocValue.parameters)):
+        NativeMut.add(Capability.EXPRESSIONS)
+
+
 # this definition exists because patched part semantics determine native capabilities
 def NativePartCaps(
     DocValue: CadDocument, OriginalModel: NativeModel, PatchedModel: NativeModel
@@ -2776,10 +2789,7 @@ def NativePartCaps(
     )
     OriginalSelections = Selections(OriginalModel)
     OriginalTimeline = Timeline(OriginalModel, OriginalSelections)
-    if ParamValues(DocValue.parameters) == ParamValues(PatchedParameters):
-        Native.add(Capability.PARAMETERS)
-        if not any((Param.expression is not None for Param in DocValue.parameters)):
-            Native.add(Capability.EXPRESSIONS)
+    AddParamCapsMut(DocValue, PatchedParameters, Native)
     if PlaneValues(DocValue.support_planes) == PlaneValues(PatchedPlanes):
         Native.add(Capability.SUPPORT_PLANES)
     DesiredSketchValues = SketchValues(DocValue.sketches)
