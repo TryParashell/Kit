@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+from __future__ import annotations
+
+from convert.adapters.solidworks.programs.Owners.Swccu.Functions.ReadOperator import (
+    KOwnerSites,
+)
+
+
+# isolated method data lets new reverse engineered serializers compose independently
+KMethodProgram = (
+    KOwnerSites,
+    {
+        "Contents/CMgr": (
+            (643, 4, 19, "primitive:ulong", 631152000),
+            (1483, 4, 19, "primitive:ulong", 1786396404),
+            (1583, 4, 19, "primitive:ulong", 1786396404),
+            (1601, 4, 19, "primitive:ulong", 0),
+            (1643, 4, 19, "primitive:ulong", 0),
+            (1878, 4, 19, "primitive:ulong", 1786396404),
+            (1961, 4, 19, "primitive:ulong", 1786396404),
+            (1979, 4, 19, "primitive:ulong", 0),
+            (2021, 4, 19, "primitive:ulong", 0),
+            (2256, 4, 19, "primitive:ulong", 1786396404),
+            (2339, 4, 19, "primitive:ulong", 1786396404),
+            (2357, 4, 19, "primitive:ulong", 0),
+            (2399, 4, 19, "primitive:ulong", 0),
+            (2634, 4, 19, "primitive:ulong", 1786396404),
+            (2717, 4, 19, "primitive:ulong", 1786396404),
+            (2735, 4, 19, "primitive:ulong", 0),
+            (2777, 4, 19, "primitive:ulong", 0),
+            (3012, 4, 19, "primitive:ulong", 1786396404),
+            (3095, 4, 19, "primitive:ulong", 1786396404),
+            (3113, 4, 19, "primitive:ulong", 0),
+            (3155, 4, 19, "primitive:ulong", 0),
+            (3368, 4, 19, "primitive:ulong", 4294967295),
+        ),
+        "Contents/Config-0": (
+            (478, 4, 19, "primitive:ulong", 1786396405),
+            (554, 4, 19, "primitive:ulong", 1786396404),
+            (1039, 4, 19, "primitive:ulong", 1786396405),
+            (1056, 4, 19, "primitive:ulong", 1786396404),
+            (1541, 4, 19, "primitive:ulong", 1786396405),
+            (1558, 4, 19, "primitive:ulong", 1786396404),
+            (2043, 4, 19, "primitive:ulong", 1786396405),
+            (2060, 4, 19, "primitive:ulong", 1786396404),
+            (2545, 4, 19, "primitive:ulong", 1786396405),
+            (2562, 4, 19, "primitive:ulong", 1786396404),
+            (4808, 4, 19, "primitive:ulong", 0),
+        ),
+        "Contents/Config-0-ModelHeader": (
+            (116, 4, 19, "primitive:ulong", 1763334902),
+            (170, 4, 19, "primitive:ulong", 1763334902),
+            (234, 4, 19, "primitive:ulong", 1763334902),
+            (264, 4, 19, "primitive:ulong", 1763334902),
+            (330, 4, 19, "primitive:ulong", 1763334902),
+            (360, 4, 19, "primitive:ulong", 1763334902),
+            (422, 4, 19, "primitive:ulong", 1763334902),
+            (452, 4, 19, "primitive:ulong", 1763334902),
+            (518, 4, 19, "primitive:ulong", 1763334902),
+            (548, 4, 19, "primitive:ulong", 1763334902),
+            (604, 4, 19, "primitive:ulong", 1763334902),
+            (682, 4, 19, "primitive:ulong", 1763334902),
+            (750, 4, 19, "primitive:ulong", 1763334902),
+            (808, 4, 19, "primitive:ulong", 1763334902),
+            (888, 4, 19, "primitive:ulong", 1763334902),
+            (940, 4, 19, "primitive:ulong", 1763334902),
+            (996, 4, 19, "primitive:ulong", 1763334902),
+            (1062, 4, 19, "primitive:ulong", 1763334902),
+            (1128, 4, 19, "primitive:ulong", 1763334902),
+            (1194, 4, 19, "primitive:ulong", 1763334902),
+            (1254, 4, 19, "primitive:ulong", 1786396404),
+            (1306, 4, 19, "primitive:ulong", 1786396404),
+            (1384, 4, 19, "primitive:ulong", 1786396404),
+            (1440, 4, 19, "primitive:ulong", 1786396404),
+            (1496, 4, 19, "primitive:ulong", 1786396404),
+            (1556, 4, 19, "primitive:ulong", 1786396404),
+            (1612, 4, 19, "primitive:ulong", 1786396404),
+            (1682, 4, 19, "primitive:ulong", 1786396404),
+            (1740, 4, 19, "primitive:ulong", 1786396404),
+            (1798, 4, 19, "primitive:ulong", 1786396404),
+            (1856, 4, 19, "primitive:ulong", 1786396405),
+            (1914, 4, 19, "primitive:ulong", 1786396405),
+            (1960, 4, 19, "primitive:ulong", 1763334902),
+            (2192, 4, 19, "primitive:ulong", 1798709179),
+            (2210, 4, 19, "primitive:ulong", 1786396405),
+            (2238, 4, 19, "primitive:ulong", 1786396405),
+            (2407, 4, 19, "primitive:ulong", 1798709179),
+            (2425, 4, 19, "primitive:ulong", 1786396405),
+            (2453, 4, 19, "primitive:ulong", 1786396405),
+            (2622, 4, 19, "primitive:ulong", 1798709179),
+            (2640, 4, 19, "primitive:ulong", 1786396405),
+            (2668, 4, 19, "primitive:ulong", 1786396405),
+            (2837, 4, 19, "primitive:ulong", 1798709179),
+            (2855, 4, 19, "primitive:ulong", 1786396405),
+            (2883, 4, 19, "primitive:ulong", 1786396405),
+            (3052, 4, 19, "primitive:ulong", 1798709179),
+            (3070, 4, 19, "primitive:ulong", 1786396405),
+            (3098, 4, 19, "primitive:ulong", 1786396405),
+            (3139, 4, 19, "primitive:ulong", 1786396404),
+            (3157, 4, 19, "primitive:ulong", 1786396405),
+            (3199, 4, 19, "primitive:ulong", 0),
+            (3219, 4, 19, "primitive:ulong", 1786396404),
+            (3245, 4, 19, "primitive:ulong", 1786396405),
+        ),
+        "Contents/Config-0-ResolvedFeatures": (
+            (5398, 4, 19, "primitive:ulong", 1763334902),
+        ),
+        "Contents/Definition": ((3591, 4, 19, "primitive:ulong", 0),),
+    },
+)
