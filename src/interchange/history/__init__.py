@@ -13,7 +13,21 @@ from interchange.enums.EnumDocument import Capability
 from interchange.features.FeatureBody import DesignBody
 from interchange.features.FeatureContract import FeatureDef
 from interchange.features.FeatureExtrude import ExtrudeEnd, ExtrudeFeature
-from interchange.features.FeatureKinds import ChamferFeature, CirclePattern, CombineFeature, DomeFeature, FilletFeature, HoleFeature, LinearPattern, MoveBodyFeature, NativeFeature, RefPlaneFeature, RevolveFeature, ScaleFeature, ShellFeature
+from interchange.features.FeatureKinds import (
+    ChamferFeature,
+    CirclePattern,
+    CombineFeature,
+    DomeFeature,
+    FilletFeature,
+    HoleFeature,
+    LinearPattern,
+    MoveBodyFeature,
+    NativeFeature,
+    RefPlaneFeature,
+    RevolveFeature,
+    ScaleFeature,
+    ShellFeature,
+)
 from interchange.features.FeatureStep import FeatureCfgState, FeatureStep
 from interchange.payloads.PayloadRecord import BrepPayload
 from interchange.payloads.PayloadRoles import PayloadRole

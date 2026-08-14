@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # The four SOLIDWORKS binaries every finding in `re/solidworks/` was derived from
 
 ## The binaries in this directory are tracked — read this first
@@ -36,26 +46,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File re\binaries\Fetch.ps1
 Copies all four out of the install named in `Manifest.json` (`install_root`), then checks byte
 size, SHA-256 and the PE file version of each. Exit code 0 means all four match.
 
-| flag | effect |
-|---|---|
-| `-InstallRoot <path>` | copy from a different install location |
-| `-VerifyOnly` | skip the copy, just check what is already on disk against the manifest |
+| flag                  | effect                                                                 |
+| --------------------- | ---------------------------------------------------------------------- |
+| `-InstallRoot <path>` | copy from a different install location                                 |
+| `-VerifyOnly`         | skip the copy, just check what is already on disk against the manifest |
 
 A version mismatch is not a script failure, it is a real warning: every address, file offset and
 `this`-relative field offset recorded in `re/solidworks/` was read out of **SOLIDWORKS 2025,
 `33.5.0.0053`**. Against a different release the addresses move and have to be re-derived. The
-grammar-level facts (token shapes, map-counter rule, field *order*) have held across `_MO_VERSION`
+grammar-level facts (token shapes, map-counter rule, field _order_) have held across `_MO_VERSION`
 generations 11000, 13000, 14000 and 18000; the absolute addresses have not been checked on any
 other build.
 
 ## What each one is, and why it matters
 
-| file | bytes | role |
-|---|---|---|
-| `swccu.dll` | 251 776 | Implements **`su_CArchive`** — the archive class SOLIDWORKS actually reads with. `su_CArchive::ReadObject` `0x31eda570`, `su_CArchive::ReadClass` `0x31eda2f0`. Both, and `MapObject`/`ftell`/`getMapCount`/`setMapCount`/`ReadCount`/`ReadString`, are exported **undecorated by name**, which is the single fact that makes the whole runtime trace possible with no PDB. |
-| `sldarchiveu.dll` | 229 760 | Exports the `su_CArchive::operator>>` overloads. `RenameArchiveApi.java` renames each to `AR_get_<type>` before decompiling; without that pass every overload prints as `operator>>` and a `double` read is indistinguishable from a `char` read. |
-| `sldmodu.dll` | 45 877 632 | 219 exported per-class `Serialize` symbols, 9395 RTTI vftables, and the 2607-class vtable-slot-5 map extracted to `re/data/Serialization/SerializeMap.json`. Every `mo*` and `sg*` field layout in `re/solidworks/records/` came out of this file. |
-| `sldmfcu.dll` | 8 094 592 | Holds the **1000-entry `file_id` -> signature-triplet lookup table** in `.rdata`. Extracted to `re/data/Serialization/SignatureTable.json`; see `re/solidworks/container/README.md`. |
+| file              | bytes      | role                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `swccu.dll`       | 251 776    | Implements **`su_CArchive`** — the archive class SOLIDWORKS actually reads with. `su_CArchive::ReadObject` `0x31eda570`, `su_CArchive::ReadClass` `0x31eda2f0`. Both, and `MapObject`/`ftell`/`getMapCount`/`setMapCount`/`ReadCount`/`ReadString`, are exported **undecorated by name**, which is the single fact that makes the whole runtime trace possible with no PDB. |
+| `sldarchiveu.dll` | 229 760    | Exports the `su_CArchive::operator>>` overloads. `RenameArchiveApi.java` renames each to `AR_get_<type>` before decompiling; without that pass every overload prints as `operator>>` and a `double` read is indistinguishable from a `char` read.                                                                                                                           |
+| `sldmodu.dll`     | 45 877 632 | 219 exported per-class `Serialize` symbols, 9395 RTTI vftables, and the 2607-class vtable-slot-5 map extracted to `re/data/Serialization/SerializeMap.json`. Every `mo*` and `sg*` field layout in `re/solidworks/records/` came out of this file.                                                                                                                          |
+| `sldmfcu.dll`     | 8 094 592  | Holds the **1000-entry `file_id` -> signature-triplet lookup table** in `.rdata`. Extracted to `re/data/Serialization/SignatureTable.json`; see `re/solidworks/container/README.md`.                                                                                                                                                                                        |
 
 ## SOLIDWORKS does not use MFC's `CArchive`
 
@@ -63,7 +73,7 @@ Worth stating here because it decides which binary you attack. A full instrument
 part open recorded **0** `CArchive::ReadObject` calls and **1** `CArchive::CArchive` construction.
 The reader is `su_CArchive` in `swccu.dll`. Any plan that hooks `mfc140u.dll` fails silently.
 
-What MFC *is* good for is the struct layout: `dt mfc140u!CArchive` on x64 MFC 14.5 gives
+What MFC _is_ good for is the struct layout: `dt mfc140u!CArchive` on x64 MFC 14.5 gives
 `m_lpBufCur +0x38`, `m_lpBufMax +0x40`, `m_lpBufStart +0x48`, `m_nMapCount +0x50`, and those
 offsets were then confirmed against `su_CArchive` instances at runtime with `candidates: 1`.
 `su_CArchive` is layout-compatible with `CArchive` even though it is not `CArchive`.

@@ -12,23 +12,36 @@ from dataclasses import dataclass as Dataclass
 import math as MathValue
 from pathlib import PureWindowsPath
 import struct as Struct
-from interchange import Mesh as MeshValue, Provenance, ProvenanceSpan, Vector3 as VectorThree, frozen_mapping as FrozenMapping
-from convert.adapters.solidworks.container.Format import ASSEMBLY_FORMAT_ID as AsmFormatId, DISPLAY_LISTS_STREAM as DisplayListsStream, SERIALIZED_STRING_MARKER as SerializedStringMarker, is_cad_path as IsCadPath, is_component_path as IsComponentPath
+from interchange import (
+    Mesh as MeshValue,
+    Provenance,
+    ProvenanceSpan,
+    Vector3 as VectorThree,
+    frozen_mapping as FrozenMapping,
+)
+from convert.adapters.solidworks.container.Format import (
+    ASSEMBLY_FORMAT_ID as AsmFormatId,
+    DISPLAY_LISTS_STREAM as DisplayListsStream,
+    SERIALIZED_STRING_MARKER as SerializedStringMarker,
+    is_cad_path as IsCadPath,
+    is_component_path as IsComponentPath,
+)
 
 # this binding exists because shared behavior needs one stable value
-KArrayMarker = Struct.pack('<I', 4)
+KArrayMarker = Struct.pack("<I", 4)
+
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeFace:
-    locals().setdefault('__annotations__', {})
-    __annotations__['offset'] = 'int'
-    __annotations__['record_length'] = 'int'
-    __annotations__['face_id'] = 'int'
-    __annotations__['strip_lengths'] = 'tuple[int, ...]'
-    __annotations__['positions_mm'] = 'tuple[tuple[float, float, float], ...]'
-    __annotations__['normals'] = 'tuple[tuple[float, float, float], ...]'
-    __annotations__['triangle_indices'] = 'tuple[tuple[int, int, int], ...]'
+    locals().setdefault("__annotations__", {})
+    __annotations__["offset"] = "int"
+    __annotations__["record_length"] = "int"
+    __annotations__["face_id"] = "int"
+    __annotations__["strip_lengths"] = "tuple[int, ...]"
+    __annotations__["positions_mm"] = "tuple[tuple[float, float, float], ...]"
+    __annotations__["normals"] = "tuple[tuple[float, float, float], ...]"
+    __annotations__["triangle_indices"] = "tuple[tuple[int, int, int], ...]"
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -38,18 +51,21 @@ class NativeFace:
     # this definition exists because focused behavior needs one stable owner
     def Triangles(Instance) -> tuple[tuple[int, int, int], ...]:
         return Instance.triangle_indices
-    locals()['positions'] = Positions
-    locals()['triangles'] = Triangles
+
+    locals()["positions"] = Positions
+    locals()["triangles"] = Triangles
+
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeDisplay:
-    locals().setdefault('__annotations__', {})
-    __annotations__['occurrence_path'] = 'str'
-    __annotations__['source_path'] = 'str'
-    __annotations__['record_offset'] = 'int'
-    __annotations__['record_length'] = 'int'
-    __annotations__['faces'] = 'tuple[NativeTessellationFace, ...]'
+    locals().setdefault("__annotations__", {})
+    __annotations__["occurrence_path"] = "str"
+    __annotations__["source_path"] = "str"
+    __annotations__["record_offset"] = "int"
+    __annotations__["record_length"] = "int"
+    __annotations__["faces"] = "tuple[NativeTessellationFace, ...]"
+
 
 # this definition exists because focused behavior needs one stable owner
 def DecodeFaces(DataValue: bytes) -> tuple[NativeFace, ...]:
@@ -67,6 +83,7 @@ def DecodeFaces(DataValue: bytes) -> tuple[NativeFace, ...]:
         Cursor = FaceValue.offset + FaceValue.record_length
     return tuple(Result)
 
+
 # this definition exists because focused behavior needs one stable owner
 def DecodeDisplay(DataValue: bytes) -> tuple[NativeDisplay, ...]:
     Faces = DecodeFaces(DataValue)
@@ -75,8 +92,22 @@ def DecodeDisplay(DataValue: bytes) -> tuple[NativeDisplay, ...]:
     for Index, (Offset, Value, Ignored) in enumerate(Strings):
         if not IsComponentPath(Value):
             continue
-        NextComponent = next((OtherOffset for OtherOffset, OtherValue, Ignored in Strings[Index + 1:] if IsComponentPath(OtherValue)), len(DataValue))
-        SourcePath = next((OtherValue for OtherOffset, OtherValue, Ignored in Strings[Index + 1:] if OtherOffset < NextComponent and IsCadPath(OtherValue)), '')
+        NextComponent = next(
+            (
+                OtherOffset
+                for OtherOffset, OtherValue, Ignored in Strings[Index + 1 :]
+                if IsComponentPath(OtherValue)
+            ),
+            len(DataValue),
+        )
+        SourcePath = next(
+            (
+                OtherValue
+                for OtherOffset, OtherValue, Ignored in Strings[Index + 1 :]
+                if OtherOffset < NextComponent and IsCadPath(OtherValue)
+            ),
+            "",
+        )
         Records.append((Offset, Value, SourcePath))
     Offsets = [Record[0] for Record in Records]
     Grouped: list[list[NativeFace]] = [[] for Ignored in Records]
@@ -85,31 +116,83 @@ def DecodeDisplay(DataValue: bytes) -> tuple[NativeDisplay, ...]:
         if Index >= 0:
             Grouped[Index].append(FaceValue)
     Result: list[NativeDisplay] = []
-    for Index, ((Offset, ItemPath, SourcePath), ComponentFaces) in enumerate(zip(Records, Grouped)):
+    for Index, ((Offset, ItemPath, SourcePath), ComponentFaces) in enumerate(
+        zip(Records, Grouped)
+    ):
         if not ComponentFaces:
             continue
         EndValue = Records[Index + 1][0] if Index + 1 < len(Records) else len(DataValue)
-        Result.append(NativeDisplay(occurrence_path=ItemPath, source_path=SourcePath, record_offset=Offset, record_length=EndValue - Offset, faces=tuple(ComponentFaces)))
+        Result.append(
+            NativeDisplay(
+                occurrence_path=ItemPath,
+                source_path=SourcePath,
+                record_offset=Offset,
+                record_length=EndValue - Offset,
+                faces=tuple(ComponentFaces),
+            )
+        )
     return tuple(Result)
+
 
 # this definition exists because focused behavior needs one stable owner
-def NeutralMeshes(Components: tuple[NativeDisplayComponent, ...]) -> tuple[MeshValue, ...]:
+def NeutralMeshes(
+    Components: tuple[NativeDisplayComponent, ...],
+) -> tuple[MeshValue, ...]:
     Result: list[MeshValue] = []
     for Component in Components:
-        ComponentName = PureWindowsPath(Component.source_path).stem if Component.source_path else Component.occurrence_path.split('@', 1)[0]
+        ComponentName = (
+            PureWindowsPath(Component.source_path).stem
+            if Component.source_path
+            else Component.occurrence_path.split("@", 1)[0]
+        )
         for FaceValue in Component.faces:
-            MeshId = f'sldasm:mesh:{FaceValue.offset}'
-            Result.append(MeshValue(id=MeshId, name=f'{ComponentName} face {FaceValue.face_id}', vertices=tuple((VectorThree(*Point) for Point in FaceValue.positions_mm)), triangles=FaceValue.triangle_indices, normals=tuple((VectorThree(*Normal) for Normal in FaceValue.normals)), provenance=Provenance(adapter=AsmFormatId, native_id=str(FaceValue.face_id), spans=(ProvenanceSpan(DisplayListsStream, FaceValue.offset, FaceValue.record_length, 'tessellation-face'),)), attributes=FrozenMapping({'occurrence_path': Component.occurrence_path, 'source_path': Component.source_path, 'face_id': FaceValue.face_id, 'strip_lengths': FaceValue.strip_lengths})))
+            MeshId = f"sldasm:mesh:{FaceValue.offset}"
+            Result.append(
+                MeshValue(
+                    id=MeshId,
+                    name=f"{ComponentName} face {FaceValue.face_id}",
+                    vertices=tuple(
+                        (VectorThree(*Point) for Point in FaceValue.positions_mm)
+                    ),
+                    triangles=FaceValue.triangle_indices,
+                    normals=tuple(
+                        (VectorThree(*Normal) for Normal in FaceValue.normals)
+                    ),
+                    provenance=Provenance(
+                        adapter=AsmFormatId,
+                        native_id=str(FaceValue.face_id),
+                        spans=(
+                            ProvenanceSpan(
+                                DisplayListsStream,
+                                FaceValue.offset,
+                                FaceValue.record_length,
+                                "tessellation-face",
+                            ),
+                        ),
+                    ),
+                    attributes=FrozenMapping(
+                        {
+                            "occurrence_path": Component.occurrence_path,
+                            "source_path": Component.source_path,
+                            "face_id": FaceValue.face_id,
+                            "strip_lengths": FaceValue.strip_lengths,
+                        }
+                    ),
+                )
+            )
     return tuple(Result)
 
+
 # channel extraction stays isolated because every array carries independent bounds and shape metadata
-def ReadFaceChans(DataValue: bytes, Start: int, StripCount: int) -> tuple[list[tuple[tuple[int, int, int, int], bytes]], int] | None:
+def ReadFaceChans(
+    DataValue: bytes, Start: int, StripCount: int
+) -> tuple[list[tuple[tuple[int, int, int, int], bytes]], int] | None:
     Channels: list[tuple[tuple[int, int, int, int], bytes]] = []
     Cursor = Start + 8
     for Ignored in range(6):
         if Cursor + 16 > len(DataValue):
             return None
-        Header = Struct.unpack_from('<IIII', DataValue, Cursor)
+        Header = Struct.unpack_from("<IIII", DataValue, Cursor)
         ItemSize, Ignored, Ignored, Count = Header
         if not 0 < ItemSize <= 64 or Count > 10000000:
             return None
@@ -123,18 +206,27 @@ def ReadFaceChans(DataValue: bytes, Start: int, StripCount: int) -> tuple[list[t
 
 
 # strip validation owns cross channel counts so decoding cannot trust inconsistent array headers
-def GetStripLayout(Channels: list[tuple[tuple[int, int, int, int], bytes]], StripCount: int) -> tuple[tuple[int, ...], int] | None:
+def GetStripLayout(
+    Channels: list[tuple[tuple[int, int, int, int], bytes]], StripCount: int
+) -> tuple[tuple[int, ...], int] | None:
     FirstHeader, FirstData = Channels[0]
     if FirstHeader != (4, 8, 2, StripCount):
         return None
-    StripLengths = Struct.unpack(f'<{StripCount}I', FirstData)
+    StripLengths = Struct.unpack(f"<{StripCount}I", FirstData)
     if min(StripLengths) < 3:
         return None
     VertexCount = sum(StripLengths)
     if VertexCount > 10000000:
         return None
     ThirdCount = Channels[3][0][3]
-    ExpectedHeaders = ((4, 8, 2, StripCount), (12, 100, 2, VertexCount), (12, 100, 2, VertexCount), (4, 8, 2, ThirdCount), (4, 8, 2, StripCount), (1, 8, 2, ThirdCount))
+    ExpectedHeaders = (
+        (4, 8, 2, StripCount),
+        (12, 100, 2, VertexCount),
+        (12, 100, 2, VertexCount),
+        (4, 8, 2, ThirdCount),
+        (4, 8, 2, StripCount),
+        (1, 8, 2, ThirdCount),
+    )
     if tuple((Channel[0] for Channel in Channels)) != ExpectedHeaders:
         return None
     return (StripLengths, VertexCount)
@@ -144,7 +236,7 @@ def GetStripLayout(Channels: list[tuple[tuple[int, int, int, int], bytes]], Stri
 def DecodeFace(DataValue: bytes, Start: int) -> NativeFace | None:
     if Start < 0 or Start + 8 > len(DataValue):
         return None
-    FaceId, StripCount = Struct.unpack_from('<II', DataValue, Start)
+    FaceId, StripCount = Struct.unpack_from("<II", DataValue, Start)
     if not 0 < StripCount <= 100000:
         return None
     ChannelResult = ReadFaceChans(DataValue, Start, StripCount)
@@ -155,13 +247,24 @@ def DecodeFace(DataValue: bytes, Start: int) -> NativeFace | None:
     if StripLayout is None:
         return None
     StripLengths, VertexCount = StripLayout
-    PositionValues = Struct.unpack(f'<{VertexCount * 3}f', Channels[1][1])
-    NormalValues = Struct.unpack(f'<{VertexCount * 3}f', Channels[2][1])
-    if not all((MathValue.isfinite(Value) for Value in (*PositionValues, *NormalValues))):
+    PositionValues = Struct.unpack(f"<{VertexCount * 3}f", Channels[1][1])
+    NormalValues = Struct.unpack(f"<{VertexCount * 3}f", Channels[2][1])
+    if not all(
+        (MathValue.isfinite(Value) for Value in (*PositionValues, *NormalValues))
+    ):
         return None
     PositionsMm = Vectors(PositionValues, 1000.0)
     Normals = Vectors(NormalValues, 1.0)
-    return NativeFace(offset=Start, record_length=Cursor - Start, face_id=FaceId, strip_lengths=StripLengths, positions_mm=PositionsMm, normals=Normals, triangle_indices=Triangles(StripLengths))
+    return NativeFace(
+        offset=Start,
+        record_length=Cursor - Start,
+        face_id=FaceId,
+        strip_lengths=StripLengths,
+        positions_mm=PositionsMm,
+        normals=Normals,
+        triangle_indices=Triangles(StripLengths),
+    )
+
 
 # this definition exists because focused behavior needs one stable owner
 def Triangles(StripLengths: tuple[int, ...]) -> tuple[tuple[int, int, int], ...]:
@@ -176,9 +279,22 @@ def Triangles(StripLengths: tuple[int, ...]) -> tuple[tuple[int, int, int], ...]
         First += Length
     return tuple(Result)
 
+
 # this definition exists because focused behavior needs one stable owner
-def Vectors(Values: tuple[float, ...], Scale: float) -> tuple[tuple[float, float, float], ...]:
-    return tuple(((Values[Index] * Scale, Values[Index + 1] * Scale, Values[Index + 2] * Scale) for Index in range(0, len(Values), 3)))
+def Vectors(
+    Values: tuple[float, ...], Scale: float
+) -> tuple[tuple[float, float, float], ...]:
+    return tuple(
+        (
+            (
+                Values[Index] * Scale,
+                Values[Index + 1] * Scale,
+                Values[Index + 2] * Scale,
+            )
+            for Index in range(0, len(Values), 3)
+        )
+    )
+
 
 # this definition exists because focused behavior needs one stable owner
 def Serialized(DataValue: bytes) -> tuple[tuple[int, str, int], ...]:
@@ -198,7 +314,7 @@ def Serialized(DataValue: bytes) -> tuple[tuple[int, str, int], ...]:
         if StringEnd > len(DataValue):
             continue
         try:
-            Value = DataValue[StringStart:StringEnd].decode('utf-16le')
+            Value = DataValue[StringStart:StringEnd].decode("utf-16le")
         except UnicodeDecodeError:
             continue
         if any((ord(Character) < 32 for Character in Value)):
@@ -206,71 +322,72 @@ def Serialized(DataValue: bytes) -> tuple[tuple[int, str, int], ...]:
         Result.append((Offset, Value, StringEnd))
     return tuple(Result)
 
-# this binding exists because shared behavior needs one stable value
-globals()['ASSEMBLY_FORMAT_ID'] = AsmFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()['DISPLAY_LISTS_STREAM'] = DisplayListsStream
+globals()["ASSEMBLY_FORMAT_ID"] = AsmFormatId
 
 # this binding exists because shared behavior needs one stable value
-globals()['Mesh'] = MeshValue
+globals()["DISPLAY_LISTS_STREAM"] = DisplayListsStream
 
 # this binding exists because shared behavior needs one stable value
-globals()['NativeDisplayComponent'] = NativeDisplay
+globals()["Mesh"] = MeshValue
 
 # this binding exists because shared behavior needs one stable value
-globals()['NativeTessellationFace'] = NativeFace
+globals()["NativeDisplayComponent"] = NativeDisplay
 
 # this binding exists because shared behavior needs one stable value
-globals()['SERIALIZED_STRING_MARKER'] = SerializedStringMarker
+globals()["NativeTessellationFace"] = NativeFace
 
 # this binding exists because shared behavior needs one stable value
-globals()['Vector3'] = VectorThree
+globals()["SERIALIZED_STRING_MARKER"] = SerializedStringMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()['_ARRAY_MARKER'] = KArrayMarker
+globals()["Vector3"] = VectorThree
 
 # this binding exists because shared behavior needs one stable value
-globals()['_decode_face'] = DecodeFace
+globals()["_ARRAY_MARKER"] = KArrayMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()['_serialized_strings'] = Serialized
+globals()["_decode_face"] = DecodeFace
 
 # this binding exists because shared behavior needs one stable value
-globals()['_triangles'] = Triangles
+globals()["_serialized_strings"] = Serialized
 
 # this binding exists because shared behavior needs one stable value
-globals()['_vectors'] = Vectors
+globals()["_triangles"] = Triangles
 
 # this binding exists because shared behavior needs one stable value
-globals()['annotations'] = Annotations
+globals()["_vectors"] = Vectors
 
 # this binding exists because shared behavior needs one stable value
-globals()['bisect_right'] = BisectRight
+globals()["annotations"] = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()['dataclass'] = Dataclass
+globals()["bisect_right"] = BisectRight
 
 # this binding exists because shared behavior needs one stable value
-globals()['decode_display_lists'] = DecodeDisplay
+globals()["dataclass"] = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()['decode_tessellation_faces'] = DecodeFaces
+globals()["decode_display_lists"] = DecodeDisplay
 
 # this binding exists because shared behavior needs one stable value
-globals()['frozen_mapping'] = FrozenMapping
+globals()["decode_tessellation_faces"] = DecodeFaces
 
 # this binding exists because shared behavior needs one stable value
-globals()['is_cad_path'] = IsCadPath
+globals()["frozen_mapping"] = FrozenMapping
 
 # this binding exists because shared behavior needs one stable value
-globals()['is_component_path'] = IsComponentPath
+globals()["is_cad_path"] = IsCadPath
 
 # this binding exists because shared behavior needs one stable value
-globals()['math'] = MathValue
+globals()["is_component_path"] = IsComponentPath
 
 # this binding exists because shared behavior needs one stable value
-globals()['neutral_meshes'] = NeutralMeshes
+globals()["math"] = MathValue
 
 # this binding exists because shared behavior needs one stable value
-globals()['struct'] = Struct
+globals()["neutral_meshes"] = NeutralMeshes
+
+# this binding exists because shared behavior needs one stable value
+globals()["struct"] = Struct

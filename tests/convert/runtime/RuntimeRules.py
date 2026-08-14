@@ -18,11 +18,7 @@ KSourcePath = KRootPath / "src"
 
 # controlled adapter discovery owns the only permitted dynamic production import
 KDynamicImportPath = (
-    KSourcePath
-    / "convert"
-    / "adapters"
-    / "registry"
-    / "AdapterDiscovery.py"
+    KSourcePath / "convert" / "adapters" / "registry" / "AdapterDiscovery.py"
 )
 
 # cad modules stay forbidden because production runtime must remain application independent

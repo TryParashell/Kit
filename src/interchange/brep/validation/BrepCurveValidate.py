@@ -8,8 +8,21 @@
 
 from math import isfinite as IsFiniteNum
 
-from interchange.brep.curves.BrepCurves import BrepCurve, CircleCurve, EllipseCurve, IntersectCurve, LineCurve, NativeCurve, NurbsCurve
-from interchange.brep.topology.BrepMath import IsFiniteSpace, IsNonzeroSpace, IsValidSpline, IsValidTol
+from interchange.brep.curves.BrepCurves import (
+    BrepCurve,
+    CircleCurve,
+    EllipseCurve,
+    IntersectCurve,
+    LineCurve,
+    NativeCurve,
+    NurbsCurve,
+)
+from interchange.brep.topology.BrepMath import (
+    IsFiniteSpace,
+    IsNonzeroSpace,
+    IsValidSpline,
+    IsValidTol,
+)
 
 
 # curve validation protects exact geometry consumers from malformed analytic data

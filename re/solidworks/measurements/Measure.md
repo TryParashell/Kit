@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Donors awaiting a SOLIDWORKS measurement
 
 `Donor.measured` is flipped by hand only after a part written from that donor has been opened in
@@ -13,10 +23,10 @@ document names as candidate donors (`Timing_belt_roller.SLDPRT`, `Journal_bearig
 **not** used: an 18000 stream that already exists is strictly better than hosting a legacy stream in
 an 18000 container, which is the thing nobody has verified.
 
-| donor | source part | topology key | what to measure |
-|---|---|---|---|
-| `revolve_full` | `.rescratch/donors/parts/revolve_full.SLDPRT`, lane 12 135 B, `Revolve1` id 31 / `Sketch1` id 26 | `(("revolve-boss", "rectangle", "sketch-axis", "full-revolution"),)` | patch the profile rectangle to `(9, −8) … (21, 8)` mm and keep 360°; expect an annulus of `π(21² − 9²)·16 = 18 095.57 mm³` |
-| `boss_revcut` | `.rescratch/donors/parts/boss_revcut.SLDPRT`, lane 17 713 B, `Boss-Extrude1` id 32 / `Sketch1` id 26, `Cut-Revolve1` id 39 / `Sketch2` id 33 | `(("boss", "rectangle", "front", "blind"), ("revolve-cut", "rectangle", "sketch-axis", "full-revolution"))` | patch the boss to `(−23, −12) … (23, 12)` mm × 12 mm blind and the revolved cut to `(−28, 0) … (28, 4)` mm about the sketch X axis; expect `46·24·12 − π·4²·46 = 13 248 − 2 312.21 = 10 935.79 mm³` |
+| donor          | source part                                                                                                                                  | topology key                                                                                                | what to measure                                                                                                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `revolve_full` | `.rescratch/donors/parts/revolve_full.SLDPRT`, lane 12 135 B, `Revolve1` id 31 / `Sketch1` id 26                                             | `(("revolve-boss", "rectangle", "sketch-axis", "full-revolution"),)`                                        | patch the profile rectangle to `(9, −8) … (21, 8)` mm and keep 360°; expect an annulus of `π(21² − 9²)·16 = 18 095.57 mm³`                                                                          |
+| `boss_revcut`  | `.rescratch/donors/parts/boss_revcut.SLDPRT`, lane 17 713 B, `Boss-Extrude1` id 32 / `Sketch1` id 26, `Cut-Revolve1` id 39 / `Sketch2` id 33 | `(("boss", "rectangle", "front", "blind"), ("revolve-cut", "rectangle", "sketch-axis", "full-revolution"))` | patch the boss to `(−23, −12) … (23, 12)` mm × 12 mm blind and the revolved cut to `(−28, 0) … (28, 4)` mm about the sketch X axis; expect `46·24·12 − π·4²·46 = 13 248 − 2 312.21 = 10 935.79 mm³` |
 
 `.rescratch/donors/check_revolve.py` writes exactly those two patched streams and re-reads them, so
 the streams to measure can be produced without touching `src/`.
@@ -40,11 +50,11 @@ the streams to measure can be produced without touching `src/`.
 
 ### Not attempted, and why
 
-* **Reference-axis revolves.** `REFERENCE_AXIS_SUPPORT` exists as a key value but no donor carries
+- **Reference-axis revolves.** `REFERENCE_AXIS_SUPPORT` exists as a key value but no donor carries
   it. The only corpus candidates derive their axis from a cylindrical face, which is opaque, and the
   smallest is 574 kB of base85 for one untargetable topology. `_revolve_edit` rejects a target whose
   support is not the donor's, so the constant cannot be selected by accident.
-* **Axis repointing.** The donor's axis construction line is a `class = 1` coordinate record, which
+- **Axis repointing.** The donor's axis construction line is a `class = 1` coordinate record, which
   `sketch_points()` deliberately excludes, so the axis is inherit-only. `Donor.axis_directions`
   records the inherited direction per feature — `(0, 1)` for `revolve_full`, `(None, (1, 0))` for
   `boss_revcut` — and `_revolve_edit` refuses a target that wants a different one.
@@ -97,32 +107,32 @@ with the vendor file as template opens and measures identically to the original.
 
 Removing one vendor stream at a time from the vendor file:
 
-| removed stream | result |
-| --- | --- |
-| `Contents/CMgr` | crash |
-| `Contents/Config-0` | crash |
-| `Contents/Config-0-ResolvedFeatures` | opens, but 0 components, 0 mates, 0 bodies, no mass |
-| `Contents/Definition` | crash |
-| `Contents/Config-0-LWDATA` | opens, unchanged |
-| `Contents/DisplayLists` | opens, unchanged |
-| `Contents/User Units Table` | opens, unchanged |
-| `SwDocContentMgr/SwDocContentMgrInfo` | opens, unchanged |
-| `docProps/ISolidWorksInformation.xml` | opens, unchanged |
-| `swXmlContents/KeyWords` | opens, unchanged |
+| removed stream                        | result                                              |
+| ------------------------------------- | --------------------------------------------------- |
+| `Contents/CMgr`                       | crash                                               |
+| `Contents/Config-0`                   | crash                                               |
+| `Contents/Config-0-ResolvedFeatures`  | opens, but 0 components, 0 mates, 0 bodies, no mass |
+| `Contents/Definition`                 | crash                                               |
+| `Contents/Config-0-LWDATA`            | opens, unchanged                                    |
+| `Contents/DisplayLists`               | opens, unchanged                                    |
+| `Contents/User Units Table`           | opens, unchanged                                    |
+| `SwDocContentMgr/SwDocContentMgrInfo` | opens, unchanged                                    |
+| `docProps/ISolidWorksInformation.xml` | opens, unchanged                                    |
+| `swXmlContents/KeyWords`              | opens, unchanged                                    |
 
 So of the ten streams `sldasm.unexpressed_native_records` enumerates, four are load-critical and six
 are cosmetic.
 
 Substituting one Kit-generated record at a time into the vendor file:
 
-| swapped stream | result |
-| --- | --- |
-| `Contents/Config-0-ModelHeader` | crash |
-| `Header2` | opens, unchanged |
-| `Contents/CMgrHdr2` | opens, unchanged |
-| `Contents/CnfgObjs` (empty, 12 bytes) | opens, unchanged |
-| `Contents/Config-0-MatesList` | opens, **0 mates** |
-| `swXmlContents/COMPINSTANCETREE` | opens, unchanged |
+| swapped stream                        | result             |
+| ------------------------------------- | ------------------ |
+| `Contents/Config-0-ModelHeader`       | crash              |
+| `Header2`                             | opens, unchanged   |
+| `Contents/CMgrHdr2`                   | opens, unchanged   |
+| `Contents/CnfgObjs` (empty, 12 bytes) | opens, unchanged   |
+| `Contents/Config-0-MatesList`         | opens, **0 mates** |
+| `swXmlContents/COMPINSTANCETREE`      | opens, unchanged   |
 
 `Header2` and `Contents/Config-0-ModelHeader` carry identical bytes in both files, yet only the
 `Config-0-ModelHeader` substitution is fatal: the reader consumes the configuration copy and treats
@@ -178,11 +188,11 @@ synthesised model header is never written.
 that differs from the vendor original in exactly three streams: `Kit/Interchange`, `Kit/Native`,
 `swXmlContents/COMPINSTANCETREE`.
 
-| file | opened | load errors | load warnings | components | states | mates | rebuilt | bodies | volume mm³ | centre mm |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Kit-written `Piston.SLDASM` (b1) | yes | none | none | 4 | 4 fully-resolved | 6 | true | 4 | `94147.19377093749` | `(0.0003789180878327792, 32.304601496316025, -0.000206795236149518)` |
-| Kit-written `Piston.SLDASM` (b3) | yes | none | none | 4 | 4 fully-resolved | 6 | true | 4 | `94147.19377093748` | `(0.00037891808783261424, 32.30460149631602, -0.00020679523614970235)` |
-| vendor `Piston.SLDASM` (b3) | yes | none | none | 4 | 4 fully-resolved | 6 | true | 4 | `94147.19377093746` | `(0.00037891808783228843, 32.304601496316025, -0.00020679523614969687)` |
+| file                             | opened | load errors | load warnings | components | states           | mates | rebuilt | bodies | volume mm³          | centre mm                                                               |
+| -------------------------------- | ------ | ----------- | ------------- | ---------- | ---------------- | ----- | ------- | ------ | ------------------- | ----------------------------------------------------------------------- |
+| Kit-written `Piston.SLDASM` (b1) | yes    | none        | none          | 4          | 4 fully-resolved | 6     | true    | 4      | `94147.19377093749` | `(0.0003789180878327792, 32.304601496316025, -0.000206795236149518)`    |
+| Kit-written `Piston.SLDASM` (b3) | yes    | none        | none          | 4          | 4 fully-resolved | 6     | true    | 4      | `94147.19377093748` | `(0.00037891808783261424, 32.30460149631602, -0.00020679523614970235)`  |
+| vendor `Piston.SLDASM` (b3)      | yes    | none        | none          | 4          | 4 fully-resolved | 6     | true    | 4      | `94147.19377093746` | `(0.00037891808783228843, 32.304601496316025, -0.00020679523614969687)` |
 
 Volume and centre of mass agree with the vendor original to ~1e-16 relative. Six mates, not the zero
 the synthesised `Contents/Config-0-MatesList` yields — the donor mate records come through intact.
@@ -197,11 +207,11 @@ proxy agreed and the writer reported `vendor_loadable = True`, `native-template`
 Shifting `Piston_shaft-1` (5089.380098815458 mm³ of 94147.19377093749 mm³) by +50 mm in Y should move
 the assembly centre of mass in Y by 2.703 mm, to ≈35.008.
 
-| file | opened | components | states | mates | bodies | volume mm³ | centre mm |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| shaft moved +50 mm Y | yes | 4 | 4 fully-resolved | 6 | 4 | `94147.19377093749` | `(0.000378918087832499, 32.304601496316025, -0.00020679523614945986)` |
-| one instance removed | yes | 4 | 4 fully-resolved | 6 | 4 | `94147.19377093746` | `(0.00037891808783270574, 32.304601496316025, -0.00020679523614959046)` |
-| source-less generated | **no** — crash during `OpenDoc6` | — | — | — | — | — | — |
+| file                  | opened                           | components | states           | mates | bodies | volume mm³          | centre mm                                                               |
+| --------------------- | -------------------------------- | ---------- | ---------------- | ----- | ------ | ------------------- | ----------------------------------------------------------------------- |
+| shaft moved +50 mm Y  | yes                              | 4          | 4 fully-resolved | 6     | 4      | `94147.19377093749` | `(0.000378918087832499, 32.304601496316025, -0.00020679523614945986)`   |
+| one instance removed  | yes                              | 4          | 4 fully-resolved | 6     | 4      | `94147.19377093746` | `(0.00037891808783270574, 32.304601496316025, -0.00020679523614959046)` |
+| source-less generated | **no** — crash during `OpenDoc6` | —          | —                | —     | —      | —                   | —                                                                       |
 
 The moved file's centre of mass is the donor's, unchanged, to the last digit. The reader takes
 placement from `Contents/Config-0-ResolvedFeatures` and never consults the patched XML. The

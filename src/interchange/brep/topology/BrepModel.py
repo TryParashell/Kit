@@ -11,7 +11,19 @@ from __future__ import annotations
 from interchange.brep.curves.BrepCurves import BrepCurve
 from interchange.brep.curves.BrepPcurves import BrepPcurve
 from interchange.brep.surfaces.BrepSurfaces import BrepSurface
-from interchange.brep.topology.BrepTopology import BrepBody, BrepCoedge, BrepEdge, BrepFace, BrepFaceUse, BrepLoop, BrepRegion, BrepShell, BrepShellUse, BrepVertex, BrepWire
+from interchange.brep.topology.BrepTopology import (
+    BrepBody,
+    BrepCoedge,
+    BrepEdge,
+    BrepFace,
+    BrepFaceUse,
+    BrepLoop,
+    BrepRegion,
+    BrepShell,
+    BrepShellUse,
+    BrepVertex,
+    BrepWire,
+)
 from interchange.core.ModelBase import ModelBase, ModelDataMut
 
 

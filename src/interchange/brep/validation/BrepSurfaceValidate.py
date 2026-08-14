@@ -9,8 +9,22 @@
 from math import isfinite as IsFiniteNum
 from math import pi as KPiValue
 
-from interchange.brep.topology.BrepMath import IsFiniteSpace, IsNonzeroSpace, IsValidSpline
-from interchange.brep.surfaces.BrepSurfaces import BrepSurface, ConeSurface, CylinderSurface, NativeSurface, NurbsSurface, OffsetSurface, PlaneSurface, SphereSurface, TorusSurface
+from interchange.brep.topology.BrepMath import (
+    IsFiniteSpace,
+    IsNonzeroSpace,
+    IsValidSpline,
+)
+from interchange.brep.surfaces.BrepSurfaces import (
+    BrepSurface,
+    ConeSurface,
+    CylinderSurface,
+    NativeSurface,
+    NurbsSurface,
+    OffsetSurface,
+    PlaneSurface,
+    SphereSurface,
+    TorusSurface,
+)
 
 
 # analytic surface checks protect downstream kernels from malformed frames and radii

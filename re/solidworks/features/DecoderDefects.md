@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Read-path defects: revolves in `src/convert/adapters/solidworks/`
 
 **Nothing in `src/` was modified.** This is a defect list for the agent that owns `src/`.
@@ -63,7 +73,7 @@ The branch constructs `NativeOperation(... direction_code=None, termination_code
 unconditionally, and `_end_spec()` is never called for a revolve. `end-spec-not-read: 67`.
 
 Given that `moRevEndSpec_c` is a 52-byte constant across the whole corpus (`Revolve.md` §4) this
-costs nothing semantic *today* — there is no value to lose. It costs structurally: the record is not
+costs nothing semantic _today_ — there is no value to lose. It costs structurally: the record is not
 even located, so there is nowhere to attach the end condition, the direction flag or the
 thin-feature thickness once a SOLIDWORKS run decodes them. The locator is cheap and exact: search
 for `u32 1` + 24 zero bytes + `float64 0.01` + `float64 0.01` + 8 zero bytes; the hit count equals
@@ -93,21 +103,21 @@ sketch the stream actually names as the axis source.
 Result: `axis_marker_offset is None` for **54 of 67** revolves (`axis-unresolved: 54`).
 
 The **11** reference-axis revolves are all inside that 54 and can never be resolved by this
-heuristic, because their axis is a reference-axis *feature*, not a sketch line:
+heuristic, because their axis is a reference-axis _feature_, not a sketch line:
 
-| part | feature | axis node | id | axis-id offset | end-spec object |
-|---|---|---|---|---|---|
-| `RUEDA DE TURBINA.SLDPRT` | `Cortar-Revolución1` | `Eje1` | 46 | 69014 | 69145 |
-| `RUEDA DE TURBINA.SLDPRT` | `Cortar-Revolución2` | `Eje1` | 46 | 138726 | 138857 |
-| `RUEDA DE TURBINA.SLDPRT` | `Revolución1` | `Eje1` | 46 | 177431 | 177562 |
-| `TURBINA.SLDPRT` | `Cortar-Revolución1` | `Eje1` | 52 | 110732 | 110863 |
-| `TURBINA.SLDPRT` | `Revolución1` | `Eje1` | 52 | 202812 | 202943 |
-| `TURBINA.SLDPRT` | `Revolución2` | `Eje1` | 52 | 227262 | 227393 |
-| `CUBIERTA.SLDPRT` | `Cortar-Revolución2` | `Eje1` | 193 | 156117 | 156248 |
-| `CUBIERTA.SLDPRT` | `Cortar-Revolución3` | `Eje1` | 193 | 300319 | 300450 |
-| `CUBIERTA DE TURBINA 1.SLDPRT` | `Cortar-Revolución1` | `Eje1` | 205 | 148763 | 148894 |
-| `CUIETA DE ENTRADA DE GASES.SLDPRT` | `Cortar-Revolución1` | `Eje1` | 205 | 148810 | 148941 |
-| `TAPA RECTANGULAR DE LA CUBIERTA DE LA TURBINA.SLDPRT` | `Cortar-Revolución1` | `Eje1` | 205 | 149372 | 149503 |
+| part                                                   | feature              | axis node | id  | axis-id offset | end-spec object |
+| ------------------------------------------------------ | -------------------- | --------- | --- | -------------- | --------------- |
+| `RUEDA DE TURBINA.SLDPRT`                              | `Cortar-Revolución1` | `Eje1`    | 46  | 69014          | 69145           |
+| `RUEDA DE TURBINA.SLDPRT`                              | `Cortar-Revolución2` | `Eje1`    | 46  | 138726         | 138857          |
+| `RUEDA DE TURBINA.SLDPRT`                              | `Revolución1`        | `Eje1`    | 46  | 177431         | 177562          |
+| `TURBINA.SLDPRT`                                       | `Cortar-Revolución1` | `Eje1`    | 52  | 110732         | 110863          |
+| `TURBINA.SLDPRT`                                       | `Revolución1`        | `Eje1`    | 52  | 202812         | 202943          |
+| `TURBINA.SLDPRT`                                       | `Revolución2`        | `Eje1`    | 52  | 227262         | 227393          |
+| `CUBIERTA.SLDPRT`                                      | `Cortar-Revolución2` | `Eje1`    | 193 | 156117         | 156248          |
+| `CUBIERTA.SLDPRT`                                      | `Cortar-Revolución3` | `Eje1`    | 193 | 300319         | 300450          |
+| `CUBIERTA DE TURBINA 1.SLDPRT`                         | `Cortar-Revolución1` | `Eje1`    | 205 | 148763         | 148894          |
+| `CUIETA DE ENTRADA DE GASES.SLDPRT`                    | `Cortar-Revolución1` | `Eje1`    | 205 | 148810         | 148941          |
+| `TAPA RECTANGULAR DE LA CUBIERTA DE LA TURBINA.SLDPRT` | `Cortar-Revolución1` | `Eje1`    | 205 | 149372         | 149503          |
 
 All eleven are V8 parts, lane `Contents/Config-0-ResolvedFeatures`, and every axis-id offset is
 exactly `end-spec object − 131`. The per-feature offsets for all 67 revolves are in `inventory.md`.
@@ -115,12 +125,12 @@ exactly `end-spec object − 131`. The per-feature offsets for all 67 revolves a
 The stream states the answer explicitly, and the decoder does not look there. Per `Revolve.md` §5:
 a `<u32 feature id><u32 time_t>` pair at `end-spec-object − 145` names a **sketch** (56/67) and at
 `− 131` names a **reference axis** (11/67), and the partition is exact — 56 + 11 = 67, no overlap,
-no misses. Replacing the heuristic with that lookup makes the axis *source* deterministic for every
+no misses. Replacing the heuristic with that lookup makes the axis _source_ deterministic for every
 revolve in the corpus.
 
-What it still will not give you is *which* line inside the sketch is the centerline. That is an
+What it still will not give you is _which_ line inside the sketch is the centerline. That is an
 intra-sketch entity reference and it is opaque. Note also that the 13 revolves the current heuristic
-*does* resolve are resolved by guesswork, and there is no static way to confirm the line it picked
+_does_ resolve are resolved by guesswork, and there is no static way to confirm the line it picked
 is the centerline — so those 13 are unverified, not correct.
 
 ---
@@ -152,12 +162,12 @@ revolve's own end-spec object (`native-offset-after-end-spec: 0`), so only the u
 
 ## Correct behaviour, recorded so nobody "fixes" it
 
-* **The angle is right.** `NativeOperation.angle_degrees` is 360.0 for all 67 revolves; zero
+- **The angle is right.** `NativeOperation.angle_degrees` is 360.0 for all 67 revolves; zero
   `angle-missing`, zero `angle-wrong`.
-* **`_bind_dimension` is right.** It converts the `KeyWords` degrees to radians and binds them to
+- **`_bind_dimension` is right.** It converts the `KeyWords` degrees to radians and binds them to
   the **correct** native scalar offset in **67/67** (`angle-native-offset-correct: 67`). This is the
   one place the revolve read path already agrees with the stream byte for byte.
-* **`profile_id` is right.** It matched the sketch tree node immediately preceding the revolve in
+- **`profile_id` is right.** It matched the sketch tree node immediately preceding the revolve in
   67/67 (`profile-mismatch: 0`).
 
 Two qualifications on the angle, both real but neither a bug today:

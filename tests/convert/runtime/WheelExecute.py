@@ -15,7 +15,9 @@ from tests.convert.runtime.RuntimeRules import KRootPath
 
 
 # isolated execution proves the built wheel cannot reach external runtime hooks
-def RunIsolated(TmpPath: FilePath, InstallRoot: FilePath) -> ProcessLib.CompletedProcess:
+def RunIsolated(
+    TmpPath: FilePath, InstallRoot: FilePath
+) -> ProcessLib.CompletedProcess:
     OutputFolder = TmpPath / "runtime"
     OutputFolder.mkdir()
     return ProcessLib.run(

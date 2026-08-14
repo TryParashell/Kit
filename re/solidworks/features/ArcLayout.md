@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Sketch arc layout in `Contents/Config-0-ResolvedFeatures` — recovered by runtime differential
 
 Supersedes the negative result in `Arc.md` §3/§4. `Arc.md` concluded a partial arc could not be
@@ -19,11 +29,11 @@ identical volumes). Every part's authored volume matches the analytic expectatio
 the arc's centre, endpoints and radius are read back from `ISketchArc` and recorded in
 `out/author_arcs.json` / `out/author_sweep.json` as ground truth.
 
-| family | varies | fixed |
-|---|---|---|
-| `ARC_h20/h15/h10/h5/h0` | arc centre x (20, 15, 10, 5, 0 mm) and therefore the radius | all four profile vertices |
-| `ARC_v12/v8` | the chord half-height (12, 8 mm) and therefore the radius | arc centre |
-| `SWEEP_minor` / `SWEEP_major` | the sweep only (120° vs 240°) | centre, both endpoints, both vertices |
+| family                        | varies                                                      | fixed                                 |
+| ----------------------------- | ----------------------------------------------------------- | ------------------------------------- |
+| `ARC_h20/h15/h10/h5/h0`       | arc centre x (20, 15, 10, 5, 0 mm) and therefore the radius | all four profile vertices             |
+| `ARC_v12/v8`                  | the chord half-height (12, 8 mm) and therefore the radius   | arc centre                            |
+| `SWEEP_minor` / `SWEEP_major` | the sweep only (120° vs 240°)                               | centre, both endpoints, both vertices |
 
 Every part's lane is exactly **10864** bytes (10268 for the `SWEEP` pair), so the records are
 value-only differences and the diff is unambiguous.
@@ -32,10 +42,10 @@ value-only differences and the diff is unambiguous.
 
 An arc is **not** a self-contained record. It is:
 
-* the arc **centre**, stored as an ordinary `Grammar.md` §5.1 sketch-coordinate record — the 18-byte
+- the arc **centre**, stored as an ordinary `Grammar.md` §5.1 sketch-coordinate record — the 18-byte
   prefix `000000000000f03f00000000000000001e00`, `float64 x`, `float64 y` in metres, then the 4-byte
   trailer — whose trailer is `role = 0`, **`geometry_class = 1`**;
-* the arc **endpoints**, which are not stored separately at all: they are the ordinary
+- the arc **endpoints**, which are not stored separately at all: they are the ordinary
   `role = 0, geometry_class = 2` profile-vertex records of the neighbouring entities.
 
 `geometry_class = 1` is therefore the discriminator `Arc.md` §1 looked for and did not find. The

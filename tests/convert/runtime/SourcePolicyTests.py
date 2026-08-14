@@ -29,8 +29,7 @@ def CheckNoPass() -> None:
         SourceBytes = SourcePath.read_bytes()
         SyntaxTree = AstLib.parse(SourceBytes, filename=str(SourcePath))
         assert not any(
-            isinstance(NodeData, AstLib.Pass)
-            for NodeData in AstLib.walk(SyntaxTree)
+            isinstance(NodeData, AstLib.Pass) for NodeData in AstLib.walk(SyntaxTree)
         ), SourcePath
 
 

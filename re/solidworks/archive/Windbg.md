@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Runtime instrumentation of the SOLIDWORKS feature-stream reader
 
 Goal: confirm the record boundaries and field order derived statically in `Grammar.md`, and
@@ -169,7 +179,7 @@ process lifetime. So:
 > The MFC runtime is loaded for UI/pane state only.
 
 Static analysis had been treating the stream as MFC `CArchive` output. That reading is correct as
-a *format*, but the implementation is SOLIDWORKS' own.
+a _format_, but the implementation is SOLIDWORKS' own.
 
 ---
 

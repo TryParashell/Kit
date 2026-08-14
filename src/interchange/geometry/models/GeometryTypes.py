@@ -9,8 +9,22 @@
 from functools import reduce as ReduceValues
 from operator import or_ as UnionValues
 
-from interchange.geometry.models.GeometryConics import ArcEllipseGeom, ArcHyperGeom, ArcParabGeom, EllipseGeometry, HyperbolaGeom, ParabolaGeom
-from interchange.geometry.models.GeometryCurves import ArcGeometry, CircleGeometry, LineGeometry, NativeGeometry, PointGeometry, SplineGeometry
+from interchange.geometry.models.GeometryConics import (
+    ArcEllipseGeom,
+    ArcHyperGeom,
+    ArcParabGeom,
+    EllipseGeometry,
+    HyperbolaGeom,
+    ParabolaGeom,
+)
+from interchange.geometry.models.GeometryCurves import (
+    ArcGeometry,
+    CircleGeometry,
+    LineGeometry,
+    NativeGeometry,
+    PointGeometry,
+    SplineGeometry,
+)
 
 
 # exhaustive geometry typing prevents new classes from escaping sketch validation

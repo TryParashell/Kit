@@ -27,6 +27,4 @@ from convert.results.ResultDetails import ResultDetails
 from convert.results.ResultFlags import ResultFlags
 
 globals().update({"ConversionResult": BuildResult()})
-globals().update(
-    {"ConversionEngine": BuildEngine(globals()["ConversionResult"])}
-)
+globals().update({"ConversionEngine": BuildEngine(globals()["ConversionResult"])})

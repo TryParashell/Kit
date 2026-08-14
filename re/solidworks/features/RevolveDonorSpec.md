@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Revolve donors for `src/convert/adapters/solidworks/donor_library.py`
 
 Written for the implementation agent. Field evidence is in `Revolve.md`; part-level evidence is in
@@ -8,21 +18,21 @@ committing a donor.
 
 ## 1. What a revolve donor can and cannot do
 
-| parameter | status | how |
-|---|---|---|
-| revolve **angle** | **PATCHABLE** | one `float64` in radians, located by the ordinal dimension-scalar rule; the two derived copies at `scalar+513` / `scalar+537` must be **left stale** |
-| axis **target** (repoint to another existing reference axis or sketch in the same donor) | **PATCHABLE**, unverified | `u32` feature id at `end-spec-object − 131` (reference axis) or `− 145` (sketch) |
-| **profile geometry** | **PARTIALLY PATCHABLE** | `float64` x/y pairs in the same 18-byte-prefixed coordinate record as extrudes, but arcs are unreadable (§7.2 of `Revolve.md`) and the role/class trailer values are undecoded — treat as inherit-only unless the donor's profile is pure line segments |
-| boss ↔ cut | **INHERIT ONLY** | changes the class set (`moRevolution_c` ↔ `moRevCut_c`) and therefore every `su_CArchive` map index after it. Separate donors, no byte flip. |
-| end condition (one-direction / mid-plane / two-direction) | **INHERIT ONLY** | `moRevEndSpec_c` is a 52-byte constant across the whole corpus; the code byte is not located |
-| direction / reverse | **INHERIT ONLY** | same reason |
-| thin feature | **INHERIT ONLY** | same reason; the two `0.01` doubles in `moRevEndSpec_c` are a guess |
-| which sketch entity is the centerline | **INHERIT ONLY** | intra-sketch entity reference, opaque |
-| axis derived from a cylindrical face | **INHERIT ONLY** | same opaque face reference report 2 §3/§7 established for extrudes |
-| axis = temporary / principal axis | **UNSUPPORTED** | no corpus example |
-| adding or removing a revolve | **UNSUPPORTED** | Grammar.md §8 items 1–3: object segmentation and map-index renumbering are unsolved |
+| parameter                                                                                | status                    | how                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| revolve **angle**                                                                        | **PATCHABLE**             | one `float64` in radians, located by the ordinal dimension-scalar rule; the two derived copies at `scalar+513` / `scalar+537` must be **left stale**                                                                                                    |
+| axis **target** (repoint to another existing reference axis or sketch in the same donor) | **PATCHABLE**, unverified | `u32` feature id at `end-spec-object − 131` (reference axis) or `− 145` (sketch)                                                                                                                                                                        |
+| **profile geometry**                                                                     | **PARTIALLY PATCHABLE**   | `float64` x/y pairs in the same 18-byte-prefixed coordinate record as extrudes, but arcs are unreadable (§7.2 of `Revolve.md`) and the role/class trailer values are undecoded — treat as inherit-only unless the donor's profile is pure line segments |
+| boss ↔ cut                                                                               | **INHERIT ONLY**          | changes the class set (`moRevolution_c` ↔ `moRevCut_c`) and therefore every `su_CArchive` map index after it. Separate donors, no byte flip.                                                                                                            |
+| end condition (one-direction / mid-plane / two-direction)                                | **INHERIT ONLY**          | `moRevEndSpec_c` is a 52-byte constant across the whole corpus; the code byte is not located                                                                                                                                                            |
+| direction / reverse                                                                      | **INHERIT ONLY**          | same reason                                                                                                                                                                                                                                             |
+| thin feature                                                                             | **INHERIT ONLY**          | same reason; the two `0.01` doubles in `moRevEndSpec_c` are a guess                                                                                                                                                                                     |
+| which sketch entity is the centerline                                                    | **INHERIT ONLY**          | intra-sketch entity reference, opaque                                                                                                                                                                                                                   |
+| axis derived from a cylindrical face                                                     | **INHERIT ONLY**          | same opaque face reference report 2 §3/§7 established for extrudes                                                                                                                                                                                      |
+| axis = temporary / principal axis                                                        | **UNSUPPORTED**           | no corpus example                                                                                                                                                                                                                                       |
+| adding or removing a revolve                                                             | **UNSUPPORTED**           | Grammar.md §8 items 1–3: object segmentation and map-index renumbering are unsolved                                                                                                                                                                     |
 
-**Consequence:** a revolve donor is essentially a *one-parameter* donor — the angle — plus an
+**Consequence:** a revolve donor is essentially a _one-parameter_ donor — the angle — plus an
 optional axis repoint. That is much weaker than the extrude donors, which can also author the
 profile, the depth, the direction and the end condition. Do not advertise more than this.
 
@@ -37,14 +47,14 @@ Every one of the 40 revolve-bearing corpus parts is `swVersion` **13000** (23 pa
 The archive-layer grammar plainly still holds across those versions: every locator in `Revolve.md`
 works unmodified on 13000 and 14000 documents. What is **not** established is that a 13000/14000
 resolved-features stream can be dropped into the 18000 container the donor pipeline builds and
-opened. SOLIDWORKS *upgrades* a legacy document when it opens it, which rewrites the stream, and
+opened. SOLIDWORKS _upgrades_ a legacy document when it opens it, which rewrites the stream, and
 Grammar.md §1 already records that a wrong container signature triplet hard-crashes the
 application.
 
 Two options, in order of preference:
 
 1. **Re-save the chosen corpus parts from SOLIDWORKS 2025** (open, rebuild, Save As to a new file),
-   then extract the resolved-features stream from the re-saved 18000 document and use *that* as the
+   then extract the resolved-features stream from the re-saved 18000 document and use _that_ as the
    donor payload. Re-run `probe_revolve.py` against the re-saved part first: all the offsets in
    `Revolve.md` must still resolve, the angle must still read 360°, and the end-spec signature count
    must still equal the revolve count. If any of those fail, the upgrade changed the layout and the
@@ -86,16 +96,16 @@ REVOLVE_END_CONDITIONS = frozenset({FULL_REVOLUTION_END})
 
 Key semantics:
 
-* `operation` — `revolve-boss` or `revolve-cut`. Two distinct values because they are two distinct
+- `operation` — `revolve-boss` or `revolve-cut`. Two distinct values because they are two distinct
   class sets (`Revolve.md` §6). Do **not** reuse the existing `boss` / `cut` values: those select
   extrude donors and the patch paths are different.
-* `profile` — use the existing `POLYLINE_PROFILE_PREFIX` convention with the coordinate count, e.g.
+- `profile` — use the existing `POLYLINE_PROFILE_PREFIX` convention with the coordinate count, e.g.
   `polyline-11`. Every corpus revolve profile is a production polyline; none is a rectangle or a
   COM-authored circle. Only claim a profile as patchable if the donor's profile has no arcs.
-* `support` — `sketch-axis` or `reference-axis`, per the slot the donor's revolve actually uses
+- `support` — `sketch-axis` or `reference-axis`, per the slot the donor's revolve actually uses
   (`inventory.md` records this per feature). This is the field the matcher needs, because the two
   cases patch at different offsets.
-* `end_condition` — `full-revolution` only. Every corpus revolve is 360° one-direction. Add
+- `end_condition` — `full-revolution` only. Every corpus revolve is 360° one-direction. Add
   `mid-plane` / `two-direction` / `thin` values only once a SOLIDWORKS-authored donor exists for
   them; a key value with no donor behind it is worse than a missing key.
 
@@ -118,13 +128,13 @@ parts in the corpus and are **rejected** — their lane holds zero sketch-coordi
 
 `examples/Random/Cylinder_heads/Timing_belt_roller.SLDPRT`
 
-* lane `Contents/Config-0-ResolvedFeatures`, **25 200 bytes** — the smallest usable revolve stream
+- lane `Contents/Config-0-ResolvedFeatures`, **25 200 bytes** — the smallest usable revolve stream
   in the corpus by a wide margin.
-* one feature: `Revolve1`, id 48, `Type="Revolve"`, 360°, tree flags `0x40000000`.
-* sketch `Sketch1` id 26; **16** sketch-coordinate records; 7 `sg*` classes.
-* axis: `sketch-entity`, the `u32` at `end-spec-object − 145` naming `Sketch1`.
-* proposed key: `(("revolve-boss", "polyline-16", "sketch-axis", "full-revolution"),)`
-* near-identical sibling for a control pair: `Timing_belt_roller_2.SLDPRT`, 25 212 bytes, same
+- one feature: `Revolve1`, id 48, `Type="Revolve"`, 360°, tree flags `0x40000000`.
+- sketch `Sketch1` id 26; **16** sketch-coordinate records; 7 `sg*` classes.
+- axis: `sketch-entity`, the `u32` at `end-spec-object − 145` naming `Sketch1`.
+- proposed key: `(("revolve-boss", "polyline-16", "sketch-axis", "full-revolution"),)`
+- near-identical sibling for a control pair: `Timing_belt_roller_2.SLDPRT`, 25 212 bytes, same
   shape. Use it exactly as `CONTROL_A`/`CONTROL_B` were used in report 1 — diff the two to measure
   the id/hash noise floor before trusting any byte you patch.
 
@@ -132,12 +142,12 @@ parts in the corpus and are **rejected** — their lane holds zero sketch-coordi
 
 `examples/Random/Crank/Journal_bearig_crank.SLDPRT`
 
-* lane **50 787 bytes**; one feature `Cut-Revolve1`, `Type="Cut-Revolve"`, 360°, flags `0x40000000`.
-* 28 sketch-coordinate records, 11 `sg*` classes; profile point count attributed to the revolve: 11.
-* axis: `sketch-entity`.
-* class set contains `moRevCut_c` and **not** `moRevolution_c` — the clean cut-only case.
-* proposed key: `(("revolve-cut", "polyline-11", "sketch-axis", "full-revolution"),)`
-* two near-identical siblings for control diffs: `Journal_bearig_conrod.SLDPRT` (50 795 bytes) and
+- lane **50 787 bytes**; one feature `Cut-Revolve1`, `Type="Cut-Revolve"`, 360°, flags `0x40000000`.
+- 28 sketch-coordinate records, 11 `sg*` classes; profile point count attributed to the revolve: 11.
+- axis: `sketch-entity`.
+- class set contains `moRevCut_c` and **not** `moRevolution_c` — the clean cut-only case.
+- proposed key: `(("revolve-cut", "polyline-11", "sketch-axis", "full-revolution"),)`
+- two near-identical siblings for control diffs: `Journal_bearig_conrod.SLDPRT` (50 795 bytes) and
   `Journal_bearig_camshaft.SLDPRT` (51 120 bytes). `Journal_bearig_camshaft` additionally owns an
   `Axis1` reference-axis feature that its revolve does **not** use — a useful negative control for
   the slot partition in §5 of `Revolve.md`.
@@ -146,13 +156,13 @@ parts in the corpus and are **rejected** — their lane holds zero sketch-coordi
 
 `examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA DE TURBINA 1.SLDPRT`
 
-* lane **574 406 bytes**. This is the smallest single-revolve reference-axis part, and it is 23×
+- lane **574 406 bytes**. This is the smallest single-revolve reference-axis part, and it is 23×
   the primary boss donor. `TAPA RECTANGULAR DE LA CUBIERTA DE LA TURBINA.SLDPRT` (594 111) and
   `CUIETA DE ENTRADA DE GASES.SLDPRT` (712 277) are the alternatives; all three carry the same
   `Eje1` id 205 and the same `Cortar-Revolución1` id 240, so they are near-duplicates of each other.
-* class set: `moRevCut_c`, `moRevEndSpec_c`, `moAngleParameter_c`, `moRefAxis_c`, `moCompRefAxis_c`,
+- class set: `moRevCut_c`, `moRevEndSpec_c`, `moAngleParameter_c`, `moRefAxis_c`, `moCompRefAxis_c`,
   `moSurfaceAxisData_c` — i.e. the axis is derived from a cylindrical face, which is opaque.
-* proposed key: `(("revolve-cut", "polyline-10", "reference-axis", "full-revolution"),)`
+- proposed key: `(("revolve-cut", "polyline-10", "reference-axis", "full-revolution"),)`
 
 **Recommendation: do not ship this donor in the first pass.** Half a megabyte of base85 in a source
 file for one opaque topology is a poor trade, and the axis it inherits is a face-derived axis nobody
@@ -161,12 +171,12 @@ needs it — ideally a small COM-authored one rather than this.
 
 ### 4.4 Explicitly not recommended
 
-* `Idle_pulley.SLDPRT`, `Power_steering_pump_pulley.SLDPRT` — no sketch geometry in the lane.
-* `10MM …Socket Head Screw.SLDPRT`, `6MM x 12MM …Screw.SLDPRT`, `8MM x 15mm …screw.SLDPRT`,
+- `Idle_pulley.SLDPRT`, `Power_steering_pump_pulley.SLDPRT` — no sketch geometry in the lane.
+- `10MM …Socket Head Screw.SLDPRT`, `6MM x 12MM …Screw.SLDPRT`, `8MM x 15mm …screw.SLDPRT`,
   `Spark_plug.SLDPRT` — 0 or 1 `sg*` classes, multiple revolves, McMaster library parts.
-* `Engine_Block.SLDPRT` (8 revolves, 1 096 147 bytes), `CUBIERTA.SLDPRT` (3 revolves, 746 886,
+- `Engine_Block.SLDPRT` (8 revolves, 1 096 147 bytes), `CUBIERTA.SLDPRT` (3 revolves, 746 886,
   mixed axis kinds), `Cylinder_head.SLDPRT` (3 revolves, 589 029) — far too large and too coupled.
-* Anything with more than one revolve, until multi-revolve donors are actually needed. Every
+- Anything with more than one revolve, until multi-revolve donors are actually needed. Every
   additional revolve multiplies the map-index exposure.
 
 ---
@@ -205,11 +215,11 @@ the SOLIDWORKS run confirms it**, and consider gating it behind an explicit flag
 
 ### 5.3 What must not be attempted
 
-* Do not port the extrude flag anchors `scalar−824/−818` or `scalar−721/−715`. They do not apply
+- Do not port the extrude flag anchors `scalar−824/−818` or `scalar−721/−715`. They do not apply
   (`Revolve.md` §4.2).
-* Do not write the two derived angle copies.
-* Do not try to convert a `revolve-boss` donor into a `revolve-cut` or vice versa.
-* Do not patch a profile that contains arcs — `resolved.sketch_arcs()` cannot see them, so a partial
+- Do not write the two derived angle copies.
+- Do not try to convert a `revolve-boss` donor into a `revolve-cut` or vice versa.
+- Do not patch a profile that contains arcs — `resolved.sketch_arcs()` cannot see them, so a partial
   write would leave the arc geometry inconsistent with the points.
 
 ### 5.4 Prerequisite fixes in `src/` (owned by another agent)

@@ -18,8 +18,7 @@ def ExtractWheel(WheelPath: FilePath, InstallRoot: FilePath) -> None:
     with ZipFile(WheelPath) as ArchiveData:
         EntryNames = tuple(ArchiveData.namelist())
         assert not any(
-            NameValue.casefold().endswith(KNativeSuffixes)
-            for NameValue in EntryNames
+            NameValue.casefold().endswith(KNativeSuffixes) for NameValue in EntryNames
         )
         CheckWheelMeta(ArchiveData, EntryNames)
         ArchiveData.extractall(InstallRoot)

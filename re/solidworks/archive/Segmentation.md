@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Runtime object segmentation of `Contents/Config-0-ResolvedFeatures`
 
 Executes the trace scripted in `.rescratch/grammar/Windbg.md` §6.1. Everything here is
@@ -36,12 +46,12 @@ non-decreasing and strictly increases, `start <= cur <= max`, and `max - start` 
 buffer span. A final pass discards any triple that violates `start <= cur <= max` in any dump of
 any archive. That leaves exactly one candidate.
 
-| field | offset | evidence |
-|---|---|---|
-| `m_lpBufCur` | `0x38` | the only qword that advances within one archive |
-| `m_lpBufMax` | `0x40` | constant, upper bound of every observed `cur`, in every archive |
-| `m_lpBufStart` | `0x48` | constant, lower bound of every observed `cur` |
-| `m_nMapCount` | `0x50` | the `u32` immediately after `m_lpBufStart`; 307 non-decreasing steps, 3 decreases (archive reuse) |
+| field          | offset | evidence                                                                                          |
+| -------------- | ------ | ------------------------------------------------------------------------------------------------- |
+| `m_lpBufCur`   | `0x38` | the only qword that advances within one archive                                                   |
+| `m_lpBufMax`   | `0x40` | constant, upper bound of every observed `cur`, in every archive                                   |
+| `m_lpBufStart` | `0x48` | constant, lower bound of every observed `cur`                                                     |
+| `m_nMapCount`  | `0x50` | the `u32` immediately after `m_lpBufStart`; 307 non-decreasing steps, 3 decreases (archive reuse) |
 
 `candidates: 1`, so the layout is forced by the observations rather than inherited from
 `dt mfc140u!CArchive`. It agrees with the MFC layout that `Windbg.md` §4 predicted.
@@ -96,7 +106,7 @@ call nesting, which is what separates a top-level object from a child read insid
 (stream offset, byte length, tag, tag kind, class name, map index, depth, parent)
 ```
 
-Object *n*'s length is the distance to the next `ReadObject` entry, so the rows tile the stream
+Object _n_'s length is the distance to the next `ReadObject` entry, so the rows tile the stream
 exactly: `tiles=True` means zero gaps, zero overlaps, a 6-byte stream header before the first
 object, and zero trailing bytes.
 
@@ -106,20 +116,20 @@ Nine parts were traced in this session: seven authored-corpus parts covering rec
 profiles, boss and cut operations, blind / through-all / mid-plane end conditions, Front and Top
 support planes, and 1, 2 and 3 features; plus two V8 production parts.
 
-| part | stream | objects | class definitions | base map index | tiles | counter mismatches | re-emit |
-|---|---|---|---|---|---|---|---|
-| `BASELINE_40x20x10` | 11075 | 321 | 41 | 109 | yes | 0 | identical |
-| `CIRCLE_r10` | 10556 | 285 | 45 | 109 | yes | 0 | identical |
-| `PLANE_TOP` | 11075 | 321 | 41 | 109 | yes | 0 | identical |
-| `TWOPAD_d5` | 19390 | 400 | 41 | 110 | yes | 0 | identical |
-| `PADPLANE_rev_d5` | 16581 | 536 | 45 | 110 | yes | 0 | identical |
-| `CUTBASE_cd5` | 16579 | 536 | 45 | 110 | yes | 0 | identical |
-| `THREEFEATURE_pad_cut_pad` | 24805 | 615 | 45 | 111 | yes | 0 | identical |
-| `Piston Ring KF` (V8) | 25998 | 916 | 61 | 111 | yes | 0 | identical |
-| `COJINETE INFERIOR` (V8) | 17601 | 573 | 48 | 111 | yes | 0 | identical |
+| part                       | stream | objects | class definitions | base map index | tiles | counter mismatches | re-emit   |
+| -------------------------- | ------ | ------- | ----------------- | -------------- | ----- | ------------------ | --------- |
+| `BASELINE_40x20x10`        | 11075  | 321     | 41                | 109            | yes   | 0                  | identical |
+| `CIRCLE_r10`               | 10556  | 285     | 45                | 109            | yes   | 0                  | identical |
+| `PLANE_TOP`                | 11075  | 321     | 41                | 109            | yes   | 0                  | identical |
+| `TWOPAD_d5`                | 19390  | 400     | 41                | 110            | yes   | 0                  | identical |
+| `PADPLANE_rev_d5`          | 16581  | 536     | 45                | 110            | yes   | 0                  | identical |
+| `CUTBASE_cd5`              | 16579  | 536     | 45                | 110            | yes   | 0                  | identical |
+| `THREEFEATURE_pad_cut_pad` | 24805  | 615     | 45                | 111            | yes   | 0                  | identical |
+| `Piston Ring KF` (V8)      | 25998  | 916     | 61                | 111            | yes   | 0                  | identical |
+| `COJINETE INFERIOR` (V8)   | 17601  | 573     | 48                | 111            | yes   | 0                  | identical |
 
 `Model.py` reparses the segmentation into a node list where every class reference and object
-reference is a *pointer to another node* rather than a literal index, then re-emits the stream
+reference is a _pointer to another node_ rather than a literal index, then re-emits the stream
 with all indices recomputed. For all nine parts the result is **byte-identical** to the original.
 That is the strongest available proof that the segmentation is complete and that the renumbering
 model is right: if a single object boundary or a single token were misclassified, the re-emitted
@@ -139,12 +149,12 @@ The counter at `m_nMapCount` is read at entry to `ReadObject`, before the tag is
 observed difference to the next object's counter, over every consecutive pair in every traced
 part:
 
-| tag at the object | increment |
-|---|---|
-| `ff ff` class definition | **+2** (one index for the class, one for the object) |
-| `0x8000\|i` class reference | **+1** (the object only) |
-| `0x0000` null tag | **0** |
-| object reference (`t < 0x8000`, `t != 0`) | **0** |
+| tag at the object                         | increment                                            |
+| ----------------------------------------- | ---------------------------------------------------- |
+| `ff ff` class definition                  | **+2** (one index for the class, one for the object) |
+| `0x8000\|i` class reference               | **+1** (the object only)                             |
+| `0x0000` null tag                         | **0**                                                |
+| object reference (`t < 0x8000`, `t != 0`) | **0**                                                |
 
 `Segment.py` models this forward from the first observed counter and compares against the value
 logged at every object: **0 mismatches across all 4503 objects of the nine traced parts**. The
@@ -155,10 +165,10 @@ starts at 109, 110 and 111 for the 1-, 2- and 3-feature parts, because the same 
 holds entries from streams read earlier in the document load, and the count of those grows by one
 per feature. Consequently:
 
-* tokens whose index is **below** the base refer to classes and objects defined by *earlier
-  streams*, and are invariant as long as those streams are inherited unchanged (31, 42 and 48
+- tokens whose index is **below** the base refer to classes and objects defined by _earlier
+  streams_, and are invariant as long as those streams are inherited unchanged (31, 42 and 48
   such class references, 6, 12 and 14 such object references in the three parts);
-* only tokens at or above the base are internal to `ResolvedFeatures` and need renumbering.
+- only tokens at or above the base are internal to `ResolvedFeatures` and need renumbering.
 
 `model.parse` refuses to build a model if any token at or above the base fails to resolve to a
 node, so this split is checked rather than assumed.
@@ -169,15 +179,15 @@ node, so this split is checked rather than assumed.
 
 `Renumber.py` derives the two node blocks that make up one feature, with no hardcoded indices:
 
-* **history block** — the `moCompFeature_c` entry pair for the last feature, located by mapping
+- **history block** — the `moCompFeature_c` entry pair for the last feature, located by mapping
   the byte span of `streamlib.comp_feature_entries[-2:]` onto object boundaries. For
   `PADPLANE_rev_d5` this is nodes `[25, 35)`, ten objects, 238 bytes.
-* **feature block** — the last sketch's tree-node name record is found, the enclosing object
+- **feature block** — the last sketch's tree-node name record is found, the enclosing object
   located, then the search walks back to the nearest `depth == 0` object. For `PADPLANE_rev_d5`
   that is node 331, a top-level `moProfileFeature_c` class reference immediately followed by the
   `Sketch2` name record, and the block runs `[331, 536)`, 205 objects, to the end of the stream.
 
-`duplicate()` copies both blocks *k* times. A copied class definition becomes a class reference to
+`duplicate()` copies both blocks _k_ times. A copied class definition becomes a class reference to
 the original definition. A reference whose target is inside any duplicated block is retargeted to
 the same copy; a reference to anything else keeps pointing at the original node. `Model.emit`
 then recomputes every index from scratch, so all `0x8000|i` class tokens and all object tokens are
@@ -211,11 +221,11 @@ bumped it. It is the direct cause of the reproducible crash that `Serialize.py` 
 `u16`/`u32` at a fixed byte offset equal to `n`, `2n`, `24+2n` and nine other linear forms. Three
 fields exist in the whole container, and no others:
 
-| stream | offset | width | value | verified on |
-|---|---|---|---|---|
-| `Contents/Config-0-ResolvedFeatures` | 604 | `u16` | `2n` | 6 parts |
-| `Contents/Config-0-ModelHeader` and `Header2` (byte-identical streams) | 77 | `u16` | `24 + 2n` | **all 51 corpus parts** |
-| `Contents/CMgr` | 1414 | `u16` | `n` | 6 parts |
+| stream                                                                 | offset | width | value     | verified on             |
+| ---------------------------------------------------------------------- | ------ | ----- | --------- | ----------------------- |
+| `Contents/Config-0-ResolvedFeatures`                                   | 604    | `u16` | `2n`      | 6 parts                 |
+| `Contents/Config-0-ModelHeader` and `Header2` (byte-identical streams) | 77     | `u16` | `24 + 2n` | **all 51 corpus parts** |
+| `Contents/CMgr`                                                        | 1414   | `u16` | `n`       | 6 parts                 |
 
 The `ModelHeader` field is the element count of the `suObList` that the stream's `moLogs_c`
 object opens (`ff ff 01 00 08 00 suObList` at byte 68, count at 77).
@@ -229,15 +239,15 @@ candidate, control after, absolute paths, dialog dismisser running. `Contents/Co
 is dropped from every emitted container, so every volume is a genuine rebuild from the records
 written here. All three batches reported `control healthy: True`.
 
-| part | features asked | status | bodies | volume mm³ | expected mm³ | tree features built |
-|---|---|---|---|---|---|---|
-| `BASELINE_40x20x10` (control) | 1 | measured | 1 | 8000.000000000001 | 8000 | 1 |
-| `T3_3_boss` | 3 | measured | 1 | 36800.0 | 37400 | 2 |
-| **`T4_4_boss`** | **4** | **measured, opens** | **1** | **36800.0** | **38100** | **2** |
-| `T3H_3_boss` (+`ModelHeader`/`Header2` count) | 3 | solidworks-crashed-on-open | – | – | 37400 | – |
-| `T4H_4_boss` (+`ModelHeader`/`Header2` count) | 4 | solidworks-crashed-on-open | – | – | 38100 | – |
-| `T4cmgr_4_boss` (+`CMgr` count) | 4 | solidworks-crashed-on-open | – | – | 38100 | – |
-| `T4all_4_boss` (+ all three counts) | 4 | solidworks-crashed-on-open | – | – | 38100 | – |
+| part                                          | features asked | status                     | bodies | volume mm³        | expected mm³ | tree features built |
+| --------------------------------------------- | -------------- | -------------------------- | ------ | ----------------- | ------------ | ------------------- |
+| `BASELINE_40x20x10` (control)                 | 1              | measured                   | 1      | 8000.000000000001 | 8000         | 1                   |
+| `T3_3_boss`                                   | 3              | measured                   | 1      | 36800.0           | 37400        | 2                   |
+| **`T4_4_boss`**                               | **4**          | **measured, opens**        | **1**  | **36800.0**       | **38100**    | **2**               |
+| `T3H_3_boss` (+`ModelHeader`/`Header2` count) | 3              | solidworks-crashed-on-open | –      | –                 | 37400        | –                   |
+| `T4H_4_boss` (+`ModelHeader`/`Header2` count) | 4              | solidworks-crashed-on-open | –      | –                 | 38100        | –                   |
+| `T4cmgr_4_boss` (+`CMgr` count)               | 4              | solidworks-crashed-on-open | –      | –                 | 38100        | –                   |
+| `T4all_4_boss` (+ all three counts)           | 4              | solidworks-crashed-on-open | –      | –                 | 38100        | –                   |
 
 Prior state for comparison, from `.rescratch/grammar/out/MeasureGrown.json`:
 `G4_four_boss` and `G5_five_boss` both `solidworks-crashed-on-open`.
@@ -259,7 +269,7 @@ What this says, precisely.
    describes 2 features.
 4. Patching the count field of `ModelHeader`/`Header2`, or of `CMgr`, without growing the list
    body behind it makes SOLIDWORKS crash on open rather than build more features — the reader
-   walks *count* elements through a body that only holds the donor's, and desynchronises. This is
+   walks _count_ elements through a body that only holds the donor's, and desynchronises. This is
    the expected failure of a count-only patch and it confirms the count fields are real.
 
 `CONTAINER.md` in this directory carries that work forward: `Contents/CMgr`,

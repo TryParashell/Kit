@@ -10,7 +10,12 @@ from inspect import Parameter as FuncParam
 
 from interchange.document.validation.DocumentAssemblyValidate import GetAssemblyErrs
 from interchange.document.behavior.DocumentLookup import FindEntity
-from interchange.compatibility.PythonCompatMethods import BindAliasMut, BindDirectMut, BindStaticMut, MakeLegacySig
+from interchange.compatibility.PythonCompatMethods import (
+    BindAliasMut,
+    BindDirectMut,
+    BindStaticMut,
+    MakeLegacySig,
+)
 
 
 # method contracts stay declarative because exact historical reflection spans several split behaviors

@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Ghidra setup and headless analysis — reproducible
 
 Everything below runs on the machine as configured, with no SOLIDWORKS process, no COM and no
@@ -57,12 +67,12 @@ The targets are copied out of `C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS` into
 `.rescratch/ghidra/bin/` and analysed there. Reading and copying is all that happens; nothing is
 executed.
 
-| file | bytes |
-|---|---|
-| `swccu.dll` | 251776 |
-| `sldarchiveu.dll` | 229760 |
-| `sldmodu.dll` | 45877632 |
-| `sldmfcu.dll` | 8094592 |
+| file              | bytes    |
+| ----------------- | -------- |
+| `swccu.dll`       | 251776   |
+| `sldarchiveu.dll` | 229760   |
+| `sldmodu.dll`     | 45877632 |
+| `sldmfcu.dll`     | 8094592  |
 
 ## 5. Import and analyse
 
@@ -108,15 +118,15 @@ Spec files accept either `0x<address>` or a function-name substring per line.
 
 ## 7. Timings, measured
 
-| workload | wall time | note |
-|---|---|---|
-| `swccu.dll` + `sldarchiveu.dll` import + full analysis | **92 s** | one project, two programs |
-| `sldmfcu.dll` import + full analysis | **329 s** | |
-| `sldmodu.dll` import + full analysis | **3022 s** (50 min) | 45.9 MB, `GHIDRA_HEADLESS_MAXMEM=12G` |
-| `swccu` extract (111 functions) | ~40 s | |
-| `sldmodu` rename + 9395 vftables + 436 functions | ~150 s | |
-| `sldmodu` accessor extract (325 functions) | ~100 s | |
-| `sldmfcu` data-reference extract | ~60 s | |
+| workload                                               | wall time           | note                                  |
+| ------------------------------------------------------ | ------------------- | ------------------------------------- |
+| `swccu.dll` + `sldarchiveu.dll` import + full analysis | **92 s**            | one project, two programs             |
+| `sldmfcu.dll` import + full analysis                   | **329 s**           |                                       |
+| `sldmodu.dll` import + full analysis                   | **3022 s** (50 min) | 45.9 MB, `GHIDRA_HEADLESS_MAXMEM=12G` |
+| `swccu` extract (111 functions)                        | ~40 s               |                                       |
+| `sldmodu` rename + 9395 vftables + 436 functions       | ~150 s              |                                       |
+| `sldmodu` accessor extract (325 functions)             | ~100 s              |                                       |
+| `sldmfcu` data-reference extract                       | ~60 s               |                                       |
 
 All four analyses reported `Analysis succeeded` / `Import succeeded` and exit code 0.
 
@@ -145,33 +155,33 @@ Each `run_dump_*.ps1` names a spec file; regenerate `SpecSldmodu.txt` from the c
 
 Run from anywhere; they resolve paths from the repository root.
 
-| script | what it does |
-|---|---|
-| `SerializeMap.py` | vtable slot 5 → per-class `Serialize` address, for 2607 RTTI-named classes |
-| `MakeSpec.py` | turns the classes observed in the traced streams into a `DumpFunctions` spec |
-| `Exports.py` | PE export table: mangled name → RVA → virtual address (needed when Ghidra folded a getter under another class's name) |
-| `Pemap.py` | PE sections; file offset → RVA → virtual address |
-| `Vtab.py` | queries a vtable dump by class or by slot |
-| `Getfn.py` | pulls one function out of a `DumpFunctions` output |
-| `Offsets.py` | summarises the `this + off` accesses of each dumped accessor |
-| `Layout.py` | loads a `segments_*.json` plus the real stream bytes and produces, per object, the exact interleaving of nested object reads and own scalar runs |
-| `Compare.py`, `Bytediff.py`, `Threeway.py`, `Classdiff.py`, `SegSpans.py`, `Segtree.py` | shape and byte comparisons of one class across parts |
-| **`VerifyLayout.py`** | walks a declared field table against the traced spans; fails if any scalar gap is not exactly filled. Also decodes the shared tail run. |
-| **`ScanEndspec.py`** | decodes the first `moEndSpec_c` of every corpus/example part statically |
-| **`ScanRevendspec.py`** | same for `moRevEndSpec_c` |
-| **`Sigtable.py`** | extracts the 1000-entry `file_id` → signature table from `sldmfcu.dll` and checks it against every real part |
-| `ScanConsts.py` | locates the signature constants across every SOLIDWORKS module |
-| `Findtable.py` | derives the table geometry from the constants by entropy bounds |
-| `Dumpbytes.py`, `Kwdump.py` | hex window into a DLL; `swXmlContents/KeyWords` dump |
+| script                                                                                  | what it does                                                                                                                                     |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SerializeMap.py`                                                                       | vtable slot 5 → per-class `Serialize` address, for 2607 RTTI-named classes                                                                       |
+| `MakeSpec.py`                                                                           | turns the classes observed in the traced streams into a `DumpFunctions` spec                                                                     |
+| `Exports.py`                                                                            | PE export table: mangled name → RVA → virtual address (needed when Ghidra folded a getter under another class's name)                            |
+| `Pemap.py`                                                                              | PE sections; file offset → RVA → virtual address                                                                                                 |
+| `Vtab.py`                                                                               | queries a vtable dump by class or by slot                                                                                                        |
+| `Getfn.py`                                                                              | pulls one function out of a `DumpFunctions` output                                                                                               |
+| `Offsets.py`                                                                            | summarises the `this + off` accesses of each dumped accessor                                                                                     |
+| `Layout.py`                                                                             | loads a `segments_*.json` plus the real stream bytes and produces, per object, the exact interleaving of nested object reads and own scalar runs |
+| `Compare.py`, `Bytediff.py`, `Threeway.py`, `Classdiff.py`, `SegSpans.py`, `Segtree.py` | shape and byte comparisons of one class across parts                                                                                             |
+| **`VerifyLayout.py`**                                                                   | walks a declared field table against the traced spans; fails if any scalar gap is not exactly filled. Also decodes the shared tail run.          |
+| **`ScanEndspec.py`**                                                                    | decodes the first `moEndSpec_c` of every corpus/example part statically                                                                          |
+| **`ScanRevendspec.py`**                                                                 | same for `moRevEndSpec_c`                                                                                                                        |
+| **`Sigtable.py`**                                                                       | extracts the 1000-entry `file_id` → signature table from `sldmfcu.dll` and checks it against every real part                                     |
+| `ScanConsts.py`                                                                         | locates the signature constants across every SOLIDWORKS module                                                                                   |
+| `Findtable.py`                                                                          | derives the table geometry from the constants by entropy bounds                                                                                  |
+| `Dumpbytes.py`, `Kwdump.py`                                                             | hex window into a DLL; `swXmlContents/KeyWords` dump                                                                                             |
 
 All are `black`-clean and comment-free; `black --check .rescratch\ghidra\*.py` exits 0.
 
 ## 10. Ghidra scripts
 
-| script | purpose |
-|---|---|
-| `scripts/RenameArchiveApi.java` | renames every `su_CArchive::operator>>` / `<<` overload and import thunk to `AR_get_<type>` / `AR_put_<type>` from the demangled parameter type |
-| `scripts/DumpFunctions.java` | decompiles every function named by a spec file (`0x<addr>` or name substring), expanding callees to a given depth |
-| `scripts/DumpVtableSlot.java` | dumps every RTTI-named `vftable` with its first N slots |
-| `scripts/DumpRefs.java` | lists every reference into an address range and decompiles the referencing functions |
-| `scripts/DumpDecomp.java`, `scripts/DumpVtables.java` | the earlier session's pattern-matching dumpers, kept because `out/sldmodu.c` and `out/sldmodu_vtables.txt` came from them |
+| script                                                | purpose                                                                                                                                         |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/RenameArchiveApi.java`                       | renames every `su_CArchive::operator>>` / `<<` overload and import thunk to `AR_get_<type>` / `AR_put_<type>` from the demangled parameter type |
+| `scripts/DumpFunctions.java`                          | decompiles every function named by a spec file (`0x<addr>` or name substring), expanding callees to a given depth                               |
+| `scripts/DumpVtableSlot.java`                         | dumps every RTTI-named `vftable` with its first N slots                                                                                         |
+| `scripts/DumpRefs.java`                               | lists every reference into an address range and decompiles the referencing functions                                                            |
+| `scripts/DumpDecomp.java`, `scripts/DumpVtables.java` | the earlier session's pattern-matching dumpers, kept because `out/sldmodu.c` and `out/sldmodu_vtables.txt` came from them                       |

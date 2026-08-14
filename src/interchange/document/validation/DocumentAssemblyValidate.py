@@ -16,9 +16,14 @@ from interchange.document.models.DocumentIdentity import GetIdGroups
 def GetAssemblyErrs(
     DocumentValue: AnyValue, IdentitySets: TypeMap[str, set[str]]
 ) -> tuple[str, ...]:
-    from interchange.document.validation.DocumentComponentValidate import GetDefLinkErrs, GetDocLinkErrs
+    from interchange.document.validation.DocumentComponentValidate import (
+        GetDefLinkErrs,
+        GetDocLinkErrs,
+    )
     from interchange.document.validation.DocumentGraphValidate import GetGraphErrors
-    from interchange.document.validation.DocumentMateEntityValidate import GetMateEntErrs
+    from interchange.document.validation.DocumentMateEntityValidate import (
+        GetMateEntErrs,
+    )
     from interchange.document.validation.DocumentMateGroupValidate import GetMateGroups
     from interchange.document.validation.DocumentMateValidate import GetMateErrors
     from interchange.document.validation.DocumentMeshValidate import GetMeshErrors

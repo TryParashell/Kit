@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # `Core.py` findings: feature flag words and the arc/circle record
 
 Scope: `src/convert/adapters/solidworks/resolved/Core.py` and `tests/convert/solidworks/resolved/SolidworksResolvedTests.py` only.
@@ -11,7 +21,7 @@ Classification is now `flags & FEATURE_FLAGS_MASK` with `FEATURE_FLAGS_MASK = 0x
 `FeatureLayout.flags` still carries the raw word, so nothing about round-tripping changed.
 `FEATURE_KIND_BY_FLAGS` keeps its name and is keyed on masked words; `feature_kind(flags)` and
 `is_tree_node_flags(flags)` do the masking. Every previously exported name still exists, and
-`BOSS_FLAGS`/`CUT_FLAGS`/`SKETCH_FLAGS`/`PLANE_FLAGS` keep their old values (the masked boss word *is*
+`BOSS_FLAGS`/`CUT_FLAGS`/`SKETCH_FLAGS`/`PLANE_FLAGS` keep their old values (the masked boss word _is_
 `0x40000140`, so no value had to change).
 
 ## 2. What the `0x40004xxx` words are
@@ -20,12 +30,12 @@ Cross-referenced the tree-node `feature_id` of every node whose flags word has a
 `0x0000F000` against the `swXmlContents/KeyWords` `id` attribute, over the whole corpus
 (`.rescratch/probe_flags_arcs.py`). Result — unambiguous, zero unmatched ids:
 
-| flags | KeyWords `Type` | count | kind assigned |
-|---|---|---|---|
-| `0x40004003` | `Sweep` 10, `Cut-Sweep` 6 | 16 | `sweep` |
-| `0x40004002` | `Sweep` 1 | 1 | `sweep` |
-| `0x40004404` | `Loft` 10, `Cut-Loft` 5 | 15 | `loft` |
-| `0xC0000001` | `Chamfer` / `Fillet` | 54 | `round` |
+| flags        | KeyWords `Type`           | count | kind assigned |
+| ------------ | ------------------------- | ----- | ------------- |
+| `0x40004003` | `Sweep` 10, `Cut-Sweep` 6 | 16    | `sweep`       |
+| `0x40004002` | `Sweep` 1                 | 1     | `sweep`       |
+| `0x40004404` | `Loft` 10, `Cut-Loft` 5   | 15    | `loft`        |
+| `0xC0000001` | `Chamfer` / `Fillet`      | 54    | `round`       |
 
 Sample evidence: `Turbo Tube.SLDPRT` id 64/189/210 `Barrer1..3` = `Sweep`, id 234/240
 `Cortar-Barrer1..2` = `Cut-Sweep`, all `0x40004003`; id 45 `Recubrir3` = `Loft` and id 48
@@ -43,7 +53,7 @@ kinds are `sweep`/`loft` rather than `sweep`/`cut-sweep`. Add/remove has to come
 ## 3. Depth attribution was also wrong, and is fixed
 
 Finding the features was only half the defect. The old pairing walked a cursor over `D*` dimension
-scalars and took the first one before the *next* feature, which on real files picks up the preceding
+scalars and took the first one before the _next_ feature, which on real files picks up the preceding
 **sketch's** dimensions. On `BIELA.SLDPRT` that gave feature id 35 a depth of 158.7186 mm instead of
 38 mm.
 
@@ -51,15 +61,15 @@ The stream is strictly ordered `sketch node → sketch geometry → feature node
 (verified with `.rescratch/probe_layout_order.py`). The scalar for a feature is therefore the first
 `D*` scalar with `feature.offset < value_offset < next_feature.offset`. With that rule BIELA decodes:
 
-| id | kind | decoded | `KeyWords` `<Dimension Name="D1">` |
-|---|---|---|---|
-| 35 | boss | 38.0 | 38 |
-| 188 | boss | 18.0 | 18 |
-| 204 | boss | 30.7 | 30.7 |
-| 214 | cut | 46.7 | 46.7 |
-| 228 | cut | 5.0 | 5 |
-| 250 | cut | 9.0 | 9 |
-| 231/236/253/256 | round | 2.0/1.0/1.0/2.0 | Chaflán1..4 D1 = 2/1/1/2 |
+| id              | kind  | decoded         | `KeyWords` `<Dimension Name="D1">` |
+| --------------- | ----- | --------------- | ---------------------------------- |
+| 35              | boss  | 38.0            | 38                                 |
+| 188             | boss  | 18.0            | 18                                 |
+| 204             | boss  | 30.7            | 30.7                               |
+| 214             | cut   | 46.7            | 46.7                               |
+| 228             | cut   | 5.0             | 5                                  |
+| 250             | cut   | 9.0             | 9                                  |
+| 231/236/253/256 | round | 2.0/1.0/1.0/2.0 | Chaflán1..4 D1 = 2/1/1/2           |
 
 Sketch attribution changed the same way: the sketch of a feature is the last non-feature tree node
 between the previous feature and this one, instead of an ordinal-indexed lookup keyed off an English
@@ -146,7 +156,7 @@ did for corners and depths. `FeatureLayout.arcs`, `FeatureLayout.radii_mm` and a
 
 - `uv run python -m pytest tests/convert/solidworks/resolved/SolidworksResolvedTests.py -q` → 55 passed (was 43).
 - `uv run python -m pytest tests/convert/solidworks/core/SolidworksTests.py tests/convert/solidworks/core/SolidworksWriterTests.py
-  tests/convert/solidworks/core/SolidworksAdapterTests.py -q` → 2 failed, 132 passed. Both failures are the
+tests/convert/solidworks/core/SolidworksAdapterTests.py -q` → 2 failed, 132 passed. Both failures are the
   GROUND_TRUTH §7 baseline ones (`test_protocol_literals_have_one_source_definition`, caused by
   `Native.py` duplicating the `Contents/DisplayLists` literal, and
   `test_entire_local_solidworks_corpus_decodes`). No new failures.

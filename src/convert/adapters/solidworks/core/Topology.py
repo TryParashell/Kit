@@ -11,79 +11,85 @@ from dataclasses import dataclass as Dataclass
 from types import MappingProxyType
 
 # this binding exists because shared behavior needs one stable value
-KBossOperation = 'boss'
+KBossOperation = "boss"
 
 # this binding exists because shared behavior needs one stable value
-KCutOperation = 'cut'
+KCutOperation = "cut"
 
 # this binding exists because shared behavior needs one stable value
-KRevolveBossOperation = 'revolve-boss'
+KRevolveBossOperation = "revolve-boss"
 
 # this binding exists because shared behavior needs one stable value
-KRevolveCutOperation = 'revolve-cut'
+KRevolveCutOperation = "revolve-cut"
 
 # this binding exists because shared behavior needs one stable value
-KBlindEnd = 'blind'
+KBlindEnd = "blind"
 
 # this binding exists because shared behavior needs one stable value
-KThroughAllEnd = 'through-all'
+KThroughAllEnd = "through-all"
 
 # this binding exists because shared behavior needs one stable value
-KMidPlaneEnd = 'mid-plane'
+KMidPlaneEnd = "mid-plane"
 
 # this binding exists because shared behavior needs one stable value
-KFullRevolutionEnd = 'full-revolution'
+KFullRevolutionEnd = "full-revolution"
 
 # this binding exists because shared behavior needs one stable value
-KFrontSupport = 'front'
+KFrontSupport = "front"
 
 # this binding exists because shared behavior needs one stable value
-KTopSupport = 'top'
+KTopSupport = "top"
 
 # this binding exists because shared behavior needs one stable value
-KRightSupport = 'right'
+KRightSupport = "right"
 
 # this binding exists because shared behavior needs one stable value
-KFaceSupport = 'face'
+KFaceSupport = "face"
 
 # this binding exists because shared behavior needs one stable value
-KSketchAxisSupport = 'sketch-axis'
+KSketchAxisSupport = "sketch-axis"
 
 # this binding exists because shared behavior needs one stable value
-KRefAxisSupport = 'reference-axis'
+KRefAxisSupport = "reference-axis"
 
 # this binding exists because shared behavior needs one stable value
-KFrontSketchAxisSupport = f'{KFrontSupport}-{KSketchAxisSupport}'
+KFrontSketchAxisSupport = f"{KFrontSupport}-{KSketchAxisSupport}"
 
 # this binding exists because shared behavior needs one stable value
-KTopSketchAxisSupport = f'{KTopSupport}-{KSketchAxisSupport}'
+KTopSketchAxisSupport = f"{KTopSupport}-{KSketchAxisSupport}"
 
 # this binding exists because shared behavior needs one stable value
-KRightSketchAxisSupport = f'{KRightSupport}-{KSketchAxisSupport}'
+KRightSketchAxisSupport = f"{KRightSupport}-{KSketchAxisSupport}"
 
 # this binding exists because shared behavior needs one stable value
-KRevolveSupportByPlane = MappingProxyType({KFrontSupport: KFrontSketchAxisSupport, KTopSupport: KTopSketchAxisSupport, KRightSupport: KRightSketchAxisSupport})
+KRevolveSupportByPlane = MappingProxyType(
+    {
+        KFrontSupport: KFrontSketchAxisSupport,
+        KTopSupport: KTopSketchAxisSupport,
+        KRightSupport: KRightSketchAxisSupport,
+    }
+)
 
 # this binding exists because shared behavior needs one stable value
-KRectangleProfile = 'rectangle'
+KRectangleProfile = "rectangle"
 
 # this binding exists because shared behavior needs one stable value
-KCircleProfile = 'circle'
+KCircleProfile = "circle"
 
 # this binding exists because shared behavior needs one stable value
-KRectangleWithCircle = 'rectangle+circle'
+KRectangleWithCircle = "rectangle+circle"
 
 # this binding exists because shared behavior needs one stable value
-KPolylineProfilePrefix = 'polyline-'
+KPolylineProfilePrefix = "polyline-"
 
 # this binding exists because shared behavior needs one stable value
-KArcProfileInfix = '-arc-'
+KArcProfileInfix = "-arc-"
 
 # this binding exists because shared behavior needs one stable value
-KCounterclockwiseSuffix = '-ccw'
+KCounterclockwiseSuffix = "-ccw"
 
 # this binding exists because shared behavior needs one stable value
-KClockwiseSuffix = '-cw'
+KClockwiseSuffix = "-cw"
 
 # this binding exists because shared behavior needs one stable value
 KSupportedEndConditions = frozenset({KBlindEnd, KThroughAllEnd, KMidPlaneEnd})
@@ -109,57 +115,69 @@ KMaximumRevolutionDegrees = KFullRevolutionDegrees
 # this binding exists because shared behavior needs one stable value
 KEndConditionCodes = MappingProxyType({KBlindEnd: 0, KMidPlaneEnd: 6})
 
+
 # this definition exists because focused behavior needs one stable owner
 def ArcProfile(LineCount: int, ArcCount: int, *, Counterclockwise: bool) -> str:
     Suffix = KCounterclockwiseSuffix if Counterclockwise else KClockwiseSuffix
-    return f'{KPolylineProfilePrefix}{LineCount}{KArcProfileInfix}{ArcCount}{Suffix}'
+    return f"{KPolylineProfilePrefix}{LineCount}{KArcProfileInfix}{ArcCount}{Suffix}"
+
 
 # this definition exists because focused behavior needs one stable owner
 def PolylineProfile(SegmentCount: int) -> str:
-    return f'{KPolylineProfilePrefix}{SegmentCount}'
+    return f"{KPolylineProfilePrefix}{SegmentCount}"
+
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class FeatureTopology:
-    locals().setdefault('__annotations__', {})
-    __annotations__['operation'] = 'str'
-    __annotations__['profile'] = 'str'
-    __annotations__['support'] = 'str'
-    __annotations__['end_condition'] = 'str'
+    locals().setdefault("__annotations__", {})
+    __annotations__["operation"] = "str"
+    __annotations__["profile"] = "str"
+    __annotations__["support"] = "str"
+    __annotations__["end_condition"] = "str"
 
     # this definition exists because focused behavior needs one stable owner
     @property
     def KeyAction(Instance) -> tuple[str, str, str, str]:
-        return (Instance.operation, Instance.profile, Instance.support, Instance.end_condition)
-    locals()['key'] = KeyAction
+        return (
+            Instance.operation,
+            Instance.profile,
+            Instance.support,
+            Instance.end_condition,
+        )
+
+    locals()["key"] = KeyAction
+
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class TargetFeature:
     __annotations__ = {
-        'operation': 'str',
-        'profile': 'str',
-        'support': 'str',
-        'end_condition': 'str',
-        'points_mm': 'tuple[tuple[float, float], ...]',
-        'radii_mm': 'tuple[float, ...]',
-        'arc_centres_mm': 'tuple[tuple[float, float], ...]',
-        'swept_arc_centres_mm': 'tuple[tuple[float, float], ...]',
-        'depth_mm': 'float | None',
-        'reversed': 'bool | None',
-        'angle_degrees': 'float | None',
-        'axis_direction': 'tuple[float, float] | None',
+        "operation": "str",
+        "profile": "str",
+        "support": "str",
+        "end_condition": "str",
+        "points_mm": "tuple[tuple[float, float], ...]",
+        "radii_mm": "tuple[float, ...]",
+        "arc_centres_mm": "tuple[tuple[float, float], ...]",
+        "swept_arc_centres_mm": "tuple[tuple[float, float], ...]",
+        "depth_mm": "float | None",
+        "reversed": "bool | None",
+        "angle_degrees": "float | None",
+        "axis_direction": "tuple[float, float] | None",
     }
-    locals().update({
-        'points_mm': (),
-        'radii_mm': (),
-        'arc_centres_mm': (),
-        'swept_arc_centres_mm': (),
-        'depth_mm': None,
-        'reversed': None,
-        'angle_degrees': None,
-        'axis_direction': None,
-    })
+    locals().update(
+        {
+            "points_mm": (),
+            "radii_mm": (),
+            "arc_centres_mm": (),
+            "swept_arc_centres_mm": (),
+            "depth_mm": None,
+            "reversed": None,
+            "angle_degrees": None,
+            "axis_direction": None,
+        }
+    )
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -169,118 +187,125 @@ class TargetFeature:
     # this definition exists because focused behavior needs one stable owner
     @property
     def Topology(Instance) -> FeatureTopology:
-        return FeatureTopology(Instance.operation, Instance.profile, Instance.support, Instance.end_condition)
-    locals()['revolve'] = IsRevolve
-    locals()['topology'] = Topology
-    locals()['Revolve'] = IsRevolve
+        return FeatureTopology(
+            Instance.operation,
+            Instance.profile,
+            Instance.support,
+            Instance.end_condition,
+        )
+
+    locals()["revolve"] = IsRevolve
+    locals()["topology"] = Topology
+    locals()["Revolve"] = IsRevolve
+
 
 # this binding exists because shared behavior needs one stable value
-globals()['ARC_PROFILE_INFIX'] = KArcProfileInfix
+globals()["ARC_PROFILE_INFIX"] = KArcProfileInfix
 
 # this binding exists because shared behavior needs one stable value
-globals()['BLIND_END'] = KBlindEnd
+globals()["BLIND_END"] = KBlindEnd
 
 # this binding exists because shared behavior needs one stable value
-globals()['BOSS_OPERATION'] = KBossOperation
+globals()["BOSS_OPERATION"] = KBossOperation
 
 # this binding exists because shared behavior needs one stable value
-globals()['CIRCLE_PROFILE'] = KCircleProfile
+globals()["CIRCLE_PROFILE"] = KCircleProfile
 
 # this binding exists because shared behavior needs one stable value
-globals()['CLOCKWISE_SUFFIX'] = KClockwiseSuffix
+globals()["CLOCKWISE_SUFFIX"] = KClockwiseSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()['COUNTERCLOCKWISE_SUFFIX'] = KCounterclockwiseSuffix
+globals()["COUNTERCLOCKWISE_SUFFIX"] = KCounterclockwiseSuffix
 
 # this binding exists because shared behavior needs one stable value
-globals()['CUT_OPERATION'] = KCutOperation
+globals()["CUT_OPERATION"] = KCutOperation
 
 # this binding exists because shared behavior needs one stable value
-globals()['DEPTHLESS_END_CONDITIONS'] = KDepthlessEndConditions
+globals()["DEPTHLESS_END_CONDITIONS"] = KDepthlessEndConditions
 
 # this binding exists because shared behavior needs one stable value
-globals()['END_CONDITION_CODES'] = KEndConditionCodes
+globals()["END_CONDITION_CODES"] = KEndConditionCodes
 
 # this binding exists because shared behavior needs one stable value
-globals()['FACE_SUPPORT'] = KFaceSupport
+globals()["FACE_SUPPORT"] = KFaceSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['FRONT_SKETCH_AXIS_SUPPORT'] = KFrontSketchAxisSupport
+globals()["FRONT_SKETCH_AXIS_SUPPORT"] = KFrontSketchAxisSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['FRONT_SUPPORT'] = KFrontSupport
+globals()["FRONT_SUPPORT"] = KFrontSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['FULL_REVOLUTION_DEGREES'] = KFullRevolutionDegrees
+globals()["FULL_REVOLUTION_DEGREES"] = KFullRevolutionDegrees
 
 # this binding exists because shared behavior needs one stable value
-globals()['FULL_REVOLUTION_END'] = KFullRevolutionEnd
+globals()["FULL_REVOLUTION_END"] = KFullRevolutionEnd
 
 # this binding exists because shared behavior needs one stable value
-globals()['MAXIMUM_REVOLUTION_DEGREES'] = KMaximumRevolutionDegrees
+globals()["MAXIMUM_REVOLUTION_DEGREES"] = KMaximumRevolutionDegrees
 
 # this binding exists because shared behavior needs one stable value
-globals()['MID_PLANE_END'] = KMidPlaneEnd
+globals()["MID_PLANE_END"] = KMidPlaneEnd
 
 # this binding exists because shared behavior needs one stable value
-globals()['POLYLINE_PROFILE_PREFIX'] = KPolylineProfilePrefix
+globals()["POLYLINE_PROFILE_PREFIX"] = KPolylineProfilePrefix
 
 # this binding exists because shared behavior needs one stable value
-globals()['RECTANGLE_PROFILE'] = KRectangleProfile
+globals()["RECTANGLE_PROFILE"] = KRectangleProfile
 
 # this binding exists because shared behavior needs one stable value
-globals()['RECTANGLE_WITH_CIRCLE_PROFILE'] = KRectangleWithCircle
+globals()["RECTANGLE_WITH_CIRCLE_PROFILE"] = KRectangleWithCircle
 
 # this binding exists because shared behavior needs one stable value
-globals()['REFERENCE_AXIS_SUPPORT'] = KRefAxisSupport
+globals()["REFERENCE_AXIS_SUPPORT"] = KRefAxisSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['REVOLVE_BOSS_OPERATION'] = KRevolveBossOperation
+globals()["REVOLVE_BOSS_OPERATION"] = KRevolveBossOperation
 
 # this binding exists because shared behavior needs one stable value
-globals()['REVOLVE_CUT_OPERATION'] = KRevolveCutOperation
+globals()["REVOLVE_CUT_OPERATION"] = KRevolveCutOperation
 
 # this binding exists because shared behavior needs one stable value
-globals()['REVOLVE_END_CONDITIONS'] = KRevolveEndConditions
+globals()["REVOLVE_END_CONDITIONS"] = KRevolveEndConditions
 
 # this binding exists because shared behavior needs one stable value
-globals()['REVOLVE_OPERATIONS'] = KRevolveOperations
+globals()["REVOLVE_OPERATIONS"] = KRevolveOperations
 
 # this binding exists because shared behavior needs one stable value
-globals()['REVOLVE_SUPPORTS'] = KRevolveSupports
+globals()["REVOLVE_SUPPORTS"] = KRevolveSupports
 
 # this binding exists because shared behavior needs one stable value
-globals()['REVOLVE_SUPPORT_BY_PLANE'] = KRevolveSupportByPlane
+globals()["REVOLVE_SUPPORT_BY_PLANE"] = KRevolveSupportByPlane
 
 # this binding exists because shared behavior needs one stable value
-globals()['RIGHT_SKETCH_AXIS_SUPPORT'] = KRightSketchAxisSupport
+globals()["RIGHT_SKETCH_AXIS_SUPPORT"] = KRightSketchAxisSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['RIGHT_SUPPORT'] = KRightSupport
+globals()["RIGHT_SUPPORT"] = KRightSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['SKETCH_AXIS_SUPPORT'] = KSketchAxisSupport
+globals()["SKETCH_AXIS_SUPPORT"] = KSketchAxisSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['SUPPORTED_END_CONDITIONS'] = KSupportedEndConditions
+globals()["SUPPORTED_END_CONDITIONS"] = KSupportedEndConditions
 
 # this binding exists because shared behavior needs one stable value
-globals()['THROUGH_ALL_END'] = KThroughAllEnd
+globals()["THROUGH_ALL_END"] = KThroughAllEnd
 
 # this binding exists because shared behavior needs one stable value
-globals()['TOP_SKETCH_AXIS_SUPPORT'] = KTopSketchAxisSupport
+globals()["TOP_SKETCH_AXIS_SUPPORT"] = KTopSketchAxisSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['TOP_SUPPORT'] = KTopSupport
+globals()["TOP_SUPPORT"] = KTopSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['annotations'] = Annotations
+globals()["annotations"] = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()['arc_profile'] = ArcProfile
+globals()["arc_profile"] = ArcProfile
 
 # this binding exists because shared behavior needs one stable value
-globals()['dataclass'] = Dataclass
+globals()["dataclass"] = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()['polyline_profile'] = PolylineProfile
+globals()["polyline_profile"] = PolylineProfile

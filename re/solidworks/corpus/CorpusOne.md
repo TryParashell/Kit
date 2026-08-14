@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # SOLIDWORKS `Contents/Config-0-ResolvedFeatures` — corpus + differential layout analysis
 
 SOLIDWORKS 2025, pywin32 311, `.venv\Scripts\python.exe`.
@@ -10,20 +20,20 @@ Nothing under `src/` or `tests/` was modified.
 
 ## 0. COM authoring — what actually works in 2025
 
-| Call | Result |
-|---|---|
-| `Dispatch("SldWorks.Application")`, `app.Visible = False` | works |
-| `gencache.EnsureDispatch("SldWorks.Application")` | **fails**: `GetTypeInfo` → `Element not found`, then `TypeError: This COM object can not automate the makepy process`. Early binding is not available. |
-| `app.NewPart()` | **fails**: `Member not found` (does not exist on the 2025 interface) |
-| `app.NewDocument(template, 0, 0, 0)` — **integer** 3rd/4th args | **works**, returns the model |
-| `app.NewDocument(template, 0, 0.0, 0.0)` | fails, `Type mismatch` (arg 8) — this is the reported failure; the fix is int args, not early binding |
-| `Extension.SelectByID2(name, kind, 0.0,0.0,0.0, False, 0, None, 0)` | **fails**, `Type mismatch` (arg 8) — the `Callout` param cannot be Python `None` |
-| `Extension.SelectByID2(..., VARIANT(pythoncom.VT_DISPATCH, None), 0)` | **works** |
-| `Extension.SaveAs2(path, 0, 1, None, "", False, err, warn)` | fails, `Type mismatch` (arg 4) |
-| `model.SaveAs4(path, 0, 1, err, warn)` | **works** (`ok=True, errors=0, warnings=0`) |
-| `model.EditRebuild3` | a **property**, not a method — `model.EditRebuild3()` raises `TypeError: 'bool' object is not callable` |
-| `FeatureExtrusion3(..., T1=4, ...)` for mid-plane | **wrong**: returns `None`, no body |
-| `T1 = 6` | **correct** — read from `swconst.tlb`: `swEndCondMidPlane = 6` (`swEndCondUpToSurface = 4`) |
+| Call                                                                  | Result                                                                                                                                                 |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Dispatch("SldWorks.Application")`, `app.Visible = False`             | works                                                                                                                                                  |
+| `gencache.EnsureDispatch("SldWorks.Application")`                     | **fails**: `GetTypeInfo` → `Element not found`, then `TypeError: This COM object can not automate the makepy process`. Early binding is not available. |
+| `app.NewPart()`                                                       | **fails**: `Member not found` (does not exist on the 2025 interface)                                                                                   |
+| `app.NewDocument(template, 0, 0, 0)` — **integer** 3rd/4th args       | **works**, returns the model                                                                                                                           |
+| `app.NewDocument(template, 0, 0.0, 0.0)`                              | fails, `Type mismatch` (arg 8) — this is the reported failure; the fix is int args, not early binding                                                  |
+| `Extension.SelectByID2(name, kind, 0.0,0.0,0.0, False, 0, None, 0)`   | **fails**, `Type mismatch` (arg 8) — the `Callout` param cannot be Python `None`                                                                       |
+| `Extension.SelectByID2(..., VARIANT(pythoncom.VT_DISPATCH, None), 0)` | **works**                                                                                                                                              |
+| `Extension.SaveAs2(path, 0, 1, None, "", False, err, warn)`           | fails, `Type mismatch` (arg 4)                                                                                                                         |
+| `model.SaveAs4(path, 0, 1, err, warn)`                                | **works** (`ok=True, errors=0, warnings=0`)                                                                                                            |
+| `model.EditRebuild3`                                                  | a **property**, not a method — `model.EditRebuild3()` raises `TypeError: 'bool' object is not callable`                                                |
+| `FeatureExtrusion3(..., T1=4, ...)` for mid-plane                     | **wrong**: returns `None`, no body                                                                                                                     |
+| `T1 = 6`                                                              | **correct** — read from `swconst.tlb`: `swEndCondMidPlane = 6` (`swEndCondUpToSurface = 4`)                                                            |
 
 Full `swEndConditions_e` read from the type library (`out/enums.json`):
 `Blind=0, ThroughAll=1, ThroughNext=2, UpToVertex=3, UpToSurface=4, OffsetFromSurface=5, MidPlane=6, UpToBody=7, ThroughAllBoth=9, UpToSelection=10, UpToNext=11`.
@@ -151,7 +161,7 @@ marker    name@   record@    len   class
  11014    11020     11035     61   moFromEndSpec_c
 ```
 
-**Important caveat on the marker walk.** `ff ff 01 00` marks a *class definition*, not an object
+**Important caveat on the marker walk.** `ff ff 01 00` marks a _class definition_, not an object
 instance. It is the MFC `CArchive` "new class" tag: the first object of a class carries the tag plus
 schema plus name, later objects of the same class are tagged by index only. In
 `TWOFEATURES_pad_pad` there are 47 distinct `mo*`/`sg*` ASCII tokens and 48 marker records, yet the
@@ -164,17 +174,17 @@ fails for the rest.
 
 ## 3. Stream length per family (answer to Q1)
 
-| family | member stream lengths | same length? |
-|---|---|---|
-| DEPTH (10/11/12/20/50 mm) | 11075 ×5 | yes |
-| WIDTH (40/41/42/60/100 mm) | 11075 ×5 | yes |
-| HEIGHT (20/21/22/30/50 mm) | 11075 ×5 | yes |
-| OFFSET ((0,0)/(5,0)/(0,5)/(10,7) mm) | 11075 ×4 | yes |
-| CIRCLE (r 10/11/20 mm) | 10556 ×3 | yes (but 519 bytes shorter than the rectangle layout) |
-| REVERSED vs BASELINE | 11075, 11075 | yes |
-| MIDPLANE vs BASELINE | 11075, 11075 | yes |
-| PLANE | Front 11075, Top 11075, **Right 11147** | no (+72 for Right) |
-| TWOFEATURES vs BASELINE | 11075, **19390** | no (+8315) |
+| family                               | member stream lengths                   | same length?                                          |
+| ------------------------------------ | --------------------------------------- | ----------------------------------------------------- |
+| DEPTH (10/11/12/20/50 mm)            | 11075 ×5                                | yes                                                   |
+| WIDTH (40/41/42/60/100 mm)           | 11075 ×5                                | yes                                                   |
+| HEIGHT (20/21/22/30/50 mm)           | 11075 ×5                                | yes                                                   |
+| OFFSET ((0,0)/(5,0)/(0,5)/(10,7) mm) | 11075 ×4                                | yes                                                   |
+| CIRCLE (r 10/11/20 mm)               | 10556 ×3                                | yes (but 519 bytes shorter than the rectangle layout) |
+| REVERSED vs BASELINE                 | 11075, 11075                            | yes                                                   |
+| MIDPLANE vs BASELINE                 | 11075, 11075                            | yes                                                   |
+| PLANE                                | Front 11075, Top 11075, **Right 11147** | no (+72 for Right)                                    |
+| TWOFEATURES vs BASELINE              | 11075, **19390**                        | no (+8315)                                            |
 
 Every scalar parameter is a fixed-width `float64` written in place, so no numeric change resizes the
 stream. Length changes come only from structural change (profile type, sketch support plane,
@@ -184,20 +194,20 @@ extra features).
 
 ## 4. Differing byte ranges per family (answer to Q2)
 
-Run counts are contiguous differing byte runs across *all* members of the family
+Run counts are contiguous differing byte runs across _all_ members of the family
 (`out/analysis.json` has the full run lists; `out/analysis2.json` has hex context per run).
 
-| family | diff runs | differing bytes | runs that are not control noise |
-|---|---|---|---|
-| DEPTH | 39 | 182 | 13 |
-| WIDTH | 38 | 175 | — |
-| HEIGHT | 36 | 158 | — |
-| OFFSET | 40 | 261 | 29 (of which 15 are 2-byte id noise) |
-| CIRCLE | 29 | 184 | — |
-| REVERSED | 44 | 92 | 18 |
-| MIDPLANE | 33 | 116 | 11 |
-| PLANE (Front vs Top) | 56 merged runs | 1885 over the common prefix | — |
-| TWOFEATURES | 722 | 6121 over the first 11075 bytes | — (whole tail shifts, see §8) |
+| family               | diff runs      | differing bytes                 | runs that are not control noise      |
+| -------------------- | -------------- | ------------------------------- | ------------------------------------ |
+| DEPTH                | 39             | 182                             | 13                                   |
+| WIDTH                | 38             | 175                             | —                                    |
+| HEIGHT               | 36             | 158                             | —                                    |
+| OFFSET               | 40             | 261                             | 29 (of which 15 are 2-byte id noise) |
+| CIRCLE               | 29             | 184                             | —                                    |
+| REVERSED             | 44             | 92                              | 18                                   |
+| MIDPLANE             | 33             | 116                             | 11                                   |
+| PLANE (Front vs Top) | 56 merged runs | 1885 over the common prefix     | —                                    |
+| TWOFEATURES          | 722            | 6121 over the first 11075 bytes | — (whole tail shifts, see §8)        |
 
 ---
 
@@ -211,14 +221,14 @@ parameter **in metres** for every member of the family simultaneously (exact equ
 
 ### 5.1 Extrusion depth — CONFIRMED
 
-| offset | marker-relative | value | evidence |
-|---|---|---|---|
-| **9882** | `moLengthParameter_c` **marker+57** (= record data start +32) | `+depth` (m) | 0.010/0.011/0.012/0.020/0.050 across DEPTH; unchanged by width, height, offset, reverse and mid-plane |
-| 10442 | marker+617 | `+depth` | same 5-value column |
-| 10466 | marker+641 | `+depth` | same 5-value column |
-| 9954 | marker+129 | signed end-plane z: `+depth` blind-forward, `-depth` reversed, `+depth/2` mid-plane | |
-| 10280 | marker+455 | `-depth` forward, `+depth` reversed | |
-| 10304 | marker+479 | `-depth` forward, `+depth` reversed | |
+| offset   | marker-relative                                               | value                                                                               | evidence                                                                                              |
+| -------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **9882** | `moLengthParameter_c` **marker+57** (= record data start +32) | `+depth` (m)                                                                        | 0.010/0.011/0.012/0.020/0.050 across DEPTH; unchanged by width, height, offset, reverse and mid-plane |
+| 10442    | marker+617                                                    | `+depth`                                                                            | same 5-value column                                                                                   |
+| 10466    | marker+641                                                    | `+depth`                                                                            | same 5-value column                                                                                   |
+| 9954     | marker+129                                                    | signed end-plane z: `+depth` blind-forward, `-depth` reversed, `+depth/2` mid-plane |                                                                                                       |
+| 10280    | marker+455                                                    | `-depth` forward, `+depth` reversed                                                 |                                                                                                       |
+| 10304    | marker+479                                                    | `-depth` forward, `+depth` reversed                                                 |                                                                                                       |
 
 `marker+57` was read back on all 31 corpus files and returned the authored depth in every one,
 including the shorter CIRCLE layout (absolute 9363) and the shifted TWOFEATURES layout
@@ -231,12 +241,12 @@ leaves five other depth-derived doubles stale.
 
 Four corner points, each two `float64` (x, y) in sketch-plane coordinates, metres:
 
-| x offset | y offset | value | enclosing marker |
-|---|---|---|---|
-| 6119 | 6127 | `(cx − w/2, cy − h/2)` | `moProfileFeature_c` (tail; the sketch-point records precede the `sgLineHandle` marker) |
-| 6297 | 6305 | `(cx + w/2, cy + h/2)` | `sgLineHandle` |
-| 6459 | 6467 | `(cx − w/2, cy + h/2)` | `sgLineHandle` |
-| 6621 | 6629 | `(cx + w/2, cy − h/2)` | `sgLineHandle` |
+| x offset | y offset | value                  | enclosing marker                                                                        |
+| -------- | -------- | ---------------------- | --------------------------------------------------------------------------------------- |
+| 6119     | 6127     | `(cx − w/2, cy − h/2)` | `moProfileFeature_c` (tail; the sketch-point records precede the `sgLineHandle` marker) |
+| 6297     | 6305     | `(cx + w/2, cy + h/2)` | `sgLineHandle`                                                                          |
+| 6459     | 6467     | `(cx − w/2, cy + h/2)` | `sgLineHandle`                                                                          |
+| 6621     | 6629     | `(cx + w/2, cy − h/2)` | `sgLineHandle`                                                                          |
 
 Stride between the last three points is **162 bytes**. Confirmed independently by three families:
 WIDTH pins the x columns (±20, ±20.5, ±21, ±30, ±50 mm), HEIGHT pins the y columns
@@ -252,15 +262,15 @@ ff ff 01 00 0b 00 "moEndSpec_c" 00 00 01 00 00 00 00 00 00 00 [F] 00 00 00 00 00
                                                                ^9058                ^9064
 ```
 
-| offset | marker-relative | width | meaning | observed |
-|---|---|---|---|---|
-| **9058** | `moEndSpec_c` **marker+27** | 1 byte | direction reverse flag | 0 forward, **1** reversed |
-| **9064** | `moEndSpec_c` **marker+33** | 1 byte | `swEndConditions_e` code | 0 blind, **6** mid-plane |
+| offset   | marker-relative             | width  | meaning                  | observed                  |
+| -------- | --------------------------- | ------ | ------------------------ | ------------------------- |
+| **9058** | `moEndSpec_c` **marker+27** | 1 byte | direction reverse flag   | 0 forward, **1** reversed |
+| **9064** | `moEndSpec_c` **marker+33** | 1 byte | `swEndConditions_e` code | 0 blind, **6** mid-plane  |
 
 `moFromEndSpec_c` (marker 11014) mirrors the direction flag:
 
-| offset | marker-relative | width | observed |
-|---|---|---|---|
+| offset    | marker-relative                 | width  | observed                  |
+| --------- | ------------------------------- | ------ | ------------------------- |
 | **11043** | `moFromEndSpec_c` **marker+29** | 1 byte | 0 forward, **1** reversed |
 
 `REVERSED_d10` differs from `BASELINE` in exactly these two flag bytes plus derived geometry;
@@ -275,12 +285,12 @@ only exercises values 0, 1 and 6, so the true field width is **not determined**.
 
 `moBBoxCenterData_c`, marker 8855:
 
-| offset | marker-relative | meaning |
-|---|---|---|
-| 8883 | marker+28 | body bbox centre **x** (m) |
-| 8891 | marker+36 | body bbox centre **y** (m) |
-| 8899 | marker+44 | body bbox centre **z** (m) |
-| 8907 | marker+52 | bounding-sphere **diameter** = `2·√(hx²+hy²+hz²)` (m) |
+| offset | marker-relative | meaning                                               |
+| ------ | --------------- | ----------------------------------------------------- |
+| 8883   | marker+28       | body bbox centre **x** (m)                            |
+| 8891   | marker+36       | body bbox centre **y** (m)                            |
+| 8899   | marker+44       | body bbox centre **z** (m)                            |
+| 8907   | marker+52       | bounding-sphere **diameter** = `2·√(hx²+hy²+hz²)` (m) |
 
 Read back on all 31 files. Examples: `BASELINE` (0, 0, 5) mm, `OFFSET_x10_y7` (10, 7, 5) mm,
 `DEPTH_d50` (0, 0, 25) mm, `MIDPLANE_d10` (0, 0, 0) mm, `REVERSED_d10` (0, 0, −5) mm,
@@ -296,23 +306,23 @@ This is a derived cache, not an authored parameter.
 one per principal plane, sized to the model. The rule is `half-extent × 1.1`, centred on the body
 bbox centre:
 
-| offset | value | family that pins it |
-|---|---|---|
-| 3533 | `−1.1·(cx + w/2)`-style x extent (−22.0 for w=40; −55.0 for w=100; −22.55 for w=41) | WIDTH, CIRCLE, OFFSET |
-| 3541 | `+1.1·h/2` (11.0 for h=20; 27.5 for h=50) | HEIGHT, CIRCLE |
-| 3680 / 3688 | `±1.1·w/2` | WIDTH, CIRCLE |
-| 3696 / 3704 | `±1.1·h/2` | HEIGHT, CIRCLE |
-| 3727 / 3735 | Front-plane rectangle centre `(cx, cy)` | OFFSET |
-| 4052, 4246, 4254 | `±1.1·w/2` again (second plane block) | WIDTH |
-| 4068 | `−0.05·depth` | DEPTH |
-| 4262 / 4270 | `±0.55·depth` | DEPTH |
-| 4293 | `cx` | OFFSET |
-| 4309 | `depth/2` | DEPTH |
-| 4630, 4832, 4840 | `±1.1·h/2` (third plane block) | HEIGHT |
-| 4638 | `+1.05·depth` | DEPTH |
-| 4816 / 4824 | `±0.55·depth` | DEPTH |
-| 4871 | `cy` | OFFSET |
-| 4879 | `depth/2` | DEPTH |
+| offset           | value                                                                               | family that pins it   |
+| ---------------- | ----------------------------------------------------------------------------------- | --------------------- |
+| 3533             | `−1.1·(cx + w/2)`-style x extent (−22.0 for w=40; −55.0 for w=100; −22.55 for w=41) | WIDTH, CIRCLE, OFFSET |
+| 3541             | `+1.1·h/2` (11.0 for h=20; 27.5 for h=50)                                           | HEIGHT, CIRCLE        |
+| 3680 / 3688      | `±1.1·w/2`                                                                          | WIDTH, CIRCLE         |
+| 3696 / 3704      | `±1.1·h/2`                                                                          | HEIGHT, CIRCLE        |
+| 3727 / 3735      | Front-plane rectangle centre `(cx, cy)`                                             | OFFSET                |
+| 4052, 4246, 4254 | `±1.1·w/2` again (second plane block)                                               | WIDTH                 |
+| 4068             | `−0.05·depth`                                                                       | DEPTH                 |
+| 4262 / 4270      | `±0.55·depth`                                                                       | DEPTH                 |
+| 4293             | `cx`                                                                                | OFFSET                |
+| 4309             | `depth/2`                                                                           | DEPTH                 |
+| 4630, 4832, 4840 | `±1.1·h/2` (third plane block)                                                      | HEIGHT                |
+| 4638             | `+1.05·depth`                                                                       | DEPTH                 |
+| 4816 / 4824      | `±0.55·depth`                                                                       | DEPTH                 |
+| 4871             | `cy`                                                                                | OFFSET                |
+| 4879             | `depth/2`                                                                           | DEPTH                 |
 
 `−0.05·depth` and `+1.05·depth` are exactly `depth/2 ∓ 0.55·depth`, i.e. the body's z range
 [0, depth] expanded 5 % on each side — consistent with the `×1.1` rule. None of these are authored
@@ -322,13 +332,13 @@ parameters; they all follow from the sketch and the depth.
 
 Inside `moLengthParameter_c` (9825), the depth dimension's witness points, in metres:
 
-| offsets | content | baseline | `OFFSET_x10_y7` | `MIDPLANE_d10` | `REVERSED_d10` |
-|---|---|---|---|---|---|
-| 9914, 9922, 9930 | attach point A `(x, y, z_start)` | (20, 10, 0) | (30, 17, 0) | (20, 10, **−5**) | (20, 10, 0) |
-| 9938, 9946, 9954 | attach point B `(x, y, z_end)` | (20, 10, 10) | (30, 17, 10) | (20, 10, **+5**) | (20, 10, **−10**) |
-| 10111, 10119, 10127 | `(−x, z_start, −y)` | (−20, 0, −10) | (−30, 0, −17) | (−20, −5, −10) | (−20, 0, −10) |
-| 10004 / 10370 | ±1.0 / ∓1.0 (direction unit) | +1 / −1 | +1 / −1 | +1 / −1 | **−1 / +1** |
-| 10200 | `x / 5` exactly | 4 mm | 6 mm | 4 mm | 4 mm |
+| offsets             | content                          | baseline      | `OFFSET_x10_y7` | `MIDPLANE_d10`   | `REVERSED_d10`    |
+| ------------------- | -------------------------------- | ------------- | --------------- | ---------------- | ----------------- |
+| 9914, 9922, 9930    | attach point A `(x, y, z_start)` | (20, 10, 0)   | (30, 17, 0)     | (20, 10, **−5**) | (20, 10, 0)       |
+| 9938, 9946, 9954    | attach point B `(x, y, z_end)`   | (20, 10, 10)  | (30, 17, 10)    | (20, 10, **+5**) | (20, 10, **−10**) |
+| 10111, 10119, 10127 | `(−x, z_start, −y)`              | (−20, 0, −10) | (−30, 0, −17)   | (−20, −5, −10)   | (−20, 0, −10)     |
+| 10004 / 10370       | ±1.0 / ∓1.0 (direction unit)     | +1 / −1       | +1 / −1         | +1 / −1          | **−1 / +1**       |
+| 10200               | `x / 5` exactly                  | 4 mm          | 6 mm            | 4 mm             | 4 mm              |
 
 `x = cx + w/2`, `y = cy + h/2` (the rectangle's max corner). In the CIRCLE layout the same fields
 appear at 9395, 9419, 9592 and 9681 with `x = r`, `y = r`, `x/5 = r/5` — which is why a naive
@@ -368,22 +378,22 @@ Sketch coordinates are **plane-local and therefore identical** for Front, Top an
 (±20, ±10 mm in all three). The plane is carried by a reference plus a basis, inside
 `moSketchChain_c`:
 
-| field | Front | Top | Right |
-|---|---|---|---|
-| support plane object id (`u32`) | **2** | **3** | **4** |
-| axis code (`u32`, +10 bytes after the id) | **3** | **2** | **1** |
-| 3×3 basis, 9 × `float64` row-major at marker+224 | **absent** | present | present |
-| trailing `1.0` double | marker+248 | marker+320 | marker+320 |
-| `moSketchChain_c` record length | 287 | 359 | 359 |
+| field                                            | Front      | Top        | Right      |
+| ------------------------------------------------ | ---------- | ---------- | ---------- |
+| support plane object id (`u32`)                  | **2**      | **3**      | **4**      |
+| axis code (`u32`, +10 bytes after the id)        | **3**      | **2**      | **1**      |
+| 3×3 basis, 9 × `float64` row-major at marker+224 | **absent** | present    | present    |
+| trailing `1.0` double                            | marker+248 | marker+320 | marker+320 |
+| `moSketchChain_c` record length                  | 287        | 359        | 359        |
 
-* The object ids 2/3/4 are exactly the Front/Top/Right ids in `native._BASE_OBJECTS`.
-* In the rectangle layout the id sits at absolute **7958** = `moSketchChain_c` marker+209. In the
+- The object ids 2/3/4 are exactly the Front/Top/Right ids in `native._BASE_OBJECTS`.
+- In the rectangle layout the id sits at absolute **7958** = `moSketchChain_c` marker+209. In the
   CIRCLE layout the same field is at marker+**197** (record is 275 bytes, not 287) and reads 2 for
   the Front-plane circle. So the id is **not at a fixed marker-relative offset**; what is stable is
   that the axis code follows the id 10 bytes later. A reader must locate the pair, not hard-code 209.
-* Axis code = 1-based index of the plane normal: Front normal +Z → 3, Top normal +Y → 2,
+- Axis code = 1-based index of the plane normal: Front normal +Z → 3, Top normal +Y → 2,
   Right normal +X → 1.
-* The 9-double basis decodes to the expected sketch frames:
+- The 9-double basis decodes to the expected sketch frames:
   Top → `(1,0,0), (0,0,−1), (0,1,0)`; Right → `(0,0,−1), (0,1,0), (1,0,0)`.
   Front is the identity and is **omitted entirely** — that is the whole 72-byte (9 × 8) difference.
 
@@ -431,12 +441,12 @@ second feature's ids and the changed body topology. The `D1` depth scalar moves 
 
 Growth accounting:
 
-| where | baseline | two features | delta |
-|---|---|---|---|
-| `moCompFeature_c` (feature tree) | 233 | 471 | **+238** |
-| `moFromEndSpec_c` (last record, absorbs the second feature's objects) | 61 | 3320 | **+3259** |
-| 7 appended class records | — | 4818 | **+4818** |
-| total | | | **+8315** ✔ |
+| where                                                                 | baseline | two features | delta       |
+| --------------------------------------------------------------------- | -------- | ------------ | ----------- |
+| `moCompFeature_c` (feature tree)                                      | 233      | 471          | **+238**    |
+| `moFromEndSpec_c` (last record, absorbs the second feature's objects) | 61       | 3320         | **+3259**   |
+| 7 appended class records                                              | —        | 4818         | **+4818**   |
+| total                                                                 |          |              | **+8315** ✔ |
 
 The seven appended records, in order:
 
@@ -467,17 +477,17 @@ Run over all 31 files (`out/analysis5.txt`, `out/analysis5.json`).
 
 ### What the decoder gets right
 
-* Class walk: 41 / 41 markers on the baseline, 45 for CIRCLE, 48 for TWOFEATURES — identical to my
+- Class walk: 41 / 41 markers on the baseline, 45 for CIRCLE, 48 for TWOFEATURES — identical to my
   independent walk.
-* Depth scalar: `D1` at **9882** with value 0.01 — the same offset my column scan confirmed, and it
+- Depth scalar: `D1` at **9882** with value 0.01 — the same offset my column scan confirmed, and it
   tracks correctly through every layout shift (9363 CIRCLE, 9954 Top/Right, 10120 TWOFEATURES).
-* Rectangle bounds: exact for every WIDTH/HEIGHT/OFFSET member, e.g. `OFFSET_x10_y7` →
+- Rectangle bounds: exact for every WIDTH/HEIGHT/OFFSET member, e.g. `OFFSET_x10_y7` →
   `(−10.0, −3.0, 30.0, 17.0)` mm.
-* `direction_code` = 1 for `REVERSED_d10` and `termination_code` = 6 for `MIDPLANE_d10` — so it does
+- `direction_code` = 1 for `REVERSED_d10` and `termination_code` = 6 for `MIDPLANE_d10` — so it does
   read offsets 9058 and 9064 correctly.
-* Both features in TWOFEATURES: `Boss-Extrude1` 10.0 mm and `Boss-Extrude2` 5.0 mm (scalar at 18238),
+- Both features in TWOFEATURES: `Boss-Extrude1` 10.0 mm and `Boss-Extrude2` 5.0 mm (scalar at 18238),
   both sketches with correct rectangles — it finds the marker-less second object.
-* No diagnostics emitted on any corpus file.
+- No diagnostics emitted on any corpus file.
 
 ### What the decoder misses
 
@@ -507,16 +517,16 @@ Run over all 31 files (`out/analysis5.txt`, `out/analysis5.json`).
 
 ## 10. What I could not determine
 
-* The true width of the `moEndSpec_c` flag fields at +27 and +33 (only values 0, 1, 6 observed; the
+- The true width of the `moEndSpec_c` flag fields at +27 and +33 (only values 0, 1, 6 observed; the
   surrounding bytes are zero, so 1-, 2- or 4-byte fields all fit).
-* What the 72 bytes are that `moLengthParameter_c` loses in `PLANE_TOP` but not in `PLANE_RIGHT`.
-* The meaning of the 0.0/0.016 m scratch double (§5.7).
-* Why the annotation field at marker+375 of `moLengthParameter_c` equals `x/5` exactly.
-* The internal structure of the second feature's objects inside the expanded `moFromEndSpec_c`
+- What the 72 bytes are that `moLengthParameter_c` loses in `PLANE_TOP` but not in `PLANE_RIGHT`.
+- The meaning of the 0.0/0.016 m scratch double (§5.7).
+- Why the annotation field at marker+375 of `moLengthParameter_c` equals `x/5` exactly.
+- The internal structure of the second feature's objects inside the expanded `moFromEndSpec_c`
   (3320 bytes) — I confirmed the second depth is at 18238 but did not segment that block, because
   it has no class markers to segment on. Doing so needs the MFC class-index tag decoding that
   `Native.py`'s `_CURRENT_MARKER` / `_LEGACY_MARKER` constants hint at.
-* Extrusion end conditions other than blind and mid-plane. `T1 = 5`
+- Extrusion end conditions other than blind and mid-plane. `T1 = 5`
   (`swEndCondOffsetFromSurface`) raised SOLIDWORKS "Internal application error" without a
   pre-selected surface, so those code paths were not corpus-tested.
 

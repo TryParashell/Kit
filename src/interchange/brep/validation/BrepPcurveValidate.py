@@ -8,8 +8,18 @@
 
 from math import isfinite as IsFiniteNum
 
-from interchange.brep.topology.BrepMath import IsFinitePlane, IsNonzeroPlane, IsValidSpline
-from interchange.brep.curves.BrepPcurves import BrepPcurve, CirclePcurve, LinePcurve, NativePcurve, NurbsPcurve
+from interchange.brep.topology.BrepMath import (
+    IsFinitePlane,
+    IsNonzeroPlane,
+    IsValidSpline,
+)
+from interchange.brep.curves.BrepPcurves import (
+    BrepPcurve,
+    CirclePcurve,
+    LinePcurve,
+    NativePcurve,
+    NurbsPcurve,
+)
 
 
 # parameter curve validation protects surface trimming from malformed data

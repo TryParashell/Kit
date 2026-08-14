@@ -13,14 +13,14 @@ from typing import Any as AnyValue
 
 # wheel metadata must keep runtime dependencies optional and entry points deterministic
 def CheckWheelMeta(ArchiveData: AnyValue, EntryNames: tuple[str, ...]) -> None:
-    WheelName = next(NameValue for NameValue in EntryNames if NameValue.endswith("/WHEEL"))
+    WheelName = next(
+        NameValue for NameValue in EntryNames if NameValue.endswith("/WHEEL")
+    )
     MetadataName = next(
         NameValue for NameValue in EntryNames if NameValue.endswith("/METADATA")
     )
     EntryPointName = next(
-        NameValue
-        for NameValue in EntryNames
-        if NameValue.endswith("/entry_points.txt")
+        NameValue for NameValue in EntryNames if NameValue.endswith("/entry_points.txt")
     )
     WheelMetadata = ArchiveData.read(WheelName).decode("utf-8")
     assert "Root-Is-Purelib: true" in WheelMetadata

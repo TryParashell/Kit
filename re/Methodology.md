@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Reverse-engineering a proprietary CAD format — the reusable playbook
 
 Distilled from cracking the SOLIDWORKS 2025 part format well enough to write files SOLIDWORKS opens
@@ -28,14 +38,14 @@ plausible byte-level inference that no measurement backed.
 Cost rises and generality rises together. Do not skip forward; each phase supplies the ground truth
 the next one is checked against.
 
-| # | phase | cost | what it buys |
-|---|---|---|---|
-| 1 | **Container framing** | days | read/write the file envelope; enumerate the streams |
-| 2 | **Measurement oracle** | days | unattended, quantitative correctness verdicts |
-| 3 | **Authored differential corpus** | 1–2 weeks | field locations for everything the app can vary |
-| 4 | **Runtime trace of the reader** | days, once you know the entry points | object boundaries, index arithmetic, the fields diffing cannot see |
-| 5 | **Static decompilation** | 1–2 weeks | authoritative field order, types, version gates, enum branches, lookup tables |
-| 6 | **Write path** | weeks | the actual product |
+| #   | phase                            | cost                                 | what it buys                                                                  |
+| --- | -------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------- |
+| 1   | **Container framing**            | days                                 | read/write the file envelope; enumerate the streams                           |
+| 2   | **Measurement oracle**           | days                                 | unattended, quantitative correctness verdicts                                 |
+| 3   | **Authored differential corpus** | 1–2 weeks                            | field locations for everything the app can vary                               |
+| 4   | **Runtime trace of the reader**  | days, once you know the entry points | object boundaries, index arithmetic, the fields diffing cannot see            |
+| 5   | **Static decompilation**         | 1–2 weeks                            | authoritative field order, types, version gates, enum branches, lookup tables |
+| 6   | **Write path**                   | weeks                                | the actual product                                                            |
 
 Phases 4 and 5 are cheap **only after** 1–3. Attempting decompilation first drowns you: the target
 had 45.9 MB in one DLL and 2607 serialisable classes. The corpus tells you which forty matter.
@@ -72,7 +82,7 @@ Build this before you need it. Everything downstream is measured against it.
 
 **Requirements:**
 
-1. **Quantitative, not boolean.** "Opens" is nearly useless. Ask for a *number* the geometry
+1. **Quantitative, not boolean.** "Opens" is nearly useless. Ask for a _number_ the geometry
    determines — we used solid volume in m³ and centre of mass, and matched to ≤6e-16 relative.
    Volume alone is not enough: it cannot distinguish a plane swap or a direction flip. Centre of
    mass catches both. Get at least two independent scalars.
@@ -85,7 +95,7 @@ Build this before you need it. Everything downstream is measured against it.
    phantom "crashes" as format findings.
 4. **Process hygiene.** Sweep orphaned helper and crash-reporter processes between batches. Seven
    stacked crash handlers were what actually broke the install.
-5. **Kill the modal dialogs.** The app showed a *"Toolbar information is inconsistent"* startup
+5. **Kill the modal dialogs.** The app showed a _"Toolbar information is inconsistent"_ startup
    modal that blocked COM registration entirely. A 40-line watchdog thread that enumerates windows
    and clicks OK (`re/tooling/harness/Dismiss.py`) unblocked the entire measurement programme.
 6. **Absolute paths.** Relative paths silently returned a null model rather than erroring.
@@ -95,7 +105,7 @@ UI automation. SOLIDWORKS COM was ideal. AutoCAD has COM + ObjectARX, NX has NXO
 Pro/TOOLKIT and OTK, CATIA has CAA + COM. All four are richer than what we had.
 
 **Critical constraint we imposed on ourselves, and you should too:** the vendor API is for
-*verification only*. It must never be a runtime dependency of the shipped converter, or you have
+_verification only_. It must never be a runtime dependency of the shipped converter, or you have
 built a wrapper, not a translator. Keep every line of it in a test/scratch directory that the
 product cannot import.
 
@@ -112,11 +122,11 @@ within the family. A field that moves when exactly one input moved is located.
 
 **Corpus design that paid off:**
 
-- **Control pairs.** Author the *same* document twice. Diff them. Everything that differs is
+- **Control pairs.** Author the _same_ document twice. Diff them. Everything that differs is
   timestamps, session ids and hashes — your noise floor. Measure it before trusting any byte.
 - **A same-family ladder.** 1, 2, 3, 4 … n features, identical otherwise. This is what makes the
   per-feature block fall out of a plain diff, and it is what let us grow a container from n to n+1.
-- **Both directions of every boolean.** Not just "reversed on"; on *and* off, in *both* operations.
+- **Both directions of every boolean.** Not just "reversed on"; on _and_ off, in _both_ operations.
 - **Also collect a real production corpus.** Ours was a 63-file engine assembly. It does not
   localise fields, but it is irreplaceable for coverage: it exposed values our authored corpus
   never produced, and it was **localised into another language**, which killed every name-based
@@ -131,7 +141,7 @@ the embedding rather than translating. **Tag generated files and refuse them as 
 
 ## 5. Phase 4 — trace the vendor's reader
 
-Differential analysis gives you field *locations*. It cannot give you object *boundaries*, and
+Differential analysis gives you field _locations_. It cannot give you object _boundaries_, and
 without boundaries you cannot insert, delete or reorder anything.
 
 **Why boundaries matter:** the format used MFC-style `CArchive` object serialisation, where a class
@@ -152,20 +162,20 @@ app. No amount of static diffing recovers that arithmetic; you need to watch the
    several streams at once by matching several lengths.
 
 **The correctness gate that makes this trustworthy:** reparse the stream into a symbolic model
-where every reference is a *pointer to a node* rather than a number, then re-emit with every index
+where every reference is a _pointer to a node_ rather than a number, then re-emit with every index
 recomputed from scratch. **If the output is byte-identical to the input, your segmentation is
 provably right.** We hit byte-identical on 16 parts across 4 streams. Nothing else gives you that
 much confidence, and it immediately turns into the ability to grow, shrink and reorder.
 
 **Debugger traps, all of which cost real time:**
 
-| trap | fix |
-|---|---|
-| symbol lookups across 620+ modules stall the run forever | set `SYMOPT_NO_UNQUALIFIED_LOADS` first |
-| script directives collapse onto one line and swallow each other | use the one-command-per-line include form |
-| mangled C++ export names are rejected by the command parser | use the undecorated spelling |
-| a deferred module-load breakpoint never fires | the module was already loaded before the first stop; set it at the initial break |
-| the app never calls the framework function you hooked | see below |
+| trap                                                            | fix                                                                              |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| symbol lookups across 620+ modules stall the run forever        | set `SYMOPT_NO_UNQUALIFIED_LOADS` first                                          |
+| script directives collapse onto one line and swallow each other | use the one-command-per-line include form                                        |
+| mangled C++ export names are rejected by the command parser     | use the undecorated spelling                                                     |
+| a deferred module-load breakpoint never fires                   | the module was already loaded before the first stop; set it at the initial break |
+| the app never calls the framework function you hooked           | see below                                                                        |
 
 **The finding that only runtime gives you:** we hooked the system MFC runtime's `CArchive::ReadObject`
 and got **zero hits** across a full startup and a file open. The vendor had reimplemented the
@@ -185,7 +195,7 @@ which add a nested record".
 GUI. Import and full analysis took 92 s for a 250 KB DLL and **50 minutes for a 45.9 MB DLL** with a
 12 GB heap. Budget for that.
 
-*Obstacle worth knowing:* the analyser rejects any path component beginning with `.`, which rules
+_Obstacle worth knowing:_ the analyser rejects any path component beginning with `.`, which rules
 out a dot-prefixed scratch directory. A directory junction fixes it without moving the files.
 
 **Three techniques that made the output readable:**
@@ -199,7 +209,7 @@ out a dot-prefixed scratch directory. A directory junction fixes it without movi
    `Serialize`, not the framework's slot 2. Dump every RTTI-named vftable, map class → slot-5
    address, and you get an index of 2607 classes to their serialisers. From then on, any class is
    one lookup away. (`DumpVtableSlot.java`, `SerializeMap.py`)
-3. **Read the *write* path to get field names.** The store branch often writes a string key
+3. **Read the _write_ path to get field names.** The store branch often writes a string key
    alongside the value for a database/debug path. That is how `Value`, `EntIndex` and others got
    authoritative names instead of guesses. Exported accessors (`getFoo`) decompile to one
    instruction and bind a name to an offset — mine them wholesale.
@@ -222,7 +232,7 @@ out a dot-prefixed scratch directory. A directory junction fixes it without movi
   be a meaningful value.**
 
 **Negative results are results.** We proved by decompilation that a particular operation flag does
-*not* exist in the three classes everyone assumed owned it. That converted an open question into a
+_not_ exist in the three classes everyone assumed owned it. That converted an open question into a
 closed one and stopped further searching.
 
 ---
@@ -234,13 +244,13 @@ every serious error in this project was a confident inference nobody measured.
 
 **Rules that earned their place:**
 
-1. **Three-tier confidence, on every single field.** *confirmed* = decompiled **and** reproduces a
-   real traced span, corpus record or measured number. *partial* = decompiled but nothing available
-   exercises it. *not found*. Enforce the vocabulary in every document. A *partial* offset is an
+1. **Three-tier confidence, on every single field.** _confirmed_ = decompiled **and** reproduces a
+   real traced span, corpus record or measured number. _partial_ = decompiled but nothing available
+   exercises it. _not found_. Enforce the vocabulary in every document. A _partial_ offset is an
    address for a hypothesis, not a fact — several of ours turned out to be **uninitialised memory**
    that the app serialises without ever setting. Copy those from a donor; never synthesise them.
 2. **A stale derived cache is safe; a wrong one is not.** Formats are full of redundant caches
-   derived from the authored parameters. Leaving them describing the *old* geometry worked fine —
+   derived from the authored parameters. Leaving them describing the _old_ geometry worked fine —
    the app recomputes. Writing them with a plausible-but-wrong rule produced zero bodies, hard
    crashes and one silently wrong volume. **Identify which fields are authored and write only
    those.** This was the highest-value single rule we found.
@@ -283,11 +293,11 @@ of prior findings before stating the task, and that was the correct ratio.
 **Specify the acceptance criterion as a number.** "Make it work" produces a decode-only check and a
 confident report. "SOLIDWORKS opens it, the tree has N features, and volume matches to ≤1e-6
 relative, with control-before and control-after values quoted" produces measurements. Every brief
-said *report measured numbers; a decode-only check is not acceptance.*
+said _report measured numbers; a decode-only check is not acceptance._
 
 **Demand honest failure.** Explicitly instruct agents to report what did not work and to withhold
-unverified claims. Ours did: one reported a 32000 vs 28800 mismatch and *declined to ship the
-donor* rather than pass a test. That report was worth more than a success would have been.
+unverified claims. Ours did: one reported a 32000 vs 28800 mismatch and _declined to ship the
+donor_ rather than pass a test. That report was worth more than a success would have been.
 
 **Keep verification for yourself.** A subagent's claim that a gate passes is not evidence. Re-run
 the formatter, the suite and the measurement checks in your own context. I re-derived the
@@ -345,7 +355,7 @@ Being honest about the ceiling is part of the method.
 - The container framing is **fully inverted** — any valid file id can be written with no donor.
 - Object boundaries and index renumbering are **solved**, which is what makes structural edits
   possible.
-- Stream *content* still comes from a **donor** document of the right feature topology. We can
+- Stream _content_ still comes from a **donor** document of the right feature topology. We can
   patch, grow and reorder; we cannot serialise a feature record from nothing, because the bulk of
   it comes from base classes that were never fully decompiled.
 - Boss-versus-cut cannot be flipped: the operation is not a flag, it is implied by derived

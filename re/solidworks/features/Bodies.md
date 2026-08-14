@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Multi-body FreeCAD documents and the SOLIDWORKS donor path
 
 `donor_match` used to decline outright whenever a document built more than one solid body. That is
@@ -34,9 +44,9 @@ blank. `Clone` is a Draft clone of `Pocket002`.
 The signal is **what consumes the body**, and there are two different shapes of consumption in this
 one document, which is what makes it a usable discriminator rather than a coincidence:
 
-* `Endmill005` declares **`Body001`** — the *body object itself* — as a dependency. The body exists
+- `Endmill005` declares **`Body001`** — the _body object itself_ — as a dependency. The body exists
   to be a tool bit. Nothing downstream treats it as part geometry.
-* `Clone` declares **`Pocket002`** — a *feature* — as a dependency. It consumes a result, it does not
+- `Clone` declares **`Pocket002`** — a _feature_ — as a dependency. It consumes a result, it does not
   own the body.
 
 `Body` is named as a dependency only by its own solid features (`Pad`, `Pocket*` all declare
@@ -68,7 +78,7 @@ In `donor_match._body_partition`:
    designed bodies are two pieces of designed geometry and Kit has no donor for that topology.
 6. Zero model bodies with at least one ancillary → decline
    `every one of the N solid bodies the document builds feeds a non-model feature, so none of them
-   is the part`. Better to refuse than to guess which artefact is the part.
+is the part`. Better to refuse than to guess which artefact is the part.
 
 Nothing is ever silently dropped: an ancillary body's features are named in the diagnostics, and
 `vendor_loadable` is unaffected because the primary body is expressed in full.
@@ -84,7 +94,7 @@ sldprt.donor_declined: native SOLIDWORKS feature records were not written becaus
   Pad: sketch Sketch uses unsupported geometry ArcGeometry
 ```
 
-Note that this is the *honest* order of events: the revolve donors exist and are wired
+Note that this is the _honest_ order of events: the revolve donors exist and are wired
 (`revolve_full`, `boss_revcut`), but they are `measured=False`, so had the Revolution stayed in the
 primary chain it would have declined on the measurement gate instead. The multi-body rule removed it
 for the right reason — a CAM tool bit is not part of the designed part — not to dodge that gate.

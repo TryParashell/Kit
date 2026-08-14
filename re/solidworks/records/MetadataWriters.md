@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Writing equations, reference planes and direction axes into a donor-backed part
 
 Read-only analysis of a licensed SOLIDWORKS 2025 install. No SOLIDWORKS binary was modified.
@@ -23,10 +33,10 @@ selects a donor, without inserting a single object into any load-critical stream
 So nothing is inserted. A donor is authored through COM that already contains the records, and the
 writer rewrites only fields whose edit cannot move a map index:
 
-| record | field rewritten | why the edit is safe |
-|---|---|---|
+| record         | field rewritten                                                 | why the edit is safe                                                                                                        |
+| -------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `moRelation_c` | the `su_CArchive` serialized string holding the equation source | `su_CArchive` stores no absolute offsets, so a different length moves no index and invalidates no token (`Equations.md` §4) |
-| `moRefPlane_c` | the 121-byte frame block | fixed size, so the stream length is unchanged |
+| `moRefPlane_c` | the 121-byte frame block                                        | fixed size, so the stream length is unchanged                                                                               |
 
 The relation count `u16` at the `moRelMgr_c` body `+0` is left exactly as authored, because the
 number of relations does not change.
@@ -36,9 +46,9 @@ number of relations does not change.
 `arcboss_cut_cut_cut_through_rev_meta` is `arcboss_cut_cut_cut_through_rev` re-authored by
 `.rescratch/sw/author_revolve.py::case_arcboss_cut_cut_cut_through_rev`, plus
 
-* **4 reference planes**, each `FeatureManager.InsertRefPlane(swRefPlaneReferenceConstraint_Coincident, 0.0, 0, 0.0, 0, 0.0)`
+- **4 reference planes**, each `FeatureManager.InsertRefPlane(swRefPlaneReferenceConstraint_Coincident, 0.0, 0, 0.0, 0, 0.0)`
   against `Top Plane`;
-* **24 global-variable equations** `"KitVar01"= 1` … `"KitVar24"= 24`, added with
+- **24 global-variable equations** `"KitVar01"= 1` … `"KitVar24"= 24`, added with
   `EquationMgr.Add2(-1, text, True)`.
 
 Geometry is unchanged: volume `591409.401648088` mm³ and 2 bodies before and after the additions,
@@ -48,12 +58,12 @@ reverse flag, end-condition code, angle) to the base donor for all five features
 
 ### API notes
 
-* `EquationMgr.Add3(index, text, solve, whichConfigurations, configNames)` returns `-1` for
+- `EquationMgr.Add3(index, text, solve, whichConfigurations, configNames)` returns `-1` for
   `whichConfigurations` of `0`, `1` (`swThisConfiguration`) and `2` (`swAllConfiguration`) on a
   freshly created part. `Add2(-1, text, True)` and `Add(-1, text)` both succeed. Use `Add2`.
-* `swRefPlaneReferenceConstraint_Coincident` is `4` and `_Distance` is `8`
+- `swRefPlaneReferenceConstraint_Coincident` is `4` and `_Distance` is `8`
   (`.rescratch/sw/out/refplane_enums.txt`).
-* `ModelDoc2.CreatePlaneFixed(p1, p2, p3, useGlobal)` returns `False` and creates nothing when
+- `ModelDoc2.CreatePlaneFixed(p1, p2, p3, useGlobal)` returns `False` and creates nothing when
   called without a selection context, so a fixed plane is not reachable that way.
 
 ## 3. Which reference planes persist a frame
@@ -62,11 +72,11 @@ Four planes were authored coincident/offset-zero against each principal plane an
 stream decoded with `native._decode_planes`:
 
 | authored against | constraint | 121-byte frame present |
-|---|---|---|
-| `Top Plane` | coincident | yes |
-| `Right Plane` | distance 0 | yes |
-| `Front Plane` | coincident | no |
-| `Front Plane` | distance 0 | no |
+| ---------------- | ---------- | ---------------------- |
+| `Top Plane`      | coincident | yes                    |
+| `Right Plane`    | distance 0 | yes                    |
+| `Front Plane`    | coincident | no                     |
+| `Front Plane`    | distance 0 | no                     |
 
 A plane whose rotation relative to the sketch-space basis is the identity does not persist a
 matrix; the decoder reports `reference plane frames unavailable for 33:Plane1, 35:Plane2` for the
@@ -157,11 +167,11 @@ a sketch axis, which is a different shape from the 38-byte edge/face selection e
 `native._edge_selections` decodes. They need no new record, because the native records already
 determine them:
 
-* an extrusion with no explicit direction spec extrudes along its profile sketch's normal, so the
+- an extrusion with no explicit direction spec extrudes along its profile sketch's normal, so the
   binding is `(operation, profile sketch, N_Axis)`. `Serialize.md` §1 item 1 records
   `moDirectionSpec_c` at `moEndSpec_c + 0x138` as null throughout the corpus, which is exactly the
   "no explicit direction reference" state;
-* a revolution's axis is the single `profile_role == 2` line marker in its profile sketch. Its two
+- a revolution's axis is the single `profile_role == 2` line marker in its profile sketch. Its two
   `endpoint_indices` are positional indices into the sketch's marker list — the same convention
   `native._structural_rectangle_profiles` uses — so the axis direction in sketch coordinates is the
   difference of the two referenced markers' `coordinates_mm`. A vertical direction is `V_Axis`, a
@@ -206,13 +216,13 @@ ground truth, and `Plane1`–`Plane4` appear as `RefPlane` features beside the t
 
 ## 7. What is measured
 
-| claim | evidence |
-|---|---|
-| the authored donor's geometry is unchanged | volume and body count identical before and after the additions; `locate_features` identical to the base donor |
-| the written part still opens | `OpenDoc6` with `errors=0`, 2 bodies, `584449.732301944` mm³, control part measured identically before and after the batch |
-| the equations exist | `EquationMgr.GetCount()` is 24 and `Equation(i)` returns the 16 encoded equations plus 8 reserved placeholders |
-| the reference planes exist | the feature walk reports `RefPlane` for `Front Plane`, `Top Plane`, `Right Plane`, `Plane1`, `Plane2`, `Plane3`, `Plane4` |
-| the selections resolve | every named feature is present with its profile sketch as a sub-feature, each profile sketch is selectable as `SKETCH`, and the revolve's axis is selectable as `Line1@Sketch5` / `EXTSKETCHSEGMENT` |
+| claim                                      | evidence                                                                                                                                                                                             |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the authored donor's geometry is unchanged | volume and body count identical before and after the additions; `locate_features` identical to the base donor                                                                                        |
+| the written part still opens               | `OpenDoc6` with `errors=0`, 2 bodies, `584449.732301944` mm³, control part measured identically before and after the batch                                                                           |
+| the equations exist                        | `EquationMgr.GetCount()` is 24 and `Equation(i)` returns the 16 encoded equations plus 8 reserved placeholders                                                                                       |
+| the reference planes exist                 | the feature walk reports `RefPlane` for `Front Plane`, `Top Plane`, `Right Plane`, `Plane1`, `Plane2`, `Plane3`, `Plane4`                                                                            |
+| the selections resolve                     | every named feature is present with its profile sketch as a sub-feature, each profile sketch is selectable as `SKETCH`, and the revolve's axis is selectable as `Line1@Sketch5` / `EXTSKETCHSEGMENT` |
 
 `IFeature.GetDefinition` is not reachable through late-bound dispatch — every call returns
 `Member not found` — so the extrusion direction reference was not read back through

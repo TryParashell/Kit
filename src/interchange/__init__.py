@@ -111,7 +111,21 @@ from interchange.enums.EnumValues import ParameterRole, ValueKind
 from interchange.features.FeatureBody import DesignBody
 from interchange.features.FeatureContract import FeatureDef
 from interchange.features.FeatureExtrude import ExtrudeEnd, ExtrudeFeature
-from interchange.features.FeatureKinds import ChamferFeature, CirclePattern, CombineFeature, DomeFeature, FilletFeature, HoleFeature, LinearPattern, MoveBodyFeature, NativeFeature, RefPlaneFeature, RevolveFeature, ScaleFeature, ShellFeature
+from interchange.features.FeatureKinds import (
+    ChamferFeature,
+    CirclePattern,
+    CombineFeature,
+    DomeFeature,
+    FilletFeature,
+    HoleFeature,
+    LinearPattern,
+    MoveBodyFeature,
+    NativeFeature,
+    RefPlaneFeature,
+    RevolveFeature,
+    ScaleFeature,
+    ShellFeature,
+)
 from interchange.features.FeatureStep import FeatureCfgState, FeatureStep
 from .geometry import (
     ArcEllipseGeom,
@@ -148,7 +162,12 @@ from interchange.records.RecordProvenance import Provenance, ProvenanceSpan
 from interchange.records.RecordSource import CadSource
 from interchange.records.RecordTopology import TopologyCounts
 from .serialization import RegMigration, RegisterTypes
-from interchange.geometry.models.Vectors import BoundingBox, PlaneVector, SpaceVector, Transform
+from interchange.geometry.models.Vectors import (
+    BoundingBox,
+    PlaneVector,
+    SpaceVector,
+    Transform,
+)
 
 globals().update(
     {

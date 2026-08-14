@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # Real-world SOLIDWORKS corpus: ground truth
 
 Source corpus: `Kit/examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024`
@@ -36,18 +46,18 @@ Consequences:
 `Core.py` had `BOSS_FLAGS = 0x40000140` / `CUT_FLAGS = 0x400201CA`. Across all 63 corpus files the observed
 tree-node flag words are:
 
-| flags | count | meaning |
-|---|---|---|
-| `0x40000000` | 1327 | folder / non-solid node |
-| `0xC0000000` | 1289 | reference plane, sketch |
-| `0xC0000140` | 235 | **boss extrude** |
-| `0xC00201CA` | 197 | **cut extrude** |
-| `0xC0000001` | 54 | fillet / chamfer |
-| `0x40004003` | 16 | |
-| `0x40004404` | 15 | |
-| `0x400201CA` | 3 | cut extrude, bit31 clear |
-| `0x40004002` | 1 | |
-| `0x40000140` | 1 | boss extrude, bit31 clear |
+| flags        | count | meaning                   |
+| ------------ | ----- | ------------------------- |
+| `0x40000000` | 1327  | folder / non-solid node   |
+| `0xC0000000` | 1289  | reference plane, sketch   |
+| `0xC0000140` | 235   | **boss extrude**          |
+| `0xC00201CA` | 197   | **cut extrude**           |
+| `0xC0000001` | 54    | fillet / chamfer          |
+| `0x40004003` | 16    |                           |
+| `0x40004404` | 15    |                           |
+| `0x400201CA` | 3     | cut extrude, bit31 clear  |
+| `0x40004002` | 1     |                           |
+| `0x40000140` | 1     | boss extrude, bit31 clear |
 
 Bit 31 (`0x80000000`) is **not** part of the feature kind — it varies for the same kind
 (`0x40000140` and `0xC0000140` are both boss extrudes; `0x400201CA` and `0xC00201CA` are both cut extrudes).
@@ -61,36 +71,36 @@ Verified by name in `BIELA.SLDPRT`: `Saliente-Extruir1/2/3` (boss) are `0xC00001
 
 Only rows that are real modeling operations. `f` = number of distinct files containing it.
 
-| operation | count | files | Kit support today |
-|---|---|---|---|
-| Sketch | 688 | 57 | rectangle profiles only |
-| Extrusion (untyped) | 356 | 50 | rectangle boss only |
-| Plane | 284 | 57 | Front only |
-| Fillet | 86 | 32 | none |
-| Boss-Extrude | 65 | 46 | rectangle, blind/midplane, Front |
-| Chamfer | 56 | 30 | none |
-| HoleWizard | 38 | 21 | none |
-| Mirror | 36 | 16 | none |
-| 3DSketch | 30 | 21 | none |
-| LPattern | 23 | 6 | none |
-| Cut-Extrude | 18 | 12 | none |
-| CirPattern | 16 | 9 | none |
-| Revolve | 15 | 11 | none |
-| Cut-Revolve | 15 | 11 | none |
-| Axis | 14 | 11 | none |
-| LocalLPattern | 12 | 2 | none |
-| Sweep | 11 | 5 | none |
-| Hole Thread | 11 | 3 | none |
-| Loft | 10 | 10 | none |
-| Cut-Sweep | 9 | 6 | none |
-| VarFillet | 9 | 5 | none |
-| AdvancedHole | 6 | 4 | none |
-| Shell | 5 | 4 | none |
-| Cut-Loft | 5 | 5 | none |
-| Helix/Spiral | 4 | 4 | none |
-| Body-Delete/Keep | 3 | 3 | none |
-| Sheet-Metal Master | 2 | 2 | none |
-| CompCurve | 362 | 4 | none |
+| operation           | count | files | Kit support today                |
+| ------------------- | ----- | ----- | -------------------------------- |
+| Sketch              | 688   | 57    | rectangle profiles only          |
+| Extrusion (untyped) | 356   | 50    | rectangle boss only              |
+| Plane               | 284   | 57    | Front only                       |
+| Fillet              | 86    | 32    | none                             |
+| Boss-Extrude        | 65    | 46    | rectangle, blind/midplane, Front |
+| Chamfer             | 56    | 30    | none                             |
+| HoleWizard          | 38    | 21    | none                             |
+| Mirror              | 36    | 16    | none                             |
+| 3DSketch            | 30    | 21    | none                             |
+| LPattern            | 23    | 6     | none                             |
+| Cut-Extrude         | 18    | 12    | none                             |
+| CirPattern          | 16    | 9     | none                             |
+| Revolve             | 15    | 11    | none                             |
+| Cut-Revolve         | 15    | 11    | none                             |
+| Axis                | 14    | 11    | none                             |
+| LocalLPattern       | 12    | 2     | none                             |
+| Sweep               | 11    | 5     | none                             |
+| Hole Thread         | 11    | 3     | none                             |
+| Loft                | 10    | 10    | none                             |
+| Cut-Sweep           | 9     | 6     | none                             |
+| VarFillet           | 9     | 5     | none                             |
+| AdvancedHole        | 6     | 4     | none                             |
+| Shell               | 5     | 4     | none                             |
+| Cut-Loft            | 5     | 5     | none                             |
+| Helix/Spiral        | 4     | 4     | none                             |
+| Body-Delete/Keep    | 3     | 3     | none                             |
+| Sheet-Metal Master  | 2     | 2     | none                             |
+| CompCurve           | 362   | 4     | none                             |
 
 ## 4. Resolved-stream class names worth knowing (230 distinct total)
 
@@ -144,7 +154,7 @@ plane it never created.
 - `FreecadAssemblyTests.py::test_fcstd_assembly_has_component_links_placements_and_mates`
 - `FreecadBrepTests.py::test_supplied_solidworks_breps_pass_only_the_proven_native_gate`
 - `SolidworksTests.py::test_protocol_literals_have_one_source_definition`
-- `SolidworksAdapterTests.py::test_entire_local_solidworks_corpus_decodes`  <- new, caused by this corpus
+- `SolidworksAdapterTests.py::test_entire_local_solidworks_corpus_decodes` <- new, caused by this corpus
 - `SolidworksAssemblyTests.py::test_assembly_capabilities_reflect_the_decoded_document`
 - `SolidworksAssemblyTests.py::test_mate_list_discovery_uses_structure_when_the_stream_is_renamed`
 

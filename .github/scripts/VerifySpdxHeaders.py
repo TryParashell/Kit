@@ -35,6 +35,15 @@ KExemptPrefixes = (".kiro/", "examples/")
 # canonical notice remains exempt because it is the uncommented source used to render headers
 KExemptPaths = frozenset({"HEADER_NOTICE"})
 
+# generated research data stays exact because its record grammar has no comment syntax
+KRawArtifactPaths = frozenset(
+    {
+        "re/data/Serialization/SldmfcuSigtableRefs.txt",
+        "re/data/vocabulary/Flagmap.txt",
+        "re/data/vocabulary/Vocabulary.txt",
+    }
+)
+
 # hash comment extensions stay grouped because these formats share one exact rendering rule
 KHashExtensions = frozenset(
     {
@@ -151,7 +160,7 @@ def HashLines(SourceLines: list[str]) -> str:
 
 # path exemption remains a predicate because scope decisions must be testable independently
 def IsPathExempt(RelPath: str) -> bool:
-    if RelPath in KExemptPaths:
+    if RelPath in KExemptPaths or RelPath in KRawArtifactPaths:
         return True
     return any(RelPath.startswith(PrefixText) for PrefixText in KExemptPrefixes)
 

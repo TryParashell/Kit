@@ -1,3 +1,13 @@
+<!--
+SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+
+This SPDX license identifier and copyright notice must not be
+removed, altered, or obscured. Doing so is a material breach of
+the PolyForm Strict License 1.0.0 and voids all licenses granted
+to you under it immediately and permanently.
+-->
+
 # SOLIDWORKS revolve — `Contents/Config-0-ResolvedFeatures` field map
 
 Static corpus analysis only. **SOLIDWORKS was never launched**; no COM, no `tests/oracle`, no
@@ -19,19 +29,19 @@ outputs in this directory are the working evidence.
 
 ## 0. Summary
 
-| finding | status |
-|---|---|
-| revolves and revolved cuts share the generic tree flag word `0x40000000` — there is **no** distinct revolve flag | **CONFIRMED**, 67/67 |
-| the revolve angle is a `D1` dimension-scalar record holding a `float64` in **RADIANS** | **CONFIRMED**, 67/67 against `KeyWords` |
-| the angle has exactly **3** copies, at scalar `+{0, +513, +537}`, all same-signed | **CONFIRMED**, 67/67 byte-exact |
-| the authored angle sits at `moAngleParameter_c` marker `+56` = record data `+32` | **CONFIRMED**, 19/19 first instances |
-| `moRevEndSpec_c` is a 52-byte **constant** across the whole corpus, so the end-condition code and the reverse flag cannot be located | **OPAQUE** — needs SOLIDWORKS authoring |
-| the extrude anchors (scalar−824/−818, scalar−721/−715) do **not** transfer to revolves | **CONFIRMED** as not applicable |
-| the axis source is a `<u32 feature id><u32 time_t>` pair at `end-spec-object − 145` (sketch) or `− 131` (reference axis) | **CONFIRMED**, 56 + 11 = 67/67 |
-| *which* entity inside the sketch is the centerline | **OPAQUE** |
-| `moRevolution_c` and `moRevCut_c` are genuinely distinct classes; boss ↔ cut changes the class set | **CONFIRMED** |
-| revolve profiles use the same sketch-coordinate record as extrudes, but the role/class trailer takes undecoded values and the 17° circle rule does not generalise | **PARTIAL** |
-| every revolve part in the corpus is `swVersion` 13000 or 14000, never 18000 | **CONFIRMED** — see §9 |
+| finding                                                                                                                                                           | status                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| revolves and revolved cuts share the generic tree flag word `0x40000000` — there is **no** distinct revolve flag                                                  | **CONFIRMED**, 67/67                    |
+| the revolve angle is a `D1` dimension-scalar record holding a `float64` in **RADIANS**                                                                            | **CONFIRMED**, 67/67 against `KeyWords` |
+| the angle has exactly **3** copies, at scalar `+{0, +513, +537}`, all same-signed                                                                                 | **CONFIRMED**, 67/67 byte-exact         |
+| the authored angle sits at `moAngleParameter_c` marker `+56` = record data `+32`                                                                                  | **CONFIRMED**, 19/19 first instances    |
+| `moRevEndSpec_c` is a 52-byte **constant** across the whole corpus, so the end-condition code and the reverse flag cannot be located                              | **OPAQUE** — needs SOLIDWORKS authoring |
+| the extrude anchors (scalar−824/−818, scalar−721/−715) do **not** transfer to revolves                                                                            | **CONFIRMED** as not applicable         |
+| the axis source is a `<u32 feature id><u32 time_t>` pair at `end-spec-object − 145` (sketch) or `− 131` (reference axis)                                          | **CONFIRMED**, 56 + 11 = 67/67          |
+| _which_ entity inside the sketch is the centerline                                                                                                                | **OPAQUE**                              |
+| `moRevolution_c` and `moRevCut_c` are genuinely distinct classes; boss ↔ cut changes the class set                                                                | **CONFIRMED**                           |
+| revolve profiles use the same sketch-coordinate record as extrudes, but the role/class trailer takes undecoded values and the 17° circle rule does not generalise | **PARTIAL**                             |
+| every revolve part in the corpus is `swVersion` 13000 or 14000, never 18000                                                                                       | **CONFIRMED** — see §9                  |
 
 ---
 
@@ -44,9 +54,9 @@ A revolve is **not** an `<Extrusion>` element. It is a `<Feature>` with `Type="R
 <Feature id="144" Name="Revolve1" Type="Revolve"><Dimension Name="D1">360°</Dimension></Feature>
 ```
 
-* `examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/10MM x 20MM x 13MM head 316 Stainless Steel Socket Head Screw.SLDPRT`
+- `examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/10MM x 20MM x 13MM head 316 Stainless Steel Socket Head Screw.SLDPRT`
   carries `Revolve1` id 144 and `Revolve2` id 256, both `360°`.
-* `examples/Random/Addons/Idle_pulley.SLDPRT` carries `Revolve1` id 50, `360.00°`.
+- `examples/Random/Addons/Idle_pulley.SLDPRT` carries `Revolve1` id 50, `360.00°`.
 
 Localisation affects the `Name` only (`Revolución1`, `Cortar-Revolución1`); `Type` stays English.
 The angle text always ends in `°` and is written either `360°` or `360.00°`, so a reader must strip
@@ -54,7 +64,7 @@ the degree sign and tolerate both forms. `swXmlContents/Features` carries no rev
 only the document/configuration header — and `docProps/*.xml` carries none either.
 
 **Every revolve in the corpus is 360°.** That is the single biggest limitation of this work: with no
-angle variation, anything that could only be pinned by varying the angle stays unpinned. What *can*
+angle variation, anything that could only be pinned by varying the angle stays unpinned. What _can_
 be pinned is the absolute value, because 2π and 360.0 are trivially distinguishable as `float64`.
 
 ---
@@ -80,7 +90,7 @@ a folder or a sketch. Two consequences:
 1. The flags word cannot classify a revolve, and it cannot distinguish a revolved boss from a
    revolved cut. The class set (§6) and the name string are the only signals.
 2. `0x40000000` is `resolved.SKETCH_FLAGS`, so the existing reader silently treats every revolve
-   node as a *sketch*. See §8 defect 1.
+   node as a _sketch_. See §8 defect 1.
 
 Observed but not load-bearing: the `0x80000000` UI-expanded bit is **clear** on every revolve node
 while it is set on the extrude nodes in the same parts. Grammar.md §4.1 already establishes that
@@ -100,10 +110,10 @@ The scalar is named **`D1`** in 67/67 cases.
 
 The value is in **RADIANS**, not degrees and not the metres-like scaling the extrude depth uses:
 
-| part | lane offset | raw `float64` | `degrees(raw)` | `KeyWords` |
-|---|---|---|---|---|
-| `examples/Random/Addons/Idle_pulley.SLDPRT` | **8608** | `6.2831853071796` | 360.000000 | `360.00°` |
-| `examples/Random/Addons/Belt_tensioner.SLDPRT` | **33761** | `6.2831853071796` | 360.000000 | `360.00°` |
+| part                                           | lane offset | raw `float64`     | `degrees(raw)` | `KeyWords` |
+| ---------------------------------------------- | ----------- | ----------------- | -------------- | ---------- |
+| `examples/Random/Addons/Idle_pulley.SLDPRT`    | **8608**    | `6.2831853071796` | 360.000000     | `360.00°`  |
+| `examples/Random/Addons/Belt_tensioner.SLDPRT` | **33761**   | `6.2831853071796` | 360.000000     | `360.00°`  |
 
 `degrees(raw)` equals the `KeyWords` angle in **67/67** features
 (`summary.angle_matches_keywords`). An exhaustive byte-aligned `float64` scan of every lane found
@@ -190,7 +200,7 @@ reference plus the same 52 data bytes).
 
 **These 52 bytes are byte-identical in all 40 parts and all 67 objects.** Verified by hashing a
 96-byte window at every `moRevEndSpec_c` class marker: the 17 distinct windows differ only from
-byte 72 onward, i.e. in the *next* object (`.rescratch/revolve/endspec.txt`).
+byte 72 onward, i.e. in the _next_ object (`.rescratch/revolve/endspec.txt`).
 
 ### 4.2 What that means, stated plainly
 
@@ -198,8 +208,8 @@ Because the record never varies, **no end-condition code byte and no direction/r
 located by differential analysis.** The corpus exercises exactly one revolve configuration:
 full 360°, one direction, no thin feature. Candidates, all **UNVERIFIED**:
 
-* the `u32 = 1` at data `+0` could be the end-condition or the revolve-type code;
-* the two `float64 = 0.01` at data `+28` and `+36` look like a thin-feature / second-direction
+- the `u32 = 1` at data `+0` could be the end-condition or the revolve-type code;
+- the two `float64 = 0.01` at data `+28` and `+36` look like a thin-feature / second-direction
   thickness default of 10 mm.
 
 The extrude anchoring does **not** transfer. For the extrude, the flag bytes sit at a fixed
@@ -232,10 +242,10 @@ Anchor: `token` = the start of the `moRevEndSpec_c` object as defined in §4.3.
 
 Two **mutually exclusive** slots, each holding a `<u32 feature id><u32 unix time_t>` pair:
 
-| slot | referenced node | count | meaning |
-|---|---|---|---|
-| `token − 145` | a **sketch** tree node | **56** of 67 | the axis is a construction line inside that sketch |
-| `token − 131` | a **reference-axis** tree node (`Eje`/`Axis`, flags `0xC0000000`) | **11** of 67 | the axis is a reference-axis feature |
+| slot          | referenced node                                                   | count        | meaning                                            |
+| ------------- | ----------------------------------------------------------------- | ------------ | -------------------------------------------------- |
+| `token − 145` | a **sketch** tree node                                            | **56** of 67 | the axis is a construction line inside that sketch |
+| `token − 131` | a **reference-axis** tree node (`Eje`/`Axis`, flags `0xC0000000`) | **11** of 67 | the axis is a reference-axis feature               |
 
 56 + 11 = 67. Every revolve matches exactly one slot; none matches both; none matches neither
 (`summary.axis_kinds`). The two offsets are 18 bytes apart, and 18 is the size difference between
@@ -244,32 +254,32 @@ Grammar.md §2.1 describes.
 
 Evidence:
 
-* `examples/Random/Addons/Idle_pulley.SLDPRT` — end-spec data at 7920, first instance, token 7900.
+- `examples/Random/Addons/Idle_pulley.SLDPRT` — end-spec data at 7920, first instance, token 7900.
   At **7755** (= token − 145): `1a 00 00 00` = 26 = the id of tree node `Sketch1`, followed by
   `be 0f b9 61` = `time_t` 1639387582. This part has no reference axis at all.
-* `examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/RUEDA DE TURBINA.SLDPRT` — three revolve
+- `examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/RUEDA DE TURBINA.SLDPRT` — three revolve
   objects at 69165 (first instance, token 69145), 138859 (token 138857) and 177564 (token 177562).
   At **69014**, **138726** and **177431** (each = token − 131): `2e 00 00 00` = 46 = the id of tree
   node `Eje1`, each followed by `time_t` 0x5c39a692.
-* `examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA.SLDPRT` is the mixed case:
+- `examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA.SLDPRT` is the mixed case:
   `Cortar-Revolución1` uses the sketch slot, `Cortar-Revolución2` and `Cortar-Revolución3` use the
   reference-axis slot (`Eje1`, id 193).
 
 ### 5.1 What is authorable and what is not
 
-* **Authorable / patchable:** the `u32` id itself. Repointing a revolve at a *different existing*
-  reference axis or a *different existing* sketch is a 4-byte write at a locatable offset. The
+- **Authorable / patchable:** the `u32` id itself. Repointing a revolve at a _different existing_
+  reference axis or a _different existing_ sketch is a 4-byte write at a locatable offset. The
   companion `time_t` is the same "any plausible value works" field Grammar.md §3.1 documents.
-* **Not authorable:** *which* entity inside the referenced sketch is the centerline. That is an
+- **Not authorable:** _which_ entity inside the referenced sketch is the centerline. That is an
   intra-sketch entity reference and nothing in this analysis reaches it. A writer can only inherit
   the donor's choice.
-* **Not authorable:** the geometry of the axis when it comes from a face. `moSurfaceAxisData_c`
+- **Not authorable:** the geometry of the axis when it comes from a face. `moSurfaceAxisData_c`
   (7 of 40 revolve parts) is "axis from a cylindrical face" definition data belonging to the axis
-  *feature*, and the face reference behind it is opaque in exactly the way report 2 §3/§7
+  _feature_, and the face reference behind it is opaque in exactly the way report 2 §3/§7
   established for extrude face supports. `moTwoPtsAxisData_c` (1 part) is "axis through two
   points". `moRefAxis_c` (10 parts) is the reference-axis tree feature itself and
   `moCompRefAxis_c` (10 parts) its component wrapper.
-* **Not used by any revolve in this corpus:** a temporary or principal axis. `moTempAxisRef_w`
+- **Not used by any revolve in this corpus:** a temporary or principal axis. `moTempAxisRef_w`
   occurs in 26 of the 40 revolve parts but never at either slot; it belongs to the circular
   patterns those parts also contain. So the "revolve about a temporary axis" case is
   **unrepresented**, not decoded.
@@ -280,13 +290,13 @@ Evidence:
 
 This is the sharpest structural difference from the extrude, and it is unambiguous.
 
-| | parts (of the 40 revolve parts) |
-|---|---|
-| `moRevolution_c` present | **30** |
-| `moRevCut_c` present | **17** |
-| `moRevolution_c` only | **23** |
-| `moRevCut_c` only | **10** |
-| both present | **7** |
+|                          | parts (of the 40 revolve parts) |
+| ------------------------ | ------------------------------- |
+| `moRevolution_c` present | **30**                          |
+| `moRevCut_c` present     | **17**                          |
+| `moRevolution_c` only    | **23**                          |
+| `moRevCut_c` only        | **10**                          |
+| both present             | **7**                           |
 
 23 + 10 + 7 = 40. Restricted to the V8 production corpus alone (17 of its 57 parts contain
 revolves) the counts are `moRevolution_c` in 11 parts and `moRevCut_c` in 11 parts, matching the
@@ -311,7 +321,7 @@ class set, therefore it changes the class-definition sequence, therefore it chan
 `su_CArchive` map index after the insertion point (Grammar.md §2.3). **A revolved boss and a
 revolved cut need separate donors. There is no byte flip between them.**
 
-One honest caveat: I did not find a per-feature operation code. In a part that contains *both*
+One honest caveat: I did not find a per-feature operation code. In a part that contains _both_
 classes, the class table alone cannot tell you which class a given unmarked revolve object belongs
 to. Attribution has to come from the tree-node name (`Revolve*` / `Revolución*` versus
 `Cut-Revolve*` / `Cortar-Revolución*`), which is also the only signal `KeyWords` offers, via `Type`.
@@ -383,7 +393,7 @@ Given §4 this currently costs nothing semantic, but the record is not even loca
 nowhere to attach the end condition once it is decoded.
 
 **Defect 3 — the axis is unresolved for 54 of 67 revolves.**
-`_revolution_axis_marker()` returns a marker only when the *most recent* sketch contains **exactly
+`_revolution_axis_marker()` returns a marker only when the _most recent_ sketch contains **exactly
 one** construction line, and it inspects `latest_sketch` rather than the sketch the stream actually
 names. `axis-unresolved: 54`. All **11** reference-axis revolves are in that 54 and can never be
 resolved by this heuristic by construction, because their axis is a reference-axis feature and not

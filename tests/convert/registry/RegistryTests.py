@@ -20,7 +20,11 @@ from convert.adapters import (
     CapabilityLossError,
 )
 from interchange import Capability
-from tests.convert.registry.RegistryTestSupport import BuildAdapter, BuildSource, ResultAdapter
+from tests.convert.registry.RegistryTestSupport import (
+    BuildAdapter,
+    BuildSource,
+    ResultAdapter,
+)
 
 
 # nested module discovery must not depend on packages reexporting their adapter class

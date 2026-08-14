@@ -81,7 +81,5 @@ def MakeEngineCall(
     LegacyCall.__module__ = "convert.engine"
     LegacyCall.__annotations__ = dict(AnnotationMap)
     LegacyCall.__signature__ = SignatureInfo
-    LegacyCall.__kwdefaults__ = (
-        None if KwargDefaults is None else dict(KwargDefaults)
-    )
+    LegacyCall.__kwdefaults__ = None if KwargDefaults is None else dict(KwargDefaults)
     return LegacyCall

@@ -90,6 +90,20 @@ KConfigOwnerCount = len(FieldOwners)
 # this binding exists because shared behavior needs one stable value
 KConfigOpaqueBytes = 0
 
+# legacy keyword mapping preserves the historical public configuration contract
+KLegacyKwargs = {
+    "part_name": "PartName",
+    "atoms": "Atoms",
+    "session_stamp": "SessionStamp",
+    "generation": "Generation",
+    "dual_length_units": "DualLengthUnits",
+    "high_water": "HighWater",
+    "part_record_body": "PartRecordBody",
+    "annotation_view_count": "AnnotationViewCount",
+    "terminal_parent_tree_id": "TerminalParentTreeId",
+    "annotation_view_variant": "AnnotationViewVariant",
+}
+
 
 # high water derivation stays separate because atom allocation has its own validation contract
 def GetHighWater(
@@ -175,8 +189,24 @@ def AddSecondView(
     )
 
 
-# public configuration encoding composes allocation terminal history and annotation phases
-def EncodeConfig(
+# legacy keyword normalization maps supported names and rejects every unknown name
+def MapLegacy(
+    CurrentValues: dict[str, object], LegacyValues: dict[str, object]
+) -> dict[str, object]:
+    UnknownNames = sorted(set(LegacyValues).difference(KLegacyKwargs))
+    if UnknownNames:
+        NameText = UnknownNames[0]
+        raise TypeError(
+            f"EncodeConfig() got an unexpected keyword argument {NameText!r}"
+        )
+    MappedValues = dict(CurrentValues)
+    for LegacyName, LegacyValue in LegacyValues.items():
+        MappedValues[KLegacyKwargs[LegacyName]] = LegacyValue
+    return MappedValues
+
+
+# validated configuration construction composes allocation terminal history and annotations
+def BuildConfig(
     PartName: str = KRefPartName,
     Atoms: tuple[tuple[int, int], ...] = ((KRefAtomId, KRefTreeId),),
     SessionStamp: int = KRefSessionStamp,
@@ -214,6 +244,47 @@ def EncodeConfig(
         return StreamData
     return AddSecondView(
         StreamData, AnnotationViewCount, TerminalParentTreeId, AnnotationViewVariant
+    )
+
+
+# public configuration encoding accepts both historical and compliant keyword forms
+def EncodeConfig(
+    PartName: str = KRefPartName,
+    Atoms: tuple[tuple[int, int], ...] = ((KRefAtomId, KRefTreeId),),
+    SessionStamp: int = KRefSessionStamp,
+    Generation: int = KMoVersion,
+    DualLengthUnits: bool = True,
+    HighWater: tuple[int, int] | None = None,
+    PartRecordBody: bytes | None = None,
+    AnnotationViewCount: int = 1,
+    TerminalParentTreeId: int | None = None,
+    AnnotationViewVariant: str = "default",
+    **LegacyValues: object,
+) -> bytes:
+    CurrentValues = {
+        "PartName": PartName,
+        "Atoms": Atoms,
+        "SessionStamp": SessionStamp,
+        "Generation": Generation,
+        "DualLengthUnits": DualLengthUnits,
+        "HighWater": HighWater,
+        "PartRecordBody": PartRecordBody,
+        "AnnotationViewCount": AnnotationViewCount,
+        "TerminalParentTreeId": TerminalParentTreeId,
+        "AnnotationViewVariant": AnnotationViewVariant,
+    }
+    MappedValues = MapLegacy(CurrentValues, LegacyValues)
+    return BuildConfig(
+        PartName=MappedValues["PartName"],
+        Atoms=MappedValues["Atoms"],
+        SessionStamp=MappedValues["SessionStamp"],
+        Generation=MappedValues["Generation"],
+        DualLengthUnits=MappedValues["DualLengthUnits"],
+        HighWater=MappedValues["HighWater"],
+        PartRecordBody=MappedValues["PartRecordBody"],
+        AnnotationViewCount=MappedValues["AnnotationViewCount"],
+        TerminalParentTreeId=MappedValues["TerminalParentTreeId"],
+        AnnotationViewVariant=MappedValues["AnnotationViewVariant"],
     )
 
 
