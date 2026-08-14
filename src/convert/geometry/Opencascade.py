@@ -1400,6 +1400,185 @@ def ShapeRecords(
     return RecordsA
 
 
+# this class exists because located geometry caches need one explicit owner
+@Dataclass(slots=True)
+class PlacementState:
+    Curves: tuple[BrepCurve, ...]
+    Surfaces: tuple[BrepSurface, ...]
+    Records: Mapping[int, ShapeRecord]
+    Locations: tuple[tuple[float, ...], ...]
+    NamePrefix: str
+    PlacedCurves: list[BrepCurve]
+    PlacedSurfaces: list[BrepSurface]
+    PlacedRecords: dict[int, ShapeRecord]
+    RecordCache: dict[tuple[int, tuple[float, ...]], int]
+    CurveCache: dict[tuple[int, tuple[float, ...]], int]
+    SurfaceCache: dict[tuple[int, tuple[float, ...]], int]
+
+
+# this definition exists because location work should be skipped when absent
+def HasLocations(Records: Mapping[int, ShapeRecord], RootRef: Reference) -> bool:
+    return bool(
+        RootRef.KLocation
+        or any(ChildRef.KLocation for Record in Records.values() for ChildRef in Record.Children)
+        or any(
+            isinstance(Record.GeometryA, (EdgeData, FaceData))
+            and Record.GeometryA.KLocation
+            for Record in Records.values()
+        )
+    )
+
+
+# this definition exists because curve placement and caching need one owner
+def PlaceCurve(State: PlacementState, CurveIndex: int, Location: tuple[float, ...]) -> int:
+    CurveKey = (CurveIndex, Location)
+    CachedIndex = State.CurveCache.get(CurveKey)
+    if CachedIndex is not None:
+        return CachedIndex
+    BaseCurve = State.Curves[CurveIndex - 1]
+    PlacedIndex = len(State.PlacedCurves) + 1
+    if isinstance(BaseCurve, LineCurve):
+        PlacedCurve: BrepCurve = LineCurve(
+            f"{State.NamePrefix}:curve:{PlacedIndex}",
+            LocationPoint(Location, BaseCurve.origin),
+            ApplyDirection(Location, BaseCurve.direction),
+            provenance=BaseCurve.provenance,
+            attributes=BaseCurve.attributes,
+        )
+    elif isinstance(BaseCurve, CircleCurve):
+        PlacedCurve = CircleCurve(
+            f"{State.NamePrefix}:curve:{PlacedIndex}",
+            LocationPoint(Location, BaseCurve.center),
+            ApplyDirection(Location, BaseCurve.axis),
+            ApplyDirection(Location, BaseCurve.reference_direction),
+            BaseCurve.radius * LocationScale(Location),
+            provenance=BaseCurve.provenance,
+            attributes=BaseCurve.attributes,
+        )
+    else:
+        raise DecodeFailure("unsupported located BRep curve")
+    State.PlacedCurves.append(PlacedCurve)
+    State.CurveCache[CurveKey] = PlacedIndex
+    return PlacedIndex
+
+
+# this definition exists because surface placement and caching need one owner
+def PlaceSurface(
+    State: PlacementState, SurfaceIndex: int, Location: tuple[float, ...]
+) -> int:
+    SurfaceKey = (SurfaceIndex, Location)
+    CachedIndex = State.SurfaceCache.get(SurfaceKey)
+    if CachedIndex is not None:
+        return CachedIndex
+    BaseSurface = State.Surfaces[SurfaceIndex - 1]
+    PlacedIndex = len(State.PlacedSurfaces) + 1
+    if isinstance(BaseSurface, PlaneSurface):
+        PlacedSurface: BrepSurface = PlaneSurface(
+            f"{State.NamePrefix}:surface:{PlacedIndex}",
+            LocationPoint(Location, BaseSurface.origin),
+            ApplyDirection(Location, BaseSurface.normal),
+            ApplyDirection(Location, BaseSurface.reference_direction),
+            provenance=BaseSurface.provenance,
+            attributes=BaseSurface.attributes,
+        )
+    elif isinstance(BaseSurface, CylinderSurface):
+        PlacedSurface = CylinderSurface(
+            f"{State.NamePrefix}:surface:{PlacedIndex}",
+            LocationPoint(Location, BaseSurface.origin),
+            ApplyDirection(Location, BaseSurface.axis),
+            ApplyDirection(Location, BaseSurface.reference_direction),
+            BaseSurface.radius * LocationScale(Location),
+            provenance=BaseSurface.provenance,
+            attributes=BaseSurface.attributes,
+        )
+    else:
+        raise DecodeFailure("unsupported located BRep surface")
+    State.PlacedSurfaces.append(PlacedSurface)
+    State.SurfaceCache[SurfaceKey] = PlacedIndex
+    return PlacedIndex
+
+
+# this definition exists because child placement recursion needs one owner
+def PlaceChildren(
+    State: PlacementState, SourceRecord: ShapeRecord, Location: tuple[float, ...]
+) -> tuple[Reference, ...]:
+    ChildRefs = []
+    for ChildRef in SourceRecord.Children:
+        ChildLoc = (
+            KIdentityLocation
+            if not ChildRef.KLocation
+            else State.Locations[ChildRef.KLocation - 1]
+        )
+        ChildMatrix = ProductLocation(ChildLoc, Location)
+        ChildRecord = PlaceRecord(State, ChildRef.RecordA, ChildMatrix)
+        ChildRefs.append(Reference(ChildRef.Orientation, ChildRecord))
+    return tuple(ChildRefs)
+
+
+# this definition exists because located topology geometry needs one transformer
+def PlaceGeometry(
+    State: PlacementState, SourceRecord: ShapeRecord, Location: tuple[float, ...]
+) -> VertexData | EdgeData | FaceData | None:
+    ScaleValue = LocationScale(Location)
+    Geometry = SourceRecord.GeometryA
+    if isinstance(Geometry, VertexData):
+        return VertexData(
+            Geometry.Tolerance * ScaleValue,
+            LocationPoint(Location, Geometry.Point),
+        )
+    if isinstance(Geometry, EdgeData):
+        SourceCurve = State.Curves[Geometry.Curve - 1]
+        GeometryLoc = (
+            KIdentityLocation
+            if not Geometry.KLocation
+            else State.Locations[Geometry.KLocation - 1]
+        )
+        CurveLoc = ProductLocation(GeometryLoc, Location)
+        ParameterScale = (
+            LocationScale(CurveLoc) if isinstance(SourceCurve, LineCurve) else 1.0
+        )
+        return EdgeData(
+            Geometry.Tolerance * ScaleValue,
+            PlaceCurve(State, Geometry.Curve, CurveLoc),
+            Geometry.FirstValue * ParameterScale,
+            Geometry.LastValue * ParameterScale,
+        )
+    if isinstance(Geometry, FaceData):
+        GeometryLoc = (
+            KIdentityLocation
+            if not Geometry.KLocation
+            else State.Locations[Geometry.KLocation - 1]
+        )
+        return FaceData(
+            Geometry.Natural,
+            Geometry.Tolerance * ScaleValue,
+            PlaceSurface(State, Geometry.Surface, ProductLocation(GeometryLoc, Location)),
+        )
+    return Geometry
+
+
+# this definition exists because record placement and caching need one owner
+def PlaceRecord(
+    State: PlacementState, RecordIndex: int, Location: tuple[float, ...]
+) -> int:
+    RecordKey = (RecordIndex, Location)
+    CachedIndex = State.RecordCache.get(RecordKey)
+    if CachedIndex is not None:
+        return CachedIndex
+    if len(State.PlacedRecords) >= KMaxShapes:
+        raise DecodeFailure("located BRep topology exceeds shape bounds")
+    SourceRecord = State.Records[RecordIndex]
+    PlacedIndex = len(State.PlacedRecords) + 1
+    State.PlacedRecords[PlacedIndex] = ShapeRecord(
+        SourceRecord.KindValue,
+        SourceRecord.FlagBits,
+        PlaceChildren(State, SourceRecord, Location),
+        PlaceGeometry(State, SourceRecord, Location),
+    )
+    State.RecordCache[RecordKey] = PlacedIndex
+    return PlacedIndex
+
+
 # this definition exists because focused parser behavior needs one stable owner
 def ApplyLocations(
     Curves: tuple[BrepCurve, ...],
@@ -1414,165 +1593,29 @@ def ApplyLocations(
     dict[int, ShapeRecord],
     Reference,
 ]:
-    if (
-        not RootRef.KLocation
-        and not any(
-            ChildRef.KLocation
-            for Record in Records.values()
-            for ChildRef in Record.Children
-        )
-        and not any(
-            isinstance(Record.GeometryA, (EdgeData, FaceData))
-            and Record.GeometryA.KLocation
-            for Record in Records.values()
-        )
-    ):
+    if not HasLocations(Records, RootRef):
         return Curves, Surfaces, dict(Records), RootRef
-
-    PlacedCurves: list[BrepCurve] = []
-    PlacedSurfaces: list[BrepSurface] = []
-    PlacedRecords: dict[int, ShapeRecord] = {}
-    RecordCache: dict[tuple[int, tuple[float, ...]], int] = {}
-    CurveCache: dict[tuple[int, tuple[float, ...]], int] = {}
-    SurfaceCache: dict[tuple[int, tuple[float, ...]], int] = {}
-
-    # this definition exists because focused parser behavior needs one stable owner
-    def PlaceCurve(CurveIndex: int, Location: tuple[float, ...]) -> int:
-        CurveKey = (CurveIndex, Location)
-        CachedIndex = CurveCache.get(CurveKey)
-        if CachedIndex is not None:
-            return CachedIndex
-        BaseCurve = Curves[CurveIndex - 1]
-        PlacedIndex = len(PlacedCurves) + 1
-        if isinstance(BaseCurve, LineCurve):
-            PlacedCurve: BrepCurve = LineCurve(
-                f"{NamePrefix}:curve:{PlacedIndex}",
-                LocationPoint(Location, BaseCurve.origin),
-                ApplyDirection(Location, BaseCurve.direction),
-                provenance=BaseCurve.provenance,
-                attributes=BaseCurve.attributes,
-            )
-        elif isinstance(BaseCurve, CircleCurve):
-            PlacedCurve = CircleCurve(
-                f"{NamePrefix}:curve:{PlacedIndex}",
-                LocationPoint(Location, BaseCurve.center),
-                ApplyDirection(Location, BaseCurve.axis),
-                ApplyDirection(Location, BaseCurve.reference_direction),
-                BaseCurve.radius * LocationScale(Location),
-                provenance=BaseCurve.provenance,
-                attributes=BaseCurve.attributes,
-            )
-        else:
-            raise DecodeFailure("unsupported located BRep curve")
-        PlacedCurves.append(PlacedCurve)
-        CurveCache[CurveKey] = PlacedIndex
-        return PlacedIndex
-
-    # this definition exists because focused parser behavior needs one stable owner
-    def PlaceSurface(SurfaceIndex: int, Location: tuple[float, ...]) -> int:
-        SurfaceKey = (SurfaceIndex, Location)
-        CachedIndex = SurfaceCache.get(SurfaceKey)
-        if CachedIndex is not None:
-            return CachedIndex
-        BaseSurface = Surfaces[SurfaceIndex - 1]
-        PlacedIndex = len(PlacedSurfaces) + 1
-        if isinstance(BaseSurface, PlaneSurface):
-            PlacedSurface: BrepSurface = PlaneSurface(
-                f"{NamePrefix}:surface:{PlacedIndex}",
-                LocationPoint(Location, BaseSurface.origin),
-                ApplyDirection(Location, BaseSurface.normal),
-                ApplyDirection(Location, BaseSurface.reference_direction),
-                provenance=BaseSurface.provenance,
-                attributes=BaseSurface.attributes,
-            )
-        elif isinstance(BaseSurface, CylinderSurface):
-            PlacedSurface = CylinderSurface(
-                f"{NamePrefix}:surface:{PlacedIndex}",
-                LocationPoint(Location, BaseSurface.origin),
-                ApplyDirection(Location, BaseSurface.axis),
-                ApplyDirection(Location, BaseSurface.reference_direction),
-                BaseSurface.radius * LocationScale(Location),
-                provenance=BaseSurface.provenance,
-                attributes=BaseSurface.attributes,
-            )
-        else:
-            raise DecodeFailure("unsupported located BRep surface")
-        PlacedSurfaces.append(PlacedSurface)
-        SurfaceCache[SurfaceKey] = PlacedIndex
-        return PlacedIndex
-
-    # this definition exists because focused parser behavior needs one stable owner
-    def PlaceRecord(RecordIndex: int, Location: tuple[float, ...]) -> int:
-        RecordKey = (RecordIndex, Location)
-        CachedIndex = RecordCache.get(RecordKey)
-        if CachedIndex is not None:
-            return CachedIndex
-        if len(PlacedRecords) >= KMaxShapes:
-            raise DecodeFailure("located BRep topology exceeds shape bounds")
-        SourceRecord = Records[RecordIndex]
-        ChildRefs: list[Reference] = []
-        for ChildRef in SourceRecord.Children:
-            ChildLoc = (
-                KIdentityLocation
-                if not ChildRef.KLocation
-                else Locations[ChildRef.KLocation - 1]
-            )
-            ChildMatrix = ProductLocation(ChildLoc, Location)
-            ChildRecord = PlaceRecord(ChildRef.RecordA, ChildMatrix)
-            ChildRefs.append(Reference(ChildRef.Orientation, ChildRecord))
-        ScaleValue = LocationScale(Location)
-        Geometry = SourceRecord.GeometryA
-        if isinstance(Geometry, VertexData):
-            Geometry = VertexData(
-                Geometry.Tolerance * ScaleValue,
-                LocationPoint(Location, Geometry.Point),
-            )
-        elif isinstance(Geometry, EdgeData):
-            SourceCurve = Curves[Geometry.Curve - 1]
-            GeometryLoc = (
-                KIdentityLocation
-                if not Geometry.KLocation
-                else Locations[Geometry.KLocation - 1]
-            )
-            CurveLoc = ProductLocation(GeometryLoc, Location)
-            ParameterScale = (
-                LocationScale(CurveLoc) if isinstance(SourceCurve, LineCurve) else 1.0
-            )
-            Geometry = EdgeData(
-                Geometry.Tolerance * ScaleValue,
-                PlaceCurve(Geometry.Curve, CurveLoc),
-                Geometry.FirstValue * ParameterScale,
-                Geometry.LastValue * ParameterScale,
-            )
-        elif isinstance(Geometry, FaceData):
-            GeometryLoc = (
-                KIdentityLocation
-                if not Geometry.KLocation
-                else Locations[Geometry.KLocation - 1]
-            )
-            Geometry = FaceData(
-                Geometry.Natural,
-                Geometry.Tolerance * ScaleValue,
-                PlaceSurface(Geometry.Surface, ProductLocation(GeometryLoc, Location)),
-            )
-        PlacedIndex = len(PlacedRecords) + 1
-        PlacedRecords[PlacedIndex] = ShapeRecord(
-            SourceRecord.KindValue,
-            SourceRecord.FlagBits,
-            tuple(ChildRefs),
-            Geometry,
-        )
-        RecordCache[RecordKey] = PlacedIndex
-        return PlacedIndex
-
+    State = PlacementState(
+        Curves,
+        Surfaces,
+        Records,
+        Locations,
+        NamePrefix,
+        [],
+        [],
+        {},
+        {},
+        {},
+        {},
+    )
     RootLoc = (
         KIdentityLocation if not RootRef.KLocation else Locations[RootRef.KLocation - 1]
     )
-    RootIndex = PlaceRecord(RootRef.RecordA, RootLoc)
+    RootIndex = PlaceRecord(State, RootRef.RecordA, RootLoc)
     return (
-        tuple(PlacedCurves),
-        tuple(PlacedSurfaces),
-        PlacedRecords,
+        tuple(State.PlacedCurves),
+        tuple(State.PlacedSurfaces),
+        State.PlacedRecords,
         Reference(RootRef.Orientation, RootIndex),
     )
 

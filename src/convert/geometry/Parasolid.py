@@ -305,7 +305,7 @@ class IndexAllocator:
 
 # encoded index storage gives every topology and attribute family one owner
 @Dataclass(slots=True)
-class EncodeIndexState:
+class EncodeIndices:
     KBodies: dict[str, int]
     KRegions: dict[str, int]
     KShells: dict[str, int]
@@ -335,7 +335,7 @@ class EncodeIndexState:
 
 # ownership storage centralizes body membership and percarrier linked ordering
 @Dataclass(slots=True)
-class EncodeOwnerState:
+class EncodeOwners:
     KFaceShell: dict[str, str]
     KFaceRegion: dict[str, str]
     KFaceBody: dict[str, str]
@@ -372,12 +372,12 @@ class EncodeFinState:
 
 # brep encoding composes allocation ownership topology and focused binary emitters
 def EncodeBrepBody(Model: BrepModel, Topology: BrepTopology, *, PartValue: bool=True, SolidFeatureIds: Mapping[str, int] | None=None) -> tuple[bytes, bool]:
-    Config = MakeEncodeConfig(Model, Topology, SolidFeatureIds)
+    Config = MakeEncConfig(Model, Topology, SolidFeatureIds)
     Allocator = MakeAllocator(Config, PartValue)
     Indices = MakeEncodeIndex(Model, Topology, Config, Allocator)
-    Owners = MakeEncodeOwners(Model, Topology)
+    Owners = MakeEncOwners(Model, Topology)
     Nodes = MakeNodeState(Model, Topology, Config, Indices, Owners)
-    Fins = MakeFinState(Model, Topology, Indices, Owners)
+    FinState = MakeFinState(Model, Topology, Indices, Owners)
     Output = bytearray()
     WriteHeadMut(Output, Model, PartValue, Indices)
     EmitBodiesMut(Output, Model, Topology, PartValue, Config, Indices, Owners, Nodes)
@@ -386,13 +386,13 @@ def EncodeBrepBody(Model: BrepModel, Topology: BrepTopology, *, PartValue: bool=
     EmitSurfacesMut(Output, Model, Config, Indices, Owners, Nodes)
     EmitCurvesMut(Output, Model, Config, Indices, Owners, Nodes)
     EmitPointsMut(Output, Model, Indices, Owners, Nodes)
-    EmitVerticesMut(Output, Model, Indices, Owners, Nodes, Fins)
-    EmitEdgesMut(Output, Model, Topology, Indices, Owners, Nodes, Fins)
-    EmitCoedgesMut(Output, Model, Topology, Indices, Owners, Fins)
-    EmitDummyMut(Output, Config, Topology, Indices, Fins)
-    EmitLoopsMut(Output, Model, Topology, Indices, Nodes, Fins)
-    EmitFacesMut(Output, Model, Topology, Config, Indices, Owners, Nodes, Fins)
-    EmitVendorMut(Output, Model, Config, Indices, Nodes, Fins)
+    EmitVerticesMut(Output, Model, Indices, Owners, Nodes, FinState)
+    EmitEdgesMut(Output, Model, Topology, Indices, Owners, Nodes, FinState)
+    EmitCoedgesMut(Output, Model, Topology, Indices, Owners, FinState)
+    EmitDummyMut(Output, Config, Topology, Indices, FinState)
+    EmitLoopsMut(Output, Model, Topology, Indices, Nodes, FinState)
+    EmitFacesMut(Output, Model, Topology, Config, Indices, Owners, Nodes, FinState)
+    EmitVendorMut(Output, Model, Config, Indices, Nodes, FinState)
     WriteTagMut(Output, 1)
     WritePointerMut(Output, 0)
     Result = OrderTriRecords(bytes(Output)) if Config.KSolidTri and not PartValue else bytes(Output)
@@ -400,7 +400,7 @@ def EncodeBrepBody(Model: BrepModel, Topology: BrepTopology, *, PartValue: bool=
 
 
 # encoder configuration derives deterministic vendor layout modes from model topology
-def MakeEncodeConfig(Model: BrepModel, Topology: BrepTopology, SolidFeatureIds: Mapping[str, int] | None) -> EncodeConfig:
+def MakeEncConfig(Model: BrepModel, Topology: BrepTopology, SolidFeatureIds: Mapping[str, int] | None) -> EncodeConfig:
     FeatureIds = dict(SolidFeatureIds or {})
     AttrBases = {BodyData.id: Position * 100 for Position, BodyData in enumerate(Model.bodies)} if FeatureIds else {}
     SolidTri = bool(FeatureIds) and len(Model.bodies) == 1 and len(Model.regions) == 1 and len(Model.shells) == 1 and len(Model.surfaces) == 1 and len(Model.curves) == 3 and len(Model.vertices) == 3 and len(Model.edges) == 3 and len(Model.coedges) == 3 and len(Model.loops) == 1 and len(Model.faces) == 1 and not Model.regions[0].solid and isinstance(Model.surfaces[0], PlaneSurface) and all((isinstance(Curve, LineCurve) for Curve in Model.curves)) and all((len(Topology.edge_coedges[EdgeData.id]) == 1 for EdgeData in Model.edges))
@@ -439,7 +439,7 @@ def AllocItemsMut(Allocator: IndexAllocator, Values: Iterable[object], Preferred
 
 
 # standard index allocation covers all direct topology and geometry record families
-def BaseIndexData(Model: BrepModel, Config: EncodeConfig, Allocator: IndexAllocator) -> tuple[dict[str, int], ...]:
+def BaseIndexesMut(Model: BrepModel, Config: EncodeConfig, Allocator: IndexAllocator) -> tuple[dict[str, int], ...]:
     Bodies = {BodyData.id: Config.KAttrBases[BodyData.id] + 1 for BodyData in Model.bodies} if Config.KAttrBases else AllocItemsMut(Allocator, Model.bodies)
     Allocator.KUsedIndices.update(Bodies.values())
     Regions = AllocItemsMut(Allocator, Model.regions, (17,) if Config.KSolidSolid else (9,) if Config.KFeatureIds else ())
@@ -498,13 +498,13 @@ def SolidIndexes(Model: BrepModel, Config: EncodeConfig, Allocator: IndexAllocat
 
 
 # complete index construction combines standard exterior and vendor attribute families
-def MakeEncodeIndex(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Allocator: IndexAllocator) -> EncodeIndexState:
-    BaseData = BaseIndexData(Model, Config, Allocator)
+def MakeEncodeIndex(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Allocator: IndexAllocator) -> EncodeIndices:
+    BaseData = BaseIndexesMut(Model, Config, Allocator)
     ExteriorRegions, ExteriorShells, Sheet = ExteriorIndexes(Model, Topology, Config, Allocator)
     SolidData = SolidIndexes(Model, Config, Allocator)
     if max((*Allocator.KReservedIndices, *Allocator.KUsedIndices), default=0) >= 32767:
         raise ParaWriteError('Parasolid V12 writer node space is exhausted')
-    return EncodeIndexState(*BaseData, ExteriorRegions, ExteriorShells, *SolidData, Sheet)
+    return EncodeIndices(*BaseData, ExteriorRegions, ExteriorShells, *SolidData, Sheet)
 
 
 # face ownership mapping links faces shells regions and bodies without duplication
@@ -602,12 +602,12 @@ def MakeBodyGroups(Model: BrepModel, Topology: BrepTopology, FaceBody: Mapping[s
 
 
 # ownership construction composes topology membership geometry links and body groups
-def MakeEncodeOwners(Model: BrepModel, Topology: BrepTopology) -> EncodeOwnerState:
+def MakeEncOwners(Model: BrepModel, Topology: BrepTopology) -> EncodeOwners:
     FaceShell, FaceRegion, FaceBody, ShellRegion, ShellBody = MakeFaceOwners(Model, Topology)
     EdgeBody, VertexBody = MakeEdgeOwners(Model, Topology, FaceBody)
     SurfFaces, CurveEdges = MakeGeomLinks(Model, Topology)
     BodyGroups = MakeBodyGroups(Model, Topology, FaceBody, EdgeBody, VertexBody, SurfFaces, CurveEdges)
-    return EncodeOwnerState(FaceShell, FaceRegion, FaceBody, ShellRegion, ShellBody, EdgeBody, VertexBody, SurfFaces, CurveEdges, *BodyGroups)
+    return EncodeOwners(FaceShell, FaceRegion, FaceBody, ShellRegion, ShellBody, EdgeBody, VertexBody, SurfFaces, CurveEdges, *BodyGroups)
 
 
 # node allocation records one monotonic perbody identifier with vendor range gaps
@@ -621,7 +621,7 @@ def AssignNodeIdMut(Index: int, BodyId: str, Config: EncodeConfig, Nodes: Encode
 
 
 # topology node assignment numbers regions shells and their exterior complements
-def SetTopoNodesMut(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def SetTopoNodesMut(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     for RegionData in Model.regions:
         AssignNodeIdMut(Indices.KRegions[RegionData.id], Topology.region_body[RegionData.id], Config, Nodes)
     for BodyId, Index in Indices.KExteriorRegions.items():
@@ -633,7 +633,7 @@ def SetTopoNodesMut(Model: BrepModel, Topology: BrepTopology, Config: EncodeConf
 
 
 # geometry node assignment numbers carriers vertices edges loops and faces
-def SetGeomNodesMut(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def SetGeomNodesMut(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     for SurfValue in Model.surfaces:
         AssignNodeIdMut(Indices.KSurfaces[SurfValue.id], Owners.KFaceBody[Owners.KSurfFaces[SurfValue.id][0]], Config, Nodes)
     for Curve in Model.curves:
@@ -650,7 +650,7 @@ def SetGeomNodesMut(Model: BrepModel, Topology: BrepTopology, Config: EncodeConf
 
 
 # vendor attribute node assignment numbers solidworks face and body chains
-def SetAttrNodesMut(Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndexState, Nodes: EncodeNodeState) -> None:
+def SetAttrNodesMut(Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndices, Nodes: EncodeNodeState) -> None:
     if not Config.KSolidSolid:
         return
     BodyId = Model.bodies[0].id
@@ -662,7 +662,7 @@ def SetAttrNodesMut(Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndex
 
 
 # node state construction runs topology geometry and vendor numbering phases
-def MakeNodeState(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState) -> EncodeNodeState:
+def MakeNodeState(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndices, Owners: EncodeOwners) -> EncodeNodeState:
     Nodes = EncodeNodeState({}, {BodyData.id: 1 for BodyData in Model.bodies})
     SetTopoNodesMut(Model, Topology, Config, Indices, Owners, Nodes)
     SetGeomNodesMut(Model, Topology, Config, Indices, Owners, Nodes)
@@ -683,7 +683,7 @@ def MakeLoopOrder(Model: BrepModel, Topology: BrepTopology) -> tuple[dict[str, t
 
 
 # edge fin construction assigns opposite fins and their incident vertices
-def AddEdgeFinsMut(EdgeData: BrepEdge, Topology: BrepTopology, Indices: EncodeIndexState, EncodedReversed: Mapping[str, bool], VertexFins: dict[str, list[int]], FinVertex: dict[int, str], FinOther: dict[int, int]) -> None:
+def AddEdgeFinsMut(EdgeData: BrepEdge, Topology: BrepTopology, Indices: EncodeIndices, EncodedReversed: Mapping[str, bool], VertexFins: dict[str, list[int]], FinVertex: dict[int, str], FinOther: dict[int, int]) -> None:
     UsesValue = Topology.edge_coedges[EdgeData.id]
     if len(UsesValue) == 1:
         RealIndex, DummyIndex = Indices.KCoedges[UsesValue[0]], Indices.KDummyFins[EdgeData.id]
@@ -704,7 +704,7 @@ def AddEdgeFinsMut(EdgeData: BrepEdge, Topology: BrepTopology, Indices: EncodeIn
 
 
 # requested fin ordering is accepted only when it exactly covers the vertex ring
-def SetFinOrderMut(Model: BrepModel, Indices: EncodeIndexState, VertexFins: dict[str, list[int]]) -> None:
+def SetFinOrderMut(Model: BrepModel, Indices: EncodeIndices, VertexFins: dict[str, list[int]]) -> None:
     for Vertex in Model.vertices:
         Requested = Vertex.attributes.get('parasolid.vertex_fins')
         if not isinstance(Requested, (tuple, list)):
@@ -716,7 +716,7 @@ def SetFinOrderMut(Model: BrepModel, Indices: EncodeIndexState, VertexFins: dict
 
 
 # fin state construction combines orientation adjacency ordering and body face anchors
-def MakeFinState(Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState) -> EncodeFinState:
+def MakeFinState(Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndices, Owners: EncodeOwners) -> EncodeFinState:
     EncodedLoops, EncodedReversed = MakeLoopOrder(Model, Topology)
     VertexFins = {Vertex.id: [] for Vertex in Model.vertices}
     FinVertex, FinOther = {}, {}
@@ -730,7 +730,7 @@ def MakeFinState(Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexS
 
 
 # partition header emission writes the optional root node and fixed framing values
-def WriteHeadMut(Output: bytearray, Model: BrepModel, PartValue: bool, Indices: EncodeIndexState) -> None:
+def WriteHeadMut(Output: bytearray, Model: BrepModel, PartValue: bool, Indices: EncodeIndices) -> None:
     if not PartValue:
         return
     VTwelveNode(Output, 101, 1)
@@ -743,13 +743,13 @@ def WriteHeadMut(Output: bytearray, Model: BrepModel, PartValue: bool, Indices: 
 
 
 # body emission serializes every body root in deterministic model order
-def EmitBodiesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, PartValue: bool, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def EmitBodiesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, PartValue: bool, Config: EncodeConfig, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     for Position, BodyData in enumerate(Model.bodies):
         EmitBodyMut(Output, Position, BodyData, Model, Topology, PartValue, Config, Indices, Owners, Nodes)
 
 
 # body record emission writes node links geometry heads and vendor attribute prefixes
-def EmitBodyMut(Output: bytearray, Position: int, BodyData: BrepBody, Model: BrepModel, Topology: BrepTopology, PartValue: bool, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def EmitBodyMut(Output: bytearray, Position: int, BodyData: BrepBody, Model: BrepModel, Topology: BrepTopology, PartValue: bool, Config: EncodeConfig, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     BodyIndex = Indices.KBodies[BodyData.id]
     RegionValues = [Indices.KRegions[RegionId] for RegionId in BodyData.region_ids]
     Solid = all((Topology.regions[RegionId].solid for RegionId in BodyData.region_ids))
@@ -778,8 +778,8 @@ def EmitBodyMut(Output: bytearray, Position: int, BodyData: BrepBody, Model: Bre
         WritePrefixMut(Output, AttrBase, BodyIndex, 11 if Config.KSolidSolid else 7)
 
 
-# region emission writes exterior complements before each body's native regions
-def EmitRegionsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+# region emission writes exterior complements before each body native regions
+def EmitRegionsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     for BodyData in Model.bodies:
         RegionValues = list(BodyData.region_ids)
         Solid = all((Topology.regions[RegionId].solid for RegionId in BodyData.region_ids))
@@ -790,7 +790,7 @@ def EmitRegionsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, 
 
 
 # exterior region emission connects solid complement shells to their native body
-def EmitOuterMut(Output: bytearray, BodyId: str, RegionValues: Sequence[str], Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def EmitOuterMut(Output: bytearray, BodyId: str, RegionValues: Sequence[str], Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     ExteriorIndex = Indices.KExteriorRegions[BodyId]
     VTwelveNode(Output, 19, ExteriorIndex)
     WriteSignedMut(Output, Nodes.KNodeIds[ExteriorIndex])
@@ -802,7 +802,7 @@ def EmitOuterMut(Output: bytearray, BodyId: str, RegionValues: Sequence[str], In
 
 
 # native region emission writes body sibling and shell relationships
-def EmitRegionMut(Output: bytearray, Position: int, RegionId: str, RegionValues: Sequence[str], BodyId: str, Solid: bool, Topology: BrepTopology, Indices: EncodeIndexState, Nodes: EncodeNodeState) -> None:
+def EmitRegionMut(Output: bytearray, Position: int, RegionId: str, RegionValues: Sequence[str], BodyId: str, Solid: bool, Topology: BrepTopology, Indices: EncodeIndices, Nodes: EncodeNodeState) -> None:
     RegionData = Topology.regions[RegionId]
     RegionIndex = Indices.KRegions[RegionId]
     ShellIds = [Topology.shell_uses[ShellUseId].shell_id for ShellUseId in RegionData.shell_use_ids]
@@ -816,7 +816,7 @@ def EmitRegionMut(Output: bytearray, Position: int, RegionId: str, RegionValues:
 
 
 # shell emission writes native shells followed by optional solid complement shells
-def EmitShellsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def EmitShellsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     for ShellData in Model.shells:
         FaceIds = EmitShellMut(Output, ShellData, Topology, Indices, Owners, Nodes)
         if ShellData.id in Indices.KExteriorShells:
@@ -824,7 +824,7 @@ def EmitShellsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, I
 
 
 # native shell emission writes region sibling and ordered face relationships
-def EmitShellMut(Output: bytearray, ShellData: BrepShell, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> list[str]:
+def EmitShellMut(Output: bytearray, ShellData: BrepShell, Topology: BrepTopology, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> list[str]:
     ShellIndex = Indices.KShells[ShellData.id]
     RegionId = Owners.KShellRegion[ShellData.id]
     RegionData = Topology.regions[RegionId]
@@ -841,7 +841,7 @@ def EmitShellMut(Output: bytearray, ShellData: BrepShell, Topology: BrepTopology
 
 
 # exterior shell emission writes complement sibling region and face relationships
-def EmitOuterShMut(Output: bytearray, ShellId: str, FaceIds: Sequence[str], Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def EmitOuterShMut(Output: bytearray, ShellId: str, FaceIds: Sequence[str], Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     BodyId = Owners.KShellBody[ShellId]
     ExteriorIndex = Indices.KExteriorShells[ShellId]
     ExteriorIds = [ValueData for ValueData, Owner in Owners.KShellBody.items() if Owner == BodyId and ValueData in Indices.KExteriorShells]
@@ -854,7 +854,7 @@ def EmitOuterShMut(Output: bytearray, ShellId: str, FaceIds: Sequence[str], Indi
 
 
 # surface emission serializes analytic carriers in their perbody linked order
-def EmitSurfacesMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def EmitSurfacesMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     for SurfValue in Model.surfaces:
         if isinstance(SurfValue, NurbsSurface):
             raise ParaWriteError(f'Parasolid V12 writer does not support NURBS surface {SurfValue.id}')
@@ -867,7 +867,7 @@ def EmitSurfacesMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, I
 
 
 # curve emission serializes analytic carriers in their perbody linked order
-def EmitCurvesMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def EmitCurvesMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     for Curve in Model.curves:
         if isinstance(Curve, NurbsCurve):
             raise ParaWriteError(f'Parasolid V12 writer does not support NURBS curve {Curve.id}')
@@ -880,7 +880,7 @@ def EmitCurvesMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Ind
 
 
 # point emission writes coordinate records and their perbody sibling links
-def EmitPointsMut(Output: bytearray, Model: BrepModel, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+def EmitPointsMut(Output: bytearray, Model: BrepModel, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState) -> None:
     for Vertex in Model.vertices:
         BodyId = Owners.KVertexBody[Vertex.id]
         Chain = Owners.KBodyPoints[BodyId]
@@ -894,12 +894,12 @@ def EmitPointsMut(Output: bytearray, Model: BrepModel, Indices: EncodeIndexState
 
 
 # vertex emission writes fin heads tolerance body and perbody sibling links
-def EmitVerticesMut(Output: bytearray, Model: BrepModel, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
+def EmitVerticesMut(Output: bytearray, Model: BrepModel, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState, FinState: EncodeFinState) -> None:
     for Vertex in Model.vertices:
         BodyId = Owners.KVertexBody[Vertex.id]
         Chain = Owners.KBodyVertices[BodyId]
         Position = Chain.index(Vertex.id)
-        FinsValue = Fins.KVertexFins[Vertex.id]
+        FinsValue = FinState.KVertexFins[Vertex.id]
         VTwelveNode(Output, 18, Indices.KVertices[Vertex.id])
         WriteSignedMut(Output, Nodes.KNodeIds[Indices.KVertices[Vertex.id]])
         Values = (0, FinsValue[0] if FinsValue else 0, Indices.KVertices[Chain[Position - 1]] if Position else 0, Indices.KVertices[Chain[Position + 1]] if Position + 1 < len(Chain) else 0, Indices.KPoints[Vertex.id])
@@ -910,7 +910,7 @@ def EmitVerticesMut(Output: bytearray, Model: BrepModel, Indices: EncodeIndexSta
 
 
 # edge emission writes tolerance fin carrier and both linked ordering dimensions
-def EmitEdgesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
+def EmitEdgesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState, FinState: EncodeFinState) -> None:
     for EdgeData in Model.edges:
         BodyId = Owners.KEdgeBody[EdgeData.id]
         Chain = Owners.KBodyEdges[BodyId]
@@ -930,42 +930,42 @@ def EmitEdgesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, In
 
 
 # coedge emission writes oriented loop neighbors opposite fins and vertex rings
-def EmitCoedgesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Fins: EncodeFinState) -> None:
+def EmitCoedgesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndices, Owners: EncodeOwners, FinState: EncodeFinState) -> None:
     for Coedge in Model.coedges:
         LoopData = Topology.loops[Topology.coedge_loop[Coedge.id]]
         FaceData = Topology.faces[Topology.loop_face[LoopData.id]]
         RegionData = Topology.regions[Owners.KFaceRegion[FaceData.id]]
-        LoopCoedges = Fins.KEncodedLoopCoedges[LoopData.id]
+        LoopCoedges = FinState.KEncodedLoopCoedges[LoopData.id]
         Position = LoopCoedges.index(Coedge.id)
         PreviousId, NextId = LoopCoedges[Position - 1], LoopCoedges[(Position + 1) % len(LoopCoedges)]
         FinIndexData = Indices.KCoedges[Coedge.id]
         PreviousFin = Indices.KCoedges[PreviousId] if RegionData.solid else Indices.KCoedges[NextId]
         NextFin = Indices.KCoedges[NextId] if RegionData.solid else Indices.KCoedges[PreviousId]
-        WriteFinMut(Output, FinIndexData, 0, Indices.KLoops[LoopData.id], PreviousFin, NextFin, Indices.KVertices[Fins.KFinVertex[FinIndexData]], Fins.KFinOther[FinIndexData], Indices.KEdges[Coedge.edge_id], 0, NextFinAtVertex(FinIndexData, Fins.KVertexFins), not Fins.KEncodedCoedgeReversed[Coedge.id])
+        WriteFinMut(Output, FinIndexData, 0, Indices.KLoops[LoopData.id], PreviousFin, NextFin, Indices.KVertices[FinState.KFinVertex[FinIndexData]], FinState.KFinOther[FinIndexData], Indices.KEdges[Coedge.edge_id], 0, NextFinAtVertex(FinIndexData, FinState.KVertexFins), not FinState.KEncodedCoedgeReversed[Coedge.id])
 
 
 # dummy fin emission closes sheet edges that have only one real coedge
-def EmitDummyMut(Output: bytearray, Config: EncodeConfig, Topology: BrepTopology, Indices: EncodeIndexState, Fins: EncodeFinState) -> None:
+def EmitDummyMut(Output: bytearray, Config: EncodeConfig, Topology: BrepTopology, Indices: EncodeIndices, FinState: EncodeFinState) -> None:
     for EdgeData in Config.KDummyEdges:
         FinIndexData = Indices.KDummyFins[EdgeData.id]
         RealValue = Topology.coedges[Topology.edge_coedges[EdgeData.id][0]]
-        WriteFinMut(Output, FinIndexData, 0, 0, 0, 0, Indices.KVertices[Fins.KFinVertex[FinIndexData]], Fins.KFinOther[FinIndexData], Indices.KEdges[EdgeData.id], 0, NextFinAtVertex(FinIndexData, Fins.KVertexFins), Fins.KEncodedCoedgeReversed[RealValue.id])
+        WriteFinMut(Output, FinIndexData, 0, 0, 0, 0, Indices.KVertices[FinState.KFinVertex[FinIndexData]], FinState.KFinOther[FinIndexData], Indices.KEdges[EdgeData.id], 0, NextFinAtVertex(FinIndexData, FinState.KVertexFins), FinState.KEncodedCoedgeReversed[RealValue.id])
 
 
 # loop emission writes first fin face and sibling loop relationships
-def EmitLoopsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
+def EmitLoopsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndices, Nodes: EncodeNodeState, FinState: EncodeFinState) -> None:
     for LoopData in Model.loops:
         FaceData = Topology.faces[Topology.loop_face[LoopData.id]]
         Position = FaceData.loop_ids.index(LoopData.id)
         NextLoopId = FaceData.loop_ids[Position + 1] if Position + 1 < len(FaceData.loop_ids) else ''
         VTwelveNode(Output, 15, Indices.KLoops[LoopData.id])
         WriteSignedMut(Output, Nodes.KNodeIds[Indices.KLoops[LoopData.id]])
-        for ValueData in (0, Indices.KCoedges[Fins.KEncodedLoopCoedges[LoopData.id][0]], Indices.KFaces[FaceData.id], Indices.KLoops.get(NextLoopId, 0)):
+        for ValueData in (0, Indices.KCoedges[FinState.KEncodedLoopCoedges[LoopData.id][0]], Indices.KFaces[FaceData.id], Indices.KLoops.get(NextLoopId, 0)):
             WritePointerMut(Output, ValueData)
 
 
 # face chain discovery gathers every linked ordering position and ownership record
-def FaceChainData(FaceData: BrepFace, Topology: BrepTopology, Config: EncodeConfig, Owners: EncodeOwnerState, Fins: EncodeFinState) -> tuple[object, ...]:
+def FaceChainData(FaceData: BrepFace, Topology: BrepTopology, Config: EncodeConfig, Owners: EncodeOwners, FinState: EncodeFinState) -> tuple[object, ...]:
     ShellData = Topology.shells[Owners.KFaceShell[FaceData.id]]
     FaceIds = OrderIds([Topology.face_uses[FaceUseId].face_id for FaceUseId in ShellData.face_use_ids], Topology.faces, 'parasolid.face_order')
     Position = FaceIds.index(FaceData.id)
@@ -975,13 +975,13 @@ def FaceChainData(FaceData: BrepFace, Topology: BrepTopology, Config: EncodeConf
     SurfPosition = SurfChain.index(FaceData.id)
     RegionData = Topology.regions[Owners.KFaceRegion[FaceData.id]]
     AttrBase = Config.KAttrBases.get(Owners.KFaceBody[FaceData.id])
-    FirstFaceId = Fins.KFirstFaceByBody.get(Owners.KFaceBody[FaceData.id])
+    FirstFaceId = FinState.KFirstFaceByBody.get(Owners.KFaceBody[FaceData.id])
     return ShellData, FaceIds, Position, FrontFaceIds, FrontPosition, SurfChain, SurfPosition, RegionData, AttrBase, FirstFaceId
 
 
 # face emission serializes tolerance loops carriers and three linked ordering dimensions
-def EmitFaceMut(Output: bytearray, FaceData: BrepFace, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
-    ShellData, FaceIds, Position, FrontFaceIds, FrontPosition, SurfChain, SurfPosition, RegionData, AttrBase, FirstFaceId = FaceChainData(FaceData, Topology, Config, Owners, Fins)
+def EmitFaceMut(Output: bytearray, FaceData: BrepFace, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState, FinState: EncodeFinState) -> None:
+    ShellData, FaceIds, Position, FrontFaceIds, FrontPosition, SurfChain, SurfPosition, RegionData, AttrBase, FirstFaceId = FaceChainData(FaceData, Topology, Config, Owners, FinState)
     VTwelveNode(Output, 14, Indices.KFaces[FaceData.id])
     WriteSignedMut(Output, Nodes.KNodeIds[Indices.KFaces[FaceData.id]])
     FaceAttr = Indices.KSolidFaceAttrs[FaceData.id][0] if FaceData.id in Indices.KSolidFaceAttrs else AttrBase + 32 if AttrBase is not None and FaceData.id == FirstFaceId else 0
@@ -997,16 +997,16 @@ def EmitFaceMut(Output: bytearray, FaceData: BrepFace, Topology: BrepTopology, C
 
 
 # face collection emission delegates each record after shared state construction
-def EmitFacesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
+def EmitFacesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndices, Owners: EncodeOwners, Nodes: EncodeNodeState, FinState: EncodeFinState) -> None:
     for FaceData in Model.faces:
-        EmitFaceMut(Output, FaceData, Topology, Config, Indices, Owners, Nodes, Fins)
+        EmitFaceMut(Output, FaceData, Topology, Config, Indices, Owners, Nodes, FinState)
 
 
 # vendor attribute emission writes solidworks body or sheet compatibility records
-def EmitVendorMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndexState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
+def EmitVendorMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndices, Nodes: EncodeNodeState, FinState: EncodeFinState) -> None:
     for BodyData in Model.bodies:
         AttrBase = Config.KAttrBases.get(BodyData.id)
-        FirstFaceId = Fins.KFirstFaceByBody.get(BodyData.id)
+        FirstFaceId = FinState.KFirstFaceByBody.get(BodyData.id)
         if AttrBase is None or FirstFaceId is None:
             continue
         if Config.KSolidSolid:
