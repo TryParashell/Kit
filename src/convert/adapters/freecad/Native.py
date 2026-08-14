@@ -309,7 +309,9 @@ def ParseProps(
     for NodeValue in Properties:
         PropName = NodeValue.get("name", "")
         if not PropName or PropName in PropNodes:
-            raise NativeFreeCad(f"FreeCAD object {NameValue!r} has malformed properties")
+            raise NativeFreeCad(
+                f"FreeCAD object {NameValue!r} has malformed properties"
+            )
         PropNodes[PropName] = NodeValue
     return (Transient, PropNodes)
 
@@ -371,10 +373,13 @@ def ReadEntries(
     Referenced: set[str],
 ) -> dict[str, bytes]:
     try:
-        return {
-            NameValue: Archive.read(Members[NameValue]) for NameValue in Referenced
-        }
-    except (OSError, RuntimeError, NotImplementedError, Zipfile.BadZipFile) as ErrorInfo:
+        return {NameValue: Archive.read(Members[NameValue]) for NameValue in Referenced}
+    except (
+        OSError,
+        RuntimeError,
+        NotImplementedError,
+        Zipfile.BadZipFile,
+    ) as ErrorInfo:
         raise NativeFreeCad(
             "FCStd archive contains unreadable referenced data"
         ) from ErrorInfo
@@ -912,9 +917,17 @@ def SplineAction(
         SplineGeom(
             Points,
             Degree,
-            knots=tuple(Number(ItemValue.get("Value")) for ItemValue in Value.findall("./Knot")),
-            multiplicities=tuple(Integer(ItemValue.get("Mult"), 1) for ItemValue in Value.findall("./Knot")),
-            weights=tuple(Number(ItemValue.get("Weight"), 1.0) for ItemValue in Value.findall("./Pole")),
+            knots=tuple(
+                Number(ItemValue.get("Value")) for ItemValue in Value.findall("./Knot")
+            ),
+            multiplicities=tuple(
+                Integer(ItemValue.get("Mult"), 1)
+                for ItemValue in Value.findall("./Knot")
+            ),
+            weights=tuple(
+                Number(ItemValue.get("Weight"), 1.0)
+                for ItemValue in Value.findall("./Pole")
+            ),
             periodic=Value.get("IsPeriodic", Value.get("Periodic", "false")).casefold()
             in XmlTrueValues,
         ),
@@ -1060,7 +1073,9 @@ def ClusterRoots(Endpoints: tuple[VectorTwo, ...]) -> tuple[int, ...] | None:
 
 
 # this definition builds the two edge incidence contract for a closed line graph
-def BuildIncident(Roots: tuple[int, ...], EdgeCount: int) -> dict[int, list[int]] | None:
+def BuildIncident(
+    Roots: tuple[int, ...], EdgeCount: int
+) -> dict[int, list[int]] | None:
     Incident: dict[int, list[int]] = {}
     for EdgeIndex in range(EdgeCount):
         Start = Roots[EdgeIndex * 2]
@@ -1167,7 +1182,9 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
     if not Candidates:
         return ()
     Closed = tuple(
-        Entity for Entity in Candidates if isinstance(Entity.geometry, (CircleGeom, EllipseGeom))
+        Entity
+        for Entity in Candidates
+        if isinstance(Entity.geometry, (CircleGeom, EllipseGeom))
     )
     Lines = tuple(
         (Index, Entity)
@@ -1178,7 +1195,8 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
         return ()
     if Closed:
         Invalid = Lines or any(
-            isinstance(Entity.geometry, CircleGeom) and Entity.geometry.radius <= 1e-09
+            isinstance(Entity.geometry, CircleGeom)
+            and Entity.geometry.radius <= 1e-09
             or isinstance(Entity.geometry, EllipseGeom)
             and min(Entity.geometry.major_radius, Entity.geometry.minor_radius) <= 1e-09
             for Entity in Closed
@@ -1487,7 +1505,9 @@ def RuleElemSlots(NodeValue: ET.Element) -> tuple[tuple[int, int], ...]:
 # this definition collects support plane objects transforms and principal frames
 def OriginData(
     Objects: tuple[_NativeObject, ...], SupportTargets: set[str]
-) -> tuple[dict[str, NativeObject], dict[str, Transform], dict[str, tuple[int, Transform]]]:
+) -> tuple[
+    dict[str, NativeObject], dict[str, Transform], dict[str, tuple[int, Transform]]
+]:
     PlaneObjects = {
         ObjValue.name: ObjValue
         for ObjValue in Objects
@@ -1709,7 +1729,11 @@ def RuleParamMut(
             ParamId,
             f"{String(ObjValue, 'Label', ObjValue.name)}.{NameValue}",
             ParamValue(Number(NodeValue.get("Value")), ValueKind, UnitValue),
-            expression=Expression(ExpressionSource, language="freecad") if ExpressionSource else None,
+            expression=(
+                Expression(ExpressionSource, language="freecad")
+                if ExpressionSource
+                else None
+            ),
             owner_id=SketchId,
             attributes={
                 "freecad_path": f"Constraints[{Index}]",
@@ -1737,7 +1761,14 @@ def SketchRulesMut(
         NameValue = NodeValue.get("Name", "") or str(Index)
         References, RefSlots = RuleRefs(NodeValue, Entities)
         ParamId = RuleParamMut(
-            ObjValue, SketchId, Index, NameValue, NodeValue, Expressions, Parameters, Consumed
+            ObjValue,
+            SketchId,
+            Index,
+            NameValue,
+            NodeValue,
+            Expressions,
+            Parameters,
+            Consumed,
         )
         if ParamId is not None:
             ParamIds.append(ParamId)
@@ -2359,14 +2390,14 @@ def BinaryMesh(
         if Magic != 2695938256 or Version != 65536 or Expected > len(DataValue):
             return ((), ())
         Vertices = tuple(
-            VectorThree(*Struct.unpack_from(f"{Endian}fff", DataValue, 272 + Index * 12))
+            VectorThree(
+                *Struct.unpack_from(f"{Endian}fff", DataValue, 272 + Index * 12)
+            )
             for Index in range(VertexCount)
         )
         TriangleOffset = 272 + VertexCount * 12
         Triangles = tuple(
-            Struct.unpack_from(
-                f"{Endian}III", DataValue, TriangleOffset + Index * 24
-            )
+            Struct.unpack_from(f"{Endian}III", DataValue, TriangleOffset + Index * 24)
             for Index in range(TriangleCount)
         )
         return (Vertices, Triangles)
@@ -2849,7 +2880,10 @@ def LoadOuterDoc(Choice: FilePath, State: OuterState, Depth: int) -> CadDoc:
         try:
             Manifest = ExtractManifestFromFcstd(ChildData)
         except ValueError as ErrorInfo:
-            if str(ErrorInfo) != "FCStd archive has no embedded Kit interchange document":
+            if (
+                str(ErrorInfo)
+                != "FCStd archive has no embedded Kit interchange document"
+            ):
                 raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
             return ReadNativeFcstd(
                 ChildData, str(Choice), StateValue=State, OuterDepth=Depth + 1
@@ -2917,7 +2951,9 @@ def AssemblyLinks(
 # this definition collects joint ordering and grounded target context
 def JointContext(
     Native: NativeArchive, Objects: Mapping[str, NativeObject]
-) -> tuple[NativeObject | None, tuple[str, ...], list[NativeObject], dict[str, NativeObject]]:
+) -> tuple[
+    NativeObject | None, tuple[str, ...], list[NativeObject], dict[str, NativeObject]
+]:
     JointGroup = FindJointGroup(Native.objects, Objects)
     JointNames = LinkList(JointGroup, "Group") if JointGroup is not None else ()
     if not JointNames:
@@ -2955,20 +2991,25 @@ def MakeDefinition(
     TargetPayloads = tuple(
         Payload
         for Payload in BrepPayloads
-        if Payload.id in PayloadIds and Payload.attributes.get("freecad_property") == "Shape"
+        if Payload.id in PayloadIds
+        and Payload.attributes.get("freecad_property") == "Shape"
     )
     if Outer is not None:
         Component = Outer[1]
         DocId = f"freecad:component-document:{Digest}"
         BodyIds = tuple(BodyValue.id for BodyValue in Component.bodies)
     else:
-        DocId, Component, BodyIds = EmbeddedDoc(Target, TargetObj, Identity, TargetPayloads)
+        DocId, Component, BodyIds = EmbeddedDoc(
+            Target, TargetObj, Identity, TargetPayloads
+        )
     Definition = ComponentDefinition(
         DefinitionId,
         String(TargetObj, "Label", Target) if TargetObj is not None else Target,
-        ComponentKind.ASSEMBLY
-        if IsAsmLinkObject(LinkObj) or Component.assembly is not None
-        else ComponentKind.PART,
+        (
+            ComponentKind.ASSEMBLY
+            if IsAsmLinkObject(LinkObj) or Component.assembly is not None
+            else ComponentKind.PART
+        ),
         document_id=DocId,
         body_ids=BodyIds,
         source_path=SourceFile,
@@ -3008,7 +3049,9 @@ def MakeInstance(
         attributes={
             "freecad": NativeObjectA(LinkObj),
             "linked_object": Linked,
-            "link_placement": list(PlacementMatrix(PlacementElem(LinkObj, "LinkPlacement"))),
+            "link_placement": list(
+                PlacementMatrix(PlacementElem(LinkObj, "LinkPlacement"))
+            ),
             "grounded_joint": NativeObjectA(Grounded) if Grounded is not None else {},
         },
     )
@@ -3023,7 +3066,12 @@ def BuildComponents(
     BrepPayloads: tuple[BrepPayload, ...],
     OuterDocuments: Mapping[str, tuple[str, CadDoc]],
     GroundedByTarget: Mapping[str, NativeObject],
-) -> tuple[list[ComponentDefinition], list[ComponentDoc], list[ComponentInstance], dict[str, str]]:
+) -> tuple[
+    list[ComponentDefinition],
+    list[ComponentDoc],
+    list[ComponentInstance],
+    dict[str, str],
+]:
     RootDefinitionId = f"freecad:definition:{RootValue.name}"
     Definitions = [
         ComponentDefinition(
@@ -3108,7 +3156,11 @@ def JointRefsMut(
                 MateEntity(
                     EntityId,
                     RootDefinitionId,
-                    (InstanceIds[ComponentName],) if ComponentName in InstanceIds else (),
+                    (
+                        (InstanceIds[ComponentName],)
+                        if ComponentName in InstanceIds
+                        else ()
+                    ),
                     MateEntityKindA(SourceEntityId),
                     source_entity_id=SourceEntityId,
                     frame=Frame,
