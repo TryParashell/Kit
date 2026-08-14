@@ -22,8 +22,13 @@ def SortOwnerItem(OwnerItem: tuple[object, str]) -> tuple[str, str]:
     return SortOwnerKey(OwnerItem[0])
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-def BuildMethods(Programs: tuple[ProgramData, ...]) -> tuple[dict[str, tuple[tuple[object, str], ...]], dict[str, tuple[MethodData, ...]]]:
+# owner collection stays independent so collision rules remain reusable and reviewable
+def CollectCatalogs(
+    Programs: tuple[ProgramData, ...],
+) -> tuple[
+    dict[str, dict[object, str]],
+    dict[str, dict[str, dict[str, list[tuple[int, int, object, str, AnyInfo]]]]],
+]:
     CatalogMaps: dict[str, dict[object, str]] = {}
     GroupBases: dict[str, set[str]] = {}
     VariantMaps: dict[str, dict[str, dict[str, list[tuple[int, int, object, str, AnyInfo]]]]] = {}
@@ -46,7 +51,16 @@ def BuildMethods(Programs: tuple[ProgramData, ...]) -> tuple[dict[str, tuple[tup
                 StreamMap = GroupStreams.setdefault(GroupPath, {})
                 StreamMap.setdefault(StreamName, []).append((StartPos, FieldWidth, OwnerKey, KindName, DefaultValue))
         VariantMaps[ProgramItem.VariantPath] = GroupStreams
-    Catalogs = {GroupPath: tuple(sorted(OwnerMap.items(), key=SortOwnerItem)) for GroupPath, OwnerMap in sorted(CatalogMaps.items())}
+    return CatalogMaps, VariantMaps
+
+
+# variant construction stays separate so catalog ordering cannot drift during method assembly
+def BuildVariants(
+    Catalogs: dict[str, tuple[tuple[object, str], ...]],
+    VariantMaps: dict[
+        str, dict[str, dict[str, list[tuple[int, int, object, str, AnyInfo]]]]
+    ],
+) -> dict[str, tuple[MethodData, ...]]:
     VariantMethods: dict[str, tuple[MethodData, ...]] = {}
     for VariantPath, GroupStreams in sorted(VariantMaps.items()):
         MethodItems: list[MethodData] = []
@@ -54,4 +68,11 @@ def BuildMethods(Programs: tuple[ProgramData, ...]) -> tuple[dict[str, tuple[tup
             StreamOps = tuple(((StreamName, tuple(Operations)) for StreamName, Operations in sorted(StreamMap.items())))
             MethodItems.append(MethodData(GroupPath=GroupPath, OwnerSites=Catalogs[GroupPath], StreamOps=StreamOps))
         VariantMethods[VariantPath] = tuple(MethodItems)
-    return (Catalogs, VariantMethods)
+    return VariantMethods
+
+
+# public assembly remains small so collection and variant construction evolve independently
+def BuildMethods(Programs: tuple[ProgramData, ...]) -> tuple[dict[str, tuple[tuple[object, str], ...]], dict[str, tuple[MethodData, ...]]]:
+    CatalogMaps, VariantMaps = CollectCatalogs(Programs)
+    Catalogs = {GroupPath: tuple(sorted(OwnerMap.items(), key=SortOwnerItem)) for GroupPath, OwnerMap in sorted(CatalogMaps.items())}
+    return (Catalogs, BuildVariants(Catalogs, VariantMaps))

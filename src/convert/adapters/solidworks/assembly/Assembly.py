@@ -738,60 +738,111 @@ def NativeMatrix(Matrix: Matrix4) -> tuple[float, ...]:
 def YesText(Value: bool) -> str:
     return 'YES' if Value else 'NO'
 
-# this definition exists because focused behavior needs one stable owner
-def EncodeMateA(AsmValue: AssemblyData, OrderedDefinitions: Sequence[ComponentDefinition], Definitions: Mapping[str, ComponentDefinition], DefinitionIds: Mapping[str, int]) -> NativeMateD:
-    if not AsmValue.mates and (not AsmValue.mate_entities) and (not AsmValue.mate_groups):
-        return NativeMateD(MappingProxyType({}), True, (), (), MappingProxyType({}))
+# mate encoding state keeps lane failures and successful records synchronized across phases
+@Dataclass(slots=True)
+class MateEncodeState:
+    Entities: Mapping[str, MateEntity]
+    Losses: dict[str, tuple[str, ...]]
+    Rejections: dict[str, tuple[str, ...]]
+    Streams: dict[str, bytes]
+    Encoded: list[str]
+    Unsupported: list[str]
+
+
+# orphan detection belongs at state creation so every lane observes the same loss inventory
+def BuildMateState(AsmValue: AssemblyData) -> MateEncodeState:
     Entities = {Entity.id: Entity for Entity in AsmValue.mate_entities}
     Losses: dict[str, tuple[str, ...]] = {}
-    Rejections: dict[str, tuple[str, ...]] = {}
     Referenced = {EntityId for MateValue in AsmValue.mates for EntityId in MateValue.entity_ids}
     for EntityId in sorted(set(Entities) - Referenced):
         Losses[EntityId] = (KMateLossOrphanEntity,)
-    Lanes = MateStreamLanes(AsmValue, OrderedDefinitions, Definitions)
-    Streams: dict[str, bytes] = {}
-    Encoded: list[str] = []
-    Unsupported: list[str] = []
-    for OwnerId, LaneValue in Lanes.items():
-        Records: list[bytes] = []
-        Layout: list[tuple[str, MateRule | MateGroup]] = []
-        for ItemValue in MateOwnerPlaMut(AsmValue, OwnerId, Losses):
-            if isinstance(ItemValue, MateGroup):
-                PairValue = EncodeGroup(ItemValue)
-                if PairValue is None:
-                    Losses[ItemValue.id] = WithReason(Losses.get(ItemValue.id, ()), KMateLossGroupMembership)
-                    continue
-                Records.extend(PairValue)
-                Layout.extend((('group_start', ItemValue), ('group_end', ItemValue)))
-                continue
-            Record, Reasons = EncodeMate(ItemValue, Entities, AsmValue, Definitions)
-            if Record is None:
-                Unsupported.append(ItemValue.id)
-                Rejections[ItemValue.id] = Reasons
-                continue
-            Records.append(Record)
-            Layout.append(('mate', ItemValue))
-            if Reasons:
-                Losses[ItemValue.id] = MergedReasons(Losses.get(ItemValue.id, ()), Reasons)
-        Planned = tuple((ItemValue.id for RoleValue, ItemValue in Layout if RoleValue == 'mate'))
-        if not Planned or len(Records) > 65535:
-            Unsupported.extend(Planned)
-            for MateId in Planned:
-                Rejections[MateId] = (KMateLossLaneCapacity,)
-            continue
-        StreamName = f'Contents/Config-{LaneValue}-MatesList'
-        NativeId = (DefinitionIds[OwnerId] | KMateListNativeIdFlag) & 4294967295
-        Stream = Struct.pack('<IH', NativeId, len(Records)) + b''.join(Records)
-        if not IsVerifyMateMut(Stream, StreamName, DefinitionIds[OwnerId], Layout, Entities, AsmValue, Definitions, Losses):
-            Unsupported.extend(Planned)
-            for MateId in Planned:
-                Rejections[MateId] = (KMateLossRecord,)
-            continue
-        Streams[StreamName] = Stream
-        Encoded.extend(Planned)
-    Blocking = any((Reason in KMateBlockingLossReasons for Reasons in Losses.values() for Reason in Reasons))
-    Complete = not Unsupported and (not Blocking) and (len(Encoded) == len(AsmValue.mates)) and (bool(AsmValue.mates) == bool(Streams))
-    return NativeMateD(MappingProxyType(Streams), Complete, tuple(Encoded), tuple(dict.fromkeys(Unsupported)), MappingProxyType(dict(sorted(Losses.items()))), MappingProxyType(dict(sorted(Rejections.items()))))
+    return MateEncodeState(Entities, Losses, {}, {}, [], [])
+
+
+# each planned item updates one lane so group and mate failures remain locally attributable
+def AppendMateMut(
+    StateValue: MateEncodeState,
+    ItemValue: MateRule | MateGroup,
+    RecordList: list[bytes],
+    LayoutList: list[tuple[str, MateRule | MateGroup]],
+    AsmValue: AssemblyData,
+    Definitions: Mapping[str, ComponentDefinition],
+) -> None:
+    if isinstance(ItemValue, MateGroup):
+        PairValue = EncodeGroup(ItemValue)
+        if PairValue is None:
+            StateValue.Losses[ItemValue.id] = WithReason(StateValue.Losses.get(ItemValue.id, ()), KMateLossGroupMembership)
+            return
+        RecordList.extend(PairValue)
+        LayoutList.extend((('group_start', ItemValue), ('group_end', ItemValue)))
+        return
+    Record, Reasons = EncodeMate(ItemValue, StateValue.Entities, AsmValue, Definitions)
+    if Record is None:
+        StateValue.Unsupported.append(ItemValue.id)
+        StateValue.Rejections[ItemValue.id] = Reasons
+        return
+    RecordList.append(Record)
+    LayoutList.append(('mate', ItemValue))
+    if Reasons:
+        StateValue.Losses[ItemValue.id] = MergedReasons(StateValue.Losses.get(ItemValue.id, ()), Reasons)
+
+
+# lane completion centralizes capacity and roundtrip checks before publishing any generated bytes
+def FinishLaneMut(
+    StateValue: MateEncodeState,
+    OwnerId: str,
+    LaneValue: int,
+    RecordList: list[bytes],
+    LayoutList: list[tuple[str, MateRule | MateGroup]],
+    DefinitionIds: Mapping[str, int],
+    AsmValue: AssemblyData,
+    Definitions: Mapping[str, ComponentDefinition],
+) -> None:
+    Planned = tuple((ItemValue.id for RoleValue, ItemValue in LayoutList if RoleValue == 'mate'))
+    if not Planned or len(RecordList) > 65535:
+        StateValue.Unsupported.extend(Planned)
+        for MateId in Planned:
+            StateValue.Rejections[MateId] = (KMateLossLaneCapacity,)
+        return
+    StreamName = f'Contents/Config-{LaneValue}-MatesList'
+    NativeId = (DefinitionIds[OwnerId] | KMateListNativeIdFlag) & 4294967295
+    StreamData = Struct.pack('<IH', NativeId, len(RecordList)) + b''.join(RecordList)
+    if not IsVerifyMateMut(StreamData, StreamName, DefinitionIds[OwnerId], LayoutList, StateValue.Entities, AsmValue, Definitions, StateValue.Losses):
+        StateValue.Unsupported.extend(Planned)
+        for MateId in Planned:
+            StateValue.Rejections[MateId] = (KMateLossRecord,)
+        return
+    StateValue.Streams[StreamName] = StreamData
+    StateValue.Encoded.extend(Planned)
+
+
+# one lane coordinator prevents record planning from leaking into aggregate completion logic
+def EncodeLaneMut(
+    StateValue: MateEncodeState,
+    AsmValue: AssemblyData,
+    OwnerId: str,
+    LaneValue: int,
+    Definitions: Mapping[str, ComponentDefinition],
+    DefinitionIds: Mapping[str, int],
+) -> None:
+    RecordList: list[bytes] = []
+    LayoutList: list[tuple[str, MateRule | MateGroup]] = []
+    for ItemValue in MateOwnerPlaMut(AsmValue, OwnerId, StateValue.Losses):
+        AppendMateMut(StateValue, ItemValue, RecordList, LayoutList, AsmValue, Definitions)
+    FinishLaneMut(StateValue, OwnerId, LaneValue, RecordList, LayoutList, DefinitionIds, AsmValue, Definitions)
+
+
+# aggregate encoding composes independent lanes and derives one explicit completeness attestation
+def EncodeMateA(AsmValue: AssemblyData, OrderedDefinitions: Sequence[ComponentDefinition], Definitions: Mapping[str, ComponentDefinition], DefinitionIds: Mapping[str, int]) -> NativeMateD:
+    if not AsmValue.mates and (not AsmValue.mate_entities) and (not AsmValue.mate_groups):
+        return NativeMateD(MappingProxyType({}), True, (), (), MappingProxyType({}))
+    StateValue = BuildMateState(AsmValue)
+    LaneValues = MateStreamLanes(AsmValue, OrderedDefinitions, Definitions)
+    for OwnerId, LaneValue in LaneValues.items():
+        EncodeLaneMut(StateValue, AsmValue, OwnerId, LaneValue, Definitions, DefinitionIds)
+    Blocking = any((Reason in KMateBlockingLossReasons for Reasons in StateValue.Losses.values() for Reason in Reasons))
+    Complete = not StateValue.Unsupported and (not Blocking) and (len(StateValue.Encoded) == len(AsmValue.mates)) and (bool(AsmValue.mates) == bool(StateValue.Streams))
+    return NativeMateD(MappingProxyType(StateValue.Streams), Complete, tuple(StateValue.Encoded), tuple(dict.fromkeys(StateValue.Unsupported)), MappingProxyType(dict(sorted(StateValue.Losses.items()))), MappingProxyType(dict(sorted(StateValue.Rejections.items()))))
 
 # this definition exists because focused behavior needs one stable owner
 def WithReason(Reasons: tuple[str, ...], Reason: str) -> tuple[str, ...]:

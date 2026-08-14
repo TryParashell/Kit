@@ -81,7 +81,39 @@ def ListPublic(TreeData: AstLib.Module) -> tuple[str, ...]:
     return tuple(PublicNames)
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
+# string encoding stays isolated because variable length archive markers form one independent grammar
+def EncodeStrings(KindName: str, FieldValue: AnyInfo) -> bytes:
+    StringItems = (FieldValue,) if KindName == 'string' else FieldValue
+    OutputData = bytearray()
+    if KindName == 'stringlist':
+        OutputData.extend(Struct.pack('<H', len(StringItems)))
+    for StringText in StringItems:
+        StringData = StringText.encode('utf-16-le')
+        UnitCount = len(StringData) // 2
+        OutputData.extend(KArchiveTags['StringMarker'])
+        if UnitCount < KArchiveTags['ShortString']:
+            OutputData.extend(bytes((UnitCount,)))
+        elif UnitCount < KArchiveTags['LongString']:
+            OutputData.extend(b'\xff' + Struct.pack('<H', UnitCount))
+        else:
+            OutputData.extend(b'\xff\xff\xff' + Struct.pack('<I', UnitCount))
+        OutputData.extend(StringData)
+    return bytes(OutputData)
+
+
+# scalar encoding stays isolated because traced primitives and direct layouts share format packing
+def EncodeScalar(KindName: str, FieldValue: AnyInfo) -> bytes:
+    if KindName.startswith('primitive:'):
+        TypeName = KindName.split(':', 1)[1]
+        return Struct.pack('<' + KPrimitiveFormats[TypeName], FieldValue)
+    if KindName.startswith('direct:'):
+        FormatText = KindName.split(':', 1)[1]
+        ValueItems = FieldValue if isinstance(FieldValue, tuple) else (FieldValue,)
+        return Struct.pack('<' + FormatText, *ValueItems)
+    raise ValueError(f'unknown generated operation {KindName!r}')
+
+
+# archive dispatch remains explicit so each independently encoded field kind stays visible
 def EncodeField(KindName: str, FieldValue: AnyInfo) -> bytes:
     if KindName == 'definition':
         ClassName, SchemaCode = FieldValue
@@ -98,30 +130,8 @@ def EncodeField(KindName: str, FieldValue: AnyInfo) -> bytes:
     if KindName == 'null':
         return Struct.pack('<H', KArchiveTags['Null'])
     if KindName in {'string', 'stringlist'}:
-        StringItems = (FieldValue,) if KindName == 'string' else FieldValue
-        OutputData = bytearray()
-        if KindName == 'stringlist':
-            OutputData.extend(Struct.pack('<H', len(StringItems)))
-        for StringText in StringItems:
-            StringData = StringText.encode('utf-16-le')
-            UnitCount = len(StringData) // 2
-            OutputData.extend(KArchiveTags['StringMarker'])
-            if UnitCount < KArchiveTags['ShortString']:
-                OutputData.extend(bytes((UnitCount,)))
-            elif UnitCount < KArchiveTags['LongString']:
-                OutputData.extend(b'\xff' + Struct.pack('<H', UnitCount))
-            else:
-                OutputData.extend(b'\xff\xff\xff' + Struct.pack('<I', UnitCount))
-            OutputData.extend(StringData)
-        return bytes(OutputData)
-    if KindName.startswith('primitive:'):
-        TypeName = KindName.split(':', 1)[1]
-        return Struct.pack('<' + KPrimitiveFormats[TypeName], FieldValue)
-    if KindName.startswith('direct:'):
-        FormatText = KindName.split(':', 1)[1]
-        ValueItems = FieldValue if isinstance(FieldValue, tuple) else (FieldValue,)
-        return Struct.pack('<' + FormatText, *ValueItems)
-    raise ValueError(f'unknown generated operation {KindName!r}')
+        return EncodeStrings(KindName, FieldValue)
+    return EncodeScalar(KindName, FieldValue)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
