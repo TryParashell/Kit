@@ -11,10 +11,10 @@ import ast as AstInfo
 from pathlib import Path as FilePath
 import struct as StructLib
 import pytest as PytestLib
-import convert.adapters.solidworks.core.Adapter as SolidworksAdapter
-import convert.adapters.solidworks.assembly.Assembly as SolidworksAssembly
-import convert.adapters.solidworks.core.Display as SolidworksDisplay
-import convert.adapters.solidworks.core.Native as SolidworksNative
+from convert.adapters.solidworks.core import Adapter as SolidworksAdapter
+from convert.adapters.solidworks.assembly import Assembly as SolidworksAssembly
+from convert.adapters.solidworks.core import Display as SolidworksDisplay
+from convert.adapters.solidworks.core import Native as SolidworksNative
 from convert.adapters.solidworks.core.Adapter import SldprtAdapter
 from convert.adapters.solidworks.container.Container import SldprtArchive
 from convert.adapters.solidworks.container.Format import (

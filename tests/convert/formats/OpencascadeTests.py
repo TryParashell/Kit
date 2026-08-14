@@ -13,7 +13,7 @@ from pathlib import Path as PathValue
 
 import pytest as PytestLib
 
-import convert.geometry.Opencascade as Opencascade
+from convert.geometry import Opencascade as Opencascade
 from convert.adapters.freecad.Brep import triangle_mesh_brep as TriangleMeshBrep
 from convert.adapters.freecad.Native import (
     _decoded_document_brep as DecodedDocumentBrep,

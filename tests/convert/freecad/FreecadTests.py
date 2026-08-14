@@ -35,9 +35,9 @@ from convert.adapters.freecad import (
     document_to_manifest as DocToManifest,
 )
 from convert.adapters.freecad.Brep import brep_model_brep as BrepModelBrep
-import convert.adapters.freecad.Adapter as FreecadAdapterModule
-import convert.adapters.freecad.Archive as FreecadArchiveModule
-import convert.adapters.freecad.Native as FreecadNativeModule
+from convert.adapters.freecad import Adapter as FreecadAdapterModule
+from convert.adapters.freecad import Archive as FreecadArchiveModule
+from convert.adapters.freecad import Native as FreecadNativeModule
 from convert.adapters.freecad.Adapter import _filtered_document as FilteredDoc
 from convert.adapters.freecad.Format import (
     CAPABILITY_CARRIER_REASONS as CapabilityCarrierReasons,

@@ -12,7 +12,7 @@ import inspect as Inspect
 import pickle as Pickle
 import typing as Typing
 import pytest as Pytest
-import convert.adapters as AdapterPackage
+from convert import adapters as AdapterPackage
 from convert.adapters import AdapterBinding
 from convert.adapters import AdapterInfo
 from convert.adapters import AdapterRegistry
