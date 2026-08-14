@@ -12696,114 +12696,108 @@ def StructuralA(
     return (tuple(Profiles), UsedValue)
 
 
+# polyline ordering owns cyclic adjacency traversal for one edge component
+def OrderPolyEdges(EdgeData, ComponentIndexes, VertexIndexes):
+    AdjacencyData: dict[int, list[tuple[int, int]]] = {
+        VertexIndex: [] for VertexIndex in VertexIndexes
+    }
+    for EdgeIndex in ComponentIndexes:
+        StartIndex, EndIndex = EdgeData[EdgeIndex].endpoint_indices or (-1, -1)
+        AdjacencyData[StartIndex].append((EdgeIndex, EndIndex))
+        AdjacencyData[EndIndex].append((EdgeIndex, StartIndex))
+    if any(len(ValueData) != 2 for ValueData in AdjacencyData.values()):
+        return None
+
+    # this callback exists because local behavior needs one focused transformation
+    FirstEdgeIndex = min(
+        ComponentIndexes, key=lambda EdgeIndex: EdgeData[EdgeIndex].offset
+    )
+    StartIndex, CurrentIndex = EdgeData[FirstEdgeIndex].endpoint_indices or (-1, -1)
+    OrderedVertices = [StartIndex]
+    OrderedEdges = [FirstEdgeIndex]
+    UsedEdges = {FirstEdgeIndex}
+    while CurrentIndex != StartIndex and len(OrderedVertices) <= len(VertexIndexes):
+        OrderedVertices.append(CurrentIndex)
+        ChoiceData = tuple(
+            ItemData
+            for ItemData in AdjacencyData[CurrentIndex]
+            if ItemData[0] not in UsedEdges
+        )
+        if len(ChoiceData) != 1:
+            break
+        NextEdgeIndex, CurrentIndex = ChoiceData[0]
+        UsedEdges.add(NextEdgeIndex)
+        OrderedEdges.append(NextEdgeIndex)
+    if (
+        CurrentIndex != StartIndex
+        or UsedEdges != ComponentIndexes
+        or len(OrderedVertices) != 6
+    ):
+        return None
+    return (OrderedVertices, OrderedEdges)
+
+
+# polyline construction owns point validation and marker offset ordering
+def CreatePoly(MarkersData, EdgeData, OrderedVertices, OrderedEdges):
+    OrderedPoints = tuple(
+        MarkersData[VertexIndex].coordinates_mm for VertexIndex in OrderedVertices
+    )
+    if any(PointData is None for PointData in OrderedPoints):
+        return None
+    ResolvedPoints = tuple(
+        PointData for PointData in OrderedPoints if PointData is not None
+    )
+    if len(set(ResolvedPoints)) != 6:
+        return None
+    MarkerOffsets = tuple(
+        EdgeData[EdgeIndex].offset for EdgeIndex in OrderedEdges
+    ) + tuple(MarkersData[VertexIndex].offset for VertexIndex in OrderedVertices)
+    Profile = NativeProfile(
+        "polyline",
+        tuple(
+            CoordinateValue
+            for PointData in ResolvedPoints
+            for CoordinateValue in PointData
+        ),
+        MarkerOffsets,
+    )
+    return (Profile, MarkerOffsets)
+
+
 # this definition exists because focused behavior needs one stable owner
 def PolyProfiles(
     MarkersData: list[NativeMarker], ExcludedOffsets: set[int]
 ) -> tuple[tuple[NativeProfile, ...], set[int]]:
     EdgeData = tuple(
-        (
-            MarkerData
-            for MarkerData in MarkersData
-            if MarkerData.offset not in ExcludedOffsets
-            and MarkerData.profile_role == 1
-            and (MarkerData.native_kind in {0, 1, 2})
-            and (MarkerData.coordinates_mm is None)
-            and (MarkerData.endpoint_indices is not None)
-            and (MarkerData.endpoint_indices[0] != MarkerData.endpoint_indices[1])
-            and all(
-                (
-                    0 <= EndpointIndex < len(MarkersData)
-                    and MarkersData[EndpointIndex].coordinates_mm is not None
-                    for EndpointIndex in MarkerData.endpoint_indices
-                )
-            )
+        MarkerData
+        for MarkerData in MarkersData
+        if MarkerData.offset not in ExcludedOffsets
+        and MarkerData.profile_role == 1
+        and MarkerData.native_kind in {0, 1, 2}
+        and MarkerData.coordinates_mm is None
+        and MarkerData.endpoint_indices is not None
+        and MarkerData.endpoint_indices[0] != MarkerData.endpoint_indices[1]
+        and all(
+            0 <= EndpointIndex < len(MarkersData)
+            and MarkersData[EndpointIndex].coordinates_mm is not None
+            for EndpointIndex in MarkerData.endpoint_indices
         )
     )
     RemainingIndexes = set(range(len(EdgeData)))
     ProfileData: list[NativeProfile] = []
     UsedOffsets: set[int] = set()
     while RemainingIndexes:
-        ComponentIndexes = {RemainingIndexes.pop()}
-        VertexIndexes = set(
-            EdgeData[next(iter(ComponentIndexes))].endpoint_indices or ()
-        )
-        ChangedValue = True
-        while ChangedValue:
-            ChangedValue = False
-            for EdgeIndex in tuple(RemainingIndexes):
-                EndpointIndexes = set(EdgeData[EdgeIndex].endpoint_indices or ())
-                if VertexIndexes & EndpointIndexes:
-                    RemainingIndexes.remove(EdgeIndex)
-                    ComponentIndexes.add(EdgeIndex)
-                    VertexIndexes.update(EndpointIndexes)
-                    ChangedValue = True
+        ComponentIndexes, VertexIndexes = TakeGraphMut(EdgeData, RemainingIndexes)
         if len(ComponentIndexes) != 6 or len(VertexIndexes) != 6:
             continue
-        AdjacencyData: dict[int, list[tuple[int, int]]] = {
-            VertexIndex: [] for VertexIndex in VertexIndexes
-        }
-        for EdgeIndex in ComponentIndexes:
-            StartIndex, EndIndex = EdgeData[EdgeIndex].endpoint_indices or (-1, -1)
-            AdjacencyData[StartIndex].append((EdgeIndex, EndIndex))
-            AdjacencyData[EndIndex].append((EdgeIndex, StartIndex))
-        if any((len(ValueData) != 2 for ValueData in AdjacencyData.values())):
+        OrderedData = OrderPolyEdges(EdgeData, ComponentIndexes, VertexIndexes)
+        if OrderedData is None:
             continue
-
-        # this callback exists because local behavior needs one focused transformation
-        FirstEdgeIndex = min(
-            ComponentIndexes, key=lambda EdgeIndex: EdgeData[EdgeIndex].offset
-        )
-        StartIndex, CurrentIndex = EdgeData[FirstEdgeIndex].endpoint_indices or (-1, -1)
-        OrderedVertices = [StartIndex]
-        OrderedEdges = [FirstEdgeIndex]
-        UsedEdges = {FirstEdgeIndex}
-        while CurrentIndex != StartIndex and len(OrderedVertices) <= len(VertexIndexes):
-            OrderedVertices.append(CurrentIndex)
-            ChoiceData = tuple(
-                (
-                    ItemData
-                    for ItemData in AdjacencyData[CurrentIndex]
-                    if ItemData[0] not in UsedEdges
-                )
-            )
-            if len(ChoiceData) != 1:
-                break
-            NextEdgeIndex, CurrentIndex = ChoiceData[0]
-            UsedEdges.add(NextEdgeIndex)
-            OrderedEdges.append(NextEdgeIndex)
-        if (
-            CurrentIndex != StartIndex
-            or UsedEdges != ComponentIndexes
-            or len(OrderedVertices) != 6
-        ):
-            continue
-        OrderedPoints = tuple(
-            (MarkersData[VertexIndex].coordinates_mm for VertexIndex in OrderedVertices)
-        )
-        if any((PointData is None for PointData in OrderedPoints)):
-            continue
-        ResolvedPoints = tuple(
-            (PointData for PointData in OrderedPoints if PointData is not None)
-        )
-        if len(set(ResolvedPoints)) != 6:
-            continue
-        MarkerOffsets = tuple(
-            (EdgeData[EdgeIndex].offset for EdgeIndex in OrderedEdges)
-        ) + tuple((MarkersData[VertexIndex].offset for VertexIndex in OrderedVertices))
-        UsedOffsets.update(MarkerOffsets)
-        ProfileData.append(
-            NativeProfile(
-                "polyline",
-                tuple(
-                    (
-                        CoordinateValue
-                        for PointData in ResolvedPoints
-                        for CoordinateValue in PointData
-                    )
-                ),
-                MarkerOffsets,
-            )
-        )
+        CreatedData = CreatePoly(MarkersData, EdgeData, *OrderedData)
+        if CreatedData is not None:
+            Profile, MarkerOffsets = CreatedData
+            UsedOffsets.update(MarkerOffsets)
+            ProfileData.append(Profile)
     return (tuple(ProfileData), UsedOffsets)
 
 
