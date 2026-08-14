@@ -12,24 +12,29 @@ from pathlib import Path as FilePath
 import subprocess as Subprocess
 import pytest as Pytest
 from convert import convert as Convert
+from convert.Security.PathBoundary import ResolveTemp
+from convert.Security.ProgramBoundary import GetFreecadPath
 
 # this binding exists because shared behavior needs one stable value
 KSample = FilePath(__file__).parents[3] / "examples" / ".SLDPRT" / "example.SLDPRT"
 
 # this binding exists because shared behavior needs one stable value
-KOracle = FilePath(OsModule.environ.get("KIT_FREECAD_ORACLE", ""))
+KOracle = GetFreecadPath()
 
 
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
 def TestRecomputes(TmpPath) -> None:
-    Output = TmpPath / "example.FCStd"
+    Output = ResolveTemp(TmpPath / "example.FCStd")
     Convert(KSample, Output)
-    CodeValue = f"import FreeCAD as App;d=App.open(r'{Output}');[o.touch() for o in d.Objects];d.recompute();p=d.getObject('Parameters');s=d.getObject('Sketch1');f=d.getObject('Fillet1');before_volume=f.Shape.Volume;before_area=f.Shape.Area;before_width=s.Shape.BoundBox.XLength;before_bounds=(f.Shape.BoundBox.XMin,f.Shape.BoundBox.YMin,f.Shape.BoundBox.ZMin,f.Shape.BoundBox.XMax,f.Shape.BoundBox.YMax,f.Shape.BoundBox.ZMax);p.set(p.getCellFromAlias('sldprt_parameter_26_D1'),'250 mm');[o.touch() for o in d.Objects];d.recompute();print('KIT_RESULT',before_volume,before_area,before_width,*before_bounds,f.Shape.Volume,s.Shape.BoundBox.XLength,f.Shape.isValid(),len(f.Shape.Solids))"
+    CodeValue = "import os;import FreeCAD as App;d=App.open(os.environ['KIT_ORACLE_PATH']);[o.touch() for o in d.Objects];d.recompute();p=d.getObject('Parameters');s=d.getObject('Sketch1');f=d.getObject('Fillet1');before_volume=f.Shape.Volume;before_area=f.Shape.Area;before_width=s.Shape.BoundBox.XLength;before_bounds=(f.Shape.BoundBox.XMin,f.Shape.BoundBox.YMin,f.Shape.BoundBox.ZMin,f.Shape.BoundBox.XMax,f.Shape.BoundBox.YMax,f.Shape.BoundBox.ZMax);p.set(p.getCellFromAlias('sldprt_parameter_26_D1'),'250 mm');[o.touch() for o in d.Objects];d.recompute();print('KIT_RESULT',before_volume,before_area,before_width,*before_bounds,f.Shape.Volume,s.Shape.BoundBox.XLength,f.Shape.isValid(),len(f.Shape.Solids))"
+    OracleEnv = OsModule.environ.copy()
+    OracleEnv["KIT_ORACLE_PATH"] = str(Output)
     Completed = Subprocess.run(
         [str(KOracle), "-c", CodeValue],
         check=True,
         capture_output=True,
+        env=OracleEnv,
         text=True,
         timeout=120,
     )

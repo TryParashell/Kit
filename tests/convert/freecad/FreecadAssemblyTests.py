@@ -16,6 +16,8 @@ import subprocess as Subprocess
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import pytest as Pytest
+from convert.Security.PathBoundary import ResolveTemp
+from convert.Security.ProgramBoundary import GetFreecadPath
 from convert.adapters.freecad import (
     read_freecad as ReadFreecad,
     write_freecad as WriteFreecad,
@@ -34,7 +36,7 @@ from tests.interchange.assembly.AssemblyTests import (
 from tests.interchange.document.DocumentTests import document as DocValue
 
 # this binding exists because shared behavior needs one stable value
-KOracle = FilePath(OsModule.environ.get("KIT_FREECAD_ORACLE", ""))
+KOracle = GetFreecadPath()
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -798,13 +800,16 @@ def TestFcstdNested(TmpPath) -> None:
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
 def TestLoadsAsm(TmpPath) -> None:
-    Output = TmpPath / "assembly.FCStd"
+    Output = ResolveTemp(TmpPath / "assembly.FCStd")
     WriteFreecad(MeshDoc(), Output)
-    CodeValue = f"import FreeCAD as App;d=App.open(r'{Output}');d.recompute();d.recompute();links=[o for o in d.Objects if o.TypeId=='App::Link'];mates=[o for o in d.Objects if hasattr(o,'MateId')];shapelinks=[o for o in links if o.LinkedObject is not None and hasattr(o.LinkedObject,'Shape') and not o.LinkedObject.Shape.isNull()];documents=tuple(App.listDocuments().values());sources=[o for document in documents for o in document.Objects if o.TypeId=='Mesh::Feature'];target=shapelinks[0].LinkedObject;print('KIT_ASSEMBLY',len(links),len(mates),links[0].Placement.Base.x,links[0].Placement.Base.y,links[0].Placement.Base.z,links[0].LinkedObject is not None,len(shapelinks),len(target.Shape.Faces),target.Shape.BoundBox.XLength,target.TypeId,getattr(target,'Representation',''),len(sources),all(o.Visibility for o in sources),not any('Touched' in o.State for o in d.Objects))"
+    CodeValue = "import os;import FreeCAD as App;d=App.open(os.environ['KIT_ORACLE_PATH']);d.recompute();d.recompute();links=[o for o in d.Objects if o.TypeId=='App::Link'];mates=[o for o in d.Objects if hasattr(o,'MateId')];shapelinks=[o for o in links if o.LinkedObject is not None and hasattr(o.LinkedObject,'Shape') and not o.LinkedObject.Shape.isNull()];documents=tuple(App.listDocuments().values());sources=[o for document in documents for o in document.Objects if o.TypeId=='Mesh::Feature'];target=shapelinks[0].LinkedObject;print('KIT_ASSEMBLY',len(links),len(mates),links[0].Placement.Base.x,links[0].Placement.Base.y,links[0].Placement.Base.z,links[0].LinkedObject is not None,len(shapelinks),len(target.Shape.Faces),target.Shape.BoundBox.XLength,target.TypeId,getattr(target,'Representation',''),len(sources),all(o.Visibility for o in sources),not any('Touched' in o.State for o in d.Objects))"
+    OracleEnv = OsModule.environ.copy()
+    OracleEnv["KIT_ORACLE_PATH"] = str(Output)
     Completed = Subprocess.run(
         [str(KOracle), "-c", CodeValue],
         check=True,
         capture_output=True,
+        env=OracleEnv,
         text=True,
         timeout=120,
     )
@@ -836,13 +841,16 @@ def TestLoadsAsm(TmpPath) -> None:
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
 def TestLoadsNested(TmpPath) -> None:
-    Output = TmpPath / "nested.FCStd"
+    Output = ResolveTemp(TmpPath / "nested.FCStd")
     WriteFreecad(NestedAsmDoc(), Output)
-    CodeValue = f"import FreeCAD as App;d=App.open(r'{Output}');links=[o for o in d.Objects if o.TypeId=='Assembly::AssemblyLink'];a=links[0];before=tuple(o.Name for o in a.Group);d.recompute();first=tuple(o.Name for o in a.Group);d.recompute();second=tuple(o.Name for o in a.Group);children=[o for o in a.Group if o.TypeId=='App::Link'];c=children[0];print('KIT_NESTED',len(links),a.Origin is not None,len(children),before==first==second,c.getParentGeoFeatureGroup()==a,c.LinkedObject in a.LinkedObject.Group,c.LinkedObject.Document==a.LinkedObject.Document,a.Placement.Base.x,a.Placement.Base.y,a.Placement.Base.z,c.Placement.Base.x,c.Placement.Base.y,c.Placement.Base.z,c.LinkedObject is not None,a.LinkedObject is not None,a.Visibility,c.Visibility)"
+    CodeValue = "import os;import FreeCAD as App;d=App.open(os.environ['KIT_ORACLE_PATH']);links=[o for o in d.Objects if o.TypeId=='Assembly::AssemblyLink'];a=links[0];before=tuple(o.Name for o in a.Group);d.recompute();first=tuple(o.Name for o in a.Group);d.recompute();second=tuple(o.Name for o in a.Group);children=[o for o in a.Group if o.TypeId=='App::Link'];c=children[0];print('KIT_NESTED',len(links),a.Origin is not None,len(children),before==first==second,c.getParentGeoFeatureGroup()==a,c.LinkedObject in a.LinkedObject.Group,c.LinkedObject.Document==a.LinkedObject.Document,a.Placement.Base.x,a.Placement.Base.y,a.Placement.Base.z,c.Placement.Base.x,c.Placement.Base.y,c.Placement.Base.z,c.LinkedObject is not None,a.LinkedObject is not None,a.Visibility,c.Visibility)"
+    OracleEnv = OsModule.environ.copy()
+    OracleEnv["KIT_ORACLE_PATH"] = str(Output)
     Completed = Subprocess.run(
         [str(KOracle), "-c", CodeValue],
         check=True,
         capture_output=True,
+        env=OracleEnv,
         text=True,
         timeout=120,
     )

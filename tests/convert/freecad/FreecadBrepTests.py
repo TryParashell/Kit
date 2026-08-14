@@ -16,6 +16,8 @@ import subprocess as Subprocess
 import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import pytest as Pytest
+from convert.Security.PathBoundary import ResolveTemp
+from convert.Security.ProgramBoundary import GetFreecadPath
 from convert import (
     ApplicationUsabilityError as AppUsabilityError,
     open_document as OpenDoc,
@@ -76,7 +78,7 @@ from interchange import (
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
 # this binding exists because shared behavior needs one stable value
-KOracle = FilePath(OsModule.environ.get("KIT_FREECAD_ORACLE", ""))
+KOracle = GetFreecadPath()
 
 # this binding exists because shared behavior needs one stable value
 KRootValue = FilePath(__file__).parents[3]
@@ -849,13 +851,16 @@ def TestUnsupported() -> None:
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
 def TestPeriodicIs(TmpPath: Path) -> None:
-    PathValue = TmpPath / "cylinder-band.brp"
+    PathValue = ResolveTemp(TmpPath / "cylinder-band.brp")
     PathValue.write_bytes(BrepModelBrep(CylinderBand()))
-    CodeValue = f"import Part;s=Part.Shape();s.read(r'{PathValue}');print('KIT_SEAM',s.ShapeType,len(s.Faces),len(s.Wires),len(s.Edges),len(s.Vertexes),s.isValid())"
+    CodeValue = "import os;import Part;s=Part.Shape();s.read(os.environ['KIT_ORACLE_PATH']);print('KIT_SEAM',s.ShapeType,len(s.Faces),len(s.Wires),len(s.Edges),len(s.Vertexes),s.isValid())"
+    OracleEnv = OsModule.environ.copy()
+    OracleEnv["KIT_ORACLE_PATH"] = str(PathValue)
     Completed = Subprocess.run(
         [str(KOracle), "-c", CodeValue],
         check=True,
         capture_output=True,
+        env=OracleEnv,
         text=True,
         timeout=60,
     )
@@ -872,24 +877,28 @@ def TestPeriodicIs(TmpPath: Path) -> None:
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
 def TestTriangleAs(TmpPath: Path) -> None:
-    Tetrahedron = TmpPath / "tetrahedron.brp"
+    Tetrahedron = ResolveTemp(TmpPath / "tetrahedron.brp")
     Tetrahedron.write_bytes(
         TriangleMeshBrep(
             ((0, 0, 0), (2, 0, 0), (0, 3, 0), (0, 0, 4)),
             ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3)),
         )
     )
-    Square = TmpPath / "square.brp"
+    Square = ResolveTemp(TmpPath / "square.brp")
     Square.write_bytes(
         TriangleMeshBrep(
             ((0, 0, 0), (2, 0, 0), (2, 3, 0), (0, 3, 0)), ((0, 1, 2), (0, 2, 3))
         )
     )
-    CodeValue = f"import Part;t=Part.Shape();t.read(r'{Tetrahedron}');s=Part.Shape();s.read(r'{Square}');print('KIT_BREP',t.ShapeType,len(t.Solids),len(t.Faces),len(t.Edges),len(t.Vertexes),t.isValid(),t.Volume,t.BoundBox.XLength,t.BoundBox.YLength,t.BoundBox.ZLength,s.ShapeType,len(s.Faces),len(s.Edges),len(s.Vertexes),s.isValid())"
+    CodeValue = "import os;import Part;t=Part.Shape();t.read(os.environ['KIT_ORACLE_FIRST']);s=Part.Shape();s.read(os.environ['KIT_ORACLE_SECOND']);print('KIT_BREP',t.ShapeType,len(t.Solids),len(t.Faces),len(t.Edges),len(t.Vertexes),t.isValid(),t.Volume,t.BoundBox.XLength,t.BoundBox.YLength,t.BoundBox.ZLength,s.ShapeType,len(s.Faces),len(s.Edges),len(s.Vertexes),s.isValid())"
+    OracleEnv = OsModule.environ.copy()
+    OracleEnv["KIT_ORACLE_FIRST"] = str(Tetrahedron)
+    OracleEnv["KIT_ORACLE_SECOND"] = str(Square)
     Completed = Subprocess.run(
         [str(KOracle), "-c", CodeValue],
         check=True,
         capture_output=True,
+        env=OracleEnv,
         text=True,
         timeout=60,
     )

@@ -17,6 +17,8 @@ import xml.etree.ElementTree as ElementTree
 import zipfile as Zipfile
 
 import pytest as Pytest
+from convert.Security.PathBoundary import ResolveTemp
+from convert.Security.ProgramBoundary import GetFreecadPath
 
 from convert import open_document as OpenDocument, write_document as WriteDocument
 from interchange import (
@@ -31,7 +33,7 @@ from interchange import (
 KRandom = PathValue(__file__).parents[3] / "examples" / "Random" / "V8_engine.SLDASM"
 
 # this binding exists because shared behavior needs one stable value
-KOracle = PathValue(OsModule.environ.get("KIT_FREECAD_ORACLE", ""))
+KOracle = GetFreecadPath()
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -504,12 +506,13 @@ def TestRAWECF(RandomDocument: CadDocument, TmpPath: PathValue) -> None:
 # this definition exists because focused behavior needs one stable owner
 @Pytest.mark.skipif(not KOracle.is_file(), reason="KIT_FREECAD_ORACLE is unavailable")
 def TestRAFLRAPPE(RandomDocument: CadDocument, TmpPath: PathValue) -> None:
-    Output = TmpPath / "V8_engine.FCStd"
+    Output = ResolveTemp(TmpPath / "V8_engine.FCStd")
     WriteDocument(RandomDocument, Output)
     ExpectedBounds = PlacedMB(RandomDocument)
-    CodeValue = f"""
+    CodeValue = """
+import os
 import FreeCAD as App
-d=App.open(r'{Output}')
+d=App.open(os.environ['KIT_ORACLE_PATH'])
 root=next(o for o in d.Objects if o.TypeId=='Assembly::AssemblyObject' and hasattr(o,'RootDefinitionId') and o.RootDefinitionId=='sldasm:definition:2')
 d.recompute()
 first_links=tuple(sorted(o.Name for o in d.Objects if o.TypeId in ('App::Link','Assembly::AssemblyLink')))
@@ -544,9 +547,12 @@ mate_groups=[o for document in documents for o in document.Objects if hasattr(o,
 assemblies=[o for document in documents for o in document.Objects if o.TypeId=='Assembly::AssemblyObject']
 print('KIT_RANDOM',len(documents),len(links),len(leaf),len(sources),len(breps),sum(len(o.Shape.Faces) for o in breps),sum(o.Shape.isValid() for o in breps),len(sketches),len(timeline),len(mates),len(all_mates),len(mate_groups),len(assemblies),stable_links,valid_mates,*bounds,flush=True)
 """
+    OracleEnv = OsModule.environ.copy()
+    OracleEnv["KIT_ORACLE_PATH"] = str(Output)
     Completed = Subprocess.run(
         [str(KOracle), "-c", CodeValue],
         capture_output=True,
+        env=OracleEnv,
         text=True,
         timeout=300,
     )
