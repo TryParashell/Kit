@@ -175,11 +175,11 @@ class ModelGraph:
                 Instance._bind_coedge(CoedgeId, "wire", WireValue.id)
         for FaceValue in Model.faces:
             for LoopId in FaceValue.loop_ids:
-                BindOnce(Instance.loop_face, LoopId, FaceValue.id, "loop", "face")
+                BindOnceMut(Instance.loop_face, LoopId, FaceValue.id, "loop", "face")
         FaceUseOwner: dict[str, str] = {}
         for Shell in Model.shells:
             for FaceUseId in Shell.face_use_ids:
-                BindOnce(FaceUseOwner, FaceUseId, Shell.id, "face use", "shell")
+                BindOnceMut(FaceUseOwner, FaceUseId, Shell.id, "face use", "shell")
                 FaceUse = Instance.face_uses[FaceUseId]
                 Instance.shell_owners.setdefault(Shell.id, []).append(
                     (FaceUse.id, FaceUse.face_id)
@@ -187,12 +187,14 @@ class ModelGraph:
         ShellUseOwner: dict[str, str] = {}
         for Region in Model.regions:
             for ShellUseId in Region.shell_use_ids:
-                BindOnce(ShellUseOwner, ShellUseId, Region.id, "shell use", "region")
+                BindOnceMut(ShellUseOwner, ShellUseId, Region.id, "shell use", "region")
         for BodyValue in Model.bodies:
             for RegionId in BodyValue.region_ids:
-                BindOnce(Instance.region_body, RegionId, BodyValue.id, "region", "body")
+                BindOnceMut(
+                    Instance.region_body, RegionId, BodyValue.id, "region", "body"
+                )
             for WireId in BodyValue.wire_ids:
-                BindOnce(Instance.wire_body, WireId, BodyValue.id, "wire", "body")
+                BindOnceMut(Instance.wire_body, WireId, BodyValue.id, "wire", "body")
         RequireOwned(Instance.coedge_owner, Instance.coedges, "coedge", "loop or wire")
         RequireOwned(Instance.loop_face, Instance.loops, "loop", "face")
         RequireOwned(FaceUseOwner, Instance.face_uses, "face use", "shell")
@@ -245,7 +247,7 @@ def Unsupported(Message: str) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def BindOnce(
+def BindOnceMut(
     Owners: dict[str, str], ValueId: str, OwnerId: str, ValueName: str, OwnerName: str
 ) -> None:
     if ValueId in Owners:
@@ -281,10 +283,10 @@ def Point(Value: Any) -> KPoint:
     else:
         try:
             Point = tuple((float(Component) for Component in Value))
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError) as ErrorInfo:
             raise ValueError(
                 "each vertex must contain three finite coordinates"
-            ) from exc
+            ) from ErrorInfo
         if len(Point) != 3:
             raise ValueError("each vertex must contain three finite coordinates")
     if not all((MathValue.isfinite(Component) for Component in Point)):
@@ -330,8 +332,10 @@ def Values(Values: Sequence[float]) -> str:
 def ParseTriangle(Value: Any, VertexCount: int) -> KTriangle:
     try:
         Indices = tuple(Value)
-    except TypeError as exc:
-        raise ValueError("each triangle must contain three vertex indices") from exc
+    except TypeError as ErrorInfo:
+        raise ValueError(
+            "each triangle must contain three vertex indices"
+        ) from ErrorInfo
     if len(Indices) != 3 or any(
         (isinstance(Index, bool) or not isinstance(Index, int) for Index in Indices)
     ):
@@ -344,7 +348,7 @@ def ParseTriangle(Value: Any, VertexCount: int) -> KTriangle:
 
 
 # this definition exists because focused behavior needs one stable owner
-def FacetIs(Points: tuple[Point, ...], Facet: Triangle, Tolerance: float) -> bool:
+def IsFacetBad(Points: tuple[Point, ...], Facet: Triangle, Tolerance: float) -> bool:
     Corners = tuple((Points[Index] for Index in Facet))
     Edges = tuple(
         (Subtract(Corners[(Index + 1) % 3], Corners[Index]) for Index in range(3))
@@ -1669,12 +1673,12 @@ def FaceLoop(
 
 
 # this definition exists because focused behavior needs one stable owner
-def CoedgeShape(Coedge: BrepCoedge, EdgeValue: BrepEdge) -> bool:
+def HasCoedgeShape(Coedge: BrepCoedge, EdgeValue: BrepEdge) -> bool:
     return Coedge.reversed != (EdgeValue.end_parameter < EdgeValue.start_parameter)
 
 
 # this definition exists because focused behavior needs one stable owner
-def PlanarLineLoop(
+def IsPlanarLoop(
     Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float
 ) -> bool:
     if len(LoopValue.coedge_ids) < 3:
@@ -1818,7 +1822,7 @@ def FaceIsProven(
             f"face {FaceValue.id} on {type(Surface).__name__} lacks a proven native topology"
         )
     Loops = tuple((Graph.loops[LoopId] for LoopId in FaceValue.loop_ids))
-    if len(Loops) == 1 and PlanarLineLoop(Graph, FaceValue, Loops[0], Tolerance):
+    if len(Loops) == 1 and IsPlanarLoop(Graph, FaceValue, Loops[0], Tolerance):
         return
     Circles = tuple(
         (PlanarCircle(Graph, FaceValue, LoopValue, Tolerance) for LoopValue in Loops)
@@ -1852,7 +1856,7 @@ def FaceEdge(
         (
             (
                 Graph.coedges[CoedgeId].edge_id,
-                CoedgeShape(
+                HasCoedgeShape(
                     Graph.coedges[CoedgeId],
                     Graph.edges[Graph.coedges[CoedgeId].edge_id],
                 )
@@ -2403,7 +2407,7 @@ def TriangleMesh(
     if not Declared:
         raise ValueError("at least one triangle is required")
     Facets = tuple(
-        (Facet for Facet in Declared if not FacetIs(Points, Facet, Tolerance))
+        (Facet for Facet in Declared if not IsFacetBad(Points, Facet, Tolerance))
     )
     if not Facets:
         raise ValueError("at least one triangle area must exceed the BRep tolerance")
@@ -2451,7 +2455,7 @@ globals()["_SeamBand"] = SeamBand
 globals()["_ShapeRecord"] = ShapeRecord
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bind_once"] = BindOnce
+globals()["_bind_once"] = BindOnceMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_bspline_layout"] = BsplineLayout
@@ -2460,7 +2464,7 @@ globals()["_bspline_layout"] = BsplineLayout
 globals()["_check_edge_geometry"] = CheckEdgeGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["_coedge_shape_reversed"] = CoedgeShape
+globals()["_coedge_shape_reversed"] = HasCoedgeShape
 
 # this binding exists because shared behavior needs one stable value
 globals()["_cross"] = Cross
@@ -2496,7 +2500,7 @@ globals()["_face_is_proven"] = FaceIsProven
 globals()["_face_loop_reversals"] = FaceLoop
 
 # this binding exists because shared behavior needs one stable value
-globals()["_facet_is_degenerate"] = FacetIs
+globals()["_facet_is_degenerate"] = IsFacetBad
 
 # this binding exists because shared behavior needs one stable value
 globals()["_frame"] = Frame
@@ -2535,7 +2539,7 @@ globals()["_pcurve_record"] = PcurveRecord
 globals()["_planar_circle_loop"] = PlanarCircle
 
 # this binding exists because shared behavior needs one stable value
-globals()["_planar_line_loop_is_proven"] = PlanarLineLoop
+globals()["_planar_line_loop_is_proven"] = IsPlanarLoop
 
 # this binding exists because shared behavior needs one stable value
 globals()["_plane_conic_pcurve"] = PlaneConic

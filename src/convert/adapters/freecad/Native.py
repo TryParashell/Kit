@@ -193,8 +193,8 @@ class OuterState:
 def EntryName(NameValue: str) -> str:
     try:
         return ValidatedEntryName(NameValue)
-    except ValueError as exc:
-        raise NativeFreeCad(str(exc)) from exc
+    except ValueError as ErrorInfo:
+        raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -204,8 +204,8 @@ def DeclaredCount(NodeValue: ET.Element, Actual: int, Label: str) -> None:
         return
     try:
         Expected = int(Value)
-    except ValueError as exc:
-        raise NativeFreeCad(f"FreeCAD {Label} count is invalid") from exc
+    except ValueError as ErrorInfo:
+        raise NativeFreeCad(f"FreeCAD {Label} count is invalid") from ErrorInfo
     if Expected != Actual:
         raise NativeFreeCad(f"FreeCAD {Label} count does not match its data")
 
@@ -216,8 +216,8 @@ def ArchiveMembers(
 ) -> tuple[Zipfile.ZipFile, dict[str, Zipfile.ZipInfo]]:
     try:
         return ValidatedArchiveMembers(DataValue)
-    except ValueError as exc:
-        raise NativeFreeCad(str(exc)) from exc
+    except ValueError as ErrorInfo:
+        raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -227,8 +227,8 @@ def StoredCount(NodeValue: ET.Element, NameValue: str, Actual: int, Label: str) 
         return
     try:
         Expected = int(Value)
-    except ValueError as exc:
-        raise NativeFreeCad(f"FreeCAD {Label} count is invalid") from exc
+    except ValueError as ErrorInfo:
+        raise NativeFreeCad(f"FreeCAD {Label} count is invalid") from ErrorInfo
     if Expected != Actual:
         raise NativeFreeCad(f"FreeCAD {Label} count does not match its data")
 
@@ -253,8 +253,8 @@ def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
             raise NativeFreeCad("FreeCAD object declarations are malformed")
         try:
             ValidatedObjectName(NameValue)
-        except ValueError as exc:
-            raise NativeFreeCad(str(exc)) from exc
+        except ValueError as ErrorInfo:
+            raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
         if ObjectId and ObjectId in IdsValue:
             raise NativeFreeCad("FreeCAD object declarations contain duplicate ids")
         if ObjectId:
@@ -330,12 +330,12 @@ def LoadNative(DataValue: bytes, *, LoadEntries: bool = True) -> NativeArchive:
     with Archive:
         try:
             RootValue, DocXml = ValidatedDocXml(Archive, Members)
-        except ValueError as exc:
-            raise NativeFreeCad(str(exc)) from exc
+        except ValueError as ErrorInfo:
+            raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
         try:
             SchemaVersion = int(RootValue.get("SchemaVersion", ""))
-        except ValueError as exc:
-            raise NativeFreeCad("FreeCAD schema version is invalid") from exc
+        except ValueError as ErrorInfo:
+            raise NativeFreeCad("FreeCAD schema version is invalid") from ErrorInfo
         if SchemaVersion < KMinObjectGraphSchema:
             raise NativeFreeCad("FreeCAD schema version is not supported")
         Objects = ParseObjects(RootValue)
@@ -363,10 +363,10 @@ def LoadNative(DataValue: bytes, *, LoadEntries: bool = True) -> NativeArchive:
                 RuntimeError,
                 NotImplementedError,
                 Zipfile.BadZipFile,
-            ) as exc:
+            ) as ErrorInfo:
                 raise NativeFreeCad(
                     "FCStd archive contains unreadable referenced data"
-                ) from exc
+                ) from ErrorInfo
     return NativeArchive(
         RootValue,
         Objects,
@@ -380,8 +380,8 @@ def LoadNative(DataValue: bytes, *, LoadEntries: bool = True) -> NativeArchive:
 def ProbeNative(DataValue: bytes) -> tuple[float, str]:
     try:
         Native = LoadNative(DataValue, LoadEntries=False)
-    except NativeFreeCad as exc:
-        return (0.0, str(exc))
+    except NativeFreeCad as ErrorInfo:
+        return (0.0, str(ErrorInfo))
     return (0.95, f"native FreeCAD schema {Native.root.get('SchemaVersion')} document")
 
 
@@ -552,7 +552,7 @@ def String(ObjValue: _NativeObject, NameValue: str, Default: str = "") -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def BoolAction(ObjValue: _NativeObject, NameValue: str, Default: bool = False) -> bool:
+def IsBoolValue(ObjValue: _NativeObject, NameValue: str, Default: bool = False) -> bool:
     NodeValue = FindChild(ObjValue, NameValue, "Bool")
     if NodeValue is None:
         return Default
@@ -914,7 +914,7 @@ def GeomAxis(Value: ET.Element) -> VectorTwo:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PointsClose(First: Vector2, Second: Vector2, Tolerance: float = 1e-07) -> bool:
+def IsPointClose(First: Vector2, Second: Vector2, Tolerance: float = 1e-07) -> bool:
     return MathValue.hypot(First.x - Second.x, First.y - Second.y) <= Tolerance
 
 
@@ -926,7 +926,7 @@ def Segment(First: Vector2, Second: Vector2, Third: Vector2) -> float:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PointOnSegment(
+def IsPointOnSeg(
     Point: Vector2, First: Vector2, Second: Vector2, Tolerance: float = 1e-07
 ) -> bool:
     return (
@@ -943,7 +943,7 @@ def PointOnSegment(
 
 
 # this definition exists because focused behavior needs one stable owner
-def SegmentsOrTouch(
+def HasSegmentTouch(
     FirstStart: Vector2,
     FirstEnd: Vector2,
     SecondStart: Vector2,
@@ -966,8 +966,7 @@ def SegmentsOrTouch(
         return True
     return any(
         (
-            abs(Value) <= Tolerance
-            and PointOnSegment(Point, Start, EndValue, Tolerance)
+            abs(Value) <= Tolerance and IsPointOnSeg(Point, Start, EndValue, Tolerance)
             for Value, Point, Start, EndValue in (
                 (FirstA, SecondStart, FirstStart, FirstEnd),
                 (FirstB, SecondEnd, FirstStart, FirstEnd),
@@ -1039,14 +1038,14 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
 
     for First in range(len(Endpoints)):
         for Second in range(First + 1, len(Endpoints)):
-            if PointsClose(Endpoints[First], Endpoints[Second]):
+            if IsPointClose(Endpoints[First], Endpoints[Second]):
                 Union(First, Second)
     Clusters: dict[int, list[int]] = {}
     for Index in range(len(Endpoints)):
         Clusters.setdefault(RootAction(Index), []).append(Index)
     if any(
         (
-            not PointsClose(Endpoints[First], Endpoints[Second])
+            not IsPointClose(Endpoints[First], Endpoints[Second])
             for Members in Clusters.values()
             for Position, First in enumerate(Members)
             for Second in Members[Position + 1 :]
@@ -1111,7 +1110,7 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
             for SecondIndex in range(FirstIndex + 1, len(Segments)):
                 if SecondIndex in {FirstIndex + 1, (FirstIndex - 1) % len(Segments)}:
                     continue
-                if SegmentsOrTouch(*FirstSegment, *Segments[SecondIndex]):
+                if HasSegmentTouch(*FirstSegment, *Segments[SecondIndex]):
                     return ()
         Profiles.append(
             (
@@ -1134,7 +1133,7 @@ def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], 
             )
             if any(
                 (
-                    SegmentsOrTouch(*FirstSegment, *SecondSegment)
+                    HasSegmentTouch(*FirstSegment, *SecondSegment)
                     for FirstSegment in FirstSegments
                     for SecondSegment in SecondSegments
                 )
@@ -1176,7 +1175,7 @@ KOriginPlaneFrames = {
 
 
 # this definition exists because focused behavior needs one stable owner
-def TransformClose(
+def IsTransformNear(
     First: Transform, Second: Transform, Tolerance: float = 1e-09
 ) -> bool:
     return all(
@@ -1206,7 +1205,7 @@ def OriginPlane(
         Value is None
         or ObjValue.type_id != "App::Plane"
         or String(ObjValue, "Role") != ObjValue.name
-        or (not TransformClose(Transform, Value[1]))
+        or (not IsTransformNear(Transform, Value[1]))
     ):
         return None
     return (Value[0], Value[2])
@@ -1392,7 +1391,7 @@ def RuleElemSlots(NodeValue: ET.Element) -> tuple[tuple[int, int], ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ParseSketches(
+def ParseSketchMut(
     Objects: tuple[_NativeObject, ...],
     Parameters: list[Parameter],
     ConsumedExpressions: set[tuple[str, str]],
@@ -1428,7 +1427,7 @@ def ParseSketches(
         if (
             Frame is None
             or SourceTransform is None
-            or TransformClose(SourceTransform, Frame[1])
+            or IsTransformNear(SourceTransform, Frame[1])
         ):
             continue
         RuleList = FindChild(ObjValue, "Constraints", "ConstraintList")
@@ -1502,7 +1501,7 @@ def ParseSketches(
             PlaneReframe(SourceTransform, TargetTransform)
             if SourceTransform is not None
             and TargetTransform is not None
-            and (not TransformClose(SourceTransform, TargetTransform))
+            and (not IsTransformNear(SourceTransform, TargetTransform))
             else None
         )
         FixedIndices = {
@@ -1630,10 +1629,10 @@ def ParseSketches(
                 constraints=tuple(Constraints),
                 parameter_ids=tuple(SketchParamIds),
                 closed_profile_entity_ids=ClosedProfile(EntityValues),
-                suppressed=not BoolAction(ObjValue, "Visibility", True),
+                suppressed=not IsBoolValue(ObjValue, "Visibility", True),
                 attributes={
                     "freecad": NativeObjectA(ObjValue),
-                    "fully_constrained": BoolAction(ObjValue, "FullyConstrained"),
+                    "fully_constrained": IsBoolValue(ObjValue, "FullyConstrained"),
                     "external_geometry": (
                         ElemData(ObjValue.properties["ExternalGeometry"])
                         if "ExternalGeometry" in ObjValue.properties
@@ -1867,7 +1866,7 @@ def Explicit(Objects: tuple[_NativeObject, ...]) -> tuple[Selection, ...]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def Feature(
+def FeatureMut(
     ObjValue: _NativeObject,
     FeatureId: str,
     Parameters: list[Parameter],
@@ -1935,8 +1934,8 @@ def Extrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
     return ExtrusionFeature(
         ParamValue(Float(ObjValue, "Length"), ValueKind.LENGTH, "mm"),
         end_condition=EndCondition,
-        reversed=BoolAction(ObjValue, "Reversed"),
-        symmetric=SideType == 2 or BoolAction(ObjValue, "Midplane"),
+        reversed=IsBoolValue(ObjValue, "Reversed"),
+        symmetric=SideType == 2 or IsBoolValue(ObjValue, "Midplane"),
         direction=Direction,
         second_length=(
             ParamValue(Float(ObjValue, "Length2"), ValueKind.LENGTH, "mm")
@@ -2395,7 +2394,7 @@ def MateEntityKindA(Value: str) -> MateEntityKind:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MateValues(
+def MateValuesMut(
     ObjValue: _NativeObject,
     KindValue: MateKind | str,
     MateId: str,
@@ -2418,7 +2417,7 @@ def MateValues(
         ("EnableAngleMin", "AngleMin", ValueKind.ANGLE, "deg"),
         ("EnableAngleMax", "AngleMax", ValueKind.ANGLE, "deg"),
     ):
-        if BoolAction(ObjValue, EnableName):
+        if IsBoolValue(ObjValue, EnableName):
             ValueProperties.append((PropName, KindItem, UnitValue))
     Expressions = ReadExpressions(ObjValue)
     PrimaryValue: ParamValue | None = None
@@ -2566,7 +2565,7 @@ def IsReparsePath(PathValue: FilePath, RootValue: FilePath) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def OuterDocuments(
+def OuterDocsMut(
     Native: _NativeArchive, SourcePath: str, State: _ExternalState | None, Depth: int
 ) -> tuple[dict[str, tuple[str, CadDoc]], list[dict[str, str]]]:
     Source = ResolvedSource(SourcePath)
@@ -2647,16 +2646,19 @@ def OuterDocuments(
         try:
             try:
                 Manifest = ExtractManifestFromFcstd(ChildData)
-            except ValueError as exc:
-                if str(exc) != "FCStd archive has no embedded Kit interchange document":
-                    raise NativeFreeCad(str(exc)) from exc
+            except ValueError as ErrorInfo:
+                if (
+                    str(ErrorInfo)
+                    != "FCStd archive has no embedded Kit interchange document"
+                ):
+                    raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
                 Child = ReadNativeFcstd(
                     ChildData, str(Choice), OuterState=State, OuterDepth=Depth + 1
                 )
             else:
                 Child = CadDoc.from_dict(Manifest)
-        except (NativeFreeCad, TypeError, ValueError, RecursionError) as exc:
-            Unresolved.append({"file": FileName, "reason": str(exc)})
+        except (NativeFreeCad, TypeError, ValueError, RecursionError) as ErrorInfo:
+            Unresolved.append({"file": FileName, "reason": str(ErrorInfo)})
             continue
         finally:
             State.active.discard(Choice)
@@ -2732,7 +2734,7 @@ def ParseAsm(
         Linked = LinkedObject(LinkObj)
         Target = str(Linked["name"]) or LinkObj.name
         SourceFile = str(Linked["file"]).replace("\\", "/")
-        Outer = OuterDocuments.get(str(Linked["file"]))
+        Outer = OuterDocsMut.get(str(Linked["file"]))
         SourceIdentity = (
             Outer[0]
             if Outer is not None
@@ -2803,7 +2805,7 @@ def ParseAsm(
                 MatrixFour(PlacementMatrix(PlacementElem(LinkObj, "Placement"))),
                 order=Order,
                 reference_number=str(Order + 1),
-                hidden=not BoolAction(LinkObj, "Visibility", True),
+                hidden=not IsBoolValue(LinkObj, "Visibility", True),
                 fixed=LinkObj.name in GroundedTargets,
                 provenance=Provenance(FormatId, LinkObj.name),
                 attributes={
@@ -2873,7 +2875,7 @@ def ParseAsm(
                         },
                     )
                 )
-        Value, ParamIds = MateValues(
+        Value, ParamIds = MateValuesMut(
             ObjValue, KindValue, MateId, Parameters, ConsumedExpressions
         )
         StoredValue = StoredMateValue(ObjValue)
@@ -2892,10 +2894,10 @@ def ParseAsm(
                 value=Value,
                 parameter_ids=ParamIds,
                 alignment=String(ObjValue, "Alignment", "unknown"),
-                suppressed=BoolAction(
-                    ObjValue, "SourceSuppressed", BoolAction(ObjValue, "Suppressed")
+                suppressed=IsBoolValue(
+                    ObjValue, "SourceSuppressed", IsBoolValue(ObjValue, "Suppressed")
                 ),
-                driving=BoolAction(ObjValue, "Driving", True),
+                driving=IsBoolValue(ObjValue, "Driving", True),
                 provenance=Provenance(FormatId, ObjValue.name),
                 attributes={
                     "freecad": NativeObjectA(ObjValue),
@@ -2943,7 +2945,7 @@ def ParseAsm(
 
 
 # this definition exists because focused behavior needs one stable owner
-def Remaining(
+def RemainingMut(
     Objects: tuple[_NativeObject, ...],
     Parameters: list[Parameter],
     Consumed: set[tuple[str, str]],
@@ -2994,7 +2996,7 @@ def BuildConfigs(
             Config(
                 IdsValue[ObjValue.name],
                 String(ObjValue, "Label", ObjValue.name),
-                active=BoolAction(ObjValue, "Active"),
+                active=IsBoolValue(ObjValue, "Active"),
                 parent_id=IdsValue.get(LinkAction(ObjValue, "ParentConfiguration")),
                 suppressed_feature_ids=tuple(
                     (
@@ -3023,12 +3025,12 @@ def ReadNativeFcstd(
     OuterStateA = OuterState
     if OuterStateA is None and SourceFile is not None:
         OuterStateA = OuterState(SourceFile.parent, {}, {SourceFile}, 1, len(DataValue))
-    ResolvedOuter, UnresolvedOuter = OuterDocuments(
+    ResolvedOuter, UnresolvedOuter = OuterDocsMut(
         Native, SourcePath, OuterStateA, OuterDepth
     )
     Parameters: list[Param] = []
     ConsumedExpressions: set[tuple[str, str]] = set()
-    SupportPlanes, Sketches = ParseSketches(
+    SupportPlanes, Sketches = ParseSketchMut(
         Native.objects, Parameters, ConsumedExpressions
     )
     SketchIds = {
@@ -3067,7 +3069,7 @@ def ReadNativeFcstd(
         KindValue = FeatureKindA(ObjValue)
         FeatureSelections = FeatureA(ObjValue)
         Selections.extend(FeatureSelections)
-        ParamIds = Feature(ObjValue, FeatureId, Parameters, ConsumedExpressions)
+        ParamIds = FeatureMut(ObjValue, FeatureId, Parameters, ConsumedExpressions)
         Dependencies = tuple(
             (
                 FeatureIds[Value]
@@ -3139,7 +3141,7 @@ def ReadNativeFcstd(
                 thickness=ParamValue(
                     abs(Float(ObjValue, "Value")), ValueKind.LENGTH, "mm"
                 ),
-                outward=not BoolAction(ObjValue, "Reversed"),
+                outward=not IsBoolValue(ObjValue, "Reversed"),
             )
         elif ObjValue.type_id == "PartDesign::LinearPattern":
             ItemCount = EnumAction(ObjValue, "Occurrences", 1)
@@ -3156,14 +3158,14 @@ def ReadNativeFcstd(
                 direction_selection_id=(
                     FeatureSelections[0].id if FeatureSelections else ""
                 ),
-                reversed=BoolAction(ObjValue, "Reversed"),
+                reversed=IsBoolValue(ObjValue, "Reversed"),
             )
         elif ObjValue.type_id == "PartDesign::PolarPattern":
             Definition = CircularPatternFeature(
                 angle=ParamValue(abs(Float(ObjValue, "Angle")), ValueKind.ANGLE, "deg"),
                 instance_count=EnumAction(ObjValue, "Occurrences", 1),
                 axis_selection_id=FeatureSelections[0].id if FeatureSelections else "",
-                reversed=BoolAction(ObjValue, "Reversed"),
+                reversed=IsBoolValue(ObjValue, "Reversed"),
             )
         else:
             Definition = NativeFeatureDefinition(
@@ -3183,7 +3185,7 @@ def ReadNativeFcstd(
                 selection_ids=tuple(
                     (SelectionValue.id for SelectionValue in FeatureSelections)
                 ),
-                suppressed=BoolAction(ObjValue, "Suppressed"),
+                suppressed=IsBoolValue(ObjValue, "Suppressed"),
                 provenance=Provenance(FormatId, ObjValue.name),
                 attributes={
                     "freecad": NativeObjectA(ObjValue),
@@ -3245,7 +3247,7 @@ def ReadNativeFcstd(
     )
     NativeDoc, NativeBinding = NativePayloads(Native, DataValue, SourcePath)
     BrepPayloads = (*BrepPayloads, NativeDoc, NativeBinding)
-    Remaining(Native.objects, Parameters, ConsumedExpressions)
+    RemainingMut(Native.objects, Parameters, ConsumedExpressions)
     NativeFeatureTypes = sorted(
         {
             ObjValue.type_id
@@ -3595,7 +3597,7 @@ globals()["_archive_members"] = ArchiveMembers
 globals()["_assembly_root_object"] = AsmRootObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_bool"] = BoolAction
+globals()["_bool"] = IsBoolValue
 
 # this binding exists because shared behavior needs one stable value
 globals()["_build_brep_payloads"] = BuildBrep
@@ -3643,7 +3645,7 @@ globals()["_explicit_selections"] = Explicit
 globals()["_expressions"] = ReadExpressions
 
 # this binding exists because shared behavior needs one stable value
-globals()["_external_documents"] = OuterDocuments
+globals()["_external_documents"] = OuterDocsMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_extrusion_definition"] = Extrusion
@@ -3655,7 +3657,7 @@ globals()["_extrusion_end_condition"] = ExtrusionEnd
 globals()["_feature_kind"] = FeatureKindA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_parameters"] = Feature
+globals()["_feature_parameters"] = FeatureMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_feature_selections"] = FeatureA
@@ -3721,7 +3723,7 @@ globals()["_load_native_archive"] = LoadNative
 globals()["_mate_entity_kind"] = MateEntityKindA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mate_values"] = MateValues
+globals()["_mate_values"] = MateValuesMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_native_configurations"] = BuildConfigs
@@ -3754,7 +3756,7 @@ globals()["_parse_meshes"] = ParseMeshes
 globals()["_parse_objects"] = ParseObjects
 
 # this binding exists because shared behavior needs one stable value
-globals()["_parse_sketches"] = ParseSketches
+globals()["_parse_sketches"] = ParseSketchMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_part_extrusion_definition"] = PartExtrusion
@@ -3769,10 +3771,10 @@ globals()["_placement_matrix"] = PlacementMatrix
 globals()["_plane_reframe"] = PlaneReframe
 
 # this binding exists because shared behavior needs one stable value
-globals()["_point_on_segment"] = PointOnSegment
+globals()["_point_on_segment"] = IsPointOnSeg
 
 # this binding exists because shared behavior needs one stable value
-globals()["_points_close"] = PointsClose
+globals()["_points_close"] = IsPointClose
 
 # this binding exists because shared behavior needs one stable value
 globals()["_property_parameter_value"] = PropParamValue
@@ -3784,7 +3786,7 @@ globals()["_proxy_class"] = ProxyClass
 globals()["_reframe_geometry"] = ReframeGeom
 
 # this binding exists because shared behavior needs one stable value
-globals()["_remaining_expressions"] = Remaining
+globals()["_remaining_expressions"] = RemainingMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_resolved_source_path"] = ResolvedSource
@@ -3793,7 +3795,7 @@ globals()["_resolved_source_path"] = ResolvedSource
 globals()["_segment_orientation"] = Segment
 
 # this binding exists because shared behavior needs one stable value
-globals()["_segments_intersect_or_touch"] = SegmentsOrTouch
+globals()["_segments_intersect_or_touch"] = HasSegmentTouch
 
 # this binding exists because shared behavior needs one stable value
 globals()["_stored_count"] = StoredCount
@@ -3814,7 +3816,7 @@ globals()["_support_target"] = SupportTarget
 globals()["_transform"] = TransformA
 
 # this binding exists because shared behavior needs one stable value
-globals()["_transform_close"] = TransformClose
+globals()["_transform_close"] = IsTransformNear
 
 # this binding exists because shared behavior needs one stable value
 globals()["_validated_archive_members"] = ValidatedArchiveMembers

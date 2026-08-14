@@ -194,7 +194,50 @@ def SourcePath(Source: Source) -> str:
     return str(NameValue) if isinstance(NameValue, (str, FilePath)) else ""
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition recursively filters linked documents while preserving invalid metadata
+def FilterOuterValues(Outer: AnyValue, Settings: ReadOptions) -> tuple[list[AnyValue], bool]:
+    if not isinstance(Outer, Sequence) or isinstance(Outer, (str, bytes, bytearray)):
+        return ([], False)
+    StrippedOuter: list[AnyValue] = []
+    Changed = False
+    for Value in Outer:
+        if not isinstance(Value, Mapping):
+            StrippedOuter.append(Value)
+            continue
+        Linked = Value.get("document")
+        Mapped = isinstance(Linked, Mapping)
+        if Mapped:
+            try:
+                Linked = CadDoc.from_dict(Linked)
+            except (TypeError, ValueError, RecursionError):
+                StrippedOuter.append(Value)
+                continue
+        if not isinstance(Linked, CadDoc):
+            StrippedOuter.append(Value)
+            continue
+        ItemValue = dict(Value)
+        Stripped = FilteredDoc(Linked, Settings)
+        ItemValue["document"] = Stripped.to_dict() if Mapped else Stripped
+        StrippedOuter.append(ItemValue)
+        Changed = True
+    return (StrippedOuter, Changed)
+
+
+# this definition updates only the external document metadata when filtering changes it
+def FilterOuterMeta(MetaValue: Mapping[str, AnyValue], Settings: ReadOptions) -> Mapping[str, AnyValue]:
+    Freecad = MetaValue.get("freecad", {}) if isinstance(MetaValue, Mapping) else {}
+    Outer = Freecad.get("external_documents", []) if isinstance(Freecad, Mapping) else []
+    StrippedOuter, Changed = FilterOuterValues(Outer, Settings)
+    if not Changed:
+        return MetaValue
+    FreecadCopy = dict(Freecad)
+    FreecadCopy["external_documents"] = StrippedOuter
+    MetaCopy = dict(MetaValue)
+    MetaCopy["freecad"] = FreecadCopy
+    return MetaCopy
+
+
+# this definition applies read filters to a document and its linked documents
 def FilteredDoc(DocValue: CadDocument, Settings: ReadOptions) -> CadDoc:
     Filtered = FilterDoc(
         DocValue,
@@ -202,40 +245,7 @@ def FilteredDoc(DocValue: CadDocument, Settings: ReadOptions) -> CadDoc:
         include_tessellation=Settings.include_tessellation,
         keep_payload_records=False,
     )
-    MetaValue: Mapping[str, AnyValue] = Filtered.metadata
-    Freecad = MetaValue.get("freecad", {}) if isinstance(MetaValue, Mapping) else {}
-    Outer = (
-        Freecad.get("external_documents", []) if isinstance(Freecad, Mapping) else []
-    )
-    if isinstance(Outer, Sequence) and (not isinstance(Outer, (str, bytes, bytearray))):
-        StrippedOuter: list[AnyValue] = []
-        Changed = False
-        for Value in Outer:
-            if not isinstance(Value, Mapping):
-                StrippedOuter.append(Value)
-                continue
-            Linked = Value.get("document")
-            Mapped = isinstance(Linked, Mapping)
-            if Mapped:
-                try:
-                    Linked = CadDoc.from_dict(Linked)
-                except (TypeError, ValueError, RecursionError):
-                    StrippedOuter.append(Value)
-                    continue
-            if not isinstance(Linked, CadDoc):
-                StrippedOuter.append(Value)
-                continue
-            ItemValue = dict(Value)
-            Stripped = FilteredDoc(Linked, Settings)
-            ItemValue["document"] = Stripped.to_dict() if Mapped else Stripped
-            StrippedOuter.append(ItemValue)
-            Changed = True
-        if Changed:
-            FreecadCopy = dict(Freecad)
-            FreecadCopy["external_documents"] = StrippedOuter
-            MetaCopy = dict(MetaValue)
-            MetaCopy["freecad"] = FreecadCopy
-            MetaValue = MetaCopy
+    MetaValue: Mapping[str, AnyValue] = FilterOuterMeta(Filtered.metadata, Settings)
     return Replace(Filtered, metadata=MetaValue)
 
 
@@ -498,7 +508,7 @@ def HasNativeGraph(DocValue: CadDocument) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def FeatureHasEdges(DocValue: CadDocument, Feature: Any) -> bool:
+def HasFeatureEdges(DocValue: CadDocument, Feature: Any) -> bool:
     Attributes = Feature.attributes
     for NameValue in (
         "selected_native_local_edge_ids",
@@ -544,7 +554,7 @@ def FeatureHasEdges(DocValue: CadDocument, Feature: Any) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def ExtrusionIs(Feature: Any) -> bool:
+def IsExtrusion(Feature: Any) -> bool:
     Definition = Feature.definition
     if not isinstance(Definition, ExtrusionFeature):
         return False
@@ -622,7 +632,7 @@ def FeatureParts(
                 Writable
                 and bool(Feature.sketch_id)
                 and SketchNative.get(Feature.sketch_id or "", False)
-                and ExtrusionIs(Feature)
+                and IsExtrusion(Feature)
             )
         elif KindValue == FeatureKind.FILLET.value:
             Writable = (
@@ -630,7 +640,7 @@ def FeatureParts(
                 and isinstance(Feature.definition, FilletFeature)
                 and (not Feature.definition.variable_radius_parameter_ids)
                 and bool(Feature.input_feature_ids)
-                and FeatureHasEdges(DocValue, Feature)
+                and HasFeatureEdges(DocValue, Feature)
             )
         elif KindValue == FeatureKind.CHAMFER.value:
             Writable = (
@@ -640,7 +650,7 @@ def FeatureParts(
                 and (Feature.definition.second_distance is None)
                 and (Feature.definition.angle is None)
                 and bool(Feature.input_feature_ids)
-                and FeatureHasEdges(DocValue, Feature)
+                and HasFeatureEdges(DocValue, Feature)
             )
         else:
             Writable = False
@@ -659,7 +669,7 @@ def FeatureParts(
                     SketchReason = SketchCarrierReasons.get(Feature.sketch_id or "")
                     if SketchReason is not None:
                         FeatureReasons.add(SketchReason)
-                    if not Feature.sketch_id or not ExtrusionIs(Feature):
+                    if not Feature.sketch_id or not IsExtrusion(Feature):
                         FeatureReasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
                 if not FeatureReasons:
                     FeatureReasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
@@ -747,7 +757,7 @@ def MateParts(DocValue: CadDocument) -> tuple[int, int]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PayloadIsExact(Payload: BrepPayload) -> bool:
+def IsExactPayload(Payload: BrepPayload) -> bool:
     DataValue = Payload.data
     Provenance = Payload.provenance
     Attributes = Payload.attributes
@@ -851,14 +861,14 @@ def ArchiveMember(
 
 
 # this definition exists because focused behavior needs one stable owner
-def PayloadMatches(
+def IsPayloadMatch(
     Payload: BrepPayload,
     Archive: zipfile.ZipFile,
     Members: Mapping[str, zipfile.ZipInfo],
     RootValue: ET.Element,
     NativeDocShaTwoFiveSix: str,
 ) -> bool:
-    if not PayloadIsExact(Payload) or Payload.data is None:
+    if not IsExactPayload(Payload) or Payload.data is None:
         return False
     if ArchiveMember(Archive, Members, Payload.source_stream) != Payload.data:
         return False
@@ -942,7 +952,7 @@ def TrustedNative(DocValue: CadDocument) -> frozenset[NativeBrepKey]:
             for Payload, Mapped in zip(
                 ItemValue.brep_payloads, MappedPayloads, strict=True
             ):
-                if not PayloadMatches(
+                if not IsPayloadMatch(
                     Payload, Archive, Members, RootValue, NativeDocShaTwoFiveSix
                 ):
                     continue
@@ -981,7 +991,7 @@ def PayloadNative(
 
 
 # this definition exists because focused behavior needs one stable owner
-def PayloadIsBrep(
+def IsBrepPayload(
     Payload: BrepPayload,
     MappedPayload: Mapping[str, Any] | None = None,
     NativeDocShaTwoFiveSix: str = "",
@@ -996,7 +1006,7 @@ def PayloadIsBrep(
 
 
 # this definition exists because focused behavior needs one stable owner
-def NeutralBrepIs(DocValue: CadDocument) -> bool:
+def IsNeutralBrep(DocValue: CadDocument) -> bool:
     if DocValue.brep is None:
         return False
     try:
@@ -1007,7 +1017,7 @@ def NeutralBrepIs(DocValue: CadDocument) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MeshIsUsable(MeshValue: Mesh) -> bool:
+def IsMeshUsable(MeshValue: Mesh) -> bool:
     Points = tuple(((Value.x, Value.y, Value.z) for Value in MeshValue.vertices))
     if not Points or any((not all(map(MathValue.isfinite, Point)) for Point in Points)):
         return False
@@ -1030,7 +1040,7 @@ def MeshIsUsable(MeshValue: Mesh) -> bool:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeGeomIs(
+def IsNativeGeom(
     DocValue: CadDocument, TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset()
 ) -> bool:
     Items = [DocValue]
@@ -1070,11 +1080,11 @@ def NativeGeomIs(
         )
         if ItemValue.brep is None and (not RawBreps):
             continue
-        if ItemValue.brep is not None and NeutralBrepIs(ItemValue):
+        if ItemValue.brep is not None and IsNeutralBrep(ItemValue):
             continue
         if any(
             (
-                PayloadIsBrep(
+                IsBrepPayload(
                     Payload,
                     MappedByIdentity.get(id(Payload)),
                     NativeDocShaTwoFiveSix,
@@ -1084,7 +1094,7 @@ def NativeGeomIs(
             )
         ):
             continue
-        if any((MeshIsUsable(MeshValue) for MeshValue in ItemValue.meshes)):
+        if any((IsMeshUsable(MeshValue) for MeshValue in ItemValue.meshes)):
             continue
         if (
             ItemValue.source.format_id.casefold() != InfoValue.format_id.casefold()
@@ -1221,7 +1231,7 @@ def CapabilityA(
             [True] * NativeExpressions + [False] * CarrierExpressions
         )
         RawBreps = [
-            PayloadIsBrep(
+            IsBrepPayload(
                 Payload,
                 MappedByIdentity.get(id(Payload)),
                 NativeDocShaTwoFiveSix,
@@ -1231,7 +1241,7 @@ def CapabilityA(
             if Payload.role == PayloadRole.BREP and Payload.data is not None
         ]
         if ItemValue.brep is not None:
-            NativeBrep = NeutralBrepIs(ItemValue) or any(RawBreps)
+            NativeBrep = IsNeutralBrep(ItemValue) or any(RawBreps)
             Parts[Capability.BREP].append(NativeBrep)
             if not NativeBrep:
                 CarrierReasons[Capability.BREP].add(CarrierReason.WRITER_UNIMPLEMENTED)
@@ -1347,8 +1357,10 @@ def WriteBytes(
             raise TypeError("destination must be a path or binary stream")
         try:
             Written = Writer(DataValue)
-        except TypeError as exc:
-            raise TypeError("FCStd destination must be opened in binary mode") from exc
+        except TypeError as ErrorInfo:
+            raise TypeError(
+                "FCStd destination must be opened in binary mode"
+            ) from ErrorInfo
         if Written is not None and Written != len(DataValue):
             raise OSError(
                 f"short FCStd write: expected {len(DataValue)} bytes, wrote {Written}"
@@ -1486,7 +1498,7 @@ def XmlString(NodeValue: ET.Element, NameValue: str, Default: str = "") -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def XmlBool(NodeValue: ET.Element, NameValue: str, Default: bool = False) -> bool:
+def IsXmlBool(NodeValue: ET.Element, NameValue: str, Default: bool = False) -> bool:
     Value = NodeValue.find(f"./Properties/Property[@name='{NameValue}']/Bool")
     if Value is None:
         return Default
@@ -1677,13 +1689,13 @@ def OuterLink(DataValue: bytes) -> tuple[str, list[dict[str, AnyValue]]]:
             "reference_number": XmlString(NodeValue, "ReferenceNumber"),
             "configuration_name": XmlString(NodeValue, "ConfigurationName"),
             "configuration_id": XmlString(NodeValue, "ConfigurationId"),
-            "suppressed": XmlBool(NodeValue, "Suppressed"),
-            "hidden": XmlBool(NodeValue, "Hidden"),
-            "fixed": XmlBool(NodeValue, "Fixed"),
-            "flexible": XmlBool(NodeValue, "Flexible"),
-            "exclude_from_bom": XmlBool(NodeValue, "ExcludeFromBOM"),
-            "visibility": XmlBool(NodeValue, "Visibility", True),
-            "rigid": XmlBool(NodeValue, "Rigid", True),
+            "suppressed": IsXmlBool(NodeValue, "Suppressed"),
+            "hidden": IsXmlBool(NodeValue, "Hidden"),
+            "fixed": IsXmlBool(NodeValue, "Fixed"),
+            "flexible": IsXmlBool(NodeValue, "Flexible"),
+            "exclude_from_bom": IsXmlBool(NodeValue, "ExcludeFromBOM"),
+            "visibility": IsXmlBool(NodeValue, "Visibility", True),
+            "rigid": IsXmlBool(NodeValue, "Rigid", True),
             "transform": XmlTransform(NodeValue),
             "scale": XmlScale(NodeValue),
             "instance_data": InstanceData,
@@ -1957,10 +1969,10 @@ def NativeOuter(DocValue: CadDocument) -> list[tuple[str, CadDoc]]:
         if isinstance(Linked, Mapping):
             try:
                 Linked = CadDoc.from_dict(Linked)
-            except (TypeError, ValueError, RecursionError) as exc:
+            except (TypeError, ValueError, RecursionError) as ErrorInfo:
                 raise FreeCadAdapterA(
                     "native FreeCAD external document metadata is invalid"
-                ) from exc
+                ) from ErrorInfo
         if not SourceFile or not isinstance(Linked, CadDoc):
             raise FreeCadAdapterA(
                 "native FreeCAD external document metadata is invalid"
@@ -2032,8 +2044,10 @@ def WriteNative(
 def ManifestDoc(Value: Mapping[str, Any]) -> CadDoc:
     try:
         return CadDoc.from_dict(Value)
-    except (TypeError, ValueError, RecursionError) as exc:
-        raise FreeCadAdapterA("embedded neutral document cannot be restored") from exc
+    except (TypeError, ValueError, RecursionError) as ErrorInfo:
+        raise FreeCadAdapterA(
+            "embedded neutral document cannot be restored"
+        ) from ErrorInfo
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2075,30 +2089,30 @@ class FreeCadAdapter:
                 try:
                     Value = ExtractManifestFromFcstd(DataValue)
                     ManifestDoc(Value)
-                except (ValueError, FreeCadAdapterA) as exc:
-                    return ProbeResult(Instance.info.format_id, 0.0, str(exc))
+                except (ValueError, FreeCadAdapterA) as ErrorInfo:
+                    return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
                 return ProbeResult(Instance.info.format_id, 1.0, "Kit FCStd archive")
             if "Document.xml" in Members:
                 try:
                     Value = ExtractManifestFromFcstd(DataValue)
-                except ValueError as exc:
+                except ValueError as ErrorInfo:
                     if (
-                        str(exc)
+                        str(ErrorInfo)
                         != "FCStd archive has no embedded Kit interchange document"
                     ):
-                        return ProbeResult(Instance.info.format_id, 0.0, str(exc))
+                        return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
                 else:
                     try:
                         ManifestDoc(Value)
-                    except FreeCadAdapterA as exc:
-                        return ProbeResult(Instance.info.format_id, 0.0, str(exc))
+                    except FreeCadAdapterA as ErrorInfo:
+                        return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
                     return ProbeResult(
                         Instance.info.format_id, 1.0, "Kit FCStd archive"
                     )
                 Confidence, Reason = ProbeNativeFcstd(DataValue)
                 return ProbeResult(Instance.info.format_id, Confidence, Reason)
-        except (OSError, TypeError, ValueError, Zipfile.BadZipFile) as exc:
-            return ProbeResult(Instance.info.format_id, 0.0, str(exc))
+        except (OSError, TypeError, ValueError, Zipfile.BadZipFile) as ErrorInfo:
+            return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
         return ProbeResult(
             Instance.info.format_id, 0.0, "ZIP archive has no FreeCAD document"
         )
@@ -2112,13 +2126,16 @@ class FreeCadAdapter:
         Native = False
         try:
             Value = ExtractManifestFromFcstd(DataValue)
-        except ValueError as exc:
-            if str(exc) != "FCStd archive has no embedded Kit interchange document":
-                raise FreeCadAdapterA(str(exc)) from exc
+        except ValueError as ErrorInfo:
+            if (
+                str(ErrorInfo)
+                != "FCStd archive has no embedded Kit interchange document"
+            ):
+                raise FreeCadAdapterA(str(ErrorInfo)) from ErrorInfo
             try:
                 DocValue = ReadNativeFcstd(DataValue, SourcePath(Source))
-            except (NativeFreeCadError, TypeError, ValueError) as native_exc:
-                raise FreeCadAdapterA(str(native_exc)) from native_exc
+            except (NativeFreeCadError, TypeError, ValueError) as NativeError:
+                raise FreeCadAdapterA(str(NativeError)) from NativeError
             Native = True
         else:
             DocValue = ManifestDoc(Value)
@@ -2134,7 +2151,7 @@ class FreeCadAdapter:
         return DocValue
 
     # this definition exists because focused behavior needs one stable owner
-    def Supports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+    def CanSupport(Instance, DocValue: CadDocument, Target: Destination) -> bool:
         PathValue = ResolveTarget(Target)
         if PathValue is not None:
             return PathValue.suffix.casefold() == Suffix.casefold()
@@ -2248,7 +2265,7 @@ class FreeCadAdapter:
         Transfers = CapabilityA(
             DocValue, TargetPath, Portable, False, TrustedNativeBreps
         )
-        AppUsable = not CarrierOnlyReferences and NativeGeomIs(
+        AppUsable = not CarrierOnlyReferences and IsNativeGeom(
             DocValue, TrustedNativeBreps
         )
         MetaValue = {
@@ -2300,7 +2317,7 @@ class FreeCadAdapter:
     locals()["info"] = InfoAction
     locals()["probe"] = Probe
     locals()["read"] = ReadAction
-    locals()["supports"] = Supports
+    locals()["supports"] = CanSupport
     locals()["write"] = Write
 
 
@@ -2469,10 +2486,10 @@ globals()["_external_link_details"] = OuterLink
 globals()["_external_link_target"] = OuterLinkTarget
 
 # this binding exists because shared behavior needs one stable value
-globals()["_extrusion_is_native"] = ExtrusionIs
+globals()["_extrusion_is_native"] = IsExtrusion
 
 # this binding exists because shared behavior needs one stable value
-globals()["_feature_has_native_edges"] = FeatureHasEdges
+globals()["_feature_has_native_edges"] = HasFeatureEdges
 
 # this binding exists because shared behavior needs one stable value
 globals()["_feature_parts"] = FeatureParts
@@ -2514,7 +2531,7 @@ globals()["_mate_parts"] = MateParts
 globals()["_mesh_component_document"] = MeshComponent
 
 # this binding exists because shared behavior needs one stable value
-globals()["_mesh_is_usable"] = MeshIsUsable
+globals()["_mesh_is_usable"] = IsMeshUsable
 
 # this binding exists because shared behavior needs one stable value
 globals()["_native_document_pair"] = NativeDocPair
@@ -2526,25 +2543,25 @@ globals()["_native_document_sha256"] = NativeDocShaTwo
 globals()["_native_external_documents"] = NativeOuter
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_geometry_is_usable"] = NativeGeomIs
+globals()["_native_geometry_is_usable"] = IsNativeGeom
 
 # this binding exists because shared behavior needs one stable value
 globals()["_nested_external_links"] = OuterLinkMap
 
 # this binding exists because shared behavior needs one stable value
-globals()["_neutral_brep_is_native"] = NeutralBrepIs
+globals()["_neutral_brep_is_native"] = IsNeutralBrep
 
 # this binding exists because shared behavior needs one stable value
 globals()["_parsed_timestamp"] = ParsedTimestamp
 
 # this binding exists because shared behavior needs one stable value
-globals()["_payload_is_exact_native_brep"] = PayloadIsExact
+globals()["_payload_is_exact_native_brep"] = IsExactPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["_payload_is_reattachable_brep"] = PayloadIsBrep
+globals()["_payload_is_reattachable_brep"] = IsBrepPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()["_payload_matches_native_archive"] = PayloadMatches
+globals()["_payload_matches_native_archive"] = IsPayloadMatch
 
 # this binding exists because shared behavior needs one stable value
 globals()["_payload_native_brep"] = PayloadNative
@@ -2595,7 +2612,7 @@ globals()["_write_components"] = WriteComponents
 globals()["_write_native_external_documents"] = WriteNative
 
 # this binding exists because shared behavior needs one stable value
-globals()["_xml_bool"] = XmlBool
+globals()["_xml_bool"] = IsXmlBool
 
 # this binding exists because shared behavior needs one stable value
 globals()["_xml_element_data"] = XmlElemData

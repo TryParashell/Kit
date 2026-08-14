@@ -110,18 +110,30 @@ KSupportPlaneTypeIds = frozenset(
     {"App::Plane", "Part::DatumPlane", "PartDesign::Plane"}
 )
 
-# this binding exists because shared behavior needs one stable value
-KQuantityPropUnits = {
+# this binding groups motion and geometric quantity units by responsibility
+KQuantityMotionUnits = {
     "Acceleration": "mm/s^2",
-    "AmountOfSubstance": "mol",
     "Angle": "deg",
     "Area": "mm^2",
-    "CompressiveStrength": "kg/(mm*s^2)",
-    "CurrentDensity": "A/mm^2",
-    "Density": "kg/mm^3",
     "DissipationRate": "mm^2/s^3",
     "Distance": "mm",
-    "DynamicViscosity": "kg/(mm*s)",
+    "Frequency": "1/s",
+    "InverseArea": "1/mm^2",
+    "InverseLength": "1/mm",
+    "InverseVolume": "1/mm^3",
+    "KinematicViscosity": "mm^2/s",
+    "Length": "mm",
+    "SpecificEnergy": "mm^2/s^2",
+    "Speed": "mm/s",
+    "Time": "s",
+    "Velocity": "mm/s",
+    "Volume": "mm^3",
+    "VolumeFlowRate": "mm^3/s",
+}
+
+# this binding groups electrical and magnetic quantity units by responsibility
+KQuantityElectricUnits = {
+    "CurrentDensity": "A/mm^2",
     "ElectricalCapacitance": "A^2*s^4/(kg*mm^2)",
     "ElectricalConductance": "A^2*s^3/(kg*mm^2)",
     "ElectricalConductivity": "A^2*s^3/(kg*mm^3)",
@@ -131,46 +143,54 @@ KQuantityPropUnits = {
     "ElectricCurrent": "A",
     "ElectricPotential": "kg*mm^2/(A*s^3)",
     "ElectromagneticPotential": "kg*mm/(A*s^2)",
-    "Force": "kg*mm/s^2",
-    "Frequency": "1/s",
-    "HeatFlux": "kg/s^3",
-    "InverseArea": "1/mm^2",
-    "InverseLength": "1/mm",
-    "InverseVolume": "1/mm^3",
-    "KinematicViscosity": "mm^2/s",
-    "Length": "mm",
-    "LuminousIntensity": "cd",
     "MagneticFieldStrength": "A/mm",
     "MagneticFlux": "kg*mm^2/(A*s^2)",
     "MagneticFluxDensity": "kg/(A*s^2)",
     "Magnetization": "A/mm",
+    "SurfaceChargeDensity": "A*s/mm^2",
+    "VacuumPermittivity": "A^2*s^4/(kg*mm^3)",
+    "VolumeChargeDensity": "A*s/mm^3",
+}
+
+# this binding groups mechanical quantity units by responsibility
+KQuantityMechanicUnits = {
+    "CompressiveStrength": "kg/(mm*s^2)",
+    "Density": "kg/mm^3",
+    "DynamicViscosity": "kg/(mm*s)",
+    "Force": "kg*mm/s^2",
     "Mass": "kg",
     "Moment": "kg*mm^2/s^2",
     "Power": "kg*mm^2/s^3",
     "Pressure": "kg/(mm*s^2)",
     "ShearModulus": "kg/(mm*s^2)",
-    "SpecificEnergy": "mm^2/s^2",
-    "SpecificHeat": "mm^2/(s^2*K)",
-    "Speed": "mm/s",
     "Stiffness": "kg/s^2",
     "StiffnessDensity": "kg/(mm^2*s^2)",
     "Stress": "kg/(mm*s^2)",
-    "SurfaceChargeDensity": "A*s/mm^2",
+    "UltimateTensileStrength": "kg/(mm*s^2)",
+    "Work": "kg*mm^2/s^2",
+    "YieldStrength": "kg/(mm*s^2)",
+    "YoungsModulus": "kg/(mm*s^2)",
+}
+
+# this binding groups thermal and remaining base quantity units by responsibility
+KQuantityThermalUnits = {
+    "AmountOfSubstance": "mol",
+    "HeatFlux": "kg/s^3",
+    "LuminousIntensity": "cd",
+    "SpecificHeat": "mm^2/(s^2*K)",
     "Temperature": "K",
     "ThermalConductivity": "kg*mm/(s^3*K)",
     "ThermalExpansionCoefficient": "1/K",
     "ThermalTransferCoefficient": "kg/(s^3*K)",
-    "Time": "s",
-    "UltimateTensileStrength": "kg/(mm*s^2)",
-    "VacuumPermittivity": "A^2*s^4/(kg*mm^3)",
-    "Velocity": "mm/s",
-    "Volume": "mm^3",
-    "VolumeChargeDensity": "A*s/mm^3",
-    "VolumeFlowRate": "mm^3/s",
     "VolumetricThermalExpansionCoefficient": "1/K",
-    "Work": "kg*mm^2/s^2",
-    "YieldStrength": "kg/(mm*s^2)",
-    "YoungsModulus": "kg/(mm*s^2)",
+}
+
+# this binding preserves the complete quantity lookup contract
+KQuantityPropUnits = {
+    **KQuantityMotionUnits,
+    **KQuantityElectricUnits,
+    **KQuantityMechanicUnits,
+    **KQuantityThermalUnits,
 }
 
 
@@ -227,8 +247,8 @@ class FeatureType:
     __annotations__["kind"] = "FeatureKind"
 
 
-# this binding exists because shared behavior needs one stable value
-KFeatureTypes = (
+# this binding groups foundational part workbench feature identities
+KPartCoreTypes = (
     FeatureType("Part::Boolean", FeatureKind.BOOLEAN),
     FeatureType("Part::Chamfer", FeatureKind.CHAMFER),
     FeatureType("Part::Common", FeatureKind.BOOLEAN),
@@ -255,6 +275,10 @@ KFeatureTypes = (
     FeatureType("Part::ImportBrep", FeatureKind.IMPORTED),
     FeatureType("Part::ImportIges", FeatureKind.IMPORTED),
     FeatureType("Part::ImportStep", FeatureKind.IMPORTED),
+)
+
+# this binding groups advanced part workbench feature identities
+KPartShapeTypes = (
     FeatureType("Part::LocalCoordinateSystem", FeatureKind.REFERENCE),
     FeatureType("Part::Loft", FeatureKind.LOFT),
     FeatureType("Part::Mirroring", FeatureKind.MIRROR),
@@ -276,6 +300,10 @@ KFeatureTypes = (
     FeatureType("Part::Sweep", FeatureKind.SWEEP),
     FeatureType("Part::Spline", FeatureKind.NATIVE),
     FeatureType("Part::Thickness", FeatureKind.SHELL),
+)
+
+# this binding groups additive and foundational design feature identities
+KDesignCoreTypes = (
     FeatureType("PartDesign::AdditiveHelix", FeatureKind.HELIX),
     FeatureType("PartDesign::AdditiveLoft", FeatureKind.LOFT),
     FeatureType("PartDesign::AdditivePipe", FeatureKind.SWEEP),
@@ -299,6 +327,10 @@ KFeatureTypes = (
     FeatureType("PartDesign::Groove", FeatureKind.REVOLUTION),
     FeatureType("PartDesign::Helix", FeatureKind.HELIX),
     FeatureType("PartDesign::Hole", FeatureKind.HOLE),
+)
+
+# this binding groups patterned and profile based design feature identities
+KDesignProfileTypes = (
     FeatureType("PartDesign::Line", FeatureKind.REFERENCE),
     FeatureType("PartDesign::LinearPattern", FeatureKind.PATTERN),
     FeatureType("PartDesign::Loft", FeatureKind.LOFT),
@@ -313,6 +345,10 @@ KFeatureTypes = (
     FeatureType("PartDesign::Revolution", FeatureKind.REVOLUTION),
     FeatureType("PartDesign::Revolved", FeatureKind.REVOLUTION),
     FeatureType("PartDesign::Scaled", FeatureKind.SCALE),
+)
+
+# this binding groups binder and subtractive design feature identities
+KDesignBinderTypes = (
     FeatureType("PartDesign::ShapeBinder", FeatureKind.REFERENCE),
     FeatureType("PartDesign::Solid", FeatureKind.NATIVE),
     FeatureType("PartDesign::SubShapeBinder", FeatureKind.REFERENCE),
@@ -322,6 +358,15 @@ KFeatureTypes = (
     FeatureType("PartDesign::SubtractivePipe", FeatureKind.SWEEP),
     FeatureType("PartDesign::Thickness", FeatureKind.SHELL),
     FeatureType("PartDesign::Transformed", FeatureKind.PATTERN),
+)
+
+# this binding preserves the complete ordered feature type contract
+KFeatureTypes = (
+    *KPartCoreTypes,
+    *KPartShapeTypes,
+    *KDesignCoreTypes,
+    *KDesignProfileTypes,
+    *KDesignBinderTypes,
 )
 
 # this binding exists because shared behavior needs one stable value

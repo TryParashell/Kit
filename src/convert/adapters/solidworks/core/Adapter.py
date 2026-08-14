@@ -1353,15 +1353,8 @@ def AsmBundleA(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def NestedAsmDoc(DocValue: CadDocument, RootDefinitionId: str) -> CadDoc | None:
-    AsmValue = DocValue.assembly
-    if AsmValue is None:
-        return None
-    Definitions = {Definition.id: Definition for Definition in AsmValue.definitions}
-    RootValue = Definitions.get(RootDefinitionId)
-    if RootValue is None or str(RootValue.kind) != ComponentKind.ASSEMBLY.value:
-        return None
+# this definition exists because nested assemblies need their transitive definitions
+def ReachableDefs(AsmValue: AsmData, RootDefinitionId: str) -> set[str]:
     Reachable = {RootDefinitionId}
     Pending = [RootDefinitionId]
     while Pending:
@@ -1372,6 +1365,13 @@ def NestedAsmDoc(DocValue: CadDocument, RootDefinitionId: str) -> CadDoc | None:
             if Instance.definition_id not in Reachable:
                 Reachable.add(Instance.definition_id)
                 Pending.append(Instance.definition_id)
+    return Reachable
+
+
+# this definition exists because nested assembly subsets share one ownership boundary
+def NestedAsmData(
+    AsmValue: AsmData, RootDefinitionId: str, Reachable: set[str]
+) -> tuple[AsmData, set[str]]:
     SelectedDefinitions = tuple(
         (
             (
@@ -1426,6 +1426,23 @@ def NestedAsmDoc(DocValue: CadDocument, RootDefinitionId: str) -> CadDoc | None:
     SelectedMeshIds = {
         MeshId for Definition in SelectedDefinitions for MeshId in Definition.mesh_ids
     }
+    NestedAsm = AsmData(
+        root_definition_id=RootDefinitionId,
+        definitions=SelectedDefinitions,
+        instances=SelectedInstances,
+        documents=SelectedDocuments,
+        mate_entities=SelectedEntities,
+        mates=SelectedMates,
+        mate_groups=SelectedGroups,
+        attributes=AsmValue.attributes,
+    )
+    return (NestedAsm, SelectedMeshIds)
+
+
+# this definition exists because nested mates need owner scoped binary payloads
+def NestedPayloads(
+    DocValue: CadDocument, RootDefinitionId: str
+) -> tuple[BrepPayload, ...]:
     SelectedPayloads: list[BrepPayload] = []
     NativeRootId = NativeId(RootDefinitionId, "sldasm:definition:")
     if NativeRootId is not None:
@@ -1444,16 +1461,23 @@ def NestedAsmDoc(DocValue: CadDocument, RootDefinitionId: str) -> CadDoc | None:
                 continue
             SourceStream = Payload.source_stream.rsplit("::", 1)[-1]
             SelectedPayloads.append(Replace(Payload, source_stream=SourceStream))
-    NestedAsm = AsmData(
-        root_definition_id=RootDefinitionId,
-        definitions=SelectedDefinitions,
-        instances=SelectedInstances,
-        documents=SelectedDocuments,
-        mate_entities=SelectedEntities,
-        mates=SelectedMates,
-        mate_groups=SelectedGroups,
-        attributes=AsmValue.attributes,
+    return tuple(SelectedPayloads)
+
+
+# this definition exists because focused behavior needs one stable owner
+def NestedAsmDoc(DocValue: CadDocument, RootDefinitionId: str) -> CadDoc | None:
+    AsmValue = DocValue.assembly
+    if AsmValue is None:
+        return None
+    Definitions = {Definition.id: Definition for Definition in AsmValue.definitions}
+    RootValue = Definitions.get(RootDefinitionId)
+    if RootValue is None or str(RootValue.kind) != ComponentKind.ASSEMBLY.value:
+        return None
+    Reachable = ReachableDefs(AsmValue, RootDefinitionId)
+    NestedAsm, SelectedMeshIds = NestedAsmData(
+        AsmValue, RootDefinitionId, Reachable
     )
+    SelectedPayloads = NestedPayloads(DocValue, RootDefinitionId)
     SourcePath = RootValue.source_path or f"{RootValue.name}.SLDASM"
     Nested = Replace(
         DocValue,
@@ -1601,8 +1625,10 @@ def NativeBytes(
     return JsonValue.dumps(Value, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-# this definition exists because focused behavior needs one stable owner
-def Native(DataValue: bytes) -> dict[str, AnyValue] | None:
+# this definition exists because attestation envelopes need authenticated decoding
+def NativeEnvelope(
+    DataValue: bytes,
+) -> tuple[SldprtArchive, dict[str, AnyValue], CadDocument] | None:
     try:
         Archive = SldprtArchive.from_bytes(DataValue)
         RawValue = Archive.require(KitNativeStream)
@@ -1631,6 +1657,11 @@ def Native(DataValue: bytes) -> dict[str, AnyValue] | None:
         or Compatibility not in KAttestedCompatibilities
     ):
         return None
+    return (Archive, Value, DocValue)
+
+
+# this definition exists because capability records need exact typed decoding
+def ParseTransfers(Value: Mapping[str, AnyValue]) -> tuple[CapabilityTransfer, ...] | None:
     Records = Value.get("transfers")
     if not isinstance(Records, list):
         return None
@@ -1656,6 +1687,33 @@ def Native(DataValue: bytes) -> dict[str, AnyValue] | None:
         {ItemValue.capability for ItemValue in Parsed}
     ) != len(Parsed):
         return None
+    return Parsed
+
+
+# this predicate exists because regenerated proof must match every attested claim
+def IsProofMatch(
+    Value: Mapping[str, AnyValue],
+    Compatibility: str,
+    Proof: Generated,
+) -> bool:
+    return (
+        Compatibility == Proof.compatibility
+        and Value["application_usable"] is Proof.application_usable
+        and Value["vendor_loadable"] is Proof.vendor_loadable
+        and (Value.get("native_brep") == Proof.native_brep)
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
+def Native(DataValue: bytes) -> dict[str, AnyValue] | None:
+    Envelope = NativeEnvelope(DataValue)
+    if Envelope is None:
+        return None
+    Archive, Value, DocValue = Envelope
+    Parsed = ParseTransfers(Value)
+    if Parsed is None:
+        return None
+    Compatibility = str(Value["compatibility"])
     AttestedNativeCaps = frozenset(
         (
             TransferItem.capability
@@ -1669,13 +1727,7 @@ def Native(DataValue: bytes) -> dict[str, AnyValue] | None:
     ExpectedTransfers = SolidworksA(
         Required(DocValue), Proof.native_capabilities, Proof.mixed_capabilities
     )
-    if (
-        Compatibility != Proof.compatibility
-        or Value["application_usable"] is not Proof.application_usable
-        or Value["vendor_loadable"] is not Proof.vendor_loadable
-        or (Value.get("native_brep") != Proof.native_brep)
-        or (Parsed != ExpectedTransfers)
-    ):
+    if Parsed != ExpectedTransfers or not IsProofMatch(Value, Compatibility, Proof):
         return None
     Value["parsed_transfers"] = Parsed
     return Value
@@ -2341,8 +2393,37 @@ def GeneratedAsm(
     return frozenset(Result)
 
 
-# this definition exists because focused behavior needs one stable owner
-def IsGeneratedAsmB(
+# this predicate exists because native definitions must preserve semantic identity
+def IsAsmDef(Source: ComponentDefinition, Target: NativeAsmDefinition) -> bool:
+    ExpectedKind = (
+        "ASSEMBLY" if str(Source.kind) == ComponentKind.ASSEMBLY.value else "PART"
+    )
+    if (
+        Target.name != Source.name
+        or Target.document_type != ExpectedKind
+        or Target.configuration_name != (Source.configuration_name or "Default")
+    ):
+        return False
+    if Source.bounding_box is None:
+        return True
+    ExpectedBox = tuple(
+        (
+            Value / 1000.0
+            for Value in (
+                Source.bounding_box.minimum.x,
+                Source.bounding_box.minimum.y,
+                Source.bounding_box.minimum.z,
+                Source.bounding_box.maximum.x,
+                Source.bounding_box.maximum.y,
+                Source.bounding_box.maximum.z,
+            )
+        )
+    )
+    return Target.bounding_box_m == ExpectedBox
+
+
+# this predicate exists because encoded definitions must match source definitions
+def IsAsmDefs(
     AsmValue: AssemblyData, Encoding: NativeAssemblyEncoding, Native: NativeAssembly
 ) -> bool:
     Definitions = {ItemValue.object_id: ItemValue for ItemValue in Native.definitions}
@@ -2354,78 +2435,54 @@ def IsGeneratedAsmB(
         return False
     for Source in AsmValue.definitions:
         Target = Definitions.get(Encoding.definition_ids[Source.id])
-        if Target is None:
+        if Target is None or not IsAsmDef(Source, Target):
             return False
-        ExpectedKind = (
-            "ASSEMBLY" if str(Source.kind) == ComponentKind.ASSEMBLY.value else "PART"
-        )
-        if (
-            Target.name != Source.name
-            or Target.document_type != ExpectedKind
-            or Target.configuration_name != (Source.configuration_name or "Default")
-        ):
-            return False
-        if Source.bounding_box is not None:
-            ExpectedBox = tuple(
-                (
-                    Value / 1000.0
-                    for Value in (
-                        Source.bounding_box.minimum.x,
-                        Source.bounding_box.minimum.y,
-                        Source.bounding_box.minimum.z,
-                        Source.bounding_box.maximum.x,
-                        Source.bounding_box.maximum.y,
-                        Source.bounding_box.maximum.z,
-                    )
-                )
-            )
-            if Target.bounding_box_m != ExpectedBox:
-                return False
-    Occurrences = {ItemValue.object_id: ItemValue for ItemValue in Native.occurrences}
-    if set(Occurrences) != set(Encoding.occurrence_ids.values()):
-        return False
-    ByOwner: Defaultdict[str, list[tuple[int, int, ComponentInstance]]] = Defaultdict(
-        list
+    return True
+
+
+# this predicate exists because native occurrences must preserve every source field
+def IsAsmItem(
+    AsmValue: AssemblyData,
+    Encoding: NativeAssemblyEncoding,
+    Source: ComponentInstance,
+    Target: NativeAsmItem,
+    Index: int,
+) -> bool:
+    RefValue = GeneratedRef(Source, Index + 1)
+    Suffix = f"-{RefValue}"
+    BaseName = Source.name[: -len(Suffix)] if Source.name.endswith(Suffix) else Source.name
+    ConfigName = (
+        Source.configuration_name
+        or AsmValue.definition(Source.definition_id).configuration_name
+        or "Default"
     )
-    for Index, Source in enumerate(AsmValue.instances):
-        ByOwner[Source.owner_definition_id].append((Source.order, Index, Source))
-        Target = Occurrences.get(Encoding.occurrence_ids[Source.id])
-        if Target is None:
-            return False
-        RefValue = GeneratedRef(Source, Index + 1)
-        Suffix = f"-{RefValue}"
-        BaseName = (
-            Source.name[: -len(Suffix)] if Source.name.endswith(Suffix) else Source.name
-        )
-        ConfigId = GeneratedA(Source.configuration_id)
-        if (
-            Target.name != BaseName
-            or Target.reference_number != RefValue
-            or Target.owner_definition_id
-            != Encoding.definition_ids[Source.owner_definition_id]
-            or (Target.definition_id != Encoding.definition_ids[Source.definition_id])
-            or (
-                Target.configuration_name
-                != (
-                    Source.configuration_name
-                    or AsmValue.definition(Source.definition_id).configuration_name
-                    or "Default"
-                )
-            )
-            or (Target.configuration_id != ConfigId)
-            or (Target.transform != NativeAsmMatrix(Source.transform))
-            or (Target.suppressed != Source.suppressed)
-            or (Target.hidden != Source.hidden)
-            or (Target.flexible != Source.flexible)
-            or (Target.exclude_from_bom != Source.exclude_from_bom)
-        ):
-            return False
+    return (
+        Target.name == BaseName
+        and Target.reference_number == RefValue
+        and Target.owner_definition_id
+        == Encoding.definition_ids[Source.owner_definition_id]
+        and (Target.definition_id == Encoding.definition_ids[Source.definition_id])
+        and (Target.configuration_name == ConfigName)
+        and (Target.configuration_id == GeneratedA(Source.configuration_id))
+        and (Target.transform == NativeAsmMatrix(Source.transform))
+        and (Target.suppressed == Source.suppressed)
+        and (Target.hidden == Source.hidden)
+        and (Target.flexible == Source.flexible)
+        and (Target.exclude_from_bom == Source.exclude_from_bom)
+    )
+
+
+# this predicate exists because sibling occurrence order is part of assembly identity
+def IsAsmOrder(
+    AsmValue: AssemblyData,
+    Encoding: NativeAssemblyEncoding,
+    Native: NativeAssembly,
+    ByOwner: Mapping[str, list[tuple[int, int, ComponentInstance]]],
+) -> bool:
     NativeByOwner: Defaultdict[int, list[NativeAsmItem]] = Defaultdict(list)
     for Target in Native.occurrences:
         NativeByOwner[Target.owner_definition_id].append(Target)
     for OwnerId, Values in ByOwner.items():
-
-        # this callback exists because local behavior needs one focused transformation
         Expected = [
             Encoding.occurrence_ids[ItemValue.id]
             for Ignored, Ignored, ItemValue in sorted(
@@ -2439,6 +2496,33 @@ def IsGeneratedAsmB(
         if Actual != Expected:
             return False
     return True
+
+
+# this predicate exists because encoded occurrences must match source occurrences
+def IsAsmItems(
+    AsmValue: AssemblyData, Encoding: NativeAssemblyEncoding, Native: NativeAssembly
+) -> bool:
+    Occurrences = {ItemValue.object_id: ItemValue for ItemValue in Native.occurrences}
+    if set(Occurrences) != set(Encoding.occurrence_ids.values()):
+        return False
+    ByOwner: Defaultdict[str, list[tuple[int, int, ComponentInstance]]] = Defaultdict(
+        list
+    )
+    for Index, Source in enumerate(AsmValue.instances):
+        ByOwner[Source.owner_definition_id].append((Source.order, Index, Source))
+        Target = Occurrences.get(Encoding.occurrence_ids[Source.id])
+        if Target is None or not IsAsmItem(AsmValue, Encoding, Source, Target, Index):
+            return False
+    return IsAsmOrder(AsmValue, Encoding, Native, ByOwner)
+
+
+# this predicate exists because generated assemblies need complete semantic proof
+def IsGeneratedAsmB(
+    AsmValue: AssemblyData, Encoding: NativeAssemblyEncoding, Native: NativeAssembly
+) -> bool:
+    return IsAsmDefs(AsmValue, Encoding, Native) and IsAsmItems(
+        AsmValue, Encoding, Native
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3552,14 +3636,7 @@ def PatchNativeAMut(
 
 
 # this definition exists because focused behavior needs one stable owner
-def PatchAsmMut(
-    AsmValue: AssemblyData, Native: NativeAssembly, Streams: dict[str, bytes]
-) -> tuple[str, ...]:
-    Original = {Instance.id: Instance for Instance in AsmInstances(Native)}
-    Desired = {Instance.id: Instance for Instance in AsmValue.instances}
-    if not set(Original) <= set(Desired):
-        return ()
-    Prefix, RootValue, Trailing = KeywordsRoot(Streams[ComponentTreeStream])
+def AsmRefElements(RootValue: XmlTree.Element) -> dict[int, XmlTree.Element]:
     Elements: dict[int, XmlTree.Element] = {}
     for ElemValue in RootValue.iter():
         if ElemValue.tag.rsplit("}", 1)[-1] != "swReference":
@@ -3568,6 +3645,19 @@ def PatchAsmMut(
             Elements[int(ElemValue.attrib.get("id", ""))] = ElemValue
         except ValueError:
             continue
+    return Elements
+
+
+# this definition exists because focused behavior needs one stable owner
+def PatchAsmMut(
+    AsmValue: AssemblyData, Native: NativeAssembly, Streams: dict[str, bytes]
+) -> tuple[str, ...]:
+    Original = {Instance.id: Instance for Instance in AsmInstances(Native)}
+    Desired = {Instance.id: Instance for Instance in AsmValue.instances}
+    if not set(Original) <= set(Desired):
+        return ()
+    Prefix, RootValue, Trailing = KeywordsRoot(Streams[ComponentTreeStream])
+    Elements = AsmRefElements(RootValue)
     Rewritten: list[str] = []
     for InstanceId, Target in Desired.items():
         Source = Original[InstanceId]
@@ -3654,12 +3744,11 @@ def YesText(Value: bool) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PatchAsmMateMut(
-    AsmValue: AssemblyData,
+def ReadAsmMates(
     Native: NativeAssembly,
-    Streams: dict[str, bytes],
+    Streams: Mapping[str, bytes],
     SourcePath: str,
-) -> tuple[str, ...]:
+) -> dict[str, MateRule]:
     DefinitionMap = {
         Definition.object_id: Definition.object_id for Definition in Native.definitions
     }
@@ -3678,7 +3767,87 @@ def PatchAsmMateMut(
             ),
         ),
     )
-    Original = {MateValue.id: MateValue for MateValue in OriginalMates}
+    return {MateValue.id: MateValue for MateValue in OriginalMates}
+
+
+# this predicate exists because mate identity fields must remain donor stable
+def IsSameMate(Source: MateRule, Target: MateRule) -> bool:
+    return (
+        Target.name == Source.name
+        and Target.kind == Source.kind
+        and Target.owner_definition_id == Source.owner_definition_id
+        and (Target.entity_ids == Source.entity_ids)
+        and (Target.order == Source.order)
+        and (Target.parameter_ids == Source.parameter_ids)
+        and (Target.suppressed == Source.suppressed)
+        and (Target.driving == Source.driving)
+    )
+
+
+# this definition exists because native mate lookup has one binary identity format
+def NativeMateItem(
+    Native: NativeAssembly, MateId: str
+) -> tuple[NativeMateList, NativeMate] | None:
+    Parts = MateId.split(":")
+    if len(Parts) != 5:
+        return None
+    try:
+        ListIndex = int(Parts[3])
+        MateOrder = int(Parts[4])
+    except ValueError:
+        return None
+    if not 0 <= ListIndex < len(Native.mate_lists):
+        return None
+    MateList = Native.mate_lists[ListIndex]
+    MateValue = next(
+        (ItemValue for ItemValue in MateList.mates if ItemValue.order == MateOrder),
+        None,
+    )
+    return (MateList, MateValue) if MateValue is not None else None
+
+
+# this predicate exists because native mate values require offset aware mutation
+def IsPatchValueMut(
+    BufferMut: bytearray, MateValue: NativeMate, TargetValue: ParameterValue | None
+) -> bool:
+    Values = NativeMateB(TargetValue, MateValue)
+    if Values is None:
+        return False
+    for Index, NativeValue in enumerate(Values):
+        Struct.pack_into(
+            "<d", BufferMut, MateValue.dimensions[Index].value_offset, NativeValue
+        )
+    return True
+
+
+# this predicate exists because native mate alignment has a coded binary field
+def IsPatchAlignMut(
+    BufferMut: bytearray, MateValue: NativeMate, TargetValue: AnyValue
+) -> bool:
+    AlignmentCode = next(
+        (
+            CodeValue
+            for CodeValue, Alignment in NativeMateAlignmentByCode.items()
+            if Alignment.kind == str(TargetValue)
+            or Alignment.kind == getattr(TargetValue, "value", None)
+        ),
+        None,
+    )
+    Offset = NativeMateA(BufferMut, MateValue)
+    if AlignmentCode is None or Offset is None:
+        return False
+    Struct.pack_into("<H", BufferMut, Offset, AlignmentCode)
+    return True
+
+
+# this definition exists because focused behavior needs one stable owner
+def PatchAsmMateMut(
+    AsmValue: AssemblyData,
+    Native: NativeAssembly,
+    Streams: dict[str, bytes],
+    SourcePath: str,
+) -> tuple[str, ...]:
+    Original = ReadAsmMates(Native, Streams, SourcePath)
     Desired = {MateValue.id: MateValue for MateValue in AsmValue.mates}
     if set(Original) != set(Desired):
         return ()
@@ -3686,64 +3855,23 @@ def PatchAsmMateMut(
     Rewritten: list[str] = []
     for MateId, Target in Desired.items():
         Source = Original[MateId]
-        if (
-            Target.name != Source.name
-            or Target.kind != Source.kind
-            or Target.owner_definition_id != Source.owner_definition_id
-            or (Target.entity_ids != Source.entity_ids)
-            or (Target.order != Source.order)
-            or (Target.parameter_ids != Source.parameter_ids)
-            or (Target.suppressed != Source.suppressed)
-            or (Target.driving != Source.driving)
-        ):
+        if not IsSameMate(Source, Target):
             continue
-        Parts = MateId.split(":")
-        if len(Parts) != 5:
+        NativeItem = NativeMateItem(Native, MateId)
+        if NativeItem is None:
             continue
-        try:
-            ListIndex = int(Parts[3])
-            MateOrder = int(Parts[4])
-        except ValueError:
-            continue
-        if not 0 <= ListIndex < len(Native.mate_lists):
-            continue
-        MateList = Native.mate_lists[ListIndex]
-        NativeMate = next(
-            (MateValue for MateValue in MateList.mates if MateValue.order == MateOrder),
-            None,
-        )
-        if NativeMate is None:
-            continue
+        MateList, NativeMate = NativeItem
         Buffer = Buffers.setdefault(
             MateList.stream, bytearray(Streams[MateList.stream])
         )
-        if Target.value != Source.value:
-            Values = NativeMateB(Target.value, NativeMate)
-            if Values is not None:
-                for Index, NativeValue in enumerate(Values):
-                    Struct.pack_into(
-                        "<d",
-                        Buffer,
-                        NativeMate.dimensions[Index].value_offset,
-                        NativeValue,
-                    )
-                if MateId not in Rewritten:
-                    Rewritten.append(MateId)
-        if Target.alignment != Source.alignment:
-            AlignmentCode = next(
-                (
-                    CodeValue
-                    for CodeValue, Alignment in NativeMateAlignmentByCode.items()
-                    if Alignment.kind == str(Target.alignment)
-                    or Alignment.kind == getattr(Target.alignment, "value", None)
-                ),
-                None,
-            )
-            Offset = NativeMateA(Buffer, NativeMate)
-            if AlignmentCode is not None and Offset is not None:
-                Struct.pack_into("<H", Buffer, Offset, AlignmentCode)
-                if MateId not in Rewritten:
-                    Rewritten.append(MateId)
+        ValueChanged = Target.value != Source.value and IsPatchValueMut(
+            Buffer, NativeMate, Target.value
+        )
+        AlignChanged = Target.alignment != Source.alignment and IsPatchAlignMut(
+            Buffer, NativeMate, Target.alignment
+        )
+        if (ValueChanged or AlignChanged) and MateId not in Rewritten:
+            Rewritten.append(MateId)
     for Stream, Buffer in Buffers.items():
         Streams[Stream] = bytes(Buffer)
     return tuple(Rewritten)
@@ -4006,10 +4134,8 @@ def MeshValues(Meshes: Sequence[Mesh]) -> tuple[AnyValue, ...]:
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def Parasolid(
-    DocValue: CadDocument, ObjectIds: Mapping[str, int] | None = None
-) -> tuple[bytes | None, str]:
+# this definition exists because preserved parasolid payloads need validated extraction
+def ParasolidData(DocValue: CadDocument) -> tuple[bytes, ...]:
     Candidates: list[bytes] = []
     for Payload in DocValue.brep_payloads:
         if (
@@ -4029,6 +4155,37 @@ def Parasolid(
                 if IsNativeParasolidPayload(ItemValue.data)
             )
         )
+    return tuple(Candidates)
+
+
+# this definition exists because parasolid bodies need native feature ownership ids
+def BrepFeatureIds(
+    DocValue: CadDocument, ObjectIds: Mapping[str, int]
+) -> dict[str, int]:
+    if DocValue.brep is None:
+        return {}
+    FeatureIds: dict[str, int] = {}
+    DesignBodies = {BodyValue.id: BodyValue for BodyValue in DocValue.bodies}
+    SingleFeatureId = (
+        DocValue.bodies[0].final_feature_id if len(DocValue.bodies) == 1 else ""
+    )
+    for BrepBody in DocValue.brep.bodies:
+        FeatureId = str(BrepBody.attributes.get("feature_id", ""))
+        if not FeatureId and BrepBody.design_body_id in DesignBodies:
+            FeatureId = DesignBodies[BrepBody.design_body_id].final_feature_id
+        if not FeatureId and len(DocValue.brep.bodies) == 1:
+            FeatureId = SingleFeatureId
+        NativeId = ObjectIds.get(f"feature:{FeatureId}")
+        if NativeId is not None:
+            FeatureIds[BrepBody.id] = NativeId
+    return FeatureIds
+
+
+# this definition exists because focused behavior needs one stable owner
+def Parasolid(
+    DocValue: CadDocument, ObjectIds: Mapping[str, int] | None = None
+) -> tuple[bytes | None, str]:
+    Candidates = ParasolidData(DocValue)
     if Candidates:
         return (EncodePartitionStream(max(Candidates, key=len)), "preserved")
     if DocValue.assembly is not None:
@@ -4042,21 +4199,7 @@ def Parasolid(
         ):
             return (EncodeBlankPartition(), "generated")
         return (EncodeBlankPartition(), "none")
-    FeatureIds: dict[str, int] = {}
-    if ObjectIds:
-        DesignBodies = {BodyValue.id: BodyValue for BodyValue in DocValue.bodies}
-        SingleFeatureId = (
-            DocValue.bodies[0].final_feature_id if len(DocValue.bodies) == 1 else ""
-        )
-        for BrepBody in DocValue.brep.bodies:
-            FeatureId = str(BrepBody.attributes.get("feature_id", ""))
-            if not FeatureId and BrepBody.design_body_id in DesignBodies:
-                FeatureId = DesignBodies[BrepBody.design_body_id].final_feature_id
-            if not FeatureId and len(DocValue.brep.bodies) == 1:
-                FeatureId = SingleFeatureId
-            NativeId = ObjectIds.get(f"feature:{FeatureId}")
-            if NativeId is not None:
-                FeatureIds[BrepBody.id] = NativeId
+    FeatureIds = BrepFeatureIds(DocValue, ObjectIds or {})
     try:
         return (
             EncodePartitionStream(
@@ -4153,15 +4296,10 @@ def WriteTargetMut(
     return PathValue
 
 
-# this definition exists because focused behavior needs one stable owner
-def AsmDoc(
-    Adapter: SldprtAdapter,
-    Archive: SldprtArchive,
-    DataValue: bytes,
-    Label: str,
-    Settings: ReadOptions,
-) -> CadDoc:
-    Native = DecodeNativeAsm(Archive, include_tessellation=True)
+# this definition exists because assembly part metadata shares one decode pass
+def AsmPartFields(
+    Archive: SldprtArchive, Settings: ReadOptions
+) -> tuple[AnyValue, ...]:
     SelectedStream = ResolvedStream(Archive.streams, ResolvedFeaturesStream)
     Model = DecodeNativeModel(
         Archive.require(KeywordsStream),
@@ -4175,6 +4313,35 @@ def AsmDoc(
     SketchValues = Sketches(Model, ParamIds)
     SelectValues = Selections(Model)
     TimeValues = Timeline(Model, SelectValues)
+    return (
+        Model,
+        ConfigValues,
+        ParamValues,
+        PlaneValues,
+        SketchValues,
+        SelectValues,
+        TimeValues,
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
+def AsmDoc(
+    Adapter: SldprtAdapter,
+    Archive: SldprtArchive,
+    DataValue: bytes,
+    Label: str,
+    Settings: ReadOptions,
+) -> CadDoc:
+    Native = DecodeNativeAsm(Archive, include_tessellation=True)
+    (
+        Model,
+        ConfigValues,
+        ParamValues,
+        PlaneValues,
+        SketchValues,
+        SelectValues,
+        TimeValues,
+    ) = AsmPartFields(Archive, Settings)
     Meshes, MeshIds = AsmMeshes(Native)
     Index = ComponentFile(Label, Settings)
     ResolveComponents = Settings.values.get("resolve_components", True) is not False
@@ -4410,20 +4577,12 @@ def ResolvedPath(
     return max(Candidates, key=Score)
 
 
-# this definition exists because focused behavior needs one stable owner
-def AsmDocuments(
-    Adapter: SldprtAdapter,
-    Native: NativeAssembly,
-    Index: dict[str, tuple[Path, ...]],
-    Settings: ReadOptions,
-) -> tuple[
-    tuple[ComponentDoc, ...],
-    dict[int, str],
+# this definition exists because assembly source discovery must retain diagnostics
+def FindAsmSources(Native: NativeAssembly, Index: dict[str, tuple[Path, ...]]) -> tuple[
+    dict[PathValue, list[NativeAsmDefinition]],
     dict[int, PathValue],
-    tuple[DiagValue, ...],
+    list[DiagValue],
 ]:
-    if not Index:
-        return ((), {}, {}, ())
     RootId = Native.root_definition_id
     DefinitionsByPath: Defaultdict[PathValue, list[NativeAsmDefinition]] = Defaultdict(
         list
@@ -4451,6 +4610,24 @@ def AsmDocuments(
             continue
         ResolvedPaths[Definition.object_id] = Resolved
         DefinitionsByPath[Resolved].append(Definition)
+    return (dict(DefinitionsByPath), ResolvedPaths, Diagnostics)
+
+
+# this definition exists because focused behavior needs one stable owner
+def AsmDocuments(
+    Adapter: SldprtAdapter,
+    Native: NativeAssembly,
+    Index: dict[str, tuple[Path, ...]],
+    Settings: ReadOptions,
+) -> tuple[
+    tuple[ComponentDoc, ...],
+    dict[int, str],
+    dict[int, PathValue],
+    tuple[DiagValue, ...],
+]:
+    if not Index:
+        return ((), {}, {}, ())
+    DefinitionsByPath, ResolvedPaths, Diagnostics = FindAsmSources(Native, Index)
     Documents: list[ComponentDoc] = []
     DocIds: dict[int, str] = {}
 
@@ -4496,6 +4673,38 @@ def AsmDocuments(
     return (tuple(Documents), DocIds, ResolvedPaths, tuple(Diagnostics))
 
 
+# this definition exists because component faces share one indexed mesh accumulator
+def MeshGeometry(Component: AnyValue) -> tuple[AnyValue, ...]:
+    Vertices: list[VectorThree] = []
+    Normals: list[VectorThree] = []
+    Triangles: list[tuple[int, int, int]] = []
+    Faces: list[dict[str, AnyValue]] = []
+    for FaceValue in Component.faces:
+        VertexStart = len(Vertices)
+        TriangleStart = len(Triangles)
+        Vertices.extend((VectorThree(*Point) for Point in FaceValue.positions_mm))
+        Normals.extend((VectorThree(*Normal) for Normal in FaceValue.normals))
+        Triangles.extend(
+            (
+                tuple((Index + VertexStart for Index in Triangle))
+                for Triangle in FaceValue.triangle_indices
+            )
+        )
+        Faces.append(
+            {
+                "face_id": FaceValue.face_id,
+                "vertex_start": VertexStart,
+                "vertex_count": len(FaceValue.positions_mm),
+                "triangle_start": TriangleStart,
+                "triangle_count": len(FaceValue.triangle_indices),
+                "strip_lengths": FaceValue.strip_lengths,
+                "source_offset": FaceValue.offset,
+                "source_length": FaceValue.record_length,
+            }
+        )
+    return (Vertices, Normals, Triangles, Faces)
+
+
 # this definition exists because focused behavior needs one stable owner
 def AsmMeshes(Native: NativeAssembly) -> tuple[tuple[MeshValue, ...], dict[int, str]]:
     DefinitionByPath = {
@@ -4520,33 +4729,7 @@ def AsmMeshes(Native: NativeAssembly) -> tuple[tuple[MeshValue, ...], dict[int, 
                 DefinitionId = ItemById[PathValue[-1]].definition_id
         if DefinitionId is None or DefinitionId in MeshIds:
             continue
-        Vertices: list[VectorThree] = []
-        Normals: list[VectorThree] = []
-        Triangles: list[tuple[int, int, int]] = []
-        Faces: list[dict[str, AnyValue]] = []
-        for FaceValue in Component.faces:
-            VertexStart = len(Vertices)
-            TriangleStart = len(Triangles)
-            Vertices.extend((VectorThree(*Point) for Point in FaceValue.positions_mm))
-            Normals.extend((VectorThree(*Normal) for Normal in FaceValue.normals))
-            Triangles.extend(
-                (
-                    tuple((Index + VertexStart for Index in Triangle))
-                    for Triangle in FaceValue.triangle_indices
-                )
-            )
-            Faces.append(
-                {
-                    "face_id": FaceValue.face_id,
-                    "vertex_start": VertexStart,
-                    "vertex_count": len(FaceValue.positions_mm),
-                    "triangle_start": TriangleStart,
-                    "triangle_count": len(FaceValue.triangle_indices),
-                    "strip_lengths": FaceValue.strip_lengths,
-                    "source_offset": FaceValue.offset,
-                    "source_length": FaceValue.record_length,
-                }
-            )
+        Vertices, Normals, Triangles, Faces = MeshGeometry(Component)
         Definition = DefinitionById[DefinitionId]
         MeshId = f"sldasm:mesh:{DefinitionId}"
         Result.append(
@@ -6729,45 +6912,57 @@ def OperationAttrs(Operation: NativeOperation) -> dict[str, AnyValue]:
     return Result
 
 
+# this definition exists because unknown features need lossless native metadata
+def NativeFallback(
+    Feature: NativeFeature, Operation: NativeOperation | None
+) -> NativeFeatureDefinition:
+    return NativeFeatureDefinition(
+        format_id=KFormatId,
+        type_id=Feature.kind or Feature.xml_tag,
+        object_data=FrozenMapping(
+            {
+                "native_object_id": Feature.object_id,
+                "native_class": Feature.class_name,
+                "native_stream": Feature.native_stream,
+                "xml_tag": Feature.xml_tag,
+                "properties": Feature.properties,
+                "dimensions": tuple(
+                    (
+                        {
+                            "name": Dimension.name,
+                            "value_mm": Dimension.value_mm,
+                            "kind": Dimension.kind,
+                            "source_text": Dimension.source_text,
+                            "native_value": Dimension.native_value,
+                            "native_offset": Dimension.native_offset,
+                            "native_role": Dimension.native_role,
+                            "operands": tuple(
+                                (
+                                    {
+                                        "offset": Operand.offset,
+                                        "kind_code": Operand.kind_code,
+                                        "entity_index": Operand.entity_index,
+                                    }
+                                    for Operand in Dimension.operands
+                                )
+                            ),
+                        }
+                        for Dimension in Feature.dimensions
+                    )
+                ),
+                "record_data": Feature.data,
+                "operation": (
+                    OperationAttrs(Operation) if Operation is not None else None
+                ),
+            }
+        ),
+    )
+
+
 # this definition exists because focused behavior needs one stable owner
-def BuildFeature(
-    Feature: NativeFeature,
-    Operation: NativeOperation | None,
-    Sketches: Mapping[int, NativeSketch],
-    Planes: Mapping[int, NativePlane],
-) -> (
-    ExtrusionFeature
-    | FilletFeature
-    | RevolutionFeature
-    | HoleFeature
-    | ChamferFeature
-    | ShellFeature
-    | RefPlaneFeature
-    | DomeFeature
-    | MoveBodyFeature
-    | CombineFeature
-    | ScaleFeature
-    | NativeFeatureDefinition
-):
-    if (
-        Operation is not None
-        and Operation.kind in {"join", "cut", "surface"}
-        and (Operation.length_mm is not None)
-    ):
-        return ExtrusionFeature(
-            length=ParamValue(Operation.length_mm, ValueKind.LENGTH, "mm"),
-            end_condition=(
-                ExtrusionEndCondition.BLIND
-                if Operation.termination_code == 0
-                else f"native:{Operation.termination_code}"
-            ),
-            reversed=Operation.kind == "cut",
-            second_length=(
-                ParamValue(Operation.second_length_mm, ValueKind.LENGTH, "mm")
-                if Operation.second_length_mm is not None
-                else None
-            ),
-        )
+def BuildRevolve(
+    Operation: NativeOperation | None, Sketches: Mapping[int, NativeSketch]
+) -> RevolutionFeature | None:
     if (
         Operation is not None
         and Operation.kind in {"revolve_join", "revolve_cut"}
@@ -6794,6 +6989,59 @@ def BuildFeature(
             ),
             reversed=Operation.kind == "revolve_cut",
         )
+    return None
+
+
+# this definition exists because focused behavior needs one stable owner
+def BuildExtrude(Operation: NativeOperation | None) -> ExtrusionFeature | None:
+    if (
+        Operation is None
+        or Operation.kind not in {"join", "cut", "surface"}
+        or Operation.length_mm is None
+    ):
+        return None
+    return ExtrusionFeature(
+        length=ParamValue(Operation.length_mm, ValueKind.LENGTH, "mm"),
+        end_condition=(
+            ExtrusionEndCondition.BLIND
+            if Operation.termination_code == 0
+            else f"native:{Operation.termination_code}"
+        ),
+        reversed=Operation.kind == "cut",
+        second_length=(
+            ParamValue(Operation.second_length_mm, ValueKind.LENGTH, "mm")
+            if Operation.second_length_mm is not None
+            else None
+        ),
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
+def BuildFeature(
+    Feature: NativeFeature,
+    Operation: NativeOperation | None,
+    Sketches: Mapping[int, NativeSketch],
+    Planes: Mapping[int, NativePlane],
+) -> (
+    ExtrusionFeature
+    | FilletFeature
+    | RevolutionFeature
+    | HoleFeature
+    | ChamferFeature
+    | ShellFeature
+    | RefPlaneFeature
+    | DomeFeature
+    | MoveBodyFeature
+    | CombineFeature
+    | ScaleFeature
+    | NativeFeatureDefinition
+):
+    Extrusion = BuildExtrude(Operation)
+    if Extrusion is not None:
+        return Extrusion
+    Revolution = BuildRevolve(Operation, Sketches)
+    if Revolution is not None:
+        return Revolution
     if (
         Operation is not None
         and Operation.kind == "hole"
@@ -6856,47 +7104,7 @@ def BuildFeature(
             reference_plane_id=PlaneId(RefIds[0]),
             offset=ParamValue(Offset, ValueKind.LENGTH, "mm"),
         )
-    return NativeFeatureDefinition(
-        format_id=KFormatId,
-        type_id=Feature.kind or Feature.xml_tag,
-        object_data=FrozenMapping(
-            {
-                "native_object_id": Feature.object_id,
-                "native_class": Feature.class_name,
-                "native_stream": Feature.native_stream,
-                "xml_tag": Feature.xml_tag,
-                "properties": Feature.properties,
-                "dimensions": tuple(
-                    (
-                        {
-                            "name": Dimension.name,
-                            "value_mm": Dimension.value_mm,
-                            "kind": Dimension.kind,
-                            "source_text": Dimension.source_text,
-                            "native_value": Dimension.native_value,
-                            "native_offset": Dimension.native_offset,
-                            "native_role": Dimension.native_role,
-                            "operands": tuple(
-                                (
-                                    {
-                                        "offset": Operand.offset,
-                                        "kind_code": Operand.kind_code,
-                                        "entity_index": Operand.entity_index,
-                                    }
-                                    for Operand in Dimension.operands
-                                )
-                            ),
-                        }
-                        for Dimension in Feature.dimensions
-                    )
-                ),
-                "record_data": Feature.data,
-                "operation": (
-                    OperationAttrs(Operation) if Operation is not None else None
-                ),
-            }
-        ),
-    )
+    return NativeFallback(Feature, Operation)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -7342,6 +7550,8 @@ globals()["ParameterValue"] = ParamValue
 
 # this binding exists because shared behavior needs one stable value
 globals()["Path"] = FilePath
+
+# this binding exists because shared behavior needs one stable value
 globals()["PathValue"] = FilePath
 
 # this binding exists because shared behavior needs one stable value

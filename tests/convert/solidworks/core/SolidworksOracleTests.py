@@ -12,22 +12,32 @@ from pathlib import Path as FilePath
 import pytest as PytestLib
 from convert import write_document as WriteDocument
 from convert.adapters.solidworks.container.Container import SldprtArchive
-from convert.adapters.solidworks.container.Format import PARTITION_STREAM as Stream, RESOLVED_FEATURES_STREAM as StreamA
-from convert.adapters.solidworks.resolved.Core import BLIND_END_CONDITION as Condition, locate_rectangle_pad as LocateRectanglePad
+from convert.adapters.solidworks.container.Format import (
+    PARTITION_STREAM as Stream,
+    RESOLVED_FEATURES_STREAM as StreamA,
+)
+from convert.adapters.solidworks.resolved.Core import (
+    BLIND_END_CONDITION as Condition,
+    locate_rectangle_pad as LocateRectanglePad,
+)
 from tests.convert.solidworks.core.SolidworksWriterTests import FreecadRPD
 from tests.oracle.Session import IsOracleReady, OracleSession
 
 # centralizes shared evidence so every related assertion uses one value
-KEnabled = OsInfo.environ.get('KIT_SOLIDWORKS_ORACLE') == '1'
+KEnabled = OsInfo.environ.get("KIT_SOLIDWORKS_ORACLE") == "1"
 
 # centralizes shared evidence so every related assertion uses one value
-KPytestmark = PytestLib.mark.skipif(not KEnabled or not IsOracleReady(), reason='KIT_SOLIDWORKS_ORACLE=1 and a registered SOLIDWORKS install are required')
+KPytestmark = PytestLib.mark.skipif(
+    not KEnabled or not IsOracleReady(),
+    reason="KIT_SOLIDWORKS_ORACLE=1 and a registered SOLIDWORKS install are required",
+)
+
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KPytestmark
 def TestFRPOISWEV(TmpPath: FilePath) -> None:
     Document = FreecadRPD()
-    TargetDoc = TmpPath / 'FreeCADRectanglePad.SLDPRT'
+    TargetDoc = TmpPath / "FreeCADRectanglePad.SLDPRT"
     ResultInfo = WriteDocument(Document, TargetDoc, allow_carrier=False)
     assert ResultInfo.application_usable is True
     assert ResultInfo.vendor_loadable is True
@@ -44,14 +54,15 @@ def TestFRPOISWEV(TmpPath: FilePath) -> None:
     assert Report.BodyCount == 1
     assert Report.Solid is not None
     assert Report.Solid.VolumeMmThree == PytestLib.approx(ExpectedVolume, rel=1e-09)
-    assert 'Extrusion' in Report.FeatureTN
-    assert 'ProfileFeature' in Report.FeatureTN
+    assert "Extrusion" in Report.FeatureTN
+    assert "ProfileFeature" in Report.FeatureTN
+
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 @KPytestmark
 def TestSRGWACP(TmpPath: FilePath) -> None:
     Document = FreecadRPD()
-    TargetDoc = TmpPath / 'NoPartition.SLDPRT'
+    TargetDoc = TmpPath / "NoPartition.SLDPRT"
     WriteDocument(Document, TargetDoc, allow_carrier=False)
     Archive = SldprtArchive.from_bytes(TargetDoc.read_bytes())
     assert Archive.get(Stream) is not None

@@ -150,8 +150,8 @@ def ValidatedObject(NameValue: str) -> str:
 def Validated(DataValue: bytes) -> tuple[Zipfile.ZipFile, dict[str, Zipfile.ZipInfo]]:
     try:
         Archive = Zipfile.ZipFile(IoStream.BytesIO(DataValue))
-    except (OSError, Zipfile.BadZipFile) as exc:
-        raise ValueError("source is not an FCStd ZIP archive") from exc
+    except (OSError, Zipfile.BadZipFile) as ErrorInfo:
+        raise ValueError("source is not an FCStd ZIP archive") from ErrorInfo
     Infos = Archive.infolist()
     if not Infos or len(Infos) > KMaxEntries:
         Archive.close()
@@ -212,8 +212,8 @@ def ValidatedDocXml(
         NotImplementedError,
         XmlTree.ParseError,
         Zipfile.BadZipFile,
-    ) as exc:
-        raise ValueError("FCStd archive has no readable Document.xml") from exc
+    ) as ErrorInfo:
+        raise ValueError("FCStd archive has no readable Document.xml") from ErrorInfo
     if RootValue.tag != "Document":
         raise ValueError("FreeCAD Document.xml has an invalid root")
     Count = 0
@@ -228,8 +228,10 @@ def ValidatedDocXml(
         Stack.extend(((Child, Depth + 1) for Child in NodeValue))
     try:
         SchemaVersion = int(RootValue.get("SchemaVersion", ""))
-    except ValueError as exc:
-        raise ValueError("FreeCAD Document.xml schema version is invalid") from exc
+    except ValueError as ErrorInfo:
+        raise ValueError(
+            "FreeCAD Document.xml schema version is invalid"
+        ) from ErrorInfo
     if SchemaVersion < KMinObjectGraphSchema:
         raise ValueError("FreeCAD Document.xml schema version is not supported")
 
@@ -249,8 +251,8 @@ def ValidatedDocXml(
             return
         try:
             Expected = int(Value)
-        except ValueError as exc:
-            raise ValueError(f"FreeCAD {Label} count is invalid") from exc
+        except ValueError as ErrorInfo:
+            raise ValueError(f"FreeCAD {Label} count is invalid") from ErrorInfo
         if Expected != Actual:
             raise ValueError(f"FreeCAD {Label} count does not match its data")
 
@@ -367,12 +369,12 @@ def ValidatedDocXml(
 def ManifestMapping(RawValue: bytes) -> dict[str, AnyValue]:
     try:
         Value = JsonValue.loads(RawValue)
-    except RecursionError as exc:
+    except RecursionError as ErrorInfo:
         raise ValueError(
             "embedded Kit interchange document JSON nesting exceeds safe limits"
-        ) from exc
-    except (UnicodeDecodeError, JsonValue.JSONDecodeError) as exc:
-        raise ValueError("embedded Kit interchange document is corrupt") from exc
+        ) from ErrorInfo
+    except (UnicodeDecodeError, JsonValue.JSONDecodeError) as ErrorInfo:
+        raise ValueError("embedded Kit interchange document is corrupt") from ErrorInfo
     if not isinstance(Value, dict):
         raise ValueError("embedded Kit document is not a mapping")
     Stack = [(iter((Value,)), 0)]
@@ -1231,7 +1233,7 @@ def NativeObject(Value: Mapping[str, Any]) -> Object:
 
 
 # this definition exists because focused behavior needs one stable owner
-def MergeNamedProp(Properties: list[ET.Element], Replacement: ET.Element) -> None:
+def MergeNamedMut(Properties: list[ET.Element], Replacement: ET.Element) -> None:
     NameValue = Replacement.get("name")
     for Current in Properties:
         if Current.get("name") == NameValue:
@@ -2212,7 +2214,7 @@ def BuildSketch(
         if not PreserveNative:
             Replacements.insert(1, MakePlacement("Placement", Transform))
         for Replacement in Replacements:
-            MergeNamedProp(Properties, Replacement)
+            MergeNamedMut(Properties, Replacement)
         Attachment = next(
             (
                 ItemValue
@@ -2336,7 +2338,7 @@ def NativeClosed(Sketch: Mapping[str, Any]) -> int:
 
 
 # this definition exists because focused behavior needs one stable owner
-def PointsClose(
+def IsPointClose(
     First: tuple[float, float], Second: tuple[float, float], Tolerance: float = 1e-07
 ) -> bool:
     return MathValue.hypot(First[0] - Second[0], First[1] - Second[1]) <= Tolerance
@@ -2352,7 +2354,7 @@ def Segment(
 
 
 # this definition exists because focused behavior needs one stable owner
-def PointOnSegment(
+def IsPointOnSeg(
     Point: tuple[float, float],
     First: tuple[float, float],
     Second: tuple[float, float],
@@ -2372,7 +2374,7 @@ def PointOnSegment(
 
 
 # this definition exists because focused behavior needs one stable owner
-def SegmentsOrTouch(
+def HasSegmentTouch(
     FirstStart: tuple[float, float],
     FirstEnd: tuple[float, float],
     SecondStart: tuple[float, float],
@@ -2396,7 +2398,7 @@ def SegmentsOrTouch(
     return any(
         (
             abs(Value) <= Tolerance
-            and PointOnSegment(Point, SegmentStart, SegmentEnd, Tolerance)
+            and IsPointOnSeg(Point, SegmentStart, SegmentEnd, Tolerance)
             for Value, Point, SegmentStart, SegmentEnd in (
                 (FirstA, SecondStart, FirstStart, FirstEnd),
                 (FirstB, SecondEnd, FirstStart, FirstEnd),
@@ -2418,7 +2420,7 @@ def LineProfile(
             return None
         Start = PointTwo(GeomValue.get("start"))
         EndValue = PointTwo(GeomValue.get("end"))
-        if PointsClose(Start, EndValue):
+        if IsPointClose(Start, EndValue):
             return None
         Remaining.append((Start, EndValue))
     if len(Remaining) < 3:
@@ -2431,15 +2433,15 @@ def LineProfile(
             (
                 Index
                 for Index, (Start, EndValue) in enumerate(Remaining)
-                if PointsClose(Current, Start) or PointsClose(Current, EndValue)
+                if IsPointClose(Current, Start) or IsPointClose(Current, EndValue)
             ),
             -1,
         )
         if NextIndex < 0:
             return None
         Start, EndValue = Remaining.pop(NextIndex)
-        Points.append(EndValue if PointsClose(Current, Start) else Start)
-    if not PointsClose(Points[-1], Points[0]):
+        Points.append(EndValue if IsPointClose(Current, Start) else Start)
+    if not IsPointClose(Points[-1], Points[0]):
         return None
     Points.pop()
     AreaValue = abs(
@@ -2457,7 +2459,7 @@ def LineProfile(
         for SecondIndex in range(FirstIndex + 1, len(Segments)):
             if SecondIndex in {FirstIndex + 1, (FirstIndex - 1) % len(Segments)}:
                 continue
-            if SegmentsOrTouch(*First, *Segments[SecondIndex]):
+            if HasSegmentTouch(*First, *Segments[SecondIndex]):
                 return None
     return tuple(Points)
 
@@ -2486,7 +2488,7 @@ def PointSegment(
 
 
 # this definition exists because focused behavior needs one stable owner
-def Profile(
+def IsProfile(
     First: tuple[str, Any], Second: tuple[str, Any], Tolerance: float = 1e-07
 ) -> bool:
     FirstKind, FirstValue = First
@@ -2511,7 +2513,7 @@ def Profile(
         )
         return any(
             (
-                SegmentsOrTouch(*FirstSegment, *SecondSegment, Tolerance)
+                HasSegmentTouch(*FirstSegment, *SecondSegment, Tolerance)
                 for FirstSegment in FirstSegments
                 for SecondSegment in SecondSegments
             )
@@ -2533,7 +2535,7 @@ def Profile(
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeProfiles(Sketch: Mapping[str, Any]) -> bool:
+def HasNativeProf(Sketch: Mapping[str, Any]) -> bool:
     Ignored, Indices, Ignored = GeomProp(Sketch)
     Entities = {
         TextAction(Entity.get("id")): Entity
@@ -2571,7 +2573,7 @@ def NativeProfiles(Sketch: Mapping[str, Any]) -> bool:
     return bool(Profiles) and (
         not any(
             (
-                Profile(First, Second)
+                IsProfile(First, Second)
                 for Index, First in enumerate(Profiles)
                 for Second in Profiles[Index + 1 :]
             )
@@ -2619,7 +2621,7 @@ def NativeShape(Manifest: Mapping[str, Any]) -> int:
         Sketch = Sketches.get(TextAction(Feature.get("sketch_id")))
         if Sketch is None or not NativeClosed(Sketch):
             continue
-        if SourceFormatId == "solidworks.sldprt" and (not NativeProfiles(Sketch)):
+        if SourceFormatId == "solidworks.sldprt" and (not HasNativeProf(Sketch)):
             continue
         Count += 1
     return Count
@@ -3069,7 +3071,7 @@ def TriangleIndices(Value: Any) -> tuple[int, int, int] | None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def TriangleIsValid(
+def IsTriangleValid(
     Vertices: list[tuple[float, float, float]], Triangle: tuple[int, int, int]
 ) -> bool:
     if len(set(Triangle)) != 3 or any(
@@ -3102,7 +3104,7 @@ def Tessellation(
     if Vertices and Triangles:
         return (
             Vertices,
-            [Triangle for Triangle in Triangles if TriangleIsValid(Vertices, Triangle)],
+            [Triangle for Triangle in Triangles if IsTriangleValid(Vertices, Triangle)],
         )
     Vertices = []
     Triangles = []
@@ -3134,7 +3136,7 @@ def Tessellation(
                         BaseValue + Cursor + Offset + 1,
                         BaseValue + Cursor + Offset + 2,
                     )
-                if TriangleIsValid(Vertices, Triangle):
+                if IsTriangleValid(Vertices, Triangle):
                     Triangles.append(Triangle)
             Cursor += StripLength
     return (Vertices, Triangles)
@@ -3284,7 +3286,7 @@ def RenamePropLinks(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ImportComponent(
+def ImportCompMut(
     Graph: _Graph,
     DocValue: Mapping[str, Any],
     Prefix: str,
@@ -3425,7 +3427,7 @@ def Without(Value: Mapping[str, Any]) -> dict[str, AnyValue]:
 
 
 # this definition exists because focused behavior needs one stable owner
-def AddAsmOrigin(Graph: _Graph, AsmValue: _Object) -> str:
+def AddOriginMut(Graph: _Graph, AsmValue: _Object) -> str:
     Origin = Graph.add(
         "App::Origin",
         f"{AsmValue.name}_Origin",
@@ -3560,7 +3562,7 @@ def AddAsmOrigin(Graph: _Graph, AsmValue: _Object) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def GroundedJoint(
+def GroundJointMut(
     Graph: _Graph,
     Component: str,
     Label: str,
@@ -3659,7 +3661,7 @@ def GroundedJoint(
 
 
 # this definition exists because focused behavior needs one stable owner
-def ReplaceNamed(
+def ReplaceNameMut(
     Properties: list[ET.Element], NameValue: str, Replacement: ET.Element
 ) -> None:
     for Index, PropElem in enumerate(Properties):
@@ -3670,7 +3672,7 @@ def ReplaceNamed(
 
 
 # this definition exists because focused behavior needs one stable owner
-def AddAsm(
+def AddAsmMut(
     Graph: _Graph,
     Manifest: Mapping[str, Any],
     PayloadEntries: dict[str, bytes],
@@ -3741,7 +3743,7 @@ def AddAsm(
         Extensions=RootExtensions or ("App::OriginGroupExtension",),
     )
     RootValue.properties.extend(NativeA(NativeRootSource))
-    RootOrigin = AddAsmOrigin(Graph, RootValue)
+    RootOrigin = AddOriginMut(Graph, RootValue)
     DefinitionsGroup = Graph.add(
         "App::DocumentObjectGroup", f"{RootLabel}_Definitions", "Definitions"
     )
@@ -3779,7 +3781,7 @@ def AddAsm(
             if ComponentKind == "assembly":
                 ImportedDoc = dict(DocValue)
                 ImportedDoc["assembly"] = None
-            ImportedTarget, Imported = ImportComponent(
+            ImportedTarget, Imported = ImportCompMut(
                 Graph, ImportedDoc, DefinitionPrefix, PayloadEntries, TrustedNativeBreps
             )
             if ImportedTarget:
@@ -3792,7 +3794,7 @@ def AddAsm(
                     None,
                 )
                 if TargetObject is not None:
-                    ReplaceNamed(
+                    ReplaceNameMut(
                         TargetObject.properties,
                         "Visibility",
                         BoolProp("Visibility", False),
@@ -3947,7 +3949,7 @@ def AddAsm(
         )
         Component.properties.extend(NativeA(NativeInstance))
         if IsAsmLink:
-            AddAsmOrigin(Graph, Component)
+            AddOriginMut(Graph, Component)
         if ComponentKind == "assembly" and (not bool(Instance.get("flexible"))):
             RigidSubassemblyIds.add(InstanceId)
         Suppressed = bool(Instance.get("suppressed"))
@@ -4023,7 +4025,7 @@ def AddAsm(
             JsonProp("InstanceDataJSON", Instance),
             BoolProp("Visibility", not Hidden),
         ):
-            ReplaceNamed(Component.properties, PropElem.get("name", ""), PropElem)
+            ReplaceNameMut(Component.properties, PropElem.get("name", ""), PropElem)
         if Outer is None and Target:
             Component.dependencies.append(Target)
         ItemObjects.append(Component.name)
@@ -4039,13 +4041,13 @@ def AddAsm(
                 if isinstance(InstanceAttributes, Mapping)
                 else {}
             )
-            Grounded = GroundedJoint(
+            Grounded = GroundJointMut(
                 Graph, Component.name, Label, PlacementMatrix, GroundedSource
             )
             GroundedObjects.append(Grounded.name)
 
     # this definition exists because focused behavior needs one stable owner
-    def AddOuter(
+    def AddOuterMut(
         RootPath: tuple[str, ...],
         Parent: _Object,
         Outer: Mapping[str, Any],
@@ -4103,7 +4105,7 @@ def AddAsm(
                 ),
             )
             if IsAsmLink:
-                AddAsmOrigin(Graph, Proxy)
+                AddOriginMut(Graph, Proxy)
             LinkedObject = XlinkProp(
                 "LinkedObject",
                 Target,
@@ -4185,7 +4187,7 @@ def AddAsm(
             Chain = (*ParentChain, Proxy.name)
             ProxyChainByPath[FullPath] = Chain
             if IsAsmLink:
-                AddOuter(
+                AddOuterMut(
                     RootPath,
                     Proxy,
                     Outer,
@@ -4193,12 +4195,12 @@ def AddAsm(
                     SourcePath,
                     Chain,
                 )
-        ReplaceNamed(Parent.properties, "Group", LinkListProp("Group", Children))
+        ReplaceNameMut(Parent.properties, "Group", LinkListProp("Group", Children))
         Parent.dependencies.extend(Children)
         return Children
 
     for RootPath, Component, Outer in AsmLinkRecords:
-        AddOuter(RootPath, Component, Outer, Outer.get("occurrences", []))
+        AddOuterMut(RootPath, Component, Outer, Outer.get("occurrences", []))
     EntityItems = [
         Entity
         for Entity in Items(AsmValue.get("mate_entities", AsmValue.get("entities", [])))
@@ -4487,7 +4489,7 @@ def AddAsm(
                 *ConnectorProperties,
                 BoolProp("Visibility", False),
             ):
-                ReplaceNamed(ObjValue.properties, PropElem.get("name", ""), PropElem)
+                ReplaceNameMut(ObjValue.properties, PropElem.get("name", ""), PropElem)
             ObjValue.dependencies.extend(ConnectorTargets)
             MateObjects.append(ObjValue.name)
             MateNames[MateId] = ObjValue.name
@@ -4545,7 +4547,7 @@ def AddAsm(
                         FloatProp(PropName, ParamValues[PropName], PropType)
                     )
             for Replacement in Replacements:
-                MergeNamedProp(Properties, Replacement)
+                MergeNamedMut(Properties, Replacement)
             Properties.extend(MetaProperties)
         else:
             Properties = [
@@ -4748,13 +4750,13 @@ def AddAsm(
         IntegerProp("MateCount", len(MateObjects), Dynamic=True),
         BoolProp("Visibility", True),
     ):
-        ReplaceNamed(RootValue.properties, PropElem.get("name", ""), PropElem)
+        ReplaceNameMut(RootValue.properties, PropElem.get("name", ""), PropElem)
     RootValue.dependencies.extend(RootChildren)
     return (RootValue.name, len(DirectInstances), len(MateObjects))
 
 
 # this definition exists because focused behavior needs one stable owner
-def AddDocMeshes(
+def AddMeshesMut(
     Graph: _Graph,
     Manifest: Mapping[str, Any],
     PayloadEntries: dict[str, bytes],
@@ -4821,12 +4823,14 @@ def AddDocMeshes(
             None,
         )
         if Target is not None:
-            ReplaceNamed(Target.properties, "Visibility", BoolProp("Visibility", False))
+            ReplaceNameMut(
+                Target.properties, "Visibility", BoolProp("Visibility", False)
+            )
     return Result
 
 
 # this definition exists because focused behavior needs one stable owner
-def AddDocBrep(
+def AddBrepMut(
     Graph: _Graph,
     Manifest: Mapping[str, Any],
     PayloadEntries: dict[str, bytes],
@@ -4836,8 +4840,8 @@ def AddDocBrep(
         return ([], "")
     try:
         DocValue = CadDoc.from_dict(Manifest)
-    except (KeyError, TypeError, ValueError, RecursionError) as exc:
-        raise ValueError("neutral B-rep manifest data is invalid") from exc
+    except (KeyError, TypeError, ValueError, RecursionError) as ErrorInfo:
+        raise ValueError("neutral B-rep manifest data is invalid") from ErrorInfo
     if DocValue.brep is None:
         return ([], "")
     try:
@@ -5137,7 +5141,7 @@ def BuildDocXml(
                 BoolProp("Visibility", False),
             ]
             for Replacement in Replacements:
-                MergeNamedProp(Properties, Replacement)
+                MergeNamedMut(Properties, Replacement)
             if not NativeReplay:
                 Properties.extend(
                     [
@@ -5167,7 +5171,7 @@ def BuildDocXml(
     for Sketch in SketchItems:
         SketchId = TextAction(Sketch.get("id"))
         SketchNativeProfileCounts[SketchId] = NativeClosed(Sketch)
-        SketchNativeProfileSound[SketchId] = NativeProfiles(Sketch)
+        SketchNativeProfileSound[SketchId] = HasNativeProf(Sketch)
         PlaneId = TextAction(Sketch.get("support_plane_id"))
         Plane = PlaneById.get(PlaneId, {"transform": {}})
         PlaneName = PlaneNames.get(PlaneId, "")
@@ -5311,7 +5315,7 @@ def BuildDocXml(
                 Final.type_id = NativeDefinitionType
             PropNames = {ItemValue.get("name", "") for ItemValue in Properties}
             if "Label" in PropNames:
-                MergeNamedProp(Properties, StringProp("Label", FeatureName))
+                MergeNamedMut(Properties, StringProp("Label", FeatureName))
             if KindValue == "extrusion":
                 Length = abs(
                     Number(
@@ -5335,7 +5339,7 @@ def BuildDocXml(
                     )
                 for Replacement in Replacements:
                     if Replacement.get("name", "") in PropNames:
-                        MergeNamedProp(Properties, Replacement)
+                        MergeNamedMut(Properties, Replacement)
             elif KindValue == "fillet":
                 Radius = abs(
                     Number(
@@ -5344,12 +5348,12 @@ def BuildDocXml(
                 )
                 for NameValue in ("Radius", "DrivingRadius"):
                     if NameValue in PropNames:
-                        MergeNamedProp(
+                        MergeNamedMut(
                             Properties,
                             FloatProp(NameValue, Radius, "App::PropertyLength"),
                         )
             if "Suppressed" in PropNames or bool(Feature.get("suppressed")):
-                MergeNamedProp(
+                MergeNamedMut(
                     Properties,
                     BoolProp(
                         "Suppressed",
@@ -5751,7 +5755,9 @@ def BuildDocXml(
                 SolidFeatureNames[FeatureId] = Final.name
                 CurrentName = Final.name
         if bool(Feature.get("suppressed")) and (not NativeReplay):
-            ReplaceNamed(Final.properties, "Visibility", BoolProp("Visibility", False))
+            ReplaceNameMut(
+                Final.properties, "Visibility", BoolProp("Visibility", False)
+            )
         if isinstance(NativeFeature, Mapping):
             if NativeFeatureName:
                 NativeObjectTargets[NativeFeatureName] = Final.name
@@ -5813,11 +5819,11 @@ def BuildDocXml(
         ObjValue = NativeGraph.get(NativeBodyName) if NativeReplay else None
         if ObjValue is not None:
             Properties = NativeA(NativeBody)
-            MergeNamedProp(
+            MergeNamedMut(
                 Properties, StringProp("Label", BodyValue.get("name", BodyId))
             )
             if FinalFeature:
-                MergeNamedProp(Properties, LinkProp("Tip", FinalFeature))
+                MergeNamedMut(Properties, LinkProp("Tip", FinalFeature))
             ObjValue.properties = Properties
             NativeObjectTargets[NativeBodyName] = ObjValue.name
         else:
@@ -5901,7 +5907,7 @@ def BuildDocXml(
             if (SelectionId := TextAction(Value)) in SelectionNames
         ]
         if Target is not None and LinkedSelections:
-            MergeNamedProp(
+            MergeNamedMut(
                 Target.properties,
                 LinkListProp("Selections", LinkedSelections, Dynamic=True),
             )
@@ -5919,7 +5925,7 @@ def BuildDocXml(
             None,
         )
         if Target is not None and SelectionName:
-            MergeNamedProp(
+            MergeNamedMut(
                 Target.properties,
                 LinkProp("SupportSelection", SelectionName, Dynamic=True),
             )
@@ -6066,16 +6072,16 @@ def BuildDocXml(
                             else SidecarEntries.get(SourceStream, SourceStream)
                         ),
                     )
-                MergeNamedProp(Target.properties, PropElem)
+                MergeNamedMut(Target.properties, PropElem)
                 if PropName == "Shape" and Target.name == CurrentName:
                     FinalShapeFileName = ShapeEntry
-    DocBreps, NeutralShapeFileName = AddDocBrep(
+    DocBreps, NeutralShapeFileName = AddBrepMut(
         Graph, Manifest, PayloadEntries, CurrentName
     )
     if NeutralShapeFileName:
         FinalShapeFileName = NeutralShapeFileName
-    DocMeshes = AddDocMeshes(Graph, Manifest, PayloadEntries, CurrentName)
-    AsmRoot, ItemCount, MateCount = AddAsm(
+    DocMeshes = AddMeshesMut(Graph, Manifest, PayloadEntries, CurrentName)
+    AsmRoot, ItemCount, MateCount = AddAsmMut(
         Graph, Manifest, PayloadEntries, OuterLinks, TrustedNativeBreps
     )
     PlanesGroup.properties.extend(
@@ -6382,8 +6388,8 @@ def DocXmlManifest(RootValue: ET.Element) -> bytes | None:
         Canonical += Decompressor.flush()
         if len(Canonical) > KMaxEntrySize or Decompressor.unused_data:
             raise ValueError
-    except (ValueError, ZlibValue.error) as exc:
-        raise ValueError("embedded Kit interchange document is corrupt") from exc
+    except (ValueError, ZlibValue.error) as ErrorInfo:
+        raise ValueError("embedded Kit interchange document is corrupt") from ErrorInfo
     if Digest and Hashlib.sha256(Canonical).hexdigest() != Digest:
         raise ValueError("embedded Kit interchange document hash mismatch")
     return Canonical
@@ -6410,8 +6416,15 @@ def ExtractManifest(DataValue: bytes) -> dict[str, AnyValue]:
             return ManifestMapping(XmlManifest)
         try:
             RawManifest = Archive.read(Members[KManifestEntry])
-        except (OSError, RuntimeError, NotImplementedError, Zipfile.BadZipFile) as exc:
-            raise ValueError("embedded Kit interchange document is corrupt") from exc
+        except (
+            OSError,
+            RuntimeError,
+            NotImplementedError,
+            Zipfile.BadZipFile,
+        ) as ErrorInfo:
+            raise ValueError(
+                "embedded Kit interchange document is corrupt"
+            ) from ErrorInfo
         Manifest = ManifestMapping(RawManifest)
         if XmlManifest is not None:
             Secondary = ManifestMapping(XmlManifest)
@@ -6597,16 +6610,16 @@ globals()["_TARGET_PROGRAM_VERSION"] = KTargetProgramVersion
 globals()["_TARGET_SCHEMA_VERSION"] = KTargetSchemaVersion
 
 # this binding exists because shared behavior needs one stable value
-globals()["_add_assembly"] = AddAsm
+globals()["_add_assembly"] = AddAsmMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_add_assembly_origin"] = AddAsmOrigin
+globals()["_add_assembly_origin"] = AddOriginMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_add_document_brep"] = AddDocBrep
+globals()["_add_document_brep"] = AddBrepMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_add_document_meshes"] = AddDocMeshes
+globals()["_add_document_meshes"] = AddMeshesMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_assembly_data"] = AsmData
@@ -6693,10 +6706,10 @@ globals()["_freecad_brep_payload"] = FreecadBrep
 globals()["_geometry_property"] = GeomProp
 
 # this binding exists because shared behavior needs one stable value
-globals()["_grounded_joint"] = GroundedJoint
+globals()["_grounded_joint"] = GroundJointMut
 
 # this binding exists because shared behavior needs one stable value
-globals()["_import_component_document"] = ImportComponent
+globals()["_import_component_document"] = ImportCompMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_integer_property"] = IntegerProp
@@ -6744,7 +6757,7 @@ globals()["_matrix_transform"] = MatrixTransform
 globals()["_matrix_values"] = MatrixValues
 
 # this binding exists because shared behavior needs one stable value
-globals()["_merge_named_property"] = MergeNamedProp
+globals()["_merge_named_property"] = MergeNamedMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_mesh_kernel_data"] = MeshKernelData
@@ -6777,7 +6790,7 @@ globals()["_native_link_property_name"] = FindLinkProp
 globals()["_native_object"] = NativeObject
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_profiles_are_statically_sound"] = NativeProfiles
+globals()["_native_profiles_are_statically_sound"] = HasNativeProf
 
 # this binding exists because shared behavior needs one stable value
 globals()["_native_properties"] = NativeA
@@ -6813,7 +6826,7 @@ globals()["_placement_property"] = MakePlacement
 globals()["_point2"] = PointTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()["_point_on_segment"] = PointOnSegment
+globals()["_point_on_segment"] = IsPointOnSeg
 
 # this binding exists because shared behavior needs one stable value
 globals()["_point_segment_distance"] = PointSegment
@@ -6822,10 +6835,10 @@ globals()["_point_segment_distance"] = PointSegment
 globals()["_points"] = Points
 
 # this binding exists because shared behavior needs one stable value
-globals()["_points_close"] = PointsClose
+globals()["_points_close"] = IsPointClose
 
 # this binding exists because shared behavior needs one stable value
-globals()["_profile_boundaries_intersect"] = Profile
+globals()["_profile_boundaries_intersect"] = IsProfile
 
 # this binding exists because shared behavior needs one stable value
 globals()["_property"] = PropAction
@@ -6846,7 +6859,7 @@ globals()["_reference_point"] = RefPoint
 globals()["_rename_property_links"] = RenamePropLinks
 
 # this binding exists because shared behavior needs one stable value
-globals()["_replace_named_property"] = ReplaceNamed
+globals()["_replace_named_property"] = ReplaceNameMut
 
 # this binding exists because shared behavior needs one stable value
 globals()["_represented_native_object_names"] = Represented
@@ -6861,7 +6874,7 @@ globals()["_sanitize_payload_references"] = SanitizePayload
 globals()["_segment_orientation"] = Segment
 
 # this binding exists because shared behavior needs one stable value
-globals()["_segments_intersect_or_touch"] = SegmentsOrTouch
+globals()["_segments_intersect_or_touch"] = HasSegmentTouch
 
 # this binding exists because shared behavior needs one stable value
 globals()["_sequence"] = Sequence
@@ -6891,7 +6904,7 @@ globals()["_text"] = TextAction
 globals()["_triangle_indices"] = TriangleIndices
 
 # this binding exists because shared behavior needs one stable value
-globals()["_triangle_is_valid"] = TriangleIsValid
+globals()["_triangle_is_valid"] = IsTriangleValid
 
 # this binding exists because shared behavior needs one stable value
 globals()["_unique_payload_name"] = UniquePayload

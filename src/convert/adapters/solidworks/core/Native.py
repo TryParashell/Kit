@@ -396,9 +396,9 @@ class NativeEndSpec:
     __annotations__['mirrored_direction_code'] = 'int | None'
     locals()['mirrored_direction_code'] = None
 
-# this definition exists because focused behavior needs one stable owner
+# native operation identity fields remain required across every operation variant
 @Dataclass(frozen=True, slots=True)
-class NativeOperation:
+class NativeOpCore:
     locals().setdefault('__annotations__', {})
     __annotations__['object_id'] = 'int'
     __annotations__['name'] = 'str'
@@ -416,6 +416,11 @@ class NativeOperation:
     __annotations__['termination_code'] = 'int | None'
     __annotations__['selection_offsets'] = 'tuple[int, ...]'
     __annotations__['selected_local_ids'] = 'tuple[int, ...]'
+
+# shape metadata groups optional dimensions and selection behavior
+@Dataclass(frozen=True, slots=True)
+class NativeOpShape(NativeOpCore):
+    locals().setdefault('__annotations__', {})
     __annotations__['angle_degrees'] = 'float | None'
     locals()['angle_degrees'] = None
     __annotations__['diameter_mm'] = 'float | None'
@@ -430,6 +435,11 @@ class NativeOperation:
     locals()['mode'] = None
     __annotations__['native_stream'] = 'str'
     locals()['native_stream'] = ResolvedFeaturesStream
+
+# reference metadata groups optional selection and mirrored direction state
+@Dataclass(frozen=True, slots=True)
+class NativeOpFrame(NativeOpShape):
+    locals().setdefault('__annotations__', {})
     __annotations__['selection_references'] = 'tuple[tuple[int, int], ...]'
     locals()['selection_references'] = ()
     __annotations__['translation_mm'] = 'tuple[float, float, float] | None'
@@ -444,6 +454,11 @@ class NativeOperation:
     locals()['mirrored_direction_code'] = None
     __annotations__['axis_source_kind'] = 'str | None'
     locals()['axis_source_kind'] = None
+
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class NativeOperation(NativeOpFrame):
+    locals().setdefault('__annotations__', {})
     __annotations__['axis_source_id'] = 'int | None'
     locals()['axis_source_id'] = None
     __annotations__['axis_source_offset'] = 'int | None'
@@ -620,15 +635,15 @@ class VendorResolved:
     locals()['annotation_view_count'] = 1
     __annotations__['terminal_parent_tree_id'] = 'int | None'
     locals()['terminal_parent_tree_id'] = None
-    KHeaderBounds: tuple[float, ...] | None = None
-    KHeaderCreation: int | None = None
+    HeaderBounds: tuple[float, ...] | None = None
+    HeaderCreation: int | None = None
     __annotations__['cmgr_parent_tree_id'] = 'int | None'
     locals()['cmgr_parent_tree_id'] = None
     __annotations__['annotation_view_variant'] = 'str'
     locals()['annotation_view_variant'] = 'default'
     __annotations__['Config0Payload'] = 'bytes | None'
     locals()['Config0Payload'] = None
-    KHeaderPayload: bytes | None = None
+    HeaderPayload: bytes | None = None
 
 # this binding exists because shared behavior needs one stable value
 KBaseObjects = ((8, 'Comments', 'Comments', 'moCommentsFolder_c'), (23, 'Favorites', 'Favorites', 'moFavoriteFolder_c'), (24, 'History', 'History', 'moHistoryFolder_c'), (25, 'Selection Sets', 'Selection Sets', 'moSelectionSetFolder_c'), (22, 'Sensors', 'Sensors', 'moSensorFolder_c'), (7, 'Design Binder', 'Design Binder', 'moDocsFolder_c'), (1, 'Annotations', 'Annotations', 'moDetailCabinet_c'), (17, 'Notes', 'Notes', 'moNotesAreaFtrFolder_c'), (18, 'Notes1___EndTag___', 'Notes', 'moNotesAreaFtrFolder_c'), (10, 'Surface Bodies', 'Surface Bodies', 'moSurfaceBodyFolder_c'), (9, 'Solid Bodies', 'Solid Bodies', 'moSolidBodyFolder_c'), (21, 'Markups', 'Markups', 'moInkMarkupFolder_c'), (16, 'Equations', 'Equations', 'moEqnFolder_c'), (11, 'Material <not specified>', 'SOLIDWORKS Materials', 'moMaterialFolder_c'), (2, 'Front Plane', 'Plane', 'moRefPlane_c'), (3, 'Top Plane', 'Plane', 'moRefPlane_c'), (4, 'Right Plane', 'Plane', 'moRefPlane_c'), (5, 'Origin', 'Origin', 'moOriginProfileFeature_c'))
@@ -903,6 +918,20 @@ def HasVendorPart(DocData: CadDocument) -> bool:
     AuthoredObjects = Canonical(SourceObjects, ObjectIds, DocData)
     return BuildVendorTree(AuthoredObjects) is not None
 
+# native envelope assembly keeps optional vendor stream replacement independently testable
+def BuildEnvelope(DocValue: CadDocument, ModelName: str, Identity: NativeIdentity, Authored: tuple[WriteObject, ...], VendorData: VendorResolved | None, VendorPayload: bytes | None) -> dict[str, bytes]:
+    FeatureObjects = tuple(((ItemData.object_id, ItemData.name, ItemData.kind == 'Sketch') for ItemData in Authored)) if VendorPayload is not None else ()
+    FeatureStamps = MappingProxyType({ItemData.object_id: StampData for ItemData, StampData in zip(Authored, VendorData.header_stamps, strict=True)}) if VendorData is not None else MappingProxyType({})
+    EnvelopeStreams = dict(NativeEnvelope(DocValue, ModelName, Identity, SolidFeatureIds(Authored), FeatureObjects, FeatureStamps, VendorData.annotation_view_count if VendorData is not None else 1, VendorData.terminal_parent_tree_id if VendorData is not None else None, VendorData.HeaderBounds if VendorData is not None else None, VendorData.HeaderCreation if VendorData is not None else None, VendorData.cmgr_parent_tree_id if VendorData is not None else None, VendorData.annotation_view_variant if VendorData is not None else 'default'))
+    if VendorPayload is not None:
+        EnvelopeStreams[ResolvedFeaturesStream] = VendorPayload
+    if VendorData is not None and VendorData.Config0Payload is not None:
+        EnvelopeStreams[ConfigStream] = VendorData.Config0Payload
+    if VendorData is not None and VendorData.HeaderPayload is not None:
+        EnvelopeStreams['Contents/Config-0-ModelHeader'] = VendorData.HeaderPayload
+        EnvelopeStreams['Header2'] = VendorData.HeaderPayload
+    return EnvelopeStreams
+
 # this definition exists because focused behavior needs one stable owner
 def EncodeNative(DocValue: CadDocument, ModelName: str) -> NativePart:
     ObjectIds = WriteObjectIds(DocValue)
@@ -923,16 +952,7 @@ def EncodeNative(DocValue: CadDocument, ModelName: str) -> NativePart:
     Features = FeaturesPayload(DocValue, ModelName, ObjectIds, Identity)
     KitResolved = ResolvedPayload(Objects)
     Resolved = VendorResolved if VendorResolved is not None else KitResolved
-    HeaderFeatureObjects = tuple(((ItemData.object_id, ItemData.name, ItemData.kind == 'Sketch') for ItemData in Authored)) if VendorResolved is not None else ()
-    HeaderFeatureStamps = MappingProxyType({ItemData.object_id: StampData for ItemData, StampData in zip(Authored, VendorData.header_stamps, strict=True)}) if VendorData is not None else MappingProxyType({})
-    EnvelopeStreams = dict(NativeEnvelope(DocValue, ModelName, Identity, SolidFeatureIds(Authored), HeaderFeatureObjects, HeaderFeatureStamps, VendorData.annotation_view_count if VendorData is not None else 1, VendorData.terminal_parent_tree_id if VendorData is not None else None, VendorData.HeaderBounds if VendorData is not None else None, VendorData.HeaderCreation if VendorData is not None else None, VendorData.cmgr_parent_tree_id if VendorData is not None else None, VendorData.annotation_view_variant if VendorData is not None else 'default'))
-    if VendorResolved is not None:
-        EnvelopeStreams[ResolvedFeaturesStream] = VendorResolved
-    if VendorData is not None and VendorData.Config0Payload is not None:
-        EnvelopeStreams[ConfigStream] = VendorData.Config0Payload
-    if VendorData is not None and VendorData.HeaderPayload is not None:
-        EnvelopeStreams['Contents/Config-0-ModelHeader'] = VendorData.HeaderPayload
-        EnvelopeStreams['Header2'] = VendorData.HeaderPayload
+    EnvelopeStreams = BuildEnvelope(DocValue, ModelName, Identity, Authored, VendorData, VendorResolved)
     ConfigData = EnvelopeStreams.get(ConfigStream, b'')
     Parsed = DecodeNative(ProofKeywords, Resolved, ConfigData, ResolvedStream=ResolvedFeaturesStream if VendorResolved is not None else KitResolvedStream)
     Capabilities = ProvedWrite(DocValue, Authored, Parsed, ObjectIds)
@@ -3137,7 +3157,7 @@ def NativeEnvelope(DocValue: CadDocument, ModelName: str, Identity: _NativeIdent
     HeaderData = ModelHeader(HeaderIdentity, ConfigName, SolidFeatureTreeIds=SolidFeatureTreeIds, FeatureObjects=HeaderFeatureObjects, FeatureStamps=HeaderFeatureStamps, HeaderBounds=HeaderBounds)
     Streams['Contents/Config-0-ModelHeader'] = HeaderData
     Streams['Header2'] = HeaderData
-    Streams['Contents/Definition'] = EncodeDefinitionStream(assembly=DocValue.assembly is not None)
+    Streams['Contents/Definition'] = EncodeDefinitionStream(AsmValue=DocValue.assembly is not None)
     TreeIds = ConfigAtomTree(SolidFeatureTreeIds)
     ParentTreeId = TerminalParentTreeId if TerminalParentTreeId is not None else CmgrParentTreeId
     if ParentTreeId is not None:
@@ -3145,8 +3165,8 @@ def NativeEnvelope(DocValue: CadDocument, ModelName: str, Identity: _NativeIdent
             raise SldprtFormatError('terminal feature configuration requires its parent and child trees')
         TreeIds = (TreeIds[-1],)
     AtomIds = AtomIdsFor(len(TreeIds))
-    Streams[ConfigManagerStream] = EncodeCmgrStream(feature_tree_ids=TreeIds, configuration_name=ConfigName, part_name=Identity.reference_name, atom_ids=AtomIds, connected_history=len(TreeIds) in {2, 3, 4} and len(DocValue.bodies) == 1, terminal_parent_tree_id=ParentTreeId)
-    Streams[ConfigStream] = EncodeConfigZeroStream(part_name=Identity.reference_name, atoms=tuple(reversed(tuple(zip(AtomIds, TreeIds, strict=True)))), high_water=(AtomIds[-1], FirstAtomId + 2 * len(AtomIds)), annotation_view_count=AnnotationViewCount, terminal_parent_tree_id=TerminalParentTreeId, annotation_view_variant=AnnotationViewVariant)
+    Streams[ConfigManagerStream] = EncodeCmgrStream(FeatureTreeIds=TreeIds, ConfigName=ConfigName, PartName=Identity.reference_name, AtomIds=AtomIds, ConnectedHistory=len(TreeIds) in {2, 3, 4} and len(DocValue.bodies) == 1, TerminalParentTreeId=ParentTreeId)
+    Streams[ConfigStream] = EncodeConfigZeroStream(PartName=Identity.reference_name, Atoms=tuple(reversed(tuple(zip(AtomIds, TreeIds, strict=True)))), HighWater=(AtomIds[-1], FirstAtomId + 2 * len(AtomIds)), AnnotationViewCount=AnnotationViewCount, TerminalParentTreeId=TerminalParentTreeId, AnnotationViewVariant=AnnotationViewVariant)
     return MappingProxyType(Streams)
 
 # this definition exists because focused behavior needs one stable owner
