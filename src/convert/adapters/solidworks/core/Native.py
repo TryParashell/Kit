@@ -1685,6 +1685,31 @@ def BuildPadGroove(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | N
     )
 
 
+# cut routing isolates secondary feature program selection behavior
+def ResolveCutData(CutObject, CutCodes):
+    if CutObject.class_name == "moExtrusion_c":
+        if CutCodes[1] != 0 or len(CutObject.dimensions) != 1:
+            return None
+        CutDepth = CutObject.dimensions[0].value_mm
+        ProgramData = EncodeBossBossProgram()
+        HeaderStamps = KBossBossHeaderStamps
+    elif CutCodes[1] == 0:
+        if len(CutObject.dimensions) != 1:
+            return None
+        CutDepth: float | None = CutObject.dimensions[0].value_mm
+        ProgramData = EncodeBossCutProgram()
+        HeaderStamps = KBossCutHeaderStamps
+    elif CutCodes == (1, 1):
+        if CutObject.dimensions:
+            return None
+        CutDepth = None
+        ProgramData = EncodeBossCutThrough()
+        HeaderStamps = KBossCutThroughHeader
+    else:
+        return None
+    return (CutDepth, ProgramData, HeaderStamps)
+
+
 # this definition exists because focused behavior needs one stable owner
 def BuildTwoFeature(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
     SketchOne, PadObject, SketchTwo, CutObject = AuthoredObjs
@@ -1723,26 +1748,10 @@ def BuildTwoFeature(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | 
     PadCodes, CutCodes = EndCodes
     if PadCodes is None or CutCodes is None or PadCodes[1] != 0:
         return None
-    if CutObject.class_name == "moExtrusion_c":
-        if CutCodes[1] != 0 or len(CutObject.dimensions) != 1:
-            return None
-        CutDepth = CutObject.dimensions[0].value_mm
-        ProgramData = EncodeBossBossProgram()
-        HeaderStamps = KBossBossHeaderStamps
-    elif CutCodes[1] == 0:
-        if len(CutObject.dimensions) != 1:
-            return None
-        CutDepth: float | None = CutObject.dimensions[0].value_mm
-        ProgramData = EncodeBossCutProgram()
-        HeaderStamps = KBossCutHeaderStamps
-    elif CutCodes == (1, 1):
-        if CutObject.dimensions:
-            return None
-        CutDepth = None
-        ProgramData = EncodeBossCutThrough()
-        HeaderStamps = KBossCutThroughHeader
-    else:
+    CutData = ResolveCutData(CutObject, CutCodes)
+    if CutData is None:
         return None
+    CutDepth, ProgramData, HeaderStamps = CutData
     DepthData = (PadObject.dimensions[0].value_mm, CutDepth)
     if any(
         (
