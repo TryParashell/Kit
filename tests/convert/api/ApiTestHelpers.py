@@ -10,22 +10,15 @@ from __future__ import annotations
 
 import ast as AstLib
 from pathlib import Path as FilePath
-from pkgutil import iter_modules as IterModules
-
-import convert.adapters as AdapterPackage
+from convert.adapters.registry.AdapterDiscovery import GetPackageItems
 
 
 # package enumeration stays shared because catalog and structure tests need identical discovery scope
 def ListFormatPacks() -> tuple[str, ...]:
     return tuple(
-        sorted(
-            ItemData.name
-            for ItemData in IterModules(
-                AdapterPackage.__path__,
-                AdapterPackage.__name__ + ".",
-            )
-            if ItemData.ispkg and not ItemData.name.rsplit(".", 1)[-1].startswith("_")
-        )
+        ModuleName
+        for ModuleName, IsPackage in GetPackageItems("convert.adapters")
+        if IsPackage
     )
 
 
@@ -47,7 +40,7 @@ def GetPackNames(
 def ListApiTrees(RootPath: FilePath) -> tuple[tuple[FilePath, AstLib.Module], ...]:
     TreeValues: list[tuple[FilePath, AstLib.Module]] = []
     ApiFolder = RootPath / "src" / "convert"
-    for SourcePath in sorted(ApiFolder.glob("api*.py")):
+    for SourcePath in sorted((ApiFolder / "api").glob("*.py")):
         SyntaxTree = AstLib.parse(
             SourcePath.read_text(encoding="utf-8"),
             filename=str(SourcePath),

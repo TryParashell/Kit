@@ -67,7 +67,7 @@ jobs:
               if PathBytes
           )
           UsePattern = Regex.compile(
-              r"^\s*uses:\s*([^\s#]+)\s*(?:#\s*(.+))?$"
+              r"^\s*(?:-\s*)?uses:\s*([^\s#]+)\s*(?:#\s*(.+))?$"
           )
           RunnerPattern = Regex.compile(r"^\s*runs-on:\s*([^\s#]+)")
           VersionPattern = Regex.compile(

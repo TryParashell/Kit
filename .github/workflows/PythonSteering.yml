@@ -47,3 +47,6 @@ jobs:
         run: |
           mapfile -d '' PythonFiles < <(git ls-files -z -- '*.py')
           uv run python -m tools.steering.SteeringCompliance "${PythonFiles[@]}"
+
+      - name: Verify Python formatting
+        run: uv run black --check .

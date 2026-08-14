@@ -20,6 +20,18 @@ from convert.adapters.base.AdapterProtocols import CadWriterAdapter
 from convert.adapters.registry.RegistryErrors import DiscoveryError
 
 
+# infrastructure package names stay centralized so discovery only visits concrete format integrations
+KInternalPackages = frozenset({"base", "registry", "staging"})
+
+
+# internal filtering applies only to the built in root so third party package names remain unrestricted
+def IsInternalPack(PackageName: str, ItemName: str) -> bool:
+    return (
+        PackageName == "convert.adapters"
+        and ItemName.rsplit(".", 1)[-1] in KInternalPackages
+    )
+
+
 # protocol member checks exclude inherited protocol artifacts while confirming concrete methods
 def HasMethods(AdapterData: object, ProtocolType: type[object]) -> bool:
     ProtocolNames = getattr(ProtocolType, "__protocol_attrs__", None)
@@ -145,6 +157,7 @@ def GetPackageItems(PackageName: str) -> tuple[tuple[str, bool], ...]:
                     PackageData.__name__ + ".",
                 )
                 if not ItemData.name.rsplit(".", 1)[-1].startswith("_")
+                and not IsInternalPack(PackageName, ItemData.name)
             )
         )
     except Exception as ErrorInfo:

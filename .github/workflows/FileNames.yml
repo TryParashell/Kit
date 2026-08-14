@@ -57,9 +57,13 @@ jobs:
           OutputText="$(uv run python -m tools.Policy.CheckPaths "${Arguments[@]}" 2>&1)"
           StatusCode=$?
           set -e
-          if [ "$StatusCode" -eq 2 ]; then
+          if [ "$StatusCode" -gt 1 ]; then
             printf '%s\n' "$OutputText"
-            exit 2
+            exit "$StatusCode"
+          fi
+          if [ "$StatusCode" -eq 1 ] && ! printf '%s\n' "$OutputText" | grep -Eq '^path policy failed with [0-9]+ violations$'; then
+            printf '%s\n' "$OutputText"
+            exit 1
           fi
           FindingText="$(printf '%s\n' "$OutputText" | grep ': PTH001:' || true)"
           if [ -n "$FindingText" ]; then

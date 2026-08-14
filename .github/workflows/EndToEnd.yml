@@ -41,7 +41,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Synchronize the locked environment
-        run: uv sync --frozen --python 3.11
+        run: uv sync --frozen --extra dev --python 3.11
 
       - name: Run all tests
         run: uv run pytest
