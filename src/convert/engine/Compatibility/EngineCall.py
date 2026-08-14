@@ -21,7 +21,18 @@ from convert.adapters.base.WriteOptions import WriteOptions
 from convert.adapters.base.WriteResult import WriteResult
 from convert.adapters.registry import AdapterRegistry
 
-globals().update({"Destination": KTargetType, "Source": KSourceType})
+# explicit annotation globals keep reflected legacy signatures resolvable at runtime
+globals().update(
+    {
+        "AdapterRegistry": AdapterRegistry,
+        "CadDocument": CadDocument,
+        "Destination": KTargetType,
+        "ReadOptions": ReadOptions,
+        "Source": KSourceType,
+        "WriteOptions": WriteOptions,
+        "WriteResult": WriteResult,
+    }
+)
 
 
 # result resolution is deferred until the engine facade creates its public record class
