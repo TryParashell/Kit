@@ -7,12 +7,12 @@
 # to you under it immediately and permanently.
 
 from interchange.brep.validation.BrepLinkValidate import IsCoedgeLink
-from interchange.brep.topology.BrepModel import BrepModel
+from interchange.brep.validation.BrepView import BrepView
 
 
 # loop and wire validation enforces nonempty connected edge use sequences
 def GetLoopErrors(
-    ModelValue: BrepModel, IdentitySets: dict[str, frozenset[str]]
+    ModelValue: BrepView, IdentitySets: dict[str, frozenset[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     EdgeById = {EdgeValue.EntityId: EdgeValue for EdgeValue in ModelValue.Edges}

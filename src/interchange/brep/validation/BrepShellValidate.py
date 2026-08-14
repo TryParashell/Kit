@@ -6,12 +6,12 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from interchange.brep.topology.BrepModel import BrepModel
+from interchange.brep.validation.BrepView import BrepView
 
 
 # shell validation preserves oriented face incidence required for closed regions
 def GetShellErrors(
-    ModelValue: BrepModel, IdentitySets: dict[str, frozenset[str]]
+    ModelValue: BrepView, IdentitySets: dict[str, frozenset[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for ShellValue in ModelValue.Shells:

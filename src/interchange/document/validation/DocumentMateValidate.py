@@ -19,8 +19,6 @@ def GetMateErrors(
     DocumentValues: TypeMap[str, AnyValue],
     IdentitySets: TypeMap[str, set[str]],
 ) -> tuple[str, ...]:
-    from interchange.document.models.DocumentModel import CadDocument
-
     ErrorValues: list[str] = []
     for MateValue in AssemblyValue.Mates:
         if MateValue.OwnerDefinitionId not in Definitions:
@@ -43,7 +41,7 @@ def GetMateErrors(
         TargetDocument = DocumentValue
         if OwnerDef is not None and OwnerDef.DocumentId:
             TargetDocument = DocumentValues.get(OwnerDef.DocumentId)
-        if isinstance(TargetDocument, CadDocument):
+        if isinstance(TargetDocument, type(DocumentValue)):
             TargetParamIds = (
                 IdentitySets["Parameters"]
                 if TargetDocument is DocumentValue

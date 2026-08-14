@@ -7,12 +7,12 @@
 # to you under it immediately and permanently.
 
 from interchange.brep.topology.BrepMath import IsValidTol
-from interchange.brep.topology.BrepModel import BrepModel
+from interchange.brep.validation.BrepView import BrepView
 
 
 # face validation protects trimming and surface references before shell traversal
 def GetFaceErrors(
-    ModelValue: BrepModel, IdentitySets: dict[str, frozenset[str]]
+    ModelValue: BrepView, IdentitySets: dict[str, frozenset[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for FaceValue in ModelValue.Faces:

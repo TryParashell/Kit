@@ -7,12 +7,12 @@
 # to you under it immediately and permanently.
 
 from interchange.brep.topology.BrepMath import IsFiniteFrame
-from interchange.brep.topology.BrepModel import BrepModel
+from interchange.brep.validation.BrepView import BrepView
 
 
 # body validation ensures exported topology has content and valid document ownership
 def GetBodyErrors(
-    ModelValue: BrepModel,
+    ModelValue: BrepView,
     IdentitySets: dict[str, frozenset[str]],
     DesignBodyIds: frozenset[str],
 ) -> tuple[str, ...]:

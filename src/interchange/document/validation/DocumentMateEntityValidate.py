@@ -80,8 +80,6 @@ def GetSelectErrors(
     CurrentDefId: str,
     IsValidPath: bool,
 ) -> tuple[str, ...]:
-    from interchange.document.models.DocumentModel import CadDocument
-
     if not EntityValue.SelectionId or not IsValidPath:
         return ()
     TargetDef = Definitions.get(CurrentDefId)
@@ -97,7 +95,7 @@ def GetSelectErrors(
         }
     )
     if (
-        isinstance(TargetDocument, CadDocument)
+        isinstance(TargetDocument, type(DocumentValue))
         and EntityValue.SelectionId not in TargetSelectIds
     ):
         return (f"mate entity {EntityValue.EntityId} references missing selection",)

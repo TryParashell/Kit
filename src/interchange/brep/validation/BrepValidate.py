@@ -12,15 +12,15 @@ from interchange.brep.validation.BrepEdgeValidate import GetEdgeErrors
 from interchange.brep.validation.BrepFaceValidate import GetFaceErrors
 from interchange.brep.validation.BrepIdentityValidate import GetBrepIds
 from interchange.brep.validation.BrepLoopValidate import GetLoopErrors
-from interchange.brep.topology.BrepModel import BrepModel
 from interchange.brep.validation.BrepPcurveValidate import GetPcurveErrors
 from interchange.brep.validation.BrepShellValidate import GetShellErrors
 from interchange.brep.validation.BrepSurfaceValidate import GetSurfErrors
+from interchange.brep.validation.BrepView import BrepView
 
 
 # validation orchestration preserves deterministic diagnostics across focused topology checks
 def GetBrepErrors(
-    ModelValue: BrepModel, DesignBodyIds: frozenset[str]
+    ModelValue: BrepView, DesignBodyIds: frozenset[str]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     if (

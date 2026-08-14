@@ -9,12 +9,12 @@
 from math import isfinite as IsFiniteNum
 
 from interchange.brep.topology.BrepMath import IsFiniteSpace, IsValidTol
-from interchange.brep.topology.BrepModel import BrepModel
+from interchange.brep.validation.BrepView import BrepView
 
 
 # vertex and edge validation protects incidence and parameter ranges together
 def GetEdgeErrors(
-    ModelValue: BrepModel, IdentitySets: dict[str, frozenset[str]]
+    ModelValue: BrepView, IdentitySets: dict[str, frozenset[str]]
 ) -> tuple[str, ...]:
     ErrorValues: list[str] = []
     for VertexValue in ModelValue.Vertices:

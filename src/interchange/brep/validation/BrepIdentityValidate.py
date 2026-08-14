@@ -8,13 +8,13 @@
 
 from dataclasses import fields as GetFields
 
-from interchange.brep.topology.BrepModel import BrepModel
+from interchange.brep.validation.BrepView import BrepView
 from interchange.serialization.Wire import ResolveField
 
 
 # identity indexing centralizes duplicate and empty identifier diagnostics
 def GetBrepIds(
-    ModelValue: BrepModel,
+    ModelValue: BrepView,
 ) -> tuple[dict[str, frozenset[str]], tuple[str, ...]]:
     ErrorValues: list[str] = []
     IdentitySets: dict[str, frozenset[str]] = {}
