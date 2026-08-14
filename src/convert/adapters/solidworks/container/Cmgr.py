@@ -1099,17 +1099,72 @@ def EncodeCmgr(
     return BuildModel(Params).emit()
 
 
-# this definition exists because focused behavior needs one stable owner
-def DeclaredOpaque(**KwargValues: object) -> dict[str, int]:
-    Stream = EncodeCmgr(**KwargValues)
+# this binding exists because historical callers retain python keyword spellings
+KLegacyNames = (
+    ("feature_tree_ids", "FeatureTreeIds"),
+    ("config_name", "ConfigName"),
+    ("part_name", "PartName"),
+    ("name_stamp", "NameStamp"),
+    ("atom_ids", "AtomIds"),
+    ("link_atom_ids", "LinkAtomIds"),
+    ("link_tree_ids", "LinkTreeIds"),
+    ("reverse_atom_ids", "ReverseAtomIds"),
+    ("feature_stamps", "FeatureStamps"),
+    ("doc_stamp", "DocStamp"),
+    ("display_stamp", "DisplayStamp"),
+    ("view_stamp", "ViewStamp"),
+    ("max_tree_id", "MaxTreeId"),
+    ("next_id_a", "NextIdA"),
+    ("next_id_b", "NextIdB"),
+    ("render_style", "RenderStyle"),
+    ("atom_head_count", "AtomHeadCount"),
+    ("chord_ratio", "ChordRatio"),
+    ("session_counter", "SessionCounter"),
+    ("generation", "Generation"),
+    ("build", "Build"),
+    ("display_geometry_cache", "DisplayGeomCache"),
+    ("connected_history", "ConnectedHistory"),
+    ("terminal_parent_tree_id", "TerminalParentTreeId"),
+)
+
+
+# legacy keyword translation keeps one explicit compatibility boundary
+def LegacyArgs(KwargValues: dict[str, object]) -> dict[str, object]:
+    NameMap = dict(KLegacyNames)
+    Canonical: dict[str, object] = {}
+    for NameValue, ItemValue in KwargValues.items():
+        TargetName = NameMap.get(NameValue, NameValue)
+        if TargetName in Canonical:
+            raise TypeError(f"duplicate Contents CMgr keyword {TargetName}")
+        Canonical[TargetName] = ItemValue
+    return Canonical
+
+
+# the lowercase public encoder accepts both historical and canonical keywords
+def EncodeLegacy(**KwargValues: object) -> bytes:
+    return EncodeCmgr(**LegacyArgs(KwargValues))
+
+
+# opaque accounting remains shared by both public keyword conventions
+def OpaqueSplit(StreamData: bytes) -> dict[str, int]:
     Opaque = sum((Length for Ignored, Ignored, Length in KResidualSpans))
     return {
-        "stream_bytes": len(Stream),
-        "declared": len(Stream) - Opaque,
+        "stream_bytes": len(StreamData),
+        "declared": len(StreamData) - Opaque,
         "opaque": Opaque,
-        "accounted": len(Stream),
+        "accounted": len(StreamData),
         "residual_spans": len(KResidualSpans),
     }
+
+
+# this definition exists because focused behavior needs one stable owner
+def DeclaredOpaque(**KwargValues: object) -> dict[str, int]:
+    return OpaqueSplit(EncodeCmgr(**KwargValues))
+
+
+# the lowercase accounting helper retains historical keyword compatibility
+def OpaqueLegacy(**KwargValues: object) -> dict[str, int]:
+    return OpaqueSplit(EncodeLegacy(**KwargValues))
 
 
 # this binding exists because shared behavior needs one stable value
@@ -1332,13 +1387,13 @@ globals()["build_model"] = BuildModel
 globals()["dataclass"] = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()["declared_opaque_split"] = DeclaredOpaque
+globals()["declared_opaque_split"] = OpaqueLegacy
 
 # this binding exists because shared behavior needs one stable value
 globals()["encode_class_definition"] = EncodeClassDefinition
 
 # this binding exists because shared behavior needs one stable value
-globals()["encode_cmgr_stream"] = EncodeCmgr
+globals()["encode_cmgr_stream"] = EncodeLegacy
 
 # this binding exists because shared behavior needs one stable value
 globals()["encode_string"] = EncodeString

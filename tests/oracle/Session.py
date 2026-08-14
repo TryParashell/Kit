@@ -11,6 +11,7 @@ from contextlib import contextmanager as Contextmanager
 from dataclasses import dataclass as DataClass, field as MakeField
 from pathlib import Path as FilePath
 from typing import Iterator
+import warnings as WarningApi
 
 # centralizes shared evidence so every related assertion uses one value
 KPartInfo = 1
@@ -222,12 +223,20 @@ class SessionLife:
             return
         try:
             SelfRef.AppInfo.CloseAllDocuments(True)
-        except Exception:
-            pass
+        except Exception as ErrorInfo:
+            WarningApi.warn(
+                f"SOLIDWORKS document cleanup failed: {ErrorInfo}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         try:
             SelfRef.AppInfo.ExitApp()
-        except Exception:
-            pass
+        except Exception as ErrorInfo:
+            WarningApi.warn(
+                f"SOLIDWORKS application shutdown failed: {ErrorInfo}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         SelfRef.AppInfo = None
         try:
             SelfRef.Pythoncom.CoUninitialize()
@@ -261,8 +270,12 @@ class DocAccess:
             if ModelDoc is not None:
                 try:
                     SelfRef.AppInfo.CloseDoc(str(ComValue(ModelDoc, "GetTitle")))
-                except Exception:
-                    pass
+                except Exception as ErrorInfo:
+                    WarningApi.warn(
+                        f"SOLIDWORKS document close failed: {ErrorInfo}",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
 
 
 # keeps this focused behavior isolated so regressions remain immediately visible

@@ -660,9 +660,8 @@ def TestStripped(TmpPath: Path) -> None:
     assert First.vendor_loadable is False
     Restored = OpenDoc(Carrier)
     MetaValue = dict(Restored.metadata)
-    assert (
-        MetaValue.pop("catia.container_compatibility") == "native-base-neutral-overlay"
-    )
+    Compatibility = MetaValue.pop("catia.container_compatibility")
+    assert Compatibility == "native-base-neutral-overlay"
     Stripped = Replace(Restored, metadata=FrozenMapping(MetaValue))
     Blocked = TmpPath / "blocked.CATPart"
     with Pytest.raises(AppUsabilityError) as Captured:

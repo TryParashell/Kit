@@ -1744,7 +1744,7 @@ def TestFPPWTENF() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFPPWTENB() -> None:
-    SourceData = FreeCPPD(Join=True)
+    SourceData = FreeCPPD(JoinInfo=True)
     OutputData = BytesIO()
     ResultData = WriteSldprt(SourceData, OutputData)
     ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
@@ -3480,7 +3480,8 @@ def TestANTSWMR(TmpPath) -> None:
     assert First.metadata["mode"] == "template"
     Restored = OpenDocument(Carrier)
     Metadata = dict(Restored.metadata)
-    assert Metadata.pop("solidworks.container_compatibility") == "native-template"
+    Compatibility = Metadata.pop("solidworks.container_compatibility")
+    assert Compatibility == "native-template"
     Stripped = ReplaceData(Restored, metadata=FrozenMapping(Metadata))
     Replay = TmpPath / "replay.SLDPRT"
     ResultInfo = WriteDocument(Stripped, Replay)
@@ -3577,7 +3578,10 @@ def TestCDTRSRC(TmpPath) -> None:
     )
     assert Referenced
     assert all((TargetPathA.is_file() for TargetPathA in Referenced))
-    assert all((SldprtArchive.open(TargetPathA).records for TargetPathA in Referenced))
+    RecordFlags = tuple(
+        bool(SldprtArchive.open(TargetPathA).records) for TargetPathA in Referenced
+    )
+    assert all(RecordFlags)
     Relocated = TmpPath / "relocated" / Output.name
     Relocated.parent.mkdir()
     Relocated.write_bytes(Output.read_bytes())
