@@ -16,10 +16,10 @@ import sys as System
 KHereInfo = PathInfo(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KScratch = KHereInfo.parents[2] / '.rescratch'
+KScratch = KHereInfo.parents[2] / ".rescratch"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KGrammar = KHereInfo.parent / 'harness'
+KGrammar = KHereInfo.parent / "harness"
 for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
@@ -27,20 +27,20 @@ import Model as Modellib
 import Streamlib as Streamlib
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KOutInfo = KScratch / 'trace' / 'out'
+KOutInfo = KScratch / "trace" / "out"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KHistoryClass = 'moHistoryFeatItemData_c'
+KHistoryClass = "moHistoryFeatItemData_c"
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def ItemCount(ByteBlob: bytes, ModeInfo: str) -> int:
     Entries = len(Streamlib.CompFeatEntries(ByteBlob))
-    if ModeInfo == 'items':
+    if ModeInfo == "items":
         return Entries
-    if ModeInfo == 'features':
+    if ModeInfo == "features":
         return Entries // 2
-    raise SystemExit(f'unknown mode {ModeInfo!r}')
+    raise SystemExit(f"unknown mode {ModeInfo!r}")
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -52,25 +52,27 @@ def FirstItemNode(ModelInfo: Modellib.Model) -> int:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Candidates(ModelInfo: Modellib.Model, CountInfo: int, Keying: str) -> set[tuple[object, ...]]:
+def Candidates(
+    ModelInfo: Modellib.Model, CountInfo: int, Keying: str
+) -> set[tuple[object, ...]]:
     Anchor = FirstItemNode(ModelInfo)
     Total = len(ModelInfo.nodes)
     Found: set[tuple[object, ...]] = set()
     for PosInfoInfo, NodeInfoInfo in enumerate(ModelInfo.nodes):
-        if Keying == 'anchor':
+        if Keying == "anchor":
             KeyName: object = PosInfoInfo - Anchor
-        elif Keying == 'tail':
+        elif Keying == "tail":
             KeyName = PosInfoInfo - Total
-        elif Keying == 'class':
+        elif Keying == "class":
             KeyName = (NodeInfoInfo.class_name, NodeInfoInfo.kind)
         else:
-            raise SystemExit(f'unknown keying {Keying!r}')
+            raise SystemExit(f"unknown keying {Keying!r}")
         BodyInfo = NodeInfoInfo.body
         for Offset in range(len(BodyInfo) - 1):
-            if Struct.unpack_from('<H', BodyInfo, Offset)[0] == CountInfo:
+            if Struct.unpack_from("<H", BodyInfo, Offset)[0] == CountInfo:
                 Found.add((KeyName, Offset, 2))
             if Offset + 4 <= len(BodyInfo):
-                if Struct.unpack_from('<I', BodyInfo, Offset)[0] == CountInfo:
+                if Struct.unpack_from("<I", BodyInfo, Offset)[0] == CountInfo:
                     Found.add((KeyName, Offset, 4))
     return Found
 
@@ -80,7 +82,7 @@ def MainRun() -> int:
     ModeInfo = System.argv[1]
     ArgsInfo = System.argv[2:]
     if not ArgsInfo or len(ArgsInfo) % 3:
-        raise SystemExit('usage: Counts.py <items|features> <label> <part> <log> [...]')
+        raise SystemExit("usage: Counts.py <items|features> <label> <part> <log> [...]")
     Loaded: list[tuple[str, PathInfo, bytes, Modellib.Model, int]] = []
     for PosInfoInfo in range(0, len(ArgsInfo), 3):
         LabelInfo = ArgsInfo[PosInfoInfo]
@@ -89,17 +91,37 @@ def MainRun() -> int:
         ByteBlob, ModelInfo, SpareValue = Modellib.LoadData(PartInfoInfo, LogInfo)
         CountInfo = ItemCount(ByteBlob, ModeInfo)
         Loaded.append((LabelInfo, PartInfoInfo, ByteBlob, ModelInfo, CountInfo))
-        print(f'{LabelInfo:12s} target={CountInfo:3d} nodes={len(ModelInfo.nodes)} anchor_node={FirstItemNode(ModelInfo)}')
+        print(
+            f"{LabelInfo:12s} target={CountInfo:3d} nodes={len(ModelInfo.nodes)} anchor_node={FirstItemNode(ModelInfo)}"
+        )
     Report: dict[str, list[list[object]]] = {}
-    for Keying in ('anchor', 'tail', 'class'):
-        SetsInfo = [Candidates(ModelInfo, CountInfo, Keying) for SpareValue, SpareValue, SpareValue, ModelInfo, CountInfo in Loaded]
+    for Keying in ("anchor", "tail", "class"):
+        SetsInfo = [
+            Candidates(ModelInfo, CountInfo, Keying)
+            for SpareValue, SpareValue, SpareValue, ModelInfo, CountInfo in Loaded
+        ]
         Shared = set.intersection(*SetsInfo)
         Report[Keying] = sorted([list(ItemData) for ItemData in Shared], key=repr)
-        print(f'keying={Keying:7s} shared fields={len(Shared)}')
+        print(f"keying={Keying:7s} shared fields={len(Shared)}")
         for Entry in sorted(Shared, key=repr):
-            print(f'  key={Entry[0]!r} body_offset={Entry[1]} width={Entry[2]}')
+            print(f"  key={Entry[0]!r} body_offset={Entry[1]} width={Entry[2]}")
     KOutInfo.mkdir(parents=True, exist_ok=True)
-    (KOutInfo / f'counts_{ModeInfo}.json').write_text(JsonData.dumps({'mode': ModeInfo, 'parts': [{'label': LabelInfo, 'part': str(PartInfoInfo), 'target': CountInfo} for LabelInfo, PartInfoInfo, SpareValue, SpareValue, CountInfo in Loaded], 'shared': Report}, indent=2), encoding='utf-8')
+    (KOutInfo / f"counts_{ModeInfo}.json").write_text(
+        JsonData.dumps(
+            {
+                "mode": ModeInfo,
+                "parts": [
+                    {"label": LabelInfo, "part": str(PartInfoInfo), "target": CountInfo}
+                    for LabelInfo, PartInfoInfo, SpareValue, SpareValue, CountInfo in Loaded
+                ],
+                "shared": Report,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     return 0
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     raise SystemExit(MainRun())

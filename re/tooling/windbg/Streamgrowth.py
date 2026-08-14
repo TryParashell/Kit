@@ -14,7 +14,7 @@ import sys as System
 KHereInfo = PathInfo(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KGrammar = KHereInfo.parent / 'harness'
+KGrammar = KHereInfo.parent / "harness"
 for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
@@ -25,21 +25,26 @@ import Streamlib as Streamlib
 def MainRun() -> int:
     Parts = [PathInfo(ItemData).resolve() for ItemData in System.argv[1:]]
     if not Parts:
-        raise SystemExit('usage: Streamgrowth.py <part> <part> [...]')
+        raise SystemExit("usage: Streamgrowth.py <part> <part> [...]")
     Table: dict[str, list[int]] = {}
     for PartInfoInfo in Parts:
         DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
         for NameTextInfo, PayloadInfo in DonorInfo.streams.items():
             Table.setdefault(NameTextInfo, []).append(len(PayloadInfo))
     WidthInfo = max((len(NameTextInfo) for NameTextInfo in Table))
-    print('stream sizes across ' + ', '.join((PartInfoInfo.stem for PartInfoInfo in Parts)))
+    print(
+        "stream sizes across "
+        + ", ".join((PartInfoInfo.stem for PartInfoInfo in Parts))
+    )
     for NameTextInfo in sorted(Table):
         Sizes = Table[NameTextInfo]
         if len(Sizes) != len(Parts):
-            print(f'{NameTextInfo:<{WidthInfo}}  {Sizes} (missing from some parts)')
+            print(f"{NameTextInfo:<{WidthInfo}}  {Sizes} (missing from some parts)")
             continue
-        Trend = 'grows' if Sizes == sorted(Sizes) and Sizes[0] != Sizes[-1] else 'flat'
-        print(f'{NameTextInfo:<{WidthInfo}}  {Sizes} {Trend}')
+        Trend = "grows" if Sizes == sorted(Sizes) and Sizes[0] != Sizes[-1] else "flat"
+        print(f"{NameTextInfo:<{WidthInfo}}  {Sizes} {Trend}")
     return 0
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     raise SystemExit(MainRun())

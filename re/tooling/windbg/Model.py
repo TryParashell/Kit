@@ -16,7 +16,7 @@ import sys as System
 KHereInfo = PathInfo(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KGrammar = KHereInfo.parent / 'harness'
+KGrammar = KHereInfo.parent / "harness"
 for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
@@ -35,6 +35,7 @@ def GetLegacyAttr(SelfRef, NameText):
 def SetLegacyMut(SelfRef, NameText, ValueData):
     TargetName = SelfRef.KAliasNames.get(NameText, NameText)
     object.__setattr__(SelfRef, TargetName, ValueData)
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KNewClassTag = 65535
@@ -60,13 +61,24 @@ class NodeInfo:
     KindNameInfo: str
     BodyInfo: bytes
     Schema: int = 0
-    ClassNameData: str = ''
+    ClassNameData: str = ""
     Target: int = -1
     Literal: int = 0
     Origin: int = -1
     ClassIndex: int = 0
     ObjectIndex: int = 0
-    KAliasNames = {'kind': 'KindNameInfo', 'body': 'BodyInfo', 'schema': 'Schema', 'class_name': 'ClassNameData', 'target': 'Target', 'literal': 'Literal', 'origin': 'Origin', 'class_index': 'ClassIndex', 'object_index': 'ObjectIndex'}
+    KAliasNames = {
+        "kind": "KindNameInfo",
+        "body": "BodyInfo",
+        "schema": "Schema",
+        "class_name": "ClassNameData",
+        "target": "Target",
+        "literal": "Literal",
+        "origin": "Origin",
+        "class_index": "ClassIndex",
+        "object_index": "ObjectIndex",
+    }
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 NodeInfo.__getattr__ = GetLegacyAttr
@@ -75,73 +87,121 @@ NodeInfo.__getattr__ = GetLegacyAttr
 NodeInfo.__setattr__ = SetLegacyMut
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-@DataClass(slots=True)
-class Model:
-    Header: bytes
-    BaseInfo: int
-    Nodes: list[NodeInfo] = FieldInfo(default_factory=list)
-
+# model copying stays independent from archive indexing and binary emission
+class ModelCopy:
+    __slots__ = ()
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
-    def Clone(SelfRef) -> 'Model':
-        return Model(Header=SelfRef.Header, BaseInfo=SelfRef.BaseInfo, Nodes=[NodeInfo(KindNameInfo=NodeInfoInfo.kind, BodyInfo=NodeInfoInfo.body, Schema=NodeInfoInfo.schema, ClassNameData=NodeInfoInfo.class_name, Target=NodeInfoInfo.target, Literal=NodeInfoInfo.literal, Origin=NodeInfoInfo.origin) for NodeInfoInfo in SelfRef.Nodes])
+    def Clone(SelfRef) -> "Model":
+        return Model(
+            Header=SelfRef.Header,
+            BaseInfo=SelfRef.BaseInfo,
+            Nodes=[
+                NodeInfo(
+                    KindNameInfo=NodeInfoInfo.kind,
+                    BodyInfo=NodeInfoInfo.body,
+                    Schema=NodeInfoInfo.schema,
+                    ClassNameData=NodeInfoInfo.class_name,
+                    Target=NodeInfoInfo.target,
+                    Literal=NodeInfoInfo.literal,
+                    Origin=NodeInfoInfo.origin,
+                )
+                for NodeInfoInfo in SelfRef.Nodes
+            ],
+        )
 
+
+# model indexing assigns deterministic archive identities before references are encoded
+class ModelIndex:
+    __slots__ = ()
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def DefnIndex(SelfRef, NameTextInfo: str) -> int:
         for PosInfoInfo, NodeInfoInfo in enumerate(SelfRef.Nodes):
-            if NodeInfoInfo.kind == 'definition' and NodeInfoInfo.class_name == NameTextInfo:
+            if (
+                NodeInfoInfo.kind == "definition"
+                and NodeInfoInfo.class_name == NameTextInfo
+            ):
                 return PosInfoInfo
         raise KeyError(NameTextInfo)
-
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def Assign(SelfRef) -> None:
         CounterInfo = SelfRef.BaseInfo
         for NodeInfoInfo in SelfRef.Nodes:
-            if NodeInfoInfo.kind == 'definition':
-                setattr(NodeInfoInfo, 'class_index', CounterInfo)
-                setattr(NodeInfoInfo, 'object_index', CounterInfo + 1)
+            if NodeInfoInfo.kind == "definition":
+                setattr(NodeInfoInfo, "class_index", CounterInfo)
+                setattr(NodeInfoInfo, "object_index", CounterInfo + 1)
                 CounterInfo += 2
-            elif NodeInfoInfo.kind == 'classref':
-                setattr(NodeInfoInfo, 'class_index', 0)
-                setattr(NodeInfoInfo, 'object_index', CounterInfo)
+            elif NodeInfoInfo.kind == "classref":
+                setattr(NodeInfoInfo, "class_index", 0)
+                setattr(NodeInfoInfo, "object_index", CounterInfo)
                 CounterInfo += 1
             else:
-                setattr(NodeInfoInfo, 'class_index', 0)
-                setattr(NodeInfoInfo, 'object_index', 0)
+                setattr(NodeInfoInfo, "class_index", 0)
+                setattr(NodeInfoInfo, "object_index", 0)
 
+
+# model emission owns binary token encoding after indexing has stabilized the graph
+class ModelWriter:
+    __slots__ = ()
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def EmitData(SelfRef) -> bytes:
         SelfRef.Assign()
         OutputDataInfo = bytearray(SelfRef.Header)
         for NodeInfoInfo in SelfRef.Nodes:
-            if NodeInfoInfo.kind == 'definition':
-                Encoded = NodeInfoInfo.class_name.encode('ascii')
-                OutputDataInfo += Struct.pack('<HHH', KNewClassTag, NodeInfoInfo.schema, len(Encoded))
+            if NodeInfoInfo.kind == "definition":
+                Encoded = NodeInfoInfo.class_name.encode("ascii")
+                OutputDataInfo += Struct.pack(
+                    "<HHH", KNewClassTag, NodeInfoInfo.schema, len(Encoded)
+                )
                 OutputDataInfo += Encoded
-            elif NodeInfoInfo.kind == 'classref':
+            elif NodeInfoInfo.kind == "classref":
                 if NodeInfoInfo.target < 0:
                     Token = NodeInfoInfo.literal
                 else:
-                    Token = KClassTagBit | SelfRef.Nodes[NodeInfoInfo.target].class_index
+                    Token = (
+                        KClassTagBit | SelfRef.Nodes[NodeInfoInfo.target].class_index
+                    )
                 if Token & ~KClassTagBit >= KBigObjectTag:
-                    raise ModelError(f'class index {Token & ~KClassTagBit} needs wBigObjectTag')
-                OutputDataInfo += Struct.pack('<H', Token)
-            elif NodeInfoInfo.kind == 'objectref':
-                Token = NodeInfoInfo.literal if NodeInfoInfo.target < 0 else SelfRef.Nodes[NodeInfoInfo.target].object_index
+                    raise ModelError(
+                        f"class index {Token & ~KClassTagBit} needs wBigObjectTag"
+                    )
+                OutputDataInfo += Struct.pack("<H", Token)
+            elif NodeInfoInfo.kind == "objectref":
+                Token = (
+                    NodeInfoInfo.literal
+                    if NodeInfoInfo.target < 0
+                    else SelfRef.Nodes[NodeInfoInfo.target].object_index
+                )
                 if Token >= KBigObjectTag:
-                    raise ModelError(f'object index {Token} needs wBigObjectTag')
-                OutputDataInfo += Struct.pack('<H', Token)
-            elif NodeInfoInfo.kind == 'null':
-                OutputDataInfo += Struct.pack('<H', KNullTag)
+                    raise ModelError(f"object index {Token} needs wBigObjectTag")
+                OutputDataInfo += Struct.pack("<H", Token)
+            elif NodeInfoInfo.kind == "null":
+                OutputDataInfo += Struct.pack("<H", KNullTag)
             else:
-                raise ModelError(f'cannot emit node kind {NodeInfoInfo.kind}')
+                raise ModelError(f"cannot emit node kind {NodeInfoInfo.kind}")
             OutputDataInfo += NodeInfoInfo.body
         return bytes(OutputDataInfo)
-    KAliasNames = {'header': 'Header', 'base': 'BaseInfo', 'nodes': 'Nodes', 'clone': 'Clone', 'definition_index': 'DefnIndex', 'assign': 'Assign', 'emit': 'EmitData'}
+
+
+# the public model composes copying indexing and emission around shared archive state
+@DataClass(slots=True)
+class Model(ModelCopy, ModelIndex, ModelWriter):
+    Header: bytes
+    BaseInfo: int
+    Nodes: list[NodeInfo] = FieldInfo(default_factory=list)
+    KAliasNames = {
+        "header": "Header",
+        "base": "BaseInfo",
+        "nodes": "Nodes",
+        "clone": "Clone",
+        "definition_index": "DefnIndex",
+        "assign": "Assign",
+        "emit": "EmitData",
+    }
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 Model.__getattr__ = GetLegacyAttr
@@ -153,32 +213,67 @@ Model.__setattr__ = SetLegacyMut
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def FinishParse(ByteBlob, SegmentsInfo) -> Model:
     BaseInfo = SegmentsInfo[0].map_index
-    ModelInfo = Model(Header=ByteBlob[:SegmentsInfo[0].offset], BaseInfo=BaseInfo)
+    ModelInfo = Model(Header=ByteBlob[: SegmentsInfo[0].offset], BaseInfo=BaseInfo)
     ClassPos: dict[int, int] = {}
     ObjectPos: dict[int, int] = {}
     for PosInfoInfo, ItemData in enumerate(SegmentsInfo):
-        BodyInfo = ByteBlob[ItemData.offset + ItemData.header:ItemData.end]
-        if ItemData.kind == 'definition':
-            Schema = Struct.unpack_from('<H', ByteBlob, ItemData.offset + 2)[0]
-            NodeInfoInfo = NodeInfo(KindNameInfo='definition', BodyInfo=BodyInfo, Schema=Schema, ClassNameData=ItemData.class_name, Origin=ItemData.offset)
+        BodyInfo = ByteBlob[ItemData.offset + ItemData.header : ItemData.end]
+        if ItemData.kind == "definition":
+            Schema = Struct.unpack_from("<H", ByteBlob, ItemData.offset + 2)[0]
+            NodeInfoInfo = NodeInfo(
+                KindNameInfo="definition",
+                BodyInfo=BodyInfo,
+                Schema=Schema,
+                ClassNameData=ItemData.class_name,
+                Origin=ItemData.offset,
+            )
             ClassPos[ItemData.class_index] = PosInfoInfo
             ObjectPos[ItemData.object_index] = PosInfoInfo
-        elif ItemData.kind == 'classref':
-            NodeInfoInfo = NodeInfo(KindNameInfo='classref', BodyInfo=BodyInfo, Literal=ItemData.tag, Target=ClassPos.get(ItemData.class_index, -1), ClassNameData=ItemData.class_name, Origin=ItemData.offset)
+        elif ItemData.kind == "classref":
+            NodeInfoInfo = NodeInfo(
+                KindNameInfo="classref",
+                BodyInfo=BodyInfo,
+                Literal=ItemData.tag,
+                Target=ClassPos.get(ItemData.class_index, -1),
+                ClassNameData=ItemData.class_name,
+                Origin=ItemData.offset,
+            )
             ObjectPos[ItemData.object_index] = PosInfoInfo
-        elif ItemData.kind == 'objectref':
-            NodeInfoInfo = NodeInfo(KindNameInfo='objectref', BodyInfo=BodyInfo, Literal=ItemData.tag, Target=ObjectPos.get(ItemData.tag, -1), Origin=ItemData.offset)
-        elif ItemData.kind == 'null':
-            NodeInfoInfo = NodeInfo(KindNameInfo='null', BodyInfo=BodyInfo, Origin=ItemData.offset)
+        elif ItemData.kind == "objectref":
+            NodeInfoInfo = NodeInfo(
+                KindNameInfo="objectref",
+                BodyInfo=BodyInfo,
+                Literal=ItemData.tag,
+                Target=ObjectPos.get(ItemData.tag, -1),
+                Origin=ItemData.offset,
+            )
+        elif ItemData.kind == "null":
+            NodeInfoInfo = NodeInfo(
+                KindNameInfo="null", BodyInfo=BodyInfo, Origin=ItemData.offset
+            )
         else:
-            raise ModelError(f'unsupported tag kind {ItemData.kind} at {ItemData.offset}')
+            raise ModelError(
+                f"unsupported tag kind {ItemData.kind} at {ItemData.offset}"
+            )
         ModelInfo.nodes.append(NodeInfoInfo)
     for PosInfoInfo, ItemData in enumerate(SegmentsInfo):
         NodeInfoInfo = ModelInfo.nodes[PosInfoInfo]
-        if NodeInfoInfo.kind == 'objectref' and NodeInfoInfo.target < 0 and (ItemData.tag >= BaseInfo):
-            raise ModelError(f'object reference {ItemData.tag} at {ItemData.offset} is unresolved')
-        if NodeInfoInfo.kind == 'classref' and NodeInfoInfo.target < 0 and (ItemData.class_index >= BaseInfo):
-            raise ModelError(f'class reference {ItemData.class_index} at {ItemData.offset} is unresolved')
+        if (
+            NodeInfoInfo.kind == "objectref"
+            and NodeInfoInfo.target < 0
+            and (ItemData.tag >= BaseInfo)
+        ):
+            raise ModelError(
+                f"object reference {ItemData.tag} at {ItemData.offset} is unresolved"
+            )
+        if (
+            NodeInfoInfo.kind == "classref"
+            and NodeInfoInfo.target < 0
+            and (ItemData.class_index >= BaseInfo)
+        ):
+            raise ModelError(
+                f"class reference {ItemData.class_index} at {ItemData.offset} is unresolved"
+            )
     ModelInfo.assign()
     return ModelInfo
 
@@ -186,16 +281,20 @@ def FinishParse(ByteBlob, SegmentsInfo) -> Model:
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Parse(ByteBlob: bytes, SegmentsInfo: tuple[Segmentlib.Segment, ...]) -> Model:
     if not SegmentsInfo:
-        raise ModelError('empty segmentation')
+        raise ModelError("empty segmentation")
     return FinishParse(ByteBlob, SegmentsInfo)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def LoadData(PartInfoInfo: PathInfo, LogInfo: PathInfo, *, Stream: str | None=None) -> tuple[bytes, Model, tuple[Segmentlib.Segment, ...]]:
+def LoadData(
+    PartInfoInfo: PathInfo, LogInfo: PathInfo, *, Stream: str | None = None
+) -> tuple[bytes, Model, tuple[Segmentlib.Segment, ...]]:
     if Stream is None:
         ByteBlob, SegmentsInfo = Segmentlib.LoadData(PartInfoInfo, LogInfo)
     else:
-        ByteBlob, SegmentsInfo = Segmentlib.LoadData(PartInfoInfo, LogInfo, Stream=Stream)
+        ByteBlob, SegmentsInfo = Segmentlib.LoadData(
+            PartInfoInfo, LogInfo, Stream=Stream
+        )
     return (ByteBlob, Parse(ByteBlob, SegmentsInfo), SegmentsInfo)
 
 
@@ -205,7 +304,18 @@ def TokenTable(ModelInfo: Model) -> list[dict[str, int | str]]:
     Offsets = NodeOffsets(ModelInfo)
     GetRows: list[dict[str, int | str]] = []
     for PosInfoInfo, NodeInfoInfo in enumerate(ModelInfo.nodes):
-        GetRows.append({'node': PosInfoInfo, 'offset': Offsets[PosInfoInfo], 'kind': NodeInfoInfo.kind, 'class_name': NodeInfoInfo.class_name, 'map_index': NodeInfoInfo.object_index, 'class_index': NodeInfoInfo.class_index, 'target': NodeInfoInfo.target, 'literal': NodeInfoInfo.literal})
+        GetRows.append(
+            {
+                "node": PosInfoInfo,
+                "offset": Offsets[PosInfoInfo],
+                "kind": NodeInfoInfo.kind,
+                "class_name": NodeInfoInfo.class_name,
+                "map_index": NodeInfoInfo.object_index,
+                "class_index": NodeInfoInfo.class_index,
+                "target": NodeInfoInfo.target,
+                "literal": NodeInfoInfo.literal,
+            }
+        )
     return GetRows
 
 
@@ -215,8 +325,8 @@ def NodeOffsets(ModelInfo: Model) -> list[int]:
     Cursor = len(ModelInfo.header)
     for NodeInfoInfo in ModelInfo.nodes:
         Offsets.append(Cursor)
-        if NodeInfoInfo.kind == 'definition':
-            Cursor += 6 + len(NodeInfoInfo.class_name.encode('ascii'))
+        if NodeInfoInfo.kind == "definition":
+            Cursor += 6 + len(NodeInfoInfo.class_name.encode("ascii"))
         else:
             Cursor += 2
         Cursor += len(NodeInfoInfo.body)
@@ -228,17 +338,33 @@ def NodeOffsets(ModelInfo: Model) -> list[int]:
 def MainRun() -> int:
     ArgsInfo = System.argv[1:]
     if len(ArgsInfo) % 3:
-        raise SystemExit('usage: Model.py <label> <part> <log> [...]')
+        raise SystemExit("usage: Model.py <label> <part> <log> [...]")
     for PosInfoInfo in range(0, len(ArgsInfo), 3):
         LabelInfo = ArgsInfo[PosInfoInfo]
         PartInfoInfo = PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve()
         LogInfo = PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve()
         ByteBlob, ModelInfo, SpareValue = LoadData(PartInfoInfo, LogInfo)
         Rebuilt = ModelInfo.emit()
-        ExternClasses = sum((1 for NodeInfoInfo in ModelInfo.nodes if NodeInfoInfo.kind == 'classref' and NodeInfoInfo.target < 0))
-        ExternObjects = sum((1 for NodeInfoInfo in ModelInfo.nodes if NodeInfoInfo.kind == 'objectref' and NodeInfoInfo.target < 0))
-        Status = 'IDENTICAL' if Rebuilt == ByteBlob else 'DIFFERS'
-        print(f'{LabelInfo:14s} nodes={len(ModelInfo.nodes):4d} base={ModelInfo.base} external classrefs={ExternClasses:3d} objectrefs={ExternObjects:3d} round-trip={Status} {len(Rebuilt)}/{len(ByteBlob)}')
+        ExternClasses = sum(
+            (
+                1
+                for NodeInfoInfo in ModelInfo.nodes
+                if NodeInfoInfo.kind == "classref" and NodeInfoInfo.target < 0
+            )
+        )
+        ExternObjects = sum(
+            (
+                1
+                for NodeInfoInfo in ModelInfo.nodes
+                if NodeInfoInfo.kind == "objectref" and NodeInfoInfo.target < 0
+            )
+        )
+        Status = "IDENTICAL" if Rebuilt == ByteBlob else "DIFFERS"
+        print(
+            f"{LabelInfo:14s} nodes={len(ModelInfo.nodes):4d} base={ModelInfo.base} external classrefs={ExternClasses:3d} objectrefs={ExternObjects:3d} round-trip={Status} {len(Rebuilt)}/{len(ByteBlob)}"
+        )
     return 0
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     raise SystemExit(MainRun())

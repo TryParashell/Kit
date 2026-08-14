@@ -325,7 +325,7 @@ def TestAdapterAnd() -> None:
         CapabilityWriteTypeIds[Capability.PARAMETERS] = frozenset()
     with Pytest.raises(TypeError):
         CapabilityCarrierReasons[Capability.PARAMETERS] = CarrierReason.TARGET_UNSUPPORTED
-    assert NativeCapabilities == frozenset((Capability for Capability, TypeIds in CapabilityWriteTypeIds.items() if TypeIds))
+    assert NativeCapabilities == frozenset((CapabilityValue for CapabilityValue, TypeIds in CapabilityWriteTypeIds.items() if TypeIds))
     assert Adapter.info.native_capabilities == NativeCapabilities
     assert Adapter.info.media_types == ('application/x-extension-fcstd',)
 

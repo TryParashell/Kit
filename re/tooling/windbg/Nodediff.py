@@ -16,10 +16,10 @@ import sys as System
 KHereInfo = PathInfo(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KScratch = KHereInfo.parents[2] / '.rescratch'
+KScratch = KHereInfo.parents[2] / ".rescratch"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KGrammar = KHereInfo.parent / 'harness'
+KGrammar = KHereInfo.parent / "harness"
 for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
@@ -27,24 +27,30 @@ import Blocks as Blockslib
 import Model as Modellib
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KOutInfo = KScratch / 'trace' / 'out'
+KOutInfo = KScratch / "trace" / "out"
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def KeyName(NodeInfoInfo: Modellib.NodeInfo) -> tuple[str, str]:
-    if NodeInfoInfo.kind == 'definition':
-        return ('class', NodeInfoInfo.class_name)
-    if NodeInfoInfo.kind == 'classref':
-        return ('instance', NodeInfoInfo.class_name)
-    return (NodeInfoInfo.kind, '')
+    if NodeInfoInfo.kind == "definition":
+        return ("class", NodeInfoInfo.class_name)
+    if NodeInfoInfo.kind == "classref":
+        return ("instance", NodeInfoInfo.class_name)
+    return (NodeInfoInfo.kind, "")
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Align(Models: list[tuple[str, Modellib.Model]]) -> list[list[int | None]]:
     RefInfo = Models[-1][1]
-    GetRows: list[list[int | None]] = [[None] * len(Models) for SpareValue in RefInfo.nodes]
+    GetRows: list[list[int | None]] = [
+        [None] * len(Models) for SpareValue in RefInfo.nodes
+    ]
     for Column, (Label, ModelInfo) in enumerate(Models):
-        Matcher = Difflib.SequenceMatcher(a=[KeyName(NodeInfoInfo) for NodeInfoInfo in ModelInfo.nodes], b=[KeyName(NodeInfoInfo) for NodeInfoInfo in RefInfo.nodes], autojunk=False)
+        Matcher = Difflib.SequenceMatcher(
+            a=[KeyName(NodeInfoInfo) for NodeInfoInfo in ModelInfo.nodes],
+            b=[KeyName(NodeInfoInfo) for NodeInfoInfo in RefInfo.nodes],
+            autojunk=False,
+        )
         for AlowInfo, BlowInfo, ByteSize in Matcher.get_matching_blocks():
             for StepInfo in range(ByteSize):
                 GetRows[BlowInfo + StepInfo][Column] = AlowInfo + StepInfo
@@ -55,8 +61,8 @@ def Align(Models: list[tuple[str, Modellib.Model]]) -> list[list[int | None]]:
 def FinishMain(GetRows, LabelInfo, Models, PosInfoInfo, Stream) -> int:
     RefInfo = Models[-1][1]
     Labels = [LabelInfo for LabelInfo, SpareValue in Models]
-    print(f'stream {Stream}')
-    print('ref  kind        class                          ' + '  '.join(Labels))
+    print(f"stream {Stream}")
+    print("ref  kind        class                          " + "  ".join(Labels))
     PayloadInfo: list[dict[str, object]] = []
     for PosInfoInfo, RowDataInfo in enumerate(GetRows):
         NodeInfoInfo = RefInfo.nodes[PosInfoInfo]
@@ -65,22 +71,40 @@ def FinishMain(GetRows, LabelInfo, Models, PosInfoInfo, Stream) -> int:
         for Column, (Label, ModelInfo) in enumerate(Models):
             Source = RowDataInfo[Column]
             if Source is None:
-                Sizes.append('   -')
+                Sizes.append("   -")
                 Lengths.append(None)
             else:
-                Sizes.append(f'{len(ModelInfo.nodes[Source].body):4d}')
+                Sizes.append(f"{len(ModelInfo.nodes[Source].body):4d}")
                 Lengths.append(len(ModelInfo.nodes[Source].body))
-        FlagInfo = ''
+        FlagInfo = ""
         Present = [ValueInfo for ValueInfo in Lengths if ValueInfo is not None]
         if len(Present) != len(Models):
-            FlagInfo = ' NEW'
+            FlagInfo = " NEW"
         elif len(set(Present)) > 1:
-            FlagInfo = ' GROWS'
-        print(f"{PosInfoInfo:3d}  {NodeInfoInfo.kind:11s} {NodeInfoInfo.class_name or '-':30s} " + ' '.join(Sizes) + FlagInfo)
-        PayloadInfo.append({'node': PosInfoInfo, 'kind': NodeInfoInfo.kind, 'class_name': NodeInfoInfo.class_name, 'sources': RowDataInfo, 'body_lengths': Lengths, 'state': FlagInfo.strip() or 'same'})
+            FlagInfo = " GROWS"
+        print(
+            f"{PosInfoInfo:3d}  {NodeInfoInfo.kind:11s} {NodeInfoInfo.class_name or '-':30s} "
+            + " ".join(Sizes)
+            + FlagInfo
+        )
+        PayloadInfo.append(
+            {
+                "node": PosInfoInfo,
+                "kind": NodeInfoInfo.kind,
+                "class_name": NodeInfoInfo.class_name,
+                "sources": RowDataInfo,
+                "body_lengths": Lengths,
+                "state": FlagInfo.strip() or "same",
+            }
+        )
     KOutInfo.mkdir(parents=True, exist_ok=True)
-    TagInfoInfo = Stream.replace('/', '_').replace('-', '_')
-    (KOutInfo / f'nodediff_{TagInfoInfo}.json').write_text(JsonData.dumps({'stream': Stream, 'labels': Labels, 'rows': PayloadInfo}, indent=2), encoding='utf-8')
+    TagInfoInfo = Stream.replace("/", "_").replace("-", "_")
+    (KOutInfo / f"nodediff_{TagInfoInfo}.json").write_text(
+        JsonData.dumps(
+            {"stream": Stream, "labels": Labels, "rows": PayloadInfo}, indent=2
+        ),
+        encoding="utf-8",
+    )
     return 0
 
 
@@ -96,5 +120,7 @@ def MainRun() -> int:
         Models.append((LabelInfo, Blockslib.LoadModel(PartInfoInfo, LogInfo, Stream)))
     GetRows = Align(Models)
     return FinishMain(GetRows, LabelInfo, Models, PosInfoInfo, Stream)
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     raise SystemExit(MainRun())

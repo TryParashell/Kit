@@ -1027,7 +1027,7 @@ def TreeNodes(BlobValue: bytes, Records: tuple[NameRecord, ...]) -> tuple[NameRe
 def Dimension(BlobValue: bytes, Records: tuple[NameRecord, ...]) -> tuple[DimensionScalar, ...]:
     Result: list[DimensionScalar] = []
     for Record in Records:
-        ValueOffset = DimensionScalarValue(BlobValue, Record.text_end, len(BlobValue), trailing_bytes=7)
+        ValueOffset = DimensionScalarValue(BlobValue, Record.text_end, len(BlobValue), TrailingBytes=7)
         if ValueOffset is None:
             continue
         Value = ReadDouble(BlobValue, ValueOffset)

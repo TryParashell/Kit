@@ -13,22 +13,22 @@ import sys as System
 KRootInfo = Pathlib.Path(__file__).resolve().parents[3]
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KPathInfo = KRootInfo / '.rescratch/ghidra/out/sldmodu_vtables.txt'
+KPathInfo = KRootInfo / ".rescratch/ghidra/out/sldmodu_vtables.txt"
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Tables():
     CurInfo = None
     GetRows = []
-    for LineText in KPathInfo.read_text(errors='replace').splitlines():
-        if LineText.startswith('=== VFTABLE '):
+    for LineText in KPathInfo.read_text(errors="replace").splitlines():
+        if LineText.startswith("=== VFTABLE "):
             if CurInfo is not None:
                 yield (CurInfo, GetRows)
-            BodyInfo = LineText[len('=== VFTABLE '):]
-            NameTextInfo, SpareValue, AddrInfo = BodyInfo.rpartition(' @ ')
+            BodyInfo = LineText[len("=== VFTABLE ") :]
+            NameTextInfo, SpareValue, AddrInfo = BodyInfo.rpartition(" @ ")
             CurInfo = (NameTextInfo.strip(), AddrInfo.strip())
             GetRows = []
-        elif CurInfo is not None and LineText.startswith('  '):
+        elif CurInfo is not None and LineText.startswith("  "):
             Parts = LineText.split()
             if len(Parts) >= 3:
                 GetRows.append((int(Parts[0]), Parts[1], Parts[2]))
@@ -40,19 +40,25 @@ def Tables():
 def MainRun():
     Wanted = System.argv[1:]
     ModeSlot = None
-    if Wanted and Wanted[0].startswith('slot='):
-        ModeSlot = int(Wanted[0].split('=', 1)[1])
+    if Wanted and Wanted[0].startswith("slot="):
+        ModeSlot = int(Wanted[0].split("=", 1)[1])
         Wanted = Wanted[1:]
     for (NameTextInfo, AddrInfo), GetRows in Tables():
         if Wanted and NameTextInfo not in Wanted:
             continue
         if ModeSlot is not None:
-            HitInfo = [ResultData for ResultData in GetRows if ResultData[0] == ModeSlot]
+            HitInfo = [
+                ResultData for ResultData in GetRows if ResultData[0] == ModeSlot
+            ]
             if HitInfo:
-                print(f'{NameTextInfo:34s} @{AddrInfo} slot{ModeSlot} {HitInfo[0][1]} {HitInfo[0][2]}')
+                print(
+                    f"{NameTextInfo:34s} @{AddrInfo} slot{ModeSlot} {HitInfo[0][1]} {HitInfo[0][2]}"
+                )
             continue
-        print(f'=== {NameTextInfo} @ {AddrInfo}  slots={len(GetRows)}')
+        print(f"=== {NameTextInfo} @ {AddrInfo}  slots={len(GetRows)}")
         for SlotIndex, Target, FnInfo in GetRows:
-            print(f'  {SlotIndex:4d} {Target} {FnInfo}')
-if __name__ == '__main__':
+            print(f"  {SlotIndex:4d} {Target} {FnInfo}")
+
+
+if __name__ == "__main__":
     MainRun()

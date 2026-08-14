@@ -14,30 +14,74 @@ import re as Regex
 KRootInfo = Pathlib.Path(__file__).resolve().parents[4]
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KTrace = KRootInfo / 're/data/segments'
+KTrace = KRootInfo / "re/data/segments"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KOutInfo = KRootInfo / '.rescratch/ghidra/out'
+KOutInfo = KRootInfo / ".rescratch/ghidra/out"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KGhInfo = KRootInfo / 're/tooling/ghidra'
+KGhInfo = KRootInfo / "re/tooling/ghidra"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KPriority = ['moExtrusion_c', 'moICE_c', 'moEndSpec_c', 'moFromEndSpec_c', 'moRevEndSpec_c', 'moRevolution_c', 'moRevolutionThin_c', 'moRevCut_c', 'moCut_c', 'moProfileFeature_c', 'moOriginProfileFeature_c', 'moLengthParameter_c', 'moAngleParameter_c', 'moBodyFeature_c', 'moFeature_c', 'moModelFeature_c', 'moCompFeature_c', 'moPerBodyChooserData_c', 'moFaceRef_c', 'moFR_c', 'moBBoxCenterData_c', 'moDisplayDistanceDim_c', 'moFeatureDimHandle_c', 'moFavoriteHandle_c', 'sgSketch', 'sgArc', 'sgLine', 'sgSpline', 'sgPoint', 'sgEntHandle', 'sgArcHandle', 'sgLineHandle', 'sgSplineHandle', 'sgPointHandle', 'sgDim', 'sgLogDim', 'moHistoryFeatItemData_c', 'moSketchChain_c', 'moSketchRegion_c']
+KPriority = [
+    "moExtrusion_c",
+    "moICE_c",
+    "moEndSpec_c",
+    "moFromEndSpec_c",
+    "moRevEndSpec_c",
+    "moRevolution_c",
+    "moRevolutionThin_c",
+    "moRevCut_c",
+    "moCut_c",
+    "moProfileFeature_c",
+    "moOriginProfileFeature_c",
+    "moLengthParameter_c",
+    "moAngleParameter_c",
+    "moBodyFeature_c",
+    "moFeature_c",
+    "moModelFeature_c",
+    "moCompFeature_c",
+    "moPerBodyChooserData_c",
+    "moFaceRef_c",
+    "moFR_c",
+    "moBBoxCenterData_c",
+    "moDisplayDistanceDim_c",
+    "moFeatureDimHandle_c",
+    "moFavoriteHandle_c",
+    "sgSketch",
+    "sgArc",
+    "sgLine",
+    "sgSpline",
+    "sgPoint",
+    "sgEntHandle",
+    "sgArcHandle",
+    "sgLineHandle",
+    "sgSplineHandle",
+    "sgPointHandle",
+    "sgDim",
+    "sgLogDim",
+    "moHistoryFeatItemData_c",
+    "moSketchChain_c",
+    "moSketchRegion_c",
+]
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Observed():
     Names = set()
-    for PathInfoData in sorted(KTrace.glob('segments_*.json')):
+    for PathInfoData in sorted(KTrace.glob("segments_*.json")):
         DocInfo = JsonData.loads(PathInfoData.read_text())
-        SegsInfo = DocInfo['segments']
+        SegsInfo = DocInfo["segments"]
         for SegInfo in SegsInfo:
-            NameTextInfo = SegInfo['class_name']
-            MatchDataInfo = Regex.match('backref->(\\d+)$', NameTextInfo)
+            NameTextInfo = SegInfo["class_name"]
+            MatchDataInfo = Regex.match("backref->(\\d+)$", NameTextInfo)
             if MatchDataInfo:
-                NameTextInfo = SegsInfo[int(MatchDataInfo.group(1))]['class_name']
-            if NameTextInfo in ('null',) or NameTextInfo.startswith('external#') or NameTextInfo.startswith('backref->'):
+                NameTextInfo = SegsInfo[int(MatchDataInfo.group(1))]["class_name"]
+            if (
+                NameTextInfo in ("null",)
+                or NameTextInfo.startswith("external#")
+                or NameTextInfo.startswith("backref->")
+            ):
                 continue
             Names.add(NameTextInfo)
     return Names
@@ -45,7 +89,7 @@ def Observed():
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun():
-    SmapInfo = JsonData.loads((KOutInfo / 'SerializeMap.json').read_text())
+    SmapInfo = JsonData.loads((KOutInfo / "SerializeMap.json").read_text())
     WantInfo = []
     for NameTextInfo in KPriority:
         if NameTextInfo in SmapInfo:
@@ -57,16 +101,30 @@ def MainRun():
     SeenInfo = set()
     GetRows = []
     for NameTextInfo in WantInfo:
-        AddrInfo = SmapInfo[NameTextInfo]['serialize_addr']
-        GetRows.append((NameTextInfo, AddrInfo, SmapInfo[NameTextInfo]['serialize_name']))
+        AddrInfo = SmapInfo[NameTextInfo]["serialize_addr"]
+        GetRows.append(
+            (NameTextInfo, AddrInfo, SmapInfo[NameTextInfo]["serialize_name"])
+        )
         if AddrInfo in SeenInfo:
             continue
         SeenInfo.add(AddrInfo)
-        Lines.append('0x' + AddrInfo)
-    (KGhInfo / 'SpecSldmodu.txt').write_text('\n'.join(Lines) + '\n')
-    (KOutInfo / 'SpecSldmoduClasses.json').write_text(JsonData.dumps([{'class': ItemCountInfo, 'addr': FirstValue, 'name': FileData} for ItemCountInfo, FirstValue, FileData in GetRows], indent=1))
-    print('classes requested', len(GetRows), 'distinct functions', len(Lines))
-    MissingInfo = [ItemCountInfo for ItemCountInfo in KPriority if ItemCountInfo not in SmapInfo]
-    print('priority classes with no vtable entry:', MissingInfo)
-if __name__ == '__main__':
+        Lines.append("0x" + AddrInfo)
+    (KGhInfo / "SpecSldmodu.txt").write_text("\n".join(Lines) + "\n")
+    (KOutInfo / "SpecSldmoduClasses.json").write_text(
+        JsonData.dumps(
+            [
+                {"class": ItemCountInfo, "addr": FirstValue, "name": FileData}
+                for ItemCountInfo, FirstValue, FileData in GetRows
+            ],
+            indent=1,
+        )
+    )
+    print("classes requested", len(GetRows), "distinct functions", len(Lines))
+    MissingInfo = [
+        ItemCountInfo for ItemCountInfo in KPriority if ItemCountInfo not in SmapInfo
+    ]
+    print("priority classes with no vtable entry:", MissingInfo)
+
+
+if __name__ == "__main__":
     MainRun()

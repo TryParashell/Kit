@@ -856,12 +856,17 @@ def Selected(
     if Selected is None:
         return Configurations
     Matches = {
-        Config.id for Config in Configurations if Selected in {Config.id, Config.name}
+        ConfigValue.id
+        for ConfigValue in Configurations
+        if Selected in {ConfigValue.id, ConfigValue.name}
     }
     if not Matches:
         raise CatiaAdapterA(f"configuration {Selected!r} is unavailable")
     return tuple(
-        (Replace(Config, active=Config.id in Matches) for Config in Configurations)
+        (
+            Replace(ConfigValue, active=ConfigValue.id in Matches)
+            for ConfigValue in Configurations
+        )
     )
 
 
@@ -1361,13 +1366,13 @@ def PartPlanes(
             SupportPlane(
                 id=f"catia:plane:{Index}",
                 name=Symbol.value,
-                transform=Transform,
+                transform=PlaneTransform,
                 provenance=SymbolSource(Folder, Stream, Symbol, "reference-plane"),
                 attributes=FrozenMapping(
                     {"native_class": "GSMPlane", "principal_index": Index - 1}
                 ),
             )
-            for Index, (Symbol, Transform) in enumerate(
+            for Index, (Symbol, PlaneTransform) in enumerate(
                 zip(Symbols, Transforms, strict=True), start=1
             )
         )

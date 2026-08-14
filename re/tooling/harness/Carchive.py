@@ -14,7 +14,7 @@ import sys as System
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KRootInfo = PathInfo(__file__).resolve().parents[3]
-for CandInfo in (KRootInfo, KRootInfo / 'src'):
+for CandInfo in (KRootInfo, KRootInfo / "src"):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
 from convert.adapters.solidworks.container.Container import SldprtArchive
@@ -33,17 +33,18 @@ def SetLegacyMut(SelfRef, NameText, ValueData):
     TargetName = SelfRef.KAliasNames.get(NameText, NameText)
     object.__setattr__(SelfRef, TargetName, ValueData)
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-KResolved = 'Contents/Config-0-ResolvedFeatures'
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KEYWORDS = 'swXmlContents/KeyWords'
+KResolved = "Contents/Config-0-ResolvedFeatures"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KFeatInfo = 'swXmlContents/Features'
+KEYWORDS = "swXmlContents/KeyWords"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KPartition = 'Contents/Config-0-Partition'
+KFeatInfo = "swXmlContents/Features"
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KPartition = "Contents/Config-0-Partition"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KNewClassTag = 65535
@@ -58,7 +59,7 @@ KBigObjectTag = 32767
 KNullTag = 0
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KStringInfo = bytes.fromhex('fffeff')
+KStringInfo = bytes.fromhex("fffeff")
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KMaxClassName = 64
@@ -72,7 +73,14 @@ class ClassDefinition:
     NameTextInfo: str
     NameOffset: int
     DataOffset: int
-    KAliasNames = {'tag_offset': 'TagOffset', 'schema': 'Schema', 'name': 'NameTextInfo', 'name_offset': 'NameOffset', 'data_offset': 'DataOffset'}
+    KAliasNames = {
+        "tag_offset": "TagOffset",
+        "schema": "Schema",
+        "name": "NameTextInfo",
+        "name_offset": "NameOffset",
+        "data_offset": "DataOffset",
+    }
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 ClassDefinition.__getattr__ = GetLegacyAttr
@@ -83,14 +91,15 @@ ClassDefinition.__getattr__ = GetLegacyAttr
 class ClassReference:
     Offset: int
     IndexData: int
-    KAliasNames = {'offset': 'Offset', 'index': 'IndexData'}
+    KAliasNames = {"offset": "Offset", "index": "IndexData"}
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 ClassReference.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Stream(PathInfoData: PathInfo, NameTextInfo: str=KResolved) -> bytes:
+def Stream(PathInfoData: PathInfo, NameTextInfo: str = KResolved) -> bytes:
     return SldprtArchive.open(PathInfoData).require(NameTextInfo)
 
 
@@ -105,11 +114,11 @@ def ClassDefns(ByteBlob: bytes) -> tuple[ClassDefinition, ...]:
     Cursor = 0
     Limit = len(ByteBlob)
     while True:
-        Offset = ByteBlob.find(b'\xff\xff', Cursor)
+        Offset = ByteBlob.find(b"\xff\xff", Cursor)
         if Offset < 0 or Offset + 6 > Limit:
             break
         Cursor = Offset + 1
-        Schema, Length = Struct.unpack_from('<HH', ByteBlob, Offset + 2)
+        Schema, Length = Struct.unpack_from("<HH", ByteBlob, Offset + 2)
         if not 0 < Length <= KMaxClassName:
             continue
         StartRun = Offset + 6
@@ -118,10 +127,10 @@ def ClassDefns(ByteBlob: bytes) -> tuple[ClassDefinition, ...]:
             continue
         RawData = ByteBlob[StartRun:EndIndex]
         try:
-            NameTextInfo = RawData.decode('ascii')
+            NameTextInfo = RawData.decode("ascii")
         except UnicodeDecodeError:
             continue
-        if not NameTextInfo.replace('_', '').isalnum():
+        if not NameTextInfo.replace("_", "").isalnum():
             continue
         Result.append(ClassDefinition(Offset, Schema, NameTextInfo, StartRun, EndIndex))
     return tuple(Result)
@@ -134,17 +143,22 @@ def ClassIndexMap(ByteBlob: bytes) -> dict[str, int]:
     Counts: dict[int, int] = {}
     for RefInfo in RefsInfo:
         Counts[RefInfo.index] = Counts.get(RefInfo.index, 0) + 1
-    return {DefnInfo.name: DefnInfo.tag_offset for DefnInfo in Defns} | {f'#ref:{IndexData}': CountInfo for IndexData, CountInfo in sorted(Counts.items())}
+    return {DefnInfo.name: DefnInfo.tag_offset for DefnInfo in Defns} | {
+        f"#ref:{IndexData}": CountInfo
+        for IndexData, CountInfo in sorted(Counts.items())
+    }
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def ClassRefs(ByteBlob: bytes, Defns: tuple[ClassDefinition, ...]) -> tuple[ClassReference, ...]:
+def ClassRefs(
+    ByteBlob: bytes, Defns: tuple[ClassDefinition, ...]
+) -> tuple[ClassReference, ...]:
     Boundaries = DefnSpans(Defns)
     Result: list[ClassReference] = []
     for Offset in range(0, len(ByteBlob) - 1):
         if IsInside(Boundaries, Offset):
             continue
-        Token = Struct.unpack_from('<H', ByteBlob, Offset)[0]
+        Token = Struct.unpack_from("<H", ByteBlob, Offset)[0]
         if Token == KNewClassTag or not Token & KClassTagBit:
             continue
         Result.append(ClassReference(Offset, Token & ~KClassTagBit))
@@ -163,7 +177,7 @@ def NamedTokens(ByteBlob: bytes) -> dict[int, int]:
             Cursor = Offset + 1
             continue
         Cursor = Offset + 1
-        Token = Struct.unpack_from('<H', ByteBlob, Offset - 2)[0]
+        Token = Struct.unpack_from("<H", ByteBlob, Offset - 2)[0]
         Counts[Token] = Counts.get(Token, 0) + 1
     return dict(sorted(Counts.items()))
 
@@ -188,12 +202,16 @@ def UnicodeStrings(ByteBlob: bytes) -> tuple[tuple[int, int, str], ...]:
         if EndIndex > len(ByteBlob):
             continue
         try:
-            TextValueData = ByteBlob[StartRun:EndIndex].decode('utf-16le')
+            TextValueData = ByteBlob[StartRun:EndIndex].decode("utf-16le")
         except UnicodeDecodeError:
             continue
         if any((not Character.isprintable() for Character in TextValueData)):
             continue
-        Token = Struct.unpack_from('<H', ByteBlob, Offset - 2)[0] if Offset >= 2 else KNullTag
+        Token = (
+            Struct.unpack_from("<H", ByteBlob, Offset - 2)[0]
+            if Offset >= 2
+            else KNullTag
+        )
         Result.append((Offset, Token, TextValueData))
     return tuple(Result)
 
@@ -212,7 +230,7 @@ def IsInside(Spans: tuple[tuple[int, int], ...], Offset: int) -> bool:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Hexdump(ByteBlob: bytes, Offset: int, WidthInfo: int=64) -> str:
+def Hexdump(ByteBlob: bytes, Offset: int, WidthInfo: int = 64) -> str:
     StartRun = max(0, Offset)
     EndIndex = min(len(ByteBlob), Offset + WidthInfo)
-    return ByteBlob[StartRun:EndIndex].hex(' ')
+    return ByteBlob[StartRun:EndIndex].hex(" ")

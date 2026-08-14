@@ -11,18 +11,27 @@ import struct as Struct
 import sys as System
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KSwInfo = Pathlib.Path('C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS')
+KSwInfo = Pathlib.Path("C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS")
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KValues = [('file_id_default', 3966641030), ('file_id_alt', 1901848975), ('local_1', 1691877445), ('central_1', 2920107766), ('end_1', 1422792602), ('local_2', 2710608671), ('central_2', 2776012559), ('end_2', 2046838560)]
+KValues = [
+    ("file_id_default", 3966641030),
+    ("file_id_alt", 1901848975),
+    ("local_1", 1691877445),
+    ("central_1", 2920107766),
+    ("end_1", 1422792602),
+    ("local_2", 2710608671),
+    ("central_2", 2776012559),
+    ("end_2", 2046838560),
+]
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Needles():
     OutputDataInfo = []
     for NameTextInfo, ValueInfo in KValues:
-        OutputDataInfo.append((NameTextInfo + '_le', Struct.pack('<I', ValueInfo)))
-        OutputDataInfo.append((NameTextInfo + '_be', Struct.pack('>I', ValueInfo)))
+        OutputDataInfo.append((NameTextInfo + "_le", Struct.pack("<I", ValueInfo)))
+        OutputDataInfo.append((NameTextInfo + "_be", Struct.pack(">I", ValueInfo)))
     return OutputDataInfo
 
 
@@ -33,7 +42,7 @@ def MainRun():
         Roots = [Pathlib.Path(FirstValue) for FirstValue in System.argv[1:]]
     PatsInfo = Needles()
     for RootPath in Roots:
-        Files = sorted(RootPath.rglob('*.dll')) + sorted(RootPath.rglob('*.exe'))
+        Files = sorted(RootPath.rglob("*.dll")) + sorted(RootPath.rglob("*.exe"))
         for PathInfoData in Files:
             try:
                 ByteBlob = PathInfoData.read_bytes()
@@ -53,6 +62,8 @@ def MainRun():
             if HitsInfo:
                 print(PathInfoData.name, len(ByteBlob))
                 for NameTextInfo, IdxInfo in HitsInfo[:40]:
-                    print(f'   {NameTextInfo} @ 0x{IdxInfo:x}')
-if __name__ == '__main__':
+                    print(f"   {NameTextInfo} @ 0x{IdxInfo:x}")
+
+
+if __name__ == "__main__":
     MainRun()

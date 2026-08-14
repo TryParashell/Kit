@@ -14,32 +14,42 @@ import Layout as Layout
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def DumpData(LabelInfo, NameTextInfo, KindNameInfo, Limit):
     DocInfo, SegsInfo, ByteBlob, PartInfoInfo = Layout.LoadData(LabelInfo)
-    print(f'=== {LabelInfo} {PartInfoInfo.name} {NameTextInfo} {KindNameInfo}')
+    print(f"=== {LabelInfo} {PartInfoInfo.name} {NameTextInfo} {KindNameInfo}")
     HitsInfo = Layout.FindItem(SegsInfo, NameTextInfo, KindNameInfo)
     for IndexData in HitsInfo[:Limit]:
         Parent = SegsInfo[IndexData]
-        print(f"--- node={IndexData} kind={Parent['kind']} span={Parent['offset']}..{Parent['scope_end']} hdr={Parent['header']}")
+        print(
+            f"--- node={IndexData} kind={Parent['kind']} span={Parent['offset']}..{Parent['scope_end']} hdr={Parent['header']}"
+        )
         for ItemData in Layout.FindGaps(SegsInfo, IndexData):
-            if ItemData[0] == 'scalars':
+            if ItemData[0] == "scalars":
                 OffInfo, ByteSize = (ItemData[1], ItemData[2])
-                RawData = ByteBlob[OffInfo:OffInfo + ByteSize]
-                HeadInfo = RawData[:96].hex(' ')
-                print(f'  scalars off={OffInfo} n={ByteSize} {HeadInfo}')
+                RawData = ByteBlob[OffInfo : OffInfo + ByteSize]
+                HeadInfo = RawData[:96].hex(" ")
+                print(f"  scalars off={OffInfo} n={ByteSize} {HeadInfo}")
                 for PosInfo in range(0, min(ByteSize, 96) - 3, 4):
-                    ValueInfo = Struct.unpack_from('<I', RawData, PosInfo)[0]
-                    print(f'      u32@{PosInfo}=0x{ValueInfo:08x} {ValueInfo}')
+                    ValueInfo = Struct.unpack_from("<I", RawData, PosInfo)[0]
+                    print(f"      u32@{PosInfo}=0x{ValueInfo:08x} {ValueInfo}")
             else:
                 KidInfo = SegsInfo[ItemData[1]]
-                SpanInfo = KidInfo['scope_end'] - KidInfo['offset'] if ItemData[3] in ('definition', 'classref') else 2
-                print(f"  OBJ off={KidInfo['offset']} span={SpanInfo} tag=0x{ItemData[4]:04x} {ItemData[3]} {ItemData[2]}")
+                SpanInfo = (
+                    KidInfo["scope_end"] - KidInfo["offset"]
+                    if ItemData[3] in ("definition", "classref")
+                    else 2
+                )
+                print(
+                    f"  OBJ off={KidInfo['offset']} span={SpanInfo} tag=0x{ItemData[4]:04x} {ItemData[3]} {ItemData[2]}"
+                )
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun():
     LabelInfo = System.argv[1]
     NameTextInfo = System.argv[2]
-    KindNameInfo = System.argv[3] if len(System.argv) > 3 else 'definition'
+    KindNameInfo = System.argv[3] if len(System.argv) > 3 else "definition"
     Limit = int(System.argv[4]) if len(System.argv) > 4 else 2
     DumpData(LabelInfo, NameTextInfo, KindNameInfo, Limit)
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     MainRun()

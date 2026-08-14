@@ -127,31 +127,7 @@ class OsmxArchive:
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def FromBytes(ClassType, Source: bytes | bytearray) -> OsmxArchive:
-        DataValue = bytes(Source)
-        if len(DataValue) < 104 or not DataValue.startswith(KOsmxMagic):
-            raise OsmxFormatError("not an OSMX stream")
-        SymbolTableOffset = Struct.unpack_from("<I", DataValue, 100)[0]
-        if SymbolTableOffset < 104 or SymbolTableOffset + 8 > len(DataValue):
-            raise OsmxFormatError("OSMX symbol table offset is outside the stream")
-        if DataValue[SymbolTableOffset : SymbolTableOffset + 2] != b"|\x02":
-            raise OsmxFormatError("OSMX symbol table marker is missing")
-        SectionLength = Struct.unpack_from("<I", DataValue, SymbolTableOffset + 2)[0]
-        if SectionLength != len(DataValue) - SymbolTableOffset:
-            raise OsmxFormatError("OSMX symbol table length is inconsistent")
-        Candidates, LimitExceeded = OsmxSymbolA(DataValue, SymbolTableOffset)
-        if LimitExceeded and (not Candidates):
-            raise OsmxFormatError("OSMX symbol table exceeds the safety limit")
-        if len(Candidates) != 1:
-            raise OsmxFormatError("OSMX symbol data boundary is ambiguous")
-        SymbolDataOffset, SymbolCount = Candidates[0]
-        Symbols = DecodeOsmx(DataValue, SymbolDataOffset, SymbolCount)
-        Match = RegexLib.search(
-            b"V5R\\d+(?:SP\\d+)?(?:HF\\d+)?", DataValue[:SymbolTableOffset]
-        )
-        Version = Match.group().decode("ascii") if Match else ""
-        return ClassType(
-            DataValue, Version, SymbolTableOffset, SymbolDataOffset, Symbols
-        )
+        return ParseOsmx(ClassType, Source)
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -181,56 +157,112 @@ class CfvTwoArchive:
     # this definition exists because focused behavior needs one stable owner
     @classmethod
     def FromBytes(ClassType, Source: bytes | bytearray) -> CfvTwoArchive:
-        DataValue = bytes(Source)
-        if len(DataValue) < 16 or not DataValue.startswith(KMagic):
-            raise CfvTwoFormat("not a V5_CFV2 container")
-        OuterOffset, OuterLength = Struct.unpack_from(">II", DataValue, 8)
-        if OuterOffset + OuterLength != len(DataValue):
-            raise CfvTwoFormat("outer CFV2 directory does not end at EOF")
-        Outer = ParseFolder(DataValue, 0, OuterOffset, OuterLength)
-        Nested = FindNested(DataValue, Outer)
-        return ClassType(DataValue, Outer, Nested)
+        return ParseCfvTwo(ClassType, Source)
 
     # this definition exists because focused behavior needs one stable owner
     def StreamBytes(
         Instance, Stream: Cfv2Stream, Folder: Cfv2Directory | None = None
     ) -> bytes:
-        Selected = Folder or Instance.outer
-        Payload = bytearray()
-        Expected = 0
-        for Extent in Stream.extents:
-            if Extent.logical_offset != Expected:
-                raise CfvTwoFormat("non-contiguous logical CFV2 extents")
-            Start = Selected.physical_base + Extent.physical_offset
-            EndValue = Start + Extent.physical_length
-            if EndValue > len(Instance.data):
-                raise CfvTwoFormat("CFV2 extent exceeds the file")
-            Payload.extend(Instance.data[Start:EndValue])
-            Expected += Extent.physical_length
-        if Expected != Stream.logical_length:
-            raise CfvTwoFormat("CFV2 logical stream length mismatch")
-        return bytes(Payload)
+        return ReadStreamBytes(Instance, Stream, Folder)
 
     # this definition exists because focused behavior needs one stable owner
     def NamedStream(
         Instance, NameValue: str, Folder: Cfv2Directory | None = None
     ) -> bytes | None:
-        Selected = Folder or Instance.outer
-        Stream = Selected.stream(NameValue)
-        return None if Stream is None else Instance.stream_bytes(Stream, Selected)
+        return ReadNamedStream(Instance, NameValue, Folder)
 
     # this definition exists because focused behavior needs one stable owner
     def Declarations(Instance) -> tuple[CfvTwoDecl, ...]:
-        DataValue = Instance.named_stream("Data")
-        if DataValue is None:
-            return ()
-        Names = {Stream.name for Stream in Instance.outer.streams}
-        return Parse(DataValue, Names)
+        return ArchiveDecls(Instance)
 
     locals()["declarations"] = Declarations
     locals()["from_bytes"] = FromBytes
     locals()["named_stream"] = NamedStream
     locals()["stream_bytes"] = StreamBytes
+
+
+# this definition exists because focused behavior needs one stable owner
+def ParseOsmx(ClassType: type[OsmxArchive], Source: bytes | bytearray) -> OsmxArchive:
+    DataValue = bytes(Source)
+    if len(DataValue) < 104 or not DataValue.startswith(KOsmxMagic):
+        raise OsmxFormatError("not an OSMX stream")
+    SymbolTableOffset = Struct.unpack_from("<I", DataValue, 100)[0]
+    if SymbolTableOffset < 104 or SymbolTableOffset + 8 > len(DataValue):
+        raise OsmxFormatError("OSMX symbol table offset is outside the stream")
+    if DataValue[SymbolTableOffset : SymbolTableOffset + 2] != b"|\x02":
+        raise OsmxFormatError("OSMX symbol table marker is missing")
+    SectionLength = Struct.unpack_from("<I", DataValue, SymbolTableOffset + 2)[0]
+    if SectionLength != len(DataValue) - SymbolTableOffset:
+        raise OsmxFormatError("OSMX symbol table length is inconsistent")
+    Candidates, LimitExceeded = OsmxSymbolA(DataValue, SymbolTableOffset)
+    if LimitExceeded and not Candidates:
+        raise OsmxFormatError("OSMX symbol table exceeds the safety limit")
+    if len(Candidates) != 1:
+        raise OsmxFormatError("OSMX symbol data boundary is ambiguous")
+    SymbolDataOffset, SymbolCount = Candidates[0]
+    Symbols = DecodeOsmx(DataValue, SymbolDataOffset, SymbolCount)
+    Match = RegexLib.search(
+        b"V5R\\d+(?:SP\\d+)?(?:HF\\d+)?", DataValue[:SymbolTableOffset]
+    )
+    Version = Match.group().decode("ascii") if Match else ""
+    return ClassType(DataValue, Version, SymbolTableOffset, SymbolDataOffset, Symbols)
+
+
+# this definition exists because focused behavior needs one stable owner
+def ParseCfvTwo(
+    ClassType: type[CfvTwoArchive], Source: bytes | bytearray
+) -> CfvTwoArchive:
+    DataValue = bytes(Source)
+    if len(DataValue) < 16 or not DataValue.startswith(KMagic):
+        raise CfvTwoFormat("not a V5_CFV2 container")
+    OuterOffset, OuterLength = Struct.unpack_from(">II", DataValue, 8)
+    if OuterOffset + OuterLength != len(DataValue):
+        raise CfvTwoFormat("outer CFV2 directory does not end at EOF")
+    Outer = ParseFolder(DataValue, 0, OuterOffset, OuterLength)
+    return ClassType(DataValue, Outer, FindNested(DataValue, Outer))
+
+
+# this definition exists because focused behavior needs one stable owner
+def ReadStreamBytes(
+    Archive: CfvTwoArchive,
+    Stream: CfvTwoStream,
+    Folder: CfvTwoFolder | None = None,
+) -> bytes:
+    Selected = Folder or Archive.outer
+    Payload = bytearray()
+    Expected = 0
+    for Extent in Stream.extents:
+        if Extent.logical_offset != Expected:
+            raise CfvTwoFormat("non-contiguous logical CFV2 extents")
+        Start = Selected.physical_base + Extent.physical_offset
+        EndValue = Start + Extent.physical_length
+        if EndValue > len(Archive.data):
+            raise CfvTwoFormat("CFV2 extent exceeds the file")
+        Payload.extend(Archive.data[Start:EndValue])
+        Expected += Extent.physical_length
+    if Expected != Stream.logical_length:
+        raise CfvTwoFormat("CFV2 logical stream length mismatch")
+    return bytes(Payload)
+
+
+# this definition exists because focused behavior needs one stable owner
+def ReadNamedStream(
+    Archive: CfvTwoArchive,
+    NameValue: str,
+    Folder: CfvTwoFolder | None = None,
+) -> bytes | None:
+    Selected = Folder or Archive.outer
+    Stream = Selected.stream(NameValue)
+    return None if Stream is None else Archive.stream_bytes(Stream, Selected)
+
+
+# this definition exists because focused behavior needs one stable owner
+def ArchiveDecls(Archive: CfvTwoArchive) -> tuple[CfvTwoDecl, ...]:
+    DataValue = Archive.named_stream("Data")
+    if DataValue is None:
+        return ()
+    Names = {Stream.name for Stream in Archive.outer.streams}
+    return Parse(DataValue, Names)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -365,6 +397,16 @@ def ExtractAscii(DataValue: bytes, Minimum: int = 4) -> tuple[str, ...]:
 def ParseFolder(
     DataValue: bytes, PhysicalBase: int, Offset: int, Length: int
 ) -> CfvTwoFolder:
+    Folder, Marker = FolderPayload(DataValue, Offset, Length)
+    Sequential = ReadSequential(DataValue, Folder, PhysicalBase, Offset, Marker)
+    Streams = Sequential or ScanStreams(DataValue, Folder, PhysicalBase, Offset)
+    Result = CfvTwoFolder(PhysicalBase, Offset, Length, Streams)
+    ValidateExtent(Result)
+    return Result
+
+
+# this definition exists because focused behavior needs one stable owner
+def FolderPayload(DataValue: bytes, Offset: int, Length: int) -> tuple[bytes, int]:
     if Length < len(KFolderMagic) + len(KFolderEnd):
         raise CfvTwoFormat("CFV2 directory is too short")
     EndValue = Offset + Length
@@ -376,64 +418,79 @@ def ParseFolder(
     Marker = Folder.rfind(KFolderEnd)
     if Marker < 0 or any(Folder[Marker + len(KFolderEnd) :]):
         raise CfvTwoFormat("CFV2 directory end marker is missing")
-    Sequential = ReadSequential(DataValue, Folder, PhysicalBase, Offset, Marker)
-    if Sequential is not None:
-        Result = CfvTwoFolder(PhysicalBase, Offset, Length, Sequential)
-        ValidateExtent(Result)
-        return Result
+    return (Folder, Marker)
+
+
+# this definition exists because focused behavior needs one stable owner
+def ScanStreams(
+    DataValue: bytes, Folder: bytes, PhysicalBase: int, FolderOffset: int
+) -> tuple[CfvTwoStream, ...]:
     Streams: list[CfvTwoStream] = []
     SeenOffsets: set[int] = set()
     for CountOffset in range(len(KFolderMagic), len(Folder) - 3):
-        Count = UThreeTwobe(Folder, CountOffset)
-        if Count < 1 or Count > 64:
-            continue
-        DescriptorOffset = CountOffset - 80
-        if DescriptorOffset < 0 or DescriptorOffset in SeenOffsets:
-            continue
-        ExtentEnd = CountOffset + 4 + 20 * Count
-        if ExtentEnd > len(Folder):
-            continue
-        LogicalLength = UThreeTwobe(Folder, DescriptorOffset + 12)
-        LogicalOffset = 0
-        Extents: list[CfvTwoExtent] = []
-        Valid = LogicalLength > 0
-        for Index in range(Count):
-            AtValue = CountOffset + 4 + 20 * Index
-            PhysicalOffset, PhysicalLength, LogicalLengthPart, StoredOffset, Flags = (
-                Struct.unpack_from(">IIIII", Folder, AtValue)
-            )
-            PhysicalEnd = PhysicalBase + PhysicalOffset + PhysicalLength
-            if (
-                PhysicalLength == 0
-                or PhysicalLength != LogicalLengthPart
-                or StoredOffset != LogicalOffset
-                or (PhysicalEnd > len(DataValue))
-            ):
-                Valid = False
-                break
-            Extents.append(
-                CfvTwoExtent(PhysicalOffset, PhysicalLength, StoredOffset, Flags)
-            )
-            LogicalOffset += LogicalLengthPart
-        if not Valid or LogicalOffset != LogicalLength:
-            continue
-        NameValue = DescriptorName(Folder, DescriptorOffset)
-        if len(NameValue) < 3:
-            continue
-        Streams.append(
-            CfvTwoStream(
-                NameValue, LogicalLength, Offset + DescriptorOffset, tuple(Extents)
-            )
+        Stream = ParseDescriptor(
+            DataValue, Folder, PhysicalBase, FolderOffset, CountOffset, SeenOffsets
         )
-        SeenOffsets.add(DescriptorOffset)
+        if Stream is not None:
+            Streams.append(Stream)
     if not Streams:
         raise CfvTwoFormat("CFV2 directory has no valid stream descriptors")
-
     # this callback exists because local behavior needs one focused transformation
     Streams.sort(key=lambda Stream: Stream.descriptor_offset)
-    Result = CfvTwoFolder(PhysicalBase, Offset, Length, tuple(Streams))
-    ValidateExtent(Result)
-    return Result
+    return tuple(Streams)
+
+
+# this definition exists because focused behavior needs one stable owner
+def ParseDescriptor(
+    DataValue: bytes,
+    Folder: bytes,
+    PhysicalBase: int,
+    FolderOffset: int,
+    CountOffset: int,
+    SeenOffsets: set[int],
+) -> CfvTwoStream | None:
+    Count = UThreeTwobe(Folder, CountOffset)
+    DescriptorOffset = CountOffset - 80
+    if Count < 1 or Count > 64 or DescriptorOffset < 0:
+        return None
+    if DescriptorOffset in SeenOffsets or CountOffset + 4 + 20 * Count > len(Folder):
+        return None
+    LogicalLength = UThreeTwobe(Folder, DescriptorOffset + 12)
+    Extents = DecodeExtents(DataValue, Folder, PhysicalBase, CountOffset, Count)
+    if Extents is None or sum(Extent.physical_length for Extent in Extents) != LogicalLength:
+        return None
+    NameValue = DescriptorName(Folder, DescriptorOffset)
+    if len(NameValue) < 3:
+        return None
+    SeenOffsets.add(DescriptorOffset)
+    return CfvTwoStream(
+        NameValue, LogicalLength, FolderOffset + DescriptorOffset, Extents
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
+def DecodeExtents(
+    DataValue: bytes,
+    Folder: bytes,
+    PhysicalBase: int,
+    CountOffset: int,
+    Count: int,
+) -> tuple[CfvTwoExtent, ...] | None:
+    LogicalOffset = 0
+    Extents: list[CfvTwoExtent] = []
+    for Index in range(Count):
+        AtValue = CountOffset + 4 + 20 * Index
+        PhysicalOffset, PhysicalLength, PartLength, StoredOffset, Flags = (
+            Struct.unpack_from(">IIIII", Folder, AtValue)
+        )
+        PhysicalEnd = PhysicalBase + PhysicalOffset + PhysicalLength
+        if not PhysicalLength or PhysicalLength != PartLength:
+            return None
+        if StoredOffset != LogicalOffset or PhysicalEnd > len(DataValue):
+            return None
+        Extents.append(CfvTwoExtent(PhysicalOffset, PhysicalLength, StoredOffset, Flags))
+        LogicalOffset += PartLength
+    return tuple(Extents)
 
 
 # this definition exists because focused behavior needs one stable owner

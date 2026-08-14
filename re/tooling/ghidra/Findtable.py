@@ -11,21 +11,21 @@ import struct as Struct
 import sys as System
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDefault = Pathlib.Path('C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldmfcu.dll')
+KDefault = Pathlib.Path("C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldmfcu.dll")
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def RandomRun(ByteBlob, Anchor):
 
-
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def DullInfo(OffInfo):
-        Chunk = ByteBlob[OffInfo:OffInfo + 16]
+        Chunk = ByteBlob[OffInfo : OffInfo + 16]
         if len(Chunk) < 16:
             return True
         if Chunk.count(0) >= 8:
             return True
         return len(set(Chunk)) <= 4
+
     LoInfo = Anchor & ~15
     while LoInfo > 0 and (not DullInfo(LoInfo - 16)):
         LoInfo -= 16
@@ -37,35 +37,43 @@ def RandomRun(ByteBlob, Anchor):
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def FinishMain(AOneInfo, AZero, BOneInfo, BZero, ByteBlob):
-    print('---')
-    print(f'A candidate base 0x{AZero:x} end 0x{AOneInfo:x}')
-    print(f'B candidate base 0x{BZero:x} end 0x{BOneInfo:x}')
+    print("---")
+    print(f"A candidate base 0x{AZero:x} end 0x{AOneInfo:x}")
+    print(f"B candidate base 0x{BZero:x} end 0x{BOneInfo:x}")
     if AZero == BZero:
         ItemCountInfo = (AOneInfo - AZero) // 16
-        print('single block; cannot split by entropy', ItemCountInfo)
+        print("single block; cannot split by entropy", ItemCountInfo)
         return
     CountA = (AOneInfo - AZero) // 4
     CountB = (BOneInfo - BZero) // 12
-    print(f'A dwords={CountA} B triplets={CountB}')
+    print(f"A dwords={CountA} B triplets={CountB}")
     IAInfo = (5666652 - AZero) // 4
     IBInfo = (5676340 - BZero) // 12
-    print(f'index of default in A={IAInfo} in B={IBInfo} (must match)')
+    print(f"index of default in A={IAInfo} in B={IBInfo} (must match)")
     IATwo = (5666808 - AZero) // 4
     IBTwo = (5676808 - BZero) // 12
-    print(f'index of alt in A={IATwo} in B={IBTwo}')
+    print(f"index of alt in A={IATwo} in B={IBTwo}")
     if IAInfo == IBInfo and IATwo == IBTwo:
         ItemCountInfo = min(CountA, CountB)
-        print(f'pairs={ItemCountInfo}')
+        print(f"pairs={ItemCountInfo}")
         GetRows = []
         for IndexInfo in range(ItemCountInfo):
-            FidInfo = Struct.unpack_from('>I', ByteBlob, AZero + 4 * IndexInfo)[0]
-            TripInfo = Struct.unpack_from('<3I', ByteBlob, BZero + 12 * IndexInfo)
+            FidInfo = Struct.unpack_from(">I", ByteBlob, AZero + 4 * IndexInfo)[0]
+            TripInfo = Struct.unpack_from("<3I", ByteBlob, BZero + 12 * IndexInfo)
             GetRows.append((IndexInfo, FidInfo, TripInfo))
         for IndexInfo, FidInfo, TripInfo in GetRows[:8]:
-            print(IndexInfo, f'0x{FidInfo:08x}', [f'{ValueData:08x}' for ValueData in TripInfo])
-        print('...')
+            print(
+                IndexInfo,
+                f"0x{FidInfo:08x}",
+                [f"{ValueData:08x}" for ValueData in TripInfo],
+            )
+        print("...")
         for IndexInfo, FidInfo, TripInfo in GetRows[-4:]:
-            print(IndexInfo, f'0x{FidInfo:08x}', [f'{ValueData:08x}' for ValueData in TripInfo])
+            print(
+                IndexInfo,
+                f"0x{FidInfo:08x}",
+                [f"{ValueData:08x}" for ValueData in TripInfo],
+            )
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -74,9 +82,13 @@ def MainRun():
     ByteBlob = PathInfoData.read_bytes()
     for Anchor in (5666652, 5676340):
         LoInfo, HiInfo = RandomRun(ByteBlob, Anchor)
-        print(f'anchor 0x{Anchor:x} run 0x{LoInfo:x}..0x{HiInfo:x} size={HiInfo - LoInfo} dwords={(HiInfo - LoInfo) // 4}')
+        print(
+            f"anchor 0x{Anchor:x} run 0x{LoInfo:x}..0x{HiInfo:x} size={HiInfo - LoInfo} dwords={(HiInfo - LoInfo) // 4}"
+        )
     AZero, AOneInfo = RandomRun(ByteBlob, 5666652)
     BZero, BOneInfo = RandomRun(ByteBlob, 5676340)
     return FinishMain(AOneInfo, AZero, BOneInfo, BZero, ByteBlob)
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     MainRun()

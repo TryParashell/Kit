@@ -25,17 +25,20 @@ def SetLegacyMut(SelfRef, NameText, ValueData):
     TargetName = SelfRef.KAliasNames.get(NameText, NameText)
     object.__setattr__(SelfRef, TargetName, ValueData)
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-KEvent = Regex.compile('^(RO|RC) ([0-9a-fA-F`]+) ([0-9a-fA-F]+) (\\d+) ([0-9a-fA-F`]+)(?: ([0-9a-fA-F`]+))?\\s*$')
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KCalib = Regex.compile('^CALIB (\\d+) this=([0-9a-fA-F`]+)\\s*$')
+KEvent = Regex.compile(
+    "^(RO|RC) ([0-9a-fA-F`]+) ([0-9a-fA-F]+) (\\d+) ([0-9a-fA-F`]+)(?: ([0-9a-fA-F`]+))?\\s*$"
+)
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDumpInfo = Regex.compile('^([0-9a-fA-F`]+)\\s+((?:[0-9a-fA-F`]{17}\\s*)+)$')
+KCalib = Regex.compile("^CALIB (\\d+) this=([0-9a-fA-F`]+)\\s*$")
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KQword = Regex.compile('([0-9a-fA-F]{8})`([0-9a-fA-F]{8})')
+KDumpInfo = Regex.compile("^([0-9a-fA-F`]+)\\s+((?:[0-9a-fA-F`]{17}\\s*)+)$")
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KQword = Regex.compile("([0-9a-fA-F]{8})`([0-9a-fA-F]{8})")
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -47,7 +50,15 @@ class Event:
     CounterInfo: int
     RspInfo: int
     SpanInfo: int = 0
-    KAliasNames = {'kind': 'KindNameInfo', 'buffer': 'Buffer', 'offset': 'Offset', 'counter': 'CounterInfo', 'rsp': 'RspInfo', 'span': 'SpanInfo'}
+    KAliasNames = {
+        "kind": "KindNameInfo",
+        "buffer": "Buffer",
+        "offset": "Offset",
+        "counter": "CounterInfo",
+        "rsp": "RspInfo",
+        "span": "SpanInfo",
+    }
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 Event.__getattr__ = GetLegacyAttr
@@ -60,25 +71,31 @@ class DumpRecord:
     ThisValue: int
     Words: tuple[int, ...]
 
-
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def UintWide(SelfRef, Offset: int) -> int:
-        return int.from_bytes(SelfRef.RawData[Offset:Offset + 8], 'little')
-
+        return int.from_bytes(SelfRef.RawData[Offset : Offset + 8], "little")
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def UintLong(SelfRef, Offset: int) -> int:
-        return int.from_bytes(SelfRef.RawData[Offset:Offset + 4], 'little')
-
+        return int.from_bytes(SelfRef.RawData[Offset : Offset + 4], "little")
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
     def RawData(SelfRef) -> bytes:
         OutputDataInfo = bytearray()
         for WordDataInfo in SelfRef.Words:
-            OutputDataInfo += WordDataInfo.to_bytes(8, 'little')
+            OutputDataInfo += WordDataInfo.to_bytes(8, "little")
         return bytes(OutputDataInfo)
-    KAliasNames = {'index': 'IndexData', 'this': 'ThisValue', 'words': 'Words', 'u64': 'UintWide', 'u32': 'UintLong', 'raw': 'RawData'}
+
+    KAliasNames = {
+        "index": "IndexData",
+        "this": "ThisValue",
+        "words": "Words",
+        "u64": "UintWide",
+        "u32": "UintLong",
+        "raw": "RawData",
+    }
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 DumpRecord.__getattr__ = GetLegacyAttr
@@ -86,17 +103,26 @@ DumpRecord.__getattr__ = GetLegacyAttr
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Hexint(TextValueData: str) -> int:
-    return int(TextValueData.replace('`', ''), 16)
+    return int(TextValueData.replace("`", ""), 16)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def ReadEvents(LogInfo: PathInfo) -> tuple[Event, ...]:
     Result: list[Event] = []
-    for RawData in LogInfo.read_text(errors='replace').splitlines():
+    for RawData in LogInfo.read_text(errors="replace").splitlines():
         Match = KEvent.match(RawData.strip())
         if Match is None:
             continue
-        Result.append(Event(KindNameInfo=Match.group(1), Buffer=Hexint(Match.group(2)), Offset=int(Match.group(3), 16), CounterInfo=int(Match.group(4)), RspInfo=Hexint(Match.group(5)), SpanInfo=Hexint(Match.group(6)) if Match.group(6) else 0))
+        Result.append(
+            Event(
+                KindNameInfo=Match.group(1),
+                Buffer=Hexint(Match.group(2)),
+                Offset=int(Match.group(3), 16),
+                CounterInfo=int(Match.group(4)),
+                RspInfo=Hexint(Match.group(5)),
+                SpanInfo=Hexint(Match.group(6)) if Match.group(6) else 0,
+            )
+        )
     return tuple(Result)
 
 
@@ -104,7 +130,7 @@ def ReadEvents(LogInfo: PathInfo) -> tuple[Event, ...]:
 def BuffersForSpan(Events: tuple[Event, ...], SpanInfo: int) -> dict[int, int]:
     Counts: dict[int, int] = {}
     for EventInfo in Events:
-        if EventInfo.kind != 'RO' or EventInfo.span != SpanInfo:
+        if EventInfo.kind != "RO" or EventInfo.span != SpanInfo:
             continue
         Counts[EventInfo.buffer] = Counts.get(EventInfo.buffer, 0) + 1
     return Counts
@@ -114,7 +140,7 @@ def BuffersForSpan(Events: tuple[Event, ...], SpanInfo: int) -> dict[int, int]:
 def BusiestBuffer(Events: tuple[Event, ...], SpanInfo: int) -> int:
     Counts = BuffersForSpan(Events, SpanInfo)
     if not Counts:
-        raise ValueError(f'no ReadObject events for span {SpanInfo}')
+        raise ValueError(f"no ReadObject events for span {SpanInfo}")
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     return max(Counts, key=lambda KeyName: Counts[KeyName])
@@ -127,7 +153,7 @@ def ReadDumps(LogInfo: PathInfo) -> tuple[DumpRecord, ...]:
     ThisValue = 0
     Words: list[int] = []
     Active = False
-    for RawData in LogInfo.read_text(errors='replace').splitlines():
+    for RawData in LogInfo.read_text(errors="replace").splitlines():
         LineText = RawData.strip()
         HeadInfo = KCalib.match(LineText)
         if HeadInfo is not None:
@@ -156,7 +182,7 @@ def DominantBuffer(Events: tuple[Event, ...]) -> int:
     for EventInfo in Events:
         Counts[EventInfo.buffer] = Counts.get(EventInfo.buffer, 0) + 1
     if not Counts:
-        raise ValueError('no trace events in log')
+        raise ValueError("no trace events in log")
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     return max(Counts, key=lambda KeyName: Counts[KeyName])

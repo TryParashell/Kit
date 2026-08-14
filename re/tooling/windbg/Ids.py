@@ -14,7 +14,7 @@ import sys as System
 KHereInfo = PathInfo(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KGrammar = KHereInfo.parent / 'harness'
+KGrammar = KHereInfo.parent / "harness"
 for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
@@ -31,10 +31,28 @@ def MainRun() -> int:
         Nodes = Resolvedlib.tree_nodes(ByteBlob)
         FeatInfoInfo = Resolvedlib.locate_features(ByteBlob)
         Entries = Streamlib.CompFeatEntries(ByteBlob)
-        print(f'{PartInfoInfo.stem}')
-        print('  tree: ' + ', '.join((f'{NodeInfoInfo.name}#{NodeInfoInfo.feature_id}' for NodeInfoInfo in Nodes)))
-        print('  features: ' + ', '.join((f'{ItemData.kind}:{ItemData.feature_id}/sketch={ItemData.sketch_id}' for ItemData in FeatInfoInfo)))
-        print('  comp ids: ' + ', '.join((str(Entry[2]) for Entry in Entries)))
+        print(f"{PartInfoInfo.stem}")
+        print(
+            "  tree: "
+            + ", ".join(
+                (
+                    f"{NodeInfoInfo.name}#{NodeInfoInfo.feature_id}"
+                    for NodeInfoInfo in Nodes
+                )
+            )
+        )
+        print(
+            "  features: "
+            + ", ".join(
+                (
+                    f"{ItemData.kind}:{ItemData.feature_id}/sketch={ItemData.sketch_id}"
+                    for ItemData in FeatInfoInfo
+                )
+            )
+        )
+        print("  comp ids: " + ", ".join((str(Entry[2]) for Entry in Entries)))
     return 0
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     raise SystemExit(MainRun())

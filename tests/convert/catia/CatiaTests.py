@@ -535,9 +535,9 @@ def TestUnresolved(TmpPath: Path) -> None:
     assert Result.application_usable is False
     assert Result.vendor_loadable is True
     assert Result.near_lossless is False
-    for Capability in (Capability.BREP, Capability.TESSELLATION):
-        assert Transfers[Capability].mode is TransferMode.CARRIER
-        assert Transfers[Capability].carrier_reason is CarrierReason.SOURCE_OPAQUE
+    for CapabilityValue in (Capability.BREP, Capability.TESSELLATION):
+        assert Transfers[CapabilityValue].mode is TransferMode.CARRIER
+        assert Transfers[CapabilityValue].carrier_reason is CarrierReason.SOURCE_OPAQUE
     with Zipfile.ZipFile(Output) as Archive:
         Names = Archive.namelist()
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))

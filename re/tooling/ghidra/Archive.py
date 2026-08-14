@@ -24,6 +24,7 @@ def SetLegacyMut(SelfRef, NameText, ValueData):
     TargetName = SelfRef.KAliasNames.get(NameText, NameText)
     object.__setattr__(SelfRef, TargetName, ValueData)
 
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KNewClassTag = 65535
 
@@ -37,19 +38,19 @@ KBigObjectTag = 32767
 KNullTag = 0
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDefnInfo = 'definition'
+KDefnInfo = "definition"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KClassref = 'classref'
+KClassref = "classref"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KObjectref = 'objectref'
+KObjectref = "objectref"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KNullInfo = 'null'
+KNullInfo = "null"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KBigInfo = 'big'
+KBigInfo = "big"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KMaxClassName = 64
@@ -70,7 +71,16 @@ class TagInfo:
     Schema: int
     NameTextInfo: str
     IndexData: int
-    KAliasNames = {'offset': 'Offset', 'token': 'Token', 'kind': 'KindNameInfo', 'header': 'Header', 'schema': 'Schema', 'name': 'NameTextInfo', 'index': 'IndexData'}
+    KAliasNames = {
+        "offset": "Offset",
+        "token": "Token",
+        "kind": "KindNameInfo",
+        "header": "Header",
+        "schema": "Schema",
+        "name": "NameTextInfo",
+        "index": "IndexData",
+    }
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 TagInfo.__getattr__ = GetLegacyAttr
@@ -89,24 +99,36 @@ class Object:
     ClassNameData: str
     Header: int
 
-
     # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
     def Length(SelfRef) -> int:
         return SelfRef.EndIndex - SelfRef.Offset
-
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
     def BodyOffset(SelfRef) -> int:
         return SelfRef.Offset + SelfRef.Header
 
-
     # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
     def BodyLength(SelfRef) -> int:
         return SelfRef.EndIndex - SelfRef.Offset - SelfRef.Header
-    KAliasNames = {'order': 'Order', 'offset': 'Offset', 'end': 'EndIndex', 'kind': 'KindNameInfo', 'token': 'Token', 'class_slot': 'ClassSlot', 'object_slot': 'ObjectSlot', 'class_name': 'ClassNameData', 'header': 'Header', 'length': 'Length', 'body_offset': 'BodyOffset', 'body_length': 'BodyLength'}
+
+    KAliasNames = {
+        "order": "Order",
+        "offset": "Offset",
+        "end": "EndIndex",
+        "kind": "KindNameInfo",
+        "token": "Token",
+        "class_slot": "ClassSlot",
+        "object_slot": "ObjectSlot",
+        "class_name": "ClassNameData",
+        "header": "Header",
+        "length": "Length",
+        "body_offset": "BodyOffset",
+        "body_length": "BodyLength",
+    }
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 Object.__getattr__ = GetLegacyAttr
@@ -115,23 +137,25 @@ Object.__getattr__ = GetLegacyAttr
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def DecodeTag(ByteBlob: bytes, Offset: int) -> TagInfo:
     if Offset + 2 > len(ByteBlob):
-        raise ArchiveError(f'tag at {Offset} runs past end of stream {len(ByteBlob)}')
-    Token = Struct.unpack_from('<H', ByteBlob, Offset)[0]
+        raise ArchiveError(f"tag at {Offset} runs past end of stream {len(ByteBlob)}")
+    Token = Struct.unpack_from("<H", ByteBlob, Offset)[0]
     if Token == KNewClassTag:
-        Schema, Length = Struct.unpack_from('<HH', ByteBlob, Offset + 2)
+        Schema, Length = Struct.unpack_from("<HH", ByteBlob, Offset + 2)
         if not 0 < Length <= KMaxClassName:
-            raise ArchiveError(f'class name length {Length} at {Offset} is implausible')
-        RawData = ByteBlob[Offset + 6:Offset + 6 + Length]
-        return TagInfo(Offset, Token, KDefnInfo, 6 + Length, Schema, RawData.decode('ascii'), -1)
+            raise ArchiveError(f"class name length {Length} at {Offset} is implausible")
+        RawData = ByteBlob[Offset + 6 : Offset + 6 + Length]
+        return TagInfo(
+            Offset, Token, KDefnInfo, 6 + Length, Schema, RawData.decode("ascii"), -1
+        )
     if Token == KNullTag:
-        return TagInfo(Offset, Token, KNullInfo, 2, 0, '', -1)
+        return TagInfo(Offset, Token, KNullInfo, 2, 0, "", -1)
     if Token == KBigObjectTag:
-        IndexData = Struct.unpack_from('<I', ByteBlob, Offset + 2)[0]
+        IndexData = Struct.unpack_from("<I", ByteBlob, Offset + 2)[0]
         KindNameInfo = KClassref if IndexData & 2147483648 else KObjectref
-        return TagInfo(Offset, Token, KBigInfo, 6, 0, '', IndexData & 2147483647)
+        return TagInfo(Offset, Token, KBigInfo, 6, 0, "", IndexData & 2147483647)
     if Token & KClassTagBit:
-        return TagInfo(Offset, Token, KClassref, 2, 0, '', Token & ~KClassTagBit)
-    return TagInfo(Offset, Token, KObjectref, 2, 0, '', Token)
+        return TagInfo(Offset, Token, KClassref, 2, 0, "", Token & ~KClassTagBit)
+    return TagInfo(Offset, Token, KObjectref, 2, 0, "", Token)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -144,7 +168,9 @@ def SlotsConsumed(KindNameInfo: str) -> int:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Allocate(TagsInfo: tuple[TagInfo, ...], BaseInfo: int, EndsInfo: tuple[int, ...]) -> tuple[Object, ...]:
+def Allocate(
+    TagsInfo: tuple[TagInfo, ...], BaseInfo: int, EndsInfo: tuple[int, ...]
+) -> tuple[Object, ...]:
     CounterInfo = BaseInfo
     Result: list[Object] = []
     Names: dict[int, str] = {}
@@ -159,18 +185,34 @@ def Allocate(TagsInfo: tuple[TagInfo, ...], BaseInfo: int, EndsInfo: tuple[int, 
             ClassSlot = TagInfoInfo.index
             ObjectSlot = CounterInfo
             CounterInfo += 1
-            NameTextInfo = Names.get(TagInfoInfo.index, '')
+            NameTextInfo = Names.get(TagInfoInfo.index, "")
         else:
             ClassSlot = -1
             ObjectSlot = -1
             NameTextInfo = TagInfoInfo.kind
-        Result.append(Object(Order=Order, Offset=TagInfoInfo.offset, EndIndex=EndIndex, KindNameInfo=TagInfoInfo.kind, Token=TagInfoInfo.token, ClassSlot=ClassSlot, ObjectSlot=ObjectSlot, ClassNameData=NameTextInfo, Header=TagInfoInfo.header))
+        Result.append(
+            Object(
+                Order=Order,
+                Offset=TagInfoInfo.offset,
+                EndIndex=EndIndex,
+                KindNameInfo=TagInfoInfo.kind,
+                Token=TagInfoInfo.token,
+                ClassSlot=ClassSlot,
+                ObjectSlot=ObjectSlot,
+                ClassNameData=NameTextInfo,
+                Header=TagInfoInfo.header,
+            )
+        )
     return tuple(Result)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def ClassTable(Objects: tuple[Object, ...]) -> dict[int, str]:
-    return {ItemData.class_slot: ItemData.class_name for ItemData in Objects if ItemData.kind == KDefnInfo}
+    return {
+        ItemData.class_slot: ItemData.class_name
+        for ItemData in Objects
+        if ItemData.kind == KDefnInfo
+    }
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -185,26 +227,32 @@ def NextSlot(Objects: tuple[Object, ...], BaseInfo: int) -> int:
 def EncodeRef(KindNameInfo: str, IndexData: int) -> bytes:
     if KindNameInfo == KClassref:
         if IndexData >= KBigObjectTag:
-            raise ArchiveError(f'class index {IndexData} needs the big-object escape')
-        return Struct.pack('<H', KClassTagBit | IndexData)
+            raise ArchiveError(f"class index {IndexData} needs the big-object escape")
+        return Struct.pack("<H", KClassTagBit | IndexData)
     if KindNameInfo == KObjectref:
         if IndexData >= KBigObjectTag:
-            raise ArchiveError(f'object index {IndexData} needs the big-object escape')
-        return Struct.pack('<H', IndexData)
-    raise ArchiveError(f'{KindNameInfo} is not a reference tag')
+            raise ArchiveError(f"object index {IndexData} needs the big-object escape")
+        return Struct.pack("<H", IndexData)
+    raise ArchiveError(f"{KindNameInfo} is not a reference tag")
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Retarget(ByteBlob: bytes, Objects: tuple[Object, ...], Shift: dict[int, int]) -> bytes:
+def Retarget(
+    ByteBlob: bytes, Objects: tuple[Object, ...], Shift: dict[int, int]
+) -> bytes:
     Output = bytearray(ByteBlob)
     for ItemData in Objects:
         if ItemData.kind == KClassref:
             Target = Shift.get(ItemData.class_slot, ItemData.class_slot)
-            Output[ItemData.offset:ItemData.offset + 2] = EncodeRef(KClassref, Target)
+            Output[ItemData.offset : ItemData.offset + 2] = EncodeRef(KClassref, Target)
         elif ItemData.kind == KObjectref:
             IndexData = ItemData.token
             Target = Shift.get(IndexData, IndexData)
-            Output[ItemData.offset:ItemData.offset + 2] = EncodeRef(KObjectref, Target)
+            Output[ItemData.offset : ItemData.offset + 2] = EncodeRef(
+                KObjectref, Target
+            )
         elif ItemData.kind == KBigInfo:
-            raise ArchiveError(f'big-object escape at {ItemData.offset} is not supported by retarget')
+            raise ArchiveError(
+                f"big-object escape at {ItemData.offset} is not supported by retarget"
+            )
     return bytes(Output)

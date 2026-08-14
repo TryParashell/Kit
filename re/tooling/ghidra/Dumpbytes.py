@@ -19,9 +19,16 @@ def MainRun():
     LoInfo = max(0, StartRun)
     HiInfo = min(len(ByteBlob), StartRun + Length)
     for OffInfo in range(LoInfo, HiInfo, 16):
-        Chunk = ByteBlob[OffInfo:OffInfo + 16]
-        Hexpart = ' '.join((f'{SecondValue:02x}' for SecondValue in Chunk))
-        TextValueData = ''.join((chr(SecondValue) if 32 <= SecondValue < 127 else '.' for SecondValue in Chunk))
-        print(f'{OffInfo:08x}  {Hexpart:<47s}  {TextValueData}')
-if __name__ == '__main__':
+        Chunk = ByteBlob[OffInfo : OffInfo + 16]
+        Hexpart = " ".join((f"{SecondValue:02x}" for SecondValue in Chunk))
+        TextValueData = "".join(
+            (
+                chr(SecondValue) if 32 <= SecondValue < 127 else "."
+                for SecondValue in Chunk
+            )
+        )
+        print(f"{OffInfo:08x}  {Hexpart:<47s}  {TextValueData}")
+
+
+if __name__ == "__main__":
     MainRun()

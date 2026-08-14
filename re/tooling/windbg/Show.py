@@ -14,7 +14,7 @@ import sys as System
 KHereInfo = PathInfo(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KGrammar = KHereInfo.parent / 'harness'
+KGrammar = KHereInfo.parent / "harness"
 for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
@@ -28,11 +28,13 @@ from convert.adapters.solidworks import resolved as Resolvedlib
 def Anchors(ByteBlob: bytes) -> dict[int, str]:
     Marks: dict[int, str] = {}
     for NodeInfoInfo in Resolvedlib.tree_nodes(ByteBlob):
-        Marks[NodeInfoInfo.text_end] = f'tree:{NodeInfoInfo.name}:flags@{NodeInfoInfo.text_end + 4}'
+        Marks[NodeInfoInfo.text_end] = (
+            f"tree:{NodeInfoInfo.name}:flags@{NodeInfoInfo.text_end + 4}"
+        )
     for IndexData, Layout in enumerate(Resolvedlib.locate_features(ByteBlob)):
-        Marks[Layout.depth_offset] = f'depth[{IndexData}]'
+        Marks[Layout.depth_offset] = f"depth[{IndexData}]"
     for IndexData, Entry in enumerate(Streamlib.CompFeatEntries(ByteBlob)):
-        Marks[Entry[0]] = f'comp_entry[{IndexData}] id={Entry[2]}'
+        Marks[Entry[0]] = f"comp_entry[{IndexData}] id={Entry[2]}"
     return Marks
 
 
@@ -46,16 +48,24 @@ def MainRun() -> int:
     Offsets = Modellib.NodeOffsets(ModelInfo)
     Marks = Anchors(ByteBlob)
     StopInfo = HighValue if HighValue else len(SegmentsInfo)
-    print(f'{PartInfoInfo.name} stream={len(ByteBlob)} nodes={len(SegmentsInfo)} base={ModelInfo.base}')
-    print(f"{'node':>5} {'offset':>7} {'len':>5} {'tag':>6} {'kind':>10} {'map':>5} {'d':>2} {'parent':>6} class")
+    print(
+        f"{PartInfoInfo.name} stream={len(ByteBlob)} nodes={len(SegmentsInfo)} base={ModelInfo.base}"
+    )
+    print(
+        f"{'node':>5} {'offset':>7} {'len':>5} {'tag':>6} {'kind':>10} {'map':>5} {'d':>2} {'parent':>6} class"
+    )
     for PosInfoInfo in range(LowValue, StopInfo):
         ItemData = SegmentsInfo[PosInfoInfo]
-        NoteInfo = ''
+        NoteInfo = ""
         for Offset, LabelInfo in Marks.items():
             if ItemData.offset <= Offset < ItemData.end:
-                NoteInfo += f'  <{LabelInfo}>'
-        print(f'{PosInfoInfo:>5} {ItemData.offset:>7} {ItemData.length:>5} {ItemData.tag:>6x} {ItemData.kind:>10} {ItemData.map_index:>5} {ItemData.depth:>2} {ItemData.parent:>6} {ItemData.class_name}{NoteInfo}')
+                NoteInfo += f"  <{LabelInfo}>"
+        print(
+            f"{PosInfoInfo:>5} {ItemData.offset:>7} {ItemData.length:>5} {ItemData.tag:>6x} {ItemData.kind:>10} {ItemData.map_index:>5} {ItemData.depth:>2} {ItemData.parent:>6} {ItemData.class_name}{NoteInfo}"
+        )
     SpareValue = Offsets
     return 0
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     raise SystemExit(MainRun())

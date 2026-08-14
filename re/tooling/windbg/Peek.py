@@ -14,7 +14,7 @@ import sys as System
 KHereInfo = PathInfo(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KGrammar = KHereInfo.parent / 'harness'
+KGrammar = KHereInfo.parent / "harness"
 for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
@@ -27,8 +27,10 @@ KPrintable = set(range(32, 127))
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def Render(ByteBlob: bytes, StartRun: int, StopInfo: int) -> None:
     for BaseInfo in range(StartRun, StopInfo, 16):
-        Chunk = ByteBlob[BaseInfo:min(BaseInfo + 16, StopInfo)]
-        TextValueData = ''.join((chr(ByteInfo) if ByteInfo in KPrintable else '.' for ByteInfo in Chunk))
+        Chunk = ByteBlob[BaseInfo : min(BaseInfo + 16, StopInfo)]
+        TextValueData = "".join(
+            (chr(ByteInfo) if ByteInfo in KPrintable else "." for ByteInfo in Chunk)
+        )
         print(f"{BaseInfo:6d}  {Chunk.hex(' '):<47}  {TextValueData}")
 
 
@@ -39,8 +41,10 @@ def MainRun() -> int:
     StartRun = int(System.argv[3])
     StopInfo = int(System.argv[4])
     ByteBlob = Streamlib.LoadDonor(PartInfoInfo).streams[NameTextInfo]
-    print(f'{PartInfoInfo.stem} {NameTextInfo} length={len(ByteBlob)}')
+    print(f"{PartInfoInfo.stem} {NameTextInfo} length={len(ByteBlob)}")
     Render(ByteBlob, max(0, StartRun), min(len(ByteBlob), StopInfo))
     return 0
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     raise SystemExit(MainRun())

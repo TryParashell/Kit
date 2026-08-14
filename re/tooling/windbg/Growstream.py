@@ -15,7 +15,7 @@ import sys as System
 KHereInfo = PathInfo(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KGrammar = KHereInfo.parent / 'harness'
+KGrammar = KHereInfo.parent / "harness"
 for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
@@ -49,22 +49,33 @@ class CountField:
     BodyOffset: int
     WidthInfo: int
 
-
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def ReadData(SelfRef, ModelInfo: Modellib.Model) -> int:
         BodyInfo = ModelInfo.nodes[SelfRef.NodeInfoInfo].body
-        return int.from_bytes(BodyInfo[SelfRef.BodyOffset:SelfRef.BodyOffset + SelfRef.WidthInfo], 'little')
-
+        return int.from_bytes(
+            BodyInfo[SelfRef.BodyOffset : SelfRef.BodyOffset + SelfRef.WidthInfo],
+            "little",
+        )
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def Write(SelfRef, ModelInfo: Modellib.Model, ValueInfo: int) -> None:
         NodeInfoInfo = ModelInfo.nodes[SelfRef.NodeInfoInfo]
         BodyInfo = bytearray(NodeInfoInfo.body)
         if SelfRef.BodyOffset + SelfRef.WidthInfo > len(BodyInfo):
-            raise GrowError(f'count field runs past node {SelfRef.NodeInfoInfo}')
-        BodyInfo[SelfRef.BodyOffset:SelfRef.BodyOffset + SelfRef.WidthInfo] = ValueInfo.to_bytes(SelfRef.WidthInfo, 'little')
-        setattr(NodeInfoInfo, 'body', bytes(BodyInfo))
-    KAliasNames = {'node': 'NodeInfoInfo', 'body_offset': 'BodyOffset', 'width': 'WidthInfo', 'read': 'ReadData', 'write': 'Write'}
+            raise GrowError(f"count field runs past node {SelfRef.NodeInfoInfo}")
+        BodyInfo[SelfRef.BodyOffset : SelfRef.BodyOffset + SelfRef.WidthInfo] = (
+            ValueInfo.to_bytes(SelfRef.WidthInfo, "little")
+        )
+        setattr(NodeInfoInfo, "body", bytes(BodyInfo))
+
+    KAliasNames = {
+        "node": "NodeInfoInfo",
+        "body_offset": "BodyOffset",
+        "width": "WidthInfo",
+        "read": "ReadData",
+        "write": "Write",
+    }
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 CountField.__getattr__ = GetLegacyAttr
@@ -75,24 +86,35 @@ def Locate(ModelInfo: Modellib.Model, Absolute: int, WidthInfo: int) -> CountFie
     Offsets = Modellib.NodeOffsets(ModelInfo)
     for PosInfoInfo, NodeInfoInfo in enumerate(ModelInfo.nodes):
         StartRun = Offsets[PosInfoInfo]
-        Header = 6 + len(NodeInfoInfo.class_name.encode('ascii')) if NodeInfoInfo.kind == 'definition' else 2
+        Header = (
+            6 + len(NodeInfoInfo.class_name.encode("ascii"))
+            if NodeInfoInfo.kind == "definition"
+            else 2
+        )
         BodyStart = StartRun + Header
         BodyEnd = BodyStart + len(NodeInfoInfo.body)
         if BodyStart <= Absolute and Absolute + WidthInfo <= BodyEnd:
             return CountField(PosInfoInfo, Absolute - BodyStart, WidthInfo)
-    raise GrowError(f'offset {Absolute} does not fall inside any node body')
+    raise GrowError(f"offset {Absolute} does not fall inside any node body")
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Relocate(FieldInfo: CountField, PlanInfo: tuple[tuple[int, int], ...]) -> CountField:
+def Relocate(
+    FieldInfo: CountField, PlanInfo: tuple[tuple[int, int], ...]
+) -> CountField:
     for PosInfoInfo, (Source, CopyId) in enumerate(PlanInfo):
         if Source == FieldInfo.node and CopyId == 0:
             return CountField(PosInfoInfo, FieldInfo.body_offset, FieldInfo.width)
-    raise GrowError(f'node {FieldInfo.node} vanished from the growth plan')
+    raise GrowError(f"node {FieldInfo.node} vanished from the growth plan")
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def GrowInfo(ModelInfo: Modellib.Model, Blocks: tuple[Renumberlib.Block, ...], Copies: int, Counts: tuple[tuple[CountField, int], ...]) -> tuple[Modellib.Model, tuple[tuple[int, int], ...]]:
+def GrowInfo(
+    ModelInfo: Modellib.Model,
+    Blocks: tuple[Renumberlib.Block, ...],
+    Copies: int,
+    Counts: tuple[tuple[CountField, int], ...],
+) -> tuple[Modellib.Model, tuple[tuple[int, int], ...]]:
     Grown, PlanInfo = Renumberlib.Duplicate(ModelInfo, Blocks, Copies)
     for FieldInfo, PerFeat in Counts:
         Moved = Relocate(FieldInfo, PlanInfo)

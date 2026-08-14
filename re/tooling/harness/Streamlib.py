@@ -17,10 +17,13 @@ KHereInfo = PathInfo(__file__).resolve().parent
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KRootInfo = KHereInfo.parents[2]
-for CandInfo in (KHereInfo, KRootInfo, KRootInfo / 'src'):
+for CandInfo in (KHereInfo, KRootInfo, KRootInfo / "src"):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
-from convert.adapters.solidworks.container.Container import SldprtArchive, _template_fields as TemplateFields
+from convert.adapters.solidworks.container.Container import (
+    SldprtArchive,
+    _template_fields as TemplateFields,
+)
 from convert.adapters.solidworks import resolved as Resolvedlib
 import Carchive as Carchive
 
@@ -38,20 +41,21 @@ def SetLegacyMut(SelfRef, NameText, ValueData):
     TargetName = SelfRef.KAliasNames.get(NameText, NameText)
     object.__setattr__(SelfRef, TargetName, ValueData)
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-KResolved = 'Contents/Config-0-ResolvedFeatures'
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KEYWORDS = 'swXmlContents/KeyWords'
+KResolved = "Contents/Config-0-ResolvedFeatures"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KFeatInfo = 'swXmlContents/Features'
+KEYWORDS = "swXmlContents/KeyWords"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KPartition = 'Contents/Config-0-Partition'
+KFeatInfo = "swXmlContents/Features"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KCompFeatClass = 'moCompFeature_c'
+KPartition = "Contents/Config-0-Partition"
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+KCompFeatClass = "moCompFeature_c"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KCompStride = 119
@@ -114,12 +118,23 @@ class Donor:
     Order: tuple[str, ...]
     StreamsInfo: dict[str, bytes]
 
-
     # needed to keep reverse engineering responsibilities isolated and maintainable
     @property
     def Resolved(SelfRef) -> bytes:
         return SelfRef.StreamsInfo[KResolved]
-    KAliasNames = {'path': 'PathInfoData', 'blob': 'ByteBlob', 'file_id': 'FileId', 'format_version': 'FormatVersion', 'signatures': 'Signatures', 'type_ids': 'TypeIds', 'order': 'Order', 'streams': 'StreamsInfo', 'resolved': 'Resolved'}
+
+    KAliasNames = {
+        "path": "PathInfoData",
+        "blob": "ByteBlob",
+        "file_id": "FileId",
+        "format_version": "FormatVersion",
+        "signatures": "Signatures",
+        "type_ids": "TypeIds",
+        "order": "Order",
+        "streams": "StreamsInfo",
+        "resolved": "Resolved",
+    }
+
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 Donor.__getattr__ = GetLegacyAttr
@@ -133,18 +148,47 @@ def LoadDonor(PathInfoData: str | PathInfo) -> Donor:
     Signatures, TypeIds = TemplateFields(ByteBlob, ArchiveInfo)
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
-    Order = tuple((Record.name for Record in sorted(ArchiveInfo.records, key=lambda ItemData: ItemData.offset)))
-    return Donor(PathInfoData=Source, ByteBlob=ByteBlob, FileId=ArchiveInfo.file_id, FormatVersion=ArchiveInfo.format_version, Signatures=Signatures, TypeIds=TypeIds, Order=Order, StreamsInfo=ArchiveInfo.streams)
+    Order = tuple(
+        (
+            Record.name
+            for Record in sorted(
+                ArchiveInfo.records, key=lambda ItemData: ItemData.offset
+            )
+        )
+    )
+    return Donor(
+        PathInfoData=Source,
+        ByteBlob=ByteBlob,
+        FileId=ArchiveInfo.file_id,
+        FormatVersion=ArchiveInfo.format_version,
+        Signatures=Signatures,
+        TypeIds=TypeIds,
+        Order=Order,
+        StreamsInfo=ArchiveInfo.streams,
+    )
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Rebuild(DonorInfo: Donor, Replacements: dict[str, bytes], *, DropInfo: frozenset[str]=frozenset({KPartition})) -> bytes:
-    from convert.adapters.solidworks.container.Container import build_sldprt as BuildSldprt
+def Rebuild(
+    DonorInfo: Donor,
+    Replacements: dict[str, bytes],
+    *,
+    DropInfo: frozenset[str] = frozenset({KPartition}),
+) -> bytes:
+    from convert.adapters.solidworks.container.Container import (
+        build_sldprt as BuildSldprt,
+    )
+
     Items: list[tuple[str, bytes]] = []
     for NameTextInfo in DonorInfo.order:
         if NameTextInfo in DropInfo:
             continue
-        Items.append((NameTextInfo, Replacements.get(NameTextInfo, DonorInfo.streams[NameTextInfo])))
+        Items.append(
+            (
+                NameTextInfo,
+                Replacements.get(NameTextInfo, DonorInfo.streams[NameTextInfo]),
+            )
+        )
     for NameTextInfo, PayloadInfo in Replacements.items():
         if NameTextInfo not in DonorInfo.order:
             Items.append((NameTextInfo, PayloadInfo))
@@ -157,7 +201,11 @@ def CompFeatSpan(ByteBlob: bytes) -> tuple[int, int]:
     for IndexData, DefnInfo in enumerate(Defns):
         if DefnInfo.name != KCompFeatClass:
             continue
-        EndIndex = Defns[IndexData + 1].tag_offset if IndexData + 1 < len(Defns) else len(ByteBlob)
+        EndIndex = (
+            Defns[IndexData + 1].tag_offset
+            if IndexData + 1 < len(Defns)
+            else len(ByteBlob)
+        )
         return (DefnInfo.data_offset, EndIndex)
     raise KeyError(KCompFeatClass)
 
@@ -167,18 +215,20 @@ def CompFeatEntries(ByteBlob: bytes) -> tuple[tuple[int, int, int, int], ...]:
     StartRun, EndIndex = CompFeatSpan(ByteBlob)
     Total = EndIndex - StartRun
     if Total < KCompFirstEntry:
-        raise ValueError('moCompFeature_c record is too short')
+        raise ValueError("moCompFeature_c record is too short")
     RemainderInfo = Total - KCompFirstEntry
     if RemainderInfo % KCompStride:
-        raise ValueError(f'moCompFeature_c record length {Total} is not {KCompFirstEntry} + n*{KCompStride}')
+        raise ValueError(
+            f"moCompFeature_c record length {Total} is not {KCompFirstEntry} + n*{KCompStride}"
+        )
     CountInfo = 1 + RemainderInfo // KCompStride
     Result: list[tuple[int, int, int, int]] = []
     Cursor = StartRun
     for IndexData in range(CountInfo):
         WidthInfo = KCompFirstEntry if IndexData == 0 else KCompStride
         EntryEnd = Cursor + WidthInfo
-        FeatId = Struct.unpack_from('<I', ByteBlob, EntryEnd - KCompBack)[0]
-        Stamp = Struct.unpack_from('<I', ByteBlob, EntryEnd - KCompBackInfo)[0]
+        FeatId = Struct.unpack_from("<I", ByteBlob, EntryEnd - KCompBack)[0]
+        Stamp = Struct.unpack_from("<I", ByteBlob, EntryEnd - KCompBackInfo)[0]
         Result.append((Cursor, EntryEnd, FeatId, Stamp))
         Cursor = EntryEnd
     return tuple(Result)
@@ -196,22 +246,22 @@ def TreeNodes(ByteBlob: bytes) -> tuple[Resolvedlib.NameRecord, ...]:
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def WriteUThirtyTwo(Output: bytearray, Offset: int, ValueInfo: int) -> None:
-    Struct.pack_into('<I', Output, Offset, ValueInfo)
+    Struct.pack_into("<I", Output, Offset, ValueInfo)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def WriteDouble(Output: bytearray, Offset: int, ValueInfo: float) -> None:
-    Struct.pack_into('<d', Output, Offset, ValueInfo)
+    Struct.pack_into("<d", Output, Offset, ValueInfo)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def ReadUThirtyTwo(ByteBlob: bytes, Offset: int) -> int:
-    return Struct.unpack_from('<I', ByteBlob, Offset)[0]
+    return Struct.unpack_from("<I", ByteBlob, Offset)[0]
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def ReadDouble(ByteBlob: bytes, Offset: int) -> float:
-    return Struct.unpack_from('<d', ByteBlob, Offset)[0]
+    return Struct.unpack_from("<d", ByteBlob, Offset)[0]
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

@@ -2277,7 +2277,7 @@ def BuildSketch(
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeBuildSketch(
+def NativeSketch(
     Manifest: Mapping[str, Any],
 ) -> tuple[tuple[int, int, frozenset[str]], ...]:
     Parameters = ParamCatalog(Items(Manifest.get("parameters", [])))
@@ -2628,13 +2628,13 @@ def NativeShape(Manifest: Mapping[str, Any]) -> int:
 # this definition exists because focused behavior needs one stable owner
 def NativeSketchB(Manifest: Mapping[str, Any]) -> tuple[tuple[int, int], ...]:
     return tuple(
-        ((Native, Carrier) for Native, Carrier, Ignored in NativeBuildSketch(Manifest))
+        ((Native, Carrier) for Native, Carrier, Ignored in NativeSketch(Manifest))
     )
 
 
 # this definition exists because focused behavior needs one stable owner
 def NativeSketchA(Manifest: Mapping[str, Any]) -> tuple[frozenset[str], ...]:
-    return tuple((Reasons for Ignored, Ignored, Reasons in NativeBuildSketch(Manifest)))
+    return tuple((Reasons for Ignored, Ignored, Reasons in NativeSketch(Manifest)))
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3243,7 +3243,7 @@ def MeshKernelData(
 
 
 # this definition exists because focused behavior needs one stable owner
-def UniquePayloadSuffix(PayloadEntries: Mapping[str, bytes], Requested: str) -> str:
+def UniquePayload(PayloadEntries: Mapping[str, bytes], Requested: str) -> str:
     PathValue = PurePosixPath(Requested)
     StemValue = PathValue.stem
     Suffix = PathValue.suffix
@@ -3339,7 +3339,7 @@ def ImportComponent(
             )
         else:
             Requested = f"{Prefix}_{PurePosixPath(FileName).name}"
-        Renamed = UniquePayloadSuffix(PayloadEntries, Requested)
+        Renamed = UniquePayload(PayloadEntries, Requested)
         PayloadEntries[Renamed] = DataValue
         Files[FileName] = Renamed
     Imported: list[str] = []
@@ -3816,7 +3816,7 @@ def AddAsm(
             MeshValue = Graph.add(
                 "Mesh::Feature", f"{DefinitionName}_Mesh", "ComponentMesh"
             )
-            FileName = UniquePayloadSuffix(PayloadEntries, f"{MeshValue.name}.MeshKernel.bms")
+            FileName = UniquePayload(PayloadEntries, f"{MeshValue.name}.MeshKernel.bms")
             PayloadEntries[FileName] = MeshKernelData(Vertices, Triangles)
             MeshValue.properties.extend(
                 [
@@ -4086,9 +4086,9 @@ def AddAsm(
             Label = TextAction(Value("label", Value("name", InstanceId)), InstanceId)
             PlacementMatrix = MatrixValues(Value("transform", {}))
             LinkFields = {
-                TextAction(Field)
-                for Field in Sequence(Record.get("link_fields", []))
-                if TextAction(Field)
+                TextAction(FieldName)
+                for FieldName in Sequence(Record.get("link_fields", []))
+                if TextAction(FieldName)
             }
             IsAsmLink = {"Group", "Rigid"}.issubset(LinkFields)
             Proxy = Graph.add(
@@ -4770,7 +4770,7 @@ def AddDocMeshes(
         Requested = "DisplayMesh" if Index == 0 else f"DisplayMesh_{Index + 1}"
         BrepRequested = "BRep" if Index == 0 else f"BRep_{Index + 1}"
         BrepValue = Graph.add("Part::Feature", BrepRequested, "FacetedBRep")
-        BrepFileName = UniquePayloadSuffix(PayloadEntries, f"{BrepValue.name}.Shape.brp")
+        BrepFileName = UniquePayload(PayloadEntries, f"{BrepValue.name}.Shape.brp")
         PayloadEntries[BrepFileName] = TriangleMeshBrep(Vertices, Triangles)
         BrepValue.properties.extend(
             [
@@ -4786,7 +4786,7 @@ def AddDocMeshes(
             ]
         )
         MeshValue = Graph.add("Mesh::Feature", Requested, "DocumentMesh")
-        FileName = UniquePayloadSuffix(PayloadEntries, f"{MeshValue.name}.MeshKernel.bms")
+        FileName = UniquePayload(PayloadEntries, f"{MeshValue.name}.MeshKernel.bms")
         PayloadEntries[FileName] = MeshKernelData(Vertices, Triangles)
         MeshValue.properties.extend(
             [
@@ -4845,7 +4845,7 @@ def AddDocBrep(
     except FreeCadBrepWriteError:
         return ([], "")
     ObjValue = Graph.add("Part::Feature", "BRep", "NeutralBRep")
-    FileName = UniquePayloadSuffix(PayloadEntries, f"{ObjValue.name}.Shape.brp")
+    FileName = UniquePayload(PayloadEntries, f"{ObjValue.name}.Shape.brp")
     PayloadEntries[FileName] = DataValue
     ObjValue.properties.extend(
         [
@@ -4920,7 +4920,7 @@ def SerializeObject(Parent: ET.Element, ObjValue: _Object) -> None:
 
 
 # this definition exists because focused behavior needs one stable owner
-def SanitizePayloadSuffix(
+def SanitizePayload(
     Objects: list[_Object], PayloadEntries: Mapping[str, bytes]
 ) -> None:
     for ObjValue in Objects:
@@ -6221,7 +6221,7 @@ def BuildDocXml(
                 and (".." not in PathValue.parts)
             ):
                 PayloadEntries[SourceStream] = DataValue
-    SanitizePayloadSuffix(Graph.objects, PayloadEntries)
+    SanitizePayload(Graph.objects, PayloadEntries)
     NativeDocProperties = (
         ElemFromData(FreecadMeta.get("document_properties"))
         if NativeReplay and isinstance(FreecadMeta, Mapping)

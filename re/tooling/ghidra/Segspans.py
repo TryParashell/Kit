@@ -16,31 +16,33 @@ from collections import defaultdict as Defaultdict
 KRootInfo = Pathlib.Path(__file__).resolve().parents[3]
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KTrace = KRootInfo / 're/data/segments'
+KTrace = KRootInfo / "re/data/segments"
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def LoadData():
     OutputDataInfo = {}
-    for PathInfoData in sorted(KTrace.glob('segments_*.json')):
-        OutputDataInfo[PathInfoData.stem[len('segments_'):]] = JsonData.loads(PathInfoData.read_text())
+    for PathInfoData in sorted(KTrace.glob("segments_*.json")):
+        OutputDataInfo[PathInfoData.stem[len("segments_") :]] = JsonData.loads(
+            PathInfoData.read_text()
+        )
     return OutputDataInfo
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def ResolveInfo(DocInfo):
-    SegsInfo = DocInfo['segments']
+    SegsInfo = DocInfo["segments"]
     ByObj = {}
     for SegInfo in SegsInfo:
-        if SegInfo['kind'] in ('definition', 'classref'):
-            ByObj[SegInfo['object_index']] = SegInfo
+        if SegInfo["kind"] in ("definition", "classref"):
+            ByObj[SegInfo["object_index"]] = SegInfo
     Names = []
     for SegInfo in SegsInfo:
-        NameTextInfo = SegInfo['class_name']
-        MatchDataInfo = Regex.match('backref->(\\d+)$', NameTextInfo)
+        NameTextInfo = SegInfo["class_name"]
+        MatchDataInfo = Regex.match("backref->(\\d+)$", NameTextInfo)
         if MatchDataInfo:
             TgtInfo = SegsInfo[int(MatchDataInfo.group(1))]
-            NameTextInfo = TgtInfo['class_name']
+            NameTextInfo = TgtInfo["class_name"]
         Names.append(NameTextInfo)
     return (SegsInfo, Names)
 
@@ -55,17 +57,32 @@ def MainRun():
     for LabelInfo, DocInfo in DocsInfo.items():
         SegsInfo, Names = ResolveInfo(DocInfo)
         for SegInfo, NameTextInfo in zip(SegsInfo, Names):
-            if WantInfo and (not any((WordData.lower() in NameTextInfo.lower() for WordData in WantInfo))):
+            if WantInfo and (
+                not any(
+                    (WordData.lower() in NameTextInfo.lower() for WordData in WantInfo)
+                )
+            ):
                 continue
-            Table[NameTextInfo][LabelInfo].append((SegInfo['offset'], SegInfo['length'], SegInfo['depth'], SegInfo['kind']))
+            Table[NameTextInfo][LabelInfo].append(
+                (
+                    SegInfo["offset"],
+                    SegInfo["length"],
+                    SegInfo["depth"],
+                    SegInfo["kind"],
+                )
+            )
     for NameTextInfo in sorted(Table):
-        print('=' * 70)
+        print("=" * 70)
         print(NameTextInfo)
         for LabelInfo in sorted(Table[NameTextInfo]):
             GetRows = Table[NameTextInfo][LabelInfo]
             LensInfo = sorted({ResultData[1] for ResultData in GetRows})
-            print(f'  {LabelInfo:18s} n={len(GetRows):4d} lengths={LensInfo}')
+            print(f"  {LabelInfo:18s} n={len(GetRows):4d} lengths={LensInfo}")
             for OffInfo, LnInfo, Depth, KindNameInfo in GetRows[:12]:
-                print(f'      off={OffInfo:6d} len={LnInfo:5d} depth={Depth} kind={KindNameInfo}')
-if __name__ == '__main__':
+                print(
+                    f"      off={OffInfo:6d} len={LnInfo:5d} depth={Depth} kind={KindNameInfo}"
+                )
+
+
+if __name__ == "__main__":
     MainRun()

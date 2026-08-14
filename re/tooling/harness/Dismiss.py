@@ -22,13 +22,13 @@ KCallback = Ctypes.WINFUNCTYPE(Ctypes.c_bool, Wintypes.HWND, Wintypes.LPARAM)
 KBmClick = 245
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDialogClass = '#32770'
+KDialogClass = "#32770"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KDialogTitle = 'SOLIDWORKS'
+KDialogTitle = "SOLIDWORKS"
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-KButtonLabels = ('OK', '&OK')
+KButtonLabels = ("OK", "&OK")
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -50,12 +50,16 @@ def WindowText(Handle: int) -> str:
 def StartupDialogs() -> list[int]:
     Found: list[int] = []
 
-
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def IsVisit(Handle: int, SpareValue: int) -> bool:
-        if ClassNameInfo(Handle) == KDialogClass and KUserThirtyTwo.IsWindowVisible(Handle) and (WindowText(Handle) == KDialogTitle):
+        if (
+            ClassNameInfo(Handle) == KDialogClass
+            and KUserThirtyTwo.IsWindowVisible(Handle)
+            and (WindowText(Handle) == KDialogTitle)
+        ):
             Found.append(Handle)
         return True
+
     KUserThirtyTwo.EnumWindows(KCallback(IsVisit), 0)
     return Found
 
@@ -64,12 +68,12 @@ def StartupDialogs() -> list[int]:
 def ConfirmButton(Dialog: int) -> int | None:
     Found: list[int] = []
 
-
     # needed to keep reverse engineering responsibilities isolated and maintainable
     def IsVisit(Handle: int, SpareValue: int) -> bool:
-        if ClassNameInfo(Handle) == 'Button' and WindowText(Handle) in KButtonLabels:
+        if ClassNameInfo(Handle) == "Button" and WindowText(Handle) in KButtonLabels:
             Found.append(Handle)
         return True
+
     KUserThirtyTwo.EnumChildWindows(Dialog, KCallback(IsVisit), 0)
     return Found[0] if Found else None
 
@@ -82,7 +86,7 @@ def DismissOnce() -> list[str]:
         if Button is None:
             continue
         KUserThirtyTwo.SendMessageW(Button, KBmClick, 0, 0)
-        Dismissed.append(f'hwnd={Dialog}')
+        Dismissed.append(f"hwnd={Dialog}")
     return Dismissed
 
 
@@ -101,14 +105,18 @@ def WatcherMut(StopInfo: Threading.Event, LogInfo: list[str]) -> None:
 def StartRun() -> tuple[Threading.Event, list[str], Threading.Thread]:
     StopInfo = Threading.Event()
     LogInfo: list[str] = []
-    ThreadInfo = Threading.Thread(target=WatcherMut, args=(StopInfo, LogInfo), daemon=True)
+    ThreadInfo = Threading.Thread(
+        target=WatcherMut, args=(StopInfo, LogInfo), daemon=True
+    )
     ThreadInfo.start()
     return (StopInfo, LogInfo, ThreadInfo)
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
     KDeadline = TimeInfo.monotonic() + 120.0
     while TimeInfo.monotonic() < KDeadline:
         for ItemData in DismissOnce():
-            print(f'dismissed {ItemData}', flush=True)
+            print(f"dismissed {ItemData}", flush=True)
         TimeInfo.sleep(0.5)

@@ -1527,7 +1527,7 @@ def FreeCadBoxMut(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[Writ
     ObjectIds[f'sketch:{SketchSourceId}'] = 26
     ObjectIds[f'feature:{FeatureData.id}'] = 34
     ExtrusionData = Replace(FeatureData, kind=FeatureKind.EXTRUSION, sketch_id=SketchSourceId, operation=BoolOperation.CREATE, definition=ExtrusionFeature(ParamValue(HeightValue, ValueKind.LENGTH, 'mm')))
-    return (WriteObject(SketchSourceId, 26, 'Sketch1', 'Sketch', 'Sketch', 'moProfileFeature_c', (('Dissectable', 'true'),), (Replace(LengthData, name='D1', text=format(LengthValue, '.15g')), Replace(WidthData, name='D2', text=format(WidthValue, '.15g'))), bytes(SketchPayload)), WriteObject(FeatureData.id, 34, 'Boss-Extrude1', 'Extrusion', 'Extrusion', 'moExtrusion_c', (('Dissectable', 'true'), ('DissectableChildren', '26'), ('DissectableRoot', 'true'), ('KitPrimitive', 'Box')), (Replace(HeightData, name='D1', text=format(HeightValue, '.15g')),), Extrusion(ExtrusionData)))
+    return (WriteObject(SketchSourceId, 26, 'Sketch1', 'Sketch', 'Sketch', 'moProfileFeature_c', (('Dissectable', 'true'),), (Replace(LengthData, name='D1', text=format(LengthValue, '.15g')), Replace(WidthData, name='D2', text=format(WidthValue, '.15g'))), bytes(SketchPayload)), WriteObject(FeatureData.id, 34, 'Boss-Extrude1', 'Extrusion', 'Extrusion', 'moExtrusion_c', (('Dissectable', 'true'), ('DissectableChildren', '26'), ('DissectableRoot', 'true'), ('KitPrimitive', 'Box')), (Replace(HeightData, name='D1', text=format(HeightValue, '.15g')),), EncodeExtrude(ExtrusionData)))
 
 # this definition exists because focused behavior needs one stable owner
 def BuildCadCylOMut(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...] | None:
@@ -1566,7 +1566,7 @@ def BuildCadCylOMut(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[Wr
     ObjectIds[f'sketch:{SketchSourceId}'] = 26
     ObjectIds[f'feature:{FeatureData.id}'] = 33
     ExtrusionData = Replace(FeatureData, kind=FeatureKind.EXTRUSION, sketch_id=SketchSourceId, operation=BoolOperation.CREATE, definition=ExtrusionFeature(ParamValue(HeightValue, ValueKind.LENGTH, 'mm')))
-    return (WriteObject(SketchSourceId, 26, 'Sketch1', 'Sketch', 'Sketch', 'moProfileFeature_c', (('Dissectable', 'true'),), (Replace(RadiusData, name='D1', value_mm=RadiusValue * 2.0, text='<MOD-DIAM>' + format(RadiusValue * 2.0, '.15g')),), bytes(SketchPayload)), WriteObject(FeatureData.id, 33, 'Boss-Extrude1', 'Extrusion', 'Extrusion', 'moExtrusion_c', (('Dissectable', 'true'), ('DissectableChildren', '26'), ('DissectableRoot', 'true'), ('KitPrimitive', 'Cylinder')), (Replace(HeightData, name='D1', text=format(HeightValue, '.15g')),), Extrusion(ExtrusionData)))
+    return (WriteObject(SketchSourceId, 26, 'Sketch1', 'Sketch', 'Sketch', 'moProfileFeature_c', (('Dissectable', 'true'),), (Replace(RadiusData, name='D1', value_mm=RadiusValue * 2.0, text='<MOD-DIAM>' + format(RadiusValue * 2.0, '.15g')),), bytes(SketchPayload)), WriteObject(FeatureData.id, 33, 'Boss-Extrude1', 'Extrusion', 'Extrusion', 'moExtrusion_c', (('Dissectable', 'true'), ('DissectableChildren', '26'), ('DissectableRoot', 'true'), ('KitPrimitive', 'Cylinder')), (Replace(HeightData, name='D1', text=format(HeightValue, '.15g')),), EncodeExtrude(ExtrusionData)))
 
 # this definition exists because focused behavior needs one stable owner
 def WriteObjects(DocValue: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...]:
@@ -1624,12 +1624,12 @@ def EquationLiteral(Value: ParameterValue) -> str | None:
     return None
 
 # this definition exists because focused behavior needs one stable owner
-def Expression(DocValue: CadDocument) -> tuple[Param, ...]:
+def ExprParams(DocValue: CadDocument) -> tuple[Param, ...]:
     return tuple((Param for Param in DocValue.parameters if Param.expression is not None))
 
 # this definition exists because focused behavior needs one stable owner
 def ExpressionTexts(DocValue: CadDocument) -> tuple[str, ...] | None:
-    Parameters = Expression(DocValue)
+    Parameters = ExprParams(DocValue)
     if not Parameters:
         return ()
     Names: dict[str, str] = {}
@@ -1732,7 +1732,7 @@ def IsonicalSingMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, 
     if SourceSketch is None or SourceFeature is None:
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchPayload, Ignored = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     BoundsValue = WriteRectangle(SketchObject)
     PinPoints = PolySixPoints(SketchObject)
@@ -1760,11 +1760,11 @@ def IsonicalPadMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, i
     if SourceSketchOne is None or SourceSketchTwo is None or SourcePad is None or (SourceGroove is None):
         return ObjectsData
     NormalizedSketches = tuple((CanonicalSketch(ItemData, DocData.support_planes, ObjectIds) for ItemData in (SourceSketchOne, SourceSketchTwo)))
-    SketchPayloads = tuple((SketchPayload(SketchData, SketchObject.object_id, ObjectIds)[0] for SketchData, SketchObject in zip(NormalizedSketches, (SketchOne, SketchTwo), strict=True)))
+    SketchPayloads = tuple((EncodeSketch(SketchData, SketchObject.object_id, ObjectIds)[0] for SketchData, SketchObject in zip(NormalizedSketches, (SketchOne, SketchTwo), strict=True)))
     SketchOne = Replace(SketchOne, payload=SketchPayloads[0])
     SketchTwo = Replace(SketchTwo, payload=SketchPayloads[1])
     NormalizedPad = CanonicalA(SourcePad, SourceSketchOne, DocData.support_planes, ObjectIds)
-    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    PadObject = Replace(PadObject, payload=EncodeExtrude(NormalizedPad))
     BoundsData = (WriteRectangle(SketchOne), WriteRectangle(SketchTwo))
     DimensionData = FreeCadPad(DocData, (SourceSketchOne, SourceSketchTwo), (SourcePad, SourceGroove))
     if PadObject.class_name != 'moExtrusion_c' or GrooveObject.class_name != 'moRevolution_c' or any((ItemData is None for ItemData in BoundsData)) or (ExtrusionEdit(PadObject.payload) is None) or (DimensionData is None) or any((len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or SketchObject.class_name != 'moProfileFeature_c' or (not HasRectDims(SketchObject, BoundsValue)) or SketchData.suppressed or (not HasCanonical(SketchData, BoundsValue, None)) or (len(SketchData.closed_profile_entity_ids) != 1) or (set(SketchData.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SketchData.entities}) for SketchObject, SketchData, BoundsValue in zip((SketchOne, SketchTwo), (SourceSketchOne, SourceSketchTwo), BoundsData, strict=True))):
@@ -1791,10 +1791,10 @@ def IsonicalBossMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, 
     if SourcePad.id != PadObject.source_id or SourceFillet.id != FilletObject.source_id:
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchPayload, Ignored = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
-    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    PadObject = Replace(PadObject, payload=EncodeExtrude(NormalizedPad))
     BoundsValue = WriteRectangle(SketchObject)
     DimensionData = FreeCadBossB(DocData, SourceSketch, SourcePad, SourceFillet, BoundsValue)
     if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (FilletObject.class_name != 'Fillet_c') or (DimensionData is None):
@@ -1820,10 +1820,10 @@ def IsonicalBosAMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, 
     if SourcePad.id != PadObject.source_id or SourceChamfer.id != ChamferObject.source_id:
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchPayload, Ignored = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
-    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    PadObject = Replace(PadObject, payload=EncodeExtrude(NormalizedPad))
     BoundsValue = WriteRectangle(SketchObject)
     DimensionData = FreeCadBoss(DocData, SourceSketch, SourcePad, SourceChamfer, BoundsValue)
     if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (ChamferObject.class_name != 'Chamfer_c') or (DimensionData is None):
@@ -1849,10 +1849,10 @@ def IsonicalBosBMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, 
     if SourcePad.id != PadObject.source_id or SourceShell.id != ShellObject.source_id:
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchPayload, Ignored = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
-    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    PadObject = Replace(PadObject, payload=EncodeExtrude(NormalizedPad))
     BoundsValue = WriteRectangle(SketchObject)
     DimensionData = FreeCadBossD(DocData, SourceSketch, SourcePad, SourceShell, BoundsValue)
     if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (ShellObject.class_name != 'moShell_c') or (DimensionData is None):
@@ -1878,10 +1878,10 @@ def IsonicalBosCMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, 
     if SourcePad.id != PadObject.source_id or SourcePattern.id != PatternObject.source_id:
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchPayload, Ignored = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
-    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    PadObject = Replace(PadObject, payload=EncodeExtrude(NormalizedPad))
     BoundsValue = WriteRectangle(SketchObject)
     DimensionData = FreeCadBossC(DocData, SourceSketch, SourcePad, SourcePattern, BoundsValue)
     if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (PatternObject.class_name != 'moLPattern_c') or (DimensionData is None):
@@ -1907,10 +1907,10 @@ def IsonicalBosDMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, 
     if SourcePad.id != PadObject.source_id or SourcePattern.id != PatternObject.source_id:
         return ObjectsData
     NormalizedSketch = CanonicalSketch(SourceSketch, DocData.support_planes, ObjectIds)
-    SketchPayload, Ignored = SketchPayload(NormalizedSketch, SketchObject.object_id, ObjectIds)
+    SketchPayload, Ignored = EncodeSketch(NormalizedSketch, SketchObject.object_id, ObjectIds)
     SketchObject = Replace(SketchObject, payload=SketchPayload)
     NormalizedPad = CanonicalA(SourcePad, SourceSketch, DocData.support_planes, ObjectIds)
-    PadObject = Replace(PadObject, payload=Extrusion(NormalizedPad))
+    PadObject = Replace(PadObject, payload=EncodeExtrude(NormalizedPad))
     BoundsValue = WriteRectangle(SketchObject)
     DimensionData = FreeCadBossA(DocData, SourceSketch, SourcePad, SourcePattern, BoundsValue)
     if BoundsValue is None or len(SketchObject.payload) < 4 or Struct.unpack_from('<I', SketchObject.payload)[0] != 2 or (SketchObject.class_name != 'moProfileFeature_c') or (not HasRectDims(SketchObject, BoundsValue)) or SourceSketch.suppressed or (not HasCanonical(SourceSketch, BoundsValue, None)) or (len(SourceSketch.closed_profile_entity_ids) != 1) or (set(SourceSketch.closed_profile_entity_ids[0]) != {ItemData.id for ItemData in SourceSketch.entities}) or (PadObject.class_name != 'moExtrusion_c') or (ExtrusionEdit(PadObject.payload) != (0, 0)) or (PatternObject.class_name != 'moCirPattern_c') or (DimensionData is None):
@@ -1930,11 +1930,11 @@ def IsonicalSinAMut(Objects: tuple[_WriteObject, ...], ObjectIds: dict[str, int]
     SourceFeature = next((ItemValue for ItemValue in DocValue.feature_timeline if ItemValue.id == Extrusion.source_id), None)
     if SourceSketch is not None:
         NormalizedSketch = CanonicalSketch(SourceSketch, DocValue.support_planes, ObjectIds)
-        NormalizedPayload, Ignored = SketchPayload(NormalizedSketch, Sketch.object_id, ObjectIds)
+        NormalizedPayload, Ignored = EncodeSketch(NormalizedSketch, Sketch.object_id, ObjectIds)
         Sketch = Replace(Sketch, payload=NormalizedPayload)
     if SourceFeature is not None and SourceSketch is not None:
         NormalizedFeature = CanonicalA(SourceFeature, SourceSketch, DocValue.support_planes, ObjectIds)
-        Extrusion = Replace(Extrusion, payload=Extrusion(NormalizedFeature))
+        Extrusion = Replace(Extrusion, payload=EncodeExtrude(NormalizedFeature))
     Bounds = WriteRectangle(Sketch)
     Circle = WriteCircle(Sketch)
     PolylineData = PolySixPoints(Sketch)
@@ -1976,8 +1976,8 @@ def IsonicalTwoMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, i
     NormalizedFeatures = tuple((CanonicalA(FeatureData, SketchData, DocData.support_planes, ObjectIds) for FeatureData, SketchData in zip((SourceFeatureOne, SourceFeatureTwo), (SourceSketchOne, SourceSketchTwo), strict=True)))
     NormalizedObjects: list[WriteObject] = []
     for SketchObject, FeatureObject, SketchData, FeatureData in zip((SketchOne, SketchTwo), (FeatureOne, FeatureTwo), NormalizedSketches, NormalizedFeatures, strict=True):
-        SketchPayload, Ignored = SketchPayload(SketchData, SketchObject.object_id, ObjectIds)
-        NormalizedObjects.extend((Replace(SketchObject, payload=SketchPayload), Replace(FeatureObject, payload=Extrusion(FeatureData))))
+        SketchPayload, Ignored = EncodeSketch(SketchData, SketchObject.object_id, ObjectIds)
+        NormalizedObjects.extend((Replace(SketchObject, payload=SketchPayload), Replace(FeatureObject, payload=EncodeExtrude(FeatureData))))
     SketchOne, FeatureOne, SketchTwo, FeatureTwo = NormalizedObjects
     BoundsData = (WriteRectangle(SketchOne), WriteRectangle(SketchTwo))
     DimensionData = FreeCadTwo(DocData, (SourceSketchOne, SourceSketchTwo), (SourceFeatureOne, SourceFeatureTwo))
@@ -2021,8 +2021,8 @@ def IsonicalCutMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, i
     NormalizedFeatures = tuple((CanonicalA(FeatureData, SketchData, DocData.support_planes, ObjectIds) for FeatureData, SketchData in zip(ResolvedFeatures, ResolvedSketches, strict=True)))
     NormalizedObjects: list[WriteObject] = []
     for SketchObject, FeatureObject, SketchData, FeatureData in zip(SketchObjects, FeatureObjects, NormalizedSketches, NormalizedFeatures, strict=True):
-        SketchPayload, Ignored = SketchPayload(SketchData, SketchObject.object_id, ObjectIds)
-        NormalizedObjects.extend((Replace(SketchObject, payload=SketchPayload), Replace(FeatureObject, payload=Extrusion(FeatureData))))
+        SketchPayload, Ignored = EncodeSketch(SketchData, SketchObject.object_id, ObjectIds)
+        NormalizedObjects.extend((Replace(SketchObject, payload=SketchPayload), Replace(FeatureObject, payload=EncodeExtrude(FeatureData))))
     SketchObjects = tuple(NormalizedObjects[0::2])
     FeatureObjects = tuple(NormalizedObjects[1::2])
     BoundsData = tuple((WriteRectangle(ItemData) for ItemData in SketchObjects))
@@ -2604,7 +2604,7 @@ def WriteRectangle(Sketch: _WriteObject) -> tuple[float, float, float, float] | 
     if Sketch.kind != 'Sketch' or not Sketch.payload:
         return None
     Markers = list(ParseMarkers(Sketch.payload, 0, len(Sketch.payload)))
-    Profiles, Ignored, Ignored = Profiles(Markers, ())
+    Profiles, Ignored, Ignored = DecodeProfiles(Markers, ())
     if len(Profiles) != 1 or Profiles[0].kind != 'rectangle':
         return None
     Coordinates = Profiles[0].coordinates
@@ -2636,7 +2636,7 @@ def PolySixPoints(SketchObject: _WriteObject) -> tuple[tuple[float, float], ...]
     if SketchObject.kind != 'Sketch' or not SketchObject.payload:
         return None
     MarkersData = list(ParseMarkers(SketchObject.payload, 0, len(SketchObject.payload)))
-    ProfilesData, Ignored, Ignored = Profiles(MarkersData, ())
+    ProfilesData, Ignored, Ignored = DecodeProfiles(MarkersData, ())
     PolylineData = tuple((ItemData for ItemData in ProfilesData if ItemData.kind == 'polyline'))
     if len(PolylineData) != 1 or len(PolylineData[0].coordinates) != 12:
         return None
@@ -2670,7 +2670,7 @@ def NativeSystem(Feature: FeatureStep | None, Fallback: str) -> str:
 def WriteSketch(Sketch: Sketch, Parameters: dict[str, Parameter], ObjectIds: dict[str, int], NativeFeature: FeatureStep | None=None) -> WriteObject:
     ObjectId = ObjectIds[f'sketch:{Sketch.id}']
     Dimensions = list(WriteDimensions(Sketch.id, Sketch.parameter_ids, Parameters))
-    Payload, GeneratedDimensions = SketchPayload(Sketch, ObjectId, ObjectIds)
+    Payload, GeneratedDimensions = EncodeSketch(Sketch, ObjectId, ObjectIds)
     Existing = {Dimension.name for Dimension in Dimensions}
     Dimensions.extend((Dimension for Dimension in GeneratedDimensions if Dimension.name not in Existing))
     NativeProperties = NativeKeyword(NativeFeature.attributes) if NativeFeature is not None else None
@@ -2692,7 +2692,7 @@ def WriteFeature(Feature: FeatureStep, Parameters: dict[str, Parameter], ObjectI
         Generated = Definition(Feature)
         if Generated is not None and (not Dimensions):
             Dimensions.append(Generated)
-        Payload = Extrusion(Feature)
+        Payload = EncodeExtrude(Feature)
     elif KindValue in {'Fillet', 'Chamfer', 'Shell'}:
         Generated = Definition(Feature)
         if Generated is not None and (not Dimensions):
@@ -2779,8 +2779,8 @@ def Definition(Feature: FeatureStep) -> WriteDimension | None:
         Value = Definition.thickness
     if Value is None:
         return None
-    Param = Param('', 'D1', Value)
-    Dimension = ParamDimension(Param)
+    ParamValue = Param('', 'D1', Value)
+    Dimension = ParamDimension(ParamValue)
     if Dimension is None:
         return None
     return Replace(Dimension, text=Prefix + Dimension.text)
@@ -2828,7 +2828,7 @@ def LineLoopPoints(LinesData: tuple[LineGeometry, ...]) -> tuple[tuple[float, fl
     return StartData
 
 # this definition exists because focused behavior needs one stable owner
-def SketchPayload(Sketch: Sketch, ObjectId: int, ObjectIds: dict[str, int]) -> tuple[bytes, tuple[WriteDimension, ...]]:
+def EncodeSketch(Sketch: Sketch, ObjectId: int, ObjectIds: dict[str, int]) -> tuple[bytes, tuple[WriteDimension, ...]]:
     Payload = bytearray()
     PlaneId = ObjectIds.get(f'plane:{Sketch.support_plane_id}', 2)
     Payload.extend(PlaneRef(PlaneId))
@@ -2839,9 +2839,9 @@ def SketchPayload(Sketch: Sketch, ObjectId: int, ObjectIds: dict[str, int]) -> t
     for Profile in Sketch.closed_profile_entity_ids:
         Selected = tuple((Entities.get(EntityId) for EntityId in Profile))
         if len(Selected) == 4 and all((Entity is not None and isinstance(Entity.geometry, LineGeom) for Entity in Selected)):
-            Rectangle = Rectangle(tuple((Entity.geometry for Entity in Selected if Entity is not None)))
-            if Rectangle is not None:
-                Points = ((Rectangle[0], Rectangle[1]), (Rectangle[2], Rectangle[1]), (Rectangle[2], Rectangle[3]), (Rectangle[0], Rectangle[3]))
+            BoundsValue = Rectangle(tuple((Entity.geometry for Entity in Selected if Entity is not None)))
+            if BoundsValue is not None:
+                Points = ((BoundsValue[0], BoundsValue[1]), (BoundsValue[2], BoundsValue[1]), (BoundsValue[2], BoundsValue[3]), (BoundsValue[0], BoundsValue[3]))
                 for Point in Points:
                     Payload.extend(Coordinate(Point, LocalId, KPointLocus))
                     LocalId += 1
@@ -2951,7 +2951,7 @@ def Rectangle(Lines: tuple[LineGeometry, ...]) -> tuple[float, float, float, flo
     return (XsValue[0], YsValue[0], XsValue[1], YsValue[1])
 
 # this definition exists because focused behavior needs one stable owner
-def Extrusion(Feature: FeatureStep) -> bytes:
+def EncodeExtrude(Feature: FeatureStep) -> bytes:
     Definition = Feature.definition
     Direction = int(isinstance(Definition, ExtrusionFeature) and Definition.reversed)
     Condition = (ExtrusionEndCondition.MID_PLANE if Definition.symmetric else Definition.end_condition) if isinstance(Definition, ExtrusionFeature) else None
@@ -3134,9 +3134,9 @@ def NativeEnvelope(DocValue: CadDocument, ModelName: str, Identity: _NativeIdent
     if HeaderCreation is not None and (not 0 <= HeaderCreation <= 4294967295):
         raise SldprtFormatError('native SOLIDWORKS header creation stamp is invalid')
     HeaderIdentity = Identity if HeaderCreation is None else NativeIdentity(HeaderCreation, Identity.last_modified_stamp, Identity.baseline_stamp, Identity.header_stamp, Identity.configuration_flags, Identity.reference_name)
-    ModelHeader = ModelHeader(HeaderIdentity, ConfigName, SolidFeatureTreeIds=SolidFeatureTreeIds, FeatureObjects=HeaderFeatureObjects, FeatureStamps=HeaderFeatureStamps, HeaderBounds=HeaderBounds)
-    Streams['Contents/Config-0-ModelHeader'] = ModelHeader
-    Streams['Header2'] = ModelHeader
+    HeaderData = ModelHeader(HeaderIdentity, ConfigName, SolidFeatureTreeIds=SolidFeatureTreeIds, FeatureObjects=HeaderFeatureObjects, FeatureStamps=HeaderFeatureStamps, HeaderBounds=HeaderBounds)
+    Streams['Contents/Config-0-ModelHeader'] = HeaderData
+    Streams['Header2'] = HeaderData
     Streams['Contents/Definition'] = EncodeDefinitionStream(assembly=DocValue.assembly is not None)
     TreeIds = ConfigAtomTree(SolidFeatureTreeIds)
     ParentTreeId = TerminalParentTreeId if TerminalParentTreeId is not None else CmgrParentTreeId
@@ -3782,7 +3782,15 @@ def DocAxisBindings(DocValue: CadDocument, ObjectIds: Mapping[str, int]) -> froz
     return frozenset(Result)
 
 # this definition exists because focused behavior needs one stable owner
-def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, ConfigId: int | None=None, ResolvedStream: str=ResolvedFeaturesStream, ConfigStream: str='') -> NativeModel:
+def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, ConfigId: int | None=None, ResolvedStream: str=ResolvedFeaturesStream, ConfigStream: str='', **LegacyValues: object) -> NativeModel:
+    ConfigData = LegacyValues.get('configuration_data', ConfigData)
+    ConfigId = LegacyValues.get('configuration_id', ConfigId)
+    ResolvedStream = LegacyValues.get('resolved_stream', ResolvedStream)
+    ConfigStream = LegacyValues.get('configuration_stream', ConfigStream)
+    UnknownValues = set(LegacyValues) - {'configuration_data', 'configuration_id', 'resolved_stream', 'configuration_stream'}
+    if UnknownValues:
+        Unexpected = next(iter(UnknownValues))
+        raise TypeError(f"DecodeNative() got an unexpected keyword argument {Unexpected!r}")
     Configurations, XmlFeatures = ParseKeywords(Keywords)
     Names = ParseNames(Resolved)
     if ResolvedStream == ResolvedFeaturesStream:
@@ -3858,8 +3866,8 @@ def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, Con
             Family, OperationCode, Schema = OperationFields(Resolved, Record)
             OperationStart = Feature.native_offset or 0
             OperationEnd = Feature.native_end or len(Resolved)
-            EndSpec = EndSpec(Resolved, OperationStart, OperationEnd, Classes)
-            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='join' if OperationCode == 0 else 'cut' if OperationCode == 2 else 'native', profile_id=ProfileId, dependencies=Dependencies, native_offset=OperationStart, native_end=ClassRecordEnd(Resolved, Classes, OperationStart) or OperationEnd, length_mm=Operation(Feature.dimensions, 'length'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndSpec.direction_code if EndSpec else None, termination_code=EndSpec.termination_code if EndSpec else None, selection_offsets=(), selected_local_ids=(), native_stream=ResolvedStream, depth_copies=DepthCopies(Resolved, OperationOffset(Feature.dimensions, 'length')), mirrored_direction_offset=EndSpec.mirrored_direction_offset if EndSpec else None, mirrored_direction_code=EndSpec.mirrored_direction_code if EndSpec else None)
+            EndData = EndSpec(Resolved, OperationStart, OperationEnd, Classes)
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='join' if OperationCode == 0 else 'cut' if OperationCode == 2 else 'native', profile_id=ProfileId, dependencies=Dependencies, native_offset=OperationStart, native_end=ClassRecordEnd(Resolved, Classes, OperationStart) or OperationEnd, length_mm=Operation(Feature.dimensions, 'length'), radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndData.direction_code if EndData else None, termination_code=EndData.termination_code if EndData else None, selection_offsets=(), selected_local_ids=(), native_stream=ResolvedStream, depth_copies=DepthCopies(Resolved, OperationOffset(Feature.dimensions, 'length')), mirrored_direction_offset=EndData.mirrored_direction_offset if EndData else None, mirrored_direction_code=EndData.mirrored_direction_code if EndData else None)
             Operations.append(Operation)
             LatestOperation = Operation
             continue
@@ -3980,9 +3988,9 @@ def DecodeNative(Keywords: bytes, Resolved: bytes, ConfigData: bytes=b'', *, Con
                 continue
             ProfileId = LatestSketch.object_id if LatestSketch else None
             Family, OperationCode, Schema = OperationFields(Resolved, Record)
-            EndSpec = EndSpec(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Classes)
+            EndData = EndSpec(Resolved, Feature.native_offset or 0, Feature.native_end or len(Resolved), Classes)
             Lengths = tuple((Dimension.value_mm for Dimension in Feature.dimensions if Dimension.kind in {'length', 'second_length'}))
-            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='surface', profile_id=ProfileId, dependencies=(ProfileId,) if ProfileId is not None else (), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=Lengths[0] if Lengths else None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndSpec.direction_code if EndSpec else None, termination_code=EndSpec.termination_code if EndSpec else None, selection_offsets=(), selected_local_ids=(), second_length_mm=Lengths[1] if len(Lengths) > 1 else None, native_stream=ResolvedStream)
+            Operation = NativeOperation(object_id=Feature.object_id, name=Feature.name, kind='surface', profile_id=ProfileId, dependencies=(ProfileId,) if ProfileId is not None else (), native_offset=Feature.native_offset or 0, native_end=Feature.native_end or len(Resolved), length_mm=Lengths[0] if Lengths else None, radius_mm=None, family_code=Family, operation_code=OperationCode, schema_code=Schema, direction_code=EndData.direction_code if EndData else None, termination_code=EndData.termination_code if EndData else None, selection_offsets=(), selected_local_ids=(), second_length_mm=Lengths[1] if len(Lengths) > 1 else None, native_stream=ResolvedStream)
             Operations.append(Operation)
     SketchesById = {Sketch.object_id: Sketch for Sketch in Sketches}
     Operations = [ResolveProfile(Operation, SketchesById, Resolved, NativeFeatures) for Operation in Operations]
@@ -4173,7 +4181,7 @@ def ParseNative(DataValue: bytes, ConfigId: int, NativeStream: str) -> tuple[Nat
 def ParseScalars(DataValue: bytes, Names: tuple[NativeName, ...]) -> tuple[NativeScalar, ...]:
     Scalars: list[NativeScalar] = []
     for NameValue in Names:
-        ValueOffset = DimensionScalarValue(DataValue, NameValue.text_end, len(DataValue), trailing_bytes=7)
+        ValueOffset = DimensionScalarValue(DataValue, NameValue.text_end, len(DataValue), TrailingBytes=7)
         if ValueOffset is None:
             continue
         Value = Struct.unpack_from('<d', DataValue, ValueOffset)[0]
@@ -4536,10 +4544,10 @@ def DecodeSketch(DataValue: bytes, Feature: NativeFeature, SupportPlaneId: int, 
     Start = Feature.native_offset or 0
     EndValue = Feature.native_end or len(DataValue)
     Markers = list(ParseMarkers(DataValue, Start, EndValue))
-    Profiles, ProfileMarkers, Dimensions = Profiles(Markers, Feature.dimensions)
+    ProfileValues, ProfileMarkers, Dimensions = DecodeProfiles(Markers, Feature.dimensions)
     NormalizedMarkers = tuple((NativeMarker(offset=Marker.offset, length=Marker.length, prefix=Marker.prefix, native_kind=Marker.native_kind, locus=Marker.locus, profile_role=Marker.profile_role, state=Marker.state, object_index=Marker.object_index, local_id=Marker.local_id, coordinates_mm=Marker.coordinates_mm, endpoint_indices=Marker.endpoint_indices, construction=Marker.construction or (Marker.offset not in ProfileMarkers and Marker.semantic != 'native'), semantic=Marker.semantic, data=Marker.data, coordinates_metres=Marker.coordinates_metres) for Marker in Markers))
-    Constraints = Constraints(Feature, NormalizedMarkers, Profiles)
-    return NativeSketch(object_id=Feature.object_id, name=Feature.name, support_plane_id=SupportPlaneId, native_offset=Start, native_end=EndValue, markers=NormalizedMarkers, profiles=Profiles, dimensions=Dimensions, constraints=Constraints, native_stream=NativeStream, support_kind=SupportKind, support_plane=SupportPlane, support_source=SupportSource, unframed_support_plane_id=UnframedSupportPlaneId)
+    ConstraintValues = Constraints(Feature, NormalizedMarkers, ProfileValues)
+    return NativeSketch(object_id=Feature.object_id, name=Feature.name, support_plane_id=SupportPlaneId, native_offset=Start, native_end=EndValue, markers=NormalizedMarkers, profiles=ProfileValues, dimensions=Dimensions, constraints=ConstraintValues, native_stream=NativeStream, support_kind=SupportKind, support_plane=SupportPlane, support_source=SupportSource, unframed_support_plane_id=UnframedSupportPlaneId)
 
 # this definition exists because focused behavior needs one stable owner
 def ParseMarkers(DataValue: bytes, Start: int, EndValue: int) -> tuple[NativeMarker, ...]:
@@ -4695,13 +4703,13 @@ def LinkedRectangle(Markers: list[NativeMarker]) -> tuple[tuple[NativeProfile, .
     return (tuple(Profiles), UsedValue)
 
 # this definition exists because focused behavior needs one stable owner
-def Profiles(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...]) -> tuple[tuple[NativeProfile, ...], set[int], tuple[NativeDimension, ...]]:
+def DecodeProfiles(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...]) -> tuple[tuple[NativeProfile, ...], set[int], tuple[NativeDimension, ...]]:
     LinkedRectangles, LinkedMarkers = LinkedRectangle(Markers)
     StructuralRectangles, StructuralRectangle = StructuralA(Markers, LinkedMarkers)
     StructuralCircles, StructuralMarkers, StructuralDimensions = Structural(Markers, Dimensions, LinkedMarkers | StructuralRectangle)
     StructuralPolylines, StructuralPolylineMarkers = PolyProfiles(Markers, LinkedMarkers | StructuralRectangle | StructuralMarkers)
     RemainingMarkers = [Marker for Marker in Markers if Marker.offset not in LinkedMarkers | StructuralRectangle | StructuralMarkers | StructuralPolylineMarkers]
-    CircleProfiles, CircleDimensions = CircleProfiles(RemainingMarkers, Dimensions)
+    CircleProfileValues, CircleDimensions = CircleSet(RemainingMarkers, Dimensions)
     CircleDimensions.update(StructuralDimensions)
     Normalized = tuple((Replace(Dimension, kind=CircleDimensions[Index]) if Index in CircleDimensions else Dimension for Index, Dimension in enumerate(Dimensions)))
     Points = [Marker for Marker in RemainingMarkers if Marker.coordinates_mm is not None and Marker.locus == KPointLocus.hex()]
@@ -4715,10 +4723,10 @@ def Profiles(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...
             if {(XZero, YZero), (XZero, YOneValue), (XOneValue, YZero), (XOneValue, YOneValue)} <= CoordinateSet:
                 Rectangles.append((XZero, YZero, XOneValue, YOneValue))
     Values = [Dimension.value_mm for Dimension in Dimensions]
-    Matches = [Rectangle for Rectangle in Rectangles if Matches(Rectangle[2] - Rectangle[0], Values) and Matches(Rectangle[3] - Rectangle[1], Values)]
-    if Matches:
-        Minimum = min(((Rectangle[2] - Rectangle[0]) * (Rectangle[3] - Rectangle[1]) for Rectangle in Matches))
-        Selected = [Rectangle for Rectangle in Matches if MathValue.isclose((Rectangle[2] - Rectangle[0]) * (Rectangle[3] - Rectangle[1]), Minimum, abs_tol=1e-07)]
+    MatchValues = [Rectangle for Rectangle in Rectangles if IsMatches(Rectangle[2] - Rectangle[0], Values) and IsMatches(Rectangle[3] - Rectangle[1], Values)]
+    if MatchValues:
+        Minimum = min(((Rectangle[2] - Rectangle[0]) * (Rectangle[3] - Rectangle[1]) for Rectangle in MatchValues))
+        Selected = [Rectangle for Rectangle in MatchValues if MathValue.isclose((Rectangle[2] - Rectangle[0]) * (Rectangle[3] - Rectangle[1]), Minimum, abs_tol=1e-07)]
     else:
         Selected = []
         for GroupStart in range(max(0, len(Points) - 3)):
@@ -4744,13 +4752,13 @@ def Profiles(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...
         else:
             RunsValue[-1].append(Marker)
     ProfileLines = [tuple(RunValue[Index:Index + 4]) for RunValue in RunsValue for Index in range(0, len(RunValue), 6) if len(RunValue[Index:Index + 4]) == 4]
-    Profiles: list[NativeProfile] = [*StructuralCircles, *CircleProfiles, *LinkedRectangles, *StructuralRectangles, *StructuralPolylines]
-    UsedValue: set[int] = LinkedMarkers | StructuralRectangle | StructuralMarkers | StructuralPolylineMarkers | {Offset for Profile in CircleProfiles for Offset in Profile.marker_offsets}
+    Profiles: list[NativeProfile] = [*StructuralCircles, *CircleProfileValues, *LinkedRectangles, *StructuralRectangles, *StructuralPolylines]
+    UsedValue: set[int] = LinkedMarkers | StructuralRectangle | StructuralMarkers | StructuralPolylineMarkers | {Offset for Profile in CircleProfileValues for Offset in Profile.marker_offsets}
     for Index, Rectangle in enumerate(Selected):
         if any((Profile.kind == 'rectangle' and Profile.coordinates == Rectangle for Profile in Profiles)):
             continue
         SpanValue = tuple((Marker.offset for Marker in (ProfileLines[Index] if Index < len(ProfileLines) else ())))
-        if CircleProfiles and len(SpanValue) != 4:
+        if CircleProfileValues and len(SpanValue) != 4:
             continue
         UsedValue.update(SpanValue)
         Corners = {(Rectangle[0], Rectangle[1]), (Rectangle[0], Rectangle[3]), (Rectangle[2], Rectangle[1]), (Rectangle[2], Rectangle[3])}
@@ -4922,7 +4930,7 @@ def Structural(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, .
     return (tuple(Profiles), UsedValue, Normalized)
 
 # this definition exists because focused behavior needs one stable owner
-def CircleProfiles(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...]) -> tuple[tuple[NativeProfile, ...], dict[int, str]]:
+def CircleSet(Markers: list[NativeMarker], Dimensions: tuple[NativeDimension, ...]) -> tuple[tuple[NativeProfile, ...], dict[int, str]]:
     Centers = [Marker for Marker in Markers if Marker.semantic == 'circle' and Marker.coordinates_mm is not None]
     if not Centers:
         return ((), {})
@@ -5143,7 +5151,7 @@ def EdgeSelections(DataValue: bytes, Start: int, EndValue: int) -> tuple[tuple[i
     return tuple(Selections)
 
 # this definition exists because focused behavior needs one stable owner
-def Operation(Dimensions: tuple[NativeDimension, ...], Semantic: str) -> float | None:
+def DimensionValue(Dimensions: tuple[NativeDimension, ...], Semantic: str) -> float | None:
     return next((Dimension.value_mm for Dimension in Dimensions if Dimension.kind == Semantic), None)
 
 # this definition exists because focused behavior needs one stable owner
@@ -5963,7 +5971,7 @@ globals()['_biography_payload'] = Biography
 globals()['_bounding_box'] = BoundingBox
 
 # this binding exists because shared behavior needs one stable value
-globals()['_circle_profiles'] = CircleProfiles
+globals()['_circle_profiles'] = CircleSet
 
 # this binding exists because shared behavior needs one stable value
 globals()['_class_declaration'] = ClassDecl
@@ -6029,10 +6037,10 @@ globals()['_equation_literal'] = EquationLiteral
 globals()['_expect_bytes'] = ExpectBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()['_expression_parameters'] = Expression
+globals()['_expression_parameters'] = ExprParams
 
 # this binding exists because shared behavior needs one stable value
-globals()['_extrusion_payload'] = Extrusion
+globals()['_extrusion_payload'] = EncodeExtrude
 
 # this binding exists because shared behavior needs one stable value
 globals()['_feature_records'] = FeatureRecords
@@ -6149,7 +6157,7 @@ globals()['_native_translation'] = Native
 globals()['_norm'] = NormAction
 
 # this binding exists because shared behavior needs one stable value
-globals()['_operation_dimension'] = Operation
+globals()['_operation_dimension'] = DimensionValue
 
 # this binding exists because shared behavior needs one stable value
 globals()['_operation_dimension_offset'] = OperationOffset
@@ -6215,7 +6223,7 @@ globals()['_principal_plane_frames'] = PrincipalPlaneA
 globals()['_principal_plane_ids'] = PrincipalPlaneB
 
 # this binding exists because shared behavior needs one stable value
-globals()['_profiles'] = Profiles
+globals()['_profiles'] = DecodeProfiles
 
 # this binding exists because shared behavior needs one stable value
 globals()['_proved_write_capabilities'] = ProvedWrite
@@ -6278,7 +6286,7 @@ globals()['_serializable_name'] = IsSerializable
 globals()['_serialized_string'] = Serialized
 
 # this binding exists because shared behavior needs one stable value
-globals()['_sketch_payload'] = SketchPayload
+globals()['_sketch_payload'] = EncodeSketch
 
 # this binding exists because shared behavior needs one stable value
 globals()['_sketch_plane_reference'] = SketchPlaneRef
