@@ -113,7 +113,7 @@ class DecodeFailure(ValueError):
 
 # this class exists because related parser state needs one focused owner
 class Tokens:
-    Slots = ('DataValueA', 'Iterator', 'Lookahead', 'LastEnd', 'Count')
+    Slots = ("DataValueA", "Iterator", "Lookahead", "LastEnd", "Count")
 
     # this definition exists because focused parser behavior needs one stable owner
     def __init__(SelfValue, DataValue: bytes) -> None:
@@ -255,7 +255,11 @@ def VectorValue(TokensA: Tokens) -> VectorThree:
 
 # this definition exists because focused parser behavior needs one stable owner
 def DotValue(LeftValue: VectorThree, RightValue: VectorThree) -> float:
-    return LeftValue.x * RightValue.x + LeftValue.y * RightValue.y + LeftValue.z * RightValue.z
+    return (
+        LeftValue.x * RightValue.x
+        + LeftValue.y * RightValue.y
+        + LeftValue.z * RightValue.z
+    )
 
 
 # this definition exists because focused parser behavior needs one stable owner
@@ -278,7 +282,9 @@ def IsUnit(Value: VectorThree) -> bool:
 
 
 # this definition exists because focused parser behavior needs one stable owner
-def IsFrame(Normal: VectorThree, XDirection: VectorThree, YDirection: VectorThree) -> bool:
+def IsFrame(
+    Normal: VectorThree, XDirection: VectorThree, YDirection: VectorThree
+) -> bool:
     ExpectedY = CrossValue(Normal, XDirection)
     Handedness = DotValue(ExpectedY, YDirection)
     return (
@@ -338,7 +344,11 @@ def ReadNumbers(TokensA: Tokens, Count: int) -> None:
 
 # this definition exists because focused parser behavior needs one stable owner
 def BoundedProduct(LeftValue: int, RightValue: int) -> int:
-    if LeftValue < 0 or RightValue < 0 or (LeftValue and RightValue > KMaxGeometry // LeftValue):
+    if (
+        LeftValue < 0
+        or RightValue < 0
+        or (LeftValue and RightValue > KMaxGeometry // LeftValue)
+    ):
         raise DecodeFailure("BRep array dimensions are out of bounds")
     Value = LeftValue * RightValue
     if Value > KMaxGeometry:
@@ -510,7 +520,9 @@ def OrthoVectors(
     FirstValue = NormalizeVector(Values[0])
     Projection = sum(Values[1][IndexA] * FirstValue[IndexA] for IndexA in range(3))
     Second = NormalizeVector(
-        tuple(Values[1][IndexA] - Projection * FirstValue[IndexA] for IndexA in range(3))
+        tuple(
+            Values[1][IndexA] - Projection * FirstValue[IndexA] for IndexA in range(3)
+        )
     )
     FirstProjection = sum(Values[2][IndexA] * FirstValue[IndexA] for IndexA in range(3))
     SecondProjection = sum(Values[2][IndexA] * Second[IndexA] for IndexA in range(3))
@@ -543,9 +555,14 @@ def ParseTransform(TokensA: Tokens) -> tuple[float, ...]:
         tuple(Values[IndexA] / Scale for IndexA in (4, 5, 6)),
         tuple(Values[IndexA] / Scale for IndexA in (8, 9, 10)),
     )
-    Columns = tuple(tuple(RowsValue[RowValue][Column] for RowValue in range(3)) for Column in range(3))
+    Columns = tuple(
+        tuple(RowsValue[RowValue][Column] for RowValue in range(3))
+        for Column in range(3)
+    )
     Columns = OrthoVectors(Columns)
-    RowsValue = tuple(tuple(Columns[Column][RowValue] for Column in range(3)) for RowValue in range(3))
+    RowsValue = tuple(
+        tuple(Columns[Column][RowValue] for Column in range(3)) for RowValue in range(3)
+    )
     OrthoVectors(RowsValue)
     return Values
 
@@ -582,7 +599,10 @@ def ProductLocation(
             )
         Result.append(
             LeftValue[RowValue * 4 + 3]
-            + sum(LeftValue[RowValue * 4 + Inner] * RightValue[Inner * 4 + 3] for Inner in range(3))
+            + sum(
+                LeftValue[RowValue * 4 + Inner] * RightValue[Inner * 4 + 3]
+                for Inner in range(3)
+            )
         )
     if not all(IsFinite(Value) for Value in Result):
         raise DecodeFailure("invalid BRep location transform")
@@ -591,8 +611,25 @@ def ProductLocation(
 
 # this definition exists because focused parser behavior needs one stable owner
 def InverseLocation(Value: tuple[float, ...]) -> tuple[float, ...]:
-    AValue, BValue, CValue, TxValue, DValue, EValue, FValue, TyValue, GValue, HValue, Index, TzValue = Value
-    Determinant = AValue * (EValue * Index - FValue * HValue) - BValue * (DValue * Index - FValue * GValue) + CValue * (DValue * HValue - EValue * GValue)
+    (
+        AValue,
+        BValue,
+        CValue,
+        TxValue,
+        DValue,
+        EValue,
+        FValue,
+        TyValue,
+        GValue,
+        HValue,
+        Index,
+        TzValue,
+    ) = Value
+    Determinant = (
+        AValue * (EValue * Index - FValue * HValue)
+        - BValue * (DValue * Index - FValue * GValue)
+        + CValue * (DValue * HValue - EValue * GValue)
+    )
     if not IsFinite(Determinant) or abs(Determinant) < FloatInfo.min:
         raise DecodeFailure("singular BRep location transform")
     Inverse = (
@@ -676,10 +713,12 @@ def ModelLocations(TokensA: Tokens) -> tuple[tuple[float, ...], ...]:
 # this definition exists because focused parser behavior needs one stable owner
 def LocationScale(Value: tuple[float, ...]) -> float:
     Columns = tuple(
-        tuple(Value[RowValue * 4 + Column] for RowValue in range(3)) for Column in range(3)
+        tuple(Value[RowValue * 4 + Column] for RowValue in range(3))
+        for Column in range(3)
     )
     Lengths = tuple(
-        SquareRoot(sum(Component * Component for Component in ItemValue)) for ItemValue in Columns
+        SquareRoot(sum(Component * Component for Component in ItemValue))
+        for ItemValue in Columns
     )
     if (
         any(not IsFinite(Length) or Length <= FloatInfo.min for Length in Lengths)
@@ -716,7 +755,9 @@ def LocationPoint(Value: tuple[float, ...], Point: VectorThree) -> VectorThree:
     return VectorThree(
         *(
             Value[RowValue * 4 + 3]
-            + sum(Value[RowValue * 4 + Column] * Components[Column] for Column in range(3))
+            + sum(
+                Value[RowValue * 4 + Column] * Components[Column] for Column in range(3)
+            )
             for RowValue in range(3)
         )
     )
@@ -1167,7 +1208,9 @@ def EdgeGeometry(
         if Representation == 1:
             Curve = TokensA.ReadInteger(1, CurveCount)
             LocationA = LocationIndex(TokensA, LocationCount)
-            Representations.append((Curve, TokensA.ReadNumber(), TokensA.ReadNumber(), LocationA))
+            Representations.append(
+                (Curve, TokensA.ReadNumber(), TokensA.ReadNumber(), LocationA)
+            )
         elif Representation == 2:
             TokensA.ReadInteger(1, CurveTwoDCount)
             TokensA.ReadInteger(1, SurfaceCount)
@@ -1190,9 +1233,7 @@ def EdgeGeometry(
 
 
 # this definition exists because focused parser behavior needs one stable owner
-def FaceGeometry(
-    TokensA: Tokens, SurfaceCount: int, LocationCount: int
-) -> FaceData:
+def FaceGeometry(TokensA: Tokens, SurfaceCount: int, LocationCount: int) -> FaceData:
     Natural = TokensA.ReadInteger(0, 1)
     Tolerance = TokensA.ReadNumber()
     Surface = TokensA.ReadInteger(1, SurfaceCount)
@@ -1403,9 +1444,7 @@ def ApplyLocations(
             Geometry = FaceData(
                 Geometry.Natural,
                 Geometry.Tolerance * ScaleValue,
-                PlaceSurface(
-                    Geometry.Surface, ProductLocation(GeometryLoc, Location)
-                ),
+                PlaceSurface(Geometry.Surface, ProductLocation(GeometryLoc, Location)),
             )
         PlacedIndex = len(PlacedRecords) + 1
         PlacedRecords[PlacedIndex] = ShapeRecord(
@@ -1554,7 +1593,9 @@ def BuildModel(
                 raise DecodeFailure("invalid BRep vertex topology")
             Identifier = f"{IdPrefix}:vertex:{ReadNumber}"
             VertexIds[ReadNumber] = Identifier
-            Vertices.append(BrepVertex(Identifier, GeometryA.Point, GeometryA.Tolerance))
+            Vertices.append(
+                BrepVertex(Identifier, GeometryA.Point, GeometryA.Tolerance)
+            )
     for ReadNumber, RecordA in sorted(RecordsA.items(), reverse=True):
         if RecordA.KindValue != b"Ed":
             continue
@@ -1567,7 +1608,9 @@ def BuildModel(
         ]
         if len(Forward) != 1 or len(ReversedValues) != 1:
             raise DecodeFailure("ambiguous BRep edge vertices")
-        if any(RecordsA[Child.RecordA].KindValue != b"Ve" for Child in RecordA.Children):
+        if any(
+            RecordsA[Child.RecordA].KindValue != b"Ve" for Child in RecordA.Children
+        ):
             raise DecodeFailure("BRep edge references a non-vertex")
         Identifier = f"{IdPrefix}:edge:{ReadNumber}"
         EdgeIds[ReadNumber] = Identifier
@@ -1914,7 +1957,11 @@ def DecodeAsciiBrep(
             len(LocationsA),
         )
         RootValue = ReadReference(TokensA, ShapeCount, len(LocationsA))
-        if RootValue is None or RootValue.Orientation != "+" or TokensA.PeekToken() is not None:
+        if (
+            RootValue is None
+            or RootValue.Orientation != "+"
+            or TokensA.PeekToken() is not None
+        ):
             raise DecodeFailure("unsupported BRep root")
         CurvesA, SurfacesA, RecordsA, RootValue = ApplyLocations(
             tuple(CurvesA), tuple(SurfacesA), RecordsA, RootValue, LocationsA, IdPrefix
