@@ -134,6 +134,12 @@ class NativeMateCode(IntEnum):
     KAntiAligned = 2
     KClosest = 3
 
+
+setattr(NativeMateCode, "ANY", NativeMateCode.KAnyValue)
+setattr(NativeMateCode, "ALIGNED", NativeMateCode.KAligned)
+setattr(NativeMateCode, "ANTI_ALIGNED", NativeMateCode.KAntiAligned)
+setattr(NativeMateCode, "CLOSEST", NativeMateCode.KClosest)
+
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeMateA:

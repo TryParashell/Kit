@@ -22,8 +22,8 @@ class TestCommand(UnitTest.TestCase):
 
     # full and changed invocations must distinguish legacy paths new destinations and invalid arguments
     def CheckExitCodes(CaseSelf) -> None:
-        with Tempfile.TemporaryDirectory() as TempPath:
-            RootPath = FilePath(TempPath)
+        with Tempfile.TemporaryDirectory() as TmpPath:
+            RootPath = FilePath(TmpPath)
             FixtureInfo = RepoFixture(RootPath)
             FixtureInfo.WriteFile("bad_name.py")
             BaseRef = FixtureInfo.CommitAll("base")

@@ -24,8 +24,8 @@ class TestGitModes(UnitTest.TestCase):
 
     # rename detection must expose only the destination while full scans retain the complete head tree
     def CheckGitModes(CaseSelf) -> None:
-        with Tempfile.TemporaryDirectory() as TempPath:
-            RootPath = FilePath(TempPath)
+        with Tempfile.TemporaryDirectory() as TmpPath:
+            RootPath = FilePath(TmpPath)
             FixtureInfo = RepoFixture(RootPath)
             FixtureInfo.WriteFile("Alpha.py")
             BaseRef = FixtureInfo.CommitAll("base")
