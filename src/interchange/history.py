@@ -29,13 +29,8 @@ from .feature_kinds import (
     ShellFeature,
 )
 from .feature_step import FeatureCfgState, FeatureStep
-from .payloads import (
-    BrepPayload,
-    GetLegacyFields,
-    KLegacyPayloadRules,
-    MigratePayload,
-    PayloadRole,
-)
+from .payload_record import BrepPayload
+from .payload_roles import PayloadRole
 from .model_base import ModelBase
 from .python_compat import BindCompatMut
 from .python_compat_history_methods import BindHistoryMut
