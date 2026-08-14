@@ -1266,6 +1266,8 @@ def VerifyFeatures() -> None:
     assert (
         ExtrusionTypeByCode[1].pocket_end_condition == ExtrusionEndCondition.THROUGH_ALL
     )
+
+
 # this definition exists because part type registries form one protocol contract
 def VerifyPartTypes() -> None:
     assert len(PrimitiveFeatureTypeIds) == 39
@@ -2415,9 +2417,7 @@ def TestAllCurrent() -> None:
 
 
 # this definition exists because unavailable geometry diagnostics have one focused xml contract
-def VerifyCarriers(
-    RootValue: ET.Element, Kinds: tuple[GeomKind, ...]
-) -> None:
+def VerifyCarriers(RootValue: ET.Element, Kinds: tuple[GeomKind, ...]) -> None:
     SketchObject = next(
         (
             ItemValue
