@@ -1515,7 +1515,7 @@ def Segment(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSiz
             setattr(ErrorInfo, 'reached', tuple(Reached))
         raise
 
-# this definition exists because archive APIs preserve established snake case option names
+# this definition exists because archive interfaces preserve established snake case option names
 def ArchiveOptions(Options: Mapping[str, object], HeaderSize: int, MoVersion: int | None, Limit: int | None, Caller: str) -> tuple[int, int | None, int | None]:
     Unknown = set(Options) - {'header_size', 'mo_version', 'limit'}
     if Unknown:
@@ -1556,12 +1556,7 @@ def ImpliedBases(Error: SegmentationError, BaseValue: int) -> tuple[int, ...]:
 # this definition exists because focused behavior needs one stable owner
 def ResolveBase(BlobValue: bytes, SeedValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None, Limit: int=KBaseResolutionLimit, **Options: object) -> BaseResolution:
     HeaderSize, MoVersion, Limit = ArchiveOptions(Options, HeaderSize, MoVersion, Limit, 'ResolveBase')
-    ValidateBase(SeedValue, Limit)
-    Queue: list[int] = [SeedValue]
-    Tried: list[int] = []
-    Implied: list[int] = []
-    Chosen = SeedValue
-    BestValue = (0, -1, -1)
+    Queue, Tried, Implied, Chosen, BestValue = BaseState(SeedValue, Limit)
     while Queue and len(Tried) < Limit:
         Choice = Queue.pop(0)
         if Choice < 1 or Choice in Tried:
@@ -1586,12 +1581,13 @@ def ResolveBase(BlobValue: bytes, SeedValue: int, Layouts: LayoutTable, *, Heade
         break
     return BaseResolution(base=Chosen, seed=SeedValue, segmented=bool(BestValue[0]), progress=BestValue[1], offset=BestValue[2], tried=tuple(Tried), implied=tuple(Implied))
 
-# this definition exists because base resolver bounds must be checked before queue traversal
-def ValidateBase(SeedValue: int, Limit: int) -> None:
+# this definition exists because base resolver bounds and queue state share one initializer
+def BaseState(SeedValue: int, Limit: int) -> tuple[list[int], list[int], list[int], int, tuple[int, int, int]]:
     if SeedValue < 1:
         raise ArchiveError(f'base seed {SeedValue} must be positive')
     if Limit < 1:
         raise ArchiveError(f'base resolution limit {Limit} must be positive')
+    return ([SeedValue], [], [], SeedValue, (0, -1, -1))
 
 # this definition exists because focused behavior needs one stable owner
 def BuildModel(BlobValue: bytes, Segments: Sequence[StaticSegment], BaseValue: int, HeaderSize: int, TrailerSize: int=0) -> Model:
