@@ -1,7 +1,0 @@
-.symopt+0x4000
-.reload /f swccu.dll
-r $t0 = 0
-bu swccu!?ReadClass@su_CArchive@@QEAAPEAUCRuntimeClass@@PEBU2@PEAIPEAK@Z "r $t0 = @$t0+1; .printf \"CALIB %d\\n\", @$t0; dq @rcx L18; .if (@$t0 > 30) { bc * }; g"
-bl
-g
-q

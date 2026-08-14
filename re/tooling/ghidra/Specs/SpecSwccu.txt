@@ -1,4 +1,0 @@
-su_CArchive::
-su_CRuntimeClass
-CRuntimeClass::Load
-su_CObject::Serialize

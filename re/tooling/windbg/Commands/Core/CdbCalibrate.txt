@@ -1,8 +1,0 @@
-.symopt+0x4000
-.symopt-0x20000
-.exepath+ C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS
-.reload /f swccu.dll
-r $t0 = 0
-bp swccu!su_CArchive::ReadClass "r $t0 = @$t0+1; .printf \"CALIB %d this=%p\\n\", @$t0, @rcx; dq @rcx L18; .if (@$t0 >= 200) { bc * }; g"
-bl
-g
