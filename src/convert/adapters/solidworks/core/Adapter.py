@@ -2013,7 +2013,7 @@ def BuildAsmMut(
 
 
 # this definition exists because geometry selection bridges part and neutral encoders
-def GeneratedGeomMut(
+def BuildGeomMut(
     Portable: CadDocument, StateMut: GeneratedState
 ) -> tuple[bytes | None, str]:
     if StateMut.PartPartition is not None:
@@ -2163,7 +2163,7 @@ def GeneratedB(
         BuildPartMut(Portable, ModelNameA, StateMut)
     else:
         BuildAsmMut(Portable, ModelNameA, BundleNames, BundleStamps, StateMut)
-    Payload, NativeBrep = GeneratedGeomMut(Portable, StateMut)
+    Payload, NativeBrep = BuildGeomMut(Portable, StateMut)
     NativeCapabilities = GeneratedCaps(
         Portable,
         StateMut,
@@ -2657,6 +2657,7 @@ def IsAsmOrder(
     for Target in Native.occurrences:
         NativeByOwner[Target.owner_definition_id].append(Target)
     for OwnerId, Values in ByOwner.items():
+
         # this callback exists because native sibling ordering needs a stable key
         Expected = [
             Encoding.occurrence_ids[ItemValue.id]
@@ -2804,7 +2805,7 @@ def NativePartCaps(
 
 
 # this definition exists because brep patching contributes independent capabilities
-def PatchBrepCapsMut(
+def PatchBrepMut(
     DocValue: CadDocument,
     StreamsMut: dict[str, bytes],
     OriginalStreams: Mapping[str, bytes],
@@ -2889,7 +2890,7 @@ def PatchNativeMut(
         )
     OriginalModel, PatchedModel = PatchModelsMut(DocValue, Streams)
     Native = NativePartCaps(DocValue, OriginalModel, PatchedModel)
-    NativeBrep, BrepNative = PatchBrepCapsMut(
+    NativeBrep, BrepNative = PatchBrepMut(
         DocValue, Streams, OriginalStreams, Native
     )
     Divergences = PatchAsmCapsMut(DocValue, Streams, BundleNames, BrepNative, Native)
@@ -3722,7 +3723,7 @@ def PatchTemplatMut(
 
 
 # this definition exists because bundled assemblies need rewritten component paths
-def PatchAsmPathsMut(
+def PatchPathsMut(
     AsmValue: AssemblyData,
     StreamsMut: dict[str, bytes],
     BundleNames: Mapping[str, str],
@@ -3756,7 +3757,7 @@ def PatchAsmPathsMut(
 
 
 # this definition exists because patched assembly streams need one guarded decoder
-def DecodePatchedAsm(
+def DecodePatchAsm(
     Streams: Mapping[str, bytes],
 ) -> tuple[SldprtArchive, NativeAssembly] | None:
     try:
@@ -3772,20 +3773,20 @@ def PatchAsmDataMut(
     DocValue: CadDocument, StreamsMut: dict[str, bytes]
 ) -> tuple[SldprtArchive, NativeAssembly, tuple[str, ...], tuple[str, ...]] | None:
     AsmValue = DocValue.assembly
-    Decoded = DecodePatchedAsm(StreamsMut)
+    Decoded = DecodePatchAsm(StreamsMut)
     if AsmValue is None or Decoded is None:
         return None
     Archive, Native = Decoded
     DonorDivergences = DivergedDonor(AsmValue, Native)
     RewrittenInstances = PatchAsmMut(AsmValue, Native, StreamsMut)
     if RewrittenInstances:
-        Decoded = DecodePatchedAsm(StreamsMut)
+        Decoded = DecodePatchAsm(StreamsMut)
         if Decoded is None:
             return None
         Archive, Native = Decoded
     RewrittenMates = PatchAsmMateMut(AsmValue, Native, StreamsMut, DocValue.source.path)
     if RewrittenMates:
-        Decoded = DecodePatchedAsm(StreamsMut)
+        Decoded = DecodePatchAsm(StreamsMut)
         if Decoded is None:
             return None
         Archive, Native = Decoded
@@ -3916,7 +3917,7 @@ def PatchNativeAMut(
     AsmValue = DocValue.assembly
     if AsmValue is None or ComponentTreeStream not in Streams:
         return AsmTemplate(frozenset(), ("donor_component_tree_absent",))
-    PatchAsmPathsMut(AsmValue, Streams, BundleNames)
+    PatchPathsMut(AsmValue, Streams, BundleNames)
     Patched = PatchAsmDataMut(DocValue, Streams)
     if Patched is None:
         return AsmTemplate(frozenset(), ("donor_component_tree_unreadable",))
