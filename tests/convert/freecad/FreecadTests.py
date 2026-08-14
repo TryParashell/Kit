@@ -591,6 +591,75 @@ def TestFollow() -> None:
     AsmValue = FreeCadAdapter().read(NativeAsm())
     assert AsmValue.capabilities == frozenset({Capability.PARAMETERS, Capability.CONFIGURATIONS, Capability.BREP, Capability.ASSEMBLIES, Capability.ASSEMBLY_MATES, Capability.COMPONENT_DOCUMENTS, Capability.NATIVE_PAYLOADS, Capability.PROVENANCE, Capability.ROUNDTRIP_METADATA})
 
+# this definition exists because all synthetic PartDesign features share one XML graph mutation
+def AppendPartDesignFeatureMut(DocRoot: ET.Element, NameValue: str, TypeId: str, Dependencies: tuple[str, ...], PropertiesData: tuple[ET.Element, ...]) -> None:
+    ObjectData = DocRoot.find('./ObjectData')
+    ObjectsData = DocRoot.find('./Objects')
+    assert ObjectData is not None
+    assert ObjectsData is not None
+    ObjectsData.set('Count', str(int(ObjectsData.get('Count', '0')) + 1))
+    ObjectData.set('Count', str(int(ObjectData.get('Count', '0')) + 1))
+    BodyDeps = ObjectsData.find("./ObjectDeps[@Name='Body']")
+    assert BodyDeps is not None
+    XmlTree.SubElement(BodyDeps, 'Dep', {'Name': NameValue})
+    BodyDeps.set('Count', str(int(BodyDeps.get('Count', '0')) + 1))
+    FeatureDeps = XmlTree.SubElement(ObjectsData, 'ObjectDeps', {'Name': NameValue, 'Count': str(len(Dependencies))})
+    for DependencyName in Dependencies:
+        XmlTree.SubElement(FeatureDeps, 'Dep', {'Name': DependencyName})
+    XmlTree.SubElement(ObjectsData, 'Object', {'type': TypeId, 'name': NameValue, 'id': '5'})
+    BodyProperties = ObjectData.find("./Object[@name='Body']/Properties")
+    assert BodyProperties is not None
+    GroupData = BodyProperties.find("./Property[@name='Group']/LinkList")
+    TipData = BodyProperties.find("./Property[@name='Tip']/Link")
+    assert GroupData is not None
+    assert TipData is not None
+    XmlTree.SubElement(GroupData, 'Link', {'value': NameValue})
+    GroupData.set('count', str(int(GroupData.get('count', '0')) + 1))
+    TipData.set('value', NameValue)
+    FeatureData = XmlTree.SubElement(ObjectData, 'Object', {'name': NameValue})
+    FeatureProperties = XmlTree.SubElement(FeatureData, 'Properties', {'Count': str(len(PropertiesData)), 'TransientCount': '0'})
+    FeatureProperties.extend(PropertiesData)
+
+
+# this definition exists because the chamfer fixture needs one reusable XML mutation
+def AddChamferMut(RootData: ET.Element) -> None:
+    BaseData = NativeProp('Base', 'App::PropertyLinkSub', 'LinkSub', {'value': 'Pad', 'count': '1'})
+    XmlTree.SubElement(BaseData[0], 'Sub', {'value': 'Edge5'})
+    PropertiesData = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Chamfer'}), BaseData, NativeProp('BaseFeature', 'App::PropertyLink', 'Link', {'value': 'Pad'}), NativeProp('Size', 'App::PropertyQuantityConstraint', 'Float', {'value': '2'}), NativeProp('Size2', 'App::PropertyQuantityConstraint', 'Float', {'value': '1'}), NativeProp('Angle', 'App::PropertyAngle', 'Float', {'value': '45'}), NativeProp('ChamferType', 'App::PropertyEnumeration', 'Integer', {'value': '0'}), NativeProp('FlipDirection', 'App::PropertyBool', 'Bool', {'value': 'false'}), NativeProp('UseAllEdges', 'App::PropertyBool', 'Bool', {'value': 'false'}))
+    AppendPartDesignFeatureMut(RootData, 'Chamfer', 'PartDesign::Chamfer', ('Pad', 'Body'), PropertiesData)
+
+
+# this definition exists because the thickness fixture needs one reusable XML mutation
+def AddThicknessMut(RootData: ET.Element) -> None:
+    BaseData = NativeProp('Base', 'App::PropertyLinkSub', 'LinkSub', {'value': 'Pad', 'count': '1'})
+    XmlTree.SubElement(BaseData[0], 'Sub', {'value': 'Face6'})
+    PropertiesData = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Thickness'}), BaseData, NativeProp('BaseFeature', 'App::PropertyLink', 'Link', {'value': 'Pad'}), NativeProp('Value', 'App::PropertyQuantityConstraint', 'Float', {'value': '2'}), NativeProp('Reversed', 'App::PropertyBool', 'Bool', {'value': 'true'}))
+    AppendPartDesignFeatureMut(RootData, 'Thickness', 'PartDesign::Thickness', ('Pad', 'Body'), PropertiesData)
+
+
+# this definition exists because pattern fixtures share stable original and axis references
+def PatternReferences(NameValue: str) -> tuple[ET.Element, ET.Element]:
+    OriginalsData = NativeProp('Originals', 'App::PropertyLinkList', 'LinkList', {'count': '1'})
+    XmlTree.SubElement(OriginalsData[0], 'Link', {'value': 'Pad'})
+    DirectionData = NativeProp(NameValue, 'App::PropertyLinkSub', 'LinkSub', {'value': 'Sketch', 'count': '1'})
+    XmlTree.SubElement(DirectionData[0], 'Sub', {'value': 'N_Axis'})
+    return OriginalsData, DirectionData
+
+
+# this definition exists because the linear-pattern fixture needs one reusable XML mutation
+def AddLinearPatternMut(DocRoot: ET.Element) -> None:
+    OriginalsData, DirectionData = PatternReferences('Direction')
+    PropertiesData = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'LinearPattern'}), OriginalsData, DirectionData, NativeProp('Length', 'App::PropertyLength', 'Float', {'value': '10'}), NativeProp('Offset', 'App::PropertyLength', 'Float', {'value': '5'}), NativeProp('Occurrences', 'App::PropertyInteger', 'Integer', {'value': '3'}), NativeProp('Mode', 'App::PropertyEnumeration', 'Integer', {'value': '0'}), NativeProp('Reversed', 'App::PropertyBool', 'Bool', {'value': 'false'}))
+    AppendPartDesignFeatureMut(DocRoot, 'LinearPattern', 'PartDesign::LinearPattern', ('Pad', 'Sketch', 'Body'), PropertiesData)
+
+
+# this definition exists because the polar-pattern fixture needs one reusable XML mutation
+def AddPolarPatternMut(DocRoot: ET.Element) -> None:
+    OriginalsData, AxisData = PatternReferences('Axis')
+    PropertiesData = (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'PolarPattern'}), OriginalsData, AxisData, NativeProp('Angle', 'App::PropertyAngle', 'Float', {'value': '360'}), NativeProp('Occurrences', 'App::PropertyInteger', 'Integer', {'value': '4'}), NativeProp('Reversed', 'App::PropertyBool', 'Bool', {'value': 'false'}))
+    AppendPartDesignFeatureMut(DocRoot, 'PolarPattern', 'PartDesign::PolarPattern', ('Pad', 'Sketch', 'Body'), PropertiesData)
+
+
 # this definition exists because focused behavior needs one stable owner
 def TestEqualIs() -> None:
 
