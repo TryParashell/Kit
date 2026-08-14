@@ -52,10 +52,10 @@ KHeaderUser = "odin"
 class PinEnvelope:
     locals().setdefault("__annotations__", {})
     __annotations__["Config0Payload"] = "bytes"
-    KHeaderPayload: bytes
-    KHeaderStamps: tuple[tuple[int, ...], ...]
-    KHeaderBounds: tuple[float, ...]
-    KHeaderCreation: int
+    __annotations__["HeaderPayload"] = "bytes"
+    __annotations__["HeaderStamps"] = "tuple[tuple[int, ...], ...]"
+    __annotations__["HeaderBounds"] = "tuple[float, ...]"
+    __annotations__["HeaderCreation"] = "int"
 
 
 # this definition exists because focused behavior needs one stable owner

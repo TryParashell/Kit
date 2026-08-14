@@ -45,3 +45,11 @@ class TestSpdxGuard(UnitTest.TestCase):
         )
         for RelPath in GovernedPaths:
             SelfValue.assertFalse(IsPathExempt(RelPath))
+
+    # newly added guard tests need direct coverage before git revisions can include them
+    def TestOwnHeader(SelfValue) -> None:
+        GuardValues = LoadGuard()
+        IsValid, ReasonText = GuardValues["CheckFile"](
+            FilePath(__file__), GuardValues["LoadCanon"]()
+        )
+        SelfValue.assertTrue(IsValid, ReasonText)
