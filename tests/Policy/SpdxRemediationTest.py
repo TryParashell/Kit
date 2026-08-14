@@ -104,6 +104,17 @@ class TestSpdxRepair(UnitTest.TestCase):
                 RepairValues["CanRepairMut"](DocsPath, HeaderLines, "#")
             )
             CaseSelf.assertEqual(DocsPath.read_bytes(), DocsBytes)
+            EncodingPath = RootPath / "Encoding.py"
+            EncodingBytes = (
+                b"# coding: utf-8\n"
+                b"# SPDX-License-Identifier: damaged\n\n"
+                b"print('safe')\n"
+            )
+            EncodingPath.write_bytes(EncodingBytes)
+            CaseSelf.assertFalse(
+                RepairValues["CanRepairMut"](EncodingPath, HeaderLines, "#")
+            )
+            CaseSelf.assertEqual(EncodingPath.read_bytes(), EncodingBytes)
 
     # unknown formats may retain a proven marker but must never receive a guessed missing style
     def TestUnkStyle(CaseSelf) -> None:
@@ -122,6 +133,19 @@ class TestSpdxRepair(UnitTest.TestCase):
             )
             CaseSelf.assertTrue(IsFixed, ReasonText)
             CaseSelf.assertTrue(DebugPath.read_bytes().startswith(b"$$ SPDX-"))
+            BlockPath = RootPath / "Markup.trace"
+            BlockPath.write_bytes(
+                b"<!--\n"
+                b"SPDX-License-Identifier: damaged\n"
+                b"SPDX-FileCopyrightText: damaged\n"
+                b"-->\n\n"
+                b"markup\n"
+            )
+            IsFixed, ReasonText = GuardValues["RepairHeadMut"](
+                BlockPath, CanonLines, RootPath
+            )
+            CaseSelf.assertTrue(IsFixed, ReasonText)
+            CaseSelf.assertTrue(BlockPath.read_bytes().startswith(b"<!--\nSPDX-"))
             MissingPath = RootPath / "Missing.trace"
             MissingPath.write_bytes(b"command\n")
             OriginalBytes = MissingPath.read_bytes()
@@ -160,12 +184,34 @@ class TestSpdxRepair(UnitTest.TestCase):
             FolderPath = RootPath / "Folder"
             FolderPath.mkdir()
             CaseSelf.assertIsNone(GuardValues["ResolvePath"](RootPath, "Folder"))
+            ChildPath = FolderPath / "Child.py"
+            ChildPath.write_text("child\n", encoding="utf-8")
             with Mocking.patch.object(
                 GuardValues["StatLib"], "S_ISLNK", return_value=True
             ):
                 CaseSelf.assertIsNone(
-                    GuardValues["ResolvePath"](RootPath, "Source.py")
+                    GuardValues["ResolvePath"](RootPath, "Folder/Child.py")
                 )
+
+    # agent skill repair stays inside the selected worktree and preserves all nonlicense frontmatter
+    def TestSkillField(CaseSelf) -> None:
+        GuardValues = LoadGuard()
+        with Tempfile.TemporaryDirectory() as TempPath:
+            RootPath = Pathlib.Path(TempPath)
+            SkillPath = RootPath / ".agents" / "skills" / "alpha" / "SKILL.md"
+            SkillPath.parent.mkdir(parents=True)
+            SkillPath.write_bytes(
+                b"---\r\nname: alpha\r\nlicense: damaged\r\n---\r\nbody\r\n"
+            )
+            IsFixed, ReasonText = GuardValues["RepairHeadMut"](
+                SkillPath, GuardValues["LoadCanon"](), RootPath
+            )
+            CaseSelf.assertTrue(IsFixed, ReasonText)
+            SourceBytes = SkillPath.read_bytes()
+            CaseSelf.assertIn(
+                b"license: LicenseRef-PolyForm-Strict-1.0.0\r\n", SourceBytes
+            )
+            CaseSelf.assertIn(b"name: alpha\r\n", SourceBytes)
 
     # exact commit and worktree checks prevent symbolic revisions or a stale materialized head
     def TestExactHead(CaseSelf) -> None:
@@ -174,10 +220,15 @@ class TestSpdxRepair(UnitTest.TestCase):
             RootPath = Pathlib.Path(TempPath)
             FixtureInfo = RepoFixture(RootPath)
             FixtureInfo.WriteFile("Source.py")
+            BaseRef = FixtureInfo.CommitAll("base")
+            FixtureInfo.MoveFile("Source.py", "Target.py")
             HeadRef = FixtureInfo.CommitAll("head")
             GuardValues["KRepoRoot"] = RootPath
             CaseSelf.assertTrue(GuardValues["IsCommit"](HeadRef))
             CaseSelf.assertFalse(GuardValues["IsCommit"]("HEAD"))
+            CaseSelf.assertEqual(
+                GuardValues["GetDiffFiles"](BaseRef, HeadRef), ["Target.py"]
+            )
             WorktreeRoot, ReasonText = GuardValues["CheckWorktree"](
                 RootPath, HeadRef
             )
