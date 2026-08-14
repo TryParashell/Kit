@@ -9,12 +9,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any as AnyValue
 
-from convert.adapters.solidworks.programs.configuration.default.Program import (
-    EncodeField,
-)
-from convert.adapters.solidworks.container.Container import SldprtFormatError
+from convert.adapters.solidworks.programs.Common.FieldEncoder import ReplayFixed
 
 from .Registry import (
     FieldOwners,
@@ -23,23 +20,12 @@ from .Registry import (
 
 
 # exact closure proves the fixed program accounts for the complete stream
-ReferenceLength = 25158
+KReferenceLength = 25158
+
+# legacy length access remains available while the invariant uses constant naming
+globals()["ReferenceLength"] = KReferenceLength
 
 
 # typed replay emits the fixed configuration without retaining vendor byte spans
-def EncodeProgram(Overrides: Mapping[int, Any] | None = None) -> bytes:
-    FieldOverrides = dict(Overrides or {})
-    OutputData = bytearray()
-    SourceCursor = 0
-    for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in ConfigOps:
-        if StartPos != SourceCursor:
-            raise SldprtFormatError(f"Config-0 field program drifted at {StartPos}")
-        FieldValue = FieldOverrides.get(StartPos, DefaultValue)
-        FieldData = EncodeField(KindName, FieldValue)
-        if len(FieldData) != FieldWidth:
-            raise SldprtFormatError(f"Config-0 field width changed at {StartPos}")
-        OutputData.extend(FieldData)
-        SourceCursor += FieldWidth
-    if SourceCursor != ReferenceLength or len(OutputData) != ReferenceLength:
-        raise SldprtFormatError("Config-0 field program did not close its source")
-    return bytes(OutputData)
+def EncodeProgram(Overrides: Mapping[int, AnyValue] | None = None) -> bytes:
+    return ReplayFixed(ConfigOps, KReferenceLength, "Config-0", Overrides)

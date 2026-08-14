@@ -1597,22 +1597,16 @@ def AddCoedgeMut(
         )
         return None
     CurveValue = Graph.curves[EdgeValue.curve_id]
-    Generated = GeneratedPcurvA(
-        CurveValue, Surface, EdgeValue, Tolerance, (0.0, 0.0)
-    )
+    Generated = GeneratedPcurvA(CurveValue, Surface, EdgeValue, Tolerance, (0.0, 0.0))
     IsReversed = Coedge.reversed != (
         EdgeValue.end_parameter < EdgeValue.start_parameter
     )
     StartPoint = Generated.end if IsReversed else Generated.start
     Offset = GetUvOffset(PreviousEnd, StartPoint, Periods)
     if Offset != (0.0, 0.0):
-        Generated = GeneratedPcurvA(
-            CurveValue, Surface, EdgeValue, Tolerance, Offset
-        )
+        Generated = GeneratedPcurvA(CurveValue, Surface, EdgeValue, Tolerance, Offset)
     Records.append(Generated.record)
-    Result[Coedge.id] = EdgePcurve(
-        len(Records), Generated.first, Generated.last
-    )
+    Result[Coedge.id] = EdgePcurve(len(Records), Generated.first, Generated.last)
     return Generated.start if IsReversed else Generated.end
 
 
