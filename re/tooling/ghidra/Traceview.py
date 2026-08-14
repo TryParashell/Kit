@@ -25,19 +25,7 @@ import Tracedump as Tracedump
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun() -> None:
-    PartInfoInfo = PathInfo(System.argv[1]).resolve()
-    Report = JsonData.loads(PathInfo(System.argv[2]).read_text(encoding='utf-8'))
-    ByteBlob = Streamlib.LoadDonor(PartInfoInfo).resolved
-    Items = Report['items']
-    BaseInfo = Report['base_counter']
-    Static = Carchive.ClassDefns(ByteBlob)
-    StaticOffsets = [DefnInfo.tag_offset for DefnInfo in Static]
-    TracedDefs = [ItemData['offset'] for ItemData in Items if ItemData['kind'] == 'definition']
-    print(f'static definitions={len(StaticOffsets)} traced={len(TracedDefs)}')
-    print(f'definition offsets identical={StaticOffsets == TracedDefs}')
-    MissingInfo = sorted(set(StaticOffsets) - set(TracedDefs))
-    Extra = sorted(set(TracedDefs) - set(StaticOffsets))
+def FinishMain(BaseInfo, ByteBlob, Extra, ItemData, Items, MissingInfo) -> None:
     print(f'static-only={MissingInfo} traced-only={Extra}')
     SlotOfClass: dict[int, str] = {}
     CounterInfo = BaseInfo
@@ -67,5 +55,22 @@ def MainRun() -> None:
     for ItemData, (SpareValue, SpareValue, ByteSize) in zip(Items, FindGaps):
         LabelInfo = ItemData['name'] or SlotOfClass.get(ItemData['index'], '')
         print(f"{ItemData['offset']:>6} {ItemData['counter']:>5} {ItemData['kind']:>10} {ItemData['token']:#06x} {ItemData['index']:>5} {ByteSize:>6} {LabelInfo}")
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun() -> None:
+    PartInfoInfo = PathInfo(System.argv[1]).resolve()
+    Report = JsonData.loads(PathInfo(System.argv[2]).read_text(encoding='utf-8'))
+    ByteBlob = Streamlib.LoadDonor(PartInfoInfo).resolved
+    Items = Report['items']
+    BaseInfo = Report['base_counter']
+    Static = Carchive.ClassDefns(ByteBlob)
+    StaticOffsets = [DefnInfo.tag_offset for DefnInfo in Static]
+    TracedDefs = [ItemData['offset'] for ItemData in Items if ItemData['kind'] == 'definition']
+    print(f'static definitions={len(StaticOffsets)} traced={len(TracedDefs)}')
+    print(f'definition offsets identical={StaticOffsets == TracedDefs}')
+    MissingInfo = sorted(set(StaticOffsets) - set(TracedDefs))
+    Extra = sorted(set(TracedDefs) - set(StaticOffsets))
+    return FinishMain(BaseInfo, ByteBlob, Extra, ItemData, Items, MissingInfo)
 if __name__ == '__main__':
     MainRun()

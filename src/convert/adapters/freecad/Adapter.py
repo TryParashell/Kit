@@ -689,8 +689,8 @@ def CapabilityA(DocValue: CadDocument, TargetPath: Path | None, Portable: bool, 
             Parts[Capability.ASSEMBLY_MATES].extend([True] * NativeMates + [False] * CarrierMates)
             NativeDocuments = TargetPath is not None
             Parts[Capability.COMPONENT_DOCUMENTS].extend((NativeDocuments for Ignored in ItemValue.assembly.documents))
-            NativeOuter = TargetPath is not None and Portable
-            Parts[Capability.EXTERNAL_REFERENCES].extend((NativeOuter for Definition in ItemValue.assembly.definitions if Definition.source_path))
+            CanWriteOuter = TargetPath is not None and Portable
+            Parts[Capability.EXTERNAL_REFERENCES].extend((CanWriteOuter for Definition in ItemValue.assembly.definitions if Definition.source_path))
         Parts[Capability.EXTERNAL_REFERENCES].extend((TargetPath is not None and Portable for Ignored in NativeOuter(ItemValue)))
         Parts[Capability.MATERIALS].extend((True for BodyValue in ItemValue.bodies if BodyValue.material_id))
         EnvelopeIndexes = SourcePayloadIndexes(ItemValue)

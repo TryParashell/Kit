@@ -93,11 +93,7 @@ def StringLength(ByteBlob: bytes, AtInfo: int) -> Optional[int]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def RunLength(Layout: dict, KeyName: str, ByteBlob: bytes, StartRun: int) -> Tuple[Optional[int], str]:
-    Constant = Layout.get('runs', {}).get(KeyName)
-    if Constant is not None:
-        return (Constant, 'constant')
-    Entries = [ErrorInfo for ErrorInfo in Layout.get('variable_runs', []) if ErrorInfo['slot'] == KeyName]
+def FinishLength(ByteBlob, Entries, StartRun) -> Tuple[Optional[int], str]:
     if not Entries:
         return (None, 'undeclared')
     Total = 0
@@ -127,6 +123,15 @@ def RunLength(Layout: dict, KeyName: str, ByteBlob: bytes, StartRun: int) -> Tup
             return (None, 'unknown rule ' + RuleInfo)
         Total += Entry.get('tail', 0)
     return (Total, 'rule')
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RunLength(Layout: dict, KeyName: str, ByteBlob: bytes, StartRun: int) -> Tuple[Optional[int], str]:
+    Constant = Layout.get('runs', {}).get(KeyName)
+    if Constant is not None:
+        return (Constant, 'constant')
+    Entries = [ErrorInfo for ErrorInfo in Layout.get('variable_runs', []) if ErrorInfo['slot'] == KeyName]
+    return FinishLength(ByteBlob, Entries, StartRun)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

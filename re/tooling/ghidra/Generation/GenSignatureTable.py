@@ -110,17 +110,7 @@ def ShippedRow() -> tuple[int, bytes] | None:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun() -> int:
-    ParserInfo = Argparse.ArgumentParser()
-    ParserInfo.add_argument('--dll')
-    ParserInfo.add_argument('--check', action='store_true')
-    ArgValues = ParserInfo.parse_args()
-    PathInfoData = HostDll(ArgValues.dll)
-    if not PathInfoData.is_file():
-        print(f'host dll {PathInfoData} is not present')
-        return 1
-    Digest = Hashlib.sha256(PathInfoData.read_bytes()).hexdigest()
-    Expect = RecordedDigest()
+def FinishMain(ArgValues, Digest, Expect, PathInfoData) -> int:
     GetRows = Extract(PathInfoData)
     IdsInfo = [FileId for FileId, SpareValue in GetRows]
     if len(set(IdsInfo)) != KEntryCount:
@@ -150,5 +140,20 @@ def MainRun() -> int:
     KRecord.write_text(JsonData.dumps(Provenance(PathInfoData, GetRows, Digest), indent=2) + '\n', encoding='utf-8', newline='\n')
     print(f'wrote {KRecord.relative_to(KRootInfo)}')
     return 0
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun() -> int:
+    ParserInfo = Argparse.ArgumentParser()
+    ParserInfo.add_argument('--dll')
+    ParserInfo.add_argument('--check', action='store_true')
+    ArgValues = ParserInfo.parse_args()
+    PathInfoData = HostDll(ArgValues.dll)
+    if not PathInfoData.is_file():
+        print(f'host dll {PathInfoData} is not present')
+        return 1
+    Digest = Hashlib.sha256(PathInfoData.read_bytes()).hexdigest()
+    Expect = RecordedDigest()
+    return FinishMain(ArgValues, Digest, Expect, PathInfoData)
 if __name__ == '__main__':
     raise SystemExit(MainRun())

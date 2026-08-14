@@ -79,11 +79,7 @@ def NodeRecords(SegsInfo, ByteBlob, IndexData):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun():
-    Report = {}
-    Total = 0
-    DecodedInfo = 0
-    FlagsSeen = Collects.Counter()
+def FinishMainMut(DecodedInfo, FlagsSeen, Report, Total):
     ByClass = Collects.Counter()
     for LabelInfo in KLabels:
         DocInfo, SegsInfo, ByteBlob, PartInfoInfo = Layout.LoadData(LabelInfo)
@@ -113,5 +109,14 @@ def MainRun():
     KOutInfo.mkdir(parents=True, exist_ok=True)
     (KOutInfo / 'VerifyFeature.json').write_text(JsonData.dumps(Report, indent=1))
     return 0 if DecodedInfo == Total and DecodedInfo else 1
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun():
+    Report = {}
+    Total = 0
+    DecodedInfo = 0
+    FlagsSeen = Collects.Counter()
+    return FinishMainMut(DecodedInfo, FlagsSeen, Report, Total)
 if __name__ == '__main__':
     System.exit(MainRun())

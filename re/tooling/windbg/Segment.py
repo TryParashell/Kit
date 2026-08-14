@@ -142,19 +142,7 @@ def Nesting(Events: list[Tracelog.Event]) -> tuple[list[int], list[int], list[in
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Build(ByteBlob: bytes, Events: tuple[Tracelog.Event, ...], *, Buffer: int | None=None, SpanInfo: int | None=None) -> tuple[Segment, ...]:
-    Objects = tuple((EventInfo for EventInfo in Events if EventInfo.kind == 'RO'))
-    if not Objects:
-        raise SegmentError('trace contains no ReadObject events')
-    if Buffer is not None:
-        Target = Buffer
-    elif SpanInfo is not None:
-        Target = Tracelog.BusiestBuffer(Events, SpanInfo)
-    else:
-        Target = Tracelog.DominantBuffer(Objects)
-    OrderedInfo = Ordered(Events, Target, SpanInfo)
-    Depths, Parents, Scope = Nesting(OrderedInfo)
-    Names: dict[int, str] = {}
+def FinishBuildMut(ByteBlob, Depths, EventInfo, Names, OrderedInfo, Parents, Scope) -> tuple[Segment, ...]:
     CounterInfo = OrderedInfo[0].counter
     Result: list[Segment] = []
     for PosInfoInfo, EventInfo in enumerate(OrderedInfo):
@@ -184,6 +172,23 @@ def Build(ByteBlob: bytes, Events: tuple[Tracelog.Event, ...], *, Buffer: int | 
             ObjectIndex = 0
         Result.append(Segment(IndexData=PosInfoInfo, Offset=Offset, EndIndex=EndIndex, Length=EndIndex - Offset, ScopeEnd=Scope[PosInfoInfo] if Scope[PosInfoInfo] >= 0 else len(ByteBlob), Depth=Depths[PosInfoInfo], Parent=Parents[PosInfoInfo], RspInfo=EventInfo.rsp, TagInfoInfo=Token, KindNameInfo=KindNameInfo, Header=Header, ClassIndex=ClassIndex, ClassNameData=NameTextInfo, MapIndex=EventInfo.counter, ModelledIndex=Modelled, ObjectIndex=ObjectIndex))
     return tuple(Result)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Build(ByteBlob: bytes, Events: tuple[Tracelog.Event, ...], *, Buffer: int | None=None, SpanInfo: int | None=None) -> tuple[Segment, ...]:
+    Objects = tuple((EventInfo for EventInfo in Events if EventInfo.kind == 'RO'))
+    if not Objects:
+        raise SegmentError('trace contains no ReadObject events')
+    if Buffer is not None:
+        Target = Buffer
+    elif SpanInfo is not None:
+        Target = Tracelog.BusiestBuffer(Events, SpanInfo)
+    else:
+        Target = Tracelog.DominantBuffer(Objects)
+    OrderedInfo = Ordered(Events, Target, SpanInfo)
+    Depths, Parents, Scope = Nesting(OrderedInfo)
+    Names: dict[int, str] = {}
+    return FinishBuildMut(ByteBlob, Depths, EventInfo, Names, OrderedInfo, Parents, Scope)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

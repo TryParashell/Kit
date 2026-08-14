@@ -52,16 +52,7 @@ def Align(Models: list[tuple[str, Modellib.Model]]) -> list[list[int | None]]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun() -> int:
-    ArgsInfo = System.argv[1:]
-    Stream = ArgsInfo[0]
-    Models: list[tuple[str, Modellib.Model]] = []
-    for PosInfoInfo in range(1, len(ArgsInfo), 3):
-        LabelInfo = ArgsInfo[PosInfoInfo]
-        PartInfoInfo = PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve()
-        LogInfo = PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve()
-        Models.append((LabelInfo, Blockslib.LoadModel(PartInfoInfo, LogInfo, Stream)))
-    GetRows = Align(Models)
+def FinishMain(GetRows, LabelInfo, Models, PosInfoInfo, Stream) -> int:
     RefInfo = Models[-1][1]
     Labels = [LabelInfo for LabelInfo, SpareValue in Models]
     print(f'stream {Stream}')
@@ -91,5 +82,19 @@ def MainRun() -> int:
     TagInfoInfo = Stream.replace('/', '_').replace('-', '_')
     (KOutInfo / f'nodediff_{TagInfoInfo}.json').write_text(JsonData.dumps({'stream': Stream, 'labels': Labels, 'rows': PayloadInfo}, indent=2), encoding='utf-8')
     return 0
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun() -> int:
+    ArgsInfo = System.argv[1:]
+    Stream = ArgsInfo[0]
+    Models: list[tuple[str, Modellib.Model]] = []
+    for PosInfoInfo in range(1, len(ArgsInfo), 3):
+        LabelInfo = ArgsInfo[PosInfoInfo]
+        PartInfoInfo = PathInfo(ArgsInfo[PosInfoInfo + 1]).resolve()
+        LogInfo = PathInfo(ArgsInfo[PosInfoInfo + 2]).resolve()
+        Models.append((LabelInfo, Blockslib.LoadModel(PartInfoInfo, LogInfo, Stream)))
+    GetRows = Align(Models)
+    return FinishMain(GetRows, LabelInfo, Models, PosInfoInfo, Stream)
 if __name__ == '__main__':
     raise SystemExit(MainRun())

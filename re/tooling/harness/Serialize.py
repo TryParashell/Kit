@@ -422,9 +422,7 @@ def WriteNodesMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) 
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def WriteInfoMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -> None:
-    ByteBlob = bytes(Output)
-    Nodes = Streamlib.TreeNodes(ByteBlob)
+def FinishWriteMut(ByteBlob, Nodes, Output, PartInfoInfo, Writes) -> None:
     Sketches = [NodeInfoInfo for NodeInfoInfo in Nodes if NodeInfoInfo.name.startswith('Sketch')]
     FeatInfoInfo = [NodeInfoInfo for NodeInfoInfo in Nodes if Resolvedlib.feature_kind(NodeInfoInfo.flags) is not None]
     Points = Resolvedlib.sketch_points(ByteBlob)
@@ -454,6 +452,13 @@ def WriteInfoMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -
         Streamlib.WriteDouble(Output, ArcInfo.point_offset, CentreX + Radius * MathLib.cos(Angle))
         Streamlib.WriteDouble(Output, ArcInfo.point_offset + 8, CentreY + Radius * MathLib.sin(Angle))
         Writes.append(f'sketch[{IndexData}] circle r={FeatInfo.profile.radius_mm} centre@{ArcInfo.centre_offset} point@{ArcInfo.point_offset}')
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def WriteInfoMut(Output: bytearray, PartInfoInfo: PartInfo, Writes: list[str]) -> None:
+    ByteBlob = bytes(Output)
+    Nodes = Streamlib.TreeNodes(ByteBlob)
+    return FinishWriteMut(ByteBlob, Nodes, Output, PartInfoInfo, Writes)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

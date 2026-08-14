@@ -250,15 +250,8 @@ def EncodeString(TextValue: str) -> bytes:
         return KStringMarker + bytes([Count]) + Units
     return KStringMarker + b'\xff' + Struct.pack('<H', Count) + Units
 
-# this definition exists because focused behavior needs one stable owner
-class ArchiveWriter:
-    KSlots = ('chunks', 'classes', 'next_index')
-
-    # this definition exists because focused behavior needs one stable owner
-    def InitAction(Instance) -> None:
-        setattr(Instance, 'chunks', [])
-        setattr(Instance, 'classes', {})
-        setattr(Instance, 'next_index', KFirstLoadArrayIndex)
+# this definition exists because primitive archive values share one byte packing interface
+class ArchiveValues:
 
     # this definition exists because focused behavior needs one stable owner
     def RawAction(Instance, Chunk: bytes) -> None:
@@ -300,6 +293,16 @@ class ArchiveWriter:
     def String(Instance, TextValue: str) -> None:
         Instance.chunks.append(EncodeString(TextValue))
 
+# this definition exists because archive object state is separate from primitive value packing
+class ArchiveWriter(ArchiveValues):
+    KSlots = ('chunks', 'classes', 'next_index')
+
+    # this definition exists because focused behavior needs one stable owner
+    def InitAction(Instance) -> None:
+        setattr(Instance, 'chunks', [])
+        setattr(Instance, 'classes', {})
+        setattr(Instance, 'next_index', KFirstLoadArrayIndex)
+
     # this definition exists because focused behavior needs one stable owner
     def BeginObject(Instance, NameValue: str, Schema: int) -> None:
         Index = Instance.classes.get(NameValue)
@@ -318,19 +321,33 @@ class ArchiveWriter:
     # this definition exists because focused behavior needs one stable owner
     def Build(Instance) -> bytes:
         return b''.join(Instance.chunks)
-    locals()['__init__'] = InitAction
-    locals()['begin_object'] = BeginObject
-    locals()['build'] = Build
-    locals()['f32'] = FThreeTwo
-    locals()['f64'] = FSixFour
-    locals()['i16'] = IOneSix
-    locals()['i32'] = IThreeTwo
-    locals()['raw'] = RawAction
-    locals()['string'] = String
-    locals()['u16'] = UOneSix
-    locals()['u32'] = UThreeTwo
-    locals()['u8'] = UEight
-    locals()['zeros'] = Zeros
+
+# this assignment preserves the established constructor contract
+ArchiveWriter.__init__ = ArchiveWriter.InitAction
+
+setattr(ArchiveWriter, 'begin_object', ArchiveWriter.BeginObject)
+
+setattr(ArchiveWriter, 'build', ArchiveWriter.Build)
+
+setattr(ArchiveWriter, 'f32', ArchiveWriter.FThreeTwo)
+
+setattr(ArchiveWriter, 'f64', ArchiveWriter.FSixFour)
+
+setattr(ArchiveWriter, 'i16', ArchiveWriter.IOneSix)
+
+setattr(ArchiveWriter, 'i32', ArchiveWriter.IThreeTwo)
+
+setattr(ArchiveWriter, 'raw', ArchiveWriter.RawAction)
+
+setattr(ArchiveWriter, 'string', ArchiveWriter.String)
+
+setattr(ArchiveWriter, 'u16', ArchiveWriter.UOneSix)
+
+setattr(ArchiveWriter, 'u32', ArchiveWriter.UThreeTwo)
+
+setattr(ArchiveWriter, 'u8', ArchiveWriter.UEight)
+
+setattr(ArchiveWriter, 'zeros', ArchiveWriter.Zeros)
 
 # this definition exists because focused behavior needs one stable owner
 def WriteDrafting(Writer: ArchiveWriter, Standard: str) -> None:

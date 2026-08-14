@@ -151,9 +151,7 @@ Model.__setattr__ = SetLegacyMut
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Parse(ByteBlob: bytes, SegmentsInfo: tuple[Segmentlib.Segment, ...]) -> Model:
-    if not SegmentsInfo:
-        raise ModelError('empty segmentation')
+def FinishParse(ByteBlob, SegmentsInfo) -> Model:
     BaseInfo = SegmentsInfo[0].map_index
     ModelInfo = Model(Header=ByteBlob[:SegmentsInfo[0].offset], BaseInfo=BaseInfo)
     ClassPos: dict[int, int] = {}
@@ -183,6 +181,13 @@ def Parse(ByteBlob: bytes, SegmentsInfo: tuple[Segmentlib.Segment, ...]) -> Mode
             raise ModelError(f'class reference {ItemData.class_index} at {ItemData.offset} is unresolved')
     ModelInfo.assign()
     return ModelInfo
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Parse(ByteBlob: bytes, SegmentsInfo: tuple[Segmentlib.Segment, ...]) -> Model:
+    if not SegmentsInfo:
+        raise ModelError('empty segmentation')
+    return FinishParse(ByteBlob, SegmentsInfo)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

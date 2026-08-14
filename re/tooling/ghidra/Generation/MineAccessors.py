@@ -110,48 +110,64 @@ def StripComments(BodyInfo: str) -> str:
     return Regex.sub('/\\*.*?\\*/', ' ', BodyInfo, flags=Regex.S)
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
+# class selection stays isolated so dump mining receives one normalized ownership set
+def LoadWanted(ClassPath: str) -> set[str]:
+    Wanted = set()
+    for LineText in open(ClassPath, encoding='utf-8'):
+        TextValueData = LineText.strip()
+        if not TextValueData:
+            continue
+        Parts = TextValueData.split(None, 1)
+        Wanted.add(Parts[1].strip() if len(Parts) == 2 and Parts[0].isdigit() else TextValueData)
+    return Wanted
+
+
+# one dump scan stays isolated so matching and conflict handling remain locally reviewable
+def ScanDumpMut(Result: DictInfo[str, DictInfo[str, dict]], Wanted: set[str], PathInfoData: str) -> tuple[int, int]:
+    Scanned = 0
+    Matched = 0
+    TextValueData = open(PathInfoData, encoding='utf-8', errors='replace').read()
+    for NameTextInfo, Address, BodyInfo in IterBlocks(TextValueData):
+        Scanned += 1
+        InfoInfo = Classify(BodyInfo)
+        if InfoInfo is None:
+            continue
+        Matched += 1
+        Owners: ListInfo[Tuple[str, str]] = []
+        if '::' in NameTextInfo:
+            ClassRef, Member = NameTextInfo.split('::', 1)
+            Owners.append((ClassRef, Member))
+        for Member, ClassRef in KMangledRe.findall(BodyInfo):
+            Owners.append((ClassRef, Member))
+        for ClassRef, Member in Owners:
+            if ClassRef not in Wanted:
+                continue
+            Entry = dict(InfoInfo)
+            Entry['address'] = Address
+            Entry['source'] = PathInfoData.replace('\\', '/').rsplit('/', 1)[-1]
+            Bucket = Result.setdefault(ClassRef, {})
+            Previous = Bucket.get(Member)
+            if Previous is not None and Previous['offset'] != Entry['offset']:
+                Entry['conflicts_with'] = Previous['offset']
+            Bucket[Member] = Entry
+    return Scanned, Matched
+
+
+# command orchestration remains small so dump scanning can extend without growing the entry point
 def MainRun() -> int:
     ParserInfo = Argparse.ArgumentParser()
     ParserInfo.add_argument('dumps', nargs='+')
     ParserInfo.add_argument('--classes', required=True)
     ParserInfo.add_argument('--out', required=True)
     ArgValues = ParserInfo.parse_args()
-    Wanted = set()
-    for LineText in open(ArgValues.classes, encoding='utf-8'):
-        TextValueData = LineText.strip()
-        if not TextValueData:
-            continue
-        Parts = TextValueData.split(None, 1)
-        Wanted.add(Parts[1].strip() if len(Parts) == 2 and Parts[0].isdigit() else TextValueData)
+    Wanted = LoadWanted(ArgValues.classes)
     Result: DictInfo[str, DictInfo[str, dict]] = {}
     Scanned = 0
     Matched = 0
     for PathInfoData in ArgValues.dumps:
-        TextValueData = open(PathInfoData, encoding='utf-8', errors='replace').read()
-        for NameTextInfo, Address, BodyInfo in IterBlocks(TextValueData):
-            Scanned += 1
-            InfoInfo = Classify(BodyInfo)
-            if InfoInfo is None:
-                continue
-            Matched += 1
-            Owners: ListInfo[Tuple[str, str]] = []
-            if '::' in NameTextInfo:
-                ClassRef, Member = NameTextInfo.split('::', 1)
-                Owners.append((ClassRef, Member))
-            for Member, ClassRef in KMangledRe.findall(BodyInfo):
-                Owners.append((ClassRef, Member))
-            for ClassRef, Member in Owners:
-                if ClassRef not in Wanted:
-                    continue
-                Entry = dict(InfoInfo)
-                Entry['address'] = Address
-                Entry['source'] = PathInfoData.replace('\\', '/').rsplit('/', 1)[-1]
-                Bucket = Result.setdefault(ClassRef, {})
-                Previous = Bucket.get(Member)
-                if Previous is not None and Previous['offset'] != Entry['offset']:
-                    Entry['conflicts_with'] = Previous['offset']
-                Bucket[Member] = Entry
+        ScanCount, MatchCount = ScanDumpMut(Result, Wanted, PathInfoData)
+        Scanned += ScanCount
+        Matched += MatchCount
     PayloadInfo = {ClassRef: dict(sorted(Members.items())) for ClassRef, Members in sorted(Result.items())}
     with open(ArgValues.out, 'w', encoding='utf-8') as Handle:
         JsonData.dump(PayloadInfo, Handle, indent=1)

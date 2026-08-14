@@ -9,7 +9,7 @@
 from __future__ import annotations as Annotations
 from collections import Counter, defaultdict as Defaultdict
 from contextlib import suppress as Suppress
-from dataclasses import dataclass as Dataclass, replace as Replace
+from dataclasses import dataclass as DataClass, replace as Replace
 import hashlib as Hashlib
 from io import BytesIO as BytesIo
 import json as JsonValue
@@ -73,7 +73,7 @@ KResolvedConfigStream = RegexLib.compile('^Contents/Config-(\\d+)-ResolvedFeatur
 KTargetUnsupported = frozenset({Capability.NATIVE_PAYLOADS, Capability.PROVENANCE, Capability.ROUNDTRIP_METADATA})
 
 # this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
+@DataClass(frozen=True, slots=True)
 class Generated:
     locals().setdefault('__annotations__', {})
     __annotations__['streams'] = 'dict[str, bytes]'
@@ -92,21 +92,21 @@ class Generated:
     locals()['reader_gaps'] = ()
 
 # this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
+@DataClass(frozen=True, slots=True)
 class AsmTemplate:
     locals().setdefault('__annotations__', {})
     __annotations__['capabilities'] = 'frozenset[Capability]'
     __annotations__['divergences'] = 'tuple[str, ...]'
 
 # this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
+@DataClass(frozen=True, slots=True)
 class AsmBundle:
     locals().setdefault('__annotations__', {})
     __annotations__['names'] = 'Mapping[str, str]'
     __annotations__['payloads'] = 'Mapping[Path, bytes]'
-    KStampValues: Mapping[str, int]
+    StampValues: Mapping[str, int]
     __annotations__['complete'] = 'bool'
-    KNativeCaps: frozenset[Capability] = frozenset()
+    NativeCaps: frozenset[Capability] = frozenset()
 
 # this binding exists because shared behavior needs one stable value
 KWrapperMetaKeys = KSourceKeys | frozenset({'adapter', 'embedded_source_format_id', 'embedded_source_path', 'embedded_source_sha256', 'file_id', 'solidworks.container_compatibility', 'stream_names'})
@@ -116,172 +116,249 @@ KFeatureKindByNative = {'3dprofilefeature': FeatureKind.REFERENCE, '3dsplinecurv
 
 # this definition exists because focused behavior needs one stable owner
 class SldprtAdapter:
+    __slots__ = ()
 
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def InfoAction(Instance) -> AdapterInfo:
-        return InfoValue
 
-    # this definition exists because focused behavior needs one stable owner
-    def Probe(Instance, Source: Source) -> ProbeResult:
-        try:
-            DataValue, Label = SourceBytes(Source)
-            if len(DataValue) < 8:
-                return ProbeResult(KFormatId, 0.0, 'file is shorter than the container header')
-            Version = Struct.unpack_from('>I', DataValue, 4)[0]
-            if Version not in ContainerVersions:
-                return ProbeResult(KFormatId, 0.0, f'unsupported container version {Version}')
-            Archive = SldprtArchive.from_bytes(DataValue, Label)
-        except (OSError, SldprtFormatError, TypeError, ValueError) as ErrorInfo:
-            return ProbeResult(KFormatId, 0.0, str(ErrorInfo))
-        Names = Archive.streams
-        if KeywordsStream in Names and any((KResolvedConfigStream.fullmatch(NameValue) for NameValue in Names)):
-            return ProbeResult(KFormatId, 1.0, 'native history and resolved-feature streams found')
-        return ProbeResult(KFormatId, 0.6, 'recognized SOLIDWORKS compound stream container')
+# adapter metadata stays isolated so discovery can inspect capabilities without reading documents
+def InfoAction(Instance) -> AdapterInfo:
+    return InfoValue
 
-    # this definition exists because focused behavior needs one stable owner
-    def ReadAction(Instance, Source: Source, Options: ReadOptions | None=None) -> CadDoc:
-        Settings = Options or ReadOptions()
+
+# probing stays independent so format detection never performs a full conversion
+def Probe(Instance, Source: Source) -> ProbeResult:
+    try:
         DataValue, Label = SourceBytes(Source)
+        if len(DataValue) < 8:
+            return ProbeResult(KFormatId, 0.0, 'file is shorter than the container header')
+        Version = Struct.unpack_from('>I', DataValue, 4)[0]
+        if Version not in ContainerVersions:
+            return ProbeResult(KFormatId, 0.0, f'unsupported container version {Version}')
         Archive = SldprtArchive.from_bytes(DataValue, Label)
-        Embedded = Archive.get(KitDocStream)
-        if Embedded is not None:
-            DocValue = EmbeddedDoc(Instance, Archive, DataValue, Label, Embedded, Settings)
-            ValidateSource(Label, DocValue.assembly is not None)
-            return DocValue
-        if Archive.get(ComponentTreeStream) is not None:
-            DocValue = RetainSource(AsmDoc(Instance, Archive, DataValue, Label, Settings), DataValue)
-            ValidateSource(Label, True)
-            return DocValue
-        Model = NativePartModel(Archive, Settings.configuration)
-        Configurations = Configurations(Model, Settings.configuration)
-        Parameters = Parameters(Model)
-        ParamIds = {Param.id for Param in Parameters}
-        Planes = Planes(Model, ParamIds)
-        Sketches = Sketches(Model, ParamIds)
-        Selections = Selections(Model)
-        Timeline = Timeline(Model, Selections)
-        Payloads, PayloadDiagnostics = BrepPayloads(Archive, Settings)
-        BrepValue = TypedBrep(Payloads)
-        SolidOperationIds = frozenset((FeatureId(Operation.object_id) for Operation in Model.operations if Operation.kind != 'surface'))
-        FinalFeature = FinalBodyId(Timeline, SolidOperationIds)
-        BodyFeature = SolidBody(Model.features)
-        Bodies = (BodyValue(id='sldprt:body:1', name=BodyFeature.name if BodyFeature is not None else 'Body 1', final_feature_id=FinalFeature, topology=TopologySummary(solid_count=1 if SolidOperationIds else 0, bounding_box=BoundingBoxA(Model)), provenance=FeatureA(BodyFeature) if BodyFeature is not None else None, attributes=FrozenMapping({'native_object_id': BodyFeature.object_id if BodyFeature is not None else None, 'parasolid_payload_ids': tuple((Payload.id for Payload in Payloads))})),)
-        Diagnostics = tuple((DiagValue(code='sldprt.native_record_unresolved', message=Message, severity=Severity.INFO) for Message in Model.diagnostics)) + PayloadDiagnostics
-        DocValue = CadDoc(source=CadSource(format_id=KFormatId, path=Label, sha256=Hashlib.sha256(DataValue).hexdigest(), container_version=str(Archive.format_version), attributes=FrozenMapping({'file_id': Archive.file_id, 'stream_count': len(Archive.records)})), configurations=Configurations, parameters=Parameters, support_planes=Planes, sketches=Sketches, selections=Selections, feature_timeline=Timeline, bodies=Bodies, brep=BrepValue, brep_payloads=Payloads, diagnostics=Diagnostics, capabilities=Instance.info.capabilities, metadata=FrozenMapping({'adapter': KFormatId, 'file_id': Archive.file_id, 'native_class_names': tuple(dict.fromkeys((ItemValue.name for ItemValue in Model.classes))), 'native_feature_count': len(Model.features), 'native_name_record_count': len(Model.names), 'native_scalar_count': len(Model.scalars), 'stream_names': tuple((Record.name for Record in Archive.records))}), units=UnitSystem.MILLIMETER)
+    except (OSError, SldprtFormatError, TypeError, ValueError) as ErrorInfo:
+        return ProbeResult(KFormatId, 0.0, str(ErrorInfo))
+    Names = Archive.streams
+    if KeywordsStream in Names and any((KResolvedConfigStream.fullmatch(NameValue) for NameValue in Names)):
+        return ProbeResult(KFormatId, 1.0, 'native history and resolved-feature streams found')
+    return ProbeResult(KFormatId, 0.6, 'recognized SOLIDWORKS compound stream container')
+
+
+# adapter reading dispatches embedded assembly and native part paths through one contract
+def ReadAction(Instance, Source: Source, Options: ReadOptions | None=None) -> CadDoc:
+    Settings = Options or ReadOptions()
+    DataValue, Label = SourceBytes(Source)
+    Archive = SldprtArchive.from_bytes(DataValue, Label)
+    Embedded = Archive.get(KitDocStream)
+    if Embedded is not None:
+        DocValue = EmbeddedDoc(Instance, Archive, DataValue, Label, Embedded, Settings)
+        ValidateSource(Label, DocValue.assembly is not None)
+        return DocValue
+    if Archive.get(ComponentTreeStream) is not None:
+        DocValue = RetainSource(AsmDoc(Instance, Archive, DataValue, Label, Settings), DataValue)
+        ValidateSource(Label, True)
+        return DocValue
+    return ReadNativePart(Instance, Archive, DataValue, Label, Settings)
+
+
+# destination checks belong on the adapter so callers can reject incompatible targets early
+def IsSupports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+    PathValue = TargetPath(Target)
+    if PathValue is None:
+        return IsBinaryTarget(Target)
+    Expected = SuffixByFormatId[TargetFormatId(DocValue)]
+    return PathValue.suffix.casefold() == Expected
+
+
+# adapter writing delegates policy and persistence to the focused write composition
+def Write(Instance, DocValue: CadDocument, Target: Destination, Options: WriteOptions | None=None) -> WriteResult:
+    return WriteDocument(Instance, DocValue, Target, Options)
+
+
+setattr(SldprtAdapter, 'info', property(InfoAction))
+setattr(SldprtAdapter, 'probe', Probe)
+setattr(SldprtAdapter, 'read', ReadAction)
+setattr(SldprtAdapter, 'supports', IsSupports)
+setattr(SldprtAdapter, 'write', Write)
+setattr(SldprtAdapter, 'Supports', IsSupports)
+
+
+# generated writing needs one immutable input bundle so selection policy cannot drift across phases
+@DataClass(frozen=True, slots=True)
+class GenWriteInput:
+    Template: bytes | None
+    Bundle: AsmBundle
+    PortableCarrier: bool
+    BundleNames: Mapping[str, str]
+    BundleStamps: Mapping[str, int]
+    ModelName: str
+
+
+# write outcomes share one contract so saved and generated paths produce identical result assembly
+@DataClass(frozen=True, slots=True)
+class WritePlan:
+    DataValue: bytes
+    Diagnostics: tuple[DiagValue, ...]
+    Transfers: tuple[CapabilityTransfer, ...]
+    ModeValue: str
+    NativeContent: str
+    NativeBrep: str
+    Compatibility: str
+    AppUsable: bool
+    VendorLoadable: bool
+    Bundle: AsmBundle
+    PortableCarrier: bool
+
+
+# generation input selection owns carrier policy bundle discovery and caller supplied identities
+def GetGenInputs(DocValue: CadDocument, PathValue: FilePath | None, Settings: WriteOptions) -> GenWriteInput:
+    Template = SourceTemplate(DocValue, PathValue)
+    if Settings.values.get('allow_non_native', True) is not True:
+        KindValue = 'edited native-backed' if Template is not None else 'source-less'
+        raise SldprtFormatError(f"{KindValue} SOLIDWORKS writing requires WriteOptions(values={{'allow_non_native': True}})")
+    Bundle = AsmBundle({}, {}, {}, False)
+    if DocValue.assembly is not None and PathValue is not None and Settings.values.get('portable') is True:
+        Bundle = AsmBundleA(DocValue, PathValue, Settings)
+    PortableCarrier = DocValue.assembly is not None and Settings.values.get('portable') is True and Settings.values.get('allow_carrier') is True and (not Bundle.complete)
+    ConfiguredNames = Settings.values.get('bundle_names')
+    BundleNames = Bundle.names if Bundle.names else ConfiguredNames if isinstance(ConfiguredNames, Mapping) else {}
+    ConfiguredStamps = Settings.values.get('bundle_stamps')
+    BundleStamps = Bundle.StampValues if Bundle.StampValues else ConfiguredStamps if isinstance(ConfiguredStamps, Mapping) else {}
+    ConfiguredName = Settings.values.get('model_name')
+    ModelName = ConfiguredName if isinstance(ConfiguredName, str) else ''
+    return GenWriteInput(Template, Bundle, PortableCarrier, BundleNames, BundleStamps, ModelName)
+
+
+# generation diagnostics remain centralized so every unsupported native feature gets one stable warning
+def GetGenDiags(Generated: Generated, Diagnostics: tuple[DiagValue, ...]) -> tuple[DiagValue, ...]:
+    if not Generated.application_usable:
+        Diagnostics = (*Diagnostics, DiagValue(code='sldprt.neutral_write', message='one or more neutral edits are retained in the Kit stream because their native SOLIDWORKS records could not be reproduced', severity=Severity.WARNING))
+    if Generated.unexpressed:
+        Diagnostics = (*Diagnostics, DiagValue(code='sldasm.unexpressed_native_records', message='generated SOLIDWORKS assembly does not express ' + ', '.join(Generated.unexpressed), severity=Severity.WARNING))
+    if Generated.reader_gaps:
+        Diagnostics = (*Diagnostics, DiagValue(code='sldasm.vendor_reader_rejects', message='SOLIDWORKS assembly is not reported loadable because the vendor reader contract is unsatisfied: ' + ', '.join(Generated.reader_gaps), severity=Severity.WARNING))
+    if Generated.donor_notes:
+        Diagnostics = (*Diagnostics, DiagValue(code='sldprt.donor_partial' if Generated.vendor_loadable else 'sldprt.donor_declined', message=('native SOLIDWORKS feature records omit ' if Generated.vendor_loadable else 'native SOLIDWORKS feature records were not written because ') + '; '.join(Generated.donor_notes), severity=Severity.WARNING))
+    if Generated.native_brep.startswith('unsupported:'):
+        Diagnostics = (*Diagnostics, DiagValue(code='sldprt.native_brep_unsupported', message=Generated.native_brep.removeprefix('unsupported:'), severity=Severity.WARNING))
+    return Diagnostics
+
+
+# native content classification stays isolated because metadata consumers depend on its exact vocabulary
+def GetNativeType(Generated: Generated, Template: bytes | None, IsAssembly: bool) -> str:
+    if Template is not None:
+        return 'source-preserved'
+    if Generated.native_brep == 'generated':
+        return 'neutral-brep' if IsAssembly else 'native-metadata-and-neutral-brep'
+    if Generated.native_brep == 'preserved':
+        return 'parasolid-import' if IsAssembly else 'native-metadata-and-parasolid-import'
+    return 'none' if IsAssembly else 'native-metadata'
+
+
+# generated write planning composes first principles streams attestation and deterministic container bytes
+def BuildGenPlan(DocValue: CadDocument, PathValue: FilePath | None, Settings: WriteOptions, RequiredCaps: frozenset[Capability]) -> WritePlan:
+    InputValue = GetGenInputs(DocValue, PathValue, Settings)
+    GeneratedValue = GeneratedB(DocValue, InputValue.Template, InputValue.BundleNames, BundleComplete=InputValue.Bundle.complete if InputValue.Bundle.names else None, BundleCapabilities=InputValue.Bundle.NativeCaps, BundleStamps=InputValue.BundleStamps, ModelName=InputValue.ModelName)
+    if InputValue.PortableCarrier:
+        GeneratedValue = Replace(GeneratedValue, compatibility='native-source-with-kit-neutral' if GeneratedValue.compatibility == 'native-template' else GeneratedValue.compatibility, application_usable=False, vendor_loadable=False)
+    Transfers = SolidworksA(RequiredCaps, GeneratedValue.native_capabilities, GeneratedValue.mixed_capabilities)
+    Streams = GeneratedValue.streams
+    Streams[KitNativeStream] = NativeBytes(Streams, GeneratedValue.compatibility, GeneratedValue.application_usable, GeneratedValue.vendor_loadable, Transfers, GeneratedValue.native_brep)
+    FileId = SldprtArchive.from_bytes(InputValue.Template).file_id if InputValue.Template is not None else None
+    DataValue = BuildSldprt(Streams, file_id=FileId, template=InputValue.Template)
+    NativeContent = GetNativeType(GeneratedValue, InputValue.Template, DocValue.assembly is not None)
+    Diagnostics = GetGenDiags(GeneratedValue, DocValue.diagnostics)
+    return WritePlan(DataValue, Diagnostics, Transfers, 'template' if InputValue.Template is not None else 'generated', NativeContent, GeneratedValue.native_brep, GeneratedValue.compatibility, GeneratedValue.application_usable, GeneratedValue.vendor_loadable, InputValue.Bundle, InputValue.PortableCarrier)
+
+
+# exact replay planning preserves prior attestation while keeping fallback capability losses explicit
+def BuildSavedPlan(SavedData: bytes, RequiredCaps: frozenset[Capability], Diagnostics: tuple[DiagValue, ...]) -> WritePlan:
+    Compatibility = Replay(SavedData)
+    Attestation = Native(SavedData)
+    NativeBrep = 'exact'
+    NativeContent = 'exact'
+    if Compatibility == 'native-exact':
+
+        # exact replay supports every required capability without reclassification
+        Transfers = tuple((CapabilityTransfer(Capability, TransferMode.NATIVE) for Capability in sorted(RequiredCaps, key=lambda Value: Value.value)))
+        AppUsable = True
+        VendorLoadable = True
+    elif Attestation is not None:
+        Transfers = Attested(Attestation, RequiredCaps)
+        AppUsable = Attestation['application_usable']
+        VendorLoadable = Attestation['vendor_loadable']
+        NativeBrep = str(Attestation.get('native_brep', 'template'))
+        NativeContent = 'source-preserved'
+    else:
+        Transfers = SolidworksA(RequiredCaps, frozenset())
+        AppUsable = False
+        VendorLoadable = False
+    return WritePlan(SavedData, Diagnostics, Transfers, 'exact', NativeContent, NativeBrep, Compatibility, AppUsable, VendorLoadable, AsmBundle({}, {}, {}, False), False)
+
+
+# write result construction stays separate because persistence and attestation metadata share one output boundary
+def MakeWriteResult(DocValue: CadDocument, Output: FilePath | None, FormatId: str, PlanValue: WritePlan, RequiredCaps: frozenset[Capability]) -> WriteResult:
+    Archive = SldprtArchive.from_bytes(PlanValue.DataValue, Output or '<memory>')
+    NativeEdits = all((Transfer.mode is TransferMode.NATIVE or Transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED for Transfer in PlanValue.Transfers))
+    Requirements = ('referenced SOLIDWORKS component files',) if DocValue.assembly is not None and (not PlanValue.Bundle.complete) and (not PlanValue.PortableCarrier) else ()
+    NativeCaps = {Transfer.capability for Transfer in PlanValue.Transfers if Transfer.mode is TransferMode.NATIVE}
+    Metadata = FrozenMapping({'mode': PlanValue.ModeValue, 'format_id': FormatId, 'compatibility': PlanValue.Compatibility, 'native_content': PlanValue.NativeContent, 'neutral_edits_are_native': NativeEdits, 'vendor_loadable': PlanValue.VendorLoadable, 'application_usable': PlanValue.AppUsable, 'native_geometry': PlanValue.NativeBrep in {'exact', 'feature-rebuilt', 'generated', 'preserved', 'patched', 'template'}, 'native_brep': PlanValue.NativeBrep, 'native_history': Capability.PARAMETRIC_HISTORY not in RequiredCaps or Capability.PARAMETRIC_HISTORY in NativeCaps, 'native_assembly': DocValue.assembly is not None and Capability.ASSEMBLIES in NativeCaps, 'native_self_contained': PlanValue.AppUsable and (DocValue.assembly is None or PlanValue.Bundle.complete), 'referenced_files_written': len(PlanValue.Bundle.payloads), 'container_version': Archive.format_version, 'file_id': Archive.file_id, 'stream_count': len(Archive.records), 'runtime': 'python-stdlib'})
+    return WriteResult(path=Output, adapter=FormatId, bytes_written=len(PlanValue.DataValue), diagnostics=PlanValue.Diagnostics, metadata=Metadata, transfers=PlanValue.Transfers, requirements=Requirements, application_usable=PlanValue.AppUsable, vendor_loadable=PlanValue.VendorLoadable)
+
+
+# public writing composes validation planning persistence and result attestation without mixing their policies
+def WriteDocument(Instance: SldprtAdapter, DocValue: CadDocument, Target: Destination, Options: WriteOptions | None) -> WriteResult:
+    Settings = Options or WriteOptions()
+    if Settings.validate:
         DocValue.assert_valid()
-        ValidateSource(Label, False)
-        return RetainSource(DocValue, DataValue)
+    ExpectedFormat = KAsmFormatId if DocValue.assembly is not None else KFormatId
+    if Settings.destination_format is not None and Settings.destination_format != ExpectedFormat:
+        raise ValueError(f'{Settings.destination_format} does not support this document kind')
+    if not Instance.supports(DocValue, Target):
+        Expected = SuffixByFormatId[ExpectedFormat].upper()
+        raise ValueError(f'SOLIDWORKS destination must end in {Expected}')
+    PathValue = TargetPath(Target)
+    FormatId = TargetFormatId(DocValue)
+    SavedData = None if DocValue.assembly is not None and (Settings.values.get('portable') is True or Settings.values.get('bundle_member') is True) else SavedSource(DocValue, PathValue)
+    RequiredCaps = Required(DocValue)
+    PlanValue = BuildGenPlan(DocValue, PathValue, Settings, RequiredCaps) if SavedData is None else BuildSavedPlan(SavedData, RequiredCaps, DocValue.diagnostics)
+    Output = WriteTargetMut(Target, PlanValue.DataValue, Settings.overwrite)
+    for BundlePath, Payload in PlanValue.Bundle.payloads.items():
+        WriteTargetMut(BundlePath, Payload, Settings.overwrite)
+    return MakeWriteResult(DocValue, Output, FormatId, PlanValue, RequiredCaps)
 
-    # this definition exists because focused behavior needs one stable owner
-    def IsSupports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
-        PathValue = TargetPath(Target)
-        if PathValue is None:
-            return IsBinaryTarget(Target)
-        Expected = SuffixByFormatId[TargetFormatId(DocValue)]
-        return PathValue.suffix.casefold() == Expected
 
-    # this definition exists because focused behavior needs one stable owner
-    def Write(Instance, DocValue: CadDocument, Target: Destination, Options: WriteOptions | None=None) -> WriteResult:
-        Settings = Options or WriteOptions()
-        if Settings.validate:
-            DocValue.assert_valid()
-        ExpectedFormat = KAsmFormatId if DocValue.assembly is not None else KFormatId
-        if Settings.destination_format is not None and Settings.destination_format != ExpectedFormat:
-            raise ValueError(f'{Settings.destination_format} does not support this document kind')
-        if not Instance.supports(DocValue, Target):
-            Expected = SuffixByFormatId[ExpectedFormat].upper()
-            raise ValueError(f'SOLIDWORKS destination must end in {Expected}')
-        PathValue = TargetPath(Target)
-        FormatId = TargetFormatId(DocValue)
-        Saved = None if DocValue.assembly is not None and (Settings.values.get('portable') is True or Settings.values.get('bundle_member') is True) else SavedSource(DocValue, PathValue)
-        Diagnostics = DocValue.diagnostics
-        Required = Required(DocValue)
-        ReferencedFilesWritten = 0
-        Bundle = AsmBundle({}, {}, {}, False)
-        PortableCarrier = False
-        if Saved is None:
-            Template = SourceTemplate(DocValue, PathValue)
-            if Settings.values.get('allow_non_native', True) is not True:
-                KindValue = 'edited native-backed' if Template is not None else 'source-less'
-                raise SldprtFormatError(f"{KindValue} SOLIDWORKS writing requires WriteOptions(values={{'allow_non_native': True}})")
-            if DocValue.assembly is not None and PathValue is not None and (Settings.values.get('portable') is True):
-                Bundle = AsmBundleA(DocValue, PathValue, Settings)
-            PortableCarrier = DocValue.assembly is not None and Settings.values.get('portable') is True and (Settings.values.get('allow_carrier') is True) and (not Bundle.complete)
-            ConfiguredBundleNames = Settings.values.get('bundle_names')
-            SelectedBundleNames = Bundle.names if Bundle.names else ConfiguredBundleNames if isinstance(ConfiguredBundleNames, Mapping) else {}
-            ConfiguredStamps = Settings.values.get('bundle_stamps')
-            SelectedStamps = Bundle.StampValues if Bundle.StampValues else ConfiguredStamps if isinstance(ConfiguredStamps, Mapping) else {}
-            ConfiguredName = Settings.values.get('model_name')
-            SelectedName = ConfiguredName if isinstance(ConfiguredName, str) else ''
-            Generated = GeneratedB(DocValue, Template, SelectedBundleNames, BundleComplete=Bundle.complete if Bundle.names else None, BundleCapabilities=Bundle.NativeCaps, BundleStamps=SelectedStamps, ModelName=SelectedName)
-            if PortableCarrier:
-                Generated = Replace(Generated, compatibility='native-source-with-kit-neutral' if Generated.compatibility == 'native-template' else Generated.compatibility, application_usable=False, vendor_loadable=False)
-            Transfers = SolidworksA(Required, Generated.native_capabilities, Generated.mixed_capabilities)
-            Streams = Generated.streams
-            Streams[KitNativeStream] = NativeBytes(Streams, Generated.compatibility, Generated.application_usable, Generated.vendor_loadable, Transfers, Generated.native_brep)
-            FileId = SldprtArchive.from_bytes(Template).file_id if Template is not None else None
-            DataValue = BuildSldprt(Streams, file_id=FileId, template=Template)
-            ModeValue = 'template' if Template is not None else 'generated'
-            NativeContent = 'source-preserved' if Template is not None else ('native-metadata-and-neutral-brep' if DocValue.assembly is None else 'neutral-brep') if Generated.native_brep == 'generated' else ('native-metadata-and-parasolid-import' if DocValue.assembly is None else 'parasolid-import') if Generated.native_brep == 'preserved' else 'native-metadata' if DocValue.assembly is None else 'none'
-            if not Generated.application_usable:
-                Diagnostics = (*Diagnostics, DiagValue(code='sldprt.neutral_write', message='one or more neutral edits are retained in the Kit stream because their native SOLIDWORKS records could not be reproduced', severity=Severity.WARNING))
-            if Generated.unexpressed:
-                Diagnostics = (*Diagnostics, DiagValue(code='sldasm.unexpressed_native_records', message='generated SOLIDWORKS assembly does not express ' + ', '.join(Generated.unexpressed), severity=Severity.WARNING))
-            if Generated.reader_gaps:
-                Diagnostics = (*Diagnostics, DiagValue(code='sldasm.vendor_reader_rejects', message='SOLIDWORKS assembly is not reported loadable because the vendor reader contract is unsatisfied: ' + ', '.join(Generated.reader_gaps), severity=Severity.WARNING))
-            if Generated.donor_notes:
-                Diagnostics = (*Diagnostics, DiagValue(code='sldprt.donor_partial' if Generated.vendor_loadable else 'sldprt.donor_declined', message=('native SOLIDWORKS feature records omit ' if Generated.vendor_loadable else 'native SOLIDWORKS feature records were not written because ') + '; '.join(Generated.donor_notes), severity=Severity.WARNING))
-            if Generated.native_brep.startswith('unsupported:'):
-                Diagnostics = (*Diagnostics, DiagValue(code='sldprt.native_brep_unsupported', message=Generated.native_brep.removeprefix('unsupported:'), severity=Severity.WARNING))
-            NativeBrep = Generated.native_brep
-            Compatibility = Generated.compatibility
-            AppUsable = Generated.application_usable
-            VendorLoadable = Generated.vendor_loadable
-        else:
-            DataValue = Saved
-            ModeValue = 'exact'
-            NativeContent = 'exact'
-            NativeBrep = 'exact'
-            Compatibility = Replay(DataValue)
-            Attestation = Native(DataValue)
-            if Compatibility == 'native-exact':
-
-                # this callback exists because local behavior needs one focused transformation
-                Transfers = tuple((CapabilityTransfer(Capability, TransferMode.NATIVE) for Capability in sorted(Required, key=lambda Value: Value.value)))
-                AppUsable = True
-                VendorLoadable = True
-            elif Attestation is not None:
-                Transfers = Attested(Attestation, Required)
-                AppUsable = Attestation['application_usable']
-                VendorLoadable = Attestation['vendor_loadable']
-                NativeBrep = str(Attestation.get('native_brep', 'template'))
-                NativeContent = 'source-preserved'
-            else:
-                Transfers = SolidworksA(Required, frozenset())
-                AppUsable = False
-                VendorLoadable = False
-        NeutralEditsAreNative = all((Transfer.mode is TransferMode.NATIVE or Transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED for Transfer in Transfers))
-        Output = WriteTargetMut(Target, DataValue, Settings.overwrite)
-        for TargetA, Payload in Bundle.payloads.items():
-            WriteTargetMut(TargetA, Payload, Settings.overwrite)
-        ReferencedFilesWritten = len(Bundle.payloads)
-        Archive = SldprtArchive.from_bytes(DataValue, Output or '<memory>')
-        Requirements = ('referenced SOLIDWORKS component files',) if DocValue.assembly is not None and (not Bundle.complete) and (not PortableCarrier) else ()
-        return WriteResult(path=Output, adapter=FormatId, bytes_written=len(DataValue), diagnostics=Diagnostics, metadata=FrozenMapping({'mode': ModeValue, 'format_id': FormatId, 'compatibility': Compatibility, 'native_content': NativeContent, 'neutral_edits_are_native': NeutralEditsAreNative, 'vendor_loadable': VendorLoadable, 'application_usable': AppUsable, 'native_geometry': NativeBrep in {'exact', 'feature-rebuilt', 'generated', 'preserved', 'patched', 'template'}, 'native_brep': NativeBrep, 'native_history': Capability.PARAMETRIC_HISTORY not in Required or Capability.PARAMETRIC_HISTORY in {Transfer.capability for Transfer in Transfers if Transfer.mode is TransferMode.NATIVE}, 'native_assembly': DocValue.assembly is not None and Capability.ASSEMBLIES in {Transfer.capability for Transfer in Transfers if Transfer.mode is TransferMode.NATIVE}, 'native_self_contained': AppUsable and (DocValue.assembly is None or Bundle.complete), 'referenced_files_written': ReferencedFilesWritten, 'container_version': Archive.format_version, 'file_id': Archive.file_id, 'stream_count': len(Archive.records), 'runtime': 'python-stdlib'}), transfers=Transfers, requirements=Requirements, application_usable=AppUsable, vendor_loadable=VendorLoadable)
-    locals()['info'] = InfoAction
-    locals()['probe'] = Probe
-    locals()['read'] = ReadAction
-    locals()['supports'] = IsSupports
-    locals()['write'] = Write
-    locals()['Supports'] = IsSupports
+# native part reconstruction stays separate because assembly and embedded documents bypass this model path
+def ReadNativePart(Instance: SldprtAdapter, Archive: SldprtArchive, DataValue: bytes, Label: str, Settings: ReadOptions) -> CadDoc:
+    Model = NativePartModel(Archive, Settings.configuration)
+    ConfigValues = Configurations(Model, Settings.configuration)
+    ParamValues = Parameters(Model)
+    ParamIds = {Param.id for Param in ParamValues}
+    PlaneValues = Planes(Model, ParamIds)
+    SketchValues = Sketches(Model, ParamIds)
+    SelectValues = Selections(Model)
+    TimeValues = Timeline(Model, SelectValues)
+    Payloads, PayloadDiags = BrepPayloads(Archive, Settings)
+    BrepValue = TypedBrep(Payloads)
+    SolidOpIds = frozenset((FeatureId(Operation.object_id) for Operation in Model.operations if Operation.kind != 'surface'))
+    FinalFeature = FinalBodyId(TimeValues, SolidOpIds)
+    BodyFeature = SolidBody(Model.features)
+    Bodies = (BodyValue(id='sldprt:body:1', name=BodyFeature.name if BodyFeature is not None else 'Body 1', final_feature_id=FinalFeature, topology=TopologySummary(solid_count=1 if SolidOpIds else 0, bounding_box=BoundingBoxA(Model)), provenance=FeatureA(BodyFeature) if BodyFeature is not None else None, attributes=FrozenMapping({'native_object_id': BodyFeature.object_id if BodyFeature is not None else None, 'parasolid_payload_ids': tuple((Payload.id for Payload in Payloads))})),)
+    Diagnostics = tuple((DiagValue(code='sldprt.native_record_unresolved', message=Message, severity=Severity.INFO) for Message in Model.diagnostics)) + PayloadDiags
+    DocValue = CadDoc(source=CadSource(format_id=KFormatId, path=Label, sha256=Hashlib.sha256(DataValue).hexdigest(), container_version=str(Archive.format_version), attributes=FrozenMapping({'file_id': Archive.file_id, 'stream_count': len(Archive.records)})), configurations=ConfigValues, parameters=ParamValues, support_planes=PlaneValues, sketches=SketchValues, selections=SelectValues, feature_timeline=TimeValues, bodies=Bodies, brep=BrepValue, brep_payloads=Payloads, diagnostics=Diagnostics, capabilities=Instance.info.capabilities, metadata=FrozenMapping({'adapter': KFormatId, 'file_id': Archive.file_id, 'native_class_names': tuple(dict.fromkeys((ItemValue.name for ItemValue in Model.classes))), 'native_feature_count': len(Model.features), 'native_name_record_count': len(Model.names), 'native_scalar_count': len(Model.scalars), 'stream_names': tuple((Record.name for Record in Archive.records))}), units=UnitSystem.MILLIMETER)
+    DocValue.assert_valid()
+    ValidateSource(Label, False)
+    return RetainSource(DocValue, DataValue)
 
 # this definition exists because focused behavior needs one stable owner
 def ReadSldprt(Source: Source, *, Config: str | None=None, IncludeBrep: bool=True, IncludeTessellation: bool=True, Strict: bool=True) -> CadDoc:
     return SldprtAdapter().read(Source, ReadOptions(configuration=Config, include_brep=IncludeBrep, include_tessellation=IncludeTessellation, strict=Strict))
 
 # this definition exists because focused behavior needs one stable owner
-def WriteSldprt(DocValue: CadDocument, Target: Destination, *, Overwrite: bool=False, Validate: bool=True, AllowNonNative: bool=True) -> WriteResult:
+def WriteSldprt(DocValue: CadDocument, Target: Destination, *, Overwrite: bool=False, Validate: bool=True, AllowNonNative: bool=True, **LegacyValues: object) -> WriteResult:
+    AllowNonNative = LegacyValues.get('allow_non_native', AllowNonNative)
+    UnknownValues = set(LegacyValues) - {'allow_non_native'}
+    if UnknownValues:
+        Unexpected = next(iter(UnknownValues))
+        raise TypeError(f"WriteSldprt() got an unexpected keyword argument {Unexpected!r}")
     return SldprtAdapter().write(DocValue, Target, WriteOptions(overwrite=Overwrite, validate=Validate, values=FrozenMapping({'allow_non_native': AllowNonNative})))
 
 # this definition exists because focused behavior needs one stable owner
@@ -1112,17 +1189,17 @@ def NativeId(Value: str, Prefix: str) -> int | None:
 def IsPatchFeatuMut(DocValue: CadDocument, Model: NativeModel, RootValue: ET.Element, Resolved: bytearray) -> bool:
     Desired: dict[int, str] = {}
     for Feature in DocValue.feature_timeline:
-        NativeId = NativeId(Feature.id, 'sldprt:feature:')
-        if NativeId is not None:
-            Desired[NativeId] = Feature.name
+        ObjectId = NativeId(Feature.id, 'sldprt:feature:')
+        if ObjectId is not None:
+            Desired[ObjectId] = Feature.name
     for Plane in DocValue.support_planes:
-        NativeId = NativeId(Plane.id, 'sldprt:plane:')
-        if NativeId is not None and NativeId not in Desired:
-            Desired[NativeId] = Plane.name
+        ObjectId = NativeId(Plane.id, 'sldprt:plane:')
+        if ObjectId is not None and ObjectId not in Desired:
+            Desired[ObjectId] = Plane.name
     for Sketch in DocValue.sketches:
-        NativeId = NativeId(Sketch.id, 'sldprt:sketch:')
-        if NativeId is not None and NativeId not in Desired:
-            Desired[NativeId] = Sketch.name
+        ObjectId = NativeId(Sketch.id, 'sldprt:sketch:')
+        if ObjectId is not None and ObjectId not in Desired:
+            Desired[ObjectId] = Sketch.name
     Elements = XmlElementsById(RootValue)
     Features = {Feature.object_id: Feature for Feature in Model.features}
     Changed = False
@@ -1210,8 +1287,8 @@ def IsOrthonormal(Transform: Transform) -> bool:
 
 # this definition exists because focused behavior needs one stable owner
 def PatchSupport(DocValue: CadDocument, Model: NativeModel, Resolved: bytearray) -> None:
-    Parameters = Parameters(Model)
-    Original = {Plane.id: Plane for Plane in Planes(Model, {Param.id for Param in Parameters})}
+    ParamValues = Parameters(Model)
+    Original = {Plane.id: Plane for Plane in Planes(Model, {Param.id for Param in ParamValues})}
     Desired = {Plane.id: Plane for Plane in DocValue.support_planes}
     if set(Original) != set(Desired):
         return
@@ -1267,8 +1344,8 @@ def PointValues(Value: Vector2) -> tuple[float, float]:
 
 # this definition exists because focused behavior needs one stable owner
 def PatchSketchGeom(DocValue: CadDocument, Model: NativeModel, Resolved: bytearray) -> None:
-    Parameters = Parameters(Model)
-    OriginalSketches = Sketches(Model, {Param.id for Param in Parameters})
+    ParamValues = Parameters(Model)
+    OriginalSketches = Sketches(Model, {Param.id for Param in ParamValues})
     Original = {Sketch.id: Sketch for Sketch in OriginalSketches}
     Native = {SketchId(Sketch.object_id): Sketch for Sketch in Model.sketches}
     Desired = {Sketch.id: Sketch for Sketch in DocValue.sketches}
@@ -1414,8 +1491,8 @@ def BodyValues(Bodies: Sequence[Body]) -> tuple[AnyValue, ...]:
 # this definition exists because focused behavior needs one stable owner
 def NativeBody(Model: NativeModel, Timeline: tuple[FeatureStep, ...]) -> tuple[AnyValue, ...]:
     BodyFeature = SolidBody(Model.features)
-    BodyValue = BodyValue(id='sldprt:body:1', name=BodyFeature.name if BodyFeature is not None else 'Body 1', final_feature_id=FinalBodyId(Timeline, frozenset((FeatureId(Operation.object_id) for Operation in Model.operations))), topology=TopologySummary(solid_count=1 if Model.operations else 0, bounding_box=BoundingBoxA(Model)))
-    return BodyValues((BodyValue,))
+    BodyItem = BodyValue(id='sldprt:body:1', name=BodyFeature.name if BodyFeature is not None else 'Body 1', final_feature_id=FinalBodyId(Timeline, frozenset((FeatureId(Operation.object_id) for Operation in Model.operations))), topology=TopologySummary(solid_count=1 if Model.operations else 0, bounding_box=BoundingBoxA(Model)))
+    return BodyValues((BodyItem,))
 
 # this definition exists because focused behavior needs one stable owner
 def PayloadValues(Payloads: Sequence[BrepPayload]) -> tuple[AnyValue, ...]:
@@ -2274,9 +2351,9 @@ def NativePartModel(Archive: SldprtArchive, Requested: str | None) -> NativeMode
         SelectedId = Selected
     if SelectedId not in Lanes:
         raise SldprtFormatError(f'native data for configuration {SelectedId} is unavailable; available lanes are {sorted(Lanes)}')
-    ResolvedStream = ResolvedStream(Archive.streams, Lanes[SelectedId])
+    SelectedStream = ResolvedStream(Archive.streams, Lanes[SelectedId])
     ConfigStream = f'Contents/Config-{SelectedId}'
-    return DecodeNativeModel(Keywords, Archive.require(ResolvedStream), Archive.get(ConfigStream) or b'', configuration_id=SelectedId, resolved_stream=ResolvedStream, configuration_stream=ConfigStream)
+    return DecodeNativeModel(Keywords, Archive.require(SelectedStream), Archive.get(ConfigStream) or b'', configuration_id=SelectedId, resolved_stream=SelectedStream, configuration_stream=ConfigStream)
 
 # this definition exists because focused behavior needs one stable owner
 def Configurations(Model: NativeModel, Requested: str | None) -> tuple[Config, ...]:
@@ -2312,26 +2389,26 @@ def ApplyNativeMut(Parameters: list[Parameter], Model: NativeModel, DimensionIds
     ParamIndexes = {Param.id: Index for Index, Param in enumerate(Parameters)}
     for Equation in Model.equations:
         RefIds = tuple((GlobalIds[RefValue] for RefValue in Equation.references if RefValue in GlobalIds))
-        Expression = Expression(Equation.rhs, RefIds, 'solidworks')
-        Provenance = Provenance(adapter=KFormatId, native_id=f'equation:{Equation.native_offset}', spans=(ProvenanceSpan(Equation.native_stream, Equation.native_offset, Equation.native_length, 'equation'),))
+        ExprValue = Expression(Equation.rhs, RefIds, 'solidworks')
+        ProvenanceValue = Provenance(adapter=KFormatId, native_id=f'equation:{Equation.native_offset}', spans=(ProvenanceSpan(Equation.native_stream, Equation.native_offset, Equation.native_length, 'equation'),))
         if '@' in Equation.lhs:
             DimensionName, FeatureName = Equation.lhs.split('@', 1)
             ParamId = DimensionIds.get((FeatureName, DimensionName))
             if ParamId is None or ParamId not in ParamIndexes:
                 continue
             Index = ParamIndexes[ParamId]
-            Parameters[Index] = Replace(Parameters[Index], role=ParamRole.DERIVED, expression=Expression, provenance=Provenance, attributes=FrozenMapping({**dict(Parameters[Index].attributes), 'equation_source': Equation.source, 'equation_configuration_id': Equation.configuration_id}))
+            Parameters[Index] = Replace(Parameters[Index], role=ParamRole.DERIVED, expression=ExprValue, provenance=ProvenanceValue, attributes=FrozenMapping({**dict(Parameters[Index].attributes), 'equation_source': Equation.source, 'equation_configuration_id': Equation.configuration_id}))
             continue
         Value = NativeEquation(Equation.rhs, Values)
         if Value is None:
             Value = ParamValue(Equation.rhs, ValueKind.STRING)
         Values[Equation.lhs] = Value
-        Param = Param(id=GlobalIds[Equation.lhs], name=Equation.lhs, value=Value, role=ParamRole.DERIVED if Equation.references else ParamRole.DRIVING, expression=Expression, owner_id=FeatureId(16), provenance=Provenance, attributes=FrozenMapping({'equation_source': Equation.source, 'equation_configuration_id': Equation.configuration_id}))
-        if Param.id in ParamIndexes:
-            Parameters[ParamIndexes[Param.id]] = Param
+        ParamValue = Param(id=GlobalIds[Equation.lhs], name=Equation.lhs, value=Value, role=ParamRole.DERIVED if Equation.references else ParamRole.DRIVING, expression=ExprValue, owner_id=FeatureId(16), provenance=ProvenanceValue, attributes=FrozenMapping({'equation_source': Equation.source, 'equation_configuration_id': Equation.configuration_id}))
+        if ParamValue.id in ParamIndexes:
+            Parameters[ParamIndexes[ParamValue.id]] = ParamValue
         else:
-            ParamIndexes[Param.id] = len(Parameters)
-            Parameters.append(Param)
+            ParamIndexes[ParamValue.id] = len(Parameters)
+            Parameters.append(ParamValue)
     return tuple(Parameters)
 
 # this definition exists because focused behavior needs one stable owner
@@ -3002,10 +3079,10 @@ def ParamEntries(NativeId: int, Dimensions: tuple[NativeDimension, ...]) -> tupl
     for Dimension in Dimensions:
         Occurrences[Dimension.name] += 1
         ItemValue = Occurrences[Dimension.name]
-        ParamId = ParamId(NativeId, Dimension.name)
+        ParamKey = ParamId(NativeId, Dimension.name)
         if ItemValue > 1:
-            ParamId += f':{ItemValue}'
-        Result.append((Dimension, ParamId))
+            ParamKey += f':{ItemValue}'
+        Result.append((Dimension, ParamKey))
     return tuple(Result)
 
 # this definition exists because focused behavior needs one stable owner
@@ -3802,7 +3879,7 @@ globals()['build_sldprt'] = BuildSldprt
 globals()['contains_parasolid_payload'] = ContainsParasolidPayload
 
 # this binding exists because shared behavior needs one stable value
-globals()['dataclass'] = Dataclass
+globals()['dataclass'] = DataClass
 
 # this binding exists because shared behavior needs one stable value
 globals()['decode_brep_model'] = DecodeBrepModel

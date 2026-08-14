@@ -45,11 +45,7 @@ def Matches(ByteBlob: bytes, ValueInfo: int) -> set[tuple[int, int]]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun() -> int:
-    Formula = System.argv[1]
-    if Formula not in KFormulas:
-        raise SystemExit(f'formula must be one of {sorted(KFormulas)}')
-    RuleInfo = KFormulas[Formula]
+def FinishMain(Formula, RuleInfo) -> int:
     Parts = [PathInfo(ItemData).resolve() for ItemData in System.argv[2:]]
     if len(Parts) < 2:
         raise SystemExit('usage: Fieldscan.py <formula> <part> <part> [...]')
@@ -79,5 +75,14 @@ def MainRun() -> int:
     KOutInfo.mkdir(parents=True, exist_ok=True)
     (KOutInfo / f'fieldscan_{Formula}.json').write_text(JsonData.dumps({'formula': Formula, 'parts': [str(PartInfoInfo) for PartInfoInfo in Parts], 'feature_counts': Counts, 'shared': Report}, indent=2), encoding='utf-8')
     return 0
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun() -> int:
+    Formula = System.argv[1]
+    if Formula not in KFormulas:
+        raise SystemExit(f'formula must be one of {sorted(KFormulas)}')
+    RuleInfo = KFormulas[Formula]
+    return FinishMain(Formula, RuleInfo)
 if __name__ == '__main__':
     raise SystemExit(MainRun())

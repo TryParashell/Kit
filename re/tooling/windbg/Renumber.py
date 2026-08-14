@@ -146,27 +146,7 @@ def FeatUnit(ByteBlob: bytes, SegmentsInfo: tuple[Segmentlib.Segment, ...]) -> B
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def Duplicate(ModelInfo: Modellib.Model, Blocks: tuple[Block, ...], Copies: int) -> tuple[Modellib.Model, tuple[tuple[int, int], ...]]:
-    if Copies < 1:
-        raise RenumberError('copies must be at least 1')
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    OrderedInfo = sorted(Blocks, key=lambda ItemData: ItemData.start)
-    for BlockInfo in OrderedInfo:
-        if BlockInfo.start < 0 or BlockInfo.stop > len(ModelInfo.nodes) or BlockInfo.size <= 0:
-            raise RenumberError(f'block {BlockInfo} is out of range')
-    for LeftInfo, Right in zip(OrderedInfo, OrderedInfo[1:]):
-        if LeftInfo.stop > Right.start:
-            raise RenumberError('blocks overlap')
-    PlanInfo: list[tuple[int, int]] = []
-    Cursor = 0
-    for BlockInfo in OrderedInfo:
-        while Cursor < BlockInfo.stop:
-            PlanInfo.append((Cursor, 0))
-            Cursor += 1
-        for CopyId in range(1, Copies + 1):
-            for Source in range(BlockInfo.start, BlockInfo.stop):
-                PlanInfo.append((Source, CopyId))
+def FinishCopyMut(BlockInfo, CopyId, Cursor, ModelInfo, OrderedInfo, PlanInfo, Source) -> tuple[Modellib.Model, tuple[tuple[int, int], ...]]:
     while Cursor < len(ModelInfo.nodes):
         PlanInfo.append((Cursor, 0))
         Cursor += 1
@@ -194,6 +174,31 @@ def Duplicate(ModelInfo: Modellib.Model, Blocks: tuple[Block, ...], Copies: int)
         Result.nodes.append(Modellib.NodeInfo(KindNameInfo=KindNameInfo, BodyInfo=Original.body, Schema=Original.schema, ClassNameData=Original.class_name, Target=Target, Literal=Literal, Origin=Original.origin))
     Result.assign()
     return (Result, tuple(PlanInfo))
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def Duplicate(ModelInfo: Modellib.Model, Blocks: tuple[Block, ...], Copies: int) -> tuple[Modellib.Model, tuple[tuple[int, int], ...]]:
+    if Copies < 1:
+        raise RenumberError('copies must be at least 1')
+
+    # needed to keep reverse engineering responsibilities isolated and maintainable
+    OrderedInfo = sorted(Blocks, key=lambda ItemData: ItemData.start)
+    for BlockInfo in OrderedInfo:
+        if BlockInfo.start < 0 or BlockInfo.stop > len(ModelInfo.nodes) or BlockInfo.size <= 0:
+            raise RenumberError(f'block {BlockInfo} is out of range')
+    for LeftInfo, Right in zip(OrderedInfo, OrderedInfo[1:]):
+        if LeftInfo.stop > Right.start:
+            raise RenumberError('blocks overlap')
+    PlanInfo: list[tuple[int, int]] = []
+    Cursor = 0
+    for BlockInfo in OrderedInfo:
+        while Cursor < BlockInfo.stop:
+            PlanInfo.append((Cursor, 0))
+            Cursor += 1
+        for CopyId in range(1, Copies + 1):
+            for Source in range(BlockInfo.start, BlockInfo.stop):
+                PlanInfo.append((Source, CopyId))
+    return FinishCopyMut(BlockInfo, CopyId, Cursor, ModelInfo, OrderedInfo, PlanInfo, Source)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

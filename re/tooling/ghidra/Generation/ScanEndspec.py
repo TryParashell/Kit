@@ -53,12 +53,7 @@ def Decode(ByteBlob, PosInfo, Klass):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun():
-    Roots = System.argv[1:] or ['.rescratch/corpus/parts', '.rescratch/corpus2', '.rescratch/trace/parts', 'examples']
-    Klass = 'moEndSpec_c'
-    Needle = Marker(Klass)
-    Histogram = Collects.Counter()
-    GetRows = []
+def FinishMainMut(GetRows, Histogram, Klass, Needle, Roots):
     SeenInfo = 0
     Skipped = 0
     for PathInfoData in Parts(Roots):
@@ -90,5 +85,15 @@ def MainRun():
             print(f"  NOTABLE {RowDataInfo['part']:44s} type0={RowDataInfo['type0']} type1={RowDataInfo['type1']}")
     KOutInfo.mkdir(parents=True, exist_ok=True)
     (KOutInfo / 'ScanEndspec.json').write_text(JsonData.dumps(GetRows, indent=1))
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun():
+    Roots = System.argv[1:] or ['.rescratch/corpus/parts', '.rescratch/corpus2', '.rescratch/trace/parts', 'examples']
+    Klass = 'moEndSpec_c'
+    Needle = Marker(Klass)
+    Histogram = Collects.Counter()
+    GetRows = []
+    return FinishMainMut(GetRows, Histogram, Klass, Needle, Roots)
 if __name__ == '__main__':
     MainRun()

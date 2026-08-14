@@ -36,14 +36,7 @@ def RandomRun(ByteBlob, Anchor):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun():
-    PathInfoData = Pathlib.Path(System.argv[1]) if len(System.argv) > 1 else KDefault
-    ByteBlob = PathInfoData.read_bytes()
-    for Anchor in (5666652, 5676340):
-        LoInfo, HiInfo = RandomRun(ByteBlob, Anchor)
-        print(f'anchor 0x{Anchor:x} run 0x{LoInfo:x}..0x{HiInfo:x} size={HiInfo - LoInfo} dwords={(HiInfo - LoInfo) // 4}')
-    AZero, AOneInfo = RandomRun(ByteBlob, 5666652)
-    BZero, BOneInfo = RandomRun(ByteBlob, 5676340)
+def FinishMain(AOneInfo, AZero, BOneInfo, BZero, ByteBlob):
     print('---')
     print(f'A candidate base 0x{AZero:x} end 0x{AOneInfo:x}')
     print(f'B candidate base 0x{BZero:x} end 0x{BOneInfo:x}')
@@ -73,5 +66,17 @@ def MainRun():
         print('...')
         for IndexInfo, FidInfo, TripInfo in GetRows[-4:]:
             print(IndexInfo, f'0x{FidInfo:08x}', [f'{ValueData:08x}' for ValueData in TripInfo])
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun():
+    PathInfoData = Pathlib.Path(System.argv[1]) if len(System.argv) > 1 else KDefault
+    ByteBlob = PathInfoData.read_bytes()
+    for Anchor in (5666652, 5676340):
+        LoInfo, HiInfo = RandomRun(ByteBlob, Anchor)
+        print(f'anchor 0x{Anchor:x} run 0x{LoInfo:x}..0x{HiInfo:x} size={HiInfo - LoInfo} dwords={(HiInfo - LoInfo) // 4}')
+    AZero, AOneInfo = RandomRun(ByteBlob, 5666652)
+    BZero, BOneInfo = RandomRun(ByteBlob, 5676340)
+    return FinishMain(AOneInfo, AZero, BOneInfo, BZero, ByteBlob)
 if __name__ == '__main__':
     MainRun()

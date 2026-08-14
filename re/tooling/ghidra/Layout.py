@@ -125,41 +125,43 @@ def Decode(RawData):
             print(f'        u32@{PosInfo}: {ValueInfo}')
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
+# one object layout check stays isolated so cursor accounting has a single responsibility
+def CheckItems(Items, SpecInfo):
+    Cursor = 0
+    Detail = []
+    for ItemData in Items:
+        if ItemData[0] == 'object':
+            if Cursor >= len(SpecInfo) or SpecInfo[Cursor][0] != 'obj':
+                Detail.append(f'expected obj at spec[{Cursor}] got {SpecInfo[Cursor:Cursor + 1]}')
+                return False, Detail
+            Detail.append(f'obj {SpecInfo[Cursor][1]} <- {ItemData[2]} ({ItemData[3]})')
+            Cursor += 1
+            continue
+        SpareValue, OffInfo, ByteSize = ItemData
+        UsedInfo = 0
+        while UsedInfo < ByteSize and Cursor < len(SpecInfo) and (SpecInfo[Cursor][0] != 'obj'):
+            KindNameData, FieldInfo = (SpecInfo[Cursor][0], SpecInfo[Cursor][1])
+            WidthInfo = KWidths[KindNameData]
+            if UsedInfo + WidthInfo > ByteSize:
+                break
+            Detail.append(f'{KindNameData} {FieldInfo} @{OffInfo + UsedInfo}')
+            UsedInfo += WidthInfo
+            Cursor += 1
+        if UsedInfo != ByteSize:
+            Detail.append(f'gap mismatch at off={OffInfo}: gap={ByteSize} consumed={UsedInfo}')
+            return False, Detail
+    if Cursor != len(SpecInfo):
+        Detail.append(f'spec has {len(SpecInfo) - Cursor} unconsumed items')
+        return False, Detail
+    return True, Detail
+
+
+# class checking aggregates focused object checks without duplicating cursor logic
 def Check(LabelInfo, NameTextInfo, SpecInfo, KindNameInfo='definition'):
     DocInfo, SegsInfo, ByteBlob, PartInfoInfo = LoadData(LabelInfo)
     Results = []
     for IndexData in FindItem(SegsInfo, NameTextInfo, KindNameInfo):
-        Items = FindGaps(SegsInfo, IndexData)
-        Cursor = 0
-        OkInfo = True
-        Detail = []
-        for ItemData in Items:
-            if ItemData[0] == 'object':
-                if Cursor >= len(SpecInfo) or SpecInfo[Cursor][0] != 'obj':
-                    OkInfo = False
-                    Detail.append(f'expected obj at spec[{Cursor}] got {SpecInfo[Cursor:Cursor + 1]}')
-                    break
-                Detail.append(f'obj {SpecInfo[Cursor][1]} <- {ItemData[2]} ({ItemData[3]})')
-                Cursor += 1
-                continue
-            SpareValue, OffInfo, ByteSize = ItemData
-            UsedInfo = 0
-            while UsedInfo < ByteSize and Cursor < len(SpecInfo) and (SpecInfo[Cursor][0] != 'obj'):
-                KindNameData, FieldInfo = (SpecInfo[Cursor][0], SpecInfo[Cursor][1])
-                WidthInfo = KWidths[KindNameData]
-                if UsedInfo + WidthInfo > ByteSize:
-                    break
-                Detail.append(f'{KindNameData} {FieldInfo} @{OffInfo + UsedInfo}')
-                UsedInfo += WidthInfo
-                Cursor += 1
-            if UsedInfo != ByteSize:
-                OkInfo = False
-                Detail.append(f'gap mismatch at off={OffInfo}: gap={ByteSize} consumed={UsedInfo}')
-                break
-        if OkInfo and Cursor != len(SpecInfo):
-            OkInfo = False
-            Detail.append(f'spec has {len(SpecInfo) - Cursor} unconsumed items')
+        OkInfo, Detail = CheckItems(FindGaps(SegsInfo, IndexData), SpecInfo)
         Results.append((IndexData, OkInfo, Detail))
     return Results
 

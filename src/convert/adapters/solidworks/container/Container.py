@@ -145,12 +145,13 @@ def ParseArchive(ClassType, BlobValue: bytes | bytearray, SourcePath: str | File
 
 # this definition exists because focused behavior needs one stable owner
 def BuildSldprt(Streams: Mapping[str, bytes] | Iterable[tuple[str, bytes]], *, FileId: int | None=None, FormatVersion: int=4, Template: bytes | bytearray | None=None, Signatures: tuple[bytes, bytes, bytes] | None=None, **Options: object) -> bytes:
-    FileId = Options.pop('file_id', FileId)
-    FormatVersion = Options.pop('format_version', FormatVersion)
-    Template = Options.pop('template', Template)
-    Signatures = Options.pop('signatures', Signatures)
-    if Options:
-        Unknown = next(iter(Options))
+    OptionsMap = dict(Options)
+    FileId = OptionsMap.pop('file_id', FileId)
+    FormatVersion = OptionsMap.pop('format_version', FormatVersion)
+    Template = OptionsMap.pop('template', Template)
+    Signatures = OptionsMap.pop('signatures', Signatures)
+    if OptionsMap:
+        Unknown = next(iter(OptionsMap))
         raise TypeError(f"BuildSldprt() got an unexpected keyword argument '{Unknown}'")
     FileId, SignatureSet, TypeIds = ResolveBuild(FileId, Template, Signatures)
     if not 0 <= FileId <= 4294967295:

@@ -49,10 +49,7 @@ def ContainFileName(NameTextInfo: str) -> str:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun() -> int:
-    if not KManifest.is_file():
-        print(f'missing fixture manifest {KManifest}')
-        return 1
+def FinishMain() -> int:
     Manifest = JsonData.loads(KManifest.read_text(encoding='utf-8'))
     Donors = Manifest['donors']
     Mismatches = 0
@@ -82,5 +79,13 @@ def MainRun() -> int:
         print(' '.join(GetRows))
     print(f'fixtures={len(Donors)} parts_missing={MissingInfo} stream_mismatches={Mismatches}')
     return 1 if Mismatches else 0
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun() -> int:
+    if not KManifest.is_file():
+        print(f'missing fixture manifest {KManifest}')
+        return 1
+    return FinishMain()
 if __name__ == '__main__':
     raise SystemExit(MainRun())

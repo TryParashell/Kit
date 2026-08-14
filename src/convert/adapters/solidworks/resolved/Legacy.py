@@ -22,50 +22,54 @@ class ResolveWriter:
 
     # this definition exists because focused behavior needs one stable owner
     def PutValues(Instance, FormatText: str, *FieldValues: object) -> None:
-        Instance.BufferData.extend(Struct.pack(FormatText, *FieldValues))
+        Instance.KBufferData.extend(Struct.pack(FormatText, *FieldValues))
 
     # this definition exists because focused behavior needs one stable owner
     def PutClass(Instance, ClassName: str, SchemaCode: int=1) -> int:
-        KnownIndex = Instance.ClassIndex.get(ClassName)
-        if KnownIndex is None:
-            KnownIndex = Instance.MapCounter
-            ObjectIndex = Instance.MapCounter + 1
-            Instance.ClassIndex[ClassName] = KnownIndex
-            Instance.BufferData.extend(EncodeClassDefinition(ClassName, SchemaCode))
-            Instance.MapCounter += 2
-        else:
-            ObjectIndex = Instance.MapCounter
-            Instance.BufferData.extend(EncodeClassRef(KnownIndex))
-            Instance.MapCounter += 1
-        Instance.ObjectCount += 1
-        return ObjectIndex
+        return PutClassMut(Instance, ClassName, SchemaCode)
 
     # this definition exists because focused behavior needs one stable owner
     def PutExtern(Instance, ClassIndex: int) -> None:
-        Instance.BufferData.extend(EncodeClassRef(ClassIndex))
-        Instance.MapCounter += 1
-        Instance.ObjectCount += 1
+        Instance.KBufferData.extend(EncodeClassRef(ClassIndex))
+        Instance.KMapCounter += 1
+        Instance.KObjectCount += 1
 
     # this definition exists because focused behavior needs one stable owner
     def PutNull(Instance) -> None:
-        Instance.BufferData.extend(Struct.pack('<H', 0))
-        Instance.ObjectCount += 1
+        Instance.KBufferData.extend(Struct.pack('<H', 0))
+        Instance.KObjectCount += 1
 
     # this definition exists because focused behavior needs one stable owner
     def PutObjRef(Instance, ObjectIndex: int) -> None:
-        Instance.BufferData.extend(EncodeObjectRef(ObjectIndex))
-        Instance.ObjectCount += 1
+        Instance.KBufferData.extend(EncodeObjectRef(ObjectIndex))
+        Instance.KObjectCount += 1
 
     # this definition exists because focused behavior needs one stable owner
     def PutString(Instance, TextValue: str) -> None:
-        Instance.BufferData.extend(EncodeString(TextValue))
+        Instance.KBufferData.extend(EncodeString(TextValue))
 
     # this definition exists because focused behavior needs one stable owner
     def EmitData(Instance) -> bytes:
-        if Instance.ObjectCount < 1:
+        if Instance.KObjectCount < 1:
             raise SldprtFormatError('resolved features must contain an object')
-        StreamHead = Struct.pack('<IH', 109, Instance.ObjectCount - 1)
-        return StreamHead + bytes(Instance.BufferData)
+        StreamHead = Struct.pack('<IH', 109, Instance.KObjectCount - 1)
+        return StreamHead + bytes(Instance.KBufferData)
+
+# this definition exists because class emission owns map and object counter updates
+def PutClassMut(Writer: ResolveWriter, ClassName: str, SchemaCode: int=1) -> int:
+    KnownIndex = Writer.KClassIndex.get(ClassName)
+    if KnownIndex is None:
+        KnownIndex = Writer.KMapCounter
+        ObjectIndex = Writer.KMapCounter + 1
+        Writer.KClassIndex[ClassName] = KnownIndex
+        Writer.KBufferData.extend(EncodeClassDefinition(ClassName, SchemaCode))
+        Writer.KMapCounter += 2
+    else:
+        ObjectIndex = Writer.KMapCounter
+        Writer.KBufferData.extend(EncodeClassRef(KnownIndex))
+        Writer.KMapCounter += 1
+    Writer.KObjectCount += 1
+    return ObjectIndex
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
@@ -192,6 +196,11 @@ def WriteDetailTree(Writer: ResolveWriter, CabinetState: FeatureState, FirstStat
 
 # this definition exists because focused behavior needs one stable owner
 def WriteEmpty(Writer: ResolveWriter) -> None:
+    WriteEmptyHead(Writer)
+    WriteEmptyTail(Writer)
+
+# this definition exists because empty sketch headers form one native record section
+def WriteEmptyHead(Writer: ResolveWriter) -> None:
     Writer.PutClass('sgSketch')
     Writer.PutValues('<iHii', 1, 0, 0, 1)
     Writer.PutValues('<HHBIHhf', 65535, 31, 3, 4294967295, 65535, -1, -1.0)
@@ -208,6 +217,9 @@ def WriteEmpty(Writer: ResolveWriter) -> None:
     Writer.PutNull()
     Writer.PutValues('<4i', -1, 0, 0, 0)
     Writer.PutNull()
+
+# this definition exists because empty sketch handles form one native record section
+def WriteEmptyTail(Writer: ResolveWriter) -> None:
     Writer.PutValues('<HBi4H', 0, 0, 17, 2, 0, 0, 65534)
     Writer.PutValues('<H', 0)
     Writer.PutClass('sgPointHandle')

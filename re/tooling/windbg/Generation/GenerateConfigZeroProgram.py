@@ -223,18 +223,7 @@ def RangeSourceInfo(Operations: list[tuple[int, int, str, str, AnyInfo]], RangeS
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def RunMain() -> int:
-    Arguments = ParseArguments()
-    if (Arguments.range_start is None) != (Arguments.range_end is None):
-        raise ValueError('Config-0 range generation needs both range boundaries')
-    Archive = SldprtArchive.open(Arguments.part)
-    StreamData = Archive.require(ConfigStream)
-    TraceText = Arguments.trace.read_text(encoding='utf-8', errors='replace')
-    SegmentData = JsonData.loads(Arguments.segments.read_text(encoding='utf-8'))
-    Segments = SelectSegments(SegmentData)
-    RowsList = TraceRows(TraceText)
-    Operations: list[tuple[int, int, str, str, AnyInfo]] = []
-    Covered: set[int] = set()
+def FinishMainMut(Arguments, Covered, Operations, RowsList, Segments, StreamData) -> int:
     AddStructures(Operations, Covered, StreamData, Segments)
     AddDirectFields(Operations, Covered, StreamData, Arguments.profile)
     AddStrings(Operations, Covered, StreamData, RowsList)
@@ -264,5 +253,21 @@ def RunMain() -> int:
     Arguments.output.write_text(FormatSource(FixedSourceInfo(Operations, len(StreamData)) if Arguments.fixed else RenderSource(Operations, len(StreamData))), encoding='utf-8', newline='\n')
     print(JsonData.dumps({'stream_bytes': len(StreamData), 'operations': len(Operations), 'owners': len({Operation[2] for Operation in Operations}), 'missing': len(Missing)}, indent=2))
     return 0
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RunMain() -> int:
+    Arguments = ParseArguments()
+    if (Arguments.range_start is None) != (Arguments.range_end is None):
+        raise ValueError('Config-0 range generation needs both range boundaries')
+    Archive = SldprtArchive.open(Arguments.part)
+    StreamData = Archive.require(ConfigStream)
+    TraceText = Arguments.trace.read_text(encoding='utf-8', errors='replace')
+    SegmentData = JsonData.loads(Arguments.segments.read_text(encoding='utf-8'))
+    Segments = SelectSegments(SegmentData)
+    RowsList = TraceRows(TraceText)
+    Operations: list[tuple[int, int, str, str, AnyInfo]] = []
+    Covered: set[int] = set()
+    return FinishMainMut(Arguments, Covered, Operations, RowsList, Segments, StreamData)
 if __name__ == '__main__':
     raise SystemExit(RunMain())

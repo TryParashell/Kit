@@ -102,13 +102,8 @@ def NeutralMeshes(Components: tuple[NativeDisplayComponent, ...]) -> tuple[MeshV
             Result.append(MeshValue(id=MeshId, name=f'{ComponentName} face {FaceValue.face_id}', vertices=tuple((VectorThree(*Point) for Point in FaceValue.positions_mm)), triangles=FaceValue.triangle_indices, normals=tuple((VectorThree(*Normal) for Normal in FaceValue.normals)), provenance=Provenance(adapter=AsmFormatId, native_id=str(FaceValue.face_id), spans=(ProvenanceSpan(DisplayListsStream, FaceValue.offset, FaceValue.record_length, 'tessellation-face'),)), attributes=FrozenMapping({'occurrence_path': Component.occurrence_path, 'source_path': Component.source_path, 'face_id': FaceValue.face_id, 'strip_lengths': FaceValue.strip_lengths})))
     return tuple(Result)
 
-# this definition exists because focused behavior needs one stable owner
-def DecodeFace(DataValue: bytes, Start: int) -> NativeFace | None:
-    if Start < 0 or Start + 8 > len(DataValue):
-        return None
-    FaceId, StripCount = Struct.unpack_from('<II', DataValue, Start)
-    if not 0 < StripCount <= 100000:
-        return None
+# channel extraction stays isolated because every array carries independent bounds and shape metadata
+def ReadFaceChans(DataValue: bytes, Start: int, StripCount: int) -> tuple[list[tuple[tuple[int, int, int, int], bytes]], int] | None:
     Channels: list[tuple[tuple[int, int, int, int], bytes]] = []
     Cursor = Start + 8
     for Ignored in range(6):
@@ -124,6 +119,11 @@ def DecodeFace(DataValue: bytes, Start: int) -> NativeFace | None:
             return None
         Channels.append((Header, DataValue[PayloadStart:PayloadEnd]))
         Cursor = PayloadEnd
+    return (Channels, Cursor)
+
+
+# strip validation owns cross channel counts so decoding cannot trust inconsistent array headers
+def GetStripLayout(Channels: list[tuple[tuple[int, int, int, int], bytes]], StripCount: int) -> tuple[tuple[int, ...], int] | None:
     FirstHeader, FirstData = Channels[0]
     if FirstHeader != (4, 8, 2, StripCount):
         return None
@@ -137,6 +137,24 @@ def DecodeFace(DataValue: bytes, Start: int) -> NativeFace | None:
     ExpectedHeaders = ((4, 8, 2, StripCount), (12, 100, 2, VertexCount), (12, 100, 2, VertexCount), (4, 8, 2, ThirdCount), (4, 8, 2, StripCount), (1, 8, 2, ThirdCount))
     if tuple((Channel[0] for Channel in Channels)) != ExpectedHeaders:
         return None
+    return (StripLengths, VertexCount)
+
+
+# face decoding composes bounded channel extraction shape validation and finite vector conversion
+def DecodeFace(DataValue: bytes, Start: int) -> NativeFace | None:
+    if Start < 0 or Start + 8 > len(DataValue):
+        return None
+    FaceId, StripCount = Struct.unpack_from('<II', DataValue, Start)
+    if not 0 < StripCount <= 100000:
+        return None
+    ChannelResult = ReadFaceChans(DataValue, Start, StripCount)
+    if ChannelResult is None:
+        return None
+    Channels, Cursor = ChannelResult
+    StripLayout = GetStripLayout(Channels, StripCount)
+    if StripLayout is None:
+        return None
+    StripLengths, VertexCount = StripLayout
     PositionValues = Struct.unpack(f'<{VertexCount * 3}f', Channels[1][1])
     NormalValues = Struct.unpack(f'<{VertexCount * 3}f', Channels[2][1])
     if not all((MathValue.isfinite(Value) for Value in (*PositionValues, *NormalValues))):

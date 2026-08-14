@@ -59,11 +59,7 @@ def ScanParts(Roots):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun():
-    GetRows = Extract()
-    Table = {}
-    for IndexInfo, FileId, TripInfo in GetRows:
-        Table.setdefault(FileId, (IndexInfo, TripInfo))
+def FinishMain(FileId, GetRows, IndexInfo, Table, TripInfo):
     print('host', KHostInfo, 'block', hex(KBlockOffset), 'count', KEntryCount)
     print('anchors', [hex(ValueData) for ValueData in Locate()])
     print('distinct file_ids', len(Table), 'of', KEntryCount)
@@ -92,5 +88,14 @@ def MainRun():
             BadInfo += 1
             print('MISMATCH', NameTextInfo, f'0x{FileId:08x}', f'index={HitInfo[0]}', [SourceData.hex() for SourceData in Signatures], [TextData.hex() for TextData in HitInfo[1]])
     print(f'parts={len(Parts)} match={OkInfo} mismatch={BadInfo} unknown={Unknown} unreadable={Broken}')
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun():
+    GetRows = Extract()
+    Table = {}
+    for IndexInfo, FileId, TripInfo in GetRows:
+        Table.setdefault(FileId, (IndexInfo, TripInfo))
+    return FinishMain(FileId, GetRows, IndexInfo, Table, TripInfo)
 if __name__ == '__main__':
     MainRun()

@@ -196,19 +196,23 @@ class CMgrParameters:
 
     # this definition exists because focused behavior needs one stable owner
     def Validate(Instance) -> None:
-        if not Instance.atom_ids:
-            raise SldprtFormatError('a SOLIDWORKS configuration manager needs at least one atom id')
-        if len(Instance.link_tree_ids) != len(Instance.link_atom_ids):
-            raise SldprtFormatError(f'{len(Instance.link_atom_ids)} linked atoms need {len(Instance.link_atom_ids)} tree ids, got {len(Instance.link_tree_ids)}')
-        if Instance.display_geometry_cache != KDisplayGeomCacheDefault:
-            raise SldprtFormatError(f'display_geometry_cache must be the recovered {KDisplayGeomCacheBytes}-byte reserved-zero field')
-        if Instance.generation != KDocGeneration:
-            raise SldprtFormatError(f'the recovered Contents/CMgr tables describe generation {KDocGeneration}, not {Instance.generation}')
-        if Instance.connected_history and len(Instance.link_atom_ids) not in {2, 3, 4}:
-            raise SldprtFormatError('the recovered connected-history CMgr shape requires two to four atoms')
-        if Instance.terminal_parent_tree_id is not None and (Instance.connected_history or len(Instance.atom_ids) != 1 or len(Instance.link_atom_ids) != 1 or (len(Instance.link_tree_ids) != 1) or (Instance.terminal_parent_tree_id <= 0) or (Instance.terminal_parent_tree_id == Instance.link_tree_ids[0])):
-            raise SldprtFormatError('the recovered terminal-history CMgr shape requires one child atom and one distinct parent tree')
+        ValidateCmgr(Instance)
     locals()['validate'] = Validate
+
+# this definition exists because configuration validation is independent from parameter storage
+def ValidateCmgr(Params: CMgrParameters) -> None:
+    if not Params.atom_ids:
+        raise SldprtFormatError('a SOLIDWORKS configuration manager needs at least one atom id')
+    if len(Params.link_tree_ids) != len(Params.link_atom_ids):
+        raise SldprtFormatError(f'{len(Params.link_atom_ids)} linked atoms need {len(Params.link_atom_ids)} tree ids, got {len(Params.link_tree_ids)}')
+    if Params.display_geometry_cache != KDisplayGeomCacheDefault:
+        raise SldprtFormatError(f'display_geometry_cache must be the recovered {KDisplayGeomCacheBytes}-byte reserved-zero field')
+    if Params.generation != KDocGeneration:
+        raise SldprtFormatError(f'the recovered Contents/CMgr tables describe generation {KDocGeneration}, not {Params.generation}')
+    if Params.connected_history and len(Params.link_atom_ids) not in {2, 3, 4}:
+        raise SldprtFormatError('the recovered connected-history CMgr shape requires two to four atoms')
+    if Params.terminal_parent_tree_id is not None and (Params.connected_history or len(Params.atom_ids) != 1 or len(Params.link_atom_ids) != 1 or (len(Params.link_tree_ids) != 1) or (Params.terminal_parent_tree_id <= 0) or (Params.terminal_parent_tree_id == Params.link_tree_ids[0])):
+        raise SldprtFormatError('the recovered terminal-history CMgr shape requires one child atom and one distinct parent tree')
 
 # this definition exists because focused behavior needs one stable owner
 def PackAction(KindValue: str, Value: object) -> bytes:
@@ -365,72 +369,85 @@ def StampList(Stamps: tuple[FeatureStamp, ...]) -> bytes:
 def BuildModel(Params: CMgrParameters) -> Model:
     Params.validate()
     Nodes: list[NodeValue] = []
+    Config = AddHeadMut(Nodes, Params)
+    AddLinksMut(Nodes, Params)
+    AddTailMut(Nodes, Params, Config)
+    return Model(header=EncodeClassDefinition(KRootClass, KClassSchema), base=KMapBase, nodes=Nodes)
 
-    # this definition exists because focused behavior needs one stable owner
-    def NullAction(BodyValue: bytes) -> None:
-        Nodes.append(NodeValue(kind=NullKind, body=BodyValue))
+# this definition exists because null records need one consistent node constructor
+def AddNullMut(Nodes: list[NodeValue], BodyValue: bytes) -> None:
+    Nodes.append(NodeValue(kind=NullKind, body=BodyValue))
 
-    # this definition exists because focused behavior needs one stable owner
-    def Definition(NameValue: str, BodyValue: bytes) -> int:
-        Nodes.append(NodeValue(kind=DefinitionKind, body=BodyValue, schema=KClassSchema, class_name=NameValue))
-        return len(Nodes) - 1
+# this definition exists because definition records need one consistent node constructor
+def AddDefMut(Nodes: list[NodeValue], NameValue: str, BodyValue: bytes) -> int:
+    Nodes.append(NodeValue(kind=DefinitionKind, body=BodyValue, schema=KClassSchema, class_name=NameValue))
+    return len(Nodes) - 1
 
-    # this definition exists because focused behavior needs one stable owner
-    def Classref(Target: int, BodyValue: bytes) -> None:
-        Nodes.append(NodeValue(kind=ClassRefKind, body=BodyValue, class_name=Nodes[Target].class_name, target=Target))
+# this definition exists because class references need one consistent node constructor
+def AddClassMut(Nodes: list[NodeValue], Target: int, BodyValue: bytes) -> None:
+    Nodes.append(NodeValue(kind=ClassRefKind, body=BodyValue, class_name=Nodes[Target].class_name, target=Target))
 
-    # this definition exists because focused behavior needs one stable owner
-    def Objectref(Target: int, BodyValue: bytes) -> None:
-        Nodes.append(NodeValue(kind=ObjectRefKind, body=BodyValue, target=Target))
-    NullAction(ManagerHead())
-    NullAction(IdentityBlock(Params.atom_ids[0], Params.generation, Params.build))
-    NullAction(Table(KViewStyle))
-    NullAction(DisplayState(Params.display_stamp, Params.session_counter))
-    Config = Definition(KConfigClass, b'')
-    Definition(KNodeNameClass, NodeName(Params.configuration_name))
-    Definition(KVisualClass, Visual(Params))
-    NullAction(Table(KViewStyle))
-    NullAction(DisplayStateA(Params))
-    NullAction(AtomHead(Params.atom_head_count, Params.generation))
-    NullAction(ConnectedAtom(Params.atom_ids) if Params.connected_history else AtomTable(Params.atom_ids))
-    NullAction(LinkHead(Params.link_atom_ids))
+# this definition exists because object references need one consistent node constructor
+def AddObjectMut(Nodes: list[NodeValue], Target: int, BodyValue: bytes) -> None:
+    Nodes.append(NodeValue(kind=ObjectRefKind, body=BodyValue, target=Target))
+
+# this definition exists because manager identity and display records form one section
+def AddHeadMut(Nodes: list[NodeValue], Params: CMgrParameters) -> int:
+    AddNullMut(Nodes, ManagerHead())
+    AddNullMut(Nodes, IdentityBlock(Params.atom_ids[0], Params.generation, Params.build))
+    AddNullMut(Nodes, Table(KViewStyle))
+    AddNullMut(Nodes, DisplayState(Params.display_stamp, Params.session_counter))
+    Config = AddDefMut(Nodes, KConfigClass, b'')
+    AddDefMut(Nodes, KNodeNameClass, NodeName(Params.configuration_name))
+    AddDefMut(Nodes, KVisualClass, Visual(Params))
+    AddNullMut(Nodes, Table(KViewStyle))
+    AddNullMut(Nodes, DisplayStateA(Params))
+    AddNullMut(Nodes, AtomHead(Params.atom_head_count, Params.generation))
+    AddNullMut(Nodes, ConnectedAtom(Params.atom_ids) if Params.connected_history else AtomTable(Params.atom_ids))
+    AddNullMut(Nodes, LinkHead(Params.link_atom_ids))
+    return Config
+
+# this definition exists because linked atom graph variants share one dispatch boundary
+def AddLinksMut(Nodes: list[NodeValue], Params: CMgrParameters) -> None:
     LinkValue = -1
     if Params.terminal_parent_tree_id is not None:
-        LinkValue = Definition(KLinkClass, TerminalLink(Params.link_atom_ids[0], Params.terminal_parent_tree_id, Params.link_tree_ids[0]))
+        AddDefMut(Nodes, KLinkClass, TerminalLink(Params.link_atom_ids[0], Params.terminal_parent_tree_id, Params.link_tree_ids[0]))
     elif Params.connected_history:
         LinkParts = ConnectedFour(Params.link_atom_ids, Params.link_tree_ids) if len(Params.link_atom_ids) == 4 else ConnectedLink(Params.link_atom_ids, Params.link_tree_ids)
         for Position, (BodyValue, ChildBodies) in enumerate(LinkParts):
             if Position == 0:
-                LinkValue = Definition(KLinkClass, BodyValue)
+                LinkValue = AddDefMut(Nodes, KLinkClass, BodyValue)
             else:
-                Classref(LinkValue, BodyValue)
+                AddClassMut(Nodes, LinkValue, BodyValue)
             for ChildBody in ChildBodies:
-                NullAction(ChildBody)
+                AddNullMut(Nodes, ChildBody)
     else:
         Total = len(Params.link_atom_ids)
         for Position, AtomValue in enumerate(Params.link_atom_ids):
             Following = Params.link_atom_ids[Position + 1] if Position + 1 < Total else None
             BodyValue = LinkBody(AtomValue, Params.link_tree_ids[Position], Following)
             if Position == 0:
-                LinkValue = Definition(KLinkClass, BodyValue)
+                LinkValue = AddDefMut(Nodes, KLinkClass, BodyValue)
             else:
-                Classref(LinkValue, BodyValue)
-    NullAction(PackAction('u32', 0) + PackAction('u32', 1) + PackAction('u32', 4294967295))
-    NullAction(b'')
-    NullAction(bytes(36))
-    NullAction(b'')
-    NullAction(PackAction('f64', -1.0))
-    NullAction(PackAction('f64', 0.0))
-    NullAction(b'')
-    NullAction(ReverseTable(Params.reverse_atom_ids))
-    Objectref(Config, PackAction('u32', 1) + PackAction('u16', 1))
-    Objectref(Config, PackAction('u32', 1))
-    Definition(KExtObjectClass, b'')
-    Handle = Definition(KStringHandleClass, EncodeString(''))
-    Classref(Handle, StringHandle(Params))
-    ObjList = Definition(KObjectListClass, StampList(Params.feature_stamps))
-    Classref(ObjList, Table(KObjectListTail))
-    return Model(header=EncodeClassDefinition(KRootClass, KClassSchema), base=KMapBase, nodes=Nodes)
+                AddClassMut(Nodes, LinkValue, BodyValue)
+
+# this definition exists because manager references and object lists form one terminal section
+def AddTailMut(Nodes: list[NodeValue], Params: CMgrParameters, Config: int) -> None:
+    AddNullMut(Nodes, PackAction('u32', 0) + PackAction('u32', 1) + PackAction('u32', 4294967295))
+    AddNullMut(Nodes, b'')
+    AddNullMut(Nodes, bytes(36))
+    AddNullMut(Nodes, b'')
+    AddNullMut(Nodes, PackAction('f64', -1.0))
+    AddNullMut(Nodes, PackAction('f64', 0.0))
+    AddNullMut(Nodes, b'')
+    AddNullMut(Nodes, ReverseTable(Params.reverse_atom_ids))
+    AddObjectMut(Nodes, Config, PackAction('u32', 1) + PackAction('u16', 1))
+    AddObjectMut(Nodes, Config, PackAction('u32', 1))
+    AddDefMut(Nodes, KExtObjectClass, b'')
+    Handle = AddDefMut(Nodes, KStringHandleClass, EncodeString(''))
+    AddClassMut(Nodes, Handle, StringHandle(Params))
+    ObjList = AddDefMut(Nodes, KObjectListClass, StampList(Params.feature_stamps))
+    AddClassMut(Nodes, ObjList, Table(KObjectListTail))
 
 # this definition exists because focused behavior needs one stable owner
 def AtomIdsFor(FeatureCount: int) -> tuple[int, ...]:

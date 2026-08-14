@@ -28,12 +28,38 @@ KMoRevEndSpec = [('i32', 'singleEnd@0x08'), ('i32', 'f@0x138'), ('i32', 'f@0x13c
 KWidths = {'u8': 1, 'i8': 1, 'u16': 2, 'i16': 2, 'u32': 4, 'i32': 4, 'f32': 4, 'f64': 8}
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
+# scalar gap decoding stays isolated so tree traversal owns only object ordering
+def ReadGapMut(ByteBlob, OffInfo, ByteSize, SpecInfo, Cursor, Values):
+    UsedInfo = 0
+    while UsedInfo < ByteSize:
+        if Cursor >= len(SpecInfo):
+            return False, f'spec exhausted with {ByteSize - UsedInfo} bytes left at {OffInfo + UsedInfo}', Cursor
+        KindNameInfo, NameTextInfo = SpecInfo[Cursor]
+        if KindNameInfo == 'obj':
+            return False, f'expected scalar at {OffInfo + UsedInfo}, spec says obj {NameTextInfo}', Cursor
+        WidthInfo = KWidths[KindNameInfo]
+        if UsedInfo + WidthInfo > ByteSize:
+            return False, f'field {NameTextInfo} ({KindNameInfo}) overruns gap at {OffInfo + UsedInfo}', Cursor
+        RawData = ByteBlob[OffInfo + UsedInfo:OffInfo + UsedInfo + WidthInfo]
+        if KindNameInfo == 'f64':
+            ValueInfo = Struct.unpack('<d', RawData)[0]
+        elif KindNameInfo in ('i32', 'u32'):
+            ValueInfo = Struct.unpack('<i' if KindNameInfo == 'i32' else '<I', RawData)[0]
+        elif KindNameInfo in ('u16', 'i16'):
+            ValueInfo = Struct.unpack('<H', RawData)[0]
+        else:
+            ValueInfo = RawData[0]
+        Values.append((NameTextInfo, ValueInfo))
+        UsedInfo += WidthInfo
+        Cursor += 1
+    return True, 'ok', Cursor
+
+
+# tree traversal remains focused on archive object ordering and delegates scalar decoding
 def WalkTree(SegsInfo, ByteBlob, IndexData, SpecInfo):
-    Items = FindGaps(SegsInfo, IndexData)
     Cursor = 0
     Values = []
-    for ItemData in Items:
+    for ItemData in FindGaps(SegsInfo, IndexData):
         if ItemData[0] == 'object':
             if Cursor >= len(SpecInfo) or SpecInfo[Cursor][0] != 'obj':
                 return (False, f'expected obj, spec[{Cursor}]={SpecInfo[Cursor:Cursor + 1]}', Values)
@@ -41,41 +67,16 @@ def WalkTree(SegsInfo, ByteBlob, IndexData, SpecInfo):
             Cursor += 1
             continue
         SpareValue, OffInfo, ByteSize = ItemData
-        UsedInfo = 0
-        while UsedInfo < ByteSize:
-            if Cursor >= len(SpecInfo):
-                return (False, f'spec exhausted with {ByteSize - UsedInfo} bytes left at {OffInfo + UsedInfo}', Values)
-            KindNameInfo, NameTextInfo = SpecInfo[Cursor]
-            if KindNameInfo == 'obj':
-                return (False, f'expected scalar at {OffInfo + UsedInfo}, spec says obj {NameTextInfo}', Values)
-            WidthInfo = KWidths[KindNameInfo]
-            if UsedInfo + WidthInfo > ByteSize:
-                return (False, f'field {NameTextInfo} ({KindNameInfo}) overruns gap at {OffInfo + UsedInfo}', Values)
-            RawData = ByteBlob[OffInfo + UsedInfo:OffInfo + UsedInfo + WidthInfo]
-            if KindNameInfo == 'f64':
-                ValueInfo = Struct.unpack('<d', RawData)[0]
-            elif KindNameInfo in ('i32', 'u32'):
-                ValueInfo = Struct.unpack('<i' if KindNameInfo == 'i32' else '<I', RawData)[0]
-            elif KindNameInfo in ('u16', 'i16'):
-                ValueInfo = Struct.unpack('<H', RawData)[0]
-            else:
-                ValueInfo = RawData[0]
-            Values.append((NameTextInfo, ValueInfo))
-            UsedInfo += WidthInfo
-            Cursor += 1
-        if UsedInfo != ByteSize:
-            return (False, f'gap mismatch at {OffInfo}', Values)
+        OkInfo, Message, Cursor = ReadGapMut(ByteBlob, OffInfo, ByteSize, SpecInfo, Cursor, Values)
+        if not OkInfo:
+            return False, Message, Values
     if Cursor != len(SpecInfo):
         return (False, f'{len(SpecInfo) - Cursor} spec items unconsumed', Values)
     return (True, 'ok', Values)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def TailInfo(SegsInfo, ByteBlob, IndexData):
-    KidsInfo = [SourceData for SourceData in SegsInfo if SourceData['parent'] == IndexData]
-    if not KidsInfo:
-        return None
-    LastInfo = KidsInfo[-1]
+def FinishTail(ByteBlob, LastInfo):
     StartRun = LastInfo['offset'] + LastInfo['header']
     ByteSize = LastInfo['scope_end'] - StartRun
     RawData = ByteBlob[StartRun:StartRun + ByteSize]
@@ -105,6 +106,15 @@ def TailInfo(SegsInfo, ByteBlob, IndexData):
     if Candidates:
         return Candidates[0]
     return {'run_size': ByteSize, 'error': 'no budget fits'}
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def TailInfo(SegsInfo, ByteBlob, IndexData):
+    KidsInfo = [SourceData for SourceData in SegsInfo if SourceData['parent'] == IndexData]
+    if not KidsInfo:
+        return None
+    LastInfo = KidsInfo[-1]
+    return FinishTail(ByteBlob, LastInfo)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

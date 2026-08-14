@@ -134,10 +134,7 @@ def TagAt(ByteBlob: bytes, Offset: int) -> tuple[int, str, int]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def SegmentInfo(ByteBlob: bytes, Events: tuple[Event, ...], *, Buffer: int | None=None) -> tuple[Segment, ...]:
-    Objects = ObjectEvents(Events)
-    if not Objects:
-        return ()
+def FinishSegment(Buffer, ByteBlob, Objects) -> tuple[Segment, ...]:
     Target = DominantBuffer(Objects) if Buffer is None else Buffer
     Offsets = sorted({EventInfo.offset for EventInfo in Objects if EventInfo.buffer == Target})
     Counters = {}
@@ -166,6 +163,14 @@ def SegmentInfo(ByteBlob: bytes, Events: tuple[Event, ...], *, Buffer: int | Non
             NameTextInfo = KindNameInfo
         Result.append(Segment(IndexData=PosInfoInfo, Offset=Offset, EndIndex=EndIndex, TagInfoInfo=Token, TagKind=KindNameInfo, ClassIndex=ClassIndex, ClassNameData=NameTextInfo, CounterInfo=Counters[Offset], Header=Header))
     return tuple(Result)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SegmentInfo(ByteBlob: bytes, Events: tuple[Event, ...], *, Buffer: int | None=None) -> tuple[Segment, ...]:
+    Objects = ObjectEvents(Events)
+    if not Objects:
+        return ()
+    return FinishSegment(Buffer, ByteBlob, Objects)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

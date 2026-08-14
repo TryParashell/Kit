@@ -1241,7 +1241,12 @@ def IsEncodedMate(Source: MateConstraint, Target: NativeMate, Entities: Mapping[
     return all((ExpectedName == Actual.name and MathValue.isclose(ExpectedValue, Actual.value, rel_tol=1e-12, abs_tol=1e-12) for (ExpectedName, ExpectedValue), Actual in zip(Dimensions, Target.dimensions)))
 
 # this definition exists because focused behavior needs one stable owner
-def DecodeNativeAsm(Archive: SldprtArchive, *, IncludeTessellation: bool=False) -> NativeAsm:
+def DecodeNativeAsm(Archive: SldprtArchive, *, IncludeTessellation: bool=False, **LegacyValues: object) -> NativeAsm:
+    IncludeTessellation = LegacyValues.get('include_tessellation', IncludeTessellation)
+    UnknownValues = set(LegacyValues) - {'include_tessellation'}
+    if UnknownValues:
+        Unexpected = next(iter(UnknownValues))
+        raise TypeError(f"DecodeNativeAsm() got an unexpected keyword argument {Unexpected!r}")
     RootValue = XmlRoot(Archive.require(ComponentTreeStream))
     Files = Files(RootValue)
     FileById = {ItemValue.object_id: ItemValue for ItemValue in Files}

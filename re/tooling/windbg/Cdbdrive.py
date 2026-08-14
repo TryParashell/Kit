@@ -69,11 +69,7 @@ def Sweep(Settle: float=4.0) -> None:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def WatchDialogs(StopInfo: Threading.Event) -> None:
-    import ctypes as Ctypes
-    import ctypes.wintypes as Wintypes
-    UserThirtyTwo = Ctypes.windll.user32
-    Prototype = Ctypes.WINFUNCTYPE(Ctypes.c_bool, Wintypes.HWND, Wintypes.LPARAM)
+def FinishDialogs(Ctypes, Prototype, StopInfo, UserThirtyTwo) -> None:
 
 
     # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -121,21 +117,16 @@ def WatchDialogs(StopInfo: Threading.Event) -> None:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def RunTask(Script: PathInfo, LogInfo: PathInfo, PartInfoInfo: PathInfo | None, *, Marker: str, TargetMarkers: int=0, HardDeadline: float=600.0, QuietSeconds: float=45.0) -> RunResult:
-    Sweep()
-    LogInfo.parent.mkdir(parents=True, exist_ok=True)
-    if LogInfo.exists():
-        LogInfo.unlink()
-    Command = [str(KCdbInfo), '-logo', str(LogInfo), '-c', f'$$<{Script.name}', str(KSldworks)]
-    if PartInfoInfo is not None:
-        Command.append(str(PartInfoInfo.resolve()))
-    StopInfo = Threading.Event()
-    WatcherMut = Threading.Thread(target=WatchDialogs, args=(StopInfo,), daemon=True)
-    WatcherMut.start()
-    Started = TimeInfo.monotonic()
-    Process = Subprocess.Popen(Command, cwd=str(Script.parent), stdout=Subprocess.DEVNULL, stderr=Subprocess.DEVNULL, stdin=Subprocess.DEVNULL)
-    Pattern = Regex.compile(Marker, Regex.MULTILINE)
-    CountInfo = 0
+def WatchDialogs(StopInfo: Threading.Event) -> None:
+    import ctypes as Ctypes
+    import ctypes.wintypes as Wintypes
+    UserThirtyTwo = Ctypes.windll.user32
+    Prototype = Ctypes.WINFUNCTYPE(Ctypes.c_bool, Wintypes.HWND, Wintypes.LPARAM)
+    return FinishDialogs(Ctypes, Prototype, StopInfo, UserThirtyTwo)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def FinishTask(CountInfo, HardDeadline, LogInfo, Pattern, Process, QuietSeconds, Started, StopInfo, TargetMarkers) -> RunResult:
     LastChange = TimeInfo.monotonic()
     Reason = 'deadline'
     try:
@@ -165,3 +156,22 @@ def RunTask(Script: PathInfo, LogInfo: PathInfo, PartInfoInfo: PathInfo | None, 
         TimeInfo.sleep(1.0)
         Sweep()
     return RunResult(LogInfo=LogInfo, Seconds=TimeInfo.monotonic() - Started, Markers=CountInfo, Reason=Reason)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def RunTask(Script: PathInfo, LogInfo: PathInfo, PartInfoInfo: PathInfo | None, *, Marker: str, TargetMarkers: int=0, HardDeadline: float=600.0, QuietSeconds: float=45.0) -> RunResult:
+    Sweep()
+    LogInfo.parent.mkdir(parents=True, exist_ok=True)
+    if LogInfo.exists():
+        LogInfo.unlink()
+    Command = [str(KCdbInfo), '-logo', str(LogInfo), '-c', f'$$<{Script.name}', str(KSldworks)]
+    if PartInfoInfo is not None:
+        Command.append(str(PartInfoInfo.resolve()))
+    StopInfo = Threading.Event()
+    WatcherMut = Threading.Thread(target=WatchDialogs, args=(StopInfo,), daemon=True)
+    WatcherMut.start()
+    Started = TimeInfo.monotonic()
+    Process = Subprocess.Popen(Command, cwd=str(Script.parent), stdout=Subprocess.DEVNULL, stderr=Subprocess.DEVNULL, stdin=Subprocess.DEVNULL)
+    Pattern = Regex.compile(Marker, Regex.MULTILINE)
+    CountInfo = 0
+    return FinishTask(CountInfo, HardDeadline, LogInfo, Pattern, Process, QuietSeconds, Started, StopInfo, TargetMarkers)

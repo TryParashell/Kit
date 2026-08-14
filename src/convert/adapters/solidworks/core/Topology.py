@@ -136,27 +136,30 @@ class FeatureTopology:
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class TargetFeature:
-    locals().setdefault('__annotations__', {})
-    __annotations__['operation'] = 'str'
-    __annotations__['profile'] = 'str'
-    __annotations__['support'] = 'str'
-    __annotations__['end_condition'] = 'str'
-    __annotations__['points_mm'] = 'tuple[tuple[float, float], ...]'
-    locals()['points_mm'] = ()
-    __annotations__['radii_mm'] = 'tuple[float, ...]'
-    locals()['radii_mm'] = ()
-    __annotations__['arc_centres_mm'] = 'tuple[tuple[float, float], ...]'
-    locals()['arc_centres_mm'] = ()
-    __annotations__['swept_arc_centres_mm'] = 'tuple[tuple[float, float], ...]'
-    locals()['swept_arc_centres_mm'] = ()
-    __annotations__['depth_mm'] = 'float | None'
-    locals()['depth_mm'] = None
-    __annotations__['reversed'] = 'bool | None'
-    locals()['reversed'] = None
-    __annotations__['angle_degrees'] = 'float | None'
-    locals()['angle_degrees'] = None
-    __annotations__['axis_direction'] = 'tuple[float, float] | None'
-    locals()['axis_direction'] = None
+    __annotations__ = {
+        'operation': 'str',
+        'profile': 'str',
+        'support': 'str',
+        'end_condition': 'str',
+        'points_mm': 'tuple[tuple[float, float], ...]',
+        'radii_mm': 'tuple[float, ...]',
+        'arc_centres_mm': 'tuple[tuple[float, float], ...]',
+        'swept_arc_centres_mm': 'tuple[tuple[float, float], ...]',
+        'depth_mm': 'float | None',
+        'reversed': 'bool | None',
+        'angle_degrees': 'float | None',
+        'axis_direction': 'tuple[float, float] | None',
+    }
+    locals().update({
+        'points_mm': (),
+        'radii_mm': (),
+        'arc_centres_mm': (),
+        'swept_arc_centres_mm': (),
+        'depth_mm': None,
+        'reversed': None,
+        'angle_degrees': None,
+        'axis_direction': None,
+    })
 
     # this definition exists because focused behavior needs one stable owner
     @property

@@ -247,12 +247,7 @@ def Assign(DocInfo, ByteBlob):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRun():
-    PerTrace = {}
-    for LabelInfo in KTraces:
-        DocInfo = LoadTrace(LabelInfo)
-        PartInfoInfo, ByteBlob = LoadStream(DocInfo)
-        PerTrace[LabelInfo] = {'part': str(PartInfoInfo), 'stream_length': len(ByteBlob), 'base_map_index': DocInfo['base_map_index'], 'slots': Assign(DocInfo, ByteBlob)}
+def FinishMain(LabelInfo, PerTrace):
     Presence = DefnPresence()
     ConfigZero = ConfigZeroMap()
     Continuation = {}
@@ -279,5 +274,15 @@ def MainRun():
     for NameTextInfo, CountInfo in Presence['defined_in_parts'].items():
         print(f'  {NameTextInfo}: {CountInfo}')
     print(f'wrote {KOutput}')
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def MainRun():
+    PerTrace = {}
+    for LabelInfo in KTraces:
+        DocInfo = LoadTrace(LabelInfo)
+        PartInfoInfo, ByteBlob = LoadStream(DocInfo)
+        PerTrace[LabelInfo] = {'part': str(PartInfoInfo), 'stream_length': len(ByteBlob), 'base_map_index': DocInfo['base_map_index'], 'slots': Assign(DocInfo, ByteBlob)}
+    return FinishMain(LabelInfo, PerTrace)
 if __name__ == '__main__':
     MainRun()

@@ -216,7 +216,7 @@ def GetLength(Vector: Point) -> float:
     return MathValue.sqrt(DotAction(Vector, Vector))
 
 # this definition exists because focused behavior needs one stable owner
-def Scale(Vector: Point, Factor: float) -> KPoint:
+def ScaleVector(Vector: Point, Factor: float) -> KPoint:
     return tuple((Component * Factor for Component in Vector))
 
 # this definition exists because focused behavior needs one stable owner
@@ -224,7 +224,7 @@ def Values(Values: Sequence[float]) -> str:
     return ' '.join((Number(Value) for Value in Values))
 
 # this definition exists because focused behavior needs one stable owner
-def Triangle(Value: Any, VertexCount: int) -> KTriangle:
+def ParseTriangle(Value: Any, VertexCount: int) -> KTriangle:
     try:
         Indices = tuple(Value)
     except TypeError as exc:
@@ -258,8 +258,8 @@ def GeomAction(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Toleranc
         NormalLength = GetLength(NormalVector)
         if NormalLength <= Tolerance * max(Lengths):
             raise ValueError('triangle area must exceed the BRep tolerance')
-        Normal = Scale(NormalVector, 1.0 / NormalLength)
-        XDirection = Scale(Edges[0], 1.0 / Lengths[0])
+        Normal = ScaleVector(NormalVector, 1.0 / NormalLength)
+        XDirection = ScaleVector(Edges[0], 1.0 / Lengths[0])
         YDirection = Cross(Normal, XDirection)
         Result.append((Corners, Lengths, Normal, XDirection, YDirection))
     return tuple(Result)
@@ -340,7 +340,7 @@ def Header(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Edges: tuple
     Lines = ['DBRep_DrawableShape', '', 'CASCADE Topology V1, (c) Matra-Datavision', 'Locations 0', 'Curve2ds 0', f'Curves {len(Edges)}']
     for Start, EndValue in Edges:
         Vector = Subtract(Points[EndValue], Points[Start])
-        Direction = Scale(Vector, 1.0 / GetLength(Vector))
+        Direction = ScaleVector(Vector, 1.0 / GetLength(Vector))
         Lines.append(f'1 {Values(Points[Start] + Direction)} ')
     Lines.extend(['Polygon3D 0', 'PolygonOnTriangulations 0', f'Surfaces {len(Facets)}'])
     for Corners, Ignored, Normal, XDirection, YDirection in GeomValue:
@@ -472,7 +472,7 @@ def UnitThree(Value: Vector3, Label: str) -> tuple[KPoint, float]:
     Length = GetLength(RawValue)
     if not MathValue.isfinite(Length) or Length <= 0.0:
         Unsupported(f'{Label} has an invalid direction')
-    return (Scale(RawValue, 1.0 / Length), Length)
+    return (ScaleVector(RawValue, 1.0 / Length), Length)
 
 # this definition exists because focused behavior needs one stable owner
 def Frame(AxisValue: Vector3, RefValue: Vector3, Label: str) -> tuple[KPoint, KPoint, KPoint]:
@@ -868,7 +868,7 @@ def EdgePcurveA(Model: BrepModel, Graph: _ModelGraph, Tolerance: float) -> tuple
             FirstPcurveIndex = len(Records)
             Records.append(f'1 {Values((LowStart[0], LowStart[1], 0.0, 1.0))} ')
             SecondPcurveIndex = len(Records)
-            Direction = Scale(Subtract(HighPoint, LowPoint), 1.0 / Length)
+            Direction = ScaleVector(Subtract(HighPoint, LowPoint), 1.0 / Length)
             SeamBands[FaceValue.id] = SeamBand(FaceValue.id, (FaceValue.loop_ids[0], FaceValue.loop_ids[1]), LowCoedge.id, HighCoedge.id, LowReversed, HighReversed, Graph.edges[LowCoedge.edge_id].start_vertex_id, Graph.edges[HighCoedge.edge_id].start_vertex_id, f'1 {Values(LowPoint + Direction)} ', Length, FirstPcurveIndex, SecondPcurveIndex)
             continue
         for LoopId in FaceValue.loop_ids:
@@ -1308,7 +1308,7 @@ def TriangleMesh(Vertices: Sequence[Any], Triangles: Sequence[Any], Tolerance: f
     if not MathValue.isfinite(Tolerance) or Tolerance <= 0.0:
         raise ValueError('tolerance must be finite and positive')
     Points = tuple((Point(Vertex) for Vertex in Vertices))
-    Declared = tuple((Triangle(Triangle, len(Points)) for Triangle in Triangles))
+    Declared = tuple((ParseTriangle(Triangle, len(Points)) for Triangle in Triangles))
     if not Declared:
         raise ValueError('at least one triangle is required')
     Facets = tuple((Facet for Facet in Declared if not FacetIs(Points, Facet, Tolerance)))
@@ -1453,7 +1453,7 @@ globals()['_point'] = Point
 globals()['_require_owned'] = RequireOwned
 
 # this binding exists because shared behavior needs one stable value
-globals()['_scale'] = Scale
+globals()['_scale'] = ScaleVector
 
 # this binding exists because shared behavior needs one stable value
 globals()['_seam_band'] = SeamBandA
@@ -1486,7 +1486,7 @@ globals()['_surface_residual'] = SurfaceResidual
 globals()['_surface_uv'] = SurfaceUv
 
 # this binding exists because shared behavior needs one stable value
-globals()['_triangle'] = Triangle
+globals()['_triangle'] = ParseTriangle
 
 # this binding exists because shared behavior needs one stable value
 globals()['_unit2'] = UnitTwo

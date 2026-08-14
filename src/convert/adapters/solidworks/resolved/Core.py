@@ -322,19 +322,8 @@ class SketchArc:
     locals()['full_circle'] = IsFullCircle
     locals()['FullCircle'] = IsFullCircle
 
-# this definition exists because focused behavior needs one stable owner
-@Dataclass(frozen=True, slots=True)
-class SweptArc:
-    locals().setdefault('__annotations__', {})
-    __annotations__['centre_offset'] = 'int'
-    __annotations__['start_offset'] = 'int'
-    __annotations__['end_offset'] = 'int'
-    __annotations__['centre_x_mm'] = 'float'
-    __annotations__['centre_y_mm'] = 'float'
-    __annotations__['start_x_mm'] = 'float'
-    __annotations__['start_y_mm'] = 'float'
-    __annotations__['end_x_mm'] = 'float'
-    __annotations__['end_y_mm'] = 'float'
+# this definition exists because swept arc coordinate properties form one geometric interface
+class ArcGeometry:
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -368,6 +357,16 @@ class SweptArc:
         if Radius <= KMinimumRadiusMm:
             return False
         return abs(Instance.end_radius_mm - Radius) <= max(KArcRadiusToleranceMm, Radius * 1e-09)
+    locals()['centre_mm'] = CentreMm
+    locals()['consistent'] = IsConsistent
+    locals()['end_mm'] = EndMm
+    locals()['end_radius_mm'] = EndRadiusMm
+    locals()['radius_mm'] = RadiusMm
+    locals()['start_mm'] = StartMm
+    locals()['Consistent'] = IsConsistent
+
+# this definition exists because swept arc angular properties form one directional interface
+class ArcAngles:
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -389,20 +388,27 @@ class SweptArc:
         while SpanValue > KFullCircleDegrees:
             SpanValue -= KFullCircleDegrees
         return SpanValue
-    locals()['centre_mm'] = CentreMm
-    locals()['consistent'] = IsConsistent
     locals()['end_angle_degrees'] = EndAngleDegrees
-    locals()['end_mm'] = EndMm
-    locals()['end_radius_mm'] = EndRadiusMm
-    locals()['radius_mm'] = RadiusMm
     locals()['start_angle_degrees'] = StartAngle
-    locals()['start_mm'] = StartMm
     locals()['sweep_angle_degrees'] = SweepAngle
-    locals()['Consistent'] = IsConsistent
 
-# this definition exists because focused behavior needs one stable owner
+# this definition exists because swept arc storage composes geometric and angular behavior
 @Dataclass(frozen=True, slots=True)
-class FeatureLayout:
+class SweptArc(ArcGeometry, ArcAngles):
+    locals().setdefault('__annotations__', {})
+    __annotations__['centre_offset'] = 'int'
+    __annotations__['start_offset'] = 'int'
+    __annotations__['end_offset'] = 'int'
+    __annotations__['centre_x_mm'] = 'float'
+    __annotations__['centre_y_mm'] = 'float'
+    __annotations__['start_x_mm'] = 'float'
+    __annotations__['start_y_mm'] = 'float'
+    __annotations__['end_x_mm'] = 'float'
+    __annotations__['end_y_mm'] = 'float'
+
+# this definition exists because core feature identity fields share one immutable record
+@Dataclass(frozen=True, slots=True)
+class FeatureCore:
     locals().setdefault('__annotations__', {})
     __annotations__['ordinal'] = 'int'
     __annotations__['name'] = 'str'
@@ -414,33 +420,9 @@ class FeatureLayout:
     __annotations__['sketch_id'] = 'int | None'
     __annotations__['points'] = 'tuple[SketchPoint, ...]'
     __annotations__['arcs'] = 'tuple[SketchArc, ...]'
-    __annotations__['depth_offset'] = 'int | None'
-    __annotations__['depth_mm'] = 'float | None'
-    __annotations__['depth_copy_offsets'] = 'tuple[int, ...]'
-    __annotations__['reverse_offset'] = 'int | None'
-    __annotations__['end_condition_offset'] = 'int | None'
-    __annotations__['reversed'] = 'bool | None'
-    __annotations__['end_condition_code'] = 'int | None'
-    __annotations__['from_reverse_offset'] = 'int | None'
-    locals()['from_reverse_offset'] = None
-    __annotations__['angle_offset'] = 'int | None'
-    locals()['angle_offset'] = None
-    __annotations__['angle_radians'] = 'float | None'
-    locals()['angle_radians'] = None
-    __annotations__['angle_copy_offsets'] = 'tuple[int, ...]'
-    locals()['angle_copy_offsets'] = ()
-    __annotations__['end_spec_offset'] = 'int | None'
-    locals()['end_spec_offset'] = None
-    __annotations__['axis_kind'] = 'str | None'
-    locals()['axis_kind'] = None
-    __annotations__['axis_offset'] = 'int | None'
-    locals()['axis_offset'] = None
-    __annotations__['axis_feature_id'] = 'int | None'
-    locals()['axis_feature_id'] = None
-    __annotations__['swept_arcs'] = 'tuple[SweptArc, ...]'
-    locals()['swept_arcs'] = ()
-    KSketchDimensionOffsets: tuple[int, ...] = ()
-    KSketchDimensionsMm: tuple[float, ...] = ()
+
+# this definition exists because derived feature geometry belongs outside immutable field storage
+class LayoutMath:
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -463,6 +445,13 @@ class FeatureLayout:
     @property
     def RadiiMm(Instance) -> tuple[float, ...]:
         return tuple((ArcValue.radius_mm for ArcValue in Instance.arcs))
+    locals()['angle_degrees'] = AngleDegrees
+    locals()['corners_mm'] = CornersMm
+    locals()['is_revolution'] = IsRevolution
+    locals()['radii_mm'] = RadiiMm
+
+# this definition exists because feature bounds derive independently from other layout properties
+class LayoutBounds:
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -476,11 +465,46 @@ class FeatureLayout:
             YsValue = tuple((Value for ArcValue in Instance.arcs for Value in (ArcValue.centre_y_mm - ArcValue.radius_mm, ArcValue.centre_y_mm + ArcValue.radius_mm)))
             return (min(XsValue), min(YsValue), max(XsValue), max(YsValue))
         return None
-    locals()['angle_degrees'] = AngleDegrees
     locals()['bounds_mm'] = BoundsMm
-    locals()['corners_mm'] = CornersMm
-    locals()['is_revolution'] = IsRevolution
-    locals()['radii_mm'] = RadiiMm
+
+# this definition exists because required depth metadata extends stable feature identity fields
+@Dataclass(frozen=True, slots=True)
+class FeatureDepth(FeatureCore):
+    locals().setdefault('__annotations__', {})
+    __annotations__['depth_offset'] = 'int | None'
+    __annotations__['depth_mm'] = 'float | None'
+    __annotations__['depth_copy_offsets'] = 'tuple[int, ...]'
+    __annotations__['reverse_offset'] = 'int | None'
+    __annotations__['end_condition_offset'] = 'int | None'
+    __annotations__['reversed'] = 'bool | None'
+    __annotations__['end_condition_code'] = 'int | None'
+
+# this definition exists because optional feature geometry extends the stable identity record
+@Dataclass(frozen=True, slots=True)
+class FeatureLayout(LayoutMath, LayoutBounds, FeatureDepth):
+    locals().setdefault('__annotations__', {})
+    __annotations__['from_reverse_offset'] = 'int | None'
+    locals()['from_reverse_offset'] = None
+    __annotations__['angle_offset'] = 'int | None'
+    locals()['angle_offset'] = None
+    __annotations__['angle_radians'] = 'float | None'
+    locals()['angle_radians'] = None
+    __annotations__['angle_copy_offsets'] = 'tuple[int, ...]'
+    locals()['angle_copy_offsets'] = ()
+    __annotations__['end_spec_offset'] = 'int | None'
+    locals()['end_spec_offset'] = None
+    __annotations__['axis_kind'] = 'str | None'
+    locals()['axis_kind'] = None
+    __annotations__['axis_offset'] = 'int | None'
+    locals()['axis_offset'] = None
+    __annotations__['axis_feature_id'] = 'int | None'
+    locals()['axis_feature_id'] = None
+    __annotations__['swept_arcs'] = 'tuple[SweptArc, ...]'
+    locals()['swept_arcs'] = ()
+    __annotations__['SketchDimensionOffsets'] = 'tuple[int, ...]'
+    locals()['SketchDimensionOffsets'] = ()
+    __annotations__['SketchDimensionsMm'] = 'tuple[float, ...]'
+    locals()['SketchDimensionsMm'] = ()
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
@@ -504,7 +528,19 @@ class FeatureEdit:
     locals()['angle_radians'] = None
     __annotations__['swept_arc_centres_mm'] = 'Sequence[tuple[float, float]] | None'
     locals()['swept_arc_centres_mm'] = None
-    KSketchDimensionsMm: Sequence[float] | None = None
+    __annotations__['SketchDimensionsMm'] = 'Sequence[float] | None'
+    locals()['SketchDimensionsMm'] = None
+    __annotations__['sketch_dimensions_mm'] = 'Sequence[float] | None'
+    locals()['sketch_dimensions_mm'] = None
+
+    # this definition exists because legacy and current sketch dimension names must stay synchronized
+    def PostInit(Instance) -> None:
+        Dimensions = Instance.SketchDimensionsMm if Instance.SketchDimensionsMm is not None else Instance.sketch_dimensions_mm
+        if Instance.SketchDimensionsMm is not None and Instance.sketch_dimensions_mm is not None and Instance.SketchDimensionsMm != Instance.sketch_dimensions_mm:
+            raise SldprtFormatError('sketch dimension aliases must describe the same values')
+        object.__setattr__(Instance, 'SketchDimensionsMm', Dimensions)
+        object.__setattr__(Instance, 'sketch_dimensions_mm', Dimensions)
+    locals()['__post_init__'] = PostInit
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
@@ -734,10 +770,7 @@ def LocateFeatures(DataValue: bytes | bytearray) -> tuple[FeatureLayout, ...]:
     Revolutions = RevolutionNodes(BlobValue, Nodes, Classes)
     Features = tuple((NodeValue for NodeValue in Nodes if FeatureKind(NodeValue.flags) is not None or NodeValue.offset in Revolutions))
     Profiles = tuple((NodeValue for NodeValue in Nodes if FeatureKind(NodeValue.flags) is None and NodeValue.offset not in Revolutions))
-    FromEndSpec = FirstClass(Classes, KFromEndSpecClass)
-    FromReverse = None if FromEndSpec is None else FromEndSpec + KFromReverseRelative
-    if FromReverse is not None and FromReverse >= len(BlobValue):
-        FromReverse = None
+    FromReverse = ReverseMirror(BlobValue, Classes)
     Points = SketchPoints(BlobValue)
     ArcsValue = SketchArcs(BlobValue)
     Swept = SweptArcs(BlobValue)
@@ -757,6 +790,14 @@ def LocateFeatures(DataValue: bytes | bytearray) -> tuple[FeatureLayout, ...]:
         Result.append(FeatureLayoutA(BlobValue, Ordinal, Extrusions, Feature, Sketch, () if Sketch is None else PointsInRange(Points, Sketch, Feature), () if Sketch is None else ArcsInRange(ArcsValue, Sketch, Feature), Scalar, FromReverse if Extrusions == 0 else None, SweptArcs=() if Sketch is None else SweptInRange(Swept, Sketch, Feature), SketchScalars=SketchScalars))
         Extrusions += 1
     return tuple(Result)
+
+# this definition exists because mirrored direction discovery has one bounds checked location
+def ReverseMirror(BlobValue: bytes, Classes: tuple[ClassRecord, ...]) -> int | None:
+    FromEndSpec = FirstClass(Classes, KFromEndSpecClass)
+    FromReverse = None if FromEndSpec is None else FromEndSpec + KFromReverseRelative
+    if FromReverse is not None and FromReverse >= len(BlobValue):
+        return None
+    return FromReverse
 
 # this definition exists because focused behavior needs one stable owner
 def RectangleMm(MinimumXMm: float, MinimumYMm: float, MaximumXMm: float, MaximumYMm: float) -> tuple[tuple[float, float], ...]:
@@ -785,51 +826,74 @@ def PatchFeatures(DataValue: bytes | bytearray, Edits: Mapping[int, FeatureEdit]
         Feature = Features[Ordinal]
         EditValue = Edits[Ordinal]
         ValidateEdit(Feature, EditValue)
-        if EditValue.corners_mm is not None:
-            for Point, (FirstCoord, SecondCoord) in zip(Feature.points, EditValue.corners_mm, strict=True):
-                Struct.pack_into('<d', Output, Point.offset, FirstCoord / KMetres)
-                Struct.pack_into('<d', Output, Point.offset + 8, SecondCoord / KMetres)
-        if EditValue.radii_mm is not None:
-            for ArcValue, RadiusMm in zip(Feature.arcs, EditValue.radii_mm, strict=True):
-                if MathValue.isclose(RadiusMm, ArcValue.radius_mm, rel_tol=0.0, abs_tol=1e-12):
-                    continue
-                WriteArcRadius(Output, ArcValue, RadiusMm)
-        if EditValue.arc_centres_mm is not None:
-            for ArcValue, (FirstCoord, SecondCoord) in zip(Feature.arcs, EditValue.arc_centres_mm, strict=True):
-                if MathValue.isclose(FirstCoord, ArcValue.centre_x_mm, rel_tol=0.0, abs_tol=1e-12) and MathValue.isclose(SecondCoord, ArcValue.centre_y_mm, rel_tol=0.0, abs_tol=1e-12):
-                    continue
-                DeltaX = (FirstCoord - ArcValue.centre_x_mm) / KMetres
-                DeltaY = (SecondCoord - ArcValue.centre_y_mm) / KMetres
-                RimXValue, RimYValue = Struct.unpack_from('<2d', Output, ArcValue.point_offset)
-                Struct.pack_into('<d', Output, ArcValue.centre_offset, FirstCoord / KMetres)
-                Struct.pack_into('<d', Output, ArcValue.centre_offset + 8, SecondCoord / KMetres)
-                Struct.pack_into('<d', Output, ArcValue.point_offset, RimXValue + DeltaX)
-                Struct.pack_into('<d', Output, ArcValue.point_offset + 8, RimYValue + DeltaY)
-        if EditValue.swept_arc_centres_mm is not None:
-            for ArcValue, Centre in zip(Feature.swept_arcs, EditValue.swept_arc_centres_mm, strict=True):
-                Struct.pack_into('<d', Output, ArcValue.centre_offset, Centre[0] / KMetres)
-                Struct.pack_into('<d', Output, ArcValue.centre_offset + 8, Centre[1] / KMetres)
-        if EditValue.SketchDimensionsMm is not None:
-            for DimensionOffset, DimensionValue in zip(Feature.SketchDimensionOffsets, EditValue.SketchDimensionsMm, strict=True):
-                Struct.pack_into('<d', Output, DimensionOffset, DimensionValue / KMetres)
-        if EditValue.angle_radians is not None:
-            Struct.pack_into('<d', Output, Feature.angle_offset, EditValue.angle_radians)
-        if EditValue.depth_mm is not None:
-            Struct.pack_into('<d', Output, Feature.depth_offset, EditValue.depth_mm / KMetres)
-            if EditValue.update_depth_copies:
-                for Delta, SignValue in zip(KDepthCopyDeltas, KDepthCopySigns, strict=True):
-                    Target = Feature.depth_offset + Delta
-                    if Target + 8 <= len(Output):
-                        Struct.pack_into('<d', Output, Target, SignValue * EditValue.depth_mm / KMetres)
-        if EditValue.reversed is not None:
-            Output[Feature.reverse_offset] = 1 if EditValue.reversed else 0
-            if Feature.from_reverse_offset is not None:
-                Output[Feature.from_reverse_offset] = 1 if EditValue.reversed else 0
-        if EditValue.end_condition_code is not None:
-            Output[Feature.end_condition_offset] = EditValue.end_condition_code
+        PatchPointsMut(Output, Feature, EditValue)
+        PatchArcsMut(Output, Feature, EditValue)
+        PatchSweptMut(Output, Feature, EditValue)
+        PatchScalarsMut(Output, Feature, EditValue)
+        PatchFlagsMut(Output, Feature, EditValue)
     Patched = bytes(Output)
     VerifyFeatures(Patched, Features, Edits)
     return Patched
+
+# this definition exists because sketch point writes share coordinate unit conversion
+def PatchPointsMut(Output: bytearray, Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
+    if EditValue.corners_mm is None:
+        return
+    for Point, (FirstCoord, SecondCoord) in zip(Feature.points, EditValue.corners_mm, strict=True):
+        Struct.pack_into('<d', Output, Point.offset, FirstCoord / KMetres)
+        Struct.pack_into('<d', Output, Point.offset + 8, SecondCoord / KMetres)
+
+# this definition exists because circular arc writes must move centres and rim points together
+def PatchArcsMut(Output: bytearray, Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
+    if EditValue.radii_mm is not None:
+        for ArcValue, RadiusMm in zip(Feature.arcs, EditValue.radii_mm, strict=True):
+            if not MathValue.isclose(RadiusMm, ArcValue.radius_mm, rel_tol=0.0, abs_tol=1e-12):
+                WriteArcRadius(Output, ArcValue, RadiusMm)
+    if EditValue.arc_centres_mm is None:
+        return
+    for ArcValue, (FirstCoord, SecondCoord) in zip(Feature.arcs, EditValue.arc_centres_mm, strict=True):
+        if MathValue.isclose(FirstCoord, ArcValue.centre_x_mm, rel_tol=0.0, abs_tol=1e-12) and MathValue.isclose(SecondCoord, ArcValue.centre_y_mm, rel_tol=0.0, abs_tol=1e-12):
+            continue
+        DeltaX = (FirstCoord - ArcValue.centre_x_mm) / KMetres
+        DeltaY = (SecondCoord - ArcValue.centre_y_mm) / KMetres
+        RimXValue, RimYValue = Struct.unpack_from('<2d', Output, ArcValue.point_offset)
+        Struct.pack_into('<d', Output, ArcValue.centre_offset, FirstCoord / KMetres)
+        Struct.pack_into('<d', Output, ArcValue.centre_offset + 8, SecondCoord / KMetres)
+        Struct.pack_into('<d', Output, ArcValue.point_offset, RimXValue + DeltaX)
+        Struct.pack_into('<d', Output, ArcValue.point_offset + 8, RimYValue + DeltaY)
+
+# this definition exists because swept arc centres occupy a distinct coordinate record
+def PatchSweptMut(Output: bytearray, Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
+    if EditValue.swept_arc_centres_mm is None:
+        return
+    for ArcValue, Centre in zip(Feature.swept_arcs, EditValue.swept_arc_centres_mm, strict=True):
+        Struct.pack_into('<d', Output, ArcValue.centre_offset, Centre[0] / KMetres)
+        Struct.pack_into('<d', Output, ArcValue.centre_offset + 8, Centre[1] / KMetres)
+
+# this definition exists because scalar edits share native double precision encoding
+def PatchScalarsMut(Output: bytearray, Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
+    if EditValue.SketchDimensionsMm is not None:
+        for DimensionOffset, DimensionValue in zip(Feature.SketchDimensionOffsets, EditValue.SketchDimensionsMm, strict=True):
+            Struct.pack_into('<d', Output, DimensionOffset, DimensionValue / KMetres)
+    if EditValue.angle_radians is not None:
+        Struct.pack_into('<d', Output, Feature.angle_offset, EditValue.angle_radians)
+    if EditValue.depth_mm is None:
+        return
+    Struct.pack_into('<d', Output, Feature.depth_offset, EditValue.depth_mm / KMetres)
+    if EditValue.update_depth_copies:
+        for Delta, SignValue in zip(KDepthCopyDeltas, KDepthCopySigns, strict=True):
+            Target = Feature.depth_offset + Delta
+            if Target + 8 <= len(Output):
+                Struct.pack_into('<d', Output, Target, SignValue * EditValue.depth_mm / KMetres)
+
+# this definition exists because direction and termination flags share byte sized storage
+def PatchFlagsMut(Output: bytearray, Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
+    if EditValue.reversed is not None:
+        Output[Feature.reverse_offset] = 1 if EditValue.reversed else 0
+        if Feature.from_reverse_offset is not None:
+            Output[Feature.from_reverse_offset] = 1 if EditValue.reversed else 0
+    if EditValue.end_condition_code is not None:
+        Output[Feature.end_condition_offset] = EditValue.end_condition_code
 
 # this definition exists because focused behavior needs one stable owner
 def LocateRectangle(DataValue: bytes | bytearray) -> RectanglePad | None:
@@ -840,17 +904,10 @@ def LocateRectangle(DataValue: bytes | bytearray) -> RectanglePad | None:
     EndSpec = FirstClass(Records, KEndSpecClass)
     if Profile is None or Param is None or EndSpec is None:
         return None
-    PointOffsets: list[tuple[int, int]] = []
-    Corners: list[tuple[float, float]] = []
-    for Relative in KRectanglePointRelative:
-        XOffset = Profile + Relative
-        YOffset = XOffset + 8
-        FirstCoord = ReadDouble(BlobValue, XOffset)
-        SecondCoord = ReadDouble(BlobValue, YOffset)
-        if FirstCoord is None or SecondCoord is None:
-            return None
-        PointOffsets.append((XOffset, YOffset))
-        Corners.append((FirstCoord * KMetres, SecondCoord * KMetres))
+    PointData = RectPoints(BlobValue, Profile)
+    if PointData is None:
+        return None
+    PointOffsets, Corners = PointData
     DepthOffset = Param + KDepthRelative
     Depth = ReadDouble(BlobValue, DepthOffset)
     if Depth is None or Depth <= 0.0:
@@ -863,11 +920,26 @@ def LocateRectangle(DataValue: bytes | bytearray) -> RectanglePad | None:
     FromReverseOffset = None if FromEndSpec is None else FromEndSpec + KFromReverseRelative
     if FromReverseOffset is not None and FromReverseOffset >= len(BlobValue):
         FromReverseOffset = None
+    return RectanglePad(point_offsets=tuple(PointOffsets), depth_offset=DepthOffset, reverse_offset=ReverseOffset, end_condition_offset=EndConditionOffset, from_reverse_offset=FromReverseOffset, corners_mm=tuple(Corners), depth_mm=Depth * KMetres, reversed=bool(BlobValue[ReverseOffset]), end_condition_code=BlobValue[EndConditionOffset])
+
+# this definition exists because rectangle point recovery validates one complete corner set
+def RectPoints(BlobValue: bytes, Profile: int) -> tuple[list[tuple[int, int]], list[tuple[float, float]]] | None:
+    PointOffsets: list[tuple[int, int]] = []
+    Corners: list[tuple[float, float]] = []
+    for Relative in KRectanglePointRelative:
+        XOffset = Profile + Relative
+        YOffset = XOffset + 8
+        FirstCoord = ReadDouble(BlobValue, XOffset)
+        SecondCoord = ReadDouble(BlobValue, YOffset)
+        if FirstCoord is None or SecondCoord is None:
+            return None
+        PointOffsets.append((XOffset, YOffset))
+        Corners.append((FirstCoord * KMetres, SecondCoord * KMetres))
     XsValue = sorted({round(Point[0], 9) for Point in Corners})
     YsValue = sorted({round(Point[1], 9) for Point in Corners})
     if len(XsValue) != 2 or len(YsValue) != 2:
         return None
-    return RectanglePad(point_offsets=tuple(PointOffsets), depth_offset=DepthOffset, reverse_offset=ReverseOffset, end_condition_offset=EndConditionOffset, from_reverse_offset=FromReverseOffset, corners_mm=tuple(Corners), depth_mm=Depth * KMetres, reversed=bool(BlobValue[ReverseOffset]), end_condition_code=BlobValue[EndConditionOffset])
+    return (PointOffsets, Corners)
 
 # this definition exists because focused behavior needs one stable owner
 def SketchPlaneId(DataValue: bytes | bytearray) -> int | None:
@@ -1084,6 +1156,13 @@ def ValidateEdit(Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
         raise SldprtFormatError(f'feature {Feature.ordinal} has no locatable direction flag')
     if EditValue.end_condition_code is not None and Feature.end_condition_offset is None:
         raise SldprtFormatError(f'feature {Feature.ordinal} has no locatable end condition')
+    ValidatePoints(Feature, EditValue)
+    ValidateArcs(Feature, EditValue)
+    ValidateSwept(Feature, EditValue)
+    ValidateScalar(Feature, EditValue)
+
+# this definition exists because sketch point validation has one coordinate contract
+def ValidatePoints(Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
     if EditValue.corners_mm is not None:
         if len(EditValue.corners_mm) != len(Feature.points):
             raise SldprtFormatError(f'feature {Feature.ordinal} has {len(Feature.points)} sketch points and {len(EditValue.corners_mm)} corners were supplied')
@@ -1091,6 +1170,9 @@ def ValidateEdit(Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
             raise SldprtFormatError(f'feature {Feature.ordinal} has no locatable sketch points')
         if not all((MathValue.isfinite(Value) for Corner in EditValue.corners_mm for Value in Corner)):
             raise SldprtFormatError('sketch corner values must be finite')
+
+# this definition exists because circular arc edits share radius and centre invariants
+def ValidateArcs(Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
     if EditValue.radii_mm is not None:
         if not Feature.arcs:
             raise SldprtFormatError(f'feature {Feature.ordinal} has no locatable sketch arcs')
@@ -1105,6 +1187,9 @@ def ValidateEdit(Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
             raise SldprtFormatError(f'feature {Feature.ordinal} has {len(Feature.arcs)} sketch arcs and {len(EditValue.arc_centres_mm)} centres were supplied')
         if not all((MathValue.isfinite(Value) for Centre in EditValue.arc_centres_mm for Value in Centre)):
             raise SldprtFormatError('sketch arc centre values must be finite')
+
+# this definition exists because swept arc centres depend on matching profile vertices
+def ValidateSwept(Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
     if EditValue.swept_arc_centres_mm is not None:
         if not Feature.swept_arcs:
             raise SldprtFormatError(f'feature {Feature.ordinal} has no locatable swept sketch arcs')
@@ -1114,6 +1199,9 @@ def ValidateEdit(Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
             raise SldprtFormatError('swept sketch arc centre values must be finite')
         if EditValue.corners_mm is None:
             raise SldprtFormatError('swept sketch arc centres can only be moved together with the profile vertices that carry their endpoints')
+
+# this definition exists because scalar and flag edits share finite range validation
+def ValidateScalar(Feature: FeatureLayout, EditValue: FeatureEdit) -> None:
     if EditValue.SketchDimensionsMm is not None:
         if len(EditValue.SketchDimensionsMm) != len(Feature.SketchDimensionOffsets):
             raise SldprtFormatError(f'feature {Feature.ordinal} has {len(Feature.SketchDimensionOffsets)} sketch dimension scalars and {len(EditValue.SketchDimensionsMm)} values were supplied')
