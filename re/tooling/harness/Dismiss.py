@@ -96,8 +96,8 @@ def WatcherMut(StopInfo: Threading.Event, LogInfo: list[str]) -> None:
         try:
             for ItemData in DismissOnce():
                 LogInfo.append(ItemData)
-        except Exception:
-            pass
+        except Exception as Problem:
+            LogInfo.append(f"error={Problem!r}")
         StopInfo.wait(0.5)
 
 

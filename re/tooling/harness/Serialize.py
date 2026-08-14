@@ -21,7 +21,6 @@ KHereInfo = PathInfo(__file__).resolve().parent
 KScratch = KHereInfo.parents[2] / ".rescratch"
 if str(KHereInfo) not in System.path:
     System.path.insert(0, str(KHereInfo))
-import Carchive as Carchive
 import Streamlib as Streamlib
 from convert.adapters.solidworks import resolved as Resolvedlib
 

@@ -12,15 +12,10 @@ from typing import Any as AnyValue
 from typing import Iterable as TypeIterable
 from typing import Mapping as TypeMap
 
-from interchange import CadDocument
-
 from convert.adapters.base.AdapterProtocols import CadReaderAdapter
 from convert.adapters.base.AdapterProtocols import CadWriterAdapter
 from convert.adapters.base.ContractTypes import KSourceType
 from convert.adapters.base.ContractTypes import KTargetType
-from convert.adapters.base.ReadOptions import ReadOptions
-from convert.adapters.base.WriteOptions import WriteOptions
-from convert.adapters.base.WriteResult import WriteResult
 
 # historical source annotations need resolution where split registry methods are defined
 globals()["Source"] = KSourceType

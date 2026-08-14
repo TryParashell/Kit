@@ -140,7 +140,9 @@ def RecordEnds(TraceInfo: Mapping[str, object]) -> ListInfo[int]:
 def IsContiguous(TraceInfo: Mapping[str, object]) -> bool:
     SegmentsInfo = list(TraceInfo["segments"])
     Children = Reparented(SegmentsInfo)[0]
-    Reach: ListInfo[set] = [set() for SpareValue in SegmentsInfo]
+    Reach: ListInfo[set] = [
+        set(range(IndexInfo, IndexInfo)) for IndexInfo in range(len(SegmentsInfo))
+    ]
     for NodeInfoInfo in range(len(SegmentsInfo) - 1, -1, -1):
         AccInfo: set = set()
         for IsChild in Children[NodeInfoInfo]:

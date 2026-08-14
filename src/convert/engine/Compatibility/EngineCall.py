@@ -14,11 +14,6 @@ from typing import Any as AnyValue
 from typing import Mapping as TypeMap
 
 from convert.adapters.base.ContractTypes import KSourceType, KTargetType
-from convert.adapters.base.ReadOptions import ReadOptions
-from convert.adapters.base.WriteOptions import WriteOptions
-from convert.adapters.base.WriteResult import WriteResult
-from convert.adapters.registry import AdapterRegistry
-from interchange import CadDocument
 
 globals().update({"Destination": KTargetType, "Source": KSourceType})
 

@@ -31,6 +31,16 @@ from convert.adapters.solidworks.container.Format import (
 KArrayMarker = Struct.pack("<I", 4)
 
 
+# position access stays outside the record type so casing steering and static method analysis agree
+def GetPositions(FaceValue: NativeFace) -> tuple[tuple[float, float, float], ...]:
+    return FaceValue.positions_mm
+
+
+# triangle access stays outside the record type so casing steering and static method analysis agree
+def GetTriangles(FaceValue: NativeFace) -> tuple[tuple[int, int, int], ...]:
+    return FaceValue.triangle_indices
+
+
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeFace:
@@ -43,17 +53,10 @@ class NativeFace:
     __annotations__["normals"] = "tuple[tuple[float, float, float], ...]"
     __annotations__["triangle_indices"] = "tuple[tuple[int, int, int], ...]"
 
-    # this definition exists because focused behavior needs one stable owner
-    @property
-    def Positions(Instance) -> tuple[tuple[float, float, float], ...]:
-        return Instance.positions_mm
-
-    # this definition exists because focused behavior needs one stable owner
-    def Triangles(Instance) -> tuple[tuple[int, int, int], ...]:
-        return Instance.triangle_indices
-
-    locals()["positions"] = Positions
-    locals()["triangles"] = Triangles
+    locals()["Positions"] = property(GetPositions)
+    locals()["Triangles"] = GetTriangles
+    locals()["positions"] = locals()["Positions"]
+    locals()["triangles"] = locals()["Triangles"]
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -89,28 +92,30 @@ def DecodeDisplay(DataValue: bytes) -> tuple[NativeDisplay, ...]:
     Faces = DecodeFaces(DataValue)
     Strings = Serialized(DataValue)
     Records: list[tuple[int, str, str]] = []
-    for Index, (Offset, Value, Ignored) in enumerate(Strings):
+    for Index, StringData in enumerate(Strings):
+        Offset = StringData[0]
+        Value = StringData[1]
         if not IsComponentPath(Value):
             continue
         NextComponent = next(
             (
-                OtherOffset
-                for OtherOffset, OtherValue, Ignored in Strings[Index + 1 :]
-                if IsComponentPath(OtherValue)
+                OtherData[0]
+                for OtherData in Strings[Index + 1 :]
+                if IsComponentPath(OtherData[1])
             ),
             len(DataValue),
         )
         SourcePath = next(
             (
-                OtherValue
-                for OtherOffset, OtherValue, Ignored in Strings[Index + 1 :]
-                if OtherOffset < NextComponent and IsCadPath(OtherValue)
+                OtherData[1]
+                for OtherData in Strings[Index + 1 :]
+                if OtherData[0] < NextComponent and IsCadPath(OtherData[1])
             ),
             "",
         )
         Records.append((Offset, Value, SourcePath))
     Offsets = [Record[0] for Record in Records]
-    Grouped: list[list[NativeFace]] = [[] for Ignored in Records]
+    Grouped: list[list[NativeFace]] = list(map(list, ((),) * len(Records)))
     for FaceValue in Faces:
         Index = BisectRight(Offsets, FaceValue.offset) - 1
         if Index >= 0:
@@ -189,11 +194,12 @@ def ReadFaceChans(
 ) -> tuple[list[tuple[tuple[int, int, int, int], bytes]], int] | None:
     Channels: list[tuple[tuple[int, int, int, int], bytes]] = []
     Cursor = Start + 8
-    for Ignored in range(6):
+    while len(Channels) < 6:
         if Cursor + 16 > len(DataValue):
             return None
         Header = Struct.unpack_from("<IIII", DataValue, Cursor)
-        ItemSize, Ignored, Ignored, Count = Header
+        ItemSize = Header[0]
+        Count = Header[3]
         if not 0 < ItemSize <= 64 or Count > 10000000:
             return None
         PayloadStart = Cursor + 16

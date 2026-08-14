@@ -7,7 +7,7 @@
 # to you under it immediately and permanently.
 
 import sys as System
-from Layout import FindItem, FindGaps, LoadData, ResolveName
+from Layout import FindItem, FindGaps, LoadData
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KLabels = [

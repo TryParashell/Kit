@@ -151,7 +151,6 @@ def DecodeTag(ByteBlob: bytes, Offset: int) -> TagInfo:
         return TagInfo(Offset, Token, KNullInfo, 2, 0, "", -1)
     if Token == KBigObjectTag:
         IndexData = Struct.unpack_from("<I", ByteBlob, Offset + 2)[0]
-        KindNameInfo = KClassref if IndexData & 2147483648 else KObjectref
         return TagInfo(Offset, Token, KBigInfo, 6, 0, "", IndexData & 2147483647)
     if Token & KClassTagBit:
         return TagInfo(Offset, Token, KClassref, 2, 0, "", Token & ~KClassTagBit)

@@ -300,7 +300,7 @@ def FreecadRPD(
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def FreeCPPD(*, ThroughAll: bool = False, JoinInfo: bool = False) -> CadDocument:
-    SourceData = FreecadRPD(bounds=(-30.0, -20.0, 30.0, 20.0), depth=15.0)
+    SourceData = FreecadRPD(Bounds=(-30.0, -20.0, 30.0, 20.0), Depth=15.0)
     FeatureOne = SourceData.feature_timeline[0]
     SketchTemplate = SourceData.sketches[0]
     PocketPoints = (
@@ -600,7 +600,7 @@ def FreeCPTPD() -> CadDocument:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def FreeCRRD() -> CadDocument:
-    SourceData = FreecadRPD(bounds=(6.0, -9.0, 18.0, 9.0))
+    SourceData = FreecadRPD(Bounds=(6.0, -9.0, 18.0, 9.0))
     SourceFeature = SourceData.feature_timeline[0]
     SelectionData = Selection(
         "freecad:selection:Revolution:ReferenceAxis:0",
@@ -1660,7 +1660,7 @@ def FreeCDV(SourceData: CadDocument, VariantName: str) -> CadDocument:
     (("reversed", 1, 0), ("midplane", 0, 6)),
 )
 def TestFRPWNDV(VariantName: str, DirectionCode: int, TerminationCode: int) -> None:
-    SourceData = FreeCDV(FreecadRPD(depth=18.0), VariantName)
+    SourceData = FreeCDV(FreecadRPD(Depth=18.0), VariantName)
     OutputData = BytesIO()
     ResultData = WriteSldprt(SourceData, OutputData)
     ArchiveData = SldprtArchive.from_bytes(OutputData.getvalue())
@@ -2273,7 +2273,7 @@ def TestFCPRWRCE(TmpPath: FilePath) -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFCPWNEF() -> None:
     CenterData = VectorTwo(0.0, 0.0)
-    SourceData = FreecadRPD(depth=14.0)
+    SourceData = FreecadRPD(Depth=14.0)
     SourceSketch = SourceData.sketches[0]
     CircleEntity = SketchEntity(
         "freecad:circle:0", GeometryKind.CIRCLE, CircleGeometry(CenterData, 18.0)
@@ -2336,7 +2336,7 @@ def TestFCPWNEF() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFCRCPWNEF() -> None:
     CenterData = VectorTwo(0.0, 0.0)
-    SourceData = FreecadRPD(depth=10.0)
+    SourceData = FreecadRPD(Depth=10.0)
     SourceSketch = SourceData.sketches[0]
     CircleEntity = SketchEntity(
         "freecad:circle:reverse", GeometryKind.CIRCLE, CircleGeometry(CenterData, 5.0)
@@ -2384,7 +2384,7 @@ def TestFCRCPWNEF() -> None:
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestCircleVar() -> None:
     CenterData = VectorTwo(0.0, 0.0)
-    VariableSource = FreecadRPD(depth=12.0)
+    VariableSource = FreecadRPD(Depth=12.0)
     VariableSketch = VariableSource.sketches[0]
     VariableCircle = SketchEntity(
         "freecad:circle:reverse:variable",
@@ -2424,7 +2424,7 @@ def TestCircleVar() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFTPPWNEF() -> None:
-    SourceData = FreecadRPD(bounds=(-17.0, -8.0, 29.0, 12.0), depth=13.0)
+    SourceData = FreecadRPD(Bounds=(-17.0, -8.0, 29.0, 12.0), Depth=13.0)
     SourcePlane = ReplaceData(
         SourceData.support_planes[0],
         transform=Transform(
@@ -2463,7 +2463,7 @@ def TestFTPPWNEF() -> None:
 
 # keeps this focused behavior isolated so regressions remain immediately visible
 def TestFRPPWNEF() -> None:
-    SourceData = FreecadRPD(bounds=(-17.0, -8.0, 29.0, 12.0), depth=7.0)
+    SourceData = FreecadRPD(Bounds=(-17.0, -8.0, 29.0, 12.0), Depth=7.0)
     SourcePlane = ReplaceData(
         SourceData.support_planes[0],
         transform=Transform(

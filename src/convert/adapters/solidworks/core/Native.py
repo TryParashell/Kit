@@ -64,6 +64,12 @@ from convert.adapters.solidworks.programs.configuration.box.Program import (
 from convert.adapters.solidworks.programs.configuration.circle.reverse.Program import (
     EncodeProgram as EncodeReverseCircleConfig,
 )
+from convert.adapters.solidworks.programs.configuration.revolve.pin.default.Program import (
+    EncodeProgram as EncodePinConfig,
+)
+from convert.adapters.solidworks.programs.configuration.revolve.pin.rightangle.Program import (
+    EncodeProgram as EncodePinRight,
+)
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 from convert.adapters.solidworks.container.Definition import (
     encode_definition_stream as EncodeDefinitionStream,
@@ -154,20 +160,11 @@ from convert.adapters.solidworks.programs.resolved.revolve.default.Program impor
 from convert.adapters.solidworks.programs.resolved.revolve.pin.default.Program import (
     EncodeProgram as EncodePinRevolveProgram,
 )
+from convert.adapters.solidworks.programs.resolved.revolve.pin.rightangle.Program import (
+    EncodeProgram as EncodePinNineZeroRevolve,
+)
 from convert.adapters.solidworks.programs.resolved.planes.top.Program import (
     EncodeProgram as EncodeTopProgram,
-)
-from convert.adapters.solidworks.envelopes.revolve.pin.rightangle.Envelope import (
-    BuildEnvelope as BuildPinNineZeroEnvelope,
-)
-from convert.adapters.solidworks.envelopes.revolve.pin.rightangle.Envelope import (
-    EncodeFeatures as EncodePinNineZeroRevolve,
-)
-from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import (
-    BuildEnvelope as BuildPinEnvelope,
-)
-from convert.adapters.solidworks.envelopes.revolve.pin.default.Envelope import (
-    KPinPointsMm,
 )
 
 # this binding exists because shared behavior needs one stable value

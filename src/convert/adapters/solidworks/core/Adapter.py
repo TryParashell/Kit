@@ -9,7 +9,7 @@
 from __future__ import annotations as Annotations
 from collections import Counter, defaultdict as Defaultdict
 from contextlib import suppress as Suppress
-from dataclasses import dataclass as DataClass, replace as Replace
+from dataclasses import dataclass as DataClass, field as Field, replace as Replace
 import hashlib as Hashlib
 from io import BytesIO as BytesIo
 import json as JsonValue
@@ -1914,7 +1914,7 @@ class GeneratedState:
     PartCapabilities: frozenset[Capability] = frozenset()
     MixedCapabilities: frozenset[Capability] = frozenset()
     PartPartition: bytes | None = None
-    PartObjectIds: Mapping[str, int] = FrozenMapping()
+    PartObjectIds: Mapping[str, int] = Field(default_factory=FrozenMapping)
     PartAppUsable: bool = False
     PartVendorLoadable: bool = False
     PartDonorNotes: tuple[str, ...] = ()

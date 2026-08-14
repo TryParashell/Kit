@@ -180,16 +180,17 @@ def StripComments(BodyInfo: str) -> str:
 # class selection stays isolated so dump mining receives one normalized ownership set
 def LoadWanted(ClassPath: str) -> set[str]:
     Wanted = set()
-    for LineText in open(ClassPath, encoding="utf-8"):
-        TextValueData = LineText.strip()
-        if not TextValueData:
-            continue
-        Parts = TextValueData.split(None, 1)
-        Wanted.add(
-            Parts[1].strip()
-            if len(Parts) == 2 and Parts[0].isdigit()
-            else TextValueData
-        )
+    with open(ClassPath, encoding="utf-8") as ClassHandle:
+        for LineText in ClassHandle:
+            TextValueData = LineText.strip()
+            if not TextValueData:
+                continue
+            Parts = TextValueData.split(None, 1)
+            Wanted.add(
+                Parts[1].strip()
+                if len(Parts) == 2 and Parts[0].isdigit()
+                else TextValueData
+            )
     return Wanted
 
 
@@ -199,7 +200,8 @@ def ScanDumpMut(
 ) -> tuple[int, int]:
     Scanned = 0
     Matched = 0
-    TextValueData = open(PathInfoData, encoding="utf-8", errors="replace").read()
+    with open(PathInfoData, encoding="utf-8", errors="replace") as DumpHandle:
+        TextValueData = DumpHandle.read()
     for NameTextInfo, Address, BodyInfo in IterBlocks(TextValueData):
         Scanned += 1
         InfoInfo = Classify(BodyInfo)

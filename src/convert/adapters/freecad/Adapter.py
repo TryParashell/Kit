@@ -168,10 +168,8 @@ def SourceBytes(Source: Source) -> bytes:
                 Position = None
         DataValue = Reader()
         if Position is not None and callable(SeekValue):
-            try:
+            with Suppress(OSError, ValueError):
                 SeekValue(Position)
-            except (OSError, ValueError):
-                Position = None
         if isinstance(DataValue, str):
             raise TypeError("FCStd input must be opened in binary mode")
         if isinstance(DataValue, (bytes, bytearray)):

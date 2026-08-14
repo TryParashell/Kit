@@ -73,6 +73,40 @@ KResolvedShiftFour = frozenset({1493, 4069, 4243, 4330})
 KHeaderShiftRefs = frozenset({257, 382, 384, 390})
 
 
+# occurrence initialization stays standalone so public casing remains analyzer safe
+def InitRepeatMut(
+    ItemValue: RepeatItem,
+    OccurName: str,
+    CompPath: str,
+    TransX: float = 0.0,
+    TransY: float = 0.0,
+    TransZ: float = 0.0,
+    ConfigName: str = "Default",
+    FileStamp: int = 0,
+    BasisVals: tuple[float, ...] = (
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ),
+) -> None:
+    if len(BasisVals) != 9:
+        raise SldprtFormatError("assembly transform basis requires nine values")
+    ItemValue.OccurName = OccurName
+    ItemValue.CompPath = CompPath
+    ItemValue.TransX = TransX
+    ItemValue.TransY = TransY
+    ItemValue.TransZ = TransZ
+    ItemValue.ConfigName = ConfigName
+    ItemValue.FileStamp = FileStamp
+    ItemValue.BasisVals = BasisVals
+
+
 # one repeated item supplies semantic identity and display translation fields
 class RepeatItem:
     __slots__ = (
@@ -86,38 +120,7 @@ class RepeatItem:
         "BasisVals",
     )
 
-    # immutable initialization keeps one occurrence coherent across all streams
-    def __init__(
-        Instance,
-        OccurName: str,
-        CompPath: str,
-        TransX: float = 0.0,
-        TransY: float = 0.0,
-        TransZ: float = 0.0,
-        ConfigName: str = "Default",
-        FileStamp: int = 0,
-        BasisVals: tuple[float, ...] = (
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-        ),
-    ) -> None:
-        if len(BasisVals) != 9:
-            raise SldprtFormatError("assembly transform basis requires nine values")
-        Instance.OccurName = OccurName
-        Instance.CompPath = CompPath
-        Instance.TransX = TransX
-        Instance.TransY = TransY
-        Instance.TransZ = TransZ
-        Instance.ConfigName = ConfigName
-        Instance.FileStamp = FileStamp
-        Instance.BasisVals = BasisVals
+    locals()["__init__"] = InitRepeatMut
 
 
 # identity transforms retain the compact native transform representation

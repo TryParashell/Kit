@@ -141,7 +141,8 @@ def LoadDumpMaps(
 ) -> tuple[DictInfo[str, dict], DictInfo[str, dict]]:
     ByAddress: DictInfo[str, dict] = {}
     for PathInfoData in Paths:
-        RawData = open(PathInfoData, encoding="utf-8", errors="replace").read()
+        with open(PathInfoData, encoding="utf-8", errors="replace") as ReadHandle:
+            RawData = ReadHandle.read()
         Lines = RawData.splitlines()
         Starts = [
             IndexInfo
@@ -500,12 +501,10 @@ def MainRun() -> int:
     ParserInfo.add_argument("--out", required=True)
     ArgValues = ParserInfo.parse_args()
     DumpData = DumpRecord(ArgValues.dumps)
-    SerialMap = JsonData.load(open(ArgValues.map, encoding="utf-8"))
-    Classes = [
-        LineText.strip()
-        for LineText in open(ArgValues.classes, encoding="utf-8")
-        if LineText.strip()
-    ]
+    with open(ArgValues.map, encoding="utf-8") as MapHandle:
+        SerialMap = JsonData.load(MapHandle)
+    with open(ArgValues.classes, encoding="utf-8") as ClassHandle:
+        Classes = [LineText.strip() for LineText in ClassHandle if LineText.strip()]
     PayloadInfo: DictInfo[str, dict] = {}
     for NameTextInfo in Classes:
         PayloadInfo[NameTextInfo] = BuildClassEntry(DumpData, SerialMap, NameTextInfo)

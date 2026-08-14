@@ -443,7 +443,7 @@ def TestOMARPEC() -> None:
     assert (
         tuple(
             (
-                NeutralMateAlignment(NativeMateA(alignment_code=CodeInfoA.value))
+                NeutralMateAlignment(NativeMateA(AlignmentCode=CodeInfoA.value))
                 for CodeInfoA in NativeMateAlignmentCode
             )
         )
@@ -455,8 +455,8 @@ def TestOMARPEC() -> None:
 def TestLCRUTMPR() -> None:
     ItemValueB = NeutralMateValue(
         NativeMateA(
-            kind="linear_coupler",
-            dimensions=(
+            KindInfo="linear_coupler",
+            Dimensions=(
                 NativeMateDimension("D1", 2.0, 10),
                 NativeMateDimension("D2", 4.0, 20),
             ),

@@ -21,7 +21,6 @@ for CandInfo in (KHereInfo, KGrammar):
         System.path.insert(0, str(CandInfo))
 import Carchive as Carchive
 import Streamlib as Streamlib
-import Tracedump as Tracedump
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

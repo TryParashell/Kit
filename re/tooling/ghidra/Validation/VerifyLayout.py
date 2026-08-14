@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 
 import json as JsonData
+import math as MathInfo
 import pathlib as Pathlib
 import struct as Struct
 import sys as System
@@ -203,7 +204,7 @@ def FinishTail(ByteBlob, LastInfo):
             "<I", RawData, Cursor
         )[0]
         OutputDataInfo["plausible"] = (
-            ValueInfo == ValueInfo and abs(ValueInfo) < 1000000.0
+            not MathInfo.isnan(ValueInfo) and abs(ValueInfo) < 1000000.0
         )
         Candidates.append(OutputDataInfo)
     for OutputDataInfo in Candidates:

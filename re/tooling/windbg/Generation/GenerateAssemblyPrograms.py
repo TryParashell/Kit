@@ -291,9 +291,11 @@ def AddDirectFields(
         return
     StartPos = FieldPosition(StreamName, StartPos, OwnerText, StreamShift, Segments)
     FieldWidth = 2
-    for TextValueInfo in TextValues:
-        Decoded, StringWidth = ReadString(StreamData, StartPos + FieldWidth)
+    TextIndex = 0
+    while TextIndex < len(TextValues):
+        StringWidth = ReadString(StreamData, StartPos + FieldWidth)[1]
         FieldWidth += StringWidth
+        TextIndex += 1
     AddOpMut(
         Operations, Covered, StartPos, FieldWidth, OwnerText, "stringlist", TextValues
     )

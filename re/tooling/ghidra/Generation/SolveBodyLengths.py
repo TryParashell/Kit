@@ -24,7 +24,8 @@ def LoadTraces(SegmentsDir: str) -> ListInfo[dict]:
     for PathInfoData in sorted(
         GlobInfo.glob(OsLayer.path.join(SegmentsDir, "segments_*.json"))
     ):
-        Traces.append(JsonData.load(open(PathInfoData, encoding="utf-8")))
+        with open(PathInfoData, encoding="utf-8") as TraceHandle:
+            Traces.append(JsonData.load(TraceHandle))
     return Traces
 
 
@@ -32,7 +33,9 @@ def LoadTraces(SegmentsDir: str) -> ListInfo[dict]:
 def BuildTree(
     SegmentsInfo: Sequence[dict],
 ) -> Tuple[ListInfo[ListInfo[int]], ListInfo[int]]:
-    Children: ListInfo[ListInfo[int]] = [[] for SpareValue in SegmentsInfo]
+    Children: ListInfo[ListInfo[int]] = [
+        list(range(IndexInfo, IndexInfo)) for IndexInfo in range(len(SegmentsInfo))
+    ]
     for IndexInfo, SegInfo in enumerate(SegmentsInfo):
         Parent = SegInfo["parent"]
         if Parent >= 0:
@@ -47,7 +50,7 @@ def BuildTree(
 def SubtreeStats(
     SegmentsInfo: Sequence[dict], Children: Sequence[Sequence[int]]
 ) -> Tuple[ListInfo[DictInfo[str, int]], ListInfo[int]]:
-    Counts: ListInfo[DictInfo[str, int]] = [dict() for SpareValue in SegmentsInfo]
+    Counts: ListInfo[DictInfo[str, int]] = [dict()] * len(SegmentsInfo)
     Headers: ListInfo[int] = [0] * len(SegmentsInfo)
     for IndexInfo in range(len(SegmentsInfo) - 1, -1, -1):
         SegInfo = SegmentsInfo[IndexInfo]
@@ -91,7 +94,7 @@ def BuildEquations(Traces: Sequence[dict]) -> Tuple[ListInfo[dict], ListInfo[str
     ValuesInfo: DictInfo[str, None] = {}
     for TraceInfo in Traces:
         SegmentsInfo = TraceInfo["segments"]
-        Children, SpareValue = BuildTree(SegmentsInfo)
+        Children = BuildTree(SegmentsInfo)[0]
         Counts, Headers = SubtreeStats(SegmentsInfo, Children)
         for IndexInfo, SegInfo in enumerate(SegmentsInfo):
             if SegInfo["kind"] in KNoBodyKinds:

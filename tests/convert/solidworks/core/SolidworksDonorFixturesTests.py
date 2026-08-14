@@ -23,7 +23,11 @@ from convert.adapters.solidworks.core.Topology import (
 
 # centralizes shared evidence so every related assertion uses one value
 KRootInfo = (
-    FilePath(__file__).resolve().parents[3] / "fixtures" / "solidworks" / "donors"
+    FilePath(__file__).resolve().parents[4]
+    / "examples"
+    / "Fixtures"
+    / "SolidWorks"
+    / "donors"
 )
 
 # centralizes shared evidence so every related assertion uses one value

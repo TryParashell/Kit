@@ -146,4 +146,4 @@ def PadFieldMap(
 # callers can replace semantic fields while retaining recovered object framing
 def EncodeProgram(Overrides: Mapping[int, AnyValue] | None = None) -> bytes:
     ExpectedLength = KResolvedOps[-1][0] + KResolvedOps[-1][1]
-    return ReplayResolved(KResolvedOps, ExpectedLength, Overrides)
+    return ReplayResolved(KResolvedOps, ExpectedLength, Overrides, KPrimitiveFormats)

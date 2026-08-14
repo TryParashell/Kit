@@ -44,7 +44,7 @@ KProfileOffsets = (
 
 # callers can replace semantic fields while retaining recovered object framing
 def EncodeProgram(Overrides: Mapping[int, AnyValue] | None = None) -> bytes:
-    return ReplayResolved(KResolvedOps, KReferenceLength, Overrides)
+    return ReplayResolved(KResolvedOps, KReferenceLength, Overrides, KPrimitiveFormats)
 
 
 # coverage metrics make hidden opaque or donor regressions mechanically visible

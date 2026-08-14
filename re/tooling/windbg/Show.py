@@ -19,7 +19,6 @@ for CandInfo in (KHereInfo, KGrammar):
     if str(CandInfo) not in System.path:
         System.path.insert(0, str(CandInfo))
 import Model as Modellib
-import Segment as Segmentlib
 import Streamlib as Streamlib
 from convert.adapters.solidworks import resolved as Resolvedlib
 
@@ -63,7 +62,6 @@ def MainRun() -> int:
         print(
             f"{PosInfoInfo:>5} {ItemData.offset:>7} {ItemData.length:>5} {ItemData.tag:>6x} {ItemData.kind:>10} {ItemData.map_index:>5} {ItemData.depth:>2} {ItemData.parent:>6} {ItemData.class_name}{NoteInfo}"
         )
-    SpareValue = Offsets
     return 0
 
 

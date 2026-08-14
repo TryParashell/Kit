@@ -7,7 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations as Annotations
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass as Dataclass
 import math as MathValue
 import struct as Struct

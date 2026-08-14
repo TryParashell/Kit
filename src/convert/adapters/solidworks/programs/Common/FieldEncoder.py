@@ -58,13 +58,18 @@ def EncodeArchive(KindName: str, FieldValue: AnyValue) -> bytes | None:
 
 
 # typed field encoding preserves every recovered primitive and archive contract
-def EncodeValue(KindName: str, FieldValue: AnyValue, ErrorScope: str) -> bytes:
+def EncodeValue(
+    KindName: str,
+    FieldValue: AnyValue,
+    ErrorScope: str,
+    FormatMap: Mapping[str, str] = KPrimitiveFormats,
+) -> bytes:
     ArchiveData = EncodeArchive(KindName, FieldValue)
     if ArchiveData is not None:
         return ArchiveData
     if KindName.startswith("primitive:"):
         TypeName = KindName.split(":", 1)[1]
-        return StructLib.pack("<" + KPrimitiveFormats[TypeName], FieldValue)
+        return StructLib.pack("<" + FormatMap[TypeName], FieldValue)
     if KindName.startswith("direct:"):
         FormatText = KindName.split(":", 1)[1]
         ValuesData = FieldValue if isinstance(FieldValue, tuple) else (FieldValue,)
@@ -77,6 +82,7 @@ def ReplayResolved(
     Operations: tuple[AnyValue, ...],
     ExpectedLength: int,
     Overrides: Mapping[int, AnyValue] | None = None,
+    FormatMap: Mapping[str, str] = KPrimitiveFormats,
 ) -> bytes:
     FieldOverrides = Overrides or {}
     OutputData = bytearray()
@@ -84,7 +90,7 @@ def ReplayResolved(
         if len(OutputData) != StartPos:
             raise SldprtFormatError(f"resolved field program drifted at {StartPos}")
         FieldValue = FieldOverrides.get(StartPos, DefaultValue)
-        FieldData = EncodeValue(KindName, FieldValue, "resolved")
+        FieldData = EncodeValue(KindName, FieldValue, "resolved", FormatMap)
         if len(FieldData) != FieldWidth:
             raise SldprtFormatError(f"resolved field width changed at {StartPos}")
         OutputData.extend(FieldData)

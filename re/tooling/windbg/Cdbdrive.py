@@ -159,7 +159,7 @@ def FinishTask(
     TargetMarkers,
 ) -> RunResult:
     LastChange = TimeInfo.monotonic()
-    Reason = "deadline"
+    Reason: str
     try:
         while True:
             TimeInfo.sleep(2.0)

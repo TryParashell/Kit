@@ -39,7 +39,8 @@ def LoadTraces(SegmentsDir: str, Labels: str) -> ListInfo[dict]:
     for PathInfoData in sorted(
         GlobInfo.glob(OsLayer.path.join(SegmentsDir, "segments_*.json"))
     ):
-        Traces.append(JsonData.load(open(PathInfoData, encoding="utf-8")))
+        with open(PathInfoData, encoding="utf-8") as TraceHandle:
+            Traces.append(JsonData.load(TraceHandle))
     if Labels:
         Wanted = set(Labels.split(","))
         Traces = [TextData for TextData in Traces if TextData["label"] in Wanted]
@@ -48,7 +49,9 @@ def LoadTraces(SegmentsDir: str, Labels: str) -> ListInfo[dict]:
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def ChildrenOf(SegmentsInfo: Sequence[dict]) -> ListInfo[ListInfo[int]]:
-    Children: ListInfo[ListInfo[int]] = [[] for SpareValue in SegmentsInfo]
+    Children: ListInfo[ListInfo[int]] = [
+        list(range(IndexInfo, IndexInfo)) for IndexInfo in range(len(SegmentsInfo))
+    ]
     for IndexInfo, SegInfo in enumerate(SegmentsInfo):
         if SegInfo["parent"] >= 0:
             Children[SegInfo["parent"]].append(IndexInfo)
@@ -249,7 +252,9 @@ class SolverResult:
             Attempts += 1
             Before = len(SelfRef.ValueValue)
             SelfRef.SeedInfo()
-            for SpareValue in range(Rounds):
+            RoundIndex = 0
+            while RoundIndex < Rounds:
+                RoundIndex += 1
                 if SelfRef.PassOnce() == 0:
                     break
             if len(SelfRef.ValueValue) == Before:
