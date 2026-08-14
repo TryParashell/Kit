@@ -150,21 +150,17 @@ from .geometry import (
 )
 from .history import AdapterCaps
 from .mesh import SurfaceMesh
-from .payloads import BrepPayload, MigratePayload, PayloadRole
+from .payload_migrate import MigratePayload
+from .payload_record import BrepPayload
+from .payload_roles import PayloadRole
 from .package_exports import KPackageExports
 from .python_compat import BindTypeGlobals
-from .records import (
-    CadSource,
-    Configuration,
-    Diagnostic,
-    Expression,
-    Parameter,
-    ParameterValue,
-    ParamOverride,
-    Provenance,
-    ProvenanceSpan,
-    TopologyCounts,
-)
+from .record_config import Configuration, ParamOverride
+from .record_diagnostic import Diagnostic
+from .record_parameter import Expression, Parameter, ParameterValue
+from .record_provenance import Provenance, ProvenanceSpan
+from .record_source import CadSource
+from .record_topology import TopologyCounts
 from .serialization import RegMigration, RegisterTypes
 from .vectors import BoundingBox, PlaneVector, SpaceVector, Transform
 

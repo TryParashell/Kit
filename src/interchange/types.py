@@ -12,18 +12,12 @@ from .enum_features import BooleanOp, FeatureKind
 from .enum_geometry import ConstraintKind, GeometryKind
 from .enum_units import UnitSystem
 from .enum_values import ParameterRole, ValueKind
-from .records import (
-    CadSource,
-    Configuration,
-    Diagnostic,
-    Expression,
-    Parameter,
-    ParameterValue,
-    ParamOverride,
-    Provenance,
-    ProvenanceSpan,
-    TopologyCounts,
-)
+from .record_config import Configuration, ParamOverride
+from .record_diagnostic import Diagnostic
+from .record_parameter import Expression, Parameter, ParameterValue
+from .record_provenance import Provenance, ProvenanceSpan
+from .record_source import CadSource
+from .record_topology import TopologyCounts
 from .python_compat import BindCompatMut
 from .vectors import BoundingBox, PlaneVector, SpaceVector, Transform
 from inspect import Parameter as FuncParam

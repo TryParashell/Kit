@@ -42,7 +42,8 @@ from interchange import (
     FilterDocument,
     InferCaps,
 )
-from interchange.history import KLegacyPayloadRules, GetLegacyFields
+from interchange.payload_migrate import GetLegacyFields
+from interchange.payload_rules import KLegacyPayloadRules
 from interchange.serialization import FromData, KTypeRegistry, RegisterTypes, ToData
 
 
