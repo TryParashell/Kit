@@ -13,16 +13,16 @@ from uuid import UUID as UuidValue
 from convert.adapters.solidworks.container.Container import SldprtFormatError
 
 # this binding exists because shared behavior needs one stable value
-KDraftingStandards = ('moBS_c', 'moISO_c', 'moANSI_c')
+KDraftingStandards = ("moBS_c", "moISO_c", "moANSI_c")
 
 # this binding exists because shared behavior needs one stable value
 KDocGeneration = 18000
 
 # this binding exists because shared behavior needs one stable value
-KPartClsid = UuidValue('83a33d30-27c5-11ce-bfd4-00400513bb57').bytes_le
+KPartClsid = UuidValue("83a33d30-27c5-11ce-bfd4-00400513bb57").bytes_le
 
 # this binding exists because shared behavior needs one stable value
-KAsmClsid = UuidValue('83a33d36-27c5-11ce-bfd4-00400513bb57').bytes_le
+KAsmClsid = UuidValue("83a33d36-27c5-11ce-bfd4-00400513bb57").bytes_le
 
 # this binding exists because shared behavior needs one stable value
 KPreambleFlags = 80
@@ -70,7 +70,7 @@ KBackRefToken = 32768
 KFirstLoadArrayIndex = 1
 
 # this binding exists because shared behavior needs one stable value
-KStringMarker = b'\xff\xfe\xff'
+KStringMarker = b"\xff\xfe\xff"
 
 # this binding exists because shared behavior needs one stable value
 KLongStringUnits = 255
@@ -82,26 +82,36 @@ KDraftingStandardSchema = 1
 KDraftingStandardState = 7
 
 # this binding exists because shared behavior needs one stable value
-KLineStyleClass = 'moLineStyle_c'
+KLineStyleClass = "moLineStyle_c"
 
 # this binding exists because shared behavior needs one stable value
 KLineStyleSchema = 1
 
+
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class LineStyle:
-    locals().setdefault('__annotations__', {})
-    __annotations__['key'] = 'str'
-    __annotations__['display'] = 'str'
-    __annotations__['segments'] = 'tuple[float, ...]'
-    __annotations__['flag'] = 'int'
-    locals()['flag'] = 0
+    locals().setdefault("__annotations__", {})
+    __annotations__["key"] = "str"
+    __annotations__["display"] = "str"
+    __annotations__["segments"] = "tuple[float, ...]"
+    __annotations__["flag"] = "int"
+    locals()["flag"] = 0
+
 
 # this binding exists because shared behavior needs one stable value
-KLineStyles = (LineStyle('CONTINUOUS', 'Solid', (12.0,)), LineStyle('HIDDEN', 'Dashed', (0.25, -0.125)), LineStyle('PHANTOM', 'Phantom', (1.25, -0.25, 0.25, -0.25, 0.25, -0.25)), LineStyle('CHAIN', 'Chain', (1.25, -0.25, 0.25, -0.25)), LineStyle('CENTER', 'Center', (3.0, -0.25, 0.25, -0.25)), LineStyle('STITCH', 'Stitch', (0.0, -0.125)), LineStyle('CHAIN_THICK', 'Thin/Thick Chain', (1.25, -0.25, 0.25, -0.25), 1))
+KLineStyles = (
+    LineStyle("CONTINUOUS", "Solid", (12.0,)),
+    LineStyle("HIDDEN", "Dashed", (0.25, -0.125)),
+    LineStyle("PHANTOM", "Phantom", (1.25, -0.25, 0.25, -0.25, 0.25, -0.25)),
+    LineStyle("CHAIN", "Chain", (1.25, -0.25, 0.25, -0.25)),
+    LineStyle("CENTER", "Center", (3.0, -0.25, 0.25, -0.25)),
+    LineStyle("STITCH", "Stitch", (0.0, -0.125)),
+    LineStyle("CHAIN_THICK", "Thin/Thick Chain", (1.25, -0.25, 0.25, -0.25), 1),
+)
 
 # this binding exists because shared behavior needs one stable value
-KLineFontManagerClass = 'uiLineFontMgr_c'
+KLineFontManagerClass = "uiLineFontMgr_c"
 
 # this binding exists because shared behavior needs one stable value
 KLineFontManagerSchema = 1
@@ -110,7 +120,7 @@ KLineFontManagerSchema = 1
 KLineFontManagerTrailing = 1
 
 # this binding exists because shared behavior needs one stable value
-KLineFontConfigClass = 'uiLFConfig_c'
+KLineFontConfigClass = "uiLFConfig_c"
 
 # this binding exists because shared behavior needs one stable value
 KLineFontConfigSchema = 1
@@ -118,24 +128,67 @@ KLineFontConfigSchema = 1
 # this binding exists because shared behavior needs one stable value
 KLineFontInheritedWidth = -1.0
 
+
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class LineFontBinding:
-    locals().setdefault('__annotations__', {})
-    __annotations__['annotation'] = 'str'
-    __annotations__['font'] = 'str'
-    __annotations__['weight'] = 'int'
-    locals()['weight'] = 0
-    __annotations__['width'] = 'float'
-    locals()['width'] = KLineFontInheritedWidth
-    __annotations__['trailing'] = 'int'
-    locals()['trailing'] = 0
+    locals().setdefault("__annotations__", {})
+    __annotations__["annotation"] = "str"
+    __annotations__["font"] = "str"
+    __annotations__["weight"] = "int"
+    locals()["weight"] = 0
+    __annotations__["width"] = "float"
+    locals()["width"] = KLineFontInheritedWidth
+    __annotations__["trailing"] = "int"
+    locals()["trailing"] = 0
+
 
 # this binding exists because shared behavior needs one stable value
-KLineFontBindings = (LineFontBinding('Sketch', 'CONTINUOUS'), LineFontBinding('Auxilliary', 'HIDDEN'), LineFontBinding('ChamferDim', 'CONTINUOUS'), LineFontBinding('LinearDim', 'CONTINUOUS'), LineFontBinding('LinearDimExt', 'CONTINUOUS'), LineFontBinding('ArcLenDim', 'CONTINUOUS'), LineFontBinding('Hidden', 'HIDDEN'), LineFontBinding('CosmeticThread', 'DUMMYTHREAD'), LineFontBinding('Explodelines', 'PHANTOM'), LineFontBinding('Callout', 'CONTINUOUS'), LineFontBinding('BendDown', 'HIDDEN'), LineFontBinding('AngOrdinateDim', 'CONTINUOUS'), LineFontBinding('Visible', 'CONTINUOUS', 1), LineFontBinding('Detail', 'CONTINUOUS'), LineFontBinding('Section', 'PHANTOM', 2), LineFontBinding('Dimensions', 'CONTINUOUS'), LineFontBinding('BreakLines', 'HIDDEN'), LineFontBinding('OrdinateDimExt', 'CONTINUOUS'), LineFontBinding('ChamferDimExt', 'CONTINUOUS'), LineFontBinding('Crosshatch', 'CONTINUOUS'), LineFontBinding('ViewArrow', 'PHANTOM', 2), LineFontBinding('EmphasizedOutline', 'CONTINUOUS', 2, KLineFontInheritedWidth, 2), LineFontBinding('AngleDimExt', 'CONTINUOUS'), LineFontBinding('Adjoining Component', 'PHANTOM'), LineFontBinding('TanHidden', 'HIDDEN'), LineFontBinding('ArcLenDimExt', 'CONTINUOUS'), LineFontBinding('AngleDim', 'CONTINUOUS'), LineFontBinding('DiameterDim', 'CONTINUOUS'), LineFontBinding('EnvelopComponent', 'PHANTOM'), LineFontBinding('DiameterDimExt', 'CONTINUOUS'), LineFontBinding('OrdinateDim', 'CONTINUOUS'), LineFontBinding('CalloutExt', 'CONTINUOUS'), LineFontBinding('AngOrdinateDimExt', 'CONTINUOUS'), LineFontBinding('TanVisible', 'PHANTOM'), LineFontBinding('RadialDim', 'CONTINUOUS'), LineFontBinding('Centerlines', 'CENTER'), LineFontBinding('DetailBorder', 'CONTINUOUS'), LineFontBinding('RadialDimExt', 'CONTINUOUS'), LineFontBinding('SpeedpakVisible', 'CONTINUOUS'), LineFontBinding('BendUp', 'CONTINUOUS'))
+KLineFontBindings = (
+    LineFontBinding("Sketch", "CONTINUOUS"),
+    LineFontBinding("Auxilliary", "HIDDEN"),
+    LineFontBinding("ChamferDim", "CONTINUOUS"),
+    LineFontBinding("LinearDim", "CONTINUOUS"),
+    LineFontBinding("LinearDimExt", "CONTINUOUS"),
+    LineFontBinding("ArcLenDim", "CONTINUOUS"),
+    LineFontBinding("Hidden", "HIDDEN"),
+    LineFontBinding("CosmeticThread", "DUMMYTHREAD"),
+    LineFontBinding("Explodelines", "PHANTOM"),
+    LineFontBinding("Callout", "CONTINUOUS"),
+    LineFontBinding("BendDown", "HIDDEN"),
+    LineFontBinding("AngOrdinateDim", "CONTINUOUS"),
+    LineFontBinding("Visible", "CONTINUOUS", 1),
+    LineFontBinding("Detail", "CONTINUOUS"),
+    LineFontBinding("Section", "PHANTOM", 2),
+    LineFontBinding("Dimensions", "CONTINUOUS"),
+    LineFontBinding("BreakLines", "HIDDEN"),
+    LineFontBinding("OrdinateDimExt", "CONTINUOUS"),
+    LineFontBinding("ChamferDimExt", "CONTINUOUS"),
+    LineFontBinding("Crosshatch", "CONTINUOUS"),
+    LineFontBinding("ViewArrow", "PHANTOM", 2),
+    LineFontBinding("EmphasizedOutline", "CONTINUOUS", 2, KLineFontInheritedWidth, 2),
+    LineFontBinding("AngleDimExt", "CONTINUOUS"),
+    LineFontBinding("Adjoining Component", "PHANTOM"),
+    LineFontBinding("TanHidden", "HIDDEN"),
+    LineFontBinding("ArcLenDimExt", "CONTINUOUS"),
+    LineFontBinding("AngleDim", "CONTINUOUS"),
+    LineFontBinding("DiameterDim", "CONTINUOUS"),
+    LineFontBinding("EnvelopComponent", "PHANTOM"),
+    LineFontBinding("DiameterDimExt", "CONTINUOUS"),
+    LineFontBinding("OrdinateDim", "CONTINUOUS"),
+    LineFontBinding("CalloutExt", "CONTINUOUS"),
+    LineFontBinding("AngOrdinateDimExt", "CONTINUOUS"),
+    LineFontBinding("TanVisible", "PHANTOM"),
+    LineFontBinding("RadialDim", "CONTINUOUS"),
+    LineFontBinding("Centerlines", "CENTER"),
+    LineFontBinding("DetailBorder", "CONTINUOUS"),
+    LineFontBinding("RadialDimExt", "CONTINUOUS"),
+    LineFontBinding("SpeedpakVisible", "CONTINUOUS"),
+    LineFontBinding("BendUp", "CONTINUOUS"),
+)
 
 # this binding exists because shared behavior needs one stable value
-KUserModelEnvClass = 'uiUserModelEnv_c'
+KUserModelEnvClass = "uiUserModelEnv_c"
 
 # this binding exists because shared behavior needs one stable value
 KUserModelEnvSchema = 1
@@ -164,29 +217,82 @@ KEnvironmentBuildStamp = 73781
 # this binding exists because shared behavior needs one stable value
 KEnvironmentTrailingFlag = 0
 
+
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class ViewRecord:
-    locals().setdefault('__annotations__', {})
-    __annotations__['rotation'] = 'tuple[float, ...]'
-    __annotations__['translation'] = 'tuple[float, float, float]'
-    __annotations__['scale'] = 'float'
-    __annotations__['gap'] = 'int'
-    __annotations__['centre'] = 'tuple[float, float, float]'
-    __annotations__['height'] = 'float'
-    __annotations__['trailer_flag'] = 'int'
-    __annotations__['trailer_first'] = 'int'
-    __annotations__['trailer_second'] = 'int'
-    __annotations__['trailer_value'] = 'float'
-    __annotations__['name'] = 'str'
-    __annotations__['has_window_placement'] = 'bool'
-    locals()['has_window_placement'] = False
+    locals().setdefault("__annotations__", {})
+    __annotations__["rotation"] = "tuple[float, ...]"
+    __annotations__["translation"] = "tuple[float, float, float]"
+    __annotations__["scale"] = "float"
+    __annotations__["gap"] = "int"
+    __annotations__["centre"] = "tuple[float, float, float]"
+    __annotations__["height"] = "float"
+    __annotations__["trailer_flag"] = "int"
+    __annotations__["trailer_first"] = "int"
+    __annotations__["trailer_second"] = "int"
+    __annotations__["trailer_value"] = "float"
+    __annotations__["name"] = "str"
+    __annotations__["has_window_placement"] = "bool"
+    locals()["has_window_placement"] = False
+
 
 # this binding exists because shared behavior needs one stable value
-KViewRecords = (ViewRecord(rotation=(0.8844181216774213, -0.24036589468392133, 0.400036026779314, 1.3877787807814457e-17, 0.8571673007021341, 0.5150380749100181, -0.4666953889300622, -0.4555090068042732, 0.7580942940502868), translation=(0.0, 0.0, 0.0), scale=1.0, gap=0, centre=(0.03568485564735271, 0.004222922958999075, -0.007028124036209772), height=6.180518783629107, trailer_flag=0, trailer_first=3, trailer_second=1, trailer_value=-1.0, name='', has_window_placement=True), ViewRecord(rotation=(), translation=(0.0, 0.0, 0.0), scale=1.0, gap=0, centre=(0.0, 0.0, 0.0), height=1.0, trailer_flag=0, trailer_first=65535, trailer_second=0, trailer_value=-1.0, name=''), ViewRecord(rotation=(), translation=(0.0, 0.0, 0.0), scale=1.0, gap=0, centre=(0.0, 0.0, 0.0), height=1.0, trailer_flag=0, trailer_first=65535, trailer_second=0, trailer_value=-1.0, name=''))
+KViewRecords = (
+    ViewRecord(
+        rotation=(
+            0.8844181216774213,
+            -0.24036589468392133,
+            0.400036026779314,
+            1.3877787807814457e-17,
+            0.8571673007021341,
+            0.5150380749100181,
+            -0.4666953889300622,
+            -0.4555090068042732,
+            0.7580942940502868,
+        ),
+        translation=(0.0, 0.0, 0.0),
+        scale=1.0,
+        gap=0,
+        centre=(0.03568485564735271, 0.004222922958999075, -0.007028124036209772),
+        height=6.180518783629107,
+        trailer_flag=0,
+        trailer_first=3,
+        trailer_second=1,
+        trailer_value=-1.0,
+        name="",
+        has_window_placement=True,
+    ),
+    ViewRecord(
+        rotation=(),
+        translation=(0.0, 0.0, 0.0),
+        scale=1.0,
+        gap=0,
+        centre=(0.0, 0.0, 0.0),
+        height=1.0,
+        trailer_flag=0,
+        trailer_first=65535,
+        trailer_second=0,
+        trailer_value=-1.0,
+        name="",
+    ),
+    ViewRecord(
+        rotation=(),
+        translation=(0.0, 0.0, 0.0),
+        scale=1.0,
+        gap=0,
+        centre=(0.0, 0.0, 0.0),
+        height=1.0,
+        trailer_flag=0,
+        trailer_first=65535,
+        trailer_second=0,
+        trailer_value=-1.0,
+        name="",
+    ),
+)
 
 # this binding exists because shared behavior needs one stable value
-KBomManagerClass = 'moBomInfoMgr_c'
+KBomManagerClass = "moBomInfoMgr_c"
 
 # this binding exists because shared behavior needs one stable value
 KBomManagerSchema = 1
@@ -198,16 +304,16 @@ KBomInfoCount = 0
 KManagerTailWords = (1, 38284, 0, 515, 0)
 
 # this binding exists because shared behavior needs one stable value
-KJournalClass = 'uoJournal_c'
+KJournalClass = "uoJournal_c"
 
 # this binding exists because shared behavior needs one stable value
 KJournalSchema = 0
 
 # this binding exists because shared behavior needs one stable value
-KJournalAttachment = 'Design Journal.doc'
+KJournalAttachment = "Design Journal.doc"
 
 # this binding exists because shared behavior needs one stable value
-KJournalSlots = (('', 0), ('', 0), ('', 0))
+KJournalSlots = (("", 0), ("", 0), ("", 0))
 
 # this binding exists because shared behavior needs one stable value
 KJournalPageHeight = 1000.0
@@ -242,13 +348,15 @@ KJournalRecordTailBytes = 146
 # this binding exists because shared behavior needs one stable value
 KOpaqueSpans: tuple[bytes, ...] = ()
 
+
 # this definition exists because focused behavior needs one stable owner
 def EncodeString(TextValue: str) -> bytes:
-    Units = TextValue.encode('utf-16-le')
+    Units = TextValue.encode("utf-16-le")
     Count = len(Units) // 2
     if Count < KLongStringUnits:
         return KStringMarker + bytes([Count]) + Units
-    return KStringMarker + b'\xff' + Struct.pack('<H', Count) + Units
+    return KStringMarker + b"\xff" + Struct.pack("<H", Count) + Units
+
 
 # this definition exists because primitive archive values share one byte packing interface
 class ArchiveValues:
@@ -259,31 +367,31 @@ class ArchiveValues:
 
     # this definition exists because focused behavior needs one stable owner
     def UEight(Instance, Value: int) -> None:
-        Instance.chunks.append(Struct.pack('<B', Value))
+        Instance.chunks.append(Struct.pack("<B", Value))
 
     # this definition exists because focused behavior needs one stable owner
     def UOneSix(Instance, Value: int) -> None:
-        Instance.chunks.append(Struct.pack('<H', Value))
+        Instance.chunks.append(Struct.pack("<H", Value))
 
     # this definition exists because focused behavior needs one stable owner
     def IOneSix(Instance, Value: int) -> None:
-        Instance.chunks.append(Struct.pack('<h', Value))
+        Instance.chunks.append(Struct.pack("<h", Value))
 
     # this definition exists because focused behavior needs one stable owner
     def IThreeTwo(Instance, Value: int) -> None:
-        Instance.chunks.append(Struct.pack('<i', Value))
+        Instance.chunks.append(Struct.pack("<i", Value))
 
     # this definition exists because focused behavior needs one stable owner
     def UThreeTwo(Instance, Value: int) -> None:
-        Instance.chunks.append(Struct.pack('<I', Value))
+        Instance.chunks.append(Struct.pack("<I", Value))
 
     # this definition exists because focused behavior needs one stable owner
     def FThreeTwo(Instance, Value: float) -> None:
-        Instance.chunks.append(Struct.pack('<f', Value))
+        Instance.chunks.append(Struct.pack("<f", Value))
 
     # this definition exists because focused behavior needs one stable owner
     def FSixFour(Instance, Value: float) -> None:
-        Instance.chunks.append(Struct.pack('<d', Value))
+        Instance.chunks.append(Struct.pack("<d", Value))
 
     # this definition exists because focused behavior needs one stable owner
     def Zeros(Instance, Count: int) -> None:
@@ -293,68 +401,72 @@ class ArchiveValues:
     def String(Instance, TextValue: str) -> None:
         Instance.chunks.append(EncodeString(TextValue))
 
+
 # this definition exists because archive object state is separate from primitive value packing
 class ArchiveWriter(ArchiveValues):
-    KSlots = ('chunks', 'classes', 'next_index')
+    KSlots = ("chunks", "classes", "next_index")
 
     # this definition exists because focused behavior needs one stable owner
     def InitAction(Instance) -> None:
-        setattr(Instance, 'chunks', [])
-        setattr(Instance, 'classes', {})
-        setattr(Instance, 'next_index', KFirstLoadArrayIndex)
+        setattr(Instance, "chunks", [])
+        setattr(Instance, "classes", {})
+        setattr(Instance, "next_index", KFirstLoadArrayIndex)
 
     # this definition exists because focused behavior needs one stable owner
     def BeginObject(Instance, NameValue: str, Schema: int) -> None:
         Index = Instance.classes.get(NameValue)
         if Index is None:
-            Encoded = NameValue.encode('ascii')
+            Encoded = NameValue.encode("ascii")
             Instance.u16(KNewClassToken)
             Instance.u16(Schema)
             Instance.u16(len(Encoded))
             Instance.raw(Encoded)
             Instance.classes[NameValue] = Instance.next_index
-            setattr(Instance, 'next_index', Instance.next_index + 1)
+            setattr(Instance, "next_index", Instance.next_index + 1)
         else:
             Instance.u16(KBackRefToken | Index)
-        setattr(Instance, 'next_index', Instance.next_index + 1)
+        setattr(Instance, "next_index", Instance.next_index + 1)
 
     # this definition exists because focused behavior needs one stable owner
     def Build(Instance) -> bytes:
-        return b''.join(Instance.chunks)
+        return b"".join(Instance.chunks)
+
 
 # this assignment preserves the established constructor contract
 ArchiveWriter.__init__ = ArchiveWriter.InitAction
 
-setattr(ArchiveWriter, 'begin_object', ArchiveWriter.BeginObject)
+setattr(ArchiveWriter, "begin_object", ArchiveWriter.BeginObject)
 
-setattr(ArchiveWriter, 'build', ArchiveWriter.Build)
+setattr(ArchiveWriter, "build", ArchiveWriter.Build)
 
-setattr(ArchiveWriter, 'f32', ArchiveWriter.FThreeTwo)
+setattr(ArchiveWriter, "f32", ArchiveWriter.FThreeTwo)
 
-setattr(ArchiveWriter, 'f64', ArchiveWriter.FSixFour)
+setattr(ArchiveWriter, "f64", ArchiveWriter.FSixFour)
 
-setattr(ArchiveWriter, 'i16', ArchiveWriter.IOneSix)
+setattr(ArchiveWriter, "i16", ArchiveWriter.IOneSix)
 
-setattr(ArchiveWriter, 'i32', ArchiveWriter.IThreeTwo)
+setattr(ArchiveWriter, "i32", ArchiveWriter.IThreeTwo)
 
-setattr(ArchiveWriter, 'raw', ArchiveWriter.RawAction)
+setattr(ArchiveWriter, "raw", ArchiveWriter.RawAction)
 
-setattr(ArchiveWriter, 'string', ArchiveWriter.String)
+setattr(ArchiveWriter, "string", ArchiveWriter.String)
 
-setattr(ArchiveWriter, 'u16', ArchiveWriter.UOneSix)
+setattr(ArchiveWriter, "u16", ArchiveWriter.UOneSix)
 
-setattr(ArchiveWriter, 'u32', ArchiveWriter.UThreeTwo)
+setattr(ArchiveWriter, "u32", ArchiveWriter.UThreeTwo)
 
-setattr(ArchiveWriter, 'u8', ArchiveWriter.UEight)
+setattr(ArchiveWriter, "u8", ArchiveWriter.UEight)
 
-setattr(ArchiveWriter, 'zeros', ArchiveWriter.Zeros)
+setattr(ArchiveWriter, "zeros", ArchiveWriter.Zeros)
+
 
 # this definition exists because focused behavior needs one stable owner
 def WriteDrafting(Writer: ArchiveWriter, Standard: str) -> None:
     if Standard not in KDraftingStandards:
-        raise SldprtFormatError(f'unknown SOLIDWORKS drafting standard {Standard!r}')
+        raise SldprtFormatError(f"unknown SOLIDWORKS drafting standard {Standard!r}")
     Writer.begin_object(Standard, KDraftingStandardSchema)
     Writer.u32(KDraftingStandardState)
+
 
 # this definition exists because focused behavior needs one stable owner
 def WriteLineStyles(Writer: ArchiveWriter) -> None:
@@ -366,6 +478,7 @@ def WriteLineStyles(Writer: ArchiveWriter) -> None:
         for Segment in Style.segments:
             Writer.f64(Segment)
         Writer.u8(Style.flag)
+
 
 # this definition exists because focused behavior needs one stable owner
 def WriteLineFonts(Writer: ArchiveWriter) -> None:
@@ -379,6 +492,7 @@ def WriteLineFonts(Writer: ArchiveWriter) -> None:
         Writer.f32(Binding.width)
         Writer.i16(Binding.trailing)
     Writer.u16(KLineFontManagerTrailing)
+
 
 # this definition exists because focused behavior needs one stable owner
 def WriteView(Writer: ArchiveWriter, ViewValue: ViewRecord) -> None:
@@ -400,6 +514,7 @@ def WriteView(Writer: ArchiveWriter, ViewValue: ViewRecord) -> None:
     if ViewValue.has_window_placement:
         WriteWindow(Writer)
 
+
 # this definition exists because focused behavior needs one stable owner
 def WriteWindow(Writer: ArchiveWriter) -> None:
     LeftValue, TopValue, *WordData, SentinelValue = KWindowPlacementFields
@@ -408,6 +523,7 @@ def WriteWindow(Writer: ArchiveWriter) -> None:
     for ItemData in WordData:
         Writer.u16(ItemData)
     Writer.i32(SentinelValue)
+
 
 # this definition exists because focused behavior needs one stable owner
 def WriteTail(Writer: ArchiveWriter) -> None:
@@ -419,6 +535,7 @@ def WriteTail(Writer: ArchiveWriter) -> None:
     Writer.u32(KEnvironmentBuildStamp)
     Writer.u8(KEnvironmentTrailingFlag)
 
+
 # this definition exists because focused behavior needs one stable owner
 def WriteUserModel(Writer: ArchiveWriter, UserValue: str) -> None:
     Writer.begin_object(KUserModelEnvClass, KUserModelEnvSchema)
@@ -428,6 +545,7 @@ def WriteUserModel(Writer: ArchiveWriter, UserValue: str) -> None:
     for ViewValue in KViewRecords:
         WriteView(Writer, ViewValue)
     WriteTail(Writer)
+
 
 # this definition exists because focused behavior needs one stable owner
 def WriteBomManager(Writer: ArchiveWriter) -> None:
@@ -441,6 +559,7 @@ def WriteBomManager(Writer: ArchiveWriter) -> None:
     Writer.u16(FlagValue)
     Writer.u16(TailValue)
 
+
 # this definition exists because focused behavior needs one stable owner
 def WriteJournalA(Writer: ArchiveWriter) -> None:
     Writer.zeros(10)
@@ -453,13 +572,25 @@ def WriteJournalA(Writer: ArchiveWriter) -> None:
     Writer.u16(KJournalHeadSchemaFlags)
     Writer.zeros(9)
 
+
 # this definition exists because focused behavior needs one stable owner
 def WriteJournalB(Writer: ArchiveWriter) -> None:
     Writer.zeros(30)
     Writer.u32(KJournalTailPageUnits)
     Writer.u32(KJournalTailStyle)
     Writer.zeros(8)
-    FirstValue, SecondValue, ThirdValue, FourthValue, FifthValue, SixthValue, SeventhValue, EighthValue, NinthValue, TenthValue = KJournalTailOptionValues
+    (
+        FirstValue,
+        SecondValue,
+        ThirdValue,
+        FourthValue,
+        FifthValue,
+        SixthValue,
+        SeventhValue,
+        EighthValue,
+        NinthValue,
+        TenthValue,
+    ) = KJournalTailOptionValues
     Writer.u32(FirstValue)
     Writer.zeros(12)
     Writer.u32(SecondValue)
@@ -478,6 +609,7 @@ def WriteJournalB(Writer: ArchiveWriter) -> None:
     Writer.u32(TenthValue)
     Writer.zeros(4)
 
+
 # this definition exists because focused behavior needs one stable owner
 def WriteJournal(Writer: ArchiveWriter) -> None:
     Writer.begin_object(KJournalClass, KJournalSchema)
@@ -489,8 +621,9 @@ def WriteJournal(Writer: ArchiveWriter) -> None:
     WriteJournalB(Writer)
     Writer.f64(KJournalPageHeight)
 
+
 # this definition exists because focused behavior needs one stable owner
-def EncodeBody(*, Standard: str='moBS_c', UserValue: str='Kit') -> bytes:
+def EncodeBody(*, Standard: str = "moBS_c", UserValue: str = "Kit") -> bytes:
     Writer = ArchiveWriter()
     WriteDrafting(Writer, Standard)
     WriteLineStyles(Writer)
@@ -500,273 +633,295 @@ def EncodeBody(*, Standard: str='moBS_c', UserValue: str='Kit') -> bytes:
     WriteJournal(Writer)
     return Writer.build()
 
+
 # this definition exists because focused behavior needs one stable owner
-def EncodePreamble(*, Clsid: bytes=KPartClsid, ViewValue: tuple[float, ...] | None=None) -> bytes:
+def EncodePreamble(
+    *, Clsid: bytes = KPartClsid, ViewValue: tuple[float, ...] | None = None
+) -> bytes:
     Chunk = bytearray()
-    Chunk += Struct.pack('<IIIII', KPreambleFlags, KPreambleGeneration, KPreambleFieldEight, KPreambleFieldOneTwo, KPreambleFieldOneSix)
+    Chunk += Struct.pack(
+        "<IIIII",
+        KPreambleFlags,
+        KPreambleGeneration,
+        KPreambleFieldEight,
+        KPreambleFieldOneTwo,
+        KPreambleFieldOneSix,
+    )
     Chunk += Clsid
     Chunk += KPreambleReserved + bytes([0 if ViewValue is None else 1])
     if ViewValue is not None:
         if len(ViewValue) != KViewBlockDoubles:
-            raise SldprtFormatError(f'definition view block needs {KViewBlockDoubles} doubles, {len(ViewValue)} were supplied')
+            raise SldprtFormatError(
+                f"definition view block needs {KViewBlockDoubles} doubles, {len(ViewValue)} were supplied"
+            )
         for Value in ViewValue:
-            Chunk += Struct.pack('<d', Value)
+            Chunk += Struct.pack("<d", Value)
     Chunk += KPreambleMiddle
-    Chunk += Struct.pack('<d', KPreambleScale)
-    Chunk += Struct.pack('<H', KPreamblePad)
+    Chunk += Struct.pack("<d", KPreambleScale)
+    Chunk += Struct.pack("<H", KPreamblePad)
     for Value in KPreambleTail:
-        Chunk += Struct.pack('<d', Value)
+        Chunk += Struct.pack("<d", Value)
     for ItemData in KPreambleTrailerWords:
-        Chunk += Struct.pack('<H', ItemData)
+        Chunk += Struct.pack("<H", ItemData)
     return bytes(Chunk)
 
+
 # this definition exists because focused behavior needs one stable owner
-def EncodeStream(*, Standard: str='moBS_c', UserValue: str='Kit', AsmValue: bool=False, ViewValue: tuple[float, ...] | None=None) -> bytes:
+def EncodeStream(
+    *,
+    Standard: str = "moBS_c",
+    UserValue: str = "Kit",
+    AsmValue: bool = False,
+    ViewValue: tuple[float, ...] | None = None,
+) -> bytes:
     Clsid = KAsmClsid if AsmValue else KPartClsid
-    return EncodePreamble(Clsid=Clsid, ViewValue=ViewValue) + EncodeBody(Standard=Standard, UserValue=UserValue)
+    return EncodePreamble(Clsid=Clsid, ViewValue=ViewValue) + EncodeBody(
+        Standard=Standard, UserValue=UserValue
+    )
 
+
 # this binding exists because shared behavior needs one stable value
-globals()['ASSEMBLY_CLSID'] = KAsmClsid
+globals()["ASSEMBLY_CLSID"] = KAsmClsid
 
 # this binding exists because shared behavior needs one stable value
-globals()['BACK_REFERENCE_TOKEN'] = KBackRefToken
+globals()["BACK_REFERENCE_TOKEN"] = KBackRefToken
 
 # this binding exists because shared behavior needs one stable value
-globals()['BOM_INFO_COUNT'] = KBomInfoCount
+globals()["BOM_INFO_COUNT"] = KBomInfoCount
 
 # this binding exists because shared behavior needs one stable value
-globals()['BOM_MANAGER_CLASS'] = KBomManagerClass
+globals()["BOM_MANAGER_CLASS"] = KBomManagerClass
 
 # this binding exists because shared behavior needs one stable value
-globals()['BOM_MANAGER_SCHEMA'] = KBomManagerSchema
+globals()["BOM_MANAGER_SCHEMA"] = KBomManagerSchema
 
 # this binding exists because shared behavior needs one stable value
-globals()['DOCUMENT_GENERATION'] = KDocGeneration
+globals()["DOCUMENT_GENERATION"] = KDocGeneration
 
 # this binding exists because shared behavior needs one stable value
-globals()['DRAFTING_STANDARDS'] = KDraftingStandards
+globals()["DRAFTING_STANDARDS"] = KDraftingStandards
 
 # this binding exists because shared behavior needs one stable value
-globals()['DRAFTING_STANDARD_SCHEMA'] = KDraftingStandardSchema
+globals()["DRAFTING_STANDARD_SCHEMA"] = KDraftingStandardSchema
 
 # this binding exists because shared behavior needs one stable value
-globals()['DRAFTING_STANDARD_STATE'] = KDraftingStandardState
+globals()["DRAFTING_STANDARD_STATE"] = KDraftingStandardState
 
 # this binding exists because shared behavior needs one stable value
-globals()['ENVIRONMENT_BUILD_STAMP'] = KEnvironmentBuildStamp
+globals()["ENVIRONMENT_BUILD_STAMP"] = KEnvironmentBuildStamp
 
 # this binding exists because shared behavior needs one stable value
-globals()['ENVIRONMENT_CAPACITY'] = KEnvironmentCapacity
+globals()["ENVIRONMENT_CAPACITY"] = KEnvironmentCapacity
 
 # this binding exists because shared behavior needs one stable value
-globals()['ENVIRONMENT_RESERVED_HEAD_BYTES'] = KEnvironmentReservedHead
+globals()["ENVIRONMENT_RESERVED_HEAD_BYTES"] = KEnvironmentReservedHead
 
 # this binding exists because shared behavior needs one stable value
-globals()['ENVIRONMENT_RESERVED_MIDDLE_BYTES'] = KEnvironmentReservedMiddA
+globals()["ENVIRONMENT_RESERVED_MIDDLE_BYTES"] = KEnvironmentReservedMiddA
 
 # this binding exists because shared behavior needs one stable value
-globals()['ENVIRONMENT_SENTINELS'] = KEnvironmentSentinels
+globals()["ENVIRONMENT_SENTINELS"] = KEnvironmentSentinels
 
 # this binding exists because shared behavior needs one stable value
-globals()['ENVIRONMENT_TRAILING_FLAG'] = KEnvironmentTrailingFlag
+globals()["ENVIRONMENT_TRAILING_FLAG"] = KEnvironmentTrailingFlag
 
 # this binding exists because shared behavior needs one stable value
-globals()['FIRST_LOAD_ARRAY_INDEX'] = KFirstLoadArrayIndex
+globals()["FIRST_LOAD_ARRAY_INDEX"] = KFirstLoadArrayIndex
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_ATTACHMENT'] = KJournalAttachment
+globals()["JOURNAL_ATTACHMENT"] = KJournalAttachment
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_CLASS'] = KJournalClass
+globals()["JOURNAL_CLASS"] = KJournalClass
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_HEAD_FIRST_FLAG'] = KJournalHeadFirstFlag
+globals()["JOURNAL_HEAD_FIRST_FLAG"] = KJournalHeadFirstFlag
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_HEAD_SCHEMA_FLAGS'] = KJournalHeadSchemaFlags
+globals()["JOURNAL_HEAD_SCHEMA_FLAGS"] = KJournalHeadSchemaFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_HEAD_SECOND_FLAG'] = KJournalHeadSecondFlag
+globals()["JOURNAL_HEAD_SECOND_FLAG"] = KJournalHeadSecondFlag
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_HEAD_THIRD_FLAG'] = KJournalHeadThirdFlag
+globals()["JOURNAL_HEAD_THIRD_FLAG"] = KJournalHeadThirdFlag
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_PAGE_HEIGHT'] = KJournalPageHeight
+globals()["JOURNAL_PAGE_HEIGHT"] = KJournalPageHeight
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_RECORD_HEAD_BYTES'] = KJournalRecordHeadBytes
+globals()["JOURNAL_RECORD_HEAD_BYTES"] = KJournalRecordHeadBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_RECORD_TAIL_BYTES'] = KJournalRecordTailBytes
+globals()["JOURNAL_RECORD_TAIL_BYTES"] = KJournalRecordTailBytes
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_SCHEMA'] = KJournalSchema
+globals()["JOURNAL_SCHEMA"] = KJournalSchema
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_SLOTS'] = KJournalSlots
+globals()["JOURNAL_SLOTS"] = KJournalSlots
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_TAIL_OPTION_VALUES'] = KJournalTailOptionValues
+globals()["JOURNAL_TAIL_OPTION_VALUES"] = KJournalTailOptionValues
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_TAIL_PAGE_UNITS'] = KJournalTailPageUnits
+globals()["JOURNAL_TAIL_PAGE_UNITS"] = KJournalTailPageUnits
 
 # this binding exists because shared behavior needs one stable value
-globals()['JOURNAL_TAIL_STYLE'] = KJournalTailStyle
+globals()["JOURNAL_TAIL_STYLE"] = KJournalTailStyle
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_FONT_BINDINGS'] = KLineFontBindings
+globals()["LINE_FONT_BINDINGS"] = KLineFontBindings
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_FONT_CONFIG_CLASS'] = KLineFontConfigClass
+globals()["LINE_FONT_CONFIG_CLASS"] = KLineFontConfigClass
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_FONT_CONFIG_SCHEMA'] = KLineFontConfigSchema
+globals()["LINE_FONT_CONFIG_SCHEMA"] = KLineFontConfigSchema
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_FONT_INHERITED_WIDTH'] = KLineFontInheritedWidth
+globals()["LINE_FONT_INHERITED_WIDTH"] = KLineFontInheritedWidth
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_FONT_MANAGER_CLASS'] = KLineFontManagerClass
+globals()["LINE_FONT_MANAGER_CLASS"] = KLineFontManagerClass
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_FONT_MANAGER_SCHEMA'] = KLineFontManagerSchema
+globals()["LINE_FONT_MANAGER_SCHEMA"] = KLineFontManagerSchema
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_FONT_MANAGER_TRAILING'] = KLineFontManagerTrailing
+globals()["LINE_FONT_MANAGER_TRAILING"] = KLineFontManagerTrailing
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_STYLES'] = KLineStyles
+globals()["LINE_STYLES"] = KLineStyles
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_STYLE_CLASS'] = KLineStyleClass
+globals()["LINE_STYLE_CLASS"] = KLineStyleClass
 
 # this binding exists because shared behavior needs one stable value
-globals()['LINE_STYLE_SCHEMA'] = KLineStyleSchema
+globals()["LINE_STYLE_SCHEMA"] = KLineStyleSchema
 
 # this binding exists because shared behavior needs one stable value
-globals()['LONG_STRING_UNITS'] = KLongStringUnits
+globals()["LONG_STRING_UNITS"] = KLongStringUnits
 
 # this binding exists because shared behavior needs one stable value
-globals()['MANAGER_TAIL_WORDS'] = KManagerTailWords
+globals()["MANAGER_TAIL_WORDS"] = KManagerTailWords
 
 # this binding exists because shared behavior needs one stable value
-globals()['NEW_CLASS_TOKEN'] = KNewClassToken
+globals()["NEW_CLASS_TOKEN"] = KNewClassToken
 
 # this binding exists because shared behavior needs one stable value
-globals()['OPAQUE_SPANS'] = KOpaqueSpans
+globals()["OPAQUE_SPANS"] = KOpaqueSpans
 
 # this binding exists because shared behavior needs one stable value
-globals()['PART_CLSID'] = KPartClsid
+globals()["PART_CLSID"] = KPartClsid
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_FIELD12'] = KPreambleFieldOneTwo
+globals()["PREAMBLE_FIELD12"] = KPreambleFieldOneTwo
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_FIELD16'] = KPreambleFieldOneSix
+globals()["PREAMBLE_FIELD16"] = KPreambleFieldOneSix
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_FIELD8'] = KPreambleFieldEight
+globals()["PREAMBLE_FIELD8"] = KPreambleFieldEight
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_FLAGS'] = KPreambleFlags
+globals()["PREAMBLE_FLAGS"] = KPreambleFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_GENERATION'] = KPreambleGeneration
+globals()["PREAMBLE_GENERATION"] = KPreambleGeneration
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_MIDDLE'] = KPreambleMiddle
+globals()["PREAMBLE_MIDDLE"] = KPreambleMiddle
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_PAD'] = KPreamblePad
+globals()["PREAMBLE_PAD"] = KPreamblePad
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_RESERVED'] = KPreambleReserved
+globals()["PREAMBLE_RESERVED"] = KPreambleReserved
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_SCALE'] = KPreambleScale
+globals()["PREAMBLE_SCALE"] = KPreambleScale
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_TAIL'] = KPreambleTail
+globals()["PREAMBLE_TAIL"] = KPreambleTail
 
 # this binding exists because shared behavior needs one stable value
-globals()['PREAMBLE_TRAILER_WORDS'] = KPreambleTrailerWords
+globals()["PREAMBLE_TRAILER_WORDS"] = KPreambleTrailerWords
 
 # this binding exists because shared behavior needs one stable value
-globals()['SESSION_HEADER_WORDS'] = KSessionHeaderWords
+globals()["SESSION_HEADER_WORDS"] = KSessionHeaderWords
 
 # this binding exists because shared behavior needs one stable value
-globals()['STRING_MARKER'] = KStringMarker
+globals()["STRING_MARKER"] = KStringMarker
 
 # this binding exists because shared behavior needs one stable value
-globals()['USER_MODEL_ENV_CLASS'] = KUserModelEnvClass
+globals()["USER_MODEL_ENV_CLASS"] = KUserModelEnvClass
 
 # this binding exists because shared behavior needs one stable value
-globals()['USER_MODEL_ENV_SCHEMA'] = KUserModelEnvSchema
+globals()["USER_MODEL_ENV_SCHEMA"] = KUserModelEnvSchema
 
 # this binding exists because shared behavior needs one stable value
-globals()['UUID'] = UuidValue
+globals()["UUID"] = UuidValue
 
 # this binding exists because shared behavior needs one stable value
-globals()['VIEW_BLOCK_DOUBLES'] = KViewBlockDoubles
+globals()["VIEW_BLOCK_DOUBLES"] = KViewBlockDoubles
 
 # this binding exists because shared behavior needs one stable value
-globals()['VIEW_RECORDS'] = KViewRecords
+globals()["VIEW_RECORDS"] = KViewRecords
 
 # this binding exists because shared behavior needs one stable value
-globals()['WINDOW_PLACEMENT_FIELDS'] = KWindowPlacementFields
+globals()["WINDOW_PLACEMENT_FIELDS"] = KWindowPlacementFields
 
 # this binding exists because shared behavior needs one stable value
-globals()['annotations'] = Annotations
+globals()["annotations"] = Annotations
 
 # this binding exists because shared behavior needs one stable value
-globals()['dataclass'] = Dataclass
+globals()["dataclass"] = Dataclass
 
 # this binding exists because shared behavior needs one stable value
-globals()['encode_body'] = EncodeBody
+globals()["encode_body"] = EncodeBody
 
 # this binding exists because shared behavior needs one stable value
-globals()['encode_definition_stream'] = EncodeStream
+globals()["encode_definition_stream"] = EncodeStream
 
 # this binding exists because shared behavior needs one stable value
-globals()['encode_preamble'] = EncodePreamble
+globals()["encode_preamble"] = EncodePreamble
 
 # this binding exists because shared behavior needs one stable value
-globals()['encode_string'] = EncodeString
+globals()["encode_string"] = EncodeString
 
 # this binding exists because shared behavior needs one stable value
-globals()['struct'] = Struct
+globals()["struct"] = Struct
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_bom_manager'] = WriteBomManager
+globals()["write_bom_manager"] = WriteBomManager
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_drafting_standard'] = WriteDrafting
+globals()["write_drafting_standard"] = WriteDrafting
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_environment_tail'] = WriteTail
+globals()["write_environment_tail"] = WriteTail
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_journal'] = WriteJournal
+globals()["write_journal"] = WriteJournal
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_journal_head'] = WriteJournalA
+globals()["write_journal_head"] = WriteJournalA
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_journal_tail'] = WriteJournalB
+globals()["write_journal_tail"] = WriteJournalB
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_line_fonts'] = WriteLineFonts
+globals()["write_line_fonts"] = WriteLineFonts
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_line_styles'] = WriteLineStyles
+globals()["write_line_styles"] = WriteLineStyles
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_user_model_env'] = WriteUserModel
+globals()["write_user_model_env"] = WriteUserModel
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_view'] = WriteView
+globals()["write_view"] = WriteView
 
 # this binding exists because shared behavior needs one stable value
-globals()['write_window_placement'] = WriteWindow
+globals()["write_window_placement"] = WriteWindow

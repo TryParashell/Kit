@@ -339,6 +339,176 @@ class CatiaAdapter(CatiaMetadata, CatiaReader, CatiaSupport, CatiaWriter):
 
 
 # this definition exists because focused behavior needs one stable owner
+def CanReplayNative(Settings: WriteOptions, DocValue: CadDocument) -> bool:
+    return not Settings.values.get("rebuild", False) and not (
+        Settings.values.get("portable") is True and DocValue.assembly is not None
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
+def WriteReplay(
+    DocValue: CadDocument,
+    Target: Destination,
+    Settings: WriteOptions,
+    DocType: str,
+    Native: bytes,
+) -> WriteResult:
+    Compatibility = Replay(Native)
+    NativeExact = Compatibility == "native-exact"
+    NativeBaseSaved = Compatibility == "native-base-neutral-overlay"
+    ModeValue = "exact_native_roundtrip" if NativeExact else "exact_carrier_roundtrip"
+    PathValue = WriteBytes(Target, Native, Settings.overwrite)
+    Requirements = (
+        ("referenced CATIA component files",) if DocValue.assembly is not None else ()
+    )
+    Metadata = {
+        "mode": ModeValue,
+        "compatibility": Compatibility,
+        "vendor_loadable": NativeExact,
+        "native_geometry": NativeExact,
+        "native_history": NativeExact,
+        "native_assembly": NativeExact and DocValue.assembly is not None,
+        "native_self_contained": NativeExact and DocValue.assembly is None,
+        "native_base_preserved": NativeBaseSaved,
+        "native_streams_preserved": NativeBaseSaved,
+        "referenced_files_written": 0,
+        "container": "V5_CFV2",
+        "document_type": DocType,
+    }
+    return WriteResult(
+        PathValue,
+        KFormatId,
+        len(Native),
+        diagnostics=DocValue.diagnostics,
+        metadata=MappingProxyType(Metadata),
+        requirements=Requirements,
+        application_usable=NativeExact,
+        vendor_loadable=NativeExact,
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
+def WriteNativeBase(
+    DocValue: CadDocument,
+    Target: Destination,
+    Settings: WriteOptions,
+    DocType: str,
+    CarrierDoc: CadDocument,
+    NativeBase: bytes,
+) -> WriteResult:
+    DataValue = AppendCfvTwoStream(NativeBase, KManifestName, PackManifest(CarrierDoc))
+    Restored = Restore(DataValue)
+    if Restored != CarrierDoc or Replay(DataValue) != "native-base-neutral-overlay":
+        raise CatiaAdapterA("CATIA native-base output failed semantic validation")
+    PathValue = WriteBytes(Target, DataValue, Settings.overwrite)
+    DiagValue = DiagnosticInfo(
+        "catia.native_base_preserved",
+        "The native CATIA streams are byte-exact; changed geometry, history, sketches, and assembly semantics remain neutral Kit data rather than native CATIA feature records.",
+        Severity.WARNING,
+    )
+    Requirements = (
+        ("referenced CATIA component files",) if DocValue.assembly is not None else ()
+    )
+    Metadata = NativeBaseMeta(DocValue, DocType, CarrierDoc, NativeBase)
+    return WriteResult(
+        PathValue,
+        KFormatId,
+        len(DataValue),
+        diagnostics=(*DocValue.diagnostics, DiagValue),
+        metadata=MappingProxyType(Metadata),
+        requirements=Requirements,
+        application_usable=False,
+        vendor_loadable=False,
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
+def NativeBaseMeta(
+    DocValue: CadDocument,
+    DocType: str,
+    CarrierDoc: CadDocument,
+    NativeBase: bytes,
+) -> dict[str, object]:
+    return {
+        "mode": "native_base_with_neutral_edits",
+        "compatibility": "native-base-neutral-overlay",
+        "vendor_loadable": False,
+        "native_geometry": False,
+        "native_history": False,
+        "native_assembly": False,
+        "native_self_contained": False,
+        "native_base_vendor_loadable": True,
+        "native_base_preserved": True,
+        "native_streams_preserved": True,
+        "neutral_geometry_embedded": DocValue.brep is not None
+        or any(Payload.role == PayloadRole.BREP for Payload in DocValue.brep_payloads),
+        "neutral_history_embedded": bool(
+            DocValue.parameters
+            or DocValue.support_planes
+            or DocValue.sketches
+            or DocValue.selections
+            or DocValue.feature_timeline
+            or DocValue.bodies
+        ),
+        "neutral_assembly_embedded": DocValue.assembly is not None,
+        "referenced_files_written": 0,
+        "container": "V5_CFV2",
+        "document_type": DocType,
+        "native_base_sha256": Hashlib.sha256(NativeBase).hexdigest(),
+        "manifest_sha256": Hashlib.sha256(
+            CarrierDoc.to_json(indent=None).encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+# this definition exists because focused behavior needs one stable owner
+def WriteCarrier(
+    DocValue: CadDocument,
+    Target: Destination,
+    Settings: WriteOptions,
+    DocType: str,
+    CarrierDoc: CadDocument,
+) -> WriteResult:
+    DataValue = Generated(CarrierDoc, DocType)
+    if Restore(DataValue) != CarrierDoc:
+        raise CatiaAdapterA("generated CATIA manifest failed semantic validation")
+    PathValue = WriteBytes(Target, DataValue, Settings.overwrite)
+    DiagValue = DiagnosticInfo(
+        "catia.native_feature_graph_embedded",
+        "Geometry and parametric data are embedded in CFV2 streams; native CATIA feature classes require exact CATIA source preservation.",
+        Severity.WARNING,
+    )
+    Archive = CfvTwoArchive.from_bytes(DataValue)
+    Metadata = {
+        "mode": "generated_cfv2",
+        "compatibility": "kit-neutral-only",
+        "vendor_loadable": False,
+        "native_geometry": False,
+        "native_history": False,
+        "native_assembly": False,
+        "native_self_contained": False,
+        "referenced_files_written": 0,
+        "native_feature_graph": False,
+        "container": "V5_CFV2",
+        "document_type": DocType,
+        "outer_stream_count": len(Archive.outer.streams),
+        "nested_directory_count": len(Archive.nested),
+        "manifest_sha256": Hashlib.sha256(
+            CarrierDoc.to_json(indent=None).encode("utf-8")
+        ).hexdigest(),
+    }
+    return WriteResult(
+        PathValue,
+        KFormatId,
+        len(DataValue),
+        diagnostics=(*DocValue.diagnostics, DiagValue),
+        metadata=MappingProxyType(Metadata),
+        application_usable=False,
+        vendor_loadable=False,
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
 def SourceBytesMut(Source: Source) -> tuple[bytes, str]:
     if isinstance(Source, (bytes, bytearray)):
         return (bytes(Source), "<memory>")
