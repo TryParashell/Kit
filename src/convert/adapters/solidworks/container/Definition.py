@@ -529,12 +529,11 @@ def WriteView(Writer: ArchiveWriter, ViewValue: ViewRecord) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def WriteWindow(Writer: ArchiveWriter) -> None:
-    LeftValue, TopValue, *WordData, SentinelValue = KWindowPlacementFields
-    Writer.u32(LeftValue)
-    Writer.u32(TopValue)
-    for ItemData in WordData:
+    Writer.u32(KWindowPlacementFields[0])
+    Writer.u32(KWindowPlacementFields[1])
+    for ItemData in KWindowPlacementFields[2:-1]:
         Writer.u16(ItemData)
-    Writer.i32(SentinelValue)
+    Writer.i32(KWindowPlacementFields[-1])
 
 
 # this definition exists because focused behavior needs one stable owner
