@@ -108,16 +108,16 @@ class Segmentation(ArchiveError):
 
     # this definition exists because focused behavior needs one stable owner
     def InitAction(Instance, ClassName: str, SlotValue: str, Offset: int, Reason: str, *, BaseValue: int=-1, Progress: int=-1, Depth: int=-1, UnresolvedIndex: int=-1, UnresolvedKind: str='') -> None:
-        Instance.class_name = ClassName
-        Instance.slot = SlotValue
-        Instance.offset = Offset
-        Instance.reason = Reason
-        Instance.base = BaseValue
-        Instance.progress = Progress
-        Instance.depth = Depth
-        Instance.unresolved_index = UnresolvedIndex
-        Instance.unresolved_kind = UnresolvedKind
-        Instance.reached: tuple[StaticSegment, ...] = ()
+        setattr(Instance, 'class_name', ClassName)
+        setattr(Instance, 'slot', SlotValue)
+        setattr(Instance, 'offset', Offset)
+        setattr(Instance, 'reason', Reason)
+        setattr(Instance, 'base', BaseValue)
+        setattr(Instance, 'progress', Progress)
+        setattr(Instance, 'depth', Depth)
+        setattr(Instance, 'unresolved_index', UnresolvedIndex)
+        setattr(Instance, 'unresolved_kind', UnresolvedKind)
+        setattr(Instance, 'reached', ())
         super().__init__(f'class {ClassName!r} slot {SlotValue!r} at byte offset {Offset}: {Reason}')
     locals()['__init__'] = InitAction
 
@@ -165,8 +165,8 @@ def ReadTag(BlobValue: bytes, Offset: int) -> TagAction:
         RawValue = BlobValue[Offset + 6:Offset + 6 + Units]
         try:
             NameValue = RawValue.decode('ascii')
-        except UnicodeDecodeError as error:
-            raise ArchiveError(f'class definition at offset {Offset} has a non ascii name') from error
+        except UnicodeDecodeError as ErrorInfo:
+            raise ArchiveError(f'class definition at offset {Offset} has a non ascii name') from ErrorInfo
         return TagAction(kind=KDefinitionKind, size=6 + Units, token=Token, index=-1, schema=Schema, class_name=NameValue, wide=False)
     if Token == KBigObjectTag:
         if Offset + 6 > len(BlobValue):
@@ -187,8 +187,8 @@ def ReadTag(BlobValue: bytes, Offset: int) -> TagAction:
 def EncodeClass(NameValue: str, Schema: int) -> bytes:
     try:
         Encoded = NameValue.encode('ascii')
-    except UnicodeEncodeError as error:
-        raise ArchiveError(f'class name {NameValue!r} is not ascii') from error
+    except UnicodeEncodeError as ErrorInfo:
+        raise ArchiveError(f'class name {NameValue!r} is not ascii') from ErrorInfo
     if not Encoded:
         raise ArchiveError('class name must not be empty')
     if len(Encoded) > 65535:
@@ -317,16 +317,16 @@ class Model:
         Counter = Instance.base
         for NodeValue in Instance.nodes:
             if NodeValue.kind == KDefinitionKind:
-                NodeValue.class_index = Counter
-                NodeValue.object_index = Counter + 1
+                setattr(NodeValue, 'class_index', Counter)
+                setattr(NodeValue, 'object_index', Counter + 1)
                 Counter += 2
             elif NodeValue.kind == KClassRefKind:
-                NodeValue.class_index = 0
-                NodeValue.object_index = Counter
+                setattr(NodeValue, 'class_index', 0)
+                setattr(NodeValue, 'object_index', Counter)
                 Counter += 1
             else:
-                NodeValue.class_index = 0
-                NodeValue.object_index = 0
+                setattr(NodeValue, 'class_index', 0)
+                setattr(NodeValue, 'object_index', 0)
 
     # this definition exists because focused behavior needs one stable owner
     def EmitAction(Instance) -> bytes:
@@ -505,17 +505,17 @@ class ClassLayout:
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def WalksGroups(Instance) -> bool:
+    def IsWalksGroups(Instance) -> bool:
         return bool(Instance.groups)
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def Repeats(Instance) -> bool:
+    def IsRepeats(Instance) -> bool:
         return Instance.repeat_unresolved and Instance.repeat_prefix <= 0
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def WalksAPrefix(Instance) -> bool:
+    def IsWalksAPrefix(Instance) -> bool:
         return Instance.repeat_unresolved and Instance.repeat_prefix > 0
 
     # this definition exists because focused behavior needs one stable owner
@@ -559,12 +559,15 @@ class ClassLayout:
         return (KLeadRun,) + tuple((str(SlotValue) for SlotValue in range(SpanValue)))
     locals()['constant_run'] = ConstantRun
     locals()['constant_run_keys'] = ConstantRunKeys
-    locals()['repeats'] = Repeats
+    locals()['repeats'] = IsRepeats
     locals()['run_key'] = RunKey
     locals()['run_keys'] = RunKeys
     locals()['template_slot'] = TemplateSlot
-    locals()['walks_a_prefix'] = WalksAPrefix
-    locals()['walks_groups'] = WalksGroups
+    locals()['walks_a_prefix'] = IsWalksAPrefix
+    locals()['walks_groups'] = IsWalksGroups
+    locals()['Repeats'] = IsRepeats
+    locals()['WalksAPrefix'] = IsWalksAPrefix
+    locals()['WalksGroups'] = IsWalksGroups
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
@@ -575,7 +578,7 @@ class LayoutTable:
     __annotations__['classes'] = 'Mapping[str, ClassLayout]'
 
     # this definition exists because focused behavior needs one stable owner
-    def Contains(Instance, NameValue: object) -> bool:
+    def IsContains(Instance, NameValue: object) -> bool:
         return NameValue in Instance.classes
 
     # this definition exists because focused behavior needs one stable owner
@@ -607,18 +610,19 @@ class LayoutTable:
         Location = PathValue(PathValue)
         try:
             Payload = JsonValue.loads(Location.read_text(encoding='utf-8'))
-        except OSError as error:
-            raise ArchiveError(f'cannot read layout table {Location}') from error
-        except JsonValue.JSONDecodeError as error:
-            raise ArchiveError(f'layout table {Location} is not valid json') from error
+        except OSError as ErrorInfo:
+            raise ArchiveError(f'cannot read layout table {Location}') from ErrorInfo
+        except JsonValue.JSONDecodeError as ErrorInfo:
+            raise ArchiveError(f'layout table {Location} is not valid json') from ErrorInfo
         if not isinstance(Payload, Mapping):
             raise ArchiveError(f'layout table {Location} is not a json object')
         return ClassType.from_mapping(Payload)
-    locals()['__contains__'] = Contains
+    locals()['__contains__'] = IsContains
     locals()['__getitem__'] = Getitem
     locals()['from_mapping'] = FromMapping
     locals()['get'] = GetAction
     locals()['load'] = LoadAction
+    locals()['Contains'] = IsContains
 
 # this definition exists because focused behavior needs one stable owner
 def ParseRunGroup(OwnerName: str, GroupName: str, Entry: Mapping[str, object], HasLead: bool) -> RunGroupCount:
@@ -925,24 +929,24 @@ def ElemLength(BlobValue: bytes, Cursor: int, Layout: ClassLayout, KeyValue: str
     if ElemValue.rule == KStringRule:
         try:
             Ignored, Consumed = ReadString(BlobValue, Cursor + ElemValue.at)
-        except ArchiveError as error:
-            raise Segmentation(Layout.name, KeyValue, Offset, str(error), BaseValue=BaseValue) from error
+        except ArchiveError as ErrorInfo:
+            raise Segmentation(Layout.name, KeyValue, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
         return ElemValue.at + Consumed + TailValue
     if ElemValue.rule == KCountRule:
         if ElemValue.count_width <= 0 or ElemValue.stride < 0:
             raise Segmentation(Layout.name, KeyValue, Offset, 'count rule is missing a count width or stride', BaseValue=BaseValue)
         try:
             Count = Scalar(BlobValue, Cursor + ElemValue.at, ElemValue.count_width)
-        except ArchiveError as error:
-            raise Segmentation(Layout.name, KeyValue, Offset, str(error), BaseValue=BaseValue) from error
+        except ArchiveError as ErrorInfo:
+            raise Segmentation(Layout.name, KeyValue, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
         return ElemValue.at + ElemValue.count_width + ElemValue.stride * Count + TailValue
     if ElemValue.rule == KConditionalRule:
         if ElemValue.predicate_width <= 0 or not ElemValue.values:
             raise Segmentation(Layout.name, KeyValue, Offset, 'conditional rule is missing a predicate width or value set', BaseValue=BaseValue)
         try:
             Value = Scalar(BlobValue, Cursor + ElemValue.predicate_at, ElemValue.predicate_width)
-        except ArchiveError as error:
-            raise Segmentation(Layout.name, KeyValue, Offset, str(error), BaseValue=BaseValue) from error
+        except ArchiveError as ErrorInfo:
+            raise Segmentation(Layout.name, KeyValue, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
         Present = ElemValue.width if Value in ElemValue.values else 0
         return ElemValue.at + Present + TailValue
     if ElemValue.rule == KGuardRule:
@@ -950,8 +954,8 @@ def ElemLength(BlobValue: bytes, Cursor: int, Layout: ClassLayout, KeyValue: str
             raise Segmentation(Layout.name, KeyValue, Offset, 'guard rule is missing a predicate width or value set', BaseValue=BaseValue)
         try:
             Value = Scalar(BlobValue, Cursor + ElemValue.predicate_at, ElemValue.predicate_width)
-        except ArchiveError as error:
-            raise Segmentation(Layout.name, KeyValue, Offset, str(error), BaseValue=BaseValue) from error
+        except ArchiveError as ErrorInfo:
+            raise Segmentation(Layout.name, KeyValue, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
         if Value not in ElemValue.values:
             raise Segmentation(Layout.name, KeyValue, Offset, f'guard predicate {ElemValue.predicate!r} rejected value {Value}', BaseValue=BaseValue)
         return ElemValue.at + TailValue
@@ -987,8 +991,8 @@ def RepeatTotal(BlobValue: bytes, RunStart: int, RunEnd: int, Layout: ClassLayou
     try:
         CountAt = RunEnd - Repeat.Back if Repeat.Back else RunStart + Repeat.at
         Count = Scalar(BlobValue, CountAt, Repeat.width)
-    except ArchiveError as error:
-        raise Segmentation(Layout.name, Repeat.run, Offset, str(error), BaseValue=BaseValue) from error
+    except ArchiveError as ErrorInfo:
+        raise Segmentation(Layout.name, Repeat.run, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
     Template = Layout.template_slot
     if Count < 0 or Template < 0:
         raise Segmentation(Layout.name, Repeat.run, Offset, f'repeated child count {Count} is not usable', BaseValue=BaseValue)
@@ -1018,8 +1022,8 @@ def GroupElemLength(BlobValue: bytes, Cursor: int, Frame: _Frame, Offset: int, B
         if Variant.Values:
             try:
                 Value = Scalar(BlobValue, Cursor + Variant.PredicateAt, Variant.PredicateWidth)
-            except ArchiveError as error:
-                raise Segmentation(Frame.layout.name, Group.name, Offset, str(error), BaseValue=BaseValue) from error
+            except ArchiveError as ErrorInfo:
+                raise Segmentation(Frame.layout.name, Group.name, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
             MatchesPredicate = Value in Variant.Values
         if MatchesPredicate:
             Length = Variant.Run
@@ -1036,8 +1040,8 @@ def GroupTrailer(BlobValue: bytes, Cursor: int, Layout: ClassLayout, Group: RunG
             continue
         try:
             Value = Scalar(BlobValue, Cursor + Variant.PredicateAt, Variant.PredicateWidth)
-        except ArchiveError as error:
-            raise Segmentation(Layout.name, Group.name, Offset, str(error), BaseValue=BaseValue) from error
+        except ArchiveError as ErrorInfo:
+            raise Segmentation(Layout.name, Group.name, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
         if Value in Variant.Values:
             return Variant.Trailer
     return Group.trailer
@@ -1053,12 +1057,12 @@ def GetTailSize(BlobValue: bytes, BaseValue: int, HeaderSize: int) -> int:
     return KStreamTailSize
 
 # this definition exists because focused behavior needs one stable owner
-def GroupOpen(BlobValue: bytes, Cursor: int, Frame: _Frame, Offset: int, BaseValue: int, MoVersion: int | None) -> tuple[int, bool]:
+def GroupOpenMut(BlobValue: bytes, Cursor: int, Frame: _Frame, Offset: int, BaseValue: int, MoVersion: int | None) -> tuple[int, bool]:
     Layout = Frame.layout
     while Frame.group < len(Layout.groups):
         Group = Layout.groups[Frame.group]
-        Frame.group += 1
-        Frame.key = Group.name
+        setattr(Frame, 'group', Frame.group + 1)
+        setattr(Frame, 'key', Group.name)
         if Group.repeat >= 0:
             Count = Group.repeat
             GroupLead = 0
@@ -1070,8 +1074,8 @@ def GroupOpen(BlobValue: bytes, Cursor: int, Frame: _Frame, Offset: int, BaseVal
                     continue
                 try:
                     Predicate = Scalar(BlobValue, Cursor + CountVariant.PredicateAt, CountVariant.PredicateWidth)
-                except ArchiveError as error:
-                    raise Segmentation(Layout.name, Group.name, Offset, str(error), BaseValue=BaseValue) from error
+                except ArchiveError as ErrorInfo:
+                    raise Segmentation(Layout.name, Group.name, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
                 if Predicate in CountVariant.Values:
                     Count = CountVariant.Count
                     GroupLead = CountVariant.Lead
@@ -1086,12 +1090,12 @@ def GroupOpen(BlobValue: bytes, Cursor: int, Frame: _Frame, Offset: int, BaseVal
                     GroupLead = CountBranch.Lead
                 try:
                     Count = Scalar(BlobValue, CountAt, CountWidth)
-                except ArchiveError as error:
-                    raise Segmentation(Layout.name, Group.name, Offset, str(error), BaseValue=BaseValue) from error
+                except ArchiveError as ErrorInfo:
+                    raise Segmentation(Layout.name, Group.name, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
         if Count:
             Cursor = Advance(BlobValue, Cursor, GroupLead, Layout, Group.name, Offset, BaseValue)
-            Frame.plan = tuple(Group.element_runs(MoVersion) * Count)
-            Frame.step = 0
+            setattr(Frame, 'plan', tuple(Group.element_runs(MoVersion) * Count))
+            setattr(Frame, 'step', 0)
             return (Cursor, True)
         Trailer = GroupTrailer(BlobValue, Cursor, Layout, Group, Offset, BaseValue, MoVersion)
         Cursor = Advance(BlobValue, Cursor, Trailer, Layout, Group.name, Offset, BaseValue)
@@ -1133,7 +1137,7 @@ def OuterName(ClassIndex: int, Layouts: LayoutTable, Frames: Sequence[_Frame]) -
     return DeclaredSlot(Layouts, Frames) or Alias
 
 # this definition exists because focused behavior needs one stable owner
-def SegmentWalk(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, HeaderSize: int, Segments: list[StaticSegment], Progress: list[int], MoVersion: int | None) -> tuple[StaticSegment, ...]:
+def SegmentWalkMut(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, HeaderSize: int, Segments: list[StaticSegment], Progress: list[int], MoVersion: int | None) -> tuple[StaticSegment, ...]:
     if BaseValue < 1:
         raise ArchiveError(f'archive map base {BaseValue} must be positive')
     if HeaderSize < 0 or HeaderSize > len(BlobValue):
@@ -1159,8 +1163,8 @@ def SegmentWalk(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, HeaderSi
             ParentSlot = str(Frames[-1].slot) if Frames else KLeadRun
         try:
             TagValue = ReadTag(BlobValue, Offset)
-        except ArchiveError as error:
-            raise Segmentation(ParentName, ParentSlot, Offset, str(error), BaseValue=BaseValue) from error
+        except ArchiveError as ErrorInfo:
+            raise Segmentation(ParentName, ParentSlot, Offset, str(ErrorInfo), BaseValue=BaseValue) from ErrorInfo
         if TagValue.kind == KDefinitionKind:
             ClassIndex = Counter
             ObjectIndex = Counter + 1
@@ -1210,7 +1214,7 @@ def SegmentWalk(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, HeaderSi
                 AmountA = RunLength(BlobValue, Cursor, Layout, KLeadRun, Offset, BaseValue, MoVersion)
                 Cursor = Advance(BlobValue, Cursor, AmountA, Layout, KLeadRun, Offset, BaseValue)
                 Frame = Frame(node=NodeValue, class_name=NameValue, layout=Layout, slot=0, total=-1)
-                Cursor, Opened = GroupOpen(BlobValue, Cursor, Frame, Offset, BaseValue, MoVersion)
+                Cursor, Opened = GroupOpenMut(BlobValue, Cursor, Frame, Offset, BaseValue, MoVersion)
                 if Opened:
                     Frames.append(Frame)
                     Pushed = True
@@ -1244,13 +1248,13 @@ def SegmentWalk(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, HeaderSi
                 if Frame.step + 1 == len(Frame.plan):
                     Amount += GroupTrailer(BlobValue, Cursor + Amount, Frame.layout, Group, Origin, BaseValue, MoVersion) if TrailerOverride is None else TrailerOverride
                 Cursor = Advance(BlobValue, Cursor, Amount, Frame.layout, Frame.key, Origin, BaseValue)
-                Frame.step += 1
+                setattr(Frame, 'step', Frame.step + 1)
                 if Frame.step < len(Frame.plan):
                     break
                 if StopGroups:
                     Frames.pop()
                     continue
-                Cursor, Opened = GroupOpen(BlobValue, Cursor, Frame, Origin, BaseValue, MoVersion)
+                Cursor, Opened = GroupOpenMut(BlobValue, Cursor, Frame, Origin, BaseValue, MoVersion)
                 if Opened:
                     break
                 Frames.pop()
@@ -1261,23 +1265,23 @@ def SegmentWalk(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, HeaderSi
             Cursor = Advance(BlobValue, Cursor, AmountA, Frame.layout, KeyValue, Origin, BaseValue)
             Repeat = Frame.layout.repeat_count
             if Repeat is not None and Frame.total < 0 and (Repeat.run == KeyValue):
-                Frame.total = RepeatTotal(BlobValue, RunStart, Cursor, Frame.layout, Origin, BaseValue)
+                setattr(Frame, 'total', RepeatTotal(BlobValue, RunStart, Cursor, Frame.layout, Origin, BaseValue))
             ChildCounts = Frame.layout.ChildCounts
             if ChildCounts is not None and Frame.total < 0 and (Frame.slot == ChildCounts.Slot):
                 ResolvedCount = ChildCounts.Counts.get(Frame.ChildClass)
                 if ResolvedCount is None:
                     raise Segmentation(Frame.class_name, KeyValue, Origin, f'child count branch has no case for {Frame.ChildClass!r}', BaseValue=BaseValue)
-                Frame.total = ResolvedCount
+                setattr(Frame, 'total', ResolvedCount)
             Limit = Frame.total if Frame.total >= 0 else Frame.layout.template_slot
             if Frame.slot + 1 < Limit:
-                Frame.slot += 1
+                setattr(Frame, 'slot', Frame.slot + 1)
                 break
             if Frame.total < 0:
                 raise Segmentation(Frame.class_name, KeyValue, Origin, 'the repeated child count was not read before the repeated slots began', BaseValue=BaseValue)
             if Repeat is not None and Frame.layout.RepeatTrailer:
                 Cursor = Advance(BlobValue, Cursor, Frame.layout.RepeatTrailer, Frame.layout, KTailRun, Origin, BaseValue)
             Frames.pop()
-        Segments[NodeValue].end = Cursor
+        setattr(Segments[NodeValue], 'end', Cursor)
         if not Frames and Cursor > ContentEnd:
             raise Segmentation('<stream>', KLeadRun, Offset, f'segmentation overran the {ContentEnd} byte object region', BaseValue=BaseValue)
     if Frames:
@@ -1296,13 +1300,13 @@ def Segment(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSiz
     Progress = [0, 0]
     Reached: list[StaticSegment] = []
     try:
-        return SegmentWalk(BlobValue, BaseValue, Layouts, HeaderSize, Reached, Progress, MoVersion)
-    except Segmentation as error:
-        if error.progress < 0:
-            error.progress = Progress[0]
-            error.depth = Progress[1]
-        if not error.reached:
-            error.reached = tuple(Reached)
+        return SegmentWalkMut(BlobValue, BaseValue, Layouts, HeaderSize, Reached, Progress, MoVersion)
+    except Segmentation as ErrorInfo:
+        if ErrorInfo.progress < 0:
+            setattr(ErrorInfo, 'progress', Progress[0])
+            setattr(ErrorInfo, 'depth', Progress[1])
+        if not ErrorInfo.reached:
+            setattr(ErrorInfo, 'reached', tuple(Reached))
         raise
 
 # this definition exists because focused behavior needs one stable owner
@@ -1350,12 +1354,12 @@ def ResolveBase(BlobValue: bytes, SeedValue: int, Layouts: LayoutTable, *, Heade
         Tried.append(Choice)
         try:
             Produced = Segment(BlobValue, Choice, Layouts, HeaderSize=HeaderSize, MoVersion=MoVersion)
-        except Segmentation as error:
-            Score = (0, error.progress, error.offset)
+        except Segmentation as ErrorInfo:
+            Score = (0, ErrorInfo.progress, ErrorInfo.offset)
             if Score > BestValue:
                 BestValue = Score
                 Chosen = Choice
-            for Value in ImpliedBases(error, Choice):
+            for Value in ImpliedBases(ErrorInfo, Choice):
                 if Value not in Tried and Value not in Queue:
                     Queue.append(Value)
                     Implied.append(Value)
@@ -1447,10 +1451,10 @@ class VerifyReport:
 def Verify(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSize: int=KStreamHeaderSize, MoVersion: int | None=None) -> VerifyReport:
     try:
         Segments = Segment(BlobValue, BaseValue, Layouts, HeaderSize=HeaderSize, MoVersion=MoVersion)
-    except Segmentation as error:
-        return VerifyReport(length=len(BlobValue), base=BaseValue, header_bytes=HeaderSize, segmented=False, tiled=False, identical=False, object_count=max(error.progress, 0), definition_count=0, gaps=(), overlaps=(), trailing_bytes=len(BlobValue) - HeaderSize, error=str(error), blocking_class=error.class_name, blocking_slot=error.slot, blocking_offset=error.offset, blocking_depth=error.depth)
-    except ArchiveError as error:
-        return VerifyReport(length=len(BlobValue), base=BaseValue, header_bytes=HeaderSize, segmented=False, tiled=False, identical=False, object_count=0, definition_count=0, gaps=(), overlaps=(), trailing_bytes=len(BlobValue) - HeaderSize, error=str(error), blocking_class='', blocking_slot='', blocking_offset=-1, blocking_depth=-1)
+    except Segmentation as ErrorInfo:
+        return VerifyReport(length=len(BlobValue), base=BaseValue, header_bytes=HeaderSize, segmented=False, tiled=False, identical=False, object_count=max(ErrorInfo.progress, 0), definition_count=0, gaps=(), overlaps=(), trailing_bytes=len(BlobValue) - HeaderSize, error=str(ErrorInfo), blocking_class=ErrorInfo.class_name, blocking_slot=ErrorInfo.slot, blocking_offset=ErrorInfo.offset, blocking_depth=ErrorInfo.depth)
+    except ArchiveError as ErrorInfo:
+        return VerifyReport(length=len(BlobValue), base=BaseValue, header_bytes=HeaderSize, segmented=False, tiled=False, identical=False, object_count=0, definition_count=0, gaps=(), overlaps=(), trailing_bytes=len(BlobValue) - HeaderSize, error=str(ErrorInfo), blocking_class='', blocking_slot='', blocking_offset=-1, blocking_depth=-1)
     TrailerSize = GetTailSize(BlobValue, BaseValue, HeaderSize)
     Shape = Tiling(BlobValue, Segments, HeaderSize, TrailerSize)
     Definitions = sum((1 for ItemValue in Segments if ItemValue.kind == KDefinitionKind))
@@ -1459,9 +1463,9 @@ def Verify(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, *, HeaderSize
         Rebuilt = Model.emit()
         Identical = Rebuilt == BlobValue
         Message = '' if Identical else f're-emit produced {len(Rebuilt)} bytes'
-    except ArchiveError as error:
+    except ArchiveError as ErrorInfo:
         Identical = False
-        Message = str(error)
+        Message = str(ErrorInfo)
     return VerifyReport(length=len(BlobValue), base=BaseValue, header_bytes=HeaderSize, segmented=True, tiled=bool(Shape['tiles']), identical=Identical, object_count=len(Segments), definition_count=Definitions, gaps=tuple((tuple(ItemValue) for ItemValue in Shape['gaps'])), overlaps=tuple((tuple(ItemValue) for ItemValue in Shape['overlaps'])), trailing_bytes=int(Shape['trailing_bytes']), error=Message, blocking_class='', blocking_slot='', blocking_offset=-1, blocking_depth=-1)
 
 # this definition exists because focused behavior needs one stable owner
@@ -1599,7 +1603,7 @@ globals()['_external_name'] = OuterName
 globals()['_group_element_length'] = GroupElemLength
 
 # this binding exists because shared behavior needs one stable value
-globals()['_group_open'] = GroupOpen
+globals()['_group_open'] = GroupOpenMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_group_trailer_length'] = GroupTrailer
@@ -1617,7 +1621,7 @@ globals()['_run_length'] = RunLength
 globals()['_scalar'] = Scalar
 
 # this binding exists because shared behavior needs one stable value
-globals()['_segment_walk'] = SegmentWalk
+globals()['_segment_walk'] = SegmentWalkMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['annotations'] = Annotations
@@ -1678,3 +1682,9 @@ globals()['tiling'] = Tiling
 
 # this binding exists because shared behavior needs one stable value
 globals()['verify'] = Verify
+
+# this binding exists because shared behavior needs one stable value
+globals()['GroupOpen'] = GroupOpenMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['SegmentWalk'] = SegmentWalkMut

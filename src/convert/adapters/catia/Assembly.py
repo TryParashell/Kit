@@ -11,7 +11,7 @@ from collections import defaultdict as Defaultdict
 from dataclasses import dataclass as Dataclass
 import hashlib as Hashlib
 import os as OsModule
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import stat as StatValue
 from typing import Callable
 from convert.adapters.base import ReadOptions
@@ -90,12 +90,12 @@ class NativeProductC:
 class NativeProductA:
     locals().setdefault('__annotations__', {})
     __annotations__['name'] = 'str'
-    __annotations__['path'] = 'PathValue'
+    __annotations__['path'] = 'FilePath'
     __annotations__['document_type'] = 'str'
     __annotations__['sha256'] = 'str'
 
 # this binding exists because shared behavior needs one stable value
-KComponentReader = Callable[[PathValue, ReadOptions], CadDoc]
+KComponentReader = Callable[[FilePath, ReadOptions], CadDoc]
 
 # this definition exists because focused behavior needs one stable owner
 def DecodeProductA(Archive: Cfv2Archive) -> NativeProductB:
@@ -144,7 +144,7 @@ def PhysicalSpans(Archive: Cfv2Archive, Table: NativeProductTable, LogicalOffset
 def NativeProductE(Archive: Cfv2Archive, Label: str, Settings: ReadOptions, Reader: ComponentReader) -> tuple[AsmData, tuple[DiagValue, ...]]:
     Table = DecodeProductA(Archive)
     References, SearchDiagnostics = ComponentRef(Label, Settings)
-    Selected, RefCandidates, RefDiagnostics = Selected(Table, References)
+    Selected, RefCandidates, RefDiagnostics = SelectReferences(Table, References)
     Documents, DocIds, DocDiagnostics = Component(Label, Table, Selected, Settings, Reader)
     DocumentsById = {ItemValue.id: ItemValue.document for ItemValue in Documents}
     RootId = 'catia:assembly:root'
@@ -318,7 +318,7 @@ def ComponentRef(Label: str, Settings: ReadOptions) -> tuple[dict[str, tuple[Nat
     TotalBytes = 0
     Limit: str | None = None
     for RootValue in Roots:
-        Pending: list[tuple[PathValue, int]] = [(RootValue, 0)]
+        Pending: list[tuple[FilePath, int]] = [(RootValue, 0)]
         while Pending and Limit is None:
             Folder, Depth = Pending.pop(0)
             try:
@@ -377,10 +377,10 @@ def ComponentRef(Label: str, Settings: ReadOptions) -> tuple[dict[str, tuple[Nat
     return ({NameValue: tuple(sorted(Values, key=lambda ItemValue: (str(ItemValue.path).casefold(), str(ItemValue.path)))) for NameValue, Values in References.items()}, tuple(Diagnostics))
 
 # this definition exists because focused behavior needs one stable owner
-def ComponentSearch(Label: str, Settings: ReadOptions) -> tuple[tuple[PathValue, ...], tuple[DiagValue, ...]]:
+def ComponentSearch(Label: str, Settings: ReadOptions) -> tuple[tuple[FilePath, ...], tuple[DiagValue, ...]]:
     Requested = Settings.values.get('component_search_root')
     if Requested:
-        Candidates = (PathValue(str(Requested)).expanduser(),)
+        Candidates = (FilePath(str(Requested)).expanduser(),)
     else:
         Source = SourcePath(Label)
         if Source is None:
@@ -388,7 +388,7 @@ def ComponentSearch(Label: str, Settings: ReadOptions) -> tuple[tuple[PathValue,
         Candidates = (Source.parent,)
         if Source.parent.name.casefold() in {KProductSuffix, KProductSuffix.removeprefix('.')}:
             Candidates = (*Candidates, Source.parent.parent / f'.{PartDocType}')
-    Roots: list[PathValue] = []
+    Roots: list[FilePath] = []
     Diagnostics: list[DiagValue] = []
     SeenValue: set[str] = set()
     for Choice in Candidates:
@@ -425,7 +425,7 @@ def SearchLimit(Settings: ReadOptions, NameValue: str, Default: int, *, AllowZer
     return Parsed
 
 # this definition exists because focused behavior needs one stable owner
-def IsReparsePoint(PathValue: Path) -> bool:
+def IsReparsePoint(PathValue: FilePath) -> bool:
     try:
         Value = PathValue.lstat()
     except OSError:
@@ -435,7 +435,7 @@ def IsReparsePoint(PathValue: Path) -> bool:
     return PathValue.is_symlink() or bool(Attributes & ReparseFlag)
 
 # this definition exists because focused behavior needs one stable owner
-def UnderRoot(PathValue: Path, RootValue: Path) -> bool:
+def UnderRoot(PathValue: FilePath, RootValue: FilePath) -> bool:
     try:
         PathValue.relative_to(RootValue)
     except ValueError:
@@ -443,11 +443,11 @@ def UnderRoot(PathValue: Path, RootValue: Path) -> bool:
     return True
 
 # this definition exists because focused behavior needs one stable owner
-def SearchDiag(PathValue: Path, Reason: str, Detail: str='') -> DiagValue:
+def SearchDiag(PathValue: FilePath, Reason: str, Detail: str='') -> DiagValue:
     return DiagValue('catia.product.component_search_rejected', f'CATIA component discovery rejected {PathValue}: {Reason}.', Severity.INFO, attributes=FrozenMapping({'path': str(PathValue), 'reason': Reason, 'detail': Detail}))
 
 # this definition exists because focused behavior needs one stable owner
-def Selected(Table: NativeProductTable, References: dict[str, tuple[NativeProductReference, ...]]) -> tuple[dict[str, NativeProductA], dict[str, tuple[NativeProductA, ...]], tuple[DiagValue, ...]]:
+def SelectReferences(Table: NativeProductTable, References: dict[str, tuple[NativeProductReference, ...]]) -> tuple[dict[str, NativeProductA], dict[str, tuple[NativeProductA, ...]], tuple[DiagValue, ...]]:
     Selected: dict[str, NativeProductA] = {}
     Retained: dict[str, tuple[NativeProductA, ...]] = {}
     Diagnostics: list[DiagValue] = []
@@ -473,7 +473,7 @@ def Component(Label: str, Table: NativeProductTable, References: dict[str, Nativ
     if Source is not None:
         Active.add(str(Source).casefold())
     Documents: list[ComponentDoc] = []
-    DocIdsByPath: dict[PathValue, str] = {}
+    DocIdsByPath: dict[FilePath, str] = {}
     DocIdsByName: dict[str, str] = {}
     Diagnostics: list[DiagValue] = []
     Names = dict.fromkeys((ItemValue.definition_name for ItemValue in Table.occurrences))
@@ -506,10 +506,10 @@ def Component(Label: str, Table: NativeProductTable, References: dict[str, Nativ
     return (tuple(Documents), DocIdsByName, tuple(Diagnostics))
 
 # this definition exists because focused behavior needs one stable owner
-def SourcePath(Label: str) -> PathValue | None:
+def SourcePath(Label: str) -> FilePath | None:
     if Label == '<memory>':
         return None
-    PathValue = PathValue(Label).expanduser()
+    PathValue = FilePath(Label).expanduser()
     return PathValue.resolve() if PathValue.is_file() else None
 
 # this binding exists because shared behavior needs one stable value
@@ -564,7 +564,7 @@ globals()['PART_DOCUMENT_TYPE'] = PartDocType
 globals()['PRODUCT_DOCUMENT_TYPE'] = ProductDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['SUFFIX_BY_DOCUMENT_TYPE'] = SuffixByDocType
@@ -627,7 +627,7 @@ globals()['_search_diagnostic'] = SearchDiag
 globals()['_search_limit'] = SearchLimit
 
 # this binding exists because shared behavior needs one stable value
-globals()['_selected_references'] = Selected
+globals()['_selected_references'] = SelectReferences
 
 # this binding exists because shared behavior needs one stable value
 globals()['_source_path'] = SourcePath

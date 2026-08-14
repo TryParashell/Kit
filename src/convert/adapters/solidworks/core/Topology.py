@@ -160,15 +160,16 @@ class TargetFeature:
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def Revolve(Instance) -> bool:
+    def IsRevolve(Instance) -> bool:
         return Instance.operation in KRevolveOperations
 
     # this definition exists because focused behavior needs one stable owner
     @property
     def Topology(Instance) -> FeatureTopology:
         return FeatureTopology(Instance.operation, Instance.profile, Instance.support, Instance.end_condition)
-    locals()['revolve'] = Revolve
+    locals()['revolve'] = IsRevolve
     locals()['topology'] = Topology
+    locals()['Revolve'] = IsRevolve
 
 # this binding exists because shared behavior needs one stable value
 globals()['ARC_PROFILE_INFIX'] = KArcProfileInfix

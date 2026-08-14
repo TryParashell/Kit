@@ -97,8 +97,8 @@ class SldprtArchive:
         Source = PathValue(PathValue).expanduser().resolve()
         try:
             BlobValue = Source.read_bytes()
-        except OSError as exc:
-            raise SldprtFormat(f'cannot read {Source}: {exc}') from exc
+        except OSError as ErrorInfo:
+            raise SldprtFormat(f'cannot read {Source}: {ErrorInfo}') from ErrorInfo
         return ClassType.from_bytes(BlobValue, Source)
 
     # this definition exists because focused behavior needs one stable owner

@@ -132,8 +132,8 @@ class SldprtAdapter:
             if Version not in ContainerVersions:
                 return ProbeResult(KFormatId, 0.0, f'unsupported container version {Version}')
             Archive = SldprtArchive.from_bytes(DataValue, Label)
-        except (OSError, SldprtFormatError, TypeError, ValueError) as exc:
-            return ProbeResult(KFormatId, 0.0, str(exc))
+        except (OSError, SldprtFormatError, TypeError, ValueError) as ErrorInfo:
+            return ProbeResult(KFormatId, 0.0, str(ErrorInfo))
         Names = Archive.streams
         if KeywordsStream in Names and any((KResolvedConfigStream.fullmatch(NameValue) for NameValue in Names)):
             return ProbeResult(KFormatId, 1.0, 'native history and resolved-feature streams found')
@@ -174,7 +174,7 @@ class SldprtAdapter:
         return RetainSource(DocValue, DataValue)
 
     # this definition exists because focused behavior needs one stable owner
-    def Supports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+    def IsSupports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
         PathValue = TargetPath(Target)
         if PathValue is None:
             return IsBinaryTarget(Target)
@@ -262,9 +262,9 @@ class SldprtAdapter:
                 AppUsable = False
                 VendorLoadable = False
         NeutralEditsAreNative = all((Transfer.mode is TransferMode.NATIVE or Transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED for Transfer in Transfers))
-        Output = WriteTarget(Target, DataValue, Settings.overwrite)
+        Output = WriteTargetMut(Target, DataValue, Settings.overwrite)
         for TargetA, Payload in Bundle.payloads.items():
-            WriteTarget(TargetA, Payload, Settings.overwrite)
+            WriteTargetMut(TargetA, Payload, Settings.overwrite)
         ReferencedFilesWritten = len(Bundle.payloads)
         Archive = SldprtArchive.from_bytes(DataValue, Output or '<memory>')
         Requirements = ('referenced SOLIDWORKS component files',) if DocValue.assembly is not None and (not Bundle.complete) and (not PortableCarrier) else ()
@@ -272,8 +272,9 @@ class SldprtAdapter:
     locals()['info'] = InfoAction
     locals()['probe'] = Probe
     locals()['read'] = ReadAction
-    locals()['supports'] = Supports
+    locals()['supports'] = IsSupports
     locals()['write'] = Write
+    locals()['Supports'] = IsSupports
 
 # this definition exists because focused behavior needs one stable owner
 def ReadSldprt(Source: Source, *, Config: str | None=None, IncludeBrep: bool=True, IncludeTessellation: bool=True, Strict: bool=True) -> CadDoc:
@@ -287,8 +288,8 @@ def WriteSldprt(DocValue: CadDocument, Target: Destination, *, Overwrite: bool=F
 def EmbeddedDoc(Adapter: SldprtAdapter, Archive: SldprtArchive, DataValue: bytes, Label: str, Embedded: bytes, Settings: ReadOptions) -> CadDoc:
     try:
         DocValue = CadDoc.from_json(Embedded.decode('utf-8'))
-    except (UnicodeDecodeError, TypeError, ValueError) as exc:
-        raise SldprtFormatError('embedded Kit document is invalid') from exc
+    except (UnicodeDecodeError, TypeError, ValueError) as ErrorInfo:
+        raise SldprtFormatError('embedded Kit document is invalid') from ErrorInfo
     Configurations = DocValue.configurations
     if Settings.configuration is not None:
         Matches = {ItemValue.id for ItemValue in Configurations if Settings.configuration in {ItemValue.id, ItemValue.name}}
@@ -347,7 +348,7 @@ def SavedSource(DocValue: CadDocument, Target: Path | None) -> bytes | None:
     Semantic = DocValue.metadata.get(KSourceSemanticShaTwoFive)
     if Semantic != SemanticShaTwo(DocValue):
         return None
-    if Replay(DataValue) == 'native-exact' and (not NativeSourceDoc(DocValue, DataValue)):
+    if Replay(DataValue) == 'native-exact' and (not IsNativeSourceD(DocValue, DataValue)):
         return None
     return DataValue
 
@@ -371,12 +372,12 @@ def SourceTemplate(DocValue: CadDocument, Target: Path | None) -> bytes | None:
     return DataValue
 
 # this definition exists because focused behavior needs one stable owner
-def NativeSourceDoc(DocValue: CadDocument, DataValue: bytes) -> bool:
+def IsNativeSourceD(DocValue: CadDocument, DataValue: bytes) -> bool:
     Active = tuple((Config.name for Config in DocValue.configurations if Config.active))
     if len(Active) > 1:
         return False
     Source = BytesIo(DataValue)
-    Source.name = DocValue.source.path
+    setattr(Source, 'name', DocValue.source.path)
     try:
         Choice = SldprtAdapter().read(Source, ReadOptions(configuration=Active[0] if Active else None, include_brep=Capability.BREP in DocValue.capabilities, include_tessellation=Capability.TESSELLATION in DocValue.capabilities))
     except (OSError, SldprtFormatError, TypeError, ValueError):
@@ -481,7 +482,7 @@ def AsmBundleA(DocValue: CadDocument, Target: Path, Settings: WriteOptions) -> A
                     raise FileExistsError(FinalTarget)
         else:
             Payloads[TargetA] = Payload
-        NativeResult = Result.application_usable and Result.vendor_loadable and (not Result.requirements or BundleSatisfied(Component, AvailableNames))
+        NativeResult = Result.application_usable and Result.vendor_loadable and (not Result.requirements or IsBundleSatisfi(Component, AvailableNames))
         if not NativeResult:
             Complete = False
         else:
@@ -538,7 +539,7 @@ def NestedAsmDoc(DocValue: CadDocument, RootDefinitionId: str) -> CadDoc | None:
     return Replace(Nested, capabilities=InferCapabilities(Nested, roundtrip_metadata=Capability.ROUNDTRIP_METADATA in DocValue.capabilities))
 
 # this definition exists because focused behavior needs one stable owner
-def BundleSatisfied(DocValue: CadDocument, AvailableNames: set[str]) -> bool:
+def IsBundleSatisfi(DocValue: CadDocument, AvailableNames: set[str]) -> bool:
     if DocValue.assembly is None:
         return True
     for Definition in DocValue.assembly.definitions:
@@ -630,7 +631,7 @@ def AttestedNative(DocValue: CadDocument, Archive: SldprtArchive, Compatibility:
         if Compatibility in {'native-brep-with-kit-neutral', 'native-metadata-with-kit-neutral'}:
             Proof = GeneratedB(DocValue, BundleNames=BundleNames, BundleComplete=Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps, BundleCapabilities=AttestedNativeCaps)
         elif KeywordsStream in Streams and ResolvedFeaturesStream in Streams:
-            Proof = PatchNative(DocValue, Streams, {})
+            Proof = PatchNativeMut(DocValue, Streams, {})
         else:
             Proof = GeneratedB(DocValue, BundleNames=BundleNames, BundleComplete=Capability.COMPONENT_DOCUMENTS in AttestedNativeCaps, BundleCapabilities=AttestedNativeCaps)
     except (KeyError, SldprtFormatError, TypeError, ValueError, Struct.error):
@@ -695,7 +696,7 @@ def GeneratedB(DocValue: CadDocument, Template: bytes | None=None, BundleNames: 
     if Template is not None:
         Streams = SldprtArchive.from_bytes(Template).streams
         Streams[KitDocStream] = Embedded
-        return PatchNative(DocValue, Streams, BundleNames or {})
+        return PatchNativeMut(DocValue, Streams, BundleNames or {})
     Config = next((ItemValue.name for ItemValue in Portable.configurations if ItemValue.active), Portable.configurations[0].name if Portable.configurations else 'Default')
     ModelNameA = ModelName or PureWindowsPath(Portable.source.path).stem
     Streams = {**Solidworks(), SolidworksStream: SolidworksXml(ModelNameA, Config), KitDocStream: Embedded}
@@ -885,7 +886,7 @@ def SavedGenerated(DocValue: CadDocument, Encoding: NativeAssemblyEncoding) -> t
                 MatchedGroupOffsets.add(KeyValue)
                 continue
             MateValue = DesiredMates.get(KeyValue)
-            if MateValue is None or not SavedNativeMate(MateValue, NativeMate, DesiredEntities):
+            if MateValue is None or not IsSavedNativeMa(MateValue, NativeMate, DesiredEntities):
                 return ({}, False)
             MatchedMates.add(MateValue.id)
     if MatchedMates != {MateValue.id for MateValue in AsmValue.mates}:
@@ -896,7 +897,7 @@ def SavedGenerated(DocValue: CadDocument, Encoding: NativeAssemblyEncoding) -> t
     return ({Payload.source_stream: bytes(Payload.data) for Payload, Ignored in Candidates.values()}, True)
 
 # this definition exists because focused behavior needs one stable owner
-def SavedNativeMate(MateValue: MateConstraint, Native: NativeMate, Entities: Mapping[str, MateEntity]) -> bool:
+def IsSavedNativeMa(MateValue: MateConstraint, Native: NativeMate, Entities: Mapping[str, MateEntity]) -> bool:
     if MateValue.name != Native.name or MateValue.kind != NeutralMateKinA(Native.kind) or MateValue.alignment != NeutralMate(Native) or (MateParamValue(MateValue.value) != MateParamValue(NeutralMateA(Native))) or MateValue.suppressed or (not MateValue.driving) or MateValue.parameter_ids or (len(MateValue.entity_ids) != len(Native.entities)):
         return False
     for EntityId, NativeEntity in zip(MateValue.entity_ids, Native.entities):
@@ -916,7 +917,7 @@ def GeneratedAsm(AsmValue: AssemblyData, Encoding: NativeAssemblyEncoding, Strea
     except (KeyError, SldprtFormatError, TypeError, ValueError, Struct.error):
         return frozenset()
     Result: set[Capability] = set()
-    if Encoding.structure_complete and GeneratedAsmB(AsmValue, Encoding, Native):
+    if Encoding.structure_complete and IsGeneratedAsmB(AsmValue, Encoding, Native):
         Result.add(Capability.ASSEMBLIES)
         if len(AsmValue.definitions) > 1:
             Result.add(Capability.EXTERNAL_REFERENCES)
@@ -930,7 +931,7 @@ def GeneratedAsm(AsmValue: AssemblyData, Encoding: NativeAssemblyEncoding, Strea
     return frozenset(Result)
 
 # this definition exists because focused behavior needs one stable owner
-def GeneratedAsmB(AsmValue: AssemblyData, Encoding: NativeAssemblyEncoding, Native: NativeAssembly) -> bool:
+def IsGeneratedAsmB(AsmValue: AssemblyData, Encoding: NativeAssemblyEncoding, Native: NativeAssembly) -> bool:
     Definitions = {ItemValue.object_id: ItemValue for ItemValue in Native.definitions}
     if Native.root_definition_id != Encoding.definition_ids.get(AsmValue.root_definition_id):
         return False
@@ -998,7 +999,7 @@ def GeneratedA(Value: Any) -> int:
         return 0
 
 # this definition exists because focused behavior needs one stable owner
-def PatchNative(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]) -> Generated:
+def PatchNativeMut(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]) -> Generated:
     Native = set[Capability]()
     OriginalStreams = dict(Streams)
     if KeywordsStream not in Streams or ResolvedFeaturesStream not in Streams:
@@ -1007,8 +1008,8 @@ def PatchNative(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: M
     OriginalModel = DecodeNativeModel(Streams[KeywordsStream], Streams[ResolvedStream], resolved_stream=ResolvedStream)
     Keywords = KeywordsRoot(Streams[KeywordsStream])
     Resolved = bytearray(Streams[ResolvedStream])
-    KeywordsChanged = PatchFeature(DocValue, OriginalModel, Keywords[1], Resolved)
-    KeywordsChanged = PatchParameters(DocValue, OriginalModel, Keywords[1], Resolved) or KeywordsChanged
+    KeywordsChanged = IsPatchFeatuMut(DocValue, OriginalModel, Keywords[1], Resolved)
+    KeywordsChanged = IsPatchParamete(DocValue, OriginalModel, Keywords[1], Resolved) or KeywordsChanged
     PatchSupport(DocValue, OriginalModel, Resolved)
     PatchSketchGeom(DocValue, OriginalModel, Resolved)
     if KeywordsChanged:
@@ -1033,7 +1034,7 @@ def PatchNative(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: M
     DesiredSketchValues = SketchValues(DocValue.sketches)
     if DesiredSketchValues == SketchValues(PatchedSketches) or DesiredSketchValues == SketchValues(OriginalSketches):
         Native.add(Capability.EDITABLE_SKETCHES)
-    if FeatureValues(DocValue.feature_timeline, DocValue.parameters) == FeatureValues(PatchedTimeline, PatchedParameters) and NativeFeatureA(DocValue.feature_timeline, OriginalTimeline):
+    if FeatureValues(DocValue.feature_timeline, DocValue.parameters) == FeatureValues(PatchedTimeline, PatchedParameters) and IsNativeFeature(DocValue.feature_timeline, OriginalTimeline):
         Native.add(Capability.PARAMETRIC_HISTORY)
     if SelectionValues(DocValue.selections) == SelectionValues(OriginalSelections):
         Native.add(Capability.SELECTIONS)
@@ -1042,7 +1043,7 @@ def PatchNative(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: M
         Native.add(Capability.CONFIGURATIONS)
     if DocValue.assembly is None and BodyValues(DocValue.bodies) == NativeBody(OriginalModel, OriginalTimeline):
         Native.add(Capability.BODY_STRUCTURE)
-    NativeBrep, BrepNative, PayloadsNative = PatchTemplate(DocValue, Streams, OriginalStreams)
+    NativeBrep, BrepNative, PayloadsNative = PatchTemplatMut(DocValue, Streams, OriginalStreams)
     if BrepNative:
         Native.add(Capability.BREP)
     if PayloadsNative:
@@ -1051,7 +1052,7 @@ def PatchNative(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: M
         Native.add(Capability.TESSELLATION)
     Divergences: tuple[str, ...] = ()
     if DocValue.assembly is not None:
-        Patch = PatchNativeAsm(DocValue, Streams, BundleNames)
+        Patch = PatchNativeAMut(DocValue, Streams, BundleNames)
         Native.update(Patch.capabilities)
         Divergences = Patch.divergences
         if Capability.COMPONENT_DOCUMENTS in Patch.capabilities and BrepNative:
@@ -1077,8 +1078,8 @@ def KeywordsRoot(DataValue: bytes) -> tuple[bytes, XmlTree.Element, bytes]:
     Trailing = b'\r\n' if RawValue.endswith(b'\r\n') else b'\n' if RawValue.endswith(b'\n') else b''
     try:
         RootValue = XmlTree.fromstring(RawValue)
-    except XmlTree.ParseError as exc:
-        raise SldprtFormatError(f'invalid keyword XML: {exc}') from exc
+    except XmlTree.ParseError as ErrorInfo:
+        raise SldprtFormatError(f'invalid keyword XML: {ErrorInfo}') from ErrorInfo
     return (Prefix, RootValue, Trailing)
 
 # this definition exists because focused behavior needs one stable owner
@@ -1108,7 +1109,7 @@ def NativeId(Value: str, Prefix: str) -> int | None:
         return None
 
 # this definition exists because focused behavior needs one stable owner
-def PatchFeature(DocValue: CadDocument, Model: NativeModel, RootValue: ET.Element, Resolved: bytearray) -> bool:
+def IsPatchFeatuMut(DocValue: CadDocument, Model: NativeModel, RootValue: ET.Element, Resolved: bytearray) -> bool:
     Desired: dict[int, str] = {}
     for Feature in DocValue.feature_timeline:
         NativeId = NativeId(Feature.id, 'sldprt:feature:')
@@ -1160,7 +1161,7 @@ def DimensionText(Source: str, Millimeters: float) -> str:
     return KNumberText.sub(Value, Source, count=1)
 
 # this definition exists because focused behavior needs one stable owner
-def PatchParameters(DocValue: CadDocument, Model: NativeModel, RootValue: ET.Element, Resolved: bytearray) -> bool:
+def IsPatchParamete(DocValue: CadDocument, Model: NativeModel, RootValue: ET.Element, Resolved: bytearray) -> bool:
     Original = {Param.id: Param for Param in Parameters(Model)}
     Desired = {Param.id: Param for Param in DocValue.parameters}
     if set(Original) != set(Desired):
@@ -1190,7 +1191,7 @@ def PatchParameters(DocValue: CadDocument, Model: NativeModel, RootValue: ET.Ele
         ItemValue = int(ParamId.rsplit(':', 1)[-1]) - 1 if ParamId.rsplit(':', 1)[-1].isdigit() and ParamId.count(':') > 3 else 0
         Matches = tuple((Child for Child in ElemValue if Child.tag.rsplit('}', 1)[-1] == 'Dimension' and Child.attrib.get('Name', '') == Dimension.name))
         if ItemValue < len(Matches):
-            Matches[ItemValue].text = DimensionText(Matches[ItemValue].text or Dimension.source_text, TargetMm)
+            setattr(Matches[ItemValue], 'text', DimensionText(Matches[ItemValue].text or Dimension.source_text, TargetMm))
             Changed = True
     return Changed
 
@@ -1199,13 +1200,13 @@ def VectorValues(Vector: Vector3) -> tuple[float, float, float]:
     return (Vector.x, Vector.y, Vector.z)
 
 # this definition exists because focused behavior needs one stable owner
-def UnitVector(Values: tuple[float, float, float]) -> bool:
+def IsUnitVector(Values: tuple[float, float, float]) -> bool:
     return all((MathValue.isfinite(Value) for Value in Values)) and MathValue.isclose(sum((Value * Value for Value in Values)), 1.0, rel_tol=1e-09, abs_tol=1e-09)
 
 # this definition exists because focused behavior needs one stable owner
-def Orthonormal(Transform: Transform) -> bool:
+def IsOrthonormal(Transform: Transform) -> bool:
     AxesValue = (VectorValues(Transform.x_axis), VectorValues(Transform.y_axis), VectorValues(Transform.z_axis))
-    return all((UnitVector(AxisValue) for AxisValue in AxesValue)) and all((MathValue.isclose(sum((LeftValue[Index] * Right[Index] for Index in range(3))), 0.0, abs_tol=1e-09) for LeftValue, Right in ((AxesValue[0], AxesValue[1]), (AxesValue[0], AxesValue[2]), (AxesValue[1], AxesValue[2]))))
+    return all((IsUnitVector(AxisValue) for AxisValue in AxesValue)) and all((MathValue.isclose(sum((LeftValue[Index] * Right[Index] for Index in range(3))), 0.0, abs_tol=1e-09) for LeftValue, Right in ((AxesValue[0], AxesValue[1]), (AxesValue[0], AxesValue[2]), (AxesValue[1], AxesValue[2]))))
 
 # this definition exists because focused behavior needs one stable owner
 def PatchSupport(DocValue: CadDocument, Model: NativeModel, Resolved: bytearray) -> None:
@@ -1218,7 +1219,7 @@ def PatchSupport(DocValue: CadDocument, Model: NativeModel, Resolved: bytearray)
         Source = Original[PlaneId]
         if Target.transform == Source.transform:
             continue
-        if Target.name != Source.name or Target.support_selection_id != Source.support_selection_id or Target.offset_parameter_id != Source.offset_parameter_id or (not Orthonormal(Target.transform)):
+        if Target.name != Source.name or Target.support_selection_id != Source.support_selection_id or Target.offset_parameter_id != Source.offset_parameter_id or (not IsOrthonormal(Target.transform)):
             continue
         Offset = Source.attributes.get('native_frame_offset')
         Length = Source.attributes.get('native_frame_length')
@@ -1251,7 +1252,7 @@ def Coordinate(DataValue: bytes | bytearray, MarkerOffset: int) -> int | None:
     return None
 
 # this definition exists because focused behavior needs one stable owner
-def PatchCoordinate(Resolved: bytearray, MarkerOffset: int, Point: tuple[float, float]) -> bool:
+def IsPatchCoordina(Resolved: bytearray, MarkerOffset: int, Point: tuple[float, float]) -> bool:
     if not all((MathValue.isfinite(Value) for Value in Point)):
         return False
     Offset = Coordinate(Resolved, MarkerOffset)
@@ -1291,7 +1292,7 @@ def PatchSketchGeom(DocValue: CadDocument, Model: NativeModel, Resolved: bytearr
             if isinstance(SourceEntity.geometry, PointGeom) and isinstance(TargetEntity.geometry, PointGeom):
                 MarkerOffset = NativeId(EntityId, f'sldprt:sketch:{NativeSketch.object_id}:native:')
                 if MarkerOffset is not None:
-                    PatchCoordinate(Resolved, MarkerOffset, PointValues(TargetEntity.geometry.point))
+                    IsPatchCoordina(Resolved, MarkerOffset, PointValues(TargetEntity.geometry.point))
         for ProfileIndex, Profile in enumerate(NativeSketch.profiles):
             if Profile.kind == 'circle':
                 EntityId = ProfileId(NativeSketch.object_id, ProfileIndex)
@@ -1310,8 +1311,8 @@ def PatchSketchGeom(DocValue: CadDocument, Model: NativeModel, Resolved: bytearr
                 if Length <= 1e-12:
                     DxValue, DyValue, Length = (1.0, 0.0, 1.0)
                 EdgeValue = (Center[0] + DxValue / Length * TargetEntity.geometry.radius, Center[1] + DyValue / Length * TargetEntity.geometry.radius)
-                PatchCoordinate(Resolved, Profile.marker_offsets[0], Center)
-                PatchCoordinate(Resolved, Profile.marker_offsets[1], EdgeValue)
+                IsPatchCoordina(Resolved, Profile.marker_offsets[0], Center)
+                IsPatchCoordina(Resolved, Profile.marker_offsets[1], EdgeValue)
             elif Profile.kind == 'rectangle':
                 PatchRectangle(Resolved, NativeSketch, ProfileIndex, Profile, TargetEntities)
 
@@ -1337,7 +1338,7 @@ def PatchRectangle(Resolved: bytearray, Sketch: NativeSketch, ProfileIndex: int,
             continue
         for Source, Target in zip(SourceCorners, Points, strict=True):
             if all((MathValue.isclose(LeftValue, Right, abs_tol=1e-09) for LeftValue, Right in zip(Marker.coordinates_mm, Source, strict=True))):
-                PatchCoordinate(Resolved, Marker.offset, Target)
+                IsPatchCoordina(Resolved, Marker.offset, Target)
                 break
 
 # this definition exists because focused behavior needs one stable owner
@@ -1388,7 +1389,7 @@ def FeatureValues(Features: Sequence[FeatureStep], Parameters: Sequence[Paramete
     return tuple(((Feature.id, Feature.name, Feature.kind, Feature.order, Feature.input_feature_ids, Feature.sketch_id, Feature.parameter_ids, Feature.operation, DefinitionValue(Feature.definition, next((ParamById[ParamId].value for ParamId in Feature.parameter_ids if ParamId in ParamById), None)), Feature.selection_ids, Feature.suppressed, Feature.configuration_states) for Feature in Features))
 
 # this definition exists because focused behavior needs one stable owner
-def NativeFeatureA(Desired: Sequence[FeatureStep], Original: Sequence[FeatureStep]) -> bool:
+def IsNativeFeature(Desired: Sequence[FeatureStep], Original: Sequence[FeatureStep]) -> bool:
     Originals = {Feature.id: Feature for Feature in Original}
     for Feature in Desired:
         Source = Originals.get(Feature.id)
@@ -1421,7 +1422,7 @@ def PayloadValues(Payloads: Sequence[BrepPayload]) -> tuple[AnyValue, ...]:
     return tuple(((Payload.id, Payload.format_id, Payload.kind, Payload.schema, Payload.sha256, Payload.data, Payload.source_stream, Payload.role, Payload.file_extension) for Payload in Payloads))
 
 # this definition exists because focused behavior needs one stable owner
-def PatchTemplate(DocValue: CadDocument, Streams: dict[str, bytes], OriginalStreams: Mapping[str, bytes]) -> tuple[str, bool, bool]:
+def PatchTemplatMut(DocValue: CadDocument, Streams: dict[str, bytes], OriginalStreams: Mapping[str, bytes]) -> tuple[str, bool, bool]:
     Archive = SldprtArchive.from_bytes(BuildSldprt(OriginalStreams))
     OriginalPayloads, Ignored = BrepPayloads(Archive, ReadOptions(strict=False))
     DesiredIndexes = SourcePayloadIndexes(DocValue)
@@ -1438,7 +1439,7 @@ def PatchTemplate(DocValue: CadDocument, Streams: dict[str, bytes], OriginalStre
     return ('patched', True, PayloadsNative)
 
 # this definition exists because focused behavior needs one stable owner
-def PatchNativeAsm(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]) -> AsmTemplate:
+def PatchNativeAMut(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]) -> AsmTemplate:
     if DocValue.assembly is None or ComponentTreeStream not in Streams:
         return AsmTemplate(frozenset(), ('donor_component_tree_absent',))
     if BundleNames:
@@ -1464,14 +1465,14 @@ def PatchNativeAsm(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames
     except SldprtFormatError:
         return AsmTemplate(frozenset(), ('donor_component_tree_unreadable',))
     DonorDivergences = DivergedDonor(DocValue.assembly, Native)
-    RewrittenInstances = PatchAsm(DocValue.assembly, Native, Streams)
+    RewrittenInstances = PatchAsmMut(DocValue.assembly, Native, Streams)
     if RewrittenInstances:
         try:
             Archive = SldprtArchive.from_bytes(BuildSldprt(Streams))
             Native = DecodeNativeAsm(Archive, include_tessellation=True)
         except SldprtFormatError:
             return AsmTemplate(frozenset(), ('donor_component_tree_unreadable',))
-    RewrittenMates = PatchAsmMates(DocValue.assembly, Native, Streams, DocValue.source.path)
+    RewrittenMates = PatchAsmMateMut(DocValue.assembly, Native, Streams, DocValue.source.path)
     if RewrittenMates:
         try:
             Archive = SldprtArchive.from_bytes(BuildSldprt(Streams))
@@ -1515,7 +1516,7 @@ def PatchNativeAsm(DocValue: CadDocument, Streams: dict[str, bytes], BundleNames
     return AsmTemplate(frozenset(Result), Divergences)
 
 # this definition exists because focused behavior needs one stable owner
-def PatchAsm(AsmValue: AssemblyData, Native: NativeAssembly, Streams: dict[str, bytes]) -> tuple[str, ...]:
+def PatchAsmMut(AsmValue: AssemblyData, Native: NativeAssembly, Streams: dict[str, bytes]) -> tuple[str, ...]:
     Original = {Instance.id: Instance for Instance in AsmInstances(Native)}
     Desired = {Instance.id: Instance for Instance in AsmValue.instances}
     if not set(Original) <= set(Desired):
@@ -1569,7 +1570,7 @@ def YesText(Value: bool) -> str:
     return 'YES' if Value else 'NO'
 
 # this definition exists because focused behavior needs one stable owner
-def PatchAsmMates(AsmValue: AssemblyData, Native: NativeAssembly, Streams: dict[str, bytes], SourcePath: str) -> tuple[str, ...]:
+def PatchAsmMateMut(AsmValue: AssemblyData, Native: NativeAssembly, Streams: dict[str, bytes], SourcePath: str) -> tuple[str, ...]:
     DefinitionMap = {Definition.object_id: Definition.object_id for Definition in Native.definitions}
     ItemMap = {ItemValue.object_id: ItemValue.object_id for ItemValue in Native.occurrences}
     Ignored, Ignored, OriginalMates, Ignored = AsmMates(Native, ((Native, SldprtArchive.from_bytes(BuildSldprt(Streams)), DefinitionMap, ItemMap, SourcePath),))
@@ -1745,8 +1746,8 @@ def Parasolid(DocValue: CadDocument, ObjectIds: Mapping[str, int] | None=None) -
                 FeatureIds[BrepBody.id] = NativeId
     try:
         return (EncodePartitionStream(EncodeBrepModel(DocValue.brep, solidworks_feature_ids=FeatureIds if len(FeatureIds) == len(DocValue.brep.bodies) else None)), 'generated')
-    except ParasolidWriteError as exc:
-        return (None, f'unsupported:{exc}')
+    except ParasolidWriteError as ErrorInfo:
+        return (None, f'unsupported:{ErrorInfo}')
 
 # this definition exists because focused behavior needs one stable owner
 def SolidworksXml(Model: str, Config: str) -> bytes:
@@ -1773,13 +1774,13 @@ def TargetPath(Target: Destination) -> PathValue | None:
     return None
 
 # this definition exists because focused behavior needs one stable owner
-def WriteTarget(Target: Destination, DataValue: bytes, Overwrite: bool) -> PathValue | None:
+def WriteTargetMut(Target: Destination, DataValue: bytes, Overwrite: bool) -> PathValue | None:
     PathValue = TargetPath(Target)
     if PathValue is None:
         try:
             Written = Target.write(DataValue)
-        except TypeError as exc:
-            raise TypeError('SLDPRT destination stream must accept bytes') from exc
+        except TypeError as ErrorInfo:
+            raise TypeError('SLDPRT destination stream must accept bytes') from ErrorInfo
         if isinstance(Written, int) and Written != len(DataValue):
             raise OSError('SLDPRT destination stream accepted a partial write')
         return None
@@ -1905,10 +1906,10 @@ def AsmDocuments(Adapter: SldprtAdapter, Native: NativeAssembly, Index: dict[str
         Options = ReadOptions(configuration=Representative.configuration_name or None, include_brep=Settings.include_brep, include_tessellation=Representative.document_type == 'ASSEMBLY', strict=Settings.strict, values=FrozenMapping(Values))
         try:
             DocValue = Adapter.read(Resolved, Options)
-        except (OSError, SldprtFormatError, TypeError, ValueError) as exc:
+        except (OSError, SldprtFormatError, TypeError, ValueError) as ErrorInfo:
             if Settings.strict:
                 raise
-            Diagnostics.append(DiagValue(code='sldasm.component_decode_failed', message=f'cannot decode {Resolved}: {exc}', severity=Severity.WARNING, attributes=FrozenMapping({'native_definition_ids': tuple((Definition.object_id for Definition in Definitions))})))
+            Diagnostics.append(DiagValue(code='sldasm.component_decode_failed', message=f'cannot decode {Resolved}: {ErrorInfo}', severity=Severity.WARNING, attributes=FrozenMapping({'native_definition_ids': tuple((Definition.object_id for Definition in Definitions))})))
             continue
         DocId = f'sldasm:document:{DocValue.source.sha256[:20]}'
         Documents.append(ComponentDoc(DocId, DocValue))
@@ -1988,10 +1989,10 @@ def MateSources(RootValue: NativeAssembly, Archive: SldprtArchive, Label: str, I
         try:
             DefinitionMap = NestedMap(RootValue, Nested, Target.object_id)
             ItemMap = NestedItemMap(RootValue, Nested, DefinitionMap)
-        except SldprtFormatError as exc:
+        except SldprtFormatError as ErrorInfo:
             if Settings.strict:
                 raise
-            Diagnostics.append(DiagValue(code='sldasm.nested_mates_unmapped', message=f'cannot map nested mates from {Resolved}: {exc}', severity=Severity.WARNING))
+            Diagnostics.append(DiagValue(code='sldasm.nested_mates_unmapped', message=f'cannot map nested mates from {Resolved}: {ErrorInfo}', severity=Severity.WARNING))
             continue
         Sources.append((Nested, NestedArchive, DefinitionMap, ItemMap, str(Resolved)))
     return (tuple(Sources), tuple(Diagnostics))
@@ -2294,7 +2295,7 @@ def Parameters(Model: NativeModel) -> tuple[Param, ...]:
             NativeValue = Dimension.native_value if Dimension.native_value is not None else Dimension.value_mm / 1000.0
             Parameters.append(Param(id=ParamId, name=Dimension.name, value=DimensionParam(Dimension), role=ParamRole.DRIVEN if Dimension.native_role == 'display' else ParamRole.DRIVING, owner_id=FeatureId(Feature.object_id), provenance=ProvenanceA(f'{Feature.object_id}:{Dimension.name}', Dimension.native_offset, 8, 'dimension-scalar', Stream=Feature.native_stream) if Dimension.native_offset is not None else FeatureA(Feature), attributes=FrozenMapping({'source_text': Dimension.source_text, 'dimension_kind': Dimension.kind, 'native_value': NativeValue, 'native_unit': 'rad' if Dimension.kind == 'angle' else 'm', 'native_role': Dimension.native_role or 'unresolved', 'native_operands': tuple(({'offset': Operand.offset, 'kind_code': Operand.kind_code, 'entity_index': Operand.entity_index} for Operand in Dimension.operands))})))
             DimensionIds.setdefault((Feature.name, Dimension.name), ParamId)
-    return ApplyNative(Parameters, Model, DimensionIds)
+    return ApplyNativeMut(Parameters, Model, DimensionIds)
 
 # this definition exists because focused behavior needs one stable owner
 def DimensionParam(Dimension: NativeDimension) -> ParamValue:
@@ -2303,7 +2304,7 @@ def DimensionParam(Dimension: NativeDimension) -> ParamValue:
     return ParamValue(Dimension.value_mm, ValueKind.LENGTH, 'mm')
 
 # this definition exists because focused behavior needs one stable owner
-def ApplyNative(Parameters: list[Parameter], Model: NativeModel, DimensionIds: dict[tuple[str, str], str]) -> tuple[Param, ...]:
+def ApplyNativeMut(Parameters: list[Parameter], Model: NativeModel, DimensionIds: dict[tuple[str, str], str]) -> tuple[Param, ...]:
     if not Model.equations:
         return tuple(Parameters)
     GlobalIds = {Equation.lhs: f'sldprt:parameter:equation:{Equation.lhs}' for Equation in Model.equations if '@' not in Equation.lhs}
@@ -2900,10 +2901,10 @@ def BrepPayloads(Archive: SldprtArchive, Options: ReadOptions) -> tuple[tuple[Br
             continue
         try:
             Decoded = DecodePartitionStream(Record.data, Record.name)
-        except SldprtFormatError as exc:
+        except SldprtFormatError as ErrorInfo:
             if Options.strict:
                 raise
-            Diagnostics.append(DiagValue(code='sldprt.parasolid_decode_failed', message=str(exc), severity=Severity.WARNING, attributes=FrozenMapping({'stream': Record.name})))
+            Diagnostics.append(DiagValue(code='sldprt.parasolid_decode_failed', message=str(ErrorInfo), severity=Severity.WARNING, attributes=FrozenMapping({'stream': Record.name})))
             continue
         for Native in Decoded:
             Payloads.append(BrepPayloadA(len(Payloads), Native))
@@ -3278,7 +3279,7 @@ globals()['_TARGET_UNSUPPORTED_CAPABILITIES'] = KTargetUnsupported
 globals()['_WRAPPER_METADATA_KEYS'] = KWrapperMetaKeys
 
 # this binding exists because shared behavior needs one stable value
-globals()['_apply_native_equations'] = ApplyNative
+globals()['_apply_native_equations'] = ApplyNativeMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_assembly_bounding_box'] = AsmBoundingBox
@@ -3347,7 +3348,7 @@ globals()['_brep_payload'] = BrepPayloadA
 globals()['_brep_payloads'] = BrepPayloads
 
 # this binding exists because shared behavior needs one stable value
-globals()['_bundle_requirements_satisfied'] = BundleSatisfied
+globals()['_bundle_requirements_satisfied'] = IsBundleSatisfi
 
 # this binding exists because shared behavior needs one stable value
 globals()['_companion_payloads'] = Companion
@@ -3437,7 +3438,7 @@ globals()['_generated_assembly_capabilities'] = GeneratedAsm
 globals()['_generated_assembly_notes'] = GeneratedAsmA
 
 # this binding exists because shared behavior needs one stable value
-globals()['_generated_assembly_structure_matches'] = GeneratedAsmB
+globals()['_generated_assembly_structure_matches'] = IsGeneratedAsmB
 
 # this binding exists because shared behavior needs one stable value
 globals()['_generated_integer'] = GeneratedA
@@ -3548,7 +3549,7 @@ globals()['_native_definition_key'] = NativeKey
 globals()['_native_equation_value'] = NativeEquation
 
 # this binding exists because shared behavior needs one stable value
-globals()['_native_feature_definitions_unchanged'] = NativeFeatureA
+globals()['_native_feature_definitions_unchanged'] = IsNativeFeature
 
 # this binding exists because shared behavior needs one stable value
 globals()['_native_id'] = NativeId
@@ -3566,7 +3567,7 @@ globals()['_native_mate_values'] = NativeMateB
 globals()['_native_part_model'] = NativePartModel
 
 # this binding exists because shared behavior needs one stable value
-globals()['_native_source_matches_document'] = NativeSourceDoc
+globals()['_native_source_matches_document'] = IsNativeSourceD
 
 # this binding exists because shared behavior needs one stable value
 globals()['_native_stream_sha256'] = NativeStreamSha
@@ -3605,7 +3606,7 @@ globals()['_operation_selection_entries'] = OperationA
 globals()['_operation_selection_id'] = OperationId
 
 # this binding exists because shared behavior needs one stable value
-globals()['_orthonormal_transform'] = Orthonormal
+globals()['_orthonormal_transform'] = IsOrthonormal
 
 # this binding exists because shared behavior needs one stable value
 globals()['_parameter_entries'] = ParamEntries
@@ -3626,25 +3627,25 @@ globals()['_parameters'] = Parameters
 globals()['_parasolid_payload'] = Parasolid
 
 # this binding exists because shared behavior needs one stable value
-globals()['_patch_assembly_instances'] = PatchAsm
+globals()['_patch_assembly_instances'] = PatchAsmMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_patch_assembly_mates'] = PatchAsmMates
+globals()['_patch_assembly_mates'] = PatchAsmMateMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_patch_coordinate'] = PatchCoordinate
+globals()['_patch_coordinate'] = IsPatchCoordina
 
 # this binding exists because shared behavior needs one stable value
-globals()['_patch_feature_names'] = PatchFeature
+globals()['_patch_feature_names'] = IsPatchFeatuMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_patch_native_assembly'] = PatchNativeAsm
+globals()['_patch_native_assembly'] = PatchNativeAMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_patch_native_template'] = PatchNative
+globals()['_patch_native_template'] = PatchNativeMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_patch_parameters'] = PatchParameters
+globals()['_patch_parameters'] = IsPatchParamete
 
 # this binding exists because shared behavior needs one stable value
 globals()['_patch_rectangle_profile'] = PatchRectangle
@@ -3656,7 +3657,7 @@ globals()['_patch_sketch_geometry'] = PatchSketchGeom
 globals()['_patch_support_planes'] = PatchSupport
 
 # this binding exists because shared behavior needs one stable value
-globals()['_patch_template_brep'] = PatchTemplate
+globals()['_patch_template_brep'] = PatchTemplatMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_payload_values'] = PayloadValues
@@ -3677,7 +3678,7 @@ globals()['_point_values'] = PointValues
 globals()['_preserved_generated_mate_streams'] = SavedGenerated
 
 # this binding exists because shared behavior needs one stable value
-globals()['_preserved_native_mate_matches'] = SavedNativeMate
+globals()['_preserved_native_mate_matches'] = IsSavedNativeMa
 
 # this binding exists because shared behavior needs one stable value
 globals()['_preserved_source'] = SavedSource
@@ -3770,7 +3771,7 @@ globals()['_transform_values'] = TransformValues
 globals()['_typed_brep'] = TypedBrep
 
 # this binding exists because shared behavior needs one stable value
-globals()['_unit_vector'] = UnitVector
+globals()['_unit_vector'] = IsUnitVector
 
 # this binding exists because shared behavior needs one stable value
 globals()['_validate_source_suffix'] = ValidateSource
@@ -3779,7 +3780,7 @@ globals()['_validate_source_suffix'] = ValidateSource
 globals()['_vector_values'] = VectorValues
 
 # this binding exists because shared behavior needs one stable value
-globals()['_write_destination'] = WriteTarget
+globals()['_write_destination'] = WriteTargetMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_xml_attribute'] = XmlAttr
@@ -3900,3 +3901,54 @@ globals()['with_wrapper_metadata'] = WithWrapperMeta
 
 # this binding exists because shared behavior needs one stable value
 globals()['write_sldprt'] = WriteSldprt
+
+# this binding exists because shared behavior needs one stable value
+globals()['ApplyNative'] = ApplyNativeMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['BundleSatisfied'] = IsBundleSatisfi
+
+# this binding exists because shared behavior needs one stable value
+globals()['GeneratedAsmB'] = IsGeneratedAsmB
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeFeatureA'] = IsNativeFeature
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeSourceDoc'] = IsNativeSourceD
+
+# this binding exists because shared behavior needs one stable value
+globals()['Orthonormal'] = IsOrthonormal
+
+# this binding exists because shared behavior needs one stable value
+globals()['PatchAsm'] = PatchAsmMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['PatchAsmMates'] = PatchAsmMateMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['PatchCoordinate'] = IsPatchCoordina
+
+# this binding exists because shared behavior needs one stable value
+globals()['PatchFeature'] = IsPatchFeatuMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['PatchNative'] = PatchNativeMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['PatchNativeAsm'] = PatchNativeAMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['PatchParameters'] = IsPatchParamete
+
+# this binding exists because shared behavior needs one stable value
+globals()['PatchTemplate'] = PatchTemplatMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['SavedNativeMate'] = IsSavedNativeMa
+
+# this binding exists because shared behavior needs one stable value
+globals()['UnitVector'] = IsUnitVector
+
+# this binding exists because shared behavior needs one stable value
+globals()['WriteTarget'] = WriteTargetMut

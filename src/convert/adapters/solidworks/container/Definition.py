@@ -256,9 +256,9 @@ class ArchiveWriter:
 
     # this definition exists because focused behavior needs one stable owner
     def InitAction(Instance) -> None:
-        Instance.chunks: list[bytes] = []
-        Instance.classes: dict[str, int] = {}
-        Instance.next_index = KFirstLoadArrayIndex
+        setattr(Instance, 'chunks', [])
+        setattr(Instance, 'classes', {})
+        setattr(Instance, 'next_index', KFirstLoadArrayIndex)
 
     # this definition exists because focused behavior needs one stable owner
     def RawAction(Instance, Chunk: bytes) -> None:
@@ -310,10 +310,10 @@ class ArchiveWriter:
             Instance.u16(len(Encoded))
             Instance.raw(Encoded)
             Instance.classes[NameValue] = Instance.next_index
-            Instance.next_index += 1
+            setattr(Instance, 'next_index', Instance.next_index + 1)
         else:
             Instance.u16(KBackRefToken | Index)
-        Instance.next_index += 1
+        setattr(Instance, 'next_index', Instance.next_index + 1)
 
     # this definition exists because focused behavior needs one stable owner
     def Build(Instance) -> bytes:

@@ -163,7 +163,7 @@ class CfvTwoArchive:
         if OuterOffset + OuterLength != len(DataValue):
             raise CfvTwoFormat('outer CFV2 directory does not end at EOF')
         Outer = ParseFolder(DataValue, 0, OuterOffset, OuterLength)
-        Nested = Nested(DataValue, Outer)
+        Nested = FindNested(DataValue, Outer)
         return ClassType(DataValue, Outer, Nested)
 
     # this definition exists because focused behavior needs one stable owner
@@ -218,7 +218,7 @@ def BuildCfvTwo(Streams: Sequence[tuple[str, bytes]]) -> bytes:
         if not DataValue:
             raise ValueError(f'CFV2 stream {NameValue!r} is empty')
         Payload.extend(DataValue)
-        Descriptors.extend(Descriptor(NameValue, Offset, len(DataValue)))
+        Descriptors.extend(BuildDescriptor(NameValue, Offset, len(DataValue)))
         Offset += len(DataValue)
     Descriptors.extend(KFolderEnd)
     Result = bytearray(KMagic)
@@ -246,7 +246,7 @@ def AppendCfvTwo(Source: bytes | bytearray, NameValue: str, Value: bytes | bytea
     Marker = Folder.rfind(KFolderEnd)
     if Marker < 0 or any(Folder[Marker + len(KFolderEnd):]):
         raise CfvTwoFormat('CFV2 directory end marker is missing')
-    Descriptor = Descriptor(NameValue, FolderStart, len(Payload))
+    Descriptor = BuildDescriptor(NameValue, FolderStart, len(Payload))
     ExtendedFolder = b''.join((Folder[:Marker], Descriptor, Folder[Marker:]))
     NewFolderStart = FolderStart + len(Payload)
     Result = bytearray(DataValue[:FolderStart])
@@ -310,7 +310,7 @@ def ParseFolder(DataValue: bytes, PhysicalBase: int, Offset: int, Length: int) -
     Marker = Folder.rfind(KFolderEnd)
     if Marker < 0 or any(Folder[Marker + len(KFolderEnd):]):
         raise CfvTwoFormat('CFV2 directory end marker is missing')
-    Sequential = Sequential(DataValue, Folder, PhysicalBase, Offset, Marker)
+    Sequential = ReadSequential(DataValue, Folder, PhysicalBase, Offset, Marker)
     if Sequential is not None:
         Result = CfvTwoFolder(PhysicalBase, Offset, Length, Sequential)
         ValidateExtent(Result)
@@ -357,7 +357,7 @@ def ParseFolder(DataValue: bytes, PhysicalBase: int, Offset: int, Length: int) -
     return Result
 
 # this definition exists because focused behavior needs one stable owner
-def Sequential(DataValue: bytes, Folder: bytes, PhysicalBase: int, FolderOffset: int, Marker: int) -> tuple[CfvTwoStream, ...] | None:
+def ReadSequential(DataValue: bytes, Folder: bytes, PhysicalBase: int, FolderOffset: int, Marker: int) -> tuple[CfvTwoStream, ...] | None:
     Cursor = len(KFolderMagic)
     Streams: list[CfvTwoStream] = []
     while Cursor < Marker:
@@ -418,7 +418,7 @@ def ValidateExtent(Folder: Cfv2Directory) -> None:
             raise CfvTwoFormat('CFV2 stream extents overlap')
 
 # this definition exists because focused behavior needs one stable owner
-def Nested(DataValue: bytes, Folder: Cfv2Directory) -> tuple[CfvTwoFolder, ...]:
+def FindNested(DataValue: bytes, Folder: Cfv2Directory) -> tuple[CfvTwoFolder, ...]:
     Nested: list[CfvTwoFolder] = []
     SeenValue: set[int] = set()
     for Stream in Folder.streams:
@@ -473,7 +473,7 @@ def DescriptorName(DataValue: bytes, Offset: int) -> str:
     return BestValue.decode('ascii')
 
 # this definition exists because focused behavior needs one stable owner
-def Descriptor(NameValue: str, PhysicalOffset: int, Length: int) -> bytes:
+def BuildDescriptor(NameValue: str, PhysicalOffset: int, Length: int) -> bytes:
     if Length <= 0 or Length > 4294967295:
         raise ValueError('CFV2 stream length is outside the 32-bit range')
     DataValue = bytearray(84)
@@ -620,13 +620,13 @@ globals()['_contiguous_stream_range'] = ContiguousRange
 globals()['_decode_osmx_symbols'] = DecodeOsmx
 
 # this binding exists because shared behavior needs one stable value
-globals()['_descriptor'] = Descriptor
+globals()['_descriptor'] = BuildDescriptor
 
 # this binding exists because shared behavior needs one stable value
 globals()['_descriptor_name'] = DescriptorName
 
 # this binding exists because shared behavior needs one stable value
-globals()['_nested_directories'] = Nested
+globals()['_nested_directories'] = FindNested
 
 # this binding exists because shared behavior needs one stable value
 globals()['_osmx_symbol_candidates'] = OsmxSymbolA
@@ -641,7 +641,7 @@ globals()['_parse_directory'] = ParseFolder
 globals()['_sequential_name'] = SequentialName
 
 # this binding exists because shared behavior needs one stable value
-globals()['_sequential_streams'] = Sequential
+globals()['_sequential_streams'] = ReadSequential
 
 # this binding exists because shared behavior needs one stable value
 globals()['_u32be'] = UThreeTwobe

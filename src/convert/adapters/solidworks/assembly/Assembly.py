@@ -133,12 +133,10 @@ class NativeMateCode(IntEnum):
     KAligned = 1
     KAntiAligned = 2
     KClosest = 3
-
-
-setattr(NativeMateCode, "ANY", NativeMateCode.KAnyValue)
-setattr(NativeMateCode, "ALIGNED", NativeMateCode.KAligned)
-setattr(NativeMateCode, "ANTI_ALIGNED", NativeMateCode.KAntiAligned)
-setattr(NativeMateCode, "CLOSEST", NativeMateCode.KClosest)
+setattr(NativeMateCode, 'ANY', NativeMateCode.KAnyValue)
+setattr(NativeMateCode, 'ALIGNED', NativeMateCode.KAligned)
+setattr(NativeMateCode, 'ANTI_ALIGNED', NativeMateCode.KAntiAligned)
+setattr(NativeMateCode, 'CLOSEST', NativeMateCode.KClosest)
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
@@ -505,7 +503,7 @@ def HasCoreBasis(AsmValue: AssemblyData) -> bool:
     return len(DirectItems) >= 4 or (len(DirectItems) >= 3 and len(UniqueDefs) > 1)
 
 # this definition exists because focused behavior needs one stable owner
-def Definition(Definition: ComponentDefinition) -> bool:
+def IsDefinition(Definition: ComponentDefinition) -> bool:
     return str(Definition.kind) in {ComponentKind.PART.value, ComponentKind.ASSEMBLY.value}
 
 # this definition exists because focused behavior needs one stable owner
@@ -663,7 +661,7 @@ def EncodeMateA(AsmValue: AssemblyData, OrderedDefinitions: Sequence[ComponentDe
     for OwnerId, LaneValue in Lanes.items():
         Records: list[bytes] = []
         Layout: list[tuple[str, MateRule | MateGroup]] = []
-        for ItemValue in MateOwnerPlan(AsmValue, OwnerId, Losses):
+        for ItemValue in MateOwnerPlaMut(AsmValue, OwnerId, Losses):
             if isinstance(ItemValue, MateGroup):
                 PairValue = EncodeGroup(ItemValue)
                 if PairValue is None:
@@ -690,7 +688,7 @@ def EncodeMateA(AsmValue: AssemblyData, OrderedDefinitions: Sequence[ComponentDe
         StreamName = f'Contents/Config-{LaneValue}-MatesList'
         NativeId = (DefinitionIds[OwnerId] | KMateListNativeIdFlag) & 4294967295
         Stream = Struct.pack('<IH', NativeId, len(Records)) + b''.join(Records)
-        if not VerifyMate(Stream, StreamName, DefinitionIds[OwnerId], Layout, Entities, AsmValue, Definitions, Losses):
+        if not IsVerifyMateMut(Stream, StreamName, DefinitionIds[OwnerId], Layout, Entities, AsmValue, Definitions, Losses):
             Unsupported.extend(Planned)
             for MateId in Planned:
                 Rejections[MateId] = (KMateLossRecord,)
@@ -722,7 +720,7 @@ def MateStreamLanes(AsmValue: AssemblyData, OrderedDefinitions: Sequence[Compone
     return Result
 
 # this definition exists because focused behavior needs one stable owner
-def MateOwnerPlan(AsmValue: AssemblyData, OwnerId: str, Losses: dict[str, tuple[str, ...]]) -> tuple[MateRule | MateGroup, ...]:
+def MateOwnerPlaMut(AsmValue: AssemblyData, OwnerId: str, Losses: dict[str, tuple[str, ...]]) -> tuple[MateRule | MateGroup, ...]:
     Mates = {MateValue.id: MateValue for MateValue in AsmValue.mates if MateValue.owner_definition_id == OwnerId}
 
     # this callback exists because local behavior needs one focused transformation
@@ -750,7 +748,7 @@ def MateOwnerPlan(AsmValue: AssemblyData, OwnerId: str, Losses: dict[str, tuple[
     return tuple(PlanValue)
 
 # this definition exists because focused behavior needs one stable owner
-def VerifyMate(Stream: bytes, StreamName: str, OwnerNativeId: int, Layout: Sequence[tuple[str, MateConstraint | MateGroup]], Entities: Mapping[str, MateEntity], AsmValue: AssemblyData, Definitions: Mapping[str, ComponentDefinition], Losses: dict[str, tuple[str, ...]]) -> bool:
+def IsVerifyMateMut(Stream: bytes, StreamName: str, OwnerNativeId: int, Layout: Sequence[tuple[str, MateConstraint | MateGroup]], Entities: Mapping[str, MateEntity], AsmValue: AssemblyData, Definitions: Mapping[str, ComponentDefinition], Losses: dict[str, tuple[str, ...]]) -> bool:
     try:
         Decoded = DecodeMateList(Stream, StreamName, OwnerNativeId)
     except SldprtFormatError:
@@ -759,7 +757,7 @@ def VerifyMate(Stream: bytes, StreamName: str, OwnerNativeId: int, Layout: Seque
         return False
     for (RoleValue, Source), Target in zip(Layout, Decoded.mates):
         if RoleValue == 'mate':
-            if not isinstance(Source, MateRule) or not EncodedMate(Source, Target, Entities, AsmValue, Definitions):
+            if not isinstance(Source, MateRule) or not IsEncodedMate(Source, Target, Entities, AsmValue, Definitions):
                 return False
             continue
         ExpectedName = Source.name if RoleValue == 'group_start' else f'{Source.name}{KMateGroupEndSuffix}'
@@ -1016,7 +1014,7 @@ def Serialized(Value: str) -> bytes | None:
     return SerializedStringMarker + bytes((Units,)) + Encoded
 
 # this definition exists because focused behavior needs one stable owner
-def EncodedMate(Source: MateConstraint, Target: NativeMate, Entities: Mapping[str, MateEntity], AsmValue: AssemblyData, Definitions: Mapping[str, ComponentDefinition]) -> bool:
+def IsEncodedMate(Source: MateConstraint, Target: NativeMate, Entities: Mapping[str, MateEntity], AsmValue: AssemblyData, Definitions: Mapping[str, ComponentDefinition]) -> bool:
     NativeKind, Ignored = NativeMateClass(Source)
     if Target.name != Source.name or Target.kind != NativeKind:
         return False
@@ -1111,8 +1109,8 @@ def DecodeMateList(DataValue: bytes, Stream: str='', OwnerDefinitionId: int=0) -
 def MateLists(Archive: SldprtArchive, OwnerDefinitionId: int) -> tuple[NativeMateList, ...]:
     Result: list[NativeMateList] = []
     for Record in Archive.records:
-        Named = MateStreamName(Record.name)
-        if not Named and (not MateStream(Record.data)):
+        Named = IsMateStreamNam(Record.name)
+        if not Named and (not IsMateStream(Record.data)):
             continue
         try:
             Decoded = DecodeMateList(Record.data, Record.name, OwnerDefinitionId)
@@ -1124,12 +1122,12 @@ def MateLists(Archive: SldprtArchive, OwnerDefinitionId: int) -> tuple[NativeMat
     return tuple(Result)
 
 # this definition exists because focused behavior needs one stable owner
-def MateStreamName(NameValue: str) -> bool:
+def IsMateStreamNam(NameValue: str) -> bool:
     LeafValue = NameValue.replace('\\', '/').rsplit('/', 1)[-1].casefold()
     return LeafValue == MatesStreamName.casefold() or LeafValue.endswith(MatesStreamSuffix.casefold())
 
 # this definition exists because focused behavior needs one stable owner
-def MateStream(DataValue: bytes) -> bool:
+def IsMateStream(DataValue: bytes) -> bool:
     if len(DataValue) < 12 or DataValue[6:10] != ClassMarker:
         return False
     ClassSize = Struct.unpack_from('<H', DataValue, 10)[0]
@@ -1169,8 +1167,8 @@ def XmlRoot(DataValue: bytes) -> XmlTree.Element:
         DataValue = DataValue[Marker:]
     try:
         return XmlTree.fromstring(DataValue)
-    except XmlTree.ParseError as exc:
-        raise SldprtFormatError(f'invalid assembly component XML: {exc}') from exc
+    except XmlTree.ParseError as ErrorInfo:
+        raise SldprtFormatError(f'invalid assembly component XML: {ErrorInfo}') from ErrorInfo
 
 # this definition exists because focused behavior needs one stable owner
 def LocalName(ElemValue: ET.Element) -> str:
@@ -1199,7 +1197,7 @@ def Models(RootValue: ET.Element, Files: dict[int, NativeAssemblyFile]) -> tuple
         Definitions.append(NativeAsmA(object_id=DefinitionId, name=ItemValue.attrib.get('swName', ''), document_type=Source.document_type, file_id=FileId, source_path=Source.source_path, configuration_name=ItemValue.attrib.get('swConfigurationName', ''), configuration_id=Integer(ItemValue.attrib.get('swConfigurationId')), alternate_configuration_name=ItemValue.attrib.get('swConfigurationAlternateName', ''), last_modified_stamp=Integer(ItemValue.attrib.get('swLastModifiedStamp')), configuration_flags=Integer(ItemValue.attrib.get('swConfigurationFlags')), bounding_box_m=BoundingBox(ItemValue.attrib.get('swBoundingBox')), child_occurrence_ids=tuple((Integer(Child.attrib.get('id')) for Child in ChildElements)), attributes=tuple(sorted(ItemValue.attrib.items()))))
         for Child in ChildElements:
             Transform = FloatTuple(Child.attrib.get('swTransform'), 16)
-            Occurrences.append(NativeAsmItem(object_id=Integer(Child.attrib.get('id')), feature_id=Integer(Child.attrib.get('swID')), owner_definition_id=DefinitionId, definition_id=Integer(Child.attrib.get('swModelRef')), name=Child.attrib.get('swName', ''), reference_number=Integer(Child.attrib.get('swReferenceNumber'), 1), component_reference=Child.attrib.get('swComponentReference', ''), configuration_name=Child.attrib.get('swConfigurationName', ''), configuration_id=Integer(Child.attrib.get('swConfigurationId')), transform=Transform, transform_stamp=Integer(Child.attrib.get('swTransformStamp')), suppressed=YesAction(Child.attrib.get('swSuppressed')), hidden=YesAction(Child.attrib.get('swHidden')), flexible=YesAction(Child.attrib.get('swFlexible')), virtual=YesAction(Child.attrib.get('swIsVirtualComponent')), exclude_from_bom=YesAction(Child.attrib.get('swExcludeFromBOM')), zone=YesAction(Child.attrib.get('swZone')), display_mode=Integer(Child.attrib.get('swDisplayMode')), display_quality=Integer(Child.attrib.get('swHlrDisplayQuality')), edges_in_shaded_mode=YesAction(Child.attrib.get('swEdgesInShadedMode')), order=Order, attributes=tuple(sorted(Child.attrib.items()))))
+            Occurrences.append(NativeAsmItem(object_id=Integer(Child.attrib.get('id')), feature_id=Integer(Child.attrib.get('swID')), owner_definition_id=DefinitionId, definition_id=Integer(Child.attrib.get('swModelRef')), name=Child.attrib.get('swName', ''), reference_number=Integer(Child.attrib.get('swReferenceNumber'), 1), component_reference=Child.attrib.get('swComponentReference', ''), configuration_name=Child.attrib.get('swConfigurationName', ''), configuration_id=Integer(Child.attrib.get('swConfigurationId')), transform=Transform, transform_stamp=Integer(Child.attrib.get('swTransformStamp')), suppressed=IsYesAction(Child.attrib.get('swSuppressed')), hidden=IsYesAction(Child.attrib.get('swHidden')), flexible=IsYesAction(Child.attrib.get('swFlexible')), virtual=IsYesAction(Child.attrib.get('swIsVirtualComponent')), exclude_from_bom=IsYesAction(Child.attrib.get('swExcludeFromBOM')), zone=IsYesAction(Child.attrib.get('swZone')), display_mode=Integer(Child.attrib.get('swDisplayMode')), display_quality=Integer(Child.attrib.get('swHlrDisplayQuality')), edges_in_shaded_mode=IsYesAction(Child.attrib.get('swEdgesInShadedMode')), order=Order, attributes=tuple(sorted(Child.attrib.items()))))
             Order += 1
     DefinitionIds = {ItemValue.object_id for ItemValue in Definitions}
     for ItemValueA in Occurrences:
@@ -1209,7 +1207,7 @@ def Models(RootValue: ET.Element, Files: dict[int, NativeAssemblyFile]) -> tuple
 
 # this definition exists because focused behavior needs one stable owner
 def Configurations(RootValue: ET.Element) -> tuple[NativeAsmConfig, ...]:
-    return tuple((NativeAsmConfig(object_id=Integer(ItemValue.attrib.get('id')), configuration_id=Integer(ItemValue.attrib.get('swID')), name=ItemValue.attrib.get('swName', ''), reference=ItemValue.attrib.get('swReference', ''), model_id=Integer(ItemValue.attrib.get('swModelRef')), most_recent=YesAction(ItemValue.attrib.get('swMostRecentConfiguration')), needs_update=YesAction(ItemValue.attrib.get('swConfigurationNeedsUpdate')), attributes=tuple(sorted(ItemValue.attrib.items()))) for ItemValue in Elements(RootValue, 'swConfiguration')))
+    return tuple((NativeAsmConfig(object_id=Integer(ItemValue.attrib.get('id')), configuration_id=Integer(ItemValue.attrib.get('swID')), name=ItemValue.attrib.get('swName', ''), reference=ItemValue.attrib.get('swReference', ''), model_id=Integer(ItemValue.attrib.get('swModelRef')), most_recent=IsYesAction(ItemValue.attrib.get('swMostRecentConfiguration')), needs_update=IsYesAction(ItemValue.attrib.get('swConfigurationNeedsUpdate')), attributes=tuple(sorted(ItemValue.attrib.items()))) for ItemValue in Elements(RootValue, 'swConfiguration')))
 
 # this definition exists because focused behavior needs one stable owner
 def DisplayStates(RootValue: ET.Element) -> tuple[NativeDisplay, ...]:
@@ -1407,11 +1405,11 @@ def FloatTuple(Value: str | None, Count: int) -> tuple[float, ...]:
 def Integer(Value: str | None, Default: int=0) -> int:
     try:
         return int(Value) if Value is not None else Default
-    except ValueError as exc:
-        raise SldprtFormatError(f'invalid integer value {Value!r}') from exc
+    except ValueError as ErrorInfo:
+        raise SldprtFormatError(f'invalid integer value {Value!r}') from ErrorInfo
 
 # this definition exists because focused behavior needs one stable owner
-def YesAction(Value: str | None) -> bool:
+def IsYesAction(Value: str | None) -> bool:
     return Value == 'YES'
 
 # this binding exists because shared behavior needs one stable value
@@ -1664,7 +1662,7 @@ globals()['_definition_file_key'] = DefinitionFile
 globals()['_definition_source_path'] = DefinitionPath
 
 # this binding exists because shared behavior needs one stable value
-globals()['_definition_supported'] = Definition
+globals()['_definition_supported'] = IsDefinition
 
 # this binding exists because shared behavior needs one stable value
 globals()['_display_states'] = DisplayStates
@@ -1685,7 +1683,7 @@ globals()['_encode_mate_streams'] = EncodeMateA
 globals()['_encode_record_body'] = EncodeRecord
 
 # this binding exists because shared behavior needs one stable value
-globals()['_encoded_mate_matches'] = EncodedMate
+globals()['_encoded_mate_matches'] = IsEncodedMate
 
 # this binding exists because shared behavior needs one stable value
 globals()['_expected_group_members'] = ExpectedGroup
@@ -1742,7 +1740,7 @@ globals()['_mate_kind'] = MateKind
 globals()['_mate_lists'] = MateLists
 
 # this binding exists because shared behavior needs one stable value
-globals()['_mate_owner_plan'] = MateOwnerPlan
+globals()['_mate_owner_plan'] = MateOwnerPlaMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_mate_record_start'] = MateRecordStart
@@ -1751,10 +1749,10 @@ globals()['_mate_record_start'] = MateRecordStart
 globals()['_mate_stream_lanes'] = MateStreamLanes
 
 # this binding exists because shared behavior needs one stable value
-globals()['_mate_stream_name'] = MateStreamName
+globals()['_mate_stream_name'] = IsMateStreamNam
 
 # this binding exists because shared behavior needs one stable value
-globals()['_mate_stream_structure'] = MateStream
+globals()['_mate_stream_structure'] = IsMateStream
 
 # this binding exists because shared behavior needs one stable value
 globals()['_mate_token_kinds'] = MateTokenKinds
@@ -1811,7 +1809,7 @@ globals()['_serialized_strings'] = SerializedA
 globals()['_utf16_string'] = UtfOneSixString
 
 # this binding exists because shared behavior needs one stable value
-globals()['_verify_mate_stream'] = VerifyMate
+globals()['_verify_mate_stream'] = IsVerifyMateMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_with_reason'] = WithReason
@@ -1820,7 +1818,7 @@ globals()['_with_reason'] = WithReason
 globals()['_xml_root'] = XmlRoot
 
 # this binding exists because shared behavior needs one stable value
-globals()['_yes'] = YesAction
+globals()['_yes'] = IsYesAction
 
 # this binding exists because shared behavior needs one stable value
 globals()['_yes_text'] = YesText
@@ -1869,3 +1867,24 @@ globals()['re'] = RegexLib
 
 # this binding exists because shared behavior needs one stable value
 globals()['struct'] = Struct
+
+# this binding exists because shared behavior needs one stable value
+globals()['Definition'] = IsDefinition
+
+# this binding exists because shared behavior needs one stable value
+globals()['EncodedMate'] = IsEncodedMate
+
+# this binding exists because shared behavior needs one stable value
+globals()['MateOwnerPlan'] = MateOwnerPlaMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['MateStream'] = IsMateStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['MateStreamName'] = IsMateStreamNam
+
+# this binding exists because shared behavior needs one stable value
+globals()['VerifyMate'] = IsVerifyMateMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['YesAction'] = IsYesAction

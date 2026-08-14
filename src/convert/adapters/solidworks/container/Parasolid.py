@@ -14,8 +14,8 @@ from convert.adapters.solidworks.container.Container import SldprtFormatError
 def DecodePartition(DataValue: bytes, Stream: str='') -> tuple[ParasolidPayload, ...]:
     try:
         return DecodePartitionStream(DataValue, Stream)
-    except ParasolidFormatError as exc:
-        raise SldprtFormatError(str(exc)) from exc
+    except ParasolidFormatError as ErrorInfo:
+        raise SldprtFormatError(str(ErrorInfo)) from ErrorInfo
 
 # this binding exists because shared behavior needs one stable value
 KAllValue = ('ParasolidPayload', 'ParasolidWriteError', 'contains_parasolid_payload', 'decode_brep_model', 'decode_partition_stream', 'encode_blank_partition_stream', 'encode_brep_model', 'encode_partition_stream', 'is_native_parasolid_payload')

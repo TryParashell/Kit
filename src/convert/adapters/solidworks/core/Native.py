@@ -1485,7 +1485,7 @@ def HasCadCylBrep(DocData: CadDocument, RadiusValue: float, HeightValue: float) 
     return all((MathValue.isclose(MathValue.hypot(ItemData.point.x, ItemData.point.y), RadiusValue, rel_tol=0.0, abs_tol=1e-09) for ItemData in BrepData.vertices)) and all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=0.0, abs_tol=1e-09) for ActualValue, ExpectedValue in zip(VertexHeights, ExpectedHeights, strict=True)))
 
 # this definition exists because focused behavior needs one stable owner
-def FreeCadBox(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...] | None:
+def FreeCadBoxMut(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...] | None:
 
     # this callback exists because local behavior needs one focused transformation
     TimelineData = tuple((FeatureData for FeatureData in sorted(DocData.feature_timeline, key=lambda FeatureData: FeatureData.order) if not IsNativeSystem(FeatureData)))
@@ -1504,7 +1504,7 @@ def FreeCadBox(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteOb
             return None
         PathData[PathValue] = ItemData
     ExpectedData = {'Length': (ValueKind.LENGTH, None), 'Width': (ValueKind.LENGTH, None), 'Height': (ValueKind.LENGTH, None), 'MapMode': (ValueKind.INTEGER, 0), 'MapPathParameter': (ValueKind.NUMBER, 0.0), 'MapReversed': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
-    if not set(ExpectedData) <= set(PathData) or any((not FreecadParam(PathData[PathName], KindData, ValueData) for PathName, (KindData, ValueData) in ExpectedData.items() if ValueData is not None)):
+    if not set(ExpectedData) <= set(PathData) or any((not IsFreecadParam(PathData[PathName], KindData, ValueData) for PathName, (KindData, ValueData) in ExpectedData.items() if ValueData is not None)):
         return None
     DimensionsData = tuple((ParamDimension(PathData[PathName]) for PathName in ('Length', 'Width', 'Height')))
     if any((ItemData is None for ItemData in DimensionsData)):
@@ -1530,7 +1530,7 @@ def FreeCadBox(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteOb
     return (WriteObject(SketchSourceId, 26, 'Sketch1', 'Sketch', 'Sketch', 'moProfileFeature_c', (('Dissectable', 'true'),), (Replace(LengthData, name='D1', text=format(LengthValue, '.15g')), Replace(WidthData, name='D2', text=format(WidthValue, '.15g'))), bytes(SketchPayload)), WriteObject(FeatureData.id, 34, 'Boss-Extrude1', 'Extrusion', 'Extrusion', 'moExtrusion_c', (('Dissectable', 'true'), ('DissectableChildren', '26'), ('DissectableRoot', 'true'), ('KitPrimitive', 'Box')), (Replace(HeightData, name='D1', text=format(HeightValue, '.15g')),), Extrusion(ExtrusionData)))
 
 # this definition exists because focused behavior needs one stable owner
-def BuildCadCylObjs(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...] | None:
+def BuildCadCylOMut(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...] | None:
 
     # this callback exists because local behavior needs one focused transformation
     TimelineData = tuple((FeatureData for FeatureData in sorted(DocData.feature_timeline, key=lambda FeatureData: FeatureData.order) if not IsNativeSystem(FeatureData)))
@@ -1549,7 +1549,7 @@ def BuildCadCylObjs(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[Wr
             return None
         PathData[PathValue] = ItemData
     ExpectedData = {'Angle': (ValueKind.ANGLE, 360.0), 'FirstAngle': (ValueKind.ANGLE, 0.0), 'SecondAngle': (ValueKind.ANGLE, 0.0), 'Height': (ValueKind.LENGTH, None), 'Radius': (ValueKind.LENGTH, None), 'MapMode': (ValueKind.INTEGER, 0), 'MapPathParameter': (ValueKind.NUMBER, 0.0), 'MapReversed': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
-    if not set(ExpectedData) <= set(PathData) or any((not FreecadParam(PathData[PathName], KindData, ValueData) for PathName, (KindData, ValueData) in ExpectedData.items() if ValueData is not None)):
+    if not set(ExpectedData) <= set(PathData) or any((not IsFreecadParam(PathData[PathName], KindData, ValueData) for PathName, (KindData, ValueData) in ExpectedData.items() if ValueData is not None)):
         return None
     RadiusData = ParamDimension(PathData['Radius'])
     HeightData = ParamDimension(PathData['Height'])
@@ -1571,10 +1571,10 @@ def BuildCadCylObjs(DocData: CadDocument, ObjectIds: dict[str, int]) -> tuple[Wr
 # this definition exists because focused behavior needs one stable owner
 def WriteObjects(DocValue: CadDocument, ObjectIds: dict[str, int]) -> tuple[WriteObject, ...]:
     Parameters = {Param.id: Param for Param in DocValue.parameters}
-    BoxObjects = FreeCadBox(DocValue, ObjectIds)
+    BoxObjects = FreeCadBoxMut(DocValue, ObjectIds)
     if BoxObjects is not None:
         return BoxObjects
-    CylinderObjects = BuildCadCylObjs(DocValue, ObjectIds)
+    CylinderObjects = BuildCadCylOMut(DocValue, ObjectIds)
     if CylinderObjects is not None:
         return CylinderObjects
     Result: list[WriteObject] = []
@@ -1681,7 +1681,7 @@ def ExpressionTexts(DocValue: CadDocument) -> tuple[str, ...] | None:
     return tuple(Texts)
 
 # this definition exists because focused behavior needs one stable owner
-def RepairPlaneIds(ObjectIds: dict[str, int]) -> None:
+def RepairPlaneIMut(ObjectIds: dict[str, int]) -> None:
     Reserved = frozenset(range(1, 26))
     Taken = {Value for KeyValue, Value in ObjectIds.items() if not KeyValue.startswith(('plane:', 'configuration:'))}
     NextId = 26
@@ -1703,27 +1703,27 @@ def RepairPlaneIds(ObjectIds: dict[str, int]) -> None:
 # this definition exists because focused behavior needs one stable owner
 def Canonical(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) == 2 and ObjectsData[1].class_name == 'moRevolution_c':
-        return CanonicalSinglA(ObjectsData, ObjectIds, DocData)
+        return IsonicalSingMut(ObjectsData, ObjectIds, DocData)
     if len(ObjectsData) in {6, 8}:
-        return CanonicalCut(ObjectsData, ObjectIds, DocData)
+        return IsonicalCutMut(ObjectsData, ObjectIds, DocData)
     if len(ObjectsData) == 4:
         if ObjectsData[3].class_name == 'moRevolution_c':
-            return CanonicalPad(ObjectsData, ObjectIds, DocData)
-        return CanonicalTwo(ObjectsData, ObjectIds, DocData)
+            return IsonicalPadMut(ObjectsData, ObjectIds, DocData)
+        return IsonicalTwoMut(ObjectsData, ObjectIds, DocData)
     if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'Fillet_c':
-        return CanonicalBossB(ObjectsData, ObjectIds, DocData)
+        return IsonicalBossMut(ObjectsData, ObjectIds, DocData)
     if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'Chamfer_c':
-        return CanonicalBoss(ObjectsData, ObjectIds, DocData)
+        return IsonicalBosAMut(ObjectsData, ObjectIds, DocData)
     if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'moShell_c':
-        return CanonicalBossD(ObjectsData, ObjectIds, DocData)
+        return IsonicalBosBMut(ObjectsData, ObjectIds, DocData)
     if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'moLPattern_c':
-        return CanonicalBossC(ObjectsData, ObjectIds, DocData)
+        return IsonicalBosCMut(ObjectsData, ObjectIds, DocData)
     if len(ObjectsData) == 3 and ObjectsData[2].class_name == 'moCirPattern_c':
-        return CanonicalBossA(ObjectsData, ObjectIds, DocData)
-    return CanonicalSingle(ObjectsData, ObjectIds, DocData)
+        return IsonicalBosDMut(ObjectsData, ObjectIds, DocData)
+    return IsonicalSinAMut(ObjectsData, ObjectIds, DocData)
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalSinglA(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalSingMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 2:
         return ObjectsData
     SketchObject, RevolveObject = ObjectsData
@@ -1747,7 +1747,7 @@ def CanonicalSinglA(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, 
     return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(RevolveObject, object_id=31, name='Revolve1', dimensions=(AngleDimension,)))
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalPad(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalPadMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 4:
         return ObjectsData
     SketchOne, PadObject, SketchTwo, GrooveObject = ObjectsData
@@ -1777,7 +1777,7 @@ def CanonicalPad(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int
     return (Replace(SketchOne, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(SketchTwo, object_id=33, name='Sketch2'), Replace(GrooveObject, object_id=39, name='Cut-Revolve1', kind='Cut-Revolve', dimensions=(GrooveDimension,)))
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalBossB(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalBossMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, FilletObject = ObjectsData
@@ -1806,7 +1806,7 @@ def CanonicalBossB(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, i
     return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(FilletObject, object_id=34, name='Fillet1', dimensions=(FilletDimension,), payload=FilletSelection(32, 3)))
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalBoss(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalBosAMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, ChamferObject = ObjectsData
@@ -1835,7 +1835,7 @@ def CanonicalBoss(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, in
     return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(ChamferObject, object_id=35, name='Chamfer1', dimensions=(ChamferDimension,), payload=FilletSelection(32, 3)))
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalBossD(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalBosBMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, ShellObject = ObjectsData
@@ -1864,7 +1864,7 @@ def CanonicalBossD(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, i
     return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(ShellObject, object_id=34, name='Shell1', dimensions=(ShellDimension,), payload=ShellSelection(32)))
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalBossC(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalBosCMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, PatternObject = ObjectsData
@@ -1893,7 +1893,7 @@ def CanonicalBossC(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, i
     return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(PatternObject, object_id=40, name='LPattern1', kind='LPattern', dimensions=(CountDimension, SpacingDimension), payload=b''))
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalBossA(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalBosDMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 3:
         return ObjectsData
     SketchObject, PadObject, PatternObject = ObjectsData
@@ -1922,7 +1922,7 @@ def CanonicalBossA(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, i
     return (Replace(SketchObject, object_id=26, name='Sketch1'), Replace(PadObject, object_id=32, name='Boss-Extrude1', dimensions=(Replace(PadDimension, name='D1'),)), Replace(PatternObject, object_id=46, name='CirPattern1', kind='CirPattern', dimensions=(CountDimension, AngleDimension), payload=b''))
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalSingle(Objects: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocValue: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalSinAMut(Objects: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocValue: CadDocument) -> tuple[WriteObject, ...]:
     if len(Objects) != 2:
         return Objects
     Sketch, Extrusion = Objects
@@ -1960,7 +1960,7 @@ def CanonicalSingle(Objects: tuple[_WriteObject, ...], ObjectIds: dict[str, int]
     return (Replace(Sketch, object_id=26, name='Sketch1'), Replace(Extrusion, object_id=FeatureObjectId, name='Boss-Extrude1', dimensions=(Dimension,)))
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalTwo(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalTwoMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     if len(ObjectsData) != 4:
         return ObjectsData
     SketchOne, FeatureOne, SketchTwo, FeatureTwo = ObjectsData
@@ -2003,7 +2003,7 @@ def CanonicalTwo(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int
     return tuple(CanonicalObjects)
 
 # this definition exists because focused behavior needs one stable owner
-def CanonicalCut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
+def IsonicalCutMut(ObjectsData: tuple[_WriteObject, ...], ObjectIds: dict[str, int], DocData: CadDocument) -> tuple[WriteObject, ...]:
     FeatureCount = len(ObjectsData) // 2
     if FeatureCount not in {3, 4} or len(ObjectsData) != FeatureCount * 2:
         return ObjectsData
@@ -2201,7 +2201,7 @@ def FreeCadPad(DocData: CadDocument, SketchData: tuple[Sketch, Sketch], FeatureD
             return None
         ParamData[PathValue] = ParamValueData
     ExpectedData = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'Angle': (ValueKind.ANGLE, 360.0), 'Angle2': (ValueKind.ANGLE, 0.0), 'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, GrooveFeature.name), 'Label2': (ValueKind.STRING, ''), 'Midplane': (ValueKind.BOOLEAN, False), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'Type': (ValueKind.INTEGER, 0), 'Visibility': (ValueKind.BOOLEAN, True)}
-    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
+    if set(ParamData) != set(ExpectedData) or any((not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
     AngleParam = ParamData['Angle']
     if AngleParam.value.unit.casefold() not in {'deg', 'degree', 'degrees'}:
@@ -2240,7 +2240,7 @@ def FreeCadBossB(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureSt
             return None
         ParamData[PathValue] = ParamValueData
     ExpectedData = {'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, FilletFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Radius': (ValueKind.QUANTITY, RadiusNumber), 'Refine': (ValueKind.BOOLEAN, True), 'SupportTransform': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'UseAllEdges': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
-    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
+    if set(ParamData) != set(ExpectedData) or any((not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
     RadiusParam = ParamData['Radius']
     return (PadDimension, WriteDimension('D1', RadiusNumber, 'R' + format(RadiusNumber, '.15g'), RadiusParam.role))
@@ -2276,7 +2276,7 @@ def FreeCadBoss(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureSte
             return None
         ParamData[PathValue] = ParamValueData
     ExpectedData = {'Angle': (ValueKind.ANGLE, 45.0), 'ChamferType': (ValueKind.INTEGER, 0), 'FlipDirection': (ValueKind.BOOLEAN, False), 'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, ChamferFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Refine': (ValueKind.BOOLEAN, True), 'Size': (ValueKind.QUANTITY, DistanceNumber), 'Size2': (ValueKind.QUANTITY, 1.0), 'SupportTransform': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'UseAllEdges': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
-    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
+    if set(ParamData) != set(ExpectedData) or any((not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
     DistanceParam = ParamData['Size']
     return (PadDimension, WriteDimension('D1', DistanceNumber, format(DistanceNumber, '.15g'), DistanceParam.role))
@@ -2312,7 +2312,7 @@ def FreeCadBossD(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureSt
             return None
         ParamData[PathValue] = ParamValueData
     ExpectedData = {'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Intersection': (ValueKind.BOOLEAN, False), 'Join': (ValueKind.INTEGER, 0), 'Label': (ValueKind.STRING, ShellFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Mode': (ValueKind.INTEGER, 0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, True), 'SupportTransform': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'Value': (ValueKind.LENGTH, ThicknessNumber), 'Visibility': (ValueKind.BOOLEAN, True)}
-    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
+    if set(ParamData) != set(ExpectedData) or any((not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
     ThicknessParam = ParamData['Value']
     return (PadDimension, WriteDimension('D1', ThicknessNumber, format(ThicknessNumber, '.15g'), ThicknessParam.role))
@@ -2347,7 +2347,7 @@ def FreeCadBossC(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureSt
     SpacingNumber = SpacingDimension.value_mm
     LengthNumber = SpacingNumber * (ItemCount - 1)
     ExpectedData = {'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, PatternFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Length': (ValueKind.LENGTH, LengthNumber), 'Length2': (ValueKind.LENGTH, 100.0), 'Mode': (ValueKind.INTEGER, 0), 'Mode2': (ValueKind.INTEGER, 0), 'Occurrences': (ValueKind.INTEGER, ItemCount), 'Occurrences2': (ValueKind.INTEGER, 1), 'Offset': (ValueKind.LENGTH, SpacingNumber), 'Offset2': (ValueKind.LENGTH, 10.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, False), 'Reversed2': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'TransformMode': (ValueKind.INTEGER, 0), 'Visibility': (ValueKind.BOOLEAN, True)}
-    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
+    if set(ParamData) != set(ExpectedData) or any((not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
     TerminalDepth = PadDimension.value_mm + SpacingNumber * (ItemCount - 1)
     if not HasFreeCadGeomA(DocData, PatternFeatureData.provenance.native_id, BoundsValue, TerminalDepth):
@@ -2397,7 +2397,7 @@ def FreeCadBossA(DocData: CadDocument, SketchData: Sketch, PadFeature: FeatureSt
             return None
         ParamData[PathValue] = ParamValueData
     ExpectedData = {'Angle': (ValueKind.ANGLE, float(AngleNumber)), 'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, PatternFeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Mode': (ValueKind.INTEGER, 0), 'Occurrences': (ValueKind.INTEGER, ItemCount), 'Offset': (ValueKind.ANGLE, 120.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'TransformMode': (ValueKind.INTEGER, 0), 'Visibility': (ValueKind.BOOLEAN, True)}
-    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
+    if set(ParamData) != set(ExpectedData) or any((not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
     if not HasFreeCadGeom(DocData, PatternFeatureData.provenance.native_id, BoundsValue, ItemCount, float(AngleNumber), PadDimension.value_mm):
         return None
@@ -2473,7 +2473,7 @@ def HasFreeCadAll(DocData: CadDocument, SketchData: Sketch, FeatureData: Feature
         return False
     DefinitionData = FeatureData.definition
     SupportPlaneValue = next((ItemData for ItemData in DocData.support_planes if ItemData.id == SketchData.support_plane_id), None)
-    if str(DefinitionData.end_condition).casefold() != ExtrusionEndCondition.THROUGH_ALL.value or DefinitionData.symmetric or DefinitionData.second_end_condition is not None or DefinitionData.up_to_reference or DefinitionData.second_up_to_reference or (not ParamValueA(DefinitionData.length, 5.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.second_length, 5.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.second_offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.draft_angle, 0.0, ValueKind.ANGLE)) or (not ParamValueA(DefinitionData.second_draft_angle, 0.0, ValueKind.ANGLE)) or (DefinitionData.direction is None) or (SupportPlaneValue is None) or (not all((MathValue.isclose(LeftValue, -RightValue, abs_tol=1e-12) for LeftValue, RightValue in zip((DefinitionData.direction.x, DefinitionData.direction.y, DefinitionData.direction.z), (SupportPlaneValue.transform.z_axis.x, SupportPlaneValue.transform.z_axis.y, SupportPlaneValue.transform.z_axis.z), strict=True)))):
+    if str(DefinitionData.end_condition).casefold() != ExtrusionEndCondition.THROUGH_ALL.value or DefinitionData.symmetric or DefinitionData.second_end_condition is not None or DefinitionData.up_to_reference or DefinitionData.second_up_to_reference or (not IsParamValueA(DefinitionData.length, 5.0, ValueKind.LENGTH)) or (not IsParamValueA(DefinitionData.second_length, 5.0, ValueKind.LENGTH)) or (not IsParamValueA(DefinitionData.offset, 0.0, ValueKind.LENGTH)) or (not IsParamValueA(DefinitionData.second_offset, 0.0, ValueKind.LENGTH)) or (not IsParamValueA(DefinitionData.draft_angle, 0.0, ValueKind.ANGLE)) or (not IsParamValueA(DefinitionData.second_draft_angle, 0.0, ValueKind.ANGLE)) or (DefinitionData.direction is None) or (SupportPlaneValue is None) or (not all((MathValue.isclose(LeftValue, -RightValue, abs_tol=1e-12) for LeftValue, RightValue in zip((DefinitionData.direction.x, DefinitionData.direction.y, DefinitionData.direction.z), (SupportPlaneValue.transform.z_axis.x, SupportPlaneValue.transform.z_axis.y, SupportPlaneValue.transform.z_axis.z), strict=True)))):
         return False
     ParamData: dict[str, Param] = {}
     for ParamValueData in DocData.parameters:
@@ -2484,7 +2484,7 @@ def HasFreeCadAll(DocData: CadDocument, SketchData: Sketch, FeatureData: Feature
             return False
         ParamData[PathValue] = ParamValueData
     ExpectedData = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'AlongSketchNormal': (ValueKind.BOOLEAN, True), 'Label': (ValueKind.STRING, None), 'Label2': (ValueKind.STRING, None), 'Length': (ValueKind.LENGTH, 5.0), 'Length2': (ValueKind.LENGTH, 5.0), 'Midplane': (ValueKind.BOOLEAN, False), 'Offset': (ValueKind.LENGTH, 0.0), 'Offset2': (ValueKind.LENGTH, 0.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, DefinitionData.reversed), 'SideType': (ValueKind.INTEGER, 0), 'Suppressed': (ValueKind.BOOLEAN, False), 'TaperAngle': (ValueKind.ANGLE, 0.0), 'TaperAngle2': (ValueKind.ANGLE, 0.0), 'Type': (ValueKind.INTEGER, 1), 'Type2': (ValueKind.INTEGER, 0), 'UseCustomVector': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
-    return set(ExpectedData) <= set(ParamData) and all((FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()))
+    return set(ExpectedData) <= set(ParamData) and all((IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items()))
 
 # this definition exists because focused behavior needs one stable owner
 def FreeCadFeature(DocData: CadDocument, SketchData: Sketch, FeatureData: FeatureStep, ExpectedTypeId: str, ExpectedSecondLength: float, ExpectedVisibility: bool) -> WriteDimension | None:
@@ -2493,7 +2493,7 @@ def FreeCadFeature(DocData: CadDocument, SketchData: Sketch, FeatureData: Featur
     DefinitionData = FeatureData.definition
     SupportPlaneValue = next((ItemData for ItemData in DocData.support_planes if ItemData.id == SketchData.support_plane_id), None)
     DirectionSign = -1.0 if ExpectedTypeId == 'PartDesign::Pocket' else 1.0
-    if str(DefinitionData.end_condition).casefold() != ExtrusionEndCondition.BLIND.value or (DefinitionData.reversed and DefinitionData.symmetric) or DefinitionData.second_end_condition is not None or DefinitionData.up_to_reference or DefinitionData.second_up_to_reference or (not ParamValueA(DefinitionData.second_length, ExpectedSecondLength, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.second_offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(DefinitionData.draft_angle, 0.0, ValueKind.ANGLE)) or (not ParamValueA(DefinitionData.second_draft_angle, 0.0, ValueKind.ANGLE)) or (DefinitionData.direction is None) or (SupportPlaneValue is None) or (not all((MathValue.isclose(LeftValue, RightValue, abs_tol=1e-12) for LeftValue, RightValue in zip((DefinitionData.direction.x, DefinitionData.direction.y, DefinitionData.direction.z), (DirectionSign * SupportPlaneValue.transform.z_axis.x, DirectionSign * SupportPlaneValue.transform.z_axis.y, DirectionSign * SupportPlaneValue.transform.z_axis.z), strict=True)))):
+    if str(DefinitionData.end_condition).casefold() != ExtrusionEndCondition.BLIND.value or (DefinitionData.reversed and DefinitionData.symmetric) or DefinitionData.second_end_condition is not None or DefinitionData.up_to_reference or DefinitionData.second_up_to_reference or (not IsParamValueA(DefinitionData.second_length, ExpectedSecondLength, ValueKind.LENGTH)) or (not IsParamValueA(DefinitionData.offset, 0.0, ValueKind.LENGTH)) or (not IsParamValueA(DefinitionData.second_offset, 0.0, ValueKind.LENGTH)) or (not IsParamValueA(DefinitionData.draft_angle, 0.0, ValueKind.ANGLE)) or (not IsParamValueA(DefinitionData.second_draft_angle, 0.0, ValueKind.ANGLE)) or (DefinitionData.direction is None) or (SupportPlaneValue is None) or (not all((MathValue.isclose(LeftValue, RightValue, abs_tol=1e-12) for LeftValue, RightValue in zip((DefinitionData.direction.x, DefinitionData.direction.y, DefinitionData.direction.z), (DirectionSign * SupportPlaneValue.transform.z_axis.x, DirectionSign * SupportPlaneValue.transform.z_axis.y, DirectionSign * SupportPlaneValue.transform.z_axis.z), strict=True)))):
         return None
     DimensionData = ParamDimension(Param('', 'D1', DefinitionData.length))
     if DimensionData is None or DimensionData.value_mm <= 0.0:
@@ -2509,7 +2509,7 @@ def FreeCadFeature(DocData: CadDocument, SketchData: Sketch, FeatureData: Featur
     ExpectedData = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'AlongSketchNormal': (ValueKind.BOOLEAN, True), 'Label': (ValueKind.STRING, None), 'Label2': (ValueKind.STRING, None), 'Length': (ValueKind.LENGTH, DimensionData.value_mm), 'Length2': (ValueKind.LENGTH, ExpectedSecondLength), 'Midplane': (ValueKind.BOOLEAN, DefinitionData.symmetric), 'Offset': (ValueKind.LENGTH, 0.0), 'Offset2': (ValueKind.LENGTH, 0.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, DefinitionData.reversed), 'SideType': (ValueKind.INTEGER, 2 if DefinitionData.symmetric else 0), 'Suppressed': (ValueKind.BOOLEAN, False), 'TaperAngle': (ValueKind.ANGLE, 0.0), 'TaperAngle2': (ValueKind.ANGLE, 0.0), 'Type': (ValueKind.INTEGER, 0), 'Type2': (ValueKind.INTEGER, 0), 'UseCustomVector': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, ExpectedVisibility)}
     if not set(ExpectedData) <= set(ParamData):
         return None
-    if any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
+    if any((not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
     return DimensionData
 
@@ -2519,7 +2519,7 @@ def FreecadSingle(DocValue: CadDocument, Sketch: Sketch, Feature: FeatureStep) -
         return None
     Definition = Feature.definition
     SupportPlaneValue = next((ItemData for ItemData in DocValue.support_planes if ItemData.id == Sketch.support_plane_id), None)
-    if str(Definition.end_condition).casefold() != ExtrusionEndCondition.BLIND.value or (Definition.reversed and Definition.symmetric) or Definition.second_end_condition is not None or Definition.up_to_reference or Definition.second_up_to_reference or (not ParamValueA(Definition.second_length, 10.0, ValueKind.LENGTH)) or (not ParamValueA(Definition.offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(Definition.second_offset, 0.0, ValueKind.LENGTH)) or (not ParamValueA(Definition.draft_angle, 0.0, ValueKind.ANGLE)) or (not ParamValueA(Definition.second_draft_angle, 0.0, ValueKind.ANGLE)) or (Definition.direction is None) or (SupportPlaneValue is None) or (not all((MathValue.isclose(LeftValue, RightValue, abs_tol=1e-12) for LeftValue, RightValue in zip((Definition.direction.x, Definition.direction.y, Definition.direction.z), (SupportPlaneValue.transform.z_axis.x, SupportPlaneValue.transform.z_axis.y, SupportPlaneValue.transform.z_axis.z), strict=True)))):
+    if str(Definition.end_condition).casefold() != ExtrusionEndCondition.BLIND.value or (Definition.reversed and Definition.symmetric) or Definition.second_end_condition is not None or Definition.up_to_reference or Definition.second_up_to_reference or (not IsParamValueA(Definition.second_length, 10.0, ValueKind.LENGTH)) or (not IsParamValueA(Definition.offset, 0.0, ValueKind.LENGTH)) or (not IsParamValueA(Definition.second_offset, 0.0, ValueKind.LENGTH)) or (not IsParamValueA(Definition.draft_angle, 0.0, ValueKind.ANGLE)) or (not IsParamValueA(Definition.second_draft_angle, 0.0, ValueKind.ANGLE)) or (Definition.direction is None) or (SupportPlaneValue is None) or (not all((MathValue.isclose(LeftValue, RightValue, abs_tol=1e-12) for LeftValue, RightValue in zip((Definition.direction.x, Definition.direction.y, Definition.direction.z), (SupportPlaneValue.transform.z_axis.x, SupportPlaneValue.transform.z_axis.y, SupportPlaneValue.transform.z_axis.z), strict=True)))):
         return None
     Dimension = ParamDimension(Param('', 'D1', Definition.length))
     if Dimension is None or Dimension.value_mm <= 0.0:
@@ -2535,7 +2535,7 @@ def FreecadSingle(DocValue: CadDocument, Sketch: Sketch, Feature: FeatureStep) -
     Expected = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'AlongSketchNormal': (ValueKind.BOOLEAN, True), 'Label': (ValueKind.STRING, None), 'Label2': (ValueKind.STRING, None), 'Length': (ValueKind.LENGTH, Dimension.value_mm), 'Length2': (ValueKind.LENGTH, 10.0), 'Midplane': (ValueKind.BOOLEAN, Definition.symmetric), 'Offset': (ValueKind.LENGTH, 0.0), 'Offset2': (ValueKind.LENGTH, 0.0), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, Definition.reversed), 'SideType': (ValueKind.INTEGER, 2 if Definition.symmetric else 0), 'Suppressed': (ValueKind.BOOLEAN, False), 'TaperAngle': (ValueKind.ANGLE, 0.0), 'TaperAngle2': (ValueKind.ANGLE, 0.0), 'Type': (ValueKind.INTEGER, 0), 'Type2': (ValueKind.INTEGER, 0), 'UseCustomVector': (ValueKind.BOOLEAN, False), 'Visibility': (ValueKind.BOOLEAN, True)}
     if not set(Expected) <= set(Parameters):
         return None
-    if any((not FreecadParam(Parameters[PathValue], KindValue, Value) for PathValue, (KindValue, Value) in Expected.items())):
+    if any((not IsFreecadParam(Parameters[PathValue], KindValue, Value) for PathValue, (KindValue, Value) in Expected.items())):
         return None
     return Dimension
 
@@ -2570,14 +2570,14 @@ def FreeCadSingle(DocData: CadDocument, SketchData: Sketch, FeatureData: Feature
     if not MathValue.isfinite(AngleDegrees) or not any((MathValue.isclose(AngleDegrees, ExpectedAngle, rel_tol=0.0, abs_tol=1e-10) for ExpectedAngle in (90.0, 360.0))):
         return None
     ExpectedData = {'AllowMultiFace': (ValueKind.BOOLEAN, True), 'Angle': (ValueKind.ANGLE, AngleDegrees), 'Angle2': (ValueKind.ANGLE, 0.0), 'FuseOrder': (ValueKind.INTEGER, 0), 'FuzzyTolerance': (ValueKind.NUMBER, -1.0), 'Label': (ValueKind.STRING, FeatureData.name), 'Label2': (ValueKind.STRING, ''), 'Midplane': (ValueKind.BOOLEAN, False), 'Refine': (ValueKind.BOOLEAN, True), 'Reversed': (ValueKind.BOOLEAN, False), 'Suppressed': (ValueKind.BOOLEAN, False), 'Type': (ValueKind.INTEGER, 0), 'Visibility': (ValueKind.BOOLEAN, True)}
-    if set(ParamData) != set(ExpectedData) or any((not FreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
+    if set(ParamData) != set(ExpectedData) or any((not IsFreecadParam(ParamData[PathValue], KindValue, ExpectedValue) for PathValue, (KindValue, ExpectedValue) in ExpectedData.items())):
         return None
     if AngleParam.value.unit.casefold() not in {'deg', 'degree', 'degrees'}:
         return None
     return WriteDimension('D1', AngleDegrees, f'{AngleDegrees:g}°', AngleParam.role)
 
 # this definition exists because focused behavior needs one stable owner
-def FreecadParam(Param: Parameter, KindValue: ValueKind, Expected: Any) -> bool:
+def IsFreecadParam(Param: Parameter, KindValue: ValueKind, Expected: Any) -> bool:
     Value = Param.value
     if Value.kind is not KindValue:
         return False
@@ -2591,7 +2591,7 @@ def FreecadParam(Param: Parameter, KindValue: ValueKind, Expected: Any) -> bool:
     return Value.value == Expected
 
 # this definition exists because focused behavior needs one stable owner
-def ParamValueA(Value: Any, Expected: float, KindValue: ValueKind) -> bool:
+def IsParamValueA(Value: Any, Expected: float, KindValue: ValueKind) -> bool:
     if Value is None or Value.kind is not KindValue:
         return False
     Param = ParamDimension(Param('', 'D1', Value))
@@ -2793,7 +2793,7 @@ def PlaneFrameBlock(Plane: SupportPlane) -> bytes | None:
     YAxis = (Transform.y_axis.x, Transform.y_axis.y, Transform.y_axis.z)
     ZAxis = (Transform.z_axis.x, Transform.z_axis.y, Transform.z_axis.z)
     Vectors = (XAxis, YAxis, ZAxis)
-    if not Orthonormal(Vectors) or not all((MathValue.isfinite(Value) for Vector in (Origin, *Vectors) for Value in Vector)):
+    if not IsOrthonormal(Vectors) or not all((MathValue.isfinite(Value) for Vector in (Origin, *Vectors) for Value in Vector)):
         return None
     Frame = bytearray(KPlaneFrameBytes)
     Struct.pack_into('<3d', Frame, 0, *(Value / KMillimetres for Value in Origin))
@@ -2812,7 +2812,7 @@ def PlanePayload(Plane: SupportPlane) -> bytes:
     return ClassDecl('moFixedRefPlnData_c') + Frame
 
 # this definition exists because focused behavior needs one stable owner
-def Orthonormal(Vectors: tuple[tuple[float, float, float], ...]) -> bool:
+def IsOrthonormal(Vectors: tuple[tuple[float, float, float], ...]) -> bool:
     return all((MathValue.isclose(NormAction(Vector), 1.0, abs_tol=1e-09) for Vector in Vectors)) and all((MathValue.isclose(DotAction(LeftValue, Right), 0.0, abs_tol=1e-09) for LeftValue, Right in Itertools.combinations(Vectors, 2)))
 
 # this definition exists because focused behavior needs one stable owner
@@ -2823,7 +2823,7 @@ def LineLoopPoints(LinesData: tuple[LineGeometry, ...]) -> tuple[tuple[float, fl
     EndData = tuple(((ItemData.end.x, ItemData.end.y) for ItemData in LinesData))
     if not all((MathValue.isfinite(ValueData) for PointData in (*StartData, *EndData) for ValueData in PointData)):
         return None
-    if any((not SamePoint(EndData[ItemIndex], StartData[(ItemIndex + 1) % len(StartData)]) for ItemIndex in range(len(StartData)))):
+    if any((not IsSamePoint(EndData[ItemIndex], StartData[(ItemIndex + 1) % len(StartData)]) for ItemIndex in range(len(StartData)))):
         return None
     return StartData
 
@@ -3156,7 +3156,7 @@ def EncodeNativeAsm(DocValue: CadDocument, ModelName: str, ItemNames: Sequence[s
     Omitted: list[str] = []
     NextObjectId = KAsmHeaderObjects[-1][0] + 1
     for NameValue in (*ItemNames, *MateNames):
-        if Serializable(NameValue):
+        if IsSerializable(NameValue):
             Listed.append((NextObjectId, NameValue, False))
             NextObjectId += 1
         else:
@@ -3270,7 +3270,7 @@ def ExpectBytes(DataValue: bytes, Offset: int, Literal: bytes) -> int:
     return Offset + len(Literal)
 
 # this definition exists because focused behavior needs one stable owner
-def Serializable(Value: str) -> bool:
+def IsSerializable(Value: str) -> bool:
     return 1 <= len(Value.encode('utf-16le')) // 2 <= 254
 
 # this definition exists because focused behavior needs one stable owner
@@ -4013,9 +4013,9 @@ def RebindIds(FeaturesList: list[_XmlFeature], NamesList: tuple[NativeName, ...]
         MatchesList = RecordsByName.get(FeatureData.name, ())
         MatchingIds = {RecordData.object_id for RecordData in MatchesList if RecordData.object_id is not None}
         if len(MatchingIds) == 1:
-            FeatureData.object_id = MatchingIds.pop()
+            setattr(FeatureData, 'object_id', MatchingIds.pop())
         elif FeatureData.kind.casefold() == 'extrusion' and any((RecordData.object_id == 32 and RecordData.name == 'Boss-Extrude1' for RecordData in NamesList)):
-            FeatureData.object_id = 32
+            setattr(FeatureData, 'object_id', 32)
         else:
             continue
         FeatureData.properties['id'] = str(FeatureData.object_id)
@@ -4070,8 +4070,8 @@ def ParseXml(DataValue: bytes) -> XmlTree.Element:
         raise SldprtFormatError('XML stream contains no document element')
     try:
         return XmlTree.fromstring(DataValue[Start:])
-    except XmlTree.ParseError as exc:
-        raise SldprtFormatError(f'invalid XML metadata stream: {exc}') from exc
+    except XmlTree.ParseError as ErrorInfo:
+        raise SldprtFormatError(f'invalid XML metadata stream: {ErrorInfo}') from ErrorInfo
 
 # this definition exists because focused behavior needs one stable owner
 def ParseDimension(NameValue: str, TextValue: str) -> NativeDimension:
@@ -4413,7 +4413,7 @@ def ReadSketchPlane(DataValue: bytes, Offset: int, EndValue: int) -> NativeSketc
     UAxis = (RowsValue[0], RowsValue[3], RowsValue[6])
     VAxis = (RowsValue[1], RowsValue[4], RowsValue[7])
     Normal = (RowsValue[2], RowsValue[5], RowsValue[8])
-    if not Orthonormal((UAxis, VAxis, Normal)):
+    if not IsOrthonormal((UAxis, VAxis, Normal)):
         return None
     return NativeSketchA(Offset, PlaneObjectId, AxisCode, tuple((Clean(Value) for Value in UAxis)), tuple((Clean(Value) for Value in VAxis)), tuple((Clean(Value) for Value in Normal)), BasisOffset)
 
@@ -4928,8 +4928,8 @@ def CircleProfiles(Markers: list[NativeMarker], Dimensions: tuple[NativeDimensio
         return ((), {})
     Candidates: dict[int, dict[tuple[float, float, float], list[tuple[NativeMarker, NativeMarker, str, float | None]]]] = {}
     for CircleMarker in Centers:
-        FollowingMarker = next((Marker for Marker in Markers if Marker.offset > CircleMarker.offset and Marker.coordinates_mm is not None and (not SamePoint(Marker.coordinates_mm, CircleMarker.coordinates_mm))), None)
-        PrecedingMarker = next((Marker for Marker in reversed(Markers) if Marker.offset < CircleMarker.offset and Marker.coordinates_mm is not None and (not SamePoint(Marker.coordinates_mm, CircleMarker.coordinates_mm))), None)
+        FollowingMarker = next((Marker for Marker in Markers if Marker.offset > CircleMarker.offset and Marker.coordinates_mm is not None and (not IsSamePoint(Marker.coordinates_mm, CircleMarker.coordinates_mm))), None)
+        PrecedingMarker = next((Marker for Marker in reversed(Markers) if Marker.offset < CircleMarker.offset and Marker.coordinates_mm is not None and (not IsSamePoint(Marker.coordinates_mm, CircleMarker.coordinates_mm))), None)
         ChoicePairs = tuple((ItemData for ItemData in ((CircleMarker, FollowingMarker) if FollowingMarker is not None else None, (PrecedingMarker, CircleMarker) if PrecedingMarker is not None and FollowingMarker is None else None) if ItemData is not None))
         for CenterMarker, RimMarker in ChoicePairs:
             RadiusValue = MarkerRadiusMm(CenterMarker, RimMarker)
@@ -4971,7 +4971,7 @@ def CircleProfiles(Markers: list[NativeMarker], Dimensions: tuple[NativeDimensio
     return (tuple(Result), Normalized)
 
 # this definition exists because focused behavior needs one stable owner
-def SamePoint(LeftValue: tuple[float, float], Right: tuple[float, float]) -> bool:
+def IsSamePoint(LeftValue: tuple[float, float], Right: tuple[float, float]) -> bool:
     return MathValue.isclose(LeftValue[0], Right[0], abs_tol=1e-12) and MathValue.isclose(LeftValue[1], Right[1], abs_tol=1e-12)
 
 # this definition exists because focused behavior needs one stable owner
@@ -5172,7 +5172,7 @@ def FindAll(DataValue: bytes, Marker: bytes, Start: int=0, EndValue: int | None=
         Cursor = Offset + 1
 
 # this definition exists because focused behavior needs one stable owner
-def Matches(Value: float, Candidates: list[float]) -> bool:
+def IsMatches(Value: float, Candidates: list[float]) -> bool:
     return any((MathValue.isclose(Value, Choice, abs_tol=1e-06) for Choice in Candidates))
 
 # this definition exists because focused behavior needs one stable owner
@@ -5657,28 +5657,28 @@ globals()['_CURRENT_MARKER'] = KCurrentMarker
 globals()['_CUT_EXTRUDE_FLAGS'] = KCutExtrudeFlags
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalBossChamferObjects'] = CanonicalBoss
+globals()['_CanonicalBossChamferObjects'] = IsonicalBosAMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalBossCircularPatternObjects'] = CanonicalBossA
+globals()['_CanonicalBossCircularPatternObjects'] = IsonicalBosDMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalBossFilletObjects'] = CanonicalBossB
+globals()['_CanonicalBossFilletObjects'] = IsonicalBossMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalBossLinearPatternObjects'] = CanonicalBossC
+globals()['_CanonicalBossLinearPatternObjects'] = IsonicalBosCMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalBossShellObjects'] = CanonicalBossD
+globals()['_CanonicalBossShellObjects'] = IsonicalBosBMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalCutChainObjects'] = CanonicalCut
+globals()['_CanonicalCutChainObjects'] = IsonicalCutMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_CanonicalExtrusionObjects'] = Canonical
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalPadGrooveObjects'] = CanonicalPad
+globals()['_CanonicalPadGrooveObjects'] = IsonicalPadMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_CanonicalPrincipalExtrusion'] = CanonicalA
@@ -5687,13 +5687,13 @@ globals()['_CanonicalPrincipalExtrusion'] = CanonicalA
 globals()['_CanonicalPrincipalSketch'] = CanonicalSketch
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalSingleBossObjects'] = CanonicalSingle
+globals()['_CanonicalSingleBossObjects'] = IsonicalSinAMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalSingleRevolutionObjects'] = CanonicalSinglA
+globals()['_CanonicalSingleRevolutionObjects'] = IsonicalSingMut
 
 # this binding exists because shared behavior needs one stable value
-globals()['_CanonicalTwoFeatureObjects'] = CanonicalTwo
+globals()['_CanonicalTwoFeatureObjects'] = IsonicalTwoMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_CircularPatternBounds'] = CircularPattern
@@ -5759,7 +5759,7 @@ globals()['_FreeCadBossLinearPatternDimensions'] = FreeCadBossC
 globals()['_FreeCadBossShellDimensions'] = FreeCadBossD
 
 # this binding exists because shared behavior needs one stable value
-globals()['_FreeCadBoxObjects'] = FreeCadBox
+globals()['_FreeCadBoxObjects'] = FreeCadBoxMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_FreeCadFeatureDimension'] = FreeCadFeature
@@ -6050,7 +6050,7 @@ globals()['_find_all'] = FindAll
 globals()['_frame_vector'] = FrameVector
 
 # this binding exists because shared behavior needs one stable value
-globals()['_freecad_parameter_matches'] = FreecadParam
+globals()['_freecad_parameter_matches'] = IsFreecadParam
 
 # this binding exists because shared behavior needs one stable value
 globals()['_freecad_single_boss_dimension'] = FreecadSingle
@@ -6101,7 +6101,7 @@ globals()['_marker_semantic'] = MarkerSemantic
 globals()['_marker_start_angle_degrees'] = MarkerStart
 
 # this binding exists because shared behavior needs one stable value
-globals()['_matches'] = Matches
+globals()['_matches'] = IsMatches
 
 # this binding exists because shared behavior needs one stable value
 globals()['_matrix_frame'] = MatrixFrame
@@ -6164,13 +6164,13 @@ globals()['_operation_selections'] = OperationA
 globals()['_operation_selections_after_class'] = OperationAfter
 
 # this binding exists because shared behavior needs one stable value
-globals()['_orthonormal'] = Orthonormal
+globals()['_orthonormal'] = IsOrthonormal
 
 # this binding exists because shared behavior needs one stable value
 globals()['_parameter_dimension'] = ParamDimension
 
 # this binding exists because shared behavior needs one stable value
-globals()['_parameter_value_matches'] = ParamValueA
+globals()['_parameter_value_matches'] = IsParamValueA
 
 # this binding exists because shared behavior needs one stable value
 globals()['_parse_classes'] = ParseClasses
@@ -6242,7 +6242,7 @@ globals()['_rectangle_coordinates'] = Rectangle
 globals()['_reference_plane_ids'] = RefPlaneIds
 
 # this binding exists because shared behavior needs one stable value
-globals()['_repair_plane_object_ids'] = RepairPlaneIds
+globals()['_repair_plane_object_ids'] = RepairPlaneIMut
 
 # this binding exists because shared behavior needs one stable value
 globals()['_resolve_profile_operation'] = ResolveProfile
@@ -6257,7 +6257,7 @@ globals()['_resolved_payload'] = ResolvedPayload
 globals()['_revolution_axis_marker'] = RevolutionAxis
 
 # this binding exists because shared behavior needs one stable value
-globals()['_same_point'] = SamePoint
+globals()['_same_point'] = IsSamePoint
 
 # this binding exists because shared behavior needs one stable value
 globals()['_scalar_owners'] = ScalarOwners
@@ -6272,7 +6272,7 @@ globals()['_scalar_trailer'] = ScalarTrailer
 globals()['_semantic_dimensions'] = Semantic
 
 # this binding exists because shared behavior needs one stable value
-globals()['_serializable_name'] = Serializable
+globals()['_serializable_name'] = IsSerializable
 
 # this binding exists because shared behavior needs one stable value
 globals()['_serialized_string'] = Serialized
@@ -6429,3 +6429,60 @@ globals()['revolution_axis_direction'] = RevolutionAxisA
 
 # this binding exists because shared behavior needs one stable value
 globals()['struct'] = Struct
+
+# this binding exists because shared behavior needs one stable value
+globals()['BuildCadCylObjs'] = BuildCadCylOMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalBoss'] = IsonicalBosAMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalBossA'] = IsonicalBosDMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalBossB'] = IsonicalBossMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalBossC'] = IsonicalBosCMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalBossD'] = IsonicalBosBMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalCut'] = IsonicalCutMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalPad'] = IsonicalPadMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalSinglA'] = IsonicalSingMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalSingle'] = IsonicalSinAMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['CanonicalTwo'] = IsonicalTwoMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['FreeCadBox'] = FreeCadBoxMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['FreecadParam'] = IsFreecadParam
+
+# this binding exists because shared behavior needs one stable value
+globals()['Matches'] = IsMatches
+
+# this binding exists because shared behavior needs one stable value
+globals()['Orthonormal'] = IsOrthonormal
+
+# this binding exists because shared behavior needs one stable value
+globals()['ParamValueA'] = IsParamValueA
+
+# this binding exists because shared behavior needs one stable value
+globals()['RepairPlaneIds'] = RepairPlaneIMut
+
+# this binding exists because shared behavior needs one stable value
+globals()['SamePoint'] = IsSamePoint
+
+# this binding exists because shared behavior needs one stable value
+globals()['Serializable'] = IsSerializable

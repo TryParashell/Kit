@@ -12,7 +12,7 @@ from contextlib import suppress as Suppress
 from dataclasses import replace as Replace
 import hashlib as Hashlib
 import os as OsModule
-from pathlib import Path as PathValue
+from pathlib import Path as FilePath
 import re as RegexLib
 import struct as Struct
 from types import MappingProxyType
@@ -20,7 +20,7 @@ import zlib as ZlibValue
 from convert.adapters.base import AdapterInfo, Destination as Target, ProbeResult, ReadOptions, Source, WriteOptions, WriteResult, is_binary_destination as IsBinaryTarget
 from convert.geometry.Opencascade import decode_ascii_brep as DecodeOpencascadeBrep
 from convert.geometry.Parasolid import decode_brep_model as DecodeParasolidBrep
-from interchange import Body as BodyValue, BrepModel, BrepPayload, CadDocument as CadDoc, CadSource, Configuration as Config, Diagnostic as DiagValue, FeatureKind, FeatureStep, NativeFeatureDefinition, PayloadRole, Provenance, ProvenanceSpan, Severity, SupportPlane, Transform, Vector3 as VectorThree, frozen_mapping as FrozenMapping, filter_document as FilterDoc, infer_capabilities as InferCapabilities, semantic_metadata as SemanticMeta, with_wrapper_metadata as WithWrapperMeta
+from interchange import Body as BodyRecord, BrepModel, BrepPayload, CadDocument as CadDoc, CadSource, Configuration as Config, Diagnostic as DiagnosticInfo, FeatureKind, FeatureStep, NativeFeatureDefinition, PayloadRole, Provenance, ProvenanceSpan, Severity, SupportPlane, Transform, Vector3 as VectorThree, frozen_mapping as FrozenMapping, filter_document as FilterDoc, infer_capabilities as InferCapabilities, semantic_metadata as SemanticMeta, with_wrapper_metadata as WithWrapperMeta
 from convert.adapters.catia.Assembly import decode_product_table as DecodeProductTable, native_product_assembly as NativeProductAsm
 from convert.adapters.catia.Container import Cfv2Archive as CfvTwoArchive, Cfv2Declaration as CfvTwoDecl, Cfv2Directory as CfvTwoFolder, Cfv2FormatError as CfvTwoFormatError, Cfv2Stream as CfvTwoStream, OsmxArchive, OsmxFormatError, OsmxSymbol, append_cfv2_stream as AppendCfvTwoStream, build_cfv2 as BuildCfvTwo, build_declaration as BuildDecl
 from convert.adapters.catia.Format import DOCUMENT_TYPE_BY_SUFFIX as DocTypeBySuffix, INFO as InfoValue, PART_DOCUMENT_TYPE as PartDocType, PRODUCT_DOCUMENT_TYPE as ProductDocType, SUFFIX_BY_DOCUMENT_TYPE as SuffixByDocType
@@ -115,7 +115,7 @@ class CatiaAdapter:
         Manifest = ManifestBytes(Archive)
         if Manifest is not None:
             return EmbeddedDoc(Archive, DataValue, Label, Manifest, Settings)
-        DocType = DocType(Archive, Label)
+        DocType = DetectDocType(Archive, Label)
         Payloads = NativePayloads(Archive, DataValue, DocType, Settings)
         if DocType == ProductDocType:
             AsmValue, AsmDiagnostics = NativeProductAsm(Archive, Label, Settings, Instance.read)
@@ -134,9 +134,9 @@ class CatiaAdapter:
 
     # this definition exists because focused behavior needs one stable owner
     def Supports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
-        if isinstance(Target, (str, PathValue)):
+        if isinstance(Target, (str, FilePath)):
             Expected = KProductSuffix if DocValue.assembly is not None else KPartSuffix
-            return PathValue(Target).suffix.casefold() == Expected
+            return FilePath(Target).suffix.casefold() == Expected
         return IsBinaryTarget(Target)
 
     # this definition exists because focused behavior needs one stable owner
@@ -167,7 +167,7 @@ class CatiaAdapter:
             if Restored != CarrierDoc or Replay(DataValue) != 'native-base-neutral-overlay':
                 raise CatiaAdapterA('CATIA native-base output failed semantic validation')
             PathValue = WriteBytes(Target, DataValue, Settings.overwrite)
-            DiagValue = DiagValue('catia.native_base_preserved', 'The native CATIA streams are byte-exact; changed geometry, history, sketches, and assembly semantics remain neutral Kit data rather than native CATIA feature records.', Severity.WARNING)
+            DiagValue = DiagnosticInfo('catia.native_base_preserved', 'The native CATIA streams are byte-exact; changed geometry, history, sketches, and assembly semantics remain neutral Kit data rather than native CATIA feature records.', Severity.WARNING)
             Requirements = ('referenced CATIA component files',) if DocValue.assembly is not None else ()
             return WriteResult(PathValue, KFormatId, len(DataValue), diagnostics=(*DocValue.diagnostics, DiagValue), metadata=MappingProxyType({'mode': 'native_base_with_neutral_edits', 'compatibility': 'native-base-neutral-overlay', 'vendor_loadable': False, 'native_geometry': False, 'native_history': False, 'native_assembly': False, 'native_self_contained': False, 'native_base_vendor_loadable': True, 'native_base_preserved': True, 'native_streams_preserved': True, 'neutral_geometry_embedded': DocValue.brep is not None or any((Payload.role == PayloadRole.BREP for Payload in DocValue.brep_payloads)), 'neutral_history_embedded': bool(DocValue.parameters or DocValue.support_planes or DocValue.sketches or DocValue.selections or DocValue.feature_timeline or DocValue.bodies), 'neutral_assembly_embedded': DocValue.assembly is not None, 'referenced_files_written': 0, 'container': 'V5_CFV2', 'document_type': DocType, 'native_base_sha256': Hashlib.sha256(NativeBase).hexdigest(), 'manifest_sha256': Hashlib.sha256(CarrierDoc.to_json(indent=None).encode('utf-8')).hexdigest()}), requirements=Requirements, application_usable=False, vendor_loadable=False)
         DataValue = Generated(CarrierDoc, DocType)
@@ -175,7 +175,7 @@ class CatiaAdapter:
         if Restored != CarrierDoc:
             raise CatiaAdapterA('generated CATIA manifest failed semantic validation')
         PathValue = WriteBytes(Target, DataValue, Settings.overwrite)
-        DiagValue = DiagValue('catia.native_feature_graph_embedded', 'Geometry and parametric data are embedded in CFV2 streams; native CATIA feature classes require exact CATIA source preservation.', Severity.WARNING)
+        DiagValue = DiagnosticInfo('catia.native_feature_graph_embedded', 'Geometry and parametric data are embedded in CFV2 streams; native CATIA feature classes require exact CATIA source preservation.', Severity.WARNING)
         Archive = CfvTwoArchive.from_bytes(DataValue)
         return WriteResult(PathValue, KFormatId, len(DataValue), diagnostics=(*DocValue.diagnostics, DiagValue), metadata=MappingProxyType({'mode': 'generated_cfv2', 'compatibility': 'kit-neutral-only', 'vendor_loadable': False, 'native_geometry': False, 'native_history': False, 'native_assembly': False, 'native_self_contained': False, 'referenced_files_written': 0, 'native_feature_graph': False, 'container': 'V5_CFV2', 'document_type': DocType, 'outer_stream_count': len(Archive.outer.streams), 'nested_directory_count': len(Archive.nested), 'manifest_sha256': Hashlib.sha256(CarrierDoc.to_json(indent=None).encode('utf-8')).hexdigest()}), application_usable=False, vendor_loadable=False)
     locals()['info'] = InfoAction
@@ -188,8 +188,8 @@ class CatiaAdapter:
 def SourceBytes(Source: Source) -> tuple[bytes, str]:
     if isinstance(Source, (bytes, bytearray)):
         return (bytes(Source), '<memory>')
-    if isinstance(Source, (str, PathValue)):
-        PathValue = PathValue(Source).expanduser().resolve()
+    if isinstance(Source, (str, FilePath)):
+        PathValue = FilePath(Source).expanduser().resolve()
         return (PathValue.read_bytes(), str(PathValue))
     Reader = getattr(Source, 'read', None)
     if not callable(Reader):
@@ -203,8 +203,8 @@ def SourceBytes(Source: Source) -> tuple[bytes, str]:
     return (bytes(Value), getattr(Source, 'name', '<stream>'))
 
 # this definition exists because focused behavior needs one stable owner
-def WriteBytes(Target: Destination, DataValue: bytes, Overwrite: bool) -> PathValue | None:
-    if not isinstance(Target, (str, PathValue)):
+def WriteBytes(Target: Destination, DataValue: bytes, Overwrite: bool) -> FilePath | None:
+    if not isinstance(Target, (str, FilePath)):
         Writer = getattr(Target, 'write', None)
         if not callable(Writer):
             raise TypeError('CATIA destination must be a path or binary stream')
@@ -212,7 +212,7 @@ def WriteBytes(Target: Destination, DataValue: bytes, Overwrite: bool) -> PathVa
         if Written is not None and Written != len(DataValue):
             raise OSError('short CATIA stream write')
         return None
-    PathValue = PathValue(Target).expanduser().resolve()
+    PathValue = FilePath(Target).expanduser().resolve()
     if PathValue.exists() and (not Overwrite):
         raise FileExistsError(PathValue)
     PathValue.parent.mkdir(parents=True, exist_ok=True)
@@ -374,7 +374,7 @@ def CarrierManifest(DocValue: CadDocument) -> CadDoc:
 def EmbeddedDoc(Archive: Cfv2Archive, DataValue: bytes, Label: str, Manifest: bytes, Settings: ReadOptions) -> CadDoc:
     Embedded = ManifestDoc(Manifest)
     Configurations = Selected(Embedded.configurations, Settings.configuration)
-    DocType = DocType(Archive, Label)
+    DocType = DetectDocType(Archive, Label)
     ExpectedType = ProductDocType if Embedded.assembly is not None else PartDocType
     if DocType != ExpectedType:
         raise CatiaAdapterA(f'{ExpectedType} content cannot be read as {DocType}')
@@ -431,7 +431,7 @@ def IsDeltaPayload(Payload: BrepPayload) -> bool:
     return 'delta' in TextValue or (Payload.data is not None and b'delta' in Payload.data[:8192].lower())
 
 # this definition exists because focused behavior needs one stable owner
-def DocType(Archive: Cfv2Archive, Label: str) -> str:
+def DetectDocType(Archive: Cfv2Archive, Label: str) -> str:
     Declarations = Archive.declarations()
     PartDeclarations = tuple((Value for Value in Declarations if Value.class_name == 'CATPrtCont'))
     ProductDeclarations = tuple((Value for Value in Declarations if Value.class_name == 'CATProdCont'))
@@ -450,7 +450,7 @@ def DocType(Archive: Cfv2Archive, Label: str) -> str:
         if DeclaredRole(Archive, ProductDeclarations[0]) == PayloadRole.FEATURE_HISTORY:
             raise CatiaAdapterA('CATIA container has contradictory document roots')
         Detected = ProductDocType
-    Suffix = PathValue(Label).suffix.casefold()
+    Suffix = FilePath(Label).suffix.casefold()
     FormatType = ''
     FormatStream = Archive.named_stream('Format')
     if FormatStream is not None:
@@ -491,7 +491,7 @@ def DeclaredRole(Archive: Cfv2Archive, DeclValue: Cfv2Declaration) -> PayloadRol
 
 # this definition exists because focused behavior needs one stable owner
 def TargetType(DocValue: CadDocument, Target: Destination) -> str:
-    Suffix = PathValue(Target).suffix.casefold() if isinstance(Target, (str, PathValue)) else KProductSuffix if DocValue.assembly is not None else KPartSuffix
+    Suffix = FilePath(Target).suffix.casefold() if isinstance(Target, (str, FilePath)) else KProductSuffix if DocValue.assembly is not None else KPartSuffix
     if Suffix not in DocTypeBySuffix:
         raise ValueError('CATIA destination must end in .CATPart or .CATProduct')
     if DocValue.assembly is None and Suffix != KPartSuffix:
@@ -542,7 +542,7 @@ def NativeBase(Archive: Cfv2Archive, DocValue: CadDocument) -> bool:
             BaseValue = CfvTwoArchive.from_bytes(Payload.data)
             if ManifestBytes(BaseValue) is not None:
                 continue
-            if DocType(BaseValue, f'candidate.{Payload.schema}') != Payload.schema:
+            if DetectDocType(BaseValue, f'candidate.{Payload.schema}') != Payload.schema:
                 continue
             if OverlayNative(Archive, BaseValue, ManifestMatches[0][1]):
                 Matches += 1
@@ -573,7 +573,7 @@ def OverlayNative(Overlay: Cfv2Archive, BaseValue: Cfv2Archive, ManifestStream: 
     return OverlayStreams == BaseStreams
 
 # this definition exists because focused behavior needs one stable owner
-def NativePartData(Archive: Cfv2Archive, DocType: str) -> tuple[dict[str, object], tuple[SupportPlane, ...], tuple[FeatureStep, ...], tuple[BodyValue, ...], tuple[DiagValue, ...]]:
+def NativePartData(Archive: Cfv2Archive, DocType: str) -> tuple[dict[str, object], tuple[SupportPlane, ...], tuple[FeatureStep, ...], tuple[BodyRecord, ...], tuple[DiagnosticInfo, ...]]:
     if DocType != PartDocType:
         return ({}, (), (), (), ())
     PartDecl, PartStream, PartGraph = DeclaredOsmx(Archive, PayloadRole.FEATURE_HISTORY)
@@ -588,9 +588,9 @@ def NativePartData(Archive: Cfv2Archive, DocType: str) -> tuple[dict[str, object
     Planes = PartPlanes(Archive.outer, PartStream, PartGraph)
     FeatureId = 'catia:feature:graph'
     Feature = FeatureStep(id=FeatureId, name='CATIA native feature graph', kind=FeatureKind.NATIVE, order=0, definition=NativeFeatureDefinition(format_id='catia.v5.osmx', type_id=PartDecl.class_name, object_data=FrozenMapping({'native_payload_id': 'catia:native-feature-graph', 'symbols': PartGraph.values, 'version': PartGraph.version, 'symbol_table_offset': PartGraph.symbol_table_offset, 'symbol_data_offset': PartGraph.symbol_data_offset})), provenance=Stream(Archive.outer, PartStream, f'{PartDecl.class_name}:{PartDecl.ordinal}', 'native-feature-graph'), attributes=FrozenMapping({'native_symbols': NativeSymbols, 'native_payload_id': 'catia:native-feature-graph', 'symbol_count': len(PartGraph.symbols)}))
-    BodyValue = BodyValue(id='catia:body:1', name=BodyName, final_feature_id=FeatureId, provenance=Symbol(Archive.outer, PartStream, BodySymbol, 'body-alias') if BodySymbol is not None else Feature.provenance, attributes=FrozenMapping({'native_class': 'MMAlias', 'native_part_name': InternalPartName}))
+    BodyValue = BodyRecord(id='catia:body:1', name=BodyName, final_feature_id=FeatureId, provenance=Symbol(Archive.outer, PartStream, BodySymbol, 'body-alias') if BodySymbol is not None else Feature.provenance, attributes=FrozenMapping({'native_class': 'MMAlias', 'native_part_name': InternalPartName}))
     MetaValue: dict[str, object] = {'catia.product_name': ProductName, 'catia.internal_part_name': InternalPartName, 'catia.body_name': BodyName, 'catia.native_symbols': NativeSymbols, 'catia.product_symbols': ProductGraph.values, 'catia.part_symbols': PartGraph.values, 'catia.osmx_streams': (OsmxMeta(ProductStream, ProductGraph, ProductDecl.class_name), OsmxMeta(PartStream, PartGraph, PartDecl.class_name))}
-    DiagValue = DiagValue('catia.part.native_graph_retained', 'The exact native feature graph, symbol table, bodies, and reference planes are retained; proprietary object records remain native.', Severity.INFO, entity_id=FeatureId, provenance=Feature.provenance, attributes=FrozenMapping({'native_symbols': NativeSymbols, 'symbol_count': len(PartGraph.symbols)}))
+    DiagValue = DiagnosticInfo('catia.part.native_graph_retained', 'The exact native feature graph, symbol table, bodies, and reference planes are retained; proprietary object records remain native.', Severity.INFO, entity_id=FeatureId, provenance=Feature.provenance, attributes=FrozenMapping({'native_symbols': NativeSymbols, 'symbol_count': len(PartGraph.symbols)}))
     return (MetaValue, Planes, (Feature,), (BodyValue,), (DiagValue,))
 
 # this definition exists because focused behavior needs one stable owner
@@ -802,7 +802,7 @@ def NativeBaseA(DocValue: CadDocument, DocType: str) -> bytes | None:
             Archive = CfvTwoArchive.from_bytes(DataValue)
             if ManifestBytes(Archive) is not None:
                 continue
-            if DocType(Archive, f'candidate.{DocType}') != DocType:
+            if DetectDocType(Archive, f'candidate.{DocType}') != DocType:
                 continue
         except (CatiaAdapterA, CfvTwoFormatError, TypeError, ValueError):
             continue
@@ -881,7 +881,7 @@ def SavedReplay(DocValue: CadDocument, NativeDoc: BrepPayload, Binding: BrepPayl
 def NativePayload(DocValue: CadDocument, DataValue: bytes, DocType: str, NativeDoc: BrepPayload, Binding: BrepPayload) -> bool:
     try:
         Archive = CfvTwoArchive.from_bytes(DataValue)
-        if DocType(Archive, f'candidate.{DocType}') != DocType:
+        if DetectDocType(Archive, f'candidate.{DocType}') != DocType:
             return False
         if not NativeDocA(NativeDoc, Binding, DataValue):
             return False
@@ -959,7 +959,7 @@ def WriteCatia(DocValue: CadDocument, Target: Destination, *, Overwrite: bool=Fa
     return CatiaAdapter().write(DocValue, Target, WriteOptions(overwrite=Overwrite, validate=Validate, values=FrozenMapping({'allow_non_native': AllowNonNative})))
 
 # this binding exists because shared behavior needs one stable value
-globals()['Body'] = BodyValue
+globals()['Body'] = BodyRecord
 
 # this binding exists because shared behavior needs one stable value
 globals()['CadDocument'] = CadDoc
@@ -992,7 +992,7 @@ globals()['DOCUMENT_TYPE_BY_SUFFIX'] = DocTypeBySuffix
 globals()['Destination'] = Target
 
 # this binding exists because shared behavior needs one stable value
-globals()['Diagnostic'] = DiagValue
+globals()['Diagnostic'] = DiagnosticInfo
 
 # this binding exists because shared behavior needs one stable value
 globals()['INFO'] = InfoValue
@@ -1004,7 +1004,7 @@ globals()['PART_DOCUMENT_TYPE'] = PartDocType
 globals()['PRODUCT_DOCUMENT_TYPE'] = ProductDocType
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['SUFFIX_BY_DOCUMENT_TYPE'] = SuffixByDocType
@@ -1103,7 +1103,7 @@ globals()['_digest_document'] = DigestDoc
 globals()['_document_digest'] = DocDigest
 
 # this binding exists because shared behavior needs one stable value
-globals()['_document_type'] = DocType
+globals()['_document_type'] = DetectDocType
 
 # this binding exists because shared behavior needs one stable value
 globals()['_embedded_document'] = EmbeddedDoc

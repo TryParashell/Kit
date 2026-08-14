@@ -316,10 +316,11 @@ class SketchArc:
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def FullCircle(Instance) -> bool:
+    def IsFullCircle(Instance) -> bool:
         return Instance.sweep_angle_degrees == KFullCircleDegrees
     locals()['centre_mm'] = CentreMm
-    locals()['full_circle'] = FullCircle
+    locals()['full_circle'] = IsFullCircle
+    locals()['FullCircle'] = IsFullCircle
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
@@ -362,7 +363,7 @@ class SweptArc:
 
     # this definition exists because focused behavior needs one stable owner
     @property
-    def Consistent(Instance) -> bool:
+    def IsConsistent(Instance) -> bool:
         Radius = Instance.radius_mm
         if Radius <= KMinimumRadiusMm:
             return False
@@ -389,7 +390,7 @@ class SweptArc:
             SpanValue -= KFullCircleDegrees
         return SpanValue
     locals()['centre_mm'] = CentreMm
-    locals()['consistent'] = Consistent
+    locals()['consistent'] = IsConsistent
     locals()['end_angle_degrees'] = EndAngleDegrees
     locals()['end_mm'] = EndMm
     locals()['end_radius_mm'] = EndRadiusMm
@@ -397,6 +398,7 @@ class SweptArc:
     locals()['start_angle_degrees'] = StartAngle
     locals()['start_mm'] = StartMm
     locals()['sweep_angle_degrees'] = SweepAngle
+    locals()['Consistent'] = IsConsistent
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
@@ -1146,26 +1148,26 @@ def VerifyFeatures(Patched: bytes, Features: tuple[FeatureLayout, ...], Edits: M
         if After.feature_id != Before.feature_id or After.kind != Before.kind or After.depth_offset != Before.depth_offset or (After.angle_offset != Before.angle_offset) or (tuple((Point.offset for Point in After.points)) != tuple((Point.offset for Point in Before.points))) or (tuple((ArcValue.centre_offset for ArcValue in After.arcs)) != tuple((ArcValue.centre_offset for ArcValue in Before.arcs))) or (tuple((ArcValue.centre_offset for ArcValue in After.swept_arcs)) != tuple((ArcValue.centre_offset for ArcValue in Before.swept_arcs))) or (After.SketchDimensionOffsets != Before.SketchDimensionOffsets):
             raise SldprtFormatError(f'patched feature {Ordinal} does not relocate to the same layout')
         if EditValue.swept_arc_centres_mm is not None:
-            if not Matches(tuple((ArcValue.centre_mm for ArcValue in After.swept_arcs)), tuple(EditValue.swept_arc_centres_mm)):
+            if not IsMatches(tuple((ArcValue.centre_mm for ArcValue in After.swept_arcs)), tuple(EditValue.swept_arc_centres_mm)):
                 raise SldprtFormatError(f'patched feature {Ordinal} swept arc centres do not verify')
             for Index, ArcValue in enumerate(After.swept_arcs):
                 if not ArcValue.consistent:
                     raise SldprtFormatError(f'patched feature {Ordinal} swept arc {Index} endpoints are not equidistant from its centre')
         if EditValue.SketchDimensionsMm is not None and (not all((MathValue.isclose(ActualValue, ExpectedValue, rel_tol=1e-12, abs_tol=1e-09) for ActualValue, ExpectedValue in zip(After.SketchDimensionsMm, EditValue.SketchDimensionsMm, strict=True)))):
             raise SldprtFormatError(f'patched feature {Ordinal} sketch dimensions do not verify')
-        if EditValue.corners_mm is not None and (not Matches(After.corners_mm, tuple(EditValue.corners_mm))):
+        if EditValue.corners_mm is not None and (not IsMatches(After.corners_mm, tuple(EditValue.corners_mm))):
             raise SldprtFormatError(f'patched feature {Ordinal} corners do not verify')
         if EditValue.radii_mm is not None:
             for Index, (ArcValue, RadiusMm) in enumerate(zip(After.arcs, EditValue.radii_mm, strict=True)):
                 VerifyArc(ArcValue, Before.arcs[Index], RadiusMm, Index)
-        if EditValue.arc_centres_mm is not None and (not Matches(tuple((ArcValue.centre_mm for ArcValue in After.arcs)), tuple(EditValue.arc_centres_mm))):
+        if EditValue.arc_centres_mm is not None and (not IsMatches(tuple((ArcValue.centre_mm for ArcValue in After.arcs)), tuple(EditValue.arc_centres_mm))):
             raise SldprtFormatError(f'patched feature {Ordinal} arc centres do not verify')
         if EditValue.angle_radians is not None and (After.angle_radians is None or not MathValue.isclose(After.angle_radians, EditValue.angle_radians, rel_tol=1e-12, abs_tol=1e-12)):
             raise SldprtFormatError(f'patched feature {Ordinal} angle does not verify')
         if EditValue.depth_mm is not None:
             if After.depth_mm is None or not MathValue.isclose(After.depth_mm, EditValue.depth_mm, rel_tol=1e-12, abs_tol=1e-09):
                 raise SldprtFormatError(f'patched feature {Ordinal} depth does not verify')
-            if EditValue.update_depth_copies and (not DepthCopies(Patched, After, EditValue.depth_mm)):
+            if EditValue.update_depth_copies and (not IsDepthCopies(Patched, After, EditValue.depth_mm)):
                 raise SldprtFormatError(f'patched feature {Ordinal} depth copies do not verify')
         if EditValue.reversed is not None:
             if After.reversed is not bool(EditValue.reversed):
@@ -1177,7 +1179,7 @@ def VerifyFeatures(Patched: bytes, Features: tuple[FeatureLayout, ...], Edits: M
             raise SldprtFormatError(f'patched feature {Ordinal} end condition does not verify')
 
 # this definition exists because focused behavior needs one stable owner
-def DepthCopies(Patched: bytes, Feature: FeatureLayout, DepthMm: float) -> bool:
+def IsDepthCopies(Patched: bytes, Feature: FeatureLayout, DepthMm: float) -> bool:
     for Offset, SignValue in zip(Feature.depth_copy_offsets, KDepthCopySigns, strict=False):
         Value = ReadDouble(Patched, Offset)
         if Value is None or not MathValue.isclose(Value * KMetres, SignValue * DepthMm, rel_tol=1e-12, abs_tol=1e-09):
@@ -1194,7 +1196,7 @@ def ReadDouble(BlobValue: bytes, Offset: int) -> float | None:
     return Value
 
 # this definition exists because focused behavior needs one stable owner
-def Matches(Actual: tuple[tuple[float, float], ...], Expected: tuple[tuple[float, float], ...]) -> bool:
+def IsMatches(Actual: tuple[tuple[float, float], ...], Expected: tuple[tuple[float, float], ...]) -> bool:
     if len(Actual) != len(Expected):
         return False
     return all((MathValue.isclose(LeftValue, Right, rel_tol=1e-12, abs_tol=1e-09) for PairValue, Target in zip(Actual, Expected, strict=True) for LeftValue, Right in zip(PairValue, Target, strict=True)))
@@ -1458,7 +1460,7 @@ globals()['_SketchScalarsInRange'] = SketchScalarsIn
 globals()['_arcs_in_range'] = ArcsInRange
 
 # this binding exists because shared behavior needs one stable value
-globals()['_depth_copies_verify'] = DepthCopies
+globals()['_depth_copies_verify'] = IsDepthCopies
 
 # this binding exists because shared behavior needs one stable value
 globals()['_dimension_scalars'] = Dimension
@@ -1473,7 +1475,7 @@ globals()['_flag_offset'] = FlagOffset
 globals()['_last_node_in_range'] = LastNodeInRange
 
 # this binding exists because shared behavior needs one stable value
-globals()['_matches'] = Matches
+globals()['_matches'] = IsMatches
 
 # this binding exists because shared behavior needs one stable value
 globals()['_name_records'] = NameRecords
@@ -1597,3 +1599,9 @@ globals()['swept_arcs'] = SweptArcs
 
 # this binding exists because shared behavior needs one stable value
 globals()['tree_nodes'] = TreeNodesA
+
+# this binding exists because shared behavior needs one stable value
+globals()['DepthCopies'] = IsDepthCopies
+
+# this binding exists because shared behavior needs one stable value
+globals()['Matches'] = IsMatches
