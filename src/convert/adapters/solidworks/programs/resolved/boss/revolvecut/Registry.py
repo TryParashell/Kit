@@ -312,8 +312,14 @@ KMethodPrograms = (
 )
 
 
-# compatibility tables preserve every established public import after decomposition
-FieldOwners, ResolvedOps = BuildProgram(
+# composed tables stay immutable because generated registries expose stable format facts
+KFieldOwners, KResolvedOps = BuildProgram(
     KMethodPrograms,
     "ResolvedFeatures",
 )
+
+# compatibility binding preserves its established public import after decomposition
+globals()["FieldOwners"] = KFieldOwners
+
+# compatibility binding preserves its established public import after decomposition
+globals()["ResolvedOps"] = KResolvedOps

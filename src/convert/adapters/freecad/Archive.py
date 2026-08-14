@@ -1069,7 +1069,7 @@ def NativeExpr(Instance, ItemValue: Mapping[str, Any]) -> str | None:
     Identifiers = set(RegexLib.findall("[A-Za-z_][A-Za-z0-9_]*", Translated))
     if Identifiers - AllowedNames:
         return None
-    if RegexLib.search("[^A-Za-z0-9_.,+\-*/%<>=!&|() \t]", Translated):
+    if RegexLib.search(r"[^A-Za-z0-9_.,+\-*/%<>=!&|() \t]", Translated):
         return None
     return Translated
 
@@ -1349,8 +1349,10 @@ def MergeNamedMut(Properties: list[ET.Element], Replacement: ET.Element) -> None
     Properties.append(Replacement)
 
 
-# this definition exists because focused behavior needs one stable owner
-def NativeGeomElem(Entity: Mapping[str, Any]) -> XmlTree.Element | None:
+# this definition exists because native geometry can arrive through either carrier representation
+def NativeGeomData(
+    Entity: Mapping[str, Any],
+) -> tuple[str, Mapping[str, Any], XmlTree.Element | None, bool]:
     KindValue = TextAction(EnumAction(Entity.get("kind"))).lower()
     Attributes = Entity.get("attributes", {})
     GeomValue = Entity.get("geometry", {})
@@ -1365,393 +1367,526 @@ def NativeGeomElem(Entity: Mapping[str, Any]) -> XmlTree.Element | None:
         (KeyValue in GeomValue for KeyValue in ("format_id", "entity_type", "data"))
     )
     if ElemValue is None and NativeGeom:
-        FormatId = TextAction(GeomValue.get("format_id")).casefold()
+        SourceFormat = TextAction(GeomValue.get("format_id")).casefold()
         EntityType = TextAction(GeomValue.get("entity_type"))
         Choice = ElemFromData(GeomValue.get("data"))
         if (
-            FormatId == FormatId
+            SourceFormat == FormatId
             and Choice is not None
             and (Choice.tag == "Geometry")
             and (Choice.get("type", "") == EntityType)
         ):
             ElemValue = Choice
+    return (KindValue, GeomValue, ElemValue, NativeGeom)
+
+
+# this definition exists because geometry carriers must match the declared neutral kind
+def IsValidGeom(KindValue: str, ElemValue: XmlTree.Element | None) -> bool:
     if ElemValue is None or ElemValue.tag != "Geometry":
-        return None
+        return False
     ExpectedTypeIds = GeomTypeIdsByKind.get(KindValue)
     if ExpectedTypeIds is not None and ElemValue.get("type", "") not in ExpectedTypeIds:
-        return None
-    if KindValue != "native" and ExpectedTypeIds is None:
-        return None
-    if not NativeGeom and KindValue == "line":
-        Value = ElemValue.find("./LineSegment")
-        if Value is not None:
-            Start = PointTwo(GeomValue.get("start"))
-            EndValue = PointTwo(GeomValue.get("end"))
-            Value.set("StartX", FmtAction(Start[0]))
-            Value.set("StartY", FmtAction(Start[1]))
-            Value.set("EndX", FmtAction(EndValue[0]))
-            Value.set("EndY", FmtAction(EndValue[1]))
-    elif not NativeGeom and KindValue in CircularGeomKinds:
-        Value = ElemValue.find("./Circle" if KindValue == "circle" else "./ArcOfCircle")
-        if Value is not None:
-            Center = PointTwo(GeomValue.get("center"))
-            Value.set("CenterX", FmtAction(Center[0]))
-            Value.set("CenterY", FmtAction(Center[1]))
-            Value.set("Radius", FmtAction(GeomValue.get("radius")))
-            if KindValue == "arc":
-                Value.set("StartAngle", FmtAction(GeomValue.get("start_angle")))
-                Value.set("EndAngle", FmtAction(GeomValue.get("end_angle")))
-    elif not NativeGeom and KindValue == "point":
-        Value = ElemValue.find("./GeomPoint")
-        if Value is None:
-            Value = ElemValue.find("./Point")
-        if Value is not None:
-            Point = PointTwo(GeomValue.get("point"))
-            Value.set("X", FmtAction(Point[0]))
-            Value.set("Y", FmtAction(Point[1]))
-    elif not NativeGeom and KindValue == "ellipse":
-        Value = ElemValue.find("./Ellipse")
-        if Value is not None:
-            Center = PointTwo(GeomValue.get("center"))
-            MajorAxis = PointTwo(GeomValue.get("major_axis"))
-            Value.set("CenterX", FmtAction(Center[0]))
-            Value.set("CenterY", FmtAction(Center[1]))
-            if Value.get("AngleXU") is not None:
-                Value.set(
-                    "AngleXU", FmtAction(MathValue.atan2(MajorAxis[1], MajorAxis[0]))
-                )
-            else:
-                Value.set("MajorAxisX", FmtAction(MajorAxis[0]))
-                Value.set("MajorAxisY", FmtAction(MajorAxis[1]))
-            Value.set("MajorRadius", FmtAction(GeomValue.get("major_radius")))
-            Value.set("MinorRadius", FmtAction(GeomValue.get("minor_radius")))
-    elif not NativeGeom and KindValue in {"arc_ellipse", "hyperbola", "arc_hyperbola"}:
-        TagValue = {
-            "arc_ellipse": "ArcOfEllipse",
-            "hyperbola": "Hyperbola",
-            "arc_hyperbola": "ArcOfHyperbola",
-        }[KindValue]
-        Value = ElemValue.find(f"./{TagValue}")
-        if Value is not None:
-            Center = PointTwo(GeomValue.get("center"))
-            MajorAxis = PointTwo(GeomValue.get("major_axis"))
-            Value.set("CenterX", FmtAction(Center[0]))
-            Value.set("CenterY", FmtAction(Center[1]))
-            Value.set("AngleXU", FmtAction(MathValue.atan2(MajorAxis[1], MajorAxis[0])))
-            Value.set("MajorRadius", FmtAction(GeomValue.get("major_radius")))
-            Value.set("MinorRadius", FmtAction(GeomValue.get("minor_radius")))
-            if KindValue != "hyperbola":
-                Value.set("StartAngle", FmtAction(GeomValue.get("start_angle")))
-                Value.set("EndAngle", FmtAction(GeomValue.get("end_angle")))
-    elif not NativeGeom and KindValue in {"parabola", "arc_parabola"}:
-        TagValue = "Parabola" if KindValue == "parabola" else "ArcOfParabola"
-        Value = ElemValue.find(f"./{TagValue}")
-        if Value is not None:
-            Center = PointTwo(GeomValue.get("center"))
-            AxisValue = PointTwo(GeomValue.get("axis"))
-            Value.set("CenterX", FmtAction(Center[0]))
-            Value.set("CenterY", FmtAction(Center[1]))
-            Value.set("AngleXU", FmtAction(MathValue.atan2(AxisValue[1], AxisValue[0])))
-            Value.set("Focal", FmtAction(GeomValue.get("focal_length")))
-            if KindValue == "arc_parabola":
-                Value.set("StartAngle", FmtAction(GeomValue.get("start_angle")))
-                Value.set("EndAngle", FmtAction(GeomValue.get("end_angle")))
-    elif not NativeGeom and KindValue in SplineGeomKinds:
-        Value = ElemValue.find(
-            "./BezierCurve" if KindValue == "bezier" else "./BSplineCurve"
+        return False
+    return KindValue == "native" or ExpectedTypeIds is not None
+
+
+# this definition exists because line carriers must reflect current neutral endpoints
+def PatchLineMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+    Value = ElemValue.find("./LineSegment")
+    if Value is None:
+        return
+    Start = PointTwo(GeomValue.get("start"))
+    EndValue = PointTwo(GeomValue.get("end"))
+    Value.set("StartX", FmtAction(Start[0]))
+    Value.set("StartY", FmtAction(Start[1]))
+    Value.set("EndX", FmtAction(EndValue[0]))
+    Value.set("EndY", FmtAction(EndValue[1]))
+
+
+# this definition exists because circular carriers must reflect current neutral dimensions
+def PatchCircleMut(
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    Value = ElemValue.find("./Circle" if KindValue == "circle" else "./ArcOfCircle")
+    if Value is None:
+        return
+    Center = PointTwo(GeomValue.get("center"))
+    Value.set("CenterX", FmtAction(Center[0]))
+    Value.set("CenterY", FmtAction(Center[1]))
+    Value.set("Radius", FmtAction(GeomValue.get("radius")))
+    if KindValue == "arc":
+        Value.set("StartAngle", FmtAction(GeomValue.get("start_angle")))
+        Value.set("EndAngle", FmtAction(GeomValue.get("end_angle")))
+
+
+# this definition exists because point carriers must reflect the current neutral location
+def PatchPointMut(ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+    Value = ElemValue.find("./GeomPoint")
+    if Value is None:
+        Value = ElemValue.find("./Point")
+    if Value is None:
+        return
+    Point = PointTwo(GeomValue.get("point"))
+    Value.set("X", FmtAction(Point[0]))
+    Value.set("Y", FmtAction(Point[1]))
+
+
+# this definition exists because ellipse carriers must reflect current neutral axes
+def PatchEllipseMut(
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any]
+) -> None:
+    Value = ElemValue.find("./Ellipse")
+    if Value is None:
+        return
+    Center = PointTwo(GeomValue.get("center"))
+    MajorAxis = PointTwo(GeomValue.get("major_axis"))
+    Value.set("CenterX", FmtAction(Center[0]))
+    Value.set("CenterY", FmtAction(Center[1]))
+    if Value.get("AngleXU") is not None:
+        Value.set("AngleXU", FmtAction(MathValue.atan2(MajorAxis[1], MajorAxis[0])))
+    else:
+        Value.set("MajorAxisX", FmtAction(MajorAxis[0]))
+        Value.set("MajorAxisY", FmtAction(MajorAxis[1]))
+    Value.set("MajorRadius", FmtAction(GeomValue.get("major_radius")))
+    Value.set("MinorRadius", FmtAction(GeomValue.get("minor_radius")))
+
+
+# this definition exists because conic carriers must reflect current neutral parameters
+def PatchConicMut(
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    TagValue = {
+        "arc_ellipse": "ArcOfEllipse",
+        "hyperbola": "Hyperbola",
+        "arc_hyperbola": "ArcOfHyperbola",
+    }[KindValue]
+    Value = ElemValue.find(f"./{TagValue}")
+    if Value is None:
+        return
+    Center = PointTwo(GeomValue.get("center"))
+    MajorAxis = PointTwo(GeomValue.get("major_axis"))
+    Value.set("CenterX", FmtAction(Center[0]))
+    Value.set("CenterY", FmtAction(Center[1]))
+    Value.set("AngleXU", FmtAction(MathValue.atan2(MajorAxis[1], MajorAxis[0])))
+    Value.set("MajorRadius", FmtAction(GeomValue.get("major_radius")))
+    Value.set("MinorRadius", FmtAction(GeomValue.get("minor_radius")))
+    if KindValue != "hyperbola":
+        Value.set("StartAngle", FmtAction(GeomValue.get("start_angle")))
+        Value.set("EndAngle", FmtAction(GeomValue.get("end_angle")))
+
+
+# this definition exists because parabola carriers must reflect current neutral parameters
+def PatchParabMut(
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    TagValue = "Parabola" if KindValue == "parabola" else "ArcOfParabola"
+    Value = ElemValue.find(f"./{TagValue}")
+    if Value is None:
+        return
+    Center = PointTwo(GeomValue.get("center"))
+    AxisValue = PointTwo(GeomValue.get("axis"))
+    Value.set("CenterX", FmtAction(Center[0]))
+    Value.set("CenterY", FmtAction(Center[1]))
+    Value.set("AngleXU", FmtAction(MathValue.atan2(AxisValue[1], AxisValue[0])))
+    Value.set("Focal", FmtAction(GeomValue.get("focal_length")))
+    if KindValue == "arc_parabola":
+        Value.set("StartAngle", FmtAction(GeomValue.get("start_angle")))
+        Value.set("EndAngle", FmtAction(GeomValue.get("end_angle")))
+
+
+# this definition exists because spline poles need one canonical weighted encoding
+def SplinePoints(
+    GeomValue: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], list[float]]:
+    Points = Items(GeomValue.get("control_points", []))
+    Weights = [Number(Value, 1.0) for Value in Sequence(GeomValue.get("weights", []))]
+    if len(Weights) != len(Points):
+        Weights = [1.0] * len(Points)
+    return (Points, Weights)
+
+
+# this definition exists because spline knot defaults must remain deterministic
+def SplineKnots(
+    GeomValue: Mapping[str, Any], PointCount: int
+) -> tuple[int, list[float], list[int]]:
+    Degree = max(
+        1, min(int(Number(GeomValue.get("degree"), 3)), max(1, PointCount - 1))
+    )
+    Knots = [Number(Value) for Value in Sequence(GeomValue.get("knots", []))]
+    Multiplicities = [
+        int(Number(Value, 1))
+        for Value in Sequence(GeomValue.get("multiplicities", []))
+    ]
+    if not Knots or len(Multiplicities) != len(Knots):
+        InteriorCount = max(0, PointCount - Degree - 1)
+        Knots = [float(Value) for Value in range(InteriorCount + 2)]
+        Multiplicities = [Degree + 1] + [1] * InteriorCount + [Degree + 1]
+    return (Degree, Knots, Multiplicities)
+
+
+# this definition exists because spline poles must retain their original ordering
+def AddPolesMut(
+    Curve: XmlTree.Element, Points: list[dict[str, Any]], Weights: list[float]
+) -> None:
+    for Point, Weight in zip(Points, Weights, strict=True):
+        FirstCoord, SecondCoord = PointTwo(Point)
+        XmlTree.SubElement(
+            Curve,
+            "Pole",
+            {
+                "X": FmtAction(FirstCoord),
+                "Y": FmtAction(SecondCoord),
+                "Z": FmtAction(0),
+                "Weight": FmtAction(Weight),
+            },
         )
-        if Value is not None:
-            Points = Items(GeomValue.get("control_points", []))
-            Weights = [
-                Number(ItemValue, 1.0)
-                for ItemValue in Sequence(GeomValue.get("weights", []))
-            ]
-            if len(Weights) != len(Points):
-                Weights = [1.0] * len(Points)
-            Value[:] = [Child for Child in Value if Child.tag not in SplineControlTags]
-            Value.set("PolesCount", str(len(Points)))
-            for Point, Weight in zip(Points, Weights, strict=True):
-                FirstCoord, SecondCoord = PointTwo(Point)
-                XmlTree.SubElement(
-                    Value,
-                    "Pole",
-                    {
-                        "X": FmtAction(FirstCoord),
-                        "Y": FmtAction(SecondCoord),
-                        "Z": FmtAction(0),
-                        "Weight": FmtAction(Weight),
-                    },
-                )
-            if KindValue == "spline":
-                Degree = max(
-                    1,
-                    min(
-                        int(Number(GeomValue.get("degree"), 3)), max(1, len(Points) - 1)
-                    ),
-                )
-                Knots = [
-                    Number(ItemValue)
-                    for ItemValue in Sequence(GeomValue.get("knots", []))
-                ]
-                Multiplicities = [
-                    int(Number(ItemValue, 1))
-                    for ItemValue in Sequence(GeomValue.get("multiplicities", []))
-                ]
-                if not Knots or len(Multiplicities) != len(Knots):
-                    InteriorCount = max(0, len(Points) - Degree - 1)
-                    Knots = [float(ItemValue) for ItemValue in range(InteriorCount + 2)]
-                    Multiplicities = [Degree + 1] + [1] * InteriorCount + [Degree + 1]
-                Value.set("KnotsCount", str(len(Knots)))
-                Value.set("Degree", str(Degree))
-                Value.set("IsPeriodic", "1" if bool(GeomValue.get("periodic")) else "0")
-                for KnotValue, Multiplicity in zip(Knots, Multiplicities, strict=True):
-                    XmlTree.SubElement(
-                        Value,
-                        "Knot",
-                        {"Value": FmtAction(KnotValue), "Mult": str(Multiplicity)},
-                    )
+
+
+# this definition exists because spline knots must retain their original ordering
+def AddKnotsMut(
+    Curve: XmlTree.Element, Knots: list[float], Multiplicities: list[int]
+) -> None:
+    for KnotValue, Multiplicity in zip(Knots, Multiplicities, strict=True):
+        XmlTree.SubElement(
+            Curve,
+            "Knot",
+            {"Value": FmtAction(KnotValue), "Mult": str(Multiplicity)},
+        )
+
+
+# this definition exists because spline carriers must reflect current neutral controls
+def PatchSplineMut(
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    Curve = ElemValue.find(
+        "./BezierCurve" if KindValue == "bezier" else "./BSplineCurve"
+    )
+    if Curve is None:
+        return
+    Points, Weights = SplinePoints(GeomValue)
+    Curve[:] = [Child for Child in Curve if Child.tag not in SplineControlTags]
+    Curve.set("PolesCount", str(len(Points)))
+    AddPolesMut(Curve, Points, Weights)
+    if KindValue != "spline":
+        return
+    Degree, Knots, Multiplicities = SplineKnots(GeomValue, len(Points))
+    Curve.set("KnotsCount", str(len(Knots)))
+    Curve.set("Degree", str(Degree))
+    Curve.set("IsPeriodic", "1" if bool(GeomValue.get("periodic")) else "0")
+    AddKnotsMut(Curve, Knots, Multiplicities)
+
+
+# this definition exists because carrier patching dispatches each geometry family explicitly
+def PatchNativeMut(
+    ElemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    if KindValue == "line":
+        PatchLineMut(ElemValue, GeomValue)
+    elif KindValue in CircularGeomKinds:
+        PatchCircleMut(ElemValue, GeomValue, KindValue)
+    elif KindValue == "point":
+        PatchPointMut(ElemValue, GeomValue)
+    elif KindValue == "ellipse":
+        PatchEllipseMut(ElemValue, GeomValue)
+    elif KindValue in {"arc_ellipse", "hyperbola", "arc_hyperbola"}:
+        PatchConicMut(ElemValue, GeomValue, KindValue)
+    elif KindValue in {"parabola", "arc_parabola"}:
+        PatchParabMut(ElemValue, GeomValue, KindValue)
+    elif KindValue in SplineGeomKinds:
+        PatchSplineMut(ElemValue, GeomValue, KindValue)
+
+
+# this definition exists because native sketch geometry must preserve valid vendor markup
+def NativeGeomElem(Entity: Mapping[str, Any]) -> XmlTree.Element | None:
+    KindValue, GeomValue, ElemValue, NativeGeom = NativeGeomData(Entity)
+    if not IsValidGeom(KindValue, ElemValue):
+        return None
+    assert ElemValue is not None
+    if not NativeGeom:
+        PatchNativeMut(ElemValue, GeomValue, KindValue)
     Construction = ElemValue.find("./Construction")
     if Construction is not None:
         Construction.set("value", "1" if bool(Entity.get("construction")) else "0")
     return ElemValue
 
 
-# this definition exists because focused behavior needs one stable owner
-def GeomProp(
-    Sketch: Mapping[str, Any],
-) -> tuple[XmlTree.Element, dict[str, int], list[dict[str, AnyValue]]]:
-    Entities = Items(Sketch.get("entities", []))
-    ClosedEntityIds = {
+# this definition exists because profile geometry needs a reusable closed membership index
+def ClosedGeomIds(Sketch: Mapping[str, Any]) -> set[str]:
+    return {
         TextAction(EntityId)
         for Profile in Sequence(Sketch.get("closed_profile_entity_ids", []))
         for EntityId in Sequence(Profile)
         if TextAction(EntityId)
     }
+
+
+# this definition exists because unsupported sketch geometry needs structured transfer evidence
+def GeomDiagnostic(
+    EntityId: str, KindValue: str, GeomType: str, TypeId: str | None
+) -> dict[str, AnyValue]:
+    ExpectedType = NeutralGeomTypeByKind.get(KindValue)
+    SourceOpaque = GeomType == "NativeGeometry" or bool(
+        TypeId is not None and GeomType and GeomType != ExpectedType
+    )
+    return {
+        "carrier_reason": "source_opaque" if SourceOpaque else "writer_unimplemented",
+        "code": "freecad.sketch_geometry_carrier_only",
+        "entity_id": EntityId,
+        "kind": KindValue,
+        "mode": "carrier_only",
+        "reason": "native FreeCAD geometry data is unavailable",
+        "severity": "warning",
+    }
+
+
+# this definition exists because neutral line geometry needs canonical freecad coordinates
+def AddLineGeomMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+    Start = PointTwo(GeomValue.get("start"))
+    EndValue = PointTwo(GeomValue.get("end"))
+    XmlTree.SubElement(
+        ItemValue,
+        "LineSegment",
+        {
+            "StartX": FmtAction(Start[0]),
+            "StartY": FmtAction(Start[1]),
+            "StartZ": FmtAction(0),
+            "EndX": FmtAction(EndValue[0]),
+            "EndY": FmtAction(EndValue[1]),
+            "EndZ": FmtAction(0),
+        },
+    )
+
+
+# this definition exists because neutral circle geometry needs canonical freecad coordinates
+def AddCircleMut(
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    Center = PointTwo(GeomValue.get("center"))
+    Attributes = {
+        "CenterX": FmtAction(Center[0]),
+        "CenterY": FmtAction(Center[1]),
+        "CenterZ": FmtAction(0),
+        "NormalX": FmtAction(0),
+        "NormalY": FmtAction(0),
+        "NormalZ": FmtAction(1),
+        "AngleXU": FmtAction(0),
+        "Radius": FmtAction(GeomValue.get("radius")),
+    }
+    if KindValue == "arc":
+        Attributes["StartAngle"] = FmtAction(GeomValue.get("start_angle"))
+        Attributes["EndAngle"] = FmtAction(GeomValue.get("end_angle"))
+    XmlTree.SubElement(
+        ItemValue, "ArcOfCircle" if KindValue == "arc" else "Circle", Attributes
+    )
+
+
+# this definition exists because neutral ellipse geometry needs canonical freecad coordinates
+def AddEllipseMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+    Center = PointTwo(GeomValue.get("center"))
+    MajorAxis = PointTwo(GeomValue.get("major_axis"))
+    XmlTree.SubElement(
+        ItemValue,
+        "Ellipse",
+        {
+            "CenterX": FmtAction(Center[0]),
+            "CenterY": FmtAction(Center[1]),
+            "CenterZ": FmtAction(0),
+            "NormalX": FmtAction(0),
+            "NormalY": FmtAction(0),
+            "NormalZ": FmtAction(1),
+            "MajorRadius": FmtAction(GeomValue.get("major_radius")),
+            "MinorRadius": FmtAction(GeomValue.get("minor_radius")),
+            "AngleXU": FmtAction(MathValue.atan2(MajorAxis[1], MajorAxis[0])),
+        },
+    )
+
+
+# this definition exists because neutral conic geometry needs canonical freecad coordinates
+def AddConicGeomMut(
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    Center = PointTwo(GeomValue.get("center"))
+    MajorAxis = PointTwo(GeomValue.get("major_axis"))
+    TagValue = {
+        "arc_ellipse": "ArcOfEllipse",
+        "hyperbola": "Hyperbola",
+        "arc_hyperbola": "ArcOfHyperbola",
+    }[KindValue]
+    Attributes = {
+        "CenterX": FmtAction(Center[0]),
+        "CenterY": FmtAction(Center[1]),
+        "CenterZ": FmtAction(0),
+        "NormalX": FmtAction(0),
+        "NormalY": FmtAction(0),
+        "NormalZ": FmtAction(1),
+        "MajorRadius": FmtAction(GeomValue.get("major_radius")),
+        "MinorRadius": FmtAction(GeomValue.get("minor_radius")),
+        "AngleXU": FmtAction(MathValue.atan2(MajorAxis[1], MajorAxis[0])),
+    }
+    if KindValue != "hyperbola":
+        Attributes["StartAngle"] = FmtAction(GeomValue.get("start_angle"))
+        Attributes["EndAngle"] = FmtAction(GeomValue.get("end_angle"))
+    XmlTree.SubElement(ItemValue, TagValue, Attributes)
+
+
+# this definition exists because neutral parabola geometry needs canonical freecad coordinates
+def AddParabGeomMut(
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    Center = PointTwo(GeomValue.get("center"))
+    AxisValue = PointTwo(GeomValue.get("axis"))
+    TagValue = "Parabola" if KindValue == "parabola" else "ArcOfParabola"
+    Attributes = {
+        "CenterX": FmtAction(Center[0]),
+        "CenterY": FmtAction(Center[1]),
+        "CenterZ": FmtAction(0),
+        "NormalX": FmtAction(0),
+        "NormalY": FmtAction(0),
+        "NormalZ": FmtAction(1),
+        "Focal": FmtAction(GeomValue.get("focal_length")),
+        "AngleXU": FmtAction(MathValue.atan2(AxisValue[1], AxisValue[0])),
+    }
+    if KindValue == "arc_parabola":
+        Attributes["StartAngle"] = FmtAction(GeomValue.get("start_angle"))
+        Attributes["EndAngle"] = FmtAction(GeomValue.get("end_angle"))
+    XmlTree.SubElement(ItemValue, TagValue, Attributes)
+
+
+# this definition exists because neutral spline geometry needs canonical freecad controls
+def AddSplineMut(
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    Points, Weights = SplinePoints(GeomValue)
+    if KindValue == "bezier":
+        Curve = XmlTree.SubElement(
+            ItemValue, "BezierCurve", {"PolesCount": str(len(Points))}
+        )
+        AddPolesMut(Curve, Points, Weights)
+        return
+    Degree, Knots, Multiplicities = SplineKnots(GeomValue, len(Points))
+    Curve = XmlTree.SubElement(
+        ItemValue,
+        "BSplineCurve",
+        {
+            "PolesCount": str(len(Points)),
+            "KnotsCount": str(len(Knots)),
+            "Degree": str(Degree),
+            "IsPeriodic": "1" if bool(GeomValue.get("periodic")) else "0",
+        },
+    )
+    AddPolesMut(Curve, Points, Weights)
+    AddKnotsMut(Curve, Knots, Multiplicities)
+
+
+# this definition exists because neutral point geometry needs canonical freecad coordinates
+def AddPointGeomMut(ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any]) -> None:
+    Point = PointTwo(GeomValue.get("point", GeomValue.get("center")))
+    XmlTree.SubElement(
+        ItemValue,
+        "GeomPoint",
+        {"X": FmtAction(Point[0]), "Y": FmtAction(Point[1]), "Z": FmtAction(0)},
+    )
+
+
+# this definition exists because neutral geometry dispatch must remain explicit and exhaustive
+def AddGeomBodyMut(
+    ItemValue: XmlTree.Element, GeomValue: Mapping[str, Any], KindValue: str
+) -> None:
+    if KindValue == "line":
+        AddLineGeomMut(ItemValue, GeomValue)
+    elif KindValue in CircularGeomKinds:
+        AddCircleMut(ItemValue, GeomValue, KindValue)
+    elif KindValue == "ellipse":
+        AddEllipseMut(ItemValue, GeomValue)
+    elif KindValue in {"arc_ellipse", "hyperbola", "arc_hyperbola"}:
+        AddConicGeomMut(ItemValue, GeomValue, KindValue)
+    elif KindValue in {"parabola", "arc_parabola"}:
+        AddParabGeomMut(ItemValue, GeomValue, KindValue)
+    elif KindValue in SplineGeomKinds:
+        AddSplineMut(ItemValue, GeomValue, KindValue)
+    elif KindValue == "point":
+        AddPointGeomMut(ItemValue, GeomValue)
+
+
+# this definition exists because every neutral geometry item needs canonical extension metadata
+def AddNeutralMut(
+    GeomList: XmlTree.Element,
+    Entity: Mapping[str, Any],
+    EntityId: str,
+    KindValue: str,
+    GeomValue: Mapping[str, Any],
+    TypeId: str,
+    ClosedIds: set[str],
+) -> None:
+    Index = len(GeomList)
+    ItemValue = XmlTree.SubElement(
+        GeomList, "Geometry", {"type": TypeId, "id": str(Index + 1), "migrated": "1"}
+    )
+    Extensions = XmlTree.SubElement(ItemValue, "GeoExtensions", {"count": "1"})
+    Construction = bool(Entity.get("construction")) or (
+        bool(ClosedIds) and EntityId not in ClosedIds
+    )
+    Flags = "00000000000000000000000000000010" if Construction else "0" * 32
+    XmlTree.SubElement(
+        Extensions,
+        "GeoExtension",
+        {
+            "type": "Sketcher::SketchGeometryExtension",
+            "id": str(Index + 1),
+            "internalGeometryType": "0",
+            "geometryModeFlags": Flags,
+            "geometryLayer": "0",
+        },
+    )
+    AddGeomBodyMut(ItemValue, GeomValue, KindValue)
+    XmlTree.SubElement(
+        ItemValue, "Construction", {"value": "1" if Construction else "0"}
+    )
+
+
+# this definition exists because one geometry transfer should update all correlated indexes
+def AppendGeomMut(
+    GeomList: XmlTree.Element,
+    IndicesMut: dict[str, int],
+    DiagnosticsMut: list[dict[str, AnyValue]],
+    ClosedIds: set[str],
+    SourceIndex: int,
+    Entity: Mapping[str, Any],
+) -> None:
+    EntityId = TextAction(Entity.get("id"), str(SourceIndex))
+    KindValue = TextAction(EnumAction(Entity.get("kind"))).lower()
+    NativeItem = NativeGeomElem(Entity)
+    if NativeItem is not None:
+        IndicesMut[EntityId] = len(GeomList)
+        GeomList.append(NativeItem)
+        return
+    GeomValue = Entity.get("geometry", {})
+    if not isinstance(GeomValue, Mapping):
+        GeomValue = {}
+    GeomType = TextAction(GeomValue.get("$type"))
+    TypeId = NeutralGeomTypeIdByKind.get(KindValue)
+    ExpectedType = NeutralGeomTypeByKind.get(KindValue)
+    if TypeId is None or GeomType == "NativeGeometry" or (
+        GeomType and GeomType != ExpectedType
+    ):
+        DiagnosticsMut.append(GeomDiagnostic(EntityId, KindValue, GeomType, TypeId))
+        return
+    IndicesMut[EntityId] = len(GeomList)
+    AddNeutralMut(GeomList, Entity, EntityId, KindValue, GeomValue, TypeId, ClosedIds)
+
+
+# this definition exists because sketch geometry property assembly coordinates native and neutral items
+def GeomProp(
+    Sketch: Mapping[str, Any],
+) -> tuple[XmlTree.Element, dict[str, int], list[dict[str, AnyValue]]]:
     Result = PropAction("Geometry", "Part::PropertyGeometryList", Status="8192")
     GeomList = XmlTree.SubElement(Result, "GeometryList", {"count": "0"})
     Indices: dict[str, int] = {}
     Diagnostics: list[dict[str, AnyValue]] = []
-    for SourceIndex, Entity in enumerate(Entities):
-        EntityId = TextAction(Entity.get("id"), str(SourceIndex))
-        KindValue = TextAction(EnumAction(Entity.get("kind"))).lower()
-        NativeItem = NativeGeomElem(Entity)
-        if NativeItem is not None:
-            Indices[EntityId] = len(GeomList)
-            GeomList.append(NativeItem)
-            continue
-        GeomValue = Entity.get("geometry", {})
-        if not isinstance(GeomValue, Mapping):
-            GeomValue = {}
-        GeomType = TextAction(GeomValue.get("$type"))
-        ExpectedGeomType = NeutralGeomTypeByKind.get(KindValue)
-        TypeId = NeutralGeomTypeIdByKind.get(KindValue)
-        if TypeId is None or (
-            GeomType == "NativeGeometry" or (GeomType and GeomType != ExpectedGeomType)
-        ):
-            CarrierReason = (
-                "source_opaque"
-                if GeomType == "NativeGeometry"
-                or (TypeId is not None and GeomType and (GeomType != ExpectedGeomType))
-                else "writer_unimplemented"
-            )
-            Diagnostics.append(
-                {
-                    "carrier_reason": CarrierReason,
-                    "code": "freecad.sketch_geometry_carrier_only",
-                    "entity_id": EntityId,
-                    "kind": KindValue,
-                    "mode": "carrier_only",
-                    "reason": "native FreeCAD geometry data is unavailable",
-                    "severity": "warning",
-                }
-            )
-            continue
-        Index = len(GeomList)
-        Indices[EntityId] = Index
-        ItemValue = XmlTree.SubElement(
-            GeomList,
-            "Geometry",
-            {"type": TypeId, "id": str(Index + 1), "migrated": "1"},
-        )
-        Extensions = XmlTree.SubElement(ItemValue, "GeoExtensions", {"count": "1"})
-        Construction = bool(Entity.get("construction")) or (
-            bool(ClosedEntityIds) and EntityId not in ClosedEntityIds
-        )
-        Flags = (
-            "00000000000000000000000000000010"
-            if Construction
-            else "00000000000000000000000000000000"
-        )
-        XmlTree.SubElement(
-            Extensions,
-            "GeoExtension",
-            {
-                "type": "Sketcher::SketchGeometryExtension",
-                "id": str(Index + 1),
-                "internalGeometryType": "0",
-                "geometryModeFlags": Flags,
-                "geometryLayer": "0",
-            },
-        )
-        if KindValue == "line":
-            Start = PointTwo(GeomValue.get("start"))
-            EndValue = PointTwo(GeomValue.get("end"))
-            XmlTree.SubElement(
-                ItemValue,
-                "LineSegment",
-                {
-                    "StartX": FmtAction(Start[0]),
-                    "StartY": FmtAction(Start[1]),
-                    "StartZ": FmtAction(0),
-                    "EndX": FmtAction(EndValue[0]),
-                    "EndY": FmtAction(EndValue[1]),
-                    "EndZ": FmtAction(0),
-                },
-            )
-        elif KindValue in CircularGeomKinds:
-            Center = PointTwo(GeomValue.get("center"))
-            Attributes = {
-                "CenterX": FmtAction(Center[0]),
-                "CenterY": FmtAction(Center[1]),
-                "CenterZ": FmtAction(0),
-                "NormalX": FmtAction(0),
-                "NormalY": FmtAction(0),
-                "NormalZ": FmtAction(1),
-                "AngleXU": FmtAction(0),
-                "Radius": FmtAction(GeomValue.get("radius")),
-            }
-            if KindValue == "arc":
-                Attributes["StartAngle"] = FmtAction(GeomValue.get("start_angle"))
-                Attributes["EndAngle"] = FmtAction(GeomValue.get("end_angle"))
-                XmlTree.SubElement(ItemValue, "ArcOfCircle", Attributes)
-            else:
-                XmlTree.SubElement(ItemValue, "Circle", Attributes)
-        elif KindValue == "ellipse":
-            Center = PointTwo(GeomValue.get("center"))
-            MajorAxis = PointTwo(GeomValue.get("major_axis"))
-            XmlTree.SubElement(
-                ItemValue,
-                "Ellipse",
-                {
-                    "CenterX": FmtAction(Center[0]),
-                    "CenterY": FmtAction(Center[1]),
-                    "CenterZ": FmtAction(0),
-                    "NormalX": FmtAction(0),
-                    "NormalY": FmtAction(0),
-                    "NormalZ": FmtAction(1),
-                    "MajorRadius": FmtAction(GeomValue.get("major_radius")),
-                    "MinorRadius": FmtAction(GeomValue.get("minor_radius")),
-                    "AngleXU": FmtAction(MathValue.atan2(MajorAxis[1], MajorAxis[0])),
-                },
-            )
-        elif KindValue in {"arc_ellipse", "hyperbola", "arc_hyperbola"}:
-            Center = PointTwo(GeomValue.get("center"))
-            MajorAxis = PointTwo(GeomValue.get("major_axis"))
-            TagValue = {
-                "arc_ellipse": "ArcOfEllipse",
-                "hyperbola": "Hyperbola",
-                "arc_hyperbola": "ArcOfHyperbola",
-            }[KindValue]
-            Attributes = {
-                "CenterX": FmtAction(Center[0]),
-                "CenterY": FmtAction(Center[1]),
-                "CenterZ": FmtAction(0),
-                "NormalX": FmtAction(0),
-                "NormalY": FmtAction(0),
-                "NormalZ": FmtAction(1),
-                "MajorRadius": FmtAction(GeomValue.get("major_radius")),
-                "MinorRadius": FmtAction(GeomValue.get("minor_radius")),
-                "AngleXU": FmtAction(MathValue.atan2(MajorAxis[1], MajorAxis[0])),
-            }
-            if KindValue != "hyperbola":
-                Attributes["StartAngle"] = FmtAction(GeomValue.get("start_angle"))
-                Attributes["EndAngle"] = FmtAction(GeomValue.get("end_angle"))
-            XmlTree.SubElement(ItemValue, TagValue, Attributes)
-        elif KindValue in {"parabola", "arc_parabola"}:
-            Center = PointTwo(GeomValue.get("center"))
-            AxisValue = PointTwo(GeomValue.get("axis"))
-            TagValue = "Parabola" if KindValue == "parabola" else "ArcOfParabola"
-            Attributes = {
-                "CenterX": FmtAction(Center[0]),
-                "CenterY": FmtAction(Center[1]),
-                "CenterZ": FmtAction(0),
-                "NormalX": FmtAction(0),
-                "NormalY": FmtAction(0),
-                "NormalZ": FmtAction(1),
-                "Focal": FmtAction(GeomValue.get("focal_length")),
-                "AngleXU": FmtAction(MathValue.atan2(AxisValue[1], AxisValue[0])),
-            }
-            if KindValue == "arc_parabola":
-                Attributes["StartAngle"] = FmtAction(GeomValue.get("start_angle"))
-                Attributes["EndAngle"] = FmtAction(GeomValue.get("end_angle"))
-            XmlTree.SubElement(ItemValue, TagValue, Attributes)
-        elif KindValue in SplineGeomKinds:
-            Points = Items(GeomValue.get("control_points", []))
-            Weights = [
-                Number(Value, 1.0) for Value in Sequence(GeomValue.get("weights", []))
-            ]
-            if len(Weights) != len(Points):
-                Weights = [1.0] * len(Points)
-            if KindValue == "bezier":
-                Curve = XmlTree.SubElement(
-                    ItemValue, "BezierCurve", {"PolesCount": str(len(Points))}
-                )
-            else:
-                Degree = max(
-                    1,
-                    min(
-                        int(Number(GeomValue.get("degree"), 3)), max(1, len(Points) - 1)
-                    ),
-                )
-                Knots = [
-                    Number(Value) for Value in Sequence(GeomValue.get("knots", []))
-                ]
-                Multiplicities = [
-                    int(Number(Value, 1))
-                    for Value in Sequence(GeomValue.get("multiplicities", []))
-                ]
-                if not Knots or len(Multiplicities) != len(Knots):
-                    InteriorCount = max(0, len(Points) - Degree - 1)
-                    Knots = [float(Value) for Value in range(InteriorCount + 2)]
-                    Multiplicities = [Degree + 1] + [1] * InteriorCount + [Degree + 1]
-                Curve = XmlTree.SubElement(
-                    ItemValue,
-                    "BSplineCurve",
-                    {
-                        "PolesCount": str(len(Points)),
-                        "KnotsCount": str(len(Knots)),
-                        "Degree": str(Degree),
-                        "IsPeriodic": "1" if bool(GeomValue.get("periodic")) else "0",
-                    },
-                )
-            for Point, Weight in zip(Points, Weights, strict=True):
-                FirstCoord, SecondCoord = PointTwo(Point)
-                XmlTree.SubElement(
-                    Curve,
-                    "Pole",
-                    {
-                        "X": FmtAction(FirstCoord),
-                        "Y": FmtAction(SecondCoord),
-                        "Z": FmtAction(0),
-                        "Weight": FmtAction(Weight),
-                    },
-                )
-            if KindValue == "spline":
-                for KnotValue, Multiplicity in zip(Knots, Multiplicities, strict=True):
-                    XmlTree.SubElement(
-                        Curve,
-                        "Knot",
-                        {"Value": FmtAction(KnotValue), "Mult": str(Multiplicity)},
-                    )
-        elif KindValue == "point":
-            Point = PointTwo(GeomValue.get("point", GeomValue.get("center")))
-            XmlTree.SubElement(
-                ItemValue,
-                "GeomPoint",
-                {"X": FmtAction(Point[0]), "Y": FmtAction(Point[1]), "Z": FmtAction(0)},
-            )
-        XmlTree.SubElement(
-            ItemValue, "Construction", {"value": "1" if Construction else "0"}
+    ClosedIds = ClosedGeomIds(Sketch)
+    for SourceIndex, Entity in enumerate(Items(Sketch.get("entities", []))):
+        AppendGeomMut(
+            GeomList, Indices, Diagnostics, ClosedIds, SourceIndex, Entity
         )
     GeomList.set("count", str(len(GeomList)))
     return (Result, Indices, Diagnostics)
@@ -1807,7 +1942,78 @@ def RawRuleSlots(Attributes: Mapping[str, Any]) -> list[tuple[int, int]]:
     return Slots
 
 
-# this definition exists because focused behavior needs one stable owner
+# this definition exists because two reference midpoint rules need directional line detection
+def MidpointPair(
+    References: list[dict[str, Any]],
+    Indices: Mapping[str, int],
+    Entities: Mapping[str, Mapping[str, Any]],
+) -> list[tuple[int, int]] | None:
+    for LineRef, PointRef in (
+        (References[0], References[1]),
+        (References[1], References[0]),
+    ):
+        LineId = TextAction(LineRef.get("entity_id"))
+        PointId = TextAction(PointRef.get("entity_id"))
+        LineValue = Entities.get(LineId, {})
+        Point = Entities.get(PointId, {})
+        LineRefPoint = TextAction(LineRef.get("point")).casefold()
+        if (
+            TextAction(EnumAction(LineValue.get("kind"))).casefold() != "line"
+            or LineRefPoint not in MidpointRefPointNames
+            or LineId == PointId
+            or LineId not in Indices
+            or PointId not in Indices
+        ):
+            continue
+        PointPosition = RefPoint(PointRef.get("point"))
+        if PointPosition == 0 and TextAction(
+            EnumAction(Point.get("kind"))
+        ).casefold() == "point":
+            PointPosition = 1
+        if PointPosition:
+            return [
+                (Indices[LineId], 1),
+                (Indices[LineId], 2),
+                (Indices[PointId], PointPosition),
+            ]
+    return None
+
+
+# this definition exists because three reference midpoint rules need explicit endpoint grouping
+def MidpointTriple(
+    References: list[dict[str, Any]],
+    Indices: Mapping[str, int],
+    Entities: Mapping[str, Mapping[str, Any]],
+) -> list[tuple[int, int]] | None:
+    Resolved = [
+        (TextAction(RefValue.get("entity_id")), RefPoint(RefValue.get("point")))
+        for RefValue in References
+    ]
+    for LineId, LineValue in Entities.items():
+        if TextAction(EnumAction(LineValue.get("kind"))).casefold() != "line" or (
+            LineId not in Indices
+        ):
+            continue
+        LinePoints = [Point for EntityId, Point in Resolved if EntityId == LineId]
+        Others = [(EntityId, Point) for EntityId, Point in Resolved if EntityId != LineId]
+        if sorted(LinePoints) != [1, 2] or len(Others) != 1:
+            continue
+        PointId, PointPosition = Others[0]
+        Point = Entities.get(PointId, {})
+        if PointPosition == 0 and TextAction(
+            EnumAction(Point.get("kind"))
+        ).casefold() == "point":
+            PointPosition = 1
+        if PointId in Indices and PointPosition:
+            return [
+                (Indices[LineId], 1),
+                (Indices[LineId], 2),
+                (Indices[PointId], PointPosition),
+            ]
+    return None
+
+
+# this definition exists because midpoint constraints accept two native reference layouts
 def MidpointSlots(
     RuleValue: Mapping[str, Any],
     Indices: Mapping[str, int],
@@ -1815,65 +2021,9 @@ def MidpointSlots(
 ) -> list[tuple[int, int]] | None:
     References = Items(RuleValue.get("references", []))
     if len(References) == 2:
-        for LineRef, PointRef in (
-            (References[0], References[1]),
-            (References[1], References[0]),
-        ):
-            LineId = TextAction(LineRef.get("entity_id"))
-            PointId = TextAction(PointRef.get("entity_id"))
-            LineValue = Entities.get(LineId, {})
-            Point = Entities.get(PointId, {})
-            LineRefPoint = TextAction(LineRef.get("point")).casefold()
-            if (
-                TextAction(EnumAction(LineValue.get("kind"))).casefold() != "line"
-                or LineRefPoint not in MidpointRefPointNames
-                or LineId == PointId
-                or (LineId not in Indices)
-                or (PointId not in Indices)
-            ):
-                continue
-            PointPosition = RefPoint(PointRef.get("point"))
-            if (
-                PointPosition == 0
-                and TextAction(EnumAction(Point.get("kind"))).casefold() == "point"
-            ):
-                PointPosition = 1
-            if PointPosition:
-                return [
-                    (Indices[LineId], 1),
-                    (Indices[LineId], 2),
-                    (Indices[PointId], PointPosition),
-                ]
+        return MidpointPair(References, Indices, Entities)
     if len(References) == 3:
-        Resolved = [
-            (TextAction(RefValue.get("entity_id")), RefPoint(RefValue.get("point")))
-            for RefValue in References
-        ]
-        for LineId, LineValue in Entities.items():
-            if (
-                TextAction(EnumAction(LineValue.get("kind"))).casefold() != "line"
-                or LineId not in Indices
-            ):
-                continue
-            LinePoints = [Point for EntityId, Point in Resolved if EntityId == LineId]
-            Others = [
-                (EntityId, Point) for EntityId, Point in Resolved if EntityId != LineId
-            ]
-            if sorted(LinePoints) != [1, 2] or len(Others) != 1:
-                continue
-            PointId, PointPosition = Others[0]
-            Point = Entities.get(PointId, {})
-            if (
-                PointPosition == 0
-                and TextAction(EnumAction(Point.get("kind"))).casefold() == "point"
-            ):
-                PointPosition = 1
-            if PointId in Indices and PointPosition:
-                return [
-                    (Indices[LineId], 1),
-                    (Indices[LineId], 2),
-                    (Indices[PointId], PointPosition),
-                ]
+        return MidpointTriple(References, Indices, Entities)
     return None
 
 
@@ -1920,7 +2070,484 @@ def RuleCarrier(RuleValue: Mapping[str, Any], NativeRule: bool) -> str:
     )
 
 
-# this definition exists because focused behavior needs one stable owner
+# this class exists because constraint conversion coordinates correlated mutable collections
+@Dataclass
+class RuleState:
+    EntityItems: list[dict[str, Any]]
+    Entities: dict[str, Mapping[str, Any]]
+    Encoded: list[dict[str, AnyValue]]
+    Expressions: list[tuple[str, str]]
+    Dependencies: list[str]
+    Diagnostics: list[dict[str, AnyValue]]
+    RuleNames: set[str]
+    FixedEntities: set[str]
+    ProfileIds: set[str]
+    Indices: Mapping[str, int]
+    Parameters: _Parameters
+    ProfileOnly: bool
+
+
+# this definition exists because constraint conversion state must share one entity index
+def CreateRuleState(
+    Sketch: Mapping[str, Any],
+    Indices: Mapping[str, int],
+    Parameters: _Parameters,
+    ProfileOnly: bool,
+) -> RuleState:
+    EntityItems = Items(Sketch.get("entities", []))
+    Entities = {TextAction(Entity.get("id")): Entity for Entity in EntityItems}
+    ProfileIds = {
+        TextAction(EntityId)
+        for Profile in Sequence(Sketch.get("closed_profile_entity_ids", []))
+        for EntityId in Sequence(Profile)
+        if TextAction(EntityId)
+    }
+    return RuleState(
+        EntityItems,
+        Entities,
+        [],
+        [],
+        [],
+        [],
+        set(),
+        set(),
+        ProfileIds,
+        Indices,
+        Parameters,
+        ProfileOnly,
+    )
+
+
+# this definition exists because profile replay activates only statically proven constraints
+def IsProfileRule(
+    RuleValue: Mapping[str, Any],
+    KindValue: str,
+    References: list[dict[str, Any]],
+    State: RuleState,
+) -> bool:
+    if not State.ProfileOnly:
+        return True
+    RefEntities = [
+        State.Entities.get(TextAction(RefValue.get("entity_id")), {})
+        for RefValue in References
+    ]
+    RefKinds = [
+        TextAction(EnumAction(Entity.get("kind"))).casefold()
+        for Entity in RefEntities
+    ]
+    RefPoints = [TextAction(Value.get("point")).casefold() for Value in References]
+    ProfileRefs = bool(References) and all(
+        TextAction(Value.get("entity_id")) in State.ProfileIds for Value in References
+    )
+    Linear = (
+        KindValue in {"horizontal", "vertical"}
+        and len(References) == 1
+        and RefKinds == ["line"]
+        and RefPoints == [""]
+    )
+    Coincident = KindValue == "coincident" and len(References) == 2 and all(RefPoints)
+    Radial = (
+        KindValue in {"radius", "diameter"}
+        and len(References) == 1
+        and RefKinds == ["circle"]
+        and RefPoints == [""]
+    )
+    return ProfileRefs and (Linear or Coincident or Radial)
+
+
+# this definition exists because native constraint metadata has two supported layouts
+def RuleSources(
+    RuleValue: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], Mapping[str, Any], Any, bool]:
+    SourceAttrs = RuleValue.get("attributes", {})
+    if not isinstance(SourceAttrs, Mapping):
+        SourceAttrs = {}
+    RawAttrs = SourceAttrs.get("freecad", {})
+    if not isinstance(RawAttrs, Mapping):
+        RawAttrs = {}
+    SourceCode = SourceAttrs.get("freecad_type_code", RawAttrs.get("Type"))
+    return (SourceAttrs, RawAttrs, SourceCode, SourceCode is not None or bool(RawAttrs))
+
+
+# this definition exists because constraint carrier diagnostics share one stable schema
+def AddRuleDiagMut(
+    State: RuleState,
+    RuleValue: Mapping[str, Any],
+    KindValue: str,
+    Reason: str,
+    NativeRule: bool,
+) -> None:
+    State.Diagnostics.append(
+        RuleDiag(
+            RuleValue,
+            KindValue,
+            "freecad.sketch_constraint_carrier_only",
+            "carrier_only",
+            Reason,
+            "warning",
+            CarrierReason=RuleCarrier(RuleValue, NativeRule),
+        )
+    )
+
+
+# this definition exists because midpoint rules require a composed native type
+def RuleCodeData(
+    RuleValue: Mapping[str, Any],
+    KindValue: str,
+    SourceCode: Any,
+    State: RuleState,
+) -> tuple[int | None, list[tuple[int, int]] | None, tuple[str, str] | None, str]:
+    if KindValue == "midpoint" and SourceCode is None:
+        Resolved = MidpointSlots(RuleValue, State.Indices, State.Entities)
+        Composition = (
+            "Symmetric",
+            "encoded as symmetry between a line's endpoints and the referenced point",
+        )
+        Reason = (
+            ""
+            if Resolved is not None
+            else "the midpoint relationship cannot be expressed as a sound FreeCAD symmetry constraint"
+        )
+        return (14, Resolved, Composition, Reason)
+    CodeValue = (
+        int(Number(SourceCode, -1))
+        if SourceCode is not None
+        else RuleCodeByKind.get(KindValue)
+    )
+    Reason = (
+        "no equivalent FreeCAD constraint type is available"
+        if CodeValue is None or CodeValue < 0
+        else ""
+    )
+    return (CodeValue, None, None, Reason)
+
+
+# this definition exists because stored reference slots need one normalized tuple representation
+def StoredRuleSlots(
+    SourceAttrs: Mapping[str, Any], RawAttrs: Mapping[str, Any]
+) -> list[tuple[int, int, str]]:
+    SourceSlots = Items(SourceAttrs.get("freecad_reference_slots", []))
+    if SourceSlots:
+        return [
+            (
+                int(Number(Value.get("freecad_geometry_index"), -2000)),
+                int(Number(Value.get("freecad_point_index"))),
+                TextAction(Value.get("entity_id")),
+            )
+            for Value in SourceSlots
+        ]
+    if RawAttrs:
+        return [
+            (EntityIndex, PointIndex, "")
+            for EntityIndex, PointIndex in RawRuleSlots(RawAttrs)
+        ]
+    return []
+
+
+# this definition exists because stored native slots must map through reordered geometry
+def ResolveStored(
+    Slots: list[tuple[int, int, str]], State: RuleState
+) -> list[tuple[int, int]]:
+    Resolved: list[tuple[int, int]] = []
+    for EntityIndex, PointIndex, EntityId in Slots:
+        if EntityIndex < 0:
+            Resolved.append((EntityIndex, PointIndex))
+            continue
+        TargetId = EntityId
+        if not TargetId and EntityIndex < len(State.EntityItems):
+            TargetId = TextAction(State.EntityItems[EntityIndex].get("id"))
+        TargetIndex = State.Indices.get(TargetId)
+        if TargetIndex is None:
+            return []
+        Resolved.append((TargetIndex, PointIndex))
+    return Resolved
+
+
+# this definition exists because neutral references must map through the emitted geometry index
+def ResolveNeutral(
+    References: list[dict[str, Any]], KindValue: str, State: RuleState
+) -> list[tuple[int, int]]:
+    Resolved: list[tuple[int, int]] = []
+    for RefValue in References:
+        EntityId = TextAction(RefValue.get("entity_id"))
+        EntityIndex = State.Indices.get(EntityId)
+        if EntityIndex is None:
+            return []
+        PointIndex = NeutralRefPoint(
+            KindValue, State.Entities.get(EntityId, {}), RefValue.get("point")
+        )
+        Resolved.append((EntityIndex, PointIndex))
+    return Resolved
+
+
+# this definition exists because composed constraints need sound reference cardinality
+def ComposeRule(
+    KindValue: str,
+    NativeRule: bool,
+    Resolved: list[tuple[int, int]],
+    Composition: tuple[str, str] | None,
+) -> tuple[list[tuple[int, int]], tuple[str, str] | None]:
+    if KindValue == "concentric" and not NativeRule:
+        if len(Resolved) != 2:
+            return ([], Composition)
+        Resolved = [(Resolved[0][0], 3), (Resolved[1][0], 3)]
+        Composition = (
+            "Coincident",
+            "encoded as coincidence between the referenced curve centers",
+        )
+    elif KindValue == "fixed" and not NativeRule:
+        if len(Resolved) != 1 or Resolved[0][1] != 0:
+            return ([], Composition)
+        Composition = ("Block", "encoded using FreeCAD's block constraint")
+    return (Resolved, Composition)
+
+
+# this definition exists because every encoded constraint needs a collision free name
+def RuleNameMut(
+    RuleValue: Mapping[str, Any],
+    RawAttrs: Mapping[str, Any],
+    NativeRule: bool,
+    RuleNamesMut: set[str],
+) -> str:
+    if NativeRule and "Name" in RawAttrs:
+        NameValue = TextAction(RawAttrs.get("Name"))
+    else:
+        NameBase = SafeAction(RuleValue.get("id"), "Constraint")
+        NameValue = NameBase
+        Suffix = 2
+        while NameValue in RuleNamesMut:
+            NameValue = f"{NameBase}_{Suffix}"
+            Suffix += 1
+    if NameValue:
+        RuleNamesMut.add(NameValue)
+    return NameValue
+
+
+# this definition exists because encoded rule records feed both xml and expression assembly
+def RuleRecord(
+    RuleValue: Mapping[str, Any],
+    CodeValue: int,
+    Value: float,
+    NameValue: str,
+    Resolved: list[tuple[int, int]],
+    RawAttrs: Mapping[str, Any],
+) -> dict[str, AnyValue]:
+    Elements = Resolved + [(-2000, 0)] * max(0, 3 - len(Resolved))
+    Values = Elements[:3]
+    return {
+        "name": NameValue,
+        "type": CodeValue,
+        "value": Value,
+        "driving": bool(RuleValue.get("driving", True)),
+        "active": not bool(RuleValue.get("suppressed")),
+        "first": Values[0],
+        "second": Values[1],
+        "third": Values[2],
+        "elements": Elements,
+        "attributes": RawAttrs,
+    }
+
+
+# this definition exists because dimensional rules can remain linked to parameter expressions
+def AddRuleExprMut(
+    State: RuleState,
+    RuleValue: Mapping[str, Any],
+    ParamId: str,
+    CodeValue: int,
+    NameValue: str,
+    NativeRule: bool,
+) -> None:
+    Expression = (
+        State.Parameters.expression(ParamId)
+        if not NativeRule or State.Parameters.has_source_expression(ParamId)
+        else None
+    )
+    if not Expression or not bool(RuleValue.get("driving", True)) or (
+        CodeValue not in DimensionalRuleCodes
+    ):
+        return
+    SourcePath = State.Parameters.source_path(ParamId)
+    PathValue = (
+        f".{SourcePath}" if NativeRule and SourcePath else f".Constraints.{NameValue}"
+    )
+    State.Expressions.append((PathValue, Expression))
+    State.Dependencies.append("Parameters")
+
+
+# this definition exists because one source constraint updates all correlated transfer state
+def AppendRuleMut(State: RuleState, RuleValue: Mapping[str, Any]) -> None:
+    KindValue = TextAction(EnumAction(RuleValue.get("kind"))).lower()
+    References = Items(RuleValue.get("references", []))
+    if not IsProfileRule(RuleValue, KindValue, References, State):
+        AddRuleDiagMut(
+            State,
+            RuleValue,
+            KindValue,
+            "the source relationship is preserved without activating an unproven solver encoding",
+            True,
+        )
+        return
+    SourceAttrs, RawAttrs, SourceCode, NativeRule = RuleSources(RuleValue)
+    CodeValue, Resolved, Composition, Reason = RuleCodeData(
+        RuleValue, KindValue, SourceCode, State
+    )
+    if Reason:
+        AddRuleDiagMut(State, RuleValue, KindValue, Reason, NativeRule)
+        return
+    assert CodeValue is not None
+    if Resolved is None:
+        Stored = StoredRuleSlots(SourceAttrs, RawAttrs)
+        Resolved = (
+            ResolveStored(Stored, State)
+            if Stored
+            else ResolveNeutral(References, KindValue, State)
+        )
+        Resolved, Composition = ComposeRule(
+            KindValue, NativeRule, Resolved, Composition
+        )
+    if not Resolved:
+        AddRuleDiagMut(
+            State,
+            RuleValue,
+            KindValue,
+            "the constraint has no sound native reference encoding",
+            NativeRule,
+        )
+        return
+    AddEncodedMut(
+        State,
+        RuleValue,
+        KindValue,
+        SourceAttrs,
+        RawAttrs,
+        NativeRule,
+        CodeValue,
+        Resolved,
+        Composition,
+    )
+
+
+# this definition exists because successful constraint encoding updates values diagnostics and links
+def AddEncodedMut(
+    State: RuleState,
+    RuleValue: Mapping[str, Any],
+    KindValue: str,
+    SourceAttrs: Mapping[str, Any],
+    RawAttrs: Mapping[str, Any],
+    NativeRule: bool,
+    CodeValue: int,
+    Resolved: list[tuple[int, int]],
+    Composition: tuple[str, str] | None,
+) -> None:
+    ParamId = TextAction(RuleValue.get("parameter_id"))
+    DefaultValue = Number(
+        RuleValue.get("value"),
+        Number(SourceAttrs.get("native_value"), Number(RawAttrs.get("Value"))),
+    )
+    Value = State.Parameters.value(ParamId, DefaultValue)
+    NameValue = RuleNameMut(RuleValue, RawAttrs, NativeRule, State.RuleNames)
+    State.Encoded.append(
+        RuleRecord(RuleValue, CodeValue, Value, NameValue, Resolved, RawAttrs)
+    )
+    if KindValue in FixedRuleKinds:
+        State.FixedEntities.update(
+            TextAction(Value.get("entity_id")) for Value in Items(RuleValue.get("references", []))
+        )
+    if Composition is not None:
+        State.Diagnostics.append(
+            RuleDiag(
+                RuleValue,
+                KindValue,
+                "freecad.sketch_constraint_composed",
+                "native_composition",
+                Composition[1],
+                "info",
+                Composition[0],
+            )
+        )
+    AddRuleExprMut(State, RuleValue, ParamId, CodeValue, NameValue, NativeRule)
+
+
+# this definition exists because fixed entities need a fallback block constraint
+def AddFixedMut(State: RuleState) -> None:
+    for Entity in State.EntityItems:
+        EntityId = TextAction(Entity.get("id"))
+        if State.ProfileOnly or not bool(Entity.get("fixed")) or (
+            EntityId in State.FixedEntities or EntityId not in State.Indices
+        ):
+            continue
+        FirstSlot = (State.Indices[EntityId], 0)
+        State.Encoded.append(
+            {
+                "name": f"fixed_{EntityId}",
+                "type": 17,
+                "value": 0.0,
+                "driving": True,
+                "active": True,
+                "first": FirstSlot,
+                "second": (-2000, 0),
+                "third": (-2000, 0),
+                "elements": [FirstSlot, (-2000, 0), (-2000, 0)],
+                "attributes": {},
+            }
+        )
+
+
+# this definition exists because constraint records need canonical freecad xml attributes
+def RuleXmlAttrs(ItemValue: Mapping[str, Any]) -> dict[str, str]:
+    First, Second, Third = (
+        ItemValue["first"],
+        ItemValue["second"],
+        ItemValue["third"],
+    )
+    Elements = ItemValue["elements"]
+    Attributes = {
+        str(KeyValue): str(Value)
+        for KeyValue, Value in ItemValue["attributes"].items()
+    }
+    if not Attributes:
+        Attributes.update(
+            {
+                "MetaData": "",
+                "Orientation": "0",
+                "LabelDistance": FmtAction(10),
+                "LabelPosition": FmtAction(0),
+                "IsInVirtualSpace": "0",
+                "IsVisible": "1",
+            }
+        )
+    Attributes.update(
+        {
+            "Name": ItemValue["name"],
+            "Type": str(ItemValue["type"]),
+            "Value": FmtAction(ItemValue["value"]),
+            "IsDriving": "1" if ItemValue["driving"] else "0",
+            "IsActive": "1" if ItemValue["active"] else "0",
+            "First": str(First[0]),
+            "FirstPos": str(First[1]),
+            "Second": str(Second[0]),
+            "SecondPos": str(Second[1]),
+            "Third": str(Third[0]),
+            "ThirdPos": str(Third[1]),
+            "ElementIds": " ".join(str(Value[0]) for Value in Elements),
+            "ElementPositions": " ".join(str(Value[1]) for Value in Elements),
+        }
+    )
+    return Attributes
+
+
+# this definition exists because encoded constraints need one ordered property container
+def BuildRuleProp(Encoded: list[dict[str, AnyValue]]) -> XmlTree.Element:
+    Result = PropAction("Constraints", "Sketcher::PropertyConstraintList")
+    RuleList = XmlTree.SubElement(
+        Result, "ConstraintList", {"count": str(len(Encoded))}
+    )
+    for ItemValue in Encoded:
+        XmlTree.SubElement(RuleList, "Constrain", RuleXmlAttrs(ItemValue))
+    return Result
+
+
+# this definition exists because sketch constraints coordinate native encoding diagnostics and links
 def ConstraintsProp(
     Sketch: Mapping[str, Any],
     Indices: Mapping[str, int],
@@ -1929,442 +2556,108 @@ def ConstraintsProp(
 ) -> tuple[
     XmlTree.Element, list[tuple[str, str]], list[str], list[dict[str, AnyValue]]
 ]:
-    SourceConstraints = Items(Sketch.get("constraints", []))
-    EntityItems = Items(Sketch.get("entities", []))
-    Entities = {TextAction(Entity.get("id")): Entity for Entity in EntityItems}
-    Encoded: list[dict[str, AnyValue]] = []
-    Expressions: list[tuple[str, str]] = []
-    Dependencies: list[str] = []
-    Diagnostics: list[dict[str, AnyValue]] = []
-    RuleNames: set[str] = set()
-    FixedEntities: set[str] = set()
-    ProfileEntityIds = {
-        TextAction(EntityId)
-        for Profile in Sequence(Sketch.get("closed_profile_entity_ids", []))
-        for EntityId in Sequence(Profile)
-        if TextAction(EntityId)
-    }
-    for RuleValue in SourceConstraints:
-        KindValue = TextAction(EnumAction(RuleValue.get("kind"))).lower()
-        References = Items(RuleValue.get("references", []))
-        if ProfileOnly:
-            RefEntities = [
-                Entities.get(TextAction(RefValue.get("entity_id")), {})
-                for RefValue in References
-            ]
-            RefKinds = [
-                TextAction(EnumAction(Entity.get("kind"))).casefold()
-                for Entity in RefEntities
-            ]
-            RefPoints = [
-                TextAction(RefValue.get("point")).casefold() for RefValue in References
-            ]
-            ProfileReferences = bool(References) and all(
-                (
-                    TextAction(RefValue.get("entity_id")) in ProfileEntityIds
-                    for RefValue in References
-                )
-            )
-            StaticallySound = ProfileReferences and (
-                KindValue in {"horizontal", "vertical"}
-                and len(References) == 1
-                and (RefKinds == ["line"])
-                and (RefPoints == [""])
-                or (
-                    KindValue == "coincident"
-                    and len(References) == 2
-                    and all(RefPoints)
-                )
-                or (
-                    KindValue in {"radius", "diameter"}
-                    and len(References) == 1
-                    and (RefKinds == ["circle"])
-                    and (RefPoints == [""])
-                )
-            )
-            if not StaticallySound:
-                Diagnostics.append(
-                    RuleDiag(
-                        RuleValue,
-                        KindValue,
-                        "freecad.sketch_constraint_carrier_only",
-                        "carrier_only",
-                        "the source relationship is preserved without activating an unproven solver encoding",
-                        "warning",
-                        CarrierReason="source_opaque",
-                    )
-                )
-                continue
-        SourceAttributes = RuleValue.get("attributes", {})
-        if not isinstance(SourceAttributes, Mapping):
-            SourceAttributes = {}
-        RawAttributes = SourceAttributes.get("freecad", {})
-        if not isinstance(RawAttributes, Mapping):
-            RawAttributes = {}
-        SourceCode = SourceAttributes.get(
-            "freecad_type_code", RawAttributes.get("Type")
-        )
-        NativeRule = SourceCode is not None or bool(RawAttributes)
-        Composition: tuple[str, str] | None = None
-        if KindValue == "midpoint" and SourceCode is None:
-            CodeValue = 14
-            Resolved = MidpointSlots(RuleValue, Indices, Entities)
-            if Resolved is not None:
-                Composition = (
-                    "Symmetric",
-                    "encoded as symmetry between a line's endpoints and the referenced point",
-                )
-            else:
-                Diagnostics.append(
-                    RuleDiag(
-                        RuleValue,
-                        KindValue,
-                        "freecad.sketch_constraint_carrier_only",
-                        "carrier_only",
-                        "the midpoint relationship cannot be expressed as a sound FreeCAD symmetry constraint",
-                        "warning",
-                        CarrierReason=RuleCarrier(RuleValue, NativeRule),
-                    )
-                )
-                continue
-        else:
-            CodeValue = (
-                int(Number(SourceCode, -1))
-                if SourceCode is not None
-                else RuleCodeByKind.get(KindValue)
-            )
-            Resolved = None
-        if CodeValue is None or CodeValue < 0:
-            Diagnostics.append(
-                RuleDiag(
-                    RuleValue,
-                    KindValue,
-                    "freecad.sketch_constraint_carrier_only",
-                    "carrier_only",
-                    "no equivalent FreeCAD constraint type is available",
-                    "warning",
-                    CarrierReason=RuleCarrier(RuleValue, NativeRule),
-                )
-            )
-            continue
-        if Resolved is None:
-            SourceSlots = Items(SourceAttributes.get("freecad_reference_slots", []))
-            SlotValues: list[tuple[int, int, str]] = []
-            if SourceSlots:
-                SlotValues = [
-                    (
-                        int(Number(SlotValue.get("freecad_geometry_index"), -2000)),
-                        int(Number(SlotValue.get("freecad_point_index"))),
-                        TextAction(SlotValue.get("entity_id")),
-                    )
-                    for SlotValue in SourceSlots
-                ]
-            elif RawAttributes:
-                SlotValues = [
-                    (EntityIndex, PointIndex, "")
-                    for EntityIndex, PointIndex in RawRuleSlots(RawAttributes)
-                ]
-            Unresolved = False
-            if SlotValues:
-                Resolved = []
-                for EntityIndex, PointIndex, EntityId in SlotValues:
-                    if EntityIndex < 0:
-                        Resolved.append((EntityIndex, PointIndex))
-                        continue
-                    TargetId = EntityId
-                    if not TargetId and EntityIndex < len(EntityItems):
-                        TargetId = TextAction(EntityItems[EntityIndex].get("id"))
-                    TargetIndex = Indices.get(TargetId)
-                    if TargetIndex is None:
-                        Unresolved = True
-                        break
-                    Resolved.append((TargetIndex, PointIndex))
-                if Unresolved:
-                    Resolved = []
-            else:
-                Resolved = []
-                for RefValue in References:
-                    EntityId = TextAction(RefValue.get("entity_id"))
-                    EntityIndex = Indices.get(EntityId)
-                    if EntityIndex is None:
-                        Unresolved = True
-                        break
-                    Resolved.append(
-                        (
-                            EntityIndex,
-                            NeutralRefPoint(
-                                KindValue,
-                                Entities.get(EntityId, {}),
-                                RefValue.get("point"),
-                            ),
-                        )
-                    )
-                if Unresolved:
-                    Resolved = []
-            if KindValue == "concentric" and (not NativeRule):
-                if len(Resolved) == 2:
-                    Resolved = [(Resolved[0][0], 3), (Resolved[1][0], 3)]
-                    Composition = (
-                        "Coincident",
-                        "encoded as coincidence between the referenced curve centers",
-                    )
-                else:
-                    Resolved = []
-            elif KindValue == "fixed" and (not NativeRule):
-                if len(Resolved) == 1 and Resolved[0][1] == 0:
-                    Composition = ("Block", "encoded using FreeCAD's block constraint")
-                else:
-                    Resolved = []
-        if not Resolved:
-            Diagnostics.append(
-                RuleDiag(
-                    RuleValue,
-                    KindValue,
-                    "freecad.sketch_constraint_carrier_only",
-                    "carrier_only",
-                    "the constraint has no sound native reference encoding",
-                    "warning",
-                    CarrierReason=RuleCarrier(RuleValue, NativeRule),
-                )
-            )
-            continue
-        ParamId = TextAction(RuleValue.get("parameter_id"))
-        Value = Parameters.value(
-            ParamId,
-            Number(
-                RuleValue.get("value"),
-                Number(
-                    SourceAttributes.get("native_value"),
-                    Number(RawAttributes.get("Value")),
-                ),
-            ),
-        )
-        Elements = Resolved + [(-2000, 0)] * max(0, 3 - len(Resolved))
-        Values = Elements[:3]
-        if NativeRule and "Name" in RawAttributes:
-            NameValue = TextAction(RawAttributes.get("Name"))
-        else:
-            NameBase = SafeAction(RuleValue.get("id"), "Constraint")
-            NameValue = NameBase
-            Suffix = 2
-            while NameValue in RuleNames:
-                NameValue = f"{NameBase}_{Suffix}"
-                Suffix += 1
-            RuleNames.add(NameValue)
-        if NameValue:
-            RuleNames.add(NameValue)
-        Encoded.append(
-            {
-                "name": NameValue,
-                "type": CodeValue,
-                "value": Value,
-                "driving": bool(RuleValue.get("driving", True)),
-                "active": not bool(RuleValue.get("suppressed")),
-                "first": Values[0],
-                "second": Values[1],
-                "third": Values[2],
-                "elements": Elements,
-                "attributes": RawAttributes,
-            }
-        )
-        if KindValue in FixedRuleKinds:
-            FixedEntities.update(
-                (
-                    TextAction(RefValue.get("entity_id"))
-                    for RefValue in Items(RuleValue.get("references", []))
-                )
-            )
-        if Composition is not None:
-            Diagnostics.append(
-                RuleDiag(
-                    RuleValue,
-                    KindValue,
-                    "freecad.sketch_constraint_composed",
-                    "native_composition",
-                    Composition[1],
-                    "info",
-                    Composition[0],
-                )
-            )
-        Expression = (
-            Parameters.expression(ParamId)
-            if not NativeRule or Parameters.has_source_expression(ParamId)
-            else None
-        )
-        if (
-            Expression
-            and bool(RuleValue.get("driving", True))
-            and (CodeValue in DimensionalRuleCodes)
-        ):
-            SourcePath = Parameters.source_path(ParamId)
-            PathValue = (
-                f".{SourcePath}"
-                if NativeRule and SourcePath
-                else f".Constraints.{NameValue}"
-            )
-            Expressions.append((PathValue, Expression))
-            Dependencies.append("Parameters")
-    for Entity in EntityItems:
-        EntityId = TextAction(Entity.get("id"))
-        if (
-            not ProfileOnly
-            and bool(Entity.get("fixed"))
-            and (EntityId not in FixedEntities)
-            and (EntityId in Indices)
-        ):
-            Encoded.append(
-                {
-                    "name": f"fixed_{EntityId}",
-                    "type": 17,
-                    "value": 0.0,
-                    "driving": True,
-                    "active": True,
-                    "first": (Indices[EntityId], 0),
-                    "second": (-2000, 0),
-                    "third": (-2000, 0),
-                    "elements": [(Indices[EntityId], 0), (-2000, 0), (-2000, 0)],
-                    "attributes": {},
-                }
-            )
-    Result = PropAction("Constraints", "Sketcher::PropertyConstraintList")
-    RuleList = XmlTree.SubElement(
-        Result, "ConstraintList", {"count": str(len(Encoded))}
+    State = CreateRuleState(Sketch, Indices, Parameters, ProfileOnly)
+    for RuleValue in Items(Sketch.get("constraints", [])):
+        AppendRuleMut(State, RuleValue)
+    AddFixedMut(State)
+    return (
+        BuildRuleProp(State.Encoded),
+        State.Expressions,
+        State.Dependencies,
+        State.Diagnostics,
     )
-    for ItemValue in Encoded:
-        First, Second, Third = (
-            ItemValue["first"],
-            ItemValue["second"],
-            ItemValue["third"],
-        )
-        Elements = ItemValue["elements"]
-        Attributes = {
-            str(KeyValue): str(Value)
-            for KeyValue, Value in ItemValue["attributes"].items()
-        }
-        if not Attributes:
-            Attributes.update(
-                {
-                    "MetaData": "",
-                    "Orientation": "0",
-                    "LabelDistance": FmtAction(10),
-                    "LabelPosition": FmtAction(0),
-                    "IsInVirtualSpace": "0",
-                    "IsVisible": "1",
-                }
-            )
-        Attributes.update(
-            {
-                "Name": ItemValue["name"],
-                "Type": str(ItemValue["type"]),
-                "Value": FmtAction(ItemValue["value"]),
-                "IsDriving": "1" if ItemValue["driving"] else "0",
-                "IsActive": "1" if ItemValue["active"] else "0",
-                "First": str(First[0]),
-                "FirstPos": str(First[1]),
-                "Second": str(Second[0]),
-                "SecondPos": str(Second[1]),
-                "Third": str(Third[0]),
-                "ThirdPos": str(Third[1]),
-                "ElementIds": " ".join((str(Value[0]) for Value in Elements)),
-                "ElementPositions": " ".join((str(Value[1]) for Value in Elements)),
-            }
-        )
-        XmlTree.SubElement(RuleList, "Constrain", Attributes)
-    return (Result, Expressions, Dependencies, Diagnostics)
 
 
-# this definition exists because focused behavior needs one stable owner
-def BuildSketch(
-    Sketch: Mapping[str, Any],
-    Plane: Mapping[str, Any],
-    PlaneName: str,
-    Parameters: _Parameters,
-    PreserveNative: bool = False,
-    ProfileConstraintsOnly: bool = False,
-) -> tuple[list[XmlTree.Element], list[str]]:
-    Transform = (
-        Plane.get("transform", {})
-        if isinstance(Plane.get("transform"), Mapping)
-        else {}
-    )
-    GeomValue, Indices, GeomDiagnostics = GeomProp(Sketch)
-    Constraints, Expressions, Dependencies, RuleDiagnostics = ConstraintsProp(
-        Sketch, Indices, Parameters, ProfileOnly=ProfileConstraintsOnly
-    )
-    SketchDiagnostics = [*GeomDiagnostics, *RuleDiagnostics]
-    DiagnosticsProp = (
-        JsonProp("KitSketchDiagnosticsJSON", SketchDiagnostics)
-        if SketchDiagnostics
-        else None
-    )
-    SketchAttributes = Sketch.get("attributes", {})
+# this definition exists because native sketch metadata may be absent or malformed
+def SketchCarrier(Sketch: Mapping[str, Any]) -> Mapping[str, Any]:
+    SketchAttrs = Sketch.get("attributes", {})
     NativeObject = (
-        SketchAttributes.get("freecad", {})
-        if isinstance(SketchAttributes, Mapping)
-        else {}
+        SketchAttrs.get("freecad", {}) if isinstance(SketchAttrs, Mapping) else {}
     )
-    NativeProperties = (
-        NativeObject.get("properties", {}) if isinstance(NativeObject, Mapping) else {}
+    return NativeObject if isinstance(NativeObject, Mapping) else {}
+
+
+# this definition exists because sketch transfer warnings share one optional property
+def SketchDiagProp(
+    GeomDiagnostics: list[dict[str, AnyValue]],
+    RuleDiagnostics: list[dict[str, AnyValue]],
+) -> XmlTree.Element | None:
+    Diagnostics = [*GeomDiagnostics, *RuleDiagnostics]
+    return JsonProp("KitSketchDiagnosticsJSON", Diagnostics) if Diagnostics else None
+
+
+# this definition exists because native sketch links must track rewritten object names
+def SketchLinks(Properties: list[XmlTree.Element], PlaneName: str) -> list[str]:
+    Attachment = next(
+        (Value for Value in Properties if Value.get("name") == "AttachmentSupport"),
+        None,
     )
-    if isinstance(NativeProperties, Mapping) and NativeProperties:
-        Properties = NativeA(NativeObject)
-        Replacements = [
-            StringProp("Label", Sketch.get("name", Sketch.get("id", "Sketch"))),
-            GeomValue,
-            Constraints,
-            ShapeProp("", "InternalShape"),
-            ShapeProp(),
-            BoolProp("Visibility", not bool(Sketch.get("suppressed"))),
-        ]
-        if DiagnosticsProp is not None:
-            Replacements.append(DiagnosticsProp)
-        if not PreserveNative:
-            Replacements.insert(1, MakePlacement("Placement", Transform))
-        for Replacement in Replacements:
-            MergeNamedMut(Properties, Replacement)
-        Attachment = next(
-            (
-                ItemValue
-                for ItemValue in Properties
-                if ItemValue.get("name") == "AttachmentSupport"
-            ),
-            None,
+    if Attachment is not None and PlaneName:
+        for LinkValue in Attachment.findall(".//Link"):
+            LinkValue.set("obj", PlaneName)
+    Dependencies = [PlaneName]
+    Outer = next(
+        (Value for Value in Properties if Value.get("name") == "ExternalGeometry"),
+        None,
+    )
+    if Outer is not None:
+        Dependencies.extend(
+            Target
+            for LinkValue in Outer.findall(".//Link")
+            if (Target := TextAction(LinkValue.get("obj")))
         )
-        if Attachment is not None and PlaneName:
-            for LinkValue in Attachment.findall(".//Link"):
-                LinkValue.set("obj", PlaneName)
-        Dependencies = [PlaneName]
-        Outer = next(
-            (
-                ItemValue
-                for ItemValue in Properties
-                if ItemValue.get("name") == "ExternalGeometry"
-            ),
-            None,
+    return Dependencies
+
+
+# this definition exists because native sketch properties need selective semantic replacement
+def PatchSketchMut(
+    Sketch: Mapping[str, Any],
+    NativeObject: Mapping[str, Any],
+    PlaneName: str,
+    Transform: Mapping[str, Any],
+    GeomValue: XmlTree.Element,
+    Constraints: XmlTree.Element,
+    DiagnosticsProp: XmlTree.Element | None,
+    PreserveNative: bool,
+) -> tuple[list[XmlTree.Element], list[str]]:
+    Properties = NativeA(NativeObject)
+    Replacements = [
+        StringProp("Label", Sketch.get("name", Sketch.get("id", "Sketch"))),
+        GeomValue,
+        Constraints,
+        ShapeProp("", "InternalShape"),
+        ShapeProp(),
+        BoolProp("Visibility", not bool(Sketch.get("suppressed"))),
+    ]
+    if DiagnosticsProp is not None:
+        Replacements.append(DiagnosticsProp)
+    if not PreserveNative:
+        Replacements.insert(1, MakePlacement("Placement", Transform))
+    for Replacement in Replacements:
+        MergeNamedMut(Properties, Replacement)
+    Dependencies = SketchLinks(Properties, PlaneName)
+    if not PreserveNative:
+        Properties.extend(
+            [
+                LinkProp("SupportPlane", PlaneName, Dynamic=True),
+                StringProp("KitId", Sketch.get("id"), Dynamic=True),
+                JsonProp("ClosedProfilesJSON", Sketch.get("closed_profile_entity_ids", [])),
+                JsonProp("SourceSketchJSON", Sketch),
+            ]
         )
-        if Outer is not None:
-            Dependencies.extend(
-                (
-                    Target
-                    for LinkValue in Outer.findall(".//Link")
-                    if (Target := TextAction(LinkValue.get("obj")))
-                )
-            )
-        if not PreserveNative:
-            Properties.extend(
-                [
-                    LinkProp("SupportPlane", PlaneName, Dynamic=True),
-                    StringProp("KitId", Sketch.get("id"), Dynamic=True),
-                    JsonProp(
-                        "ClosedProfilesJSON",
-                        Sketch.get("closed_profile_entity_ids", []),
-                    ),
-                    JsonProp("SourceSketchJSON", Sketch),
-                ]
-            )
-        return (Properties, Dependencies)
-    Expressions.append(("Placement", f"{PlaneName}.Placement"))
-    Dependencies.append(PlaneName)
+    return (Properties, Dependencies)
+
+
+# this definition exists because neutral sketches need one canonical property sequence
+def NeutralSketch(
+    Sketch: Mapping[str, Any],
+    PlaneName: str,
+    Transform: Mapping[str, Any],
+    GeomValue: XmlTree.Element,
+    Constraints: XmlTree.Element,
+    Expressions: list[tuple[str, str]],
+    DiagnosticsProp: XmlTree.Element | None,
+) -> list[XmlTree.Element]:
     Properties = [
         StringProp("Label", Sketch.get("name", Sketch.get("id", "Sketch"))),
         MakePlacement("Placement", Transform),
@@ -2382,7 +2675,57 @@ def BuildSketch(
     ]
     if DiagnosticsProp is not None:
         Properties.append(DiagnosticsProp)
-    return (Properties, Dependencies)
+    return Properties
+
+
+# this definition exists because sketch assembly coordinates geometry constraints and plane links
+def BuildSketch(
+    Sketch: Mapping[str, Any],
+    Plane: Mapping[str, Any],
+    PlaneName: str,
+    Parameters: _Parameters,
+    PreserveNative: bool = False,
+    ProfileConstraintsOnly: bool = False,
+) -> tuple[list[XmlTree.Element], list[str]]:
+    Transform = (
+        Plane.get("transform", {})
+        if isinstance(Plane.get("transform"), Mapping)
+        else {}
+    )
+    GeomValue, Indices, GeomDiagnostics = GeomProp(Sketch)
+    Constraints, Expressions, Dependencies, RuleDiagnostics = ConstraintsProp(
+        Sketch, Indices, Parameters, ProfileOnly=ProfileConstraintsOnly
+    )
+    DiagnosticsProp = SketchDiagProp(GeomDiagnostics, RuleDiagnostics)
+    NativeObject = SketchCarrier(Sketch)
+    NativeProperties = (
+        NativeObject.get("properties", {}) if isinstance(NativeObject, Mapping) else {}
+    )
+    if isinstance(NativeProperties, Mapping) and NativeProperties:
+        return PatchSketchMut(
+            Sketch,
+            NativeObject,
+            PlaneName,
+            Transform,
+            GeomValue,
+            Constraints,
+            DiagnosticsProp,
+            PreserveNative,
+        )
+    Expressions.append(("Placement", f"{PlaneName}.Placement"))
+    Dependencies.append(PlaneName)
+    return (
+        NeutralSketch(
+            Sketch,
+            PlaneName,
+            Transform,
+            GeomValue,
+            Constraints,
+            Expressions,
+            DiagnosticsProp,
+        ),
+        Dependencies,
+    )
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2516,11 +2859,11 @@ def HasSegmentTouch(
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def LineProfile(
+# this definition exists because profile lines need validated nondegenerate endpoints
+def ProfileSegments(
     Entities: list[Mapping[str, Any]],
-) -> tuple[tuple[float, float], ...] | None:
-    Remaining: list[tuple[tuple[float, float], tuple[float, float]]] = []
+) -> list[tuple[tuple[float, float], tuple[float, float]]] | None:
+    Segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
     for Entity in Entities:
         GeomValue = Entity.get("geometry", {})
         if not isinstance(GeomValue, Mapping):
@@ -2529,7 +2872,15 @@ def LineProfile(
         EndValue = PointTwo(GeomValue.get("end"))
         if IsPointClose(Start, EndValue):
             return None
-        Remaining.append((Start, EndValue))
+        Segments.append((Start, EndValue))
+    return Segments
+
+
+# this definition exists because unordered profile lines need one continuous vertex loop
+def OrderedProfile(
+    Segments: list[tuple[tuple[float, float], tuple[float, float]]],
+) -> list[tuple[float, float]] | None:
+    Remaining = list(Segments)
     if len(Remaining) < 3:
         return None
     FirstStart, FirstEnd = Remaining.pop(0)
@@ -2551,23 +2902,40 @@ def LineProfile(
     if not IsPointClose(Points[-1], Points[0]):
         return None
     Points.pop()
-    AreaValue = abs(
-        sum(
-            (
-                First[0] * Second[1] - Second[0] * First[1]
-                for First, Second in zip(Points, Points[1:] + Points[:1], strict=True)
-            )
-        )
+    return Points
+
+
+# this definition exists because degenerate profile loops cannot define a solid face
+def HasProfileArea(Points: list[tuple[float, float]]) -> bool:
+    AreaValue = sum(
+        First[0] * Second[1] - Second[0] * First[1]
+        for First, Second in zip(Points, Points[1:] + Points[:1], strict=True)
     )
-    if AreaValue <= 1e-09:
-        return None
+    return abs(AreaValue) > 1e-09
+
+
+# this definition exists because self intersecting profile loops cannot define a solid face
+def HasProfileCross(Points: list[tuple[float, float]]) -> bool:
     Segments = list(zip(Points, Points[1:] + Points[:1], strict=True))
     for FirstIndex, First in enumerate(Segments):
         for SecondIndex in range(FirstIndex + 1, len(Segments)):
             if SecondIndex in {FirstIndex + 1, (FirstIndex - 1) % len(Segments)}:
                 continue
             if HasSegmentTouch(*First, *Segments[SecondIndex]):
-                return None
+                return True
+    return False
+
+
+# this definition exists because profile validation must reject gaps degeneracy and intersections
+def LineProfile(
+    Entities: list[Mapping[str, Any]],
+) -> tuple[tuple[float, float], ...] | None:
+    Segments = ProfileSegments(Entities)
+    if Segments is None:
+        return None
+    Points = OrderedProfile(Segments)
+    if Points is None or not HasProfileArea(Points) or HasProfileCross(Points):
+        return None
     return tuple(Points)
 
 
@@ -2911,7 +3279,7 @@ def PayloadRole(Payload: Mapping[str, Any]) -> str:
 
 
 # this definition exists because focused behavior needs one stable owner
-def NativeBrepKey(
+def BuildBrepKey(
     Payload: Mapping[str, Any], DataValue: bytes, NativeDocShaTwoFiveSix: str
 ) -> KNativeBrepKey | None:
     Provenance = Payload.get("provenance")
@@ -2996,14 +3364,14 @@ def FreecadBrep(
     Payload: Mapping[str, Any],
     DataValue: bytes,
     NativeDocShaTwoFiveSix: str,
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
 ) -> bytes | None:
     if TextAction(Payload.get("format_id")).casefold() not in FreecadBrepFormatIds:
         return None
     PayloadNativeDocShaTwoSix = PayloadNative(Payload)
     if PayloadNativeDocShaTwoSix:
         NativeDocShaTwoFiveSix = PayloadNativeDocShaTwoSix
-    if NativeBrepKey(Payload, DataValue, NativeDocShaTwoFiveSix) in TrustedNativeBreps:
+    if BuildBrepKey(Payload, DataValue, NativeDocShaTwoFiveSix) in TrustedNativeBreps:
         return DataValue
     return ProvenAsciiBrep(DataValue)
 
@@ -3281,10 +3649,8 @@ def DefinitionMesh(
     return Result
 
 
-# this definition exists because focused behavior needs one stable owner
-def MeshKernelData(
-    Vertices: list[tuple[float, float, float]], Triangles: list[tuple[int, int, int]]
-) -> bytes:
+# this definition exists because mesh triangles need deterministic manifold adjacency metadata
+def MeshNeighbors(Triangles: list[tuple[int, int, int]]) -> list[list[int]]:
     Neighbors = [[-1, -1, -1] for Ignored in Triangles]
     EdgeUses: dict[tuple[int, int], tuple[int, ...] | None] = {}
     for TriangleIndex, Triangle in enumerate(Triangles):
@@ -3316,6 +3682,14 @@ def MeshKernelData(
                 Neighbors[FirstTriangle][FirstEdge] = -1
                 Neighbors[SecondTriangle][SecondEdge] = -1
                 EdgeUses[KeyValue] = None
+    return Neighbors
+
+
+# this definition exists because freecad mesh payloads require adjacency bounds and stable framing
+def MeshKernelData(
+    Vertices: list[tuple[float, float, float]], Triangles: list[tuple[int, int, int]]
+) -> bytes:
+    Neighbors = MeshNeighbors(Triangles)
     Banner = (b"MESH-" * 52)[:255] + b"\n"
     Result = bytearray(Struct.pack("<II", 2695938256, 65536))
     Result.extend(Banner)
@@ -3392,14 +3766,10 @@ def RenamePropLinks(
             ElemValue.set("expression", Expression)
 
 
-# this definition exists because focused behavior needs one stable owner
-def ImportCompMut(
-    Graph: _Graph,
-    DocValue: Mapping[str, Any],
-    Prefix: str,
-    PayloadEntries: dict[str, bytes],
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
-) -> tuple[str, list[str]]:
+# this definition exists because imported components must be rendered through the same document writer
+def ImportArchive(
+    DocValue: Mapping[str, Any], TrustedNativeBreps: frozenset[KNativeBrepKey]
+) -> tuple[XmlTree.Element, dict[str, bytes]]:
     Canonical = JsonValue.dumps(
         DocValue, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
@@ -3407,7 +3777,15 @@ def ImportCompMut(
     DocXml, ChildPayloads = BuildDocXml(
         DocValue, "", Digest, TrustedNativeBreps=TrustedNativeBreps
     )
-    RootValue = XmlTree.fromstring(DocXml)
+    return (XmlTree.fromstring(DocXml), ChildPayloads)
+
+
+# this definition exists because imported document nodes need indexed data and dependency lookup
+def ImportNodes(
+    RootValue: XmlTree.Element,
+) -> tuple[
+    list[XmlTree.Element], dict[str, XmlTree.Element], dict[str, list[str]]
+]:
     ObjectNodes = RootValue.findall("./Objects/Object")
     DataNodes = {
         NodeValue.get("name", ""): NodeValue
@@ -3419,6 +3797,11 @@ def ImportCompMut(
         ]
         for NodeValue in RootValue.findall("./Objects/ObjectDeps")
     }
+    return (ObjectNodes, DataNodes, Dependencies)
+
+
+# this definition exists because imported metadata identifies preferred visible shape targets
+def ImportTargets(DataNodes: Mapping[str, XmlTree.Element]) -> tuple[str, str]:
     MetaNode = DataNodes.get("KitMetadata")
     OuterOld = ""
     FinalOld = ""
@@ -3429,15 +3812,27 @@ def ImportCompMut(
         OuterOld = Outer.get("value", "") if Outer is not None else ""
         Final = MetaNode.find("./Properties/Property[@name='FinalFeature']/String")
         FinalOld = Final.get("value", "") if Final is not None else ""
-    Included = [
-        NodeValue for NodeValue in ObjectNodes if NodeValue.get("name") != "KitMetadata"
-    ]
-    Names = {
+    return (OuterOld, FinalOld)
+
+
+# this definition exists because imported object names must remain unique within the parent graph
+def ImportNamesMut(
+    Graph: _Graph, Included: list[XmlTree.Element], Prefix: str
+) -> dict[str, str]:
+    return {
         NodeValue.get("name", ""): Graph.unique(
             f"{Prefix}_{NodeValue.get('name', '')}", "Component"
         )
         for NodeValue in Included
     }
+
+
+# this definition exists because imported payload names must remain unique within the parent archive
+def MovePayloadsMut(
+    ChildPayloads: Mapping[str, bytes],
+    Prefix: str,
+    PayloadEntriesMut: dict[str, bytes],
+) -> dict[str, str]:
     Files: dict[str, str] = {}
     for FileName, DataValue in sorted(ChildPayloads.items()):
         if FileName.startswith("interchange/native/"):
@@ -3448,9 +3843,21 @@ def ImportCompMut(
             )
         else:
             Requested = f"{Prefix}_{PurePosixPath(FileName).name}"
-        Renamed = UniquePayload(PayloadEntries, Requested)
-        PayloadEntries[Renamed] = DataValue
+        Renamed = UniquePayload(PayloadEntriesMut, Requested)
+        PayloadEntriesMut[Renamed] = DataValue
         Files[FileName] = Renamed
+    return Files
+
+
+# this definition exists because imported nodes need rewritten links and preserved native metadata
+def AddImportsMut(
+    Graph: _Graph,
+    Included: list[XmlTree.Element],
+    DataNodes: Mapping[str, XmlTree.Element],
+    Dependencies: Mapping[str, list[str]],
+    Names: Mapping[str, str],
+    Files: Mapping[str, str],
+) -> list[str]:
     Imported: list[str] = []
     for NodeValue in Included:
         OldName = NodeValue.get("name", "")
@@ -3484,6 +3891,17 @@ def ImportCompMut(
         )
         Graph.Objects.append(ImportedObject)
         Imported.append(ImportedObject.name)
+    return Imported
+
+
+# this definition exists because imported components need a deterministic preferred shape target
+def ImportTarget(
+    Included: list[XmlTree.Element],
+    DataNodes: Mapping[str, XmlTree.Element],
+    Names: Mapping[str, str],
+    OuterOld: str,
+    FinalOld: str,
+) -> str:
     Target = Names.get(OuterOld, "") or Names.get(FinalOld, "")
     if not Target:
         for NodeValue in reversed(Included):
@@ -3495,7 +3913,27 @@ def ImportCompMut(
             ):
                 Target = Names.get(OldName, "")
                 break
-    return (Target, Imported)
+    return Target
+
+
+# this definition exists because component import coordinates names payloads links and target selection
+def ImportCompMut(
+    Graph: _Graph,
+    DocValue: Mapping[str, Any],
+    Prefix: str,
+    PayloadEntries: dict[str, bytes],
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
+) -> tuple[str, list[str]]:
+    RootValue, ChildPayloads = ImportArchive(DocValue, TrustedNativeBreps)
+    ObjectNodes, DataNodes, Dependencies = ImportNodes(RootValue)
+    OuterOld, FinalOld = ImportTargets(DataNodes)
+    Included = [Value for Value in ObjectNodes if Value.get("name") != "KitMetadata"]
+    Names = ImportNamesMut(Graph, Included, Prefix)
+    Files = MovePayloadsMut(ChildPayloads, Prefix, PayloadEntries)
+    Imported = AddImportsMut(
+        Graph, Included, DataNodes, Dependencies, Names, Files
+    )
+    return (ImportTarget(Included, DataNodes, Names, OuterOld, FinalOld), Imported)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3668,23 +4106,8 @@ def AddOriginMut(Graph: _Graph, AsmValue: _Object) -> str:
     return Origin.name
 
 
-# this definition exists because focused behavior needs one stable owner
-def GroundJointMut(
-    Graph: _Graph,
-    Component: str,
-    Label: str,
-    Placement: tuple[float, ...],
-    Source: Mapping[str, Any] | None = None,
-) -> Object:
-    Source = Source if isinstance(Source, Mapping) else {}
-    Joint = Graph.add(
-        TextAction(Source.get("type_id"), "App::FeaturePython"),
-        Source.get("name", f"Grounded_{Label}"),
-        "GroundedJoint",
-        Touched=bool(Source.get("touched")),
-        Extensions=Native(Source),
-    )
-    Joint.properties.extend(NativeA(Source))
+# this definition exists because grounded joints need a canonical component link property
+def GroundLinkMut(Joint: Object, Component: str) -> None:
     ObjectToGround = next(
         (
             ItemValue
@@ -3710,6 +4133,10 @@ def GroundJointMut(
     if LinkValue is None:
         LinkValue = XmlTree.SubElement(ObjectToGround, "Link")
     LinkValue.set("value", Component)
+
+
+# this definition exists because grounded joints need a canonical placement property
+def GroundPlaceMut(Joint: Object, Placement: tuple[float, ...]) -> None:
     PlacementProp = next(
         (
             ItemValue
@@ -3740,6 +4167,10 @@ def GroundJointMut(
     if PlacementValue is not None:
         CurrentPlacement.attrib.clear()
         CurrentPlacement.attrib.update(PlacementValue.attrib)
+
+
+# this definition exists because grounded joints require standard python feature properties
+def GroundPropsMut(Joint: Object) -> None:
     if not Joint.properties:
         raise ValueError("grounded joint properties could not be generated")
     if not any(
@@ -3763,6 +4194,28 @@ def GroundJointMut(
         Visibility = PropAction("Visibility", "App::PropertyBool", Status="648")
         XmlTree.SubElement(Visibility, "Bool", {"value": "true"})
         Joint.properties.append(Visibility)
+
+
+# this definition exists because grounded joint assembly coordinates source metadata links and placement
+def GroundJointMut(
+    Graph: _Graph,
+    Component: str,
+    Label: str,
+    Placement: tuple[float, ...],
+    Source: Mapping[str, Any] | None = None,
+) -> Object:
+    Source = Source if isinstance(Source, Mapping) else {}
+    Joint = Graph.add(
+        TextAction(Source.get("type_id"), "App::FeaturePython"),
+        Source.get("name", f"Grounded_{Label}"),
+        "GroundedJoint",
+        Touched=bool(Source.get("touched")),
+        Extensions=Native(Source),
+    )
+    Joint.properties.extend(NativeA(Source))
+    GroundLinkMut(Joint, Component)
+    GroundPlaceMut(Joint, Placement)
+    GroundPropsMut(Joint)
     Joint.dependencies.append(Component)
     return Joint
 
@@ -3778,56 +4231,142 @@ def ReplaceNameMut(
     Properties.append(Replacement)
 
 
-# this definition exists because focused behavior needs one stable owner
-def AddAsmMut(
+# this class exists because assembly source indexes must remain synchronized across phases
+@Dataclass
+class AsmContext:
+    Graph: _Graph
+    Manifest: Mapping[str, Any]
+    PayloadEntries: dict[str, bytes]
+    OuterLinks: Mapping[str, Mapping[str, Any]]
+    TrustedBreps: frozenset[KNativeBrepKey]
+    Assembly: Mapping[str, Any]
+    Parameters: _Parameters
+    Definitions: list[dict[str, Any]]
+    Documents: dict[str, Any]
+    RootDefId: str
+    DefinitionsById: dict[str, dict[str, Any]]
+    InstancesById: dict[str, dict[str, Any]]
+
+
+# this class exists because assembly root objects share native source metadata
+@Dataclass
+class AsmRoot:
+    RootLabel: str
+    NativeRoot: Mapping[str, Any]
+    GroupItems: list[dict[str, Any]]
+    NativeJointGroup: Mapping[str, Any] | None
+    NativeJoint: Mapping[str, Any]
+    RootObject: Object
+    RootOrigin: str
+    DefinitionsGroup: Object
+    ComponentsGroup: Object
+    EntitiesGroup: Object
+    MatesGroup: Object
+
+
+# this class exists because component transfer produces correlated names paths and groups
+@Dataclass
+class AsmItems:
+    DefinitionObjects: list[str]
+    DefinitionTargets: dict[str, str]
+    DefinitionOuter: dict[str, Mapping[str, AnyValue]]
+    DirectInstances: list[dict[str, Any]]
+    ItemObjects: list[str]
+    ItemByPath: dict[tuple[str, ...], str]
+    ItemByNativeName: dict[str, str]
+    ProxyChainByPath: dict[tuple[str, ...], tuple[str, ...]]
+    AsmLinkRecords: list[tuple[tuple[str, ...], Object, Mapping[str, AnyValue]]]
+    RigidInstanceIds: set[str]
+    GroundedObjects: list[str]
+
+
+# this class exists because mate transfer shares entity component and object indexes
+@Dataclass
+class AsmMates:
+    EntityItems: list[dict[str, Any]]
+    EntityObjects: list[str]
+    EntityNames: dict[str, str]
+    EntityComponents: dict[str, str]
+    EntityPrefixes: dict[str, str]
+    MateItems: list[dict[str, Any]]
+    MateObjects: list[str]
+    MateNames: dict[str, str]
+
+
+# this definition exists because assembly item indexes need independent mutable collections
+def CreateAsmItems() -> AsmItems:
+    return AsmItems([], {}, {}, [], [], {}, {}, {}, [], set(), [])
+
+
+# this definition exists because assembly conversion needs one validated indexed source context
+def BuildAsmContext(
     Graph: _Graph,
     Manifest: Mapping[str, Any],
     PayloadEntries: dict[str, bytes],
     OuterLinks: Mapping[str, Mapping[str, Any]],
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
-) -> tuple[str, int, int]:
-    AsmValue = AsmData(Manifest)
-    if AsmValue is None:
-        return ("", 0, 0)
-    Parameters = ParamCatalog(Items(Manifest.get("parameters", [])))
-    Definitions = Items(AsmValue.get("definitions", []))
+    TrustedBreps: frozenset[KNativeBrepKey],
+) -> AsmContext | None:
+    Assembly = AsmData(Manifest)
+    if Assembly is None:
+        return None
+    Definitions = Items(Assembly.get("definitions", []))
     Documents = {
-        TextAction(ItemValue.get("id")): ItemValue.get("document")
-        for ItemValue in Items(AsmValue.get("documents", []))
-        if isinstance(ItemValue.get("document"), Mapping)
+        TextAction(Value.get("id")): Value.get("document")
+        for Value in Items(Assembly.get("documents", []))
+        if isinstance(Value.get("document"), Mapping)
     }
-    RootDefinitionId = TextAction(AsmValue.get("root_definition_id"))
+    RootDefId = TextAction(Assembly.get("root_definition_id"))
     DefinitionsById = {
-        TextAction(ItemValue.get("id")): ItemValue for ItemValue in Definitions
+        TextAction(Value.get("id")): Value for Value in Definitions
     }
     InstancesById = {
-        TextAction(ItemValue.get("id")): ItemValue
-        for ItemValue in Items(
-            AsmValue.get("instances", AsmValue.get("components", []))
-        )
+        TextAction(Value.get("id")): Value
+        for Value in Items(Assembly.get("instances", Assembly.get("components", [])))
     }
-    RootDefinition = DefinitionsById.get(RootDefinitionId, {})
-    RootLabel = TextAction(RootDefinition.get("name"), "Assembly")
-    AsmAttributes = AsmValue.get("attributes", {})
-    NativeRootSource = (
-        AsmAttributes.get("freecad", {}) if isinstance(AsmAttributes, Mapping) else {}
+    return AsmContext(
+        Graph,
+        Manifest,
+        PayloadEntries,
+        OuterLinks,
+        TrustedBreps,
+        Assembly,
+        ParamCatalog(Items(Manifest.get("parameters", []))),
+        Definitions,
+        Documents,
+        RootDefId,
+        DefinitionsById,
+        InstancesById,
     )
-    if not isinstance(NativeRootSource, Mapping):
-        NativeRootSource = {}
 
-    # this callback exists because local behavior needs one focused transformation
-    GroupItems = sorted(
+
+# this definition exists because ordered assembly records share the same stable sort key
+def OrderedSource(Value: Mapping[str, Any]) -> tuple[int, str]:
+    return (int(Number(Value.get("order"))), TextAction(Value.get("id")))
+
+
+# this definition exists because root mate groups require deterministic source ordering
+def RootGroupItems(Context: AsmContext) -> list[dict[str, Any]]:
+    return sorted(
         (
             Group
-            for Group in Items(AsmValue.get("mate_groups", AsmValue.get("groups", [])))
-            if TextAction(Group.get("owner_definition_id")) == RootDefinitionId
+            for Group in Items(
+                Context.Assembly.get("mate_groups", Context.Assembly.get("groups", []))
+            )
+            if TextAction(Group.get("owner_definition_id")) == Context.RootDefId
         ),
-        key=lambda ItemValue: (
-            int(Number(ItemValue.get("order"))),
-            TextAction(ItemValue.get("id")),
-        ),
+        key=OrderedSource,
     )
-    NativeJointGroup = next(
+
+
+# this definition exists because root objects must preserve native assembly and joint metadata
+def BuildAsmRootMut(Context: AsmContext) -> AsmRoot:
+    RootDefinition = Context.DefinitionsById.get(Context.RootDefId, {})
+    RootLabel = TextAction(RootDefinition.get("name"), "Assembly")
+    AsmAttrs = Context.Assembly.get("attributes", {})
+    NativeRoot = AsmAttrs.get("freecad", {}) if isinstance(AsmAttrs, Mapping) else {}
+    NativeRoot = NativeRoot if isinstance(NativeRoot, Mapping) else {}
+    GroupItems = RootGroupItems(Context)
+    NativeGroup = next(
         (
             Group
             for Group in GroupItems
@@ -3836,924 +4375,1275 @@ def AddAsmMut(
         ),
         None,
     )
-    NativeJointSource = (
-        NativeJointGroup["attributes"]["freecad"]
-        if NativeJointGroup is not None
-        else {}
-    )
-    RootExtensions = Native(NativeRootSource)
-    RootValue = Graph.add(
-        TextAction(NativeRootSource.get("type_id"), AsmRootTypeId),
-        NativeRootSource.get("name", RootLabel),
+    NativeJoint = NativeGroup["attributes"]["freecad"] if NativeGroup else {}
+    RootObject = Context.Graph.add(
+        TextAction(NativeRoot.get("type_id"), AsmRootTypeId),
+        NativeRoot.get("name", RootLabel),
         "Assembly",
-        Touched=bool(NativeRootSource.get("touched")),
-        Extensions=RootExtensions or ("App::OriginGroupExtension",),
+        Touched=bool(NativeRoot.get("touched")),
+        Extensions=Native(NativeRoot) or ("App::OriginGroupExtension",),
     )
-    RootValue.properties.extend(NativeA(NativeRootSource))
-    RootOrigin = AddOriginMut(Graph, RootValue)
-    DefinitionsGroup = Graph.add(
+    RootObject.properties.extend(NativeA(NativeRoot))
+    RootOrigin = AddOriginMut(Context.Graph, RootObject)
+    DefinitionsGroup = Context.Graph.add(
         "App::DocumentObjectGroup", f"{RootLabel}_Definitions", "Definitions"
     )
-    ComponentsGroup = Graph.add(
+    ComponentsGroup = Context.Graph.add(
         "App::DocumentObjectGroup", f"{RootLabel}_Components", "Components"
     )
-    EntitiesGroup = Graph.add(
+    EntitiesGroup = Context.Graph.add(
         "App::DocumentObjectGroup", f"{RootLabel}_MateEntities", "MateEntities"
     )
-    JointExtensions = Native(NativeJointSource)
-    MatesGroup = Graph.add(
-        TextAction(NativeJointSource.get("type_id"), AsmJointGroupTypeId),
-        NativeJointSource.get("name", f"{RootLabel}_Joints"),
+    MatesGroup = Context.Graph.add(
+        TextAction(NativeJoint.get("type_id"), AsmJointGroupTypeId),
+        NativeJoint.get("name", f"{RootLabel}_Joints"),
         "Joints",
-        Touched=bool(NativeJointSource.get("touched")),
-        Extensions=JointExtensions or ("App::GroupExtension",),
+        Touched=bool(NativeJoint.get("touched")),
+        Extensions=Native(NativeJoint) or ("App::GroupExtension",),
     )
-    DefinitionObjects: list[str] = []
-    DefinitionTargets: dict[str, str] = {}
-    DefinitionOuter: dict[str, Mapping[str, AnyValue]] = {}
-    for Definition in Definitions:
-        DefinitionId = TextAction(Definition.get("id"))
-        DefinitionName = TextAction(Definition.get("name"), DefinitionId)
-        DefinitionPrefix = SafeAction(f"Definition_{DefinitionId}", "Definition")
-        Imported: list[str] = []
-        ImportedTarget = ""
-        DocId = TextAction(Definition.get("document_id"))
-        DocValue = Documents.get(DocId)
-        ComponentKind = TextAction(EnumAction(Definition.get("kind"))).lower()
-        Outer = OuterLinks.get(DefinitionId)
-        if Outer is not None:
-            DefinitionOuter[DefinitionId] = Outer
-        elif isinstance(DocValue, Mapping):
-            ImportedDoc = DocValue
-            if ComponentKind == "assembly":
-                ImportedDoc = dict(DocValue)
-                ImportedDoc["assembly"] = None
-            ImportedTarget, Imported = ImportCompMut(
-                Graph, ImportedDoc, DefinitionPrefix, PayloadEntries, TrustedNativeBreps
-            )
-            if ImportedTarget:
-                TargetObject = next(
-                    (
-                        ItemValue
-                        for ItemValue in Graph.Objects
-                        if ItemValue.name == ImportedTarget
-                    ),
-                    None,
-                )
-                if TargetObject is not None:
-                    ReplaceNameMut(
-                        TargetObject.properties,
-                        "Visibility",
-                        BoolProp("Visibility", False),
-                    )
-        Vertices: list[tuple[float, float, float]] = []
-        Triangles: list[tuple[int, int, int]] = []
-        for MeshSource in (
-            [] if Outer is not None else DefinitionMesh(Manifest, Definition)
-        ):
-            MeshVertices, MeshTriangles = Tessellation(MeshSource)
-            Offset = len(Vertices)
-            Vertices.extend(MeshVertices)
-            Triangles.extend(
-                (
-                    tuple((Index + Offset for Index in Triangle))
-                    for Triangle in MeshTriangles
-                )
-            )
-        MeshName = ""
-        if Vertices and Triangles:
-            MeshValue = Graph.add(
-                "Mesh::Feature", f"{DefinitionName}_Mesh", "ComponentMesh"
-            )
-            FileName = UniquePayload(PayloadEntries, f"{MeshValue.name}.MeshKernel.bms")
-            PayloadEntries[FileName] = MeshKernelData(Vertices, Triangles)
-            MeshValue.properties.extend(
-                [
-                    StringProp("Label", f"{DefinitionName} geometry"),
-                    MeshProp(FileName),
-                    MakePlacement("Placement", MatrixTransform(KIdentityMatrix)),
-                    StringProp("DefinitionId", DefinitionId, Dynamic=True),
-                    BoolProp("Visibility", False),
-                ]
-            )
-            MeshName = MeshValue.name
-        DefinitionObject = Graph.add(
-            "App::DocumentObjectGroup",
-            f"{DefinitionName}_Definition",
-            "ComponentDefinition",
-        )
-        Children = [*Imported, *([MeshName] if MeshName else [])]
-        DefinitionObject.properties.extend(
-            [
-                StringProp("Label", DefinitionName),
-                LinkListProp("Group", Children),
-                StringProp("DefinitionId", DefinitionId, Dynamic=True),
-                StringProp(
-                    "ComponentKind",
-                    TextAction(EnumAction(Definition.get("kind"))),
-                    Dynamic=True,
-                ),
-                StringProp("DocumentId", DocId, Dynamic=True),
-                StringProp(
-                    "ConfigurationName",
-                    Definition.get("configuration_name", ""),
-                    Dynamic=True,
-                ),
-                StringProp(
-                    "ConfigurationId",
-                    Definition.get("configuration_id", ""),
-                    Dynamic=True,
-                ),
-                StringProp(
-                    "SourcePath", Definition.get("source_path", ""), Dynamic=True
-                ),
-                StringProp(
-                    "SourceFormat", Definition.get("source_format_id", ""), Dynamic=True
-                ),
-                StringProp(
-                    "SourceSHA256", Definition.get("source_sha256", ""), Dynamic=True
-                ),
-                JsonProp("DefinitionDataJSON", Without(Definition)),
-                BoolProp("Visibility", False),
-            ]
-        )
-        DefinitionObject.dependencies.extend(Children)
-        DefinitionObjects.append(DefinitionObject.name)
-        DefinitionTargets[DefinitionId] = (
-            MeshName or ImportedTarget or DefinitionObject.name
-        )
+    return AsmRoot(
+        RootLabel,
+        NativeRoot,
+        GroupItems,
+        NativeGroup,
+        NativeJoint,
+        RootObject,
+        RootOrigin,
+        DefinitionsGroup,
+        ComponentsGroup,
+        EntitiesGroup,
+        MatesGroup,
+    )
 
-    # this callback exists because local behavior needs one focused transformation
-    DirectInstances = sorted(
+
+# this definition exists because embedded component documents need isolated object and payload import
+def ImportDefMut(
+    Context: AsmContext,
+    Definition: Mapping[str, Any],
+    DefinitionPrefix: str,
+    ComponentKind: str,
+) -> tuple[str, list[str]]:
+    DocValue = Context.Documents.get(TextAction(Definition.get("document_id")))
+    if not isinstance(DocValue, Mapping):
+        return ("", [])
+    ImportedDoc = DocValue
+    if ComponentKind == "assembly":
+        ImportedDoc = dict(DocValue)
+        ImportedDoc["assembly"] = None
+    ImportedTarget, Imported = ImportCompMut(
+        Context.Graph,
+        ImportedDoc,
+        DefinitionPrefix,
+        Context.PayloadEntries,
+        Context.TrustedBreps,
+    )
+    TargetObject = next(
+        (Value for Value in Context.Graph.Objects if Value.name == ImportedTarget),
+        None,
+    )
+    if TargetObject is not None:
+        ReplaceNameMut(
+            TargetObject.properties, "Visibility", BoolProp("Visibility", False)
+        )
+    return (ImportedTarget, Imported)
+
+
+# this definition exists because component meshes aggregate every declared tessellation source
+def DefMeshData(
+    Context: AsmContext, Definition: Mapping[str, Any]
+) -> tuple[list[tuple[float, float, float]], list[tuple[int, int, int]]]:
+    Vertices: list[tuple[float, float, float]] = []
+    Triangles: list[tuple[int, int, int]] = []
+    for MeshSource in DefinitionMesh(Context.Manifest, Definition):
+        MeshVertices, MeshTriangles = Tessellation(MeshSource)
+        Offset = len(Vertices)
+        Vertices.extend(MeshVertices)
+        Triangles.extend(
+            tuple(Index + Offset for Index in Triangle) for Triangle in MeshTriangles
+        )
+    return (Vertices, Triangles)
+
+
+# this definition exists because component display meshes need deterministic archive payload names
+def AddDefMeshMut(
+    Context: AsmContext,
+    DefinitionName: str,
+    DefinitionId: str,
+    Vertices: list[tuple[float, float, float]],
+    Triangles: list[tuple[int, int, int]],
+) -> str:
+    if not Vertices or not Triangles:
+        return ""
+    MeshValue = Context.Graph.add(
+        "Mesh::Feature", f"{DefinitionName}_Mesh", "ComponentMesh"
+    )
+    FileName = UniquePayload(
+        Context.PayloadEntries, f"{MeshValue.name}.MeshKernel.bms"
+    )
+    Context.PayloadEntries[FileName] = MeshKernelData(Vertices, Triangles)
+    MeshValue.properties.extend(
+        [
+            StringProp("Label", f"{DefinitionName} geometry"),
+            MeshProp(FileName),
+            MakePlacement("Placement", MatrixTransform(KIdentityMatrix)),
+            StringProp("DefinitionId", DefinitionId, Dynamic=True),
+            BoolProp("Visibility", False),
+        ]
+    )
+    return MeshValue.name
+
+
+# this definition exists because component definition groups need complete source provenance
+def AsmDefProps(
+    Definition: Mapping[str, Any], DefinitionId: str, DefinitionName: str, DocId: str
+) -> list[XmlTree.Element]:
+    return [
+        StringProp("Label", DefinitionName),
+        StringProp("DefinitionId", DefinitionId, Dynamic=True),
+        StringProp(
+            "ComponentKind", TextAction(EnumAction(Definition.get("kind"))), Dynamic=True
+        ),
+        StringProp("DocumentId", DocId, Dynamic=True),
+        StringProp(
+            "ConfigurationName", Definition.get("configuration_name", ""), Dynamic=True
+        ),
+        StringProp(
+            "ConfigurationId", Definition.get("configuration_id", ""), Dynamic=True
+        ),
+        StringProp("SourcePath", Definition.get("source_path", ""), Dynamic=True),
+        StringProp(
+            "SourceFormat", Definition.get("source_format_id", ""), Dynamic=True
+        ),
+        StringProp("SourceSHA256", Definition.get("source_sha256", ""), Dynamic=True),
+        JsonProp("DefinitionDataJSON", Without(Definition)),
+        BoolProp("Visibility", False),
+    ]
+
+
+# this definition exists because one component definition coordinates import mesh and group state
+def AddDefMut(
+    Context: AsmContext, ItemsState: AsmItems, Definition: Mapping[str, Any]
+) -> None:
+    DefinitionId = TextAction(Definition.get("id"))
+    DefinitionName = TextAction(Definition.get("name"), DefinitionId)
+    DefinitionPrefix = SafeAction(f"Definition_{DefinitionId}", "Definition")
+    DocId = TextAction(Definition.get("document_id"))
+    ComponentKind = TextAction(EnumAction(Definition.get("kind"))).lower()
+    Outer = Context.OuterLinks.get(DefinitionId)
+    ImportedTarget = ""
+    Imported: list[str] = []
+    if Outer is not None:
+        ItemsState.DefinitionOuter[DefinitionId] = Outer
+    else:
+        ImportedTarget, Imported = ImportDefMut(
+            Context, Definition, DefinitionPrefix, ComponentKind
+        )
+    Vertices, Triangles = (
+        ([], []) if Outer is not None else DefMeshData(Context, Definition)
+    )
+    MeshName = AddDefMeshMut(
+        Context, DefinitionName, DefinitionId, Vertices, Triangles
+    )
+    DefinitionObject = Context.Graph.add(
+        "App::DocumentObjectGroup",
+        f"{DefinitionName}_Definition",
+        "ComponentDefinition",
+    )
+    Children = [*Imported, *([MeshName] if MeshName else [])]
+    Properties = AsmDefProps(Definition, DefinitionId, DefinitionName, DocId)
+    DefinitionObject.properties.extend(
+        [
+            Properties[0],
+            LinkListProp("Group", Children),
+            *Properties[1:],
+        ]
+    )
+    DefinitionObject.dependencies.extend(Children)
+    ItemsState.DefinitionObjects.append(DefinitionObject.name)
+    ItemsState.DefinitionTargets[DefinitionId] = (
+        MeshName or ImportedTarget or DefinitionObject.name
+    )
+
+
+# this definition exists because definitions must preserve their source ordering in the archive
+def AddDefsMut(Context: AsmContext, ItemsState: AsmItems) -> None:
+    for Definition in Context.Definitions:
+        AddDefMut(Context, ItemsState, Definition)
+
+
+# this definition exists because direct component occurrences require deterministic source ordering
+def DirectAsmItems(Context: AsmContext) -> list[dict[str, Any]]:
+    return sorted(
         (
             Instance
             for Instance in Items(
-                AsmValue.get("instances", AsmValue.get("components", []))
+                Context.Assembly.get(
+                    "instances", Context.Assembly.get("components", [])
+                )
             )
-            if TextAction(Instance.get("owner_definition_id")) == RootDefinitionId
+            if TextAction(Instance.get("owner_definition_id")) == Context.RootDefId
         ),
-        key=lambda ItemValue: (
-            int(Number(ItemValue.get("order"))),
-            TextAction(ItemValue.get("id")),
+        key=OrderedSource,
+    )
+
+
+# this definition exists because occurrence metadata may omit or malformed native data
+def InstanceNative(Instance: Mapping[str, Any]) -> Mapping[str, Any]:
+    Attributes = Instance.get("attributes", {})
+    NativeValue = Attributes.get("freecad", {}) if isinstance(Attributes, Mapping) else {}
+    return NativeValue if isinstance(NativeValue, Mapping) else {}
+
+
+# this definition exists because native link metadata selects the compatible component object type
+def AsmLinkData(
+    NativeValue: Mapping[str, Any],
+    Outer: Mapping[str, Any] | None,
+    ComponentKind: str,
+) -> tuple[str, bool, str]:
+    NativeProps = NativeValue.get("properties", {})
+    LinkFields = (
+        {TextAction(NameValue) for NameValue in NativeProps if TextAction(NameValue)}
+        if isinstance(NativeProps, Mapping)
+        else set()
+    )
+    LinkPropName = FindLinkProp(NativeValue)
+    HasNativeLink = bool(LinkPropName)
+    IsAssembly = Outer is not None and (
+        {"Group", "Rigid"}.issubset(LinkFields)
+        or (not HasNativeLink and ComponentKind == "assembly")
+    )
+    NativeType = TextAction(NativeValue.get("type_id"))
+    TypeId = (
+        NativeType
+        if HasNativeLink and NativeType
+        else AsmLinkTypeId if IsAssembly else AppLinkTypeId
+    )
+    return (LinkPropName, IsAssembly, TypeId)
+
+
+# this definition exists because direct occurrence links need canonical native component properties
+def InstanceProps(
+    Instance: Mapping[str, Any],
+    Label: str,
+    InstanceId: str,
+    DefinitionId: str,
+    PathValue: tuple[str, ...],
+    Target: str,
+    Outer: Mapping[str, Any] | None,
+    LinkPropName: str,
+    IsAssembly: bool,
+    PlacementMatrix: tuple[float, ...],
+    Fixed: bool,
+    Hidden: bool,
+) -> list[XmlTree.Element]:
+    LinkedObject = (
+        XlinkProp(
+            LinkPropName or "LinkedObject",
+            TextAction(Outer.get("target")),
+            FileValue=TextAction(Outer.get("file")),
+            Stamp=TextAction(Outer.get("stamp")),
+            Status=None if IsAssembly else "256",
+        )
+        if Outer is not None
+        else XlinkProp(LinkPropName or "LinkedObject", Target)
+    )
+    Placement = MakePlacement(
+        "Placement",
+        MatrixTransform(PlacementMatrix),
+        Status=(
+            "8388612"
+            if IsAssembly and Fixed
+            else "8388608" if IsAssembly else "268" if Fixed else "264"
         ),
     )
-    ItemObjects: list[str] = []
-    ItemByPath: dict[tuple[str, ...], str] = {}
-    ItemByNativeName: dict[str, str] = {}
-    ProxyChainByPath: dict[tuple[str, ...], tuple[str, ...]] = {}
-    AsmLinkRecords: list[tuple[tuple[str, ...], Object, Mapping[str, AnyValue]]] = []
-    RigidSubassemblyIds: set[str] = set()
-    GroundedObjects: list[str] = []
-    for Instance in DirectInstances:
-        InstanceId = TextAction(Instance.get("id"))
-        PathValue = (InstanceId,)
-        DefinitionId = TextAction(Instance.get("definition_id"))
-        Target = DefinitionTargets.get(DefinitionId)
-        Outer = DefinitionOuter.get(DefinitionId)
-        if not Target and Outer is None:
-            continue
-        Label = TextAction(Instance.get("name"), InstanceId)
-        InstanceAttributes = Instance.get("attributes", {})
-        NativeInstance = (
-            InstanceAttributes.get("freecad", {})
-            if isinstance(InstanceAttributes, Mapping)
-            else {}
-        )
-        NativeInstanceProperties = NativeInstance.get("properties", {})
-        NativeLinkFields = (
-            {
-                TextAction(NameValue)
-                for NameValue in NativeInstanceProperties
-                if TextAction(NameValue)
-            }
-            if isinstance(NativeInstanceProperties, Mapping)
-            else set()
-        )
-        NativeLinkProp = FindLinkProp(NativeInstance)
-        HasNativeLink = bool(NativeLinkProp)
-        ComponentKind = TextAction(
-            EnumAction(DefinitionsById.get(DefinitionId, {}).get("kind"))
-        ).lower()
-        IsAsmLink = Outer is not None and (
-            {"Group", "Rigid"}.issubset(NativeLinkFields)
-            or (not HasNativeLink and ComponentKind == "assembly")
-        )
-        ComponentTypeId = (
-            TextAction(NativeInstance.get("type_id"))
-            if HasNativeLink and TextAction(NativeInstance.get("type_id"))
-            else AsmLinkTypeId if IsAsmLink else AppLinkTypeId
-        )
-        PlacementMatrix = MatrixValues(Instance.get("transform", {}))
-        Component = Graph.add(
-            ComponentTypeId,
-            f"{Label}_{'_'.join(PathValue)}",
-            "Component",
-            Touched=IsAsmLink,
-            Extensions=Native(NativeInstance)
-            or (
-                ("App::OriginGroupExtension",) if IsAsmLink else ("App::LinkExtension",)
+    LinkProperties = (
+        [
+            BoolProp("Rigid", not bool(Instance.get("flexible"))),
+            LinkListProp("Group", []),
+            StringProp("Type", ""),
+        ]
+        if IsAssembly
+        else [
+            MakePlacement(
+                "LinkPlacement",
+                MatrixTransform(PlacementMatrix),
+                Status="260" if Fixed else "256",
             ),
+            BoolProp("LinkTransform", True),
+            VectorProp("ScaleVector", MatrixScale(PlacementMatrix)),
+        ]
+    )
+    return [
+        StringProp("Label", Label),
+        LinkedObject,
+        Placement,
+        *LinkProperties,
+        StringProp("InstanceId", InstanceId, Dynamic=True),
+        StringProp("DefinitionId", DefinitionId, Dynamic=True),
+        StringProp(
+            "OwnerDefinitionId", Instance.get("owner_definition_id", ""), Dynamic=True
+        ),
+        StringListProp("InstancePath", list(PathValue), Dynamic=True),
+        StringProp("ReferenceNumber", Instance.get("reference_number", ""), Dynamic=True),
+        StringProp(
+            "ConfigurationName", Instance.get("configuration_name", ""), Dynamic=True
+        ),
+        StringProp(
+            "ConfigurationId", Instance.get("configuration_id", ""), Dynamic=True
+        ),
+        BoolProp("Suppressed", bool(Instance.get("suppressed")), Dynamic=True),
+        BoolProp("Hidden", bool(Instance.get("hidden")), Dynamic=True),
+        BoolProp("Flexible", bool(Instance.get("flexible")), Dynamic=True),
+        BoolProp("ExcludeFromBOM", bool(Instance.get("exclude_from_bom")), Dynamic=True),
+        JsonProp("InstanceDataJSON", Instance),
+        BoolProp("Visibility", not Hidden),
+    ]
+
+
+# this definition exists because occurrence creation updates component path and grounding indexes
+def RecordItemMut(
+    Context: AsmContext,
+    ItemsState: AsmItems,
+    Instance: Mapping[str, Any],
+    NativeValue: Mapping[str, Any],
+    Component: Object,
+    PathValue: tuple[str, ...],
+    Outer: Mapping[str, Any] | None,
+    IsAssembly: bool,
+    Fixed: bool,
+    Label: str,
+    PlacementMatrix: tuple[float, ...],
+) -> None:
+    ItemsState.ItemObjects.append(Component.name)
+    ItemsState.ItemByPath[PathValue] = Component.name
+    NativeName = TextAction(NativeValue.get("name"))
+    if NativeName:
+        ItemsState.ItemByNativeName[NativeName] = Component.name
+    if IsAssembly and Outer is not None:
+        ItemsState.AsmLinkRecords.append((PathValue, Component, Outer))
+    if not Fixed:
+        return
+    Attributes = Instance.get("attributes", {})
+    GroundedSource = (
+        Attributes.get("grounded_joint", {}) if isinstance(Attributes, Mapping) else {}
+    )
+    Grounded = GroundJointMut(
+        Context.Graph, Component.name, Label, PlacementMatrix, GroundedSource
+    )
+    ItemsState.GroundedObjects.append(Grounded.name)
+
+
+# this definition exists because one direct occurrence coordinates link placement visibility and state
+def AddInstanceMut(
+    Context: AsmContext, ItemsState: AsmItems, Instance: Mapping[str, Any]
+) -> None:
+    InstanceId = TextAction(Instance.get("id"))
+    PathValue = (InstanceId,)
+    DefinitionId = TextAction(Instance.get("definition_id"))
+    Target = ItemsState.DefinitionTargets.get(DefinitionId, "")
+    Outer = ItemsState.DefinitionOuter.get(DefinitionId)
+    if not Target and Outer is None:
+        return
+    Label = TextAction(Instance.get("name"), InstanceId)
+    NativeValue = InstanceNative(Instance)
+    ComponentKind = TextAction(
+        EnumAction(Context.DefinitionsById.get(DefinitionId, {}).get("kind"))
+    ).lower()
+    LinkPropName, IsAssembly, TypeId = AsmLinkData(
+        NativeValue, Outer, ComponentKind
+    )
+    PlacementMatrix = MatrixValues(Instance.get("transform", {}))
+    Component = Context.Graph.add(
+        TypeId,
+        f"{Label}_{'_'.join(PathValue)}",
+        "Component",
+        Touched=IsAssembly,
+        Extensions=Native(NativeValue)
+        or (("App::OriginGroupExtension",) if IsAssembly else ("App::LinkExtension",)),
+    )
+    Component.properties.extend(NativeA(NativeValue))
+    if IsAssembly:
+        AddOriginMut(Context.Graph, Component)
+    if ComponentKind == "assembly" and not bool(Instance.get("flexible")):
+        ItemsState.RigidInstanceIds.add(InstanceId)
+    Suppressed = bool(Instance.get("suppressed"))
+    Hidden = bool(Instance.get("hidden")) or Suppressed
+    Fixed = bool(Instance.get("fixed")) and not Suppressed
+    for PropElem in InstanceProps(
+        Instance,
+        Label,
+        InstanceId,
+        DefinitionId,
+        PathValue,
+        Target,
+        Outer,
+        LinkPropName,
+        IsAssembly,
+        PlacementMatrix,
+        Fixed,
+        Hidden,
+    ):
+        ReplaceNameMut(Component.properties, PropElem.get("name", ""), PropElem)
+    if Outer is None and Target:
+        Component.dependencies.append(Target)
+    RecordItemMut(
+        Context,
+        ItemsState,
+        Instance,
+        NativeValue,
+        Component,
+        PathValue,
+        Outer,
+        IsAssembly,
+        Fixed,
+        Label,
+        PlacementMatrix,
+    )
+
+
+# this definition exists because direct occurrences must preserve their source ordering
+def AddInstancesMut(Context: AsmContext, ItemsState: AsmItems) -> None:
+    ItemsState.DirectInstances = DirectAsmItems(Context)
+    for Instance in ItemsState.DirectInstances:
+        AddInstanceMut(Context, ItemsState, Instance)
+
+
+# this definition exists because outer occurrence data overrides neutral occurrence fields selectively
+def OuterField(
+    Record: Mapping[str, Any],
+    Neutral: Mapping[str, Any],
+    NameValue: str,
+    Default: Any = "",
+) -> AnyValue:
+    return Record.get(NameValue) if NameValue in Record else Neutral.get(NameValue, Default)
+
+
+# this definition exists because outer occurrence paths may be absolute or parent relative
+def OuterSourcePath(
+    Record: Mapping[str, Any],
+    InstanceId: str,
+    ParentSource: tuple[str, ...],
+) -> tuple[str, ...]:
+    SourcePath = tuple(
+        TextAction(Value)
+        for Value in Sequence(Record.get("instance_path", []))
+        if TextAction(Value)
+    )
+    if not SourcePath:
+        return (*ParentSource, InstanceId)
+    if ParentSource and SourcePath[: len(ParentSource)] != ParentSource:
+        return (*ParentSource, *SourcePath)
+    return SourcePath
+
+
+# this definition exists because outer proxy links need canonical placement and occurrence metadata
+def OuterProps(
+    Record: Mapping[str, Any],
+    Neutral: Mapping[str, Any],
+    Outer: Mapping[str, Any],
+    Label: str,
+    InstanceId: str,
+    FullPath: tuple[str, ...],
+    PlacementMatrix: tuple[float, ...],
+    IsAssembly: bool,
+) -> list[XmlTree.Element]:
+    LinkedObject = XlinkProp(
+        "LinkedObject",
+        TextAction(Record.get("target")),
+        FileValue=TextAction(Outer.get("file")),
+        Stamp=TextAction(Outer.get("stamp")),
+        Status=None if IsAssembly else "256",
+    )
+    LinkProperties = (
+        [
+            BoolProp(
+                "Rigid",
+                bool(OuterField(Record, Neutral, "rigid", not bool(OuterField(Record, Neutral, "flexible")))),
+            ),
+            LinkListProp("Group", []),
+            StringProp("Type", ""),
+        ]
+        if IsAssembly
+        else [
+            MakePlacement(
+                "LinkPlacement", MatrixTransform(PlacementMatrix), Status="256"
+            ),
+            BoolProp("LinkTransform", True),
+            VectorProp(
+                "ScaleVector",
+                Vector(
+                    OuterField(Record, Neutral, "scale", MatrixScale(PlacementMatrix)),
+                    MatrixScale(PlacementMatrix),
+                ),
+            ),
+        ]
+    )
+    Visibility = bool(
+        OuterField(
+            Record,
+            Neutral,
+            "visibility",
+            not bool(OuterField(Record, Neutral, "hidden"))
+            and not bool(OuterField(Record, Neutral, "suppressed")),
         )
-        Component.properties.extend(NativeA(NativeInstance))
-        if IsAsmLink:
-            AddOriginMut(Graph, Component)
-        if ComponentKind == "assembly" and (not bool(Instance.get("flexible"))):
-            RigidSubassemblyIds.add(InstanceId)
-        Suppressed = bool(Instance.get("suppressed"))
-        Hidden = bool(Instance.get("hidden")) or Suppressed
-        Fixed = bool(Instance.get("fixed")) and (not Suppressed)
-        LinkedObject = (
-            XlinkProp(
-                NativeLinkProp or "LinkedObject",
-                TextAction(Outer.get("target")),
-                FileValue=TextAction(Outer.get("file")),
-                Stamp=TextAction(Outer.get("stamp")),
-                Status=None if IsAsmLink else "256",
-            )
-            if Outer is not None
-            else XlinkProp(NativeLinkProp or "LinkedObject", Target)
-        )
-        Placement = MakePlacement(
+    )
+    return [
+        StringProp("Label", Label),
+        LinkedObject,
+        MakePlacement(
             "Placement",
             MatrixTransform(PlacementMatrix),
-            Status=(
-                "8388612"
-                if IsAsmLink and Fixed
-                else "8388608" if IsAsmLink else "268" if Fixed else "264"
-            ),
+            Status="8388608" if IsAssembly else "264",
+        ),
+        *LinkProperties,
+        StringProp("InstanceId", InstanceId, Dynamic=True),
+        StringProp("DefinitionId", OuterField(Record, Neutral, "definition_id"), Dynamic=True),
+        StringProp(
+            "OwnerDefinitionId",
+            OuterField(Record, Neutral, "owner_definition_id"),
+            Dynamic=True,
+        ),
+        StringListProp("InstancePath", list(FullPath), Dynamic=True),
+        StringProp(
+            "ReferenceNumber", OuterField(Record, Neutral, "reference_number"), Dynamic=True
+        ),
+        StringProp(
+            "ConfigurationName",
+            OuterField(Record, Neutral, "configuration_name"),
+            Dynamic=True,
+        ),
+        StringProp(
+            "ConfigurationId",
+            OuterField(Record, Neutral, "configuration_id"),
+            Dynamic=True,
+        ),
+        BoolProp("Suppressed", bool(OuterField(Record, Neutral, "suppressed")), Dynamic=True),
+        BoolProp("Hidden", bool(OuterField(Record, Neutral, "hidden")), Dynamic=True),
+        BoolProp("Fixed", bool(OuterField(Record, Neutral, "fixed")), Dynamic=True),
+        BoolProp("Flexible", bool(OuterField(Record, Neutral, "flexible")), Dynamic=True),
+        BoolProp(
+            "ExcludeFromBOM",
+            bool(OuterField(Record, Neutral, "exclude_from_bom")),
+            Dynamic=True,
+        ),
+        JsonProp("InstanceDataJSON", OuterField(Record, Neutral, "instance_data", Neutral)),
+        BoolProp("Visibility", Visibility),
+    ]
+
+
+# this definition exists because one outer occurrence creates a typed proxy with stable paths
+def CreateOuterMut(
+    Context: AsmContext,
+    RootPath: tuple[str, ...],
+    Parent: Object,
+    Outer: Mapping[str, Any],
+    Record: Mapping[str, Any],
+    ParentSource: tuple[str, ...],
+) -> tuple[Object, tuple[str, ...], tuple[str, ...], bool] | None:
+    Target = TextAction(Record.get("target"))
+    TypeId = TextAction(Record.get("type_id"))
+    InstanceId = TextAction(Record.get("instance_id"))
+    if not Target or not InstanceId or not TypeId:
+        return None
+    SourcePath = OuterSourcePath(Record, InstanceId, ParentSource)
+    FullPath = (*RootPath, *SourcePath)
+    Neutral = Context.InstancesById.get(InstanceId, {})
+    Label = TextAction(
+        OuterField(Record, Neutral, "label", OuterField(Record, Neutral, "name", InstanceId)),
+        InstanceId,
+    )
+    PlacementMatrix = MatrixValues(OuterField(Record, Neutral, "transform", {}))
+    LinkFields = {
+        TextAction(NameValue)
+        for NameValue in Sequence(Record.get("link_fields", []))
+        if TextAction(NameValue)
+    }
+    IsAssembly = {"Group", "Rigid"}.issubset(LinkFields)
+    Proxy = Context.Graph.add(
+        TypeId,
+        f"{Parent.name}_{Target}",
+        "Component",
+        Touched=IsAssembly,
+        Extensions=(
+            ("App::OriginGroupExtension",)
+            if IsAssembly
+            else ("App::LinkExtension",)
+        ),
+    )
+    if IsAssembly:
+        AddOriginMut(Context.Graph, Proxy)
+    Proxy.properties.extend(
+        OuterProps(
+            Record,
+            Neutral,
+            Outer,
+            Label,
+            InstanceId,
+            FullPath,
+            PlacementMatrix,
+            IsAssembly,
         )
-        NativeLinkProperties = (
-            [
-                BoolProp("Rigid", not bool(Instance.get("flexible"))),
-                LinkListProp("Group", []),
-                StringProp("Type", ""),
-            ]
-            if IsAsmLink
-            else [
-                MakePlacement(
-                    "LinkPlacement",
-                    MatrixTransform(PlacementMatrix),
-                    Status="260" if Fixed else "256",
-                ),
-                BoolProp("LinkTransform", True),
-                VectorProp("ScaleVector", MatrixScale(PlacementMatrix)),
-            ]
+    )
+    return (Proxy, FullPath, SourcePath, IsAssembly)
+
+
+# this definition exists because outer occurrence trees need recursive proxy group assembly
+def AddOuterMut(
+    Context: AsmContext,
+    ItemsState: AsmItems,
+    RootPath: tuple[str, ...],
+    Parent: Object,
+    Outer: Mapping[str, Any],
+    Records: Any,
+    ParentSource: tuple[str, ...] = (),
+    ParentChain: tuple[str, ...] = (),
+) -> list[str]:
+    Children: list[str] = []
+    for Record in Items(Records):
+        Created = CreateOuterMut(
+            Context, RootPath, Parent, Outer, Record, ParentSource
         )
-        for PropElem in (
-            StringProp("Label", Label),
-            LinkedObject,
-            Placement,
-            *NativeLinkProperties,
-            StringProp("InstanceId", InstanceId, Dynamic=True),
-            StringProp("DefinitionId", DefinitionId, Dynamic=True),
-            StringProp(
-                "OwnerDefinitionId",
-                Instance.get("owner_definition_id", ""),
-                Dynamic=True,
-            ),
-            StringListProp("InstancePath", list(PathValue), Dynamic=True),
-            StringProp(
-                "ReferenceNumber", Instance.get("reference_number", ""), Dynamic=True
-            ),
-            StringProp(
-                "ConfigurationName",
-                Instance.get("configuration_name", ""),
-                Dynamic=True,
-            ),
-            StringProp(
-                "ConfigurationId", Instance.get("configuration_id", ""), Dynamic=True
-            ),
-            BoolProp("Suppressed", Suppressed, Dynamic=True),
-            BoolProp("Hidden", bool(Instance.get("hidden")), Dynamic=True),
-            BoolProp("Flexible", bool(Instance.get("flexible")), Dynamic=True),
-            BoolProp(
-                "ExcludeFromBOM", bool(Instance.get("exclude_from_bom")), Dynamic=True
-            ),
-            JsonProp("InstanceDataJSON", Instance),
-            BoolProp("Visibility", not Hidden),
-        ):
-            ReplaceNameMut(Component.properties, PropElem.get("name", ""), PropElem)
-        if Outer is None and Target:
-            Component.dependencies.append(Target)
-        ItemObjects.append(Component.name)
-        ItemByPath[PathValue] = Component.name
-        NativeInstanceName = TextAction(NativeInstance.get("name"))
-        if NativeInstanceName:
-            ItemByNativeName[NativeInstanceName] = Component.name
-        if IsAsmLink and Outer is not None:
-            AsmLinkRecords.append((PathValue, Component, Outer))
-        if Fixed:
-            GroundedSource = (
-                InstanceAttributes.get("grounded_joint", {})
-                if isinstance(InstanceAttributes, Mapping)
-                else {}
+        if Created is None:
+            continue
+        Proxy, FullPath, SourcePath, IsAssembly = Created
+        Children.append(Proxy.name)
+        ItemsState.ItemByPath[FullPath] = Proxy.name
+        Chain = (*ParentChain, Proxy.name)
+        ItemsState.ProxyChainByPath[FullPath] = Chain
+        if IsAssembly:
+            AddOuterMut(
+                Context,
+                ItemsState,
+                RootPath,
+                Proxy,
+                Outer,
+                Record.get("occurrences", []),
+                SourcePath,
+                Chain,
             )
-            Grounded = GroundJointMut(
-                Graph, Component.name, Label, PlacementMatrix, GroundedSource
-            )
-            GroundedObjects.append(Grounded.name)
+    ReplaceNameMut(Parent.properties, "Group", LinkListProp("Group", Children))
+    Parent.dependencies.extend(Children)
+    return Children
 
-    # this definition exists because focused behavior needs one stable owner
-    def AddOuterMut(
-        RootPath: tuple[str, ...],
-        Parent: _Object,
-        Outer: Mapping[str, Any],
-        Records: Any,
-        ParentSourcePath: tuple[str, ...] = (),
-        ParentChain: tuple[str, ...] = (),
-    ) -> list[str]:
-        Children: list[str] = []
-        for Record in Items(Records):
-            Target = TextAction(Record.get("target"))
-            TypeId = TextAction(Record.get("type_id"))
-            InstanceId = TextAction(Record.get("instance_id"))
-            if not Target or not InstanceId or (not TypeId):
-                continue
-            SourcePath = tuple(
-                (
-                    TextAction(Value)
-                    for Value in Sequence(Record.get("instance_path", []))
-                    if TextAction(Value)
-                )
-            )
-            if not SourcePath:
-                SourcePath = (*ParentSourcePath, InstanceId)
-            elif (
-                ParentSourcePath
-                and SourcePath[: len(ParentSourcePath)] != ParentSourcePath
-            ):
-                SourcePath = (*ParentSourcePath, *SourcePath)
-            FullPath = (*RootPath, *SourcePath)
-            Neutral = InstancesById.get(InstanceId, {})
 
-            # this definition exists because focused behavior needs one stable owner
-            def Value(NameValue: str, Default: Any = "") -> AnyValue:
-                if NameValue in Record:
-                    return Record.get(NameValue)
-                return Neutral.get(NameValue, Default)
+# this definition exists because every external assembly link needs its occurrence proxy tree
+def AddOutersMut(Context: AsmContext, ItemsState: AsmItems) -> None:
+    for RootPath, Component, Outer in ItemsState.AsmLinkRecords:
+        AddOuterMut(
+            Context,
+            ItemsState,
+            RootPath,
+            Component,
+            Outer,
+            Outer.get("occurrences", []),
+        )
 
-            Label = TextAction(Value("label", Value("name", InstanceId)), InstanceId)
-            PlacementMatrix = MatrixValues(Value("transform", {}))
-            LinkFields = {
-                TextAction(FieldName)
-                for FieldName in Sequence(Record.get("link_fields", []))
-                if TextAction(FieldName)
-            }
-            IsAsmLink = {"Group", "Rigid"}.issubset(LinkFields)
-            Proxy = Graph.add(
-                TypeId,
-                f"{Parent.name}_{Target}",
-                "Component",
-                Touched=IsAsmLink,
-                Extensions=(
-                    ("App::OriginGroupExtension",)
-                    if IsAsmLink
-                    else ("App::LinkExtension",)
-                ),
-            )
-            if IsAsmLink:
-                AddOriginMut(Graph, Proxy)
-            LinkedObject = XlinkProp(
-                "LinkedObject",
-                Target,
-                FileValue=TextAction(Outer.get("file")),
-                Stamp=TextAction(Outer.get("stamp")),
-                Status=None if IsAsmLink else "256",
-            )
-            NativeLinkProperties = (
-                [
-                    BoolProp(
-                        "Rigid", bool(Value("rigid", not bool(Value("flexible"))))
-                    ),
-                    LinkListProp("Group", []),
-                    StringProp("Type", ""),
-                ]
-                if IsAsmLink
-                else [
-                    MakePlacement(
-                        "LinkPlacement", MatrixTransform(PlacementMatrix), Status="256"
-                    ),
-                    BoolProp("LinkTransform", True),
-                    VectorProp(
-                        "ScaleVector",
-                        Vector(
-                            Value("scale", MatrixScale(PlacementMatrix)),
-                            MatrixScale(PlacementMatrix),
-                        ),
-                    ),
-                ]
-            )
-            InstanceData = Value("instance_data", Neutral)
-            Proxy.properties.extend(
-                [
-                    StringProp("Label", Label),
-                    LinkedObject,
-                    MakePlacement(
-                        "Placement",
-                        MatrixTransform(PlacementMatrix),
-                        Status="8388608" if IsAsmLink else "264",
-                    ),
-                    *NativeLinkProperties,
-                    StringProp("InstanceId", InstanceId, Dynamic=True),
-                    StringProp("DefinitionId", Value("definition_id"), Dynamic=True),
-                    StringProp(
-                        "OwnerDefinitionId", Value("owner_definition_id"), Dynamic=True
-                    ),
-                    StringListProp("InstancePath", list(FullPath), Dynamic=True),
-                    StringProp(
-                        "ReferenceNumber", Value("reference_number"), Dynamic=True
-                    ),
-                    StringProp(
-                        "ConfigurationName", Value("configuration_name"), Dynamic=True
-                    ),
-                    StringProp(
-                        "ConfigurationId", Value("configuration_id"), Dynamic=True
-                    ),
-                    BoolProp("Suppressed", bool(Value("suppressed")), Dynamic=True),
-                    BoolProp("Hidden", bool(Value("hidden")), Dynamic=True),
-                    BoolProp("Fixed", bool(Value("fixed")), Dynamic=True),
-                    BoolProp("Flexible", bool(Value("flexible")), Dynamic=True),
-                    BoolProp(
-                        "ExcludeFromBOM", bool(Value("exclude_from_bom")), Dynamic=True
-                    ),
-                    JsonProp("InstanceDataJSON", InstanceData),
-                    BoolProp(
-                        "Visibility",
-                        bool(
-                            Value(
-                                "visibility",
-                                not bool(Value("hidden"))
-                                and (not bool(Value("suppressed"))),
-                            )
-                        ),
-                    ),
-                ]
-            )
-            Children.append(Proxy.name)
-            ItemByPath[FullPath] = Proxy.name
-            Chain = (*ParentChain, Proxy.name)
-            ProxyChainByPath[FullPath] = Chain
-            if IsAsmLink:
-                AddOuterMut(
-                    RootPath,
-                    Proxy,
-                    Outer,
-                    Record.get("occurrences", []),
-                    SourcePath,
-                    Chain,
-                )
-        ReplaceNameMut(Parent.properties, "Group", LinkListProp("Group", Children))
-        Parent.dependencies.extend(Children)
-        return Children
 
-    for RootPath, Component, Outer in AsmLinkRecords:
-        AddOuterMut(RootPath, Component, Outer, Outer.get("occurrences", []))
+# this definition exists because mate entities and constraints require deterministic source subsets
+def CreateAsmMates(Context: AsmContext) -> AsmMates:
     EntityItems = [
         Entity
-        for Entity in Items(AsmValue.get("mate_entities", AsmValue.get("entities", [])))
-        if TextAction(Entity.get("owner_definition_id")) == RootDefinitionId
-    ]
-    EntityObjects: list[str] = []
-    EntityNames: dict[str, str] = {}
-    EntityComponents: dict[str, str] = {}
-    EntityPrefixes: dict[str, str] = {}
-
-    # this definition exists because focused behavior needs one stable owner
-    def ComponentFor(PathValue: tuple[str, ...]) -> str:
-        if not PathValue:
-            return RootOrigin
-        Direct = ItemByPath.get((PathValue[0],), "")
-        if len(PathValue) == 1 or PathValue[0] in RigidSubassemblyIds:
-            return Direct
-        return ""
-
-    # this definition exists because focused behavior needs one stable owner
-    def PrefixForPath(PathValue: tuple[str, ...]) -> str:
-        if len(PathValue) <= 1 or PathValue[0] not in RigidSubassemblyIds:
-            return ""
-        for Length in range(len(PathValue), 1, -1):
-            Chain = ProxyChainByPath.get(PathValue[:Length])
-            if Chain:
-                return ".".join(Chain)
-        return ""
-
-    for Entity in EntityItems:
-        EntityId = TextAction(Entity.get("id"))
-        OwnerId = TextAction(Entity.get("owner_definition_id"))
-        PathValue = tuple(
-            (TextAction(Value) for Value in Sequence(Entity.get("instance_path", [])))
+        for Entity in Items(
+            Context.Assembly.get("mate_entities", Context.Assembly.get("entities", []))
         )
-        ComponentName = ComponentFor(PathValue)
-        ComponentPrefix = PrefixForPath(PathValue)
-        ObjValue = Graph.add("App::FeaturePython", EntityId, "MateEntity")
-        Properties = [
-            StringProp("Label", EntityId),
-            StringProp("EntityId", EntityId, Dynamic=True),
-            StringProp("OwnerDefinitionId", OwnerId, Dynamic=True),
-            StringListProp("OwnerOccurrencePath", [], Dynamic=True),
-            StringListProp("InstancePath", list(PathValue), Dynamic=True),
-            StringProp(
-                "EntityKind", TextAction(EnumAction(Entity.get("kind"))), Dynamic=True
-            ),
-            StringProp(
-                "SourceEntityId", Entity.get("source_entity_id", ""), Dynamic=True
-            ),
-            StringProp("SelectionId", Entity.get("selection_id", ""), Dynamic=True),
-            JsonProp("EntityDataJSON", Entity),
-            BoolProp("Visibility", False),
-        ]
-        Frame = Entity.get("frame")
-        if isinstance(Frame, Mapping):
-            Properties.append(
-                MakePlacement(
-                    "ConnectorFrame", MatrixTransform(MatrixValues(Frame)), Dynamic=True
-                )
-            )
-        if Entity.get("radius") is not None:
-            Properties.append(
-                FloatProp(
-                    "Radius", Entity.get("radius"), "App::PropertyLength", Dynamic=True
-                )
-            )
-        if ComponentName:
-            Properties.append(StringProp("ComponentName", ComponentName, Dynamic=True))
-            EntityComponents[EntityId] = ComponentName
-        if ComponentPrefix:
-            Properties.append(
-                StringProp("ComponentSubpath", ComponentPrefix, Dynamic=True)
-            )
-            EntityPrefixes[EntityId] = ComponentPrefix
-        ObjValue.properties.extend(Properties)
-        EntityObjects.append(ObjValue.name)
-        EntityNames[EntityId] = ObjValue.name
-
-    # this callback exists because local behavior needs one focused transformation
+        if TextAction(Entity.get("owner_definition_id")) == Context.RootDefId
+    ]
     MateItems = sorted(
         (
             MateValue
             for MateValue in Items(
-                AsmValue.get("mates", AsmValue.get("constraints", []))
+                Context.Assembly.get("mates", Context.Assembly.get("constraints", []))
             )
-            if TextAction(MateValue.get("owner_definition_id")) == RootDefinitionId
+            if TextAction(MateValue.get("owner_definition_id")) == Context.RootDefId
         ),
-        key=lambda ItemValue: (
-            int(Number(ItemValue.get("order"))),
-            TextAction(ItemValue.get("id")),
-        ),
+        key=OrderedSource,
     )
-    MateObjects: list[str] = []
-    MateNames: dict[str, str] = {}
-    EntityById = {
-        TextAction(ItemValue.get("id")): ItemValue for ItemValue in EntityItems
+    return AsmMates(EntityItems, [], {}, {}, {}, MateItems, [], {})
+
+
+# this definition exists because rigid subassemblies resolve mate components at their direct link
+def ComponentFor(
+    ItemsState: AsmItems, RootData: AsmRoot, PathValue: tuple[str, ...]
+) -> str:
+    if not PathValue:
+        return RootData.RootOrigin
+    Direct = ItemsState.ItemByPath.get((PathValue[0],), "")
+    if len(PathValue) == 1 or PathValue[0] in ItemsState.RigidInstanceIds:
+        return Direct
+    return ""
+
+
+# this definition exists because rigid nested connectors need the longest emitted proxy chain
+def PrefixForPath(ItemsState: AsmItems, PathValue: tuple[str, ...]) -> str:
+    if len(PathValue) <= 1 or PathValue[0] not in ItemsState.RigidInstanceIds:
+        return ""
+    for Length in range(len(PathValue), 1, -1):
+        Chain = ItemsState.ProxyChainByPath.get(PathValue[:Length])
+        if Chain:
+            return ".".join(Chain)
+    return ""
+
+
+# this definition exists because mate entity objects preserve connector geometry and component routing
+def AddEntityMut(
+    Context: AsmContext,
+    RootData: AsmRoot,
+    ItemsState: AsmItems,
+    MatesState: AsmMates,
+    Entity: Mapping[str, Any],
+) -> None:
+    EntityId = TextAction(Entity.get("id"))
+    OwnerId = TextAction(Entity.get("owner_definition_id"))
+    PathValue = tuple(
+        TextAction(Value) for Value in Sequence(Entity.get("instance_path", []))
+    )
+    ComponentName = ComponentFor(ItemsState, RootData, PathValue)
+    ComponentPrefix = PrefixForPath(ItemsState, PathValue)
+    ObjValue = Context.Graph.add("App::FeaturePython", EntityId, "MateEntity")
+    Properties = [
+        StringProp("Label", EntityId),
+        StringProp("EntityId", EntityId, Dynamic=True),
+        StringProp("OwnerDefinitionId", OwnerId, Dynamic=True),
+        StringListProp("OwnerOccurrencePath", [], Dynamic=True),
+        StringListProp("InstancePath", list(PathValue), Dynamic=True),
+        StringProp("EntityKind", TextAction(EnumAction(Entity.get("kind"))), Dynamic=True),
+        StringProp("SourceEntityId", Entity.get("source_entity_id", ""), Dynamic=True),
+        StringProp("SelectionId", Entity.get("selection_id", ""), Dynamic=True),
+        JsonProp("EntityDataJSON", Entity),
+        BoolProp("Visibility", False),
+    ]
+    Frame = Entity.get("frame")
+    if isinstance(Frame, Mapping):
+        Properties.append(
+            MakePlacement("ConnectorFrame", MatrixTransform(MatrixValues(Frame)), Dynamic=True)
+        )
+    if Entity.get("radius") is not None:
+        Properties.append(
+            FloatProp("Radius", Entity.get("radius"), "App::PropertyLength", Dynamic=True)
+        )
+    if ComponentName:
+        Properties.append(StringProp("ComponentName", ComponentName, Dynamic=True))
+        MatesState.EntityComponents[EntityId] = ComponentName
+    if ComponentPrefix:
+        Properties.append(StringProp("ComponentSubpath", ComponentPrefix, Dynamic=True))
+        MatesState.EntityPrefixes[EntityId] = ComponentPrefix
+    ObjValue.properties.extend(Properties)
+    MatesState.EntityObjects.append(ObjValue.name)
+    MatesState.EntityNames[EntityId] = ObjValue.name
+
+
+# this definition exists because mate entities must preserve their source ordering
+def AddEntitiesMut(
+    Context: AsmContext,
+    RootData: AsmRoot,
+    ItemsState: AsmItems,
+    MatesState: AsmMates,
+) -> None:
+    for Entity in MatesState.EntityItems:
+        AddEntityMut(Context, RootData, ItemsState, MatesState, Entity)
+
+
+# this definition exists because mate metadata supports native properties and connector references
+def MateAttributes(
+    MateValue: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], Mapping[str, Any], list[dict[str, Any]]]:
+    Attributes = MateValue.get("attributes", {})
+    if not isinstance(Attributes, Mapping):
+        Attributes = {}
+    NativeMate = Attributes.get("freecad", {})
+    if not isinstance(NativeMate, Mapping):
+        NativeMate = {}
+    return (Attributes, NativeMate, Items(Attributes.get("references", [])))
+
+
+# this definition exists because connector references may declare their native side explicitly
+def MateRefGroups(
+    EntityIds: list[str], EntityById: Mapping[str, Mapping[str, Any]]
+) -> list[list[str]]:
+    RefEntityIds: list[list[str]] = [[], []]
+    for EntityId in EntityIds:
+        Entity = EntityById.get(EntityId, {})
+        Attributes = Entity.get("attributes", {})
+        PropName = (
+            TextAction(Attributes.get("reference_property"))
+            if isinstance(Attributes, Mapping)
+            else ""
+        )
+        RefIndex = JointRefIndexByProp.get(PropName)
+        if RefIndex is not None:
+            RefEntityIds[RefIndex].append(EntityId)
+    if not any(RefEntityIds):
+        for Index, EntityId in enumerate(EntityIds[:2]):
+            RefEntityIds[Index].append(EntityId)
+    return RefEntityIds
+
+
+# this definition exists because neutral mate entities resolve to emitted component objects
+def ConnectorTarget(
+    EntityId: str,
+    EntityById: Mapping[str, Mapping[str, Any]],
+    RootData: AsmRoot,
+    ItemsState: AsmItems,
+    MatesState: AsmMates,
+) -> str:
+    Target = MatesState.EntityComponents.get(EntityId, "")
+    if Target:
+        return Target
+    PathValue = tuple(
+        TextAction(Value)
+        for Value in Sequence(EntityById.get(EntityId, {}).get("instance_path", []))
+    )
+    return ComponentFor(ItemsState, RootData, PathValue)
+
+
+# this definition exists because native connector references need rewritten object and subelement names
+def NativeRefData(
+    NativeRef: Mapping[str, Any], RootData: AsmRoot, ItemsState: AsmItems
+) -> tuple[str, list[str]]:
+    SourceTarget = TextAction(NativeRef.get("name"))
+    NativeRootName = TextAction(RootData.NativeRoot.get("name"))
+    Target = (
+        RootData.RootObject.name
+        if SourceTarget == NativeRootName
+        else ItemsState.ItemByNativeName.get(SourceTarget, SourceTarget)
+    )
+    Subelements = []
+    for Value in Sequence(NativeRef.get("subelements", [])):
+        SourceValue = TextAction(Value)
+        Prefix, Separator, Suffix = SourceValue.partition(".")
+        Mapped = ItemsState.ItemByNativeName.get(Prefix, Prefix)
+        Subelements.append(f"{Mapped}.{Suffix}" if Separator else Mapped)
+    return (Target, Subelements)
+
+
+# this definition exists because neutral connector references need geometric subelement reconstruction
+def NeutralRefData(
+    GroupedIds: list[str],
+    EntityById: Mapping[str, Mapping[str, Any]],
+    RootData: AsmRoot,
+    ItemsState: AsmItems,
+    MatesState: AsmMates,
+) -> tuple[str, list[str]]:
+    Target = (
+        ConnectorTarget(
+            GroupedIds[0], EntityById, RootData, ItemsState, MatesState
+        )
+        if GroupedIds
+        else ""
+    )
+    Subelements: list[str] = []
+    for EntityId in GroupedIds:
+        Values = MateSubelements(EntityById.get(EntityId, {}))
+        if len(GroupedIds) == 1:
+            Subelements.extend(Values)
+        elif Values:
+            Subelements.append(Values[0])
+    return (Target, Subelements)
+
+
+# this definition exists because each mate needs two resolved connector sides
+def MateConnectors(
+    NativeReferences: list[dict[str, Any]],
+    RefEntityIds: list[list[str]],
+    EntityById: Mapping[str, Mapping[str, Any]],
+    RootData: AsmRoot,
+    ItemsState: AsmItems,
+    MatesState: AsmMates,
+) -> tuple[list[str], list[list[str]]]:
+    ConnectorTargets: list[str] = []
+    ConnectorSubelements: list[list[str]] = []
+    for Index, GroupedIds in enumerate(RefEntityIds):
+        NativeRef = NativeReferences[Index] if Index < len(NativeReferences) else {}
+        Target, Subelements = (
+            NativeRefData(NativeRef, RootData, ItemsState)
+            if NativeRef
+            else NeutralRefData(
+                GroupedIds, EntityById, RootData, ItemsState, MatesState
+            )
+        )
+        ConnectorTargets.append(Target)
+        ConnectorSubelements.append(Subelements)
+    return (ConnectorTargets, ConnectorSubelements)
+
+
+# this definition exists because connector sides need linked subelements placements offsets and detachment
+def ConnectorProps(
+    RefEntityIds: list[list[str]],
+    ConnectorTargets: list[str],
+    ConnectorSubelements: list[list[str]],
+    EntityById: Mapping[str, Mapping[str, Any]],
+    MatesState: AsmMates,
+) -> list[XmlTree.Element]:
+    Properties: list[XmlTree.Element] = []
+    for Index in range(1, 3):
+        GroupedIds = RefEntityIds[Index - 1]
+        EntityId = GroupedIds[0] if GroupedIds else ""
+        ComponentName = ConnectorTargets[Index - 1] if Index <= len(ConnectorTargets) else ""
+        Entity = EntityById.get(EntityId, {})
+        Subelements = ConnectorSubelements[Index - 1]
+        HasRealSubelements = bool(Subelements)
+        ComponentPrefix = MatesState.EntityPrefixes.get(EntityId, "")
+        if ComponentPrefix:
+            Subelements = [
+                f"{ComponentPrefix}.{Value}" if Value else f"{ComponentPrefix}."
+                for Value in Subelements or ["", ""]
+            ]
+        elif ComponentName and not Subelements:
+            Subelements = ["", ""]
+        Properties.append(
+            XlinkSubProp(f"Reference{Index}", ComponentName, Subelements, Dynamic=True)
+        )
+        Frame = Entity.get("frame")
+        Matrix = MatrixValues(Frame) if isinstance(Frame, Mapping) else KIdentityMatrix
+        Properties.extend(
+            [
+                MakePlacement(f"Placement{Index}", MatrixTransform(Matrix), Dynamic=True),
+                MakePlacement(
+                    f"Offset{Index}", MatrixTransform(KIdentityMatrix), Dynamic=True
+                ),
+                BoolProp(
+                    f"Detach{Index}",
+                    isinstance(Frame, Mapping) and not HasRealSubelements,
+                    Dynamic=True,
+                ),
+            ]
+        )
+    return Properties
+
+
+# this definition exists because mate carriers need complete neutral provenance and links
+def MateMetaProps(
+    MateValue: Mapping[str, Any],
+    MateId: str,
+    OwnerId: str,
+    EntityIds: list[str],
+    LinkedEntities: list[str],
+    LinkedComponents: list[str],
+) -> list[XmlTree.Element]:
+    return [
+        StringProp("MateId", MateId, Dynamic=True),
+        StringListProp("OwnerOccurrencePath", [], Dynamic=True),
+        StringProp("MateType", TextAction(EnumAction(MateValue.get("kind"))), Dynamic=True),
+        StringProp("OwnerDefinitionId", OwnerId, Dynamic=True),
+        StringListProp("EntityLinks", LinkedEntities, Dynamic=True),
+        StringListProp("ComponentLinks", LinkedComponents, Dynamic=True),
+        StringListProp("EntityIds", EntityIds, Dynamic=True),
+        StringListProp(
+            "ParameterIds",
+            [TextAction(Value) for Value in Sequence(MateValue.get("parameter_ids", []))],
+            Dynamic=True,
+        ),
+        StringProp("Alignment", TextAction(EnumAction(MateValue.get("alignment"))), Dynamic=True),
+        BoolProp("SourceSuppressed", bool(MateValue.get("suppressed")), Dynamic=True),
+        BoolProp("Driving", bool(MateValue.get("driving", True)), Dynamic=True),
+        JsonProp("MateValueJSON", MateValue.get("value")),
+        JsonProp("MateDataJSON", MateValue),
+    ]
+
+
+# this definition exists because mate dimensions may originate from several named parameters
+def MateParamValues(
+    MateValue: Mapping[str, Any], Parameters: _Parameters
+) -> dict[str, float]:
+    return {
+        PathValue: Parameters.value(ParamId)
+        for ParamId in (
+            TextAction(Value)
+            for Value in Sequence(MateValue.get("parameter_ids", []))
+        )
+        if (PathValue := Parameters.source_path(ParamId))
     }
 
-    # this definition exists because focused behavior needs one stable owner
-    def ConnectorTarget(EntityId: str) -> str:
-        Target = EntityComponents.get(EntityId, "")
-        if Target:
-            return Target
-        return ComponentFor(
-            tuple(
-                (
-                    TextAction(Value)
-                    for Value in Sequence(
-                        EntityById.get(EntityId, {}).get("instance_path", [])
-                    )
-                )
-            )
+
+# this definition exists because unsupported mates must remain editable carrier objects
+def AddCarrierMut(
+    ObjValue: Object,
+    NativeMate: Mapping[str, Any],
+    MateName: str,
+    JointType: str | None,
+    MetaProperties: list[XmlTree.Element],
+    ConnectorProperties: list[XmlTree.Element],
+) -> None:
+    ObjValue.properties.extend(NativeA(NativeMate))
+    for PropElem in (
+        StringProp("Label", MateName),
+        BoolProp("KitMateCarrier", True, Dynamic=True),
+        StringProp(
+            "NativeExecutionReason",
+            "unsupported_mate_kind" if JointType is None else "missing_connector_pair",
+            Dynamic=True,
+        ),
+        *MetaProperties,
+        *ConnectorProperties,
+        BoolProp("Visibility", False),
+    ):
+        ReplaceNameMut(ObjValue.properties, PropElem.get("name", ""), PropElem)
+
+
+# this definition exists because native joint objects need selective property replacement
+def NativeMateProps(
+    NativeMate: Mapping[str, Any],
+    MateValue: Mapping[str, Any],
+    MateName: str,
+    JointType: str,
+    HasConnectorPair: bool,
+    ParamValues: Mapping[str, float],
+    AngleValue: float,
+    DistanceValue: float,
+    MetaProperties: list[XmlTree.Element],
+    ConnectorProperties: list[XmlTree.Element],
+) -> list[XmlTree.Element]:
+    NativeProperties = NativeMate.get("properties", {})
+    Properties = [
+        ElemValue
+        for Value in NativeProperties.values()
+        if (ElemValue := ElemFromData(Value)) is not None and ElemValue.tag == "Property"
+    ]
+    Replacements = [
+        StringProp("Label", MateName),
+        EnumerationProp("JointType", JointTypes, JointTypes.index(JointType)),
+        BoolProp("Suppressed", bool(MateValue.get("suppressed")) or not HasConnectorPair),
+        FloatProp("Angle", AngleValue, "App::PropertyAngle"),
+        FloatProp("Distance", DistanceValue, "App::PropertyLength"),
+        *[
+            Value
+            for Value in ConnectorProperties
+            if Value.get("name", "").startswith(AsmConnectorPropPrefixes)
+        ],
+    ]
+    for PropName, PropType in (
+        ("Distance2", "App::PropertyLength"),
+        ("LengthMin", "App::PropertyLength"),
+        ("LengthMax", "App::PropertyLength"),
+        ("AngleMin", "App::PropertyAngle"),
+        ("AngleMax", "App::PropertyAngle"),
+    ):
+        if PropName in ParamValues:
+            Replacements.append(FloatProp(PropName, ParamValues[PropName], PropType))
+    for Replacement in Replacements:
+        MergeNamedMut(Properties, Replacement)
+    Properties.extend(MetaProperties)
+    return Properties
+
+
+# this definition exists because neutral joints need the complete standard assembly property set
+def NeutralJoint(
+    MateValue: Mapping[str, Any],
+    MateName: str,
+    JointType: str,
+    HasConnectorPair: bool,
+    ParamValues: Mapping[str, float],
+    AngleValue: float,
+    DistanceValue: float,
+    MetaProperties: list[XmlTree.Element],
+    ConnectorProperties: list[XmlTree.Element],
+) -> list[XmlTree.Element]:
+    return [
+        StringProp("Label", MateName),
+        *MetaProperties,
+        EnumerationProp("JointType", JointTypes, JointTypes.index(JointType), Dynamic=True),
+        BoolProp("Suppressed", bool(MateValue.get("suppressed")) or not HasConnectorPair),
+        FloatProp("Angle", AngleValue, "App::PropertyAngle", Dynamic=True),
+        FloatProp("Distance", DistanceValue, "App::PropertyLength", Dynamic=True),
+        FloatProp(
+            "Distance2",
+            ParamValues.get("Distance2", 0.0) if JointType in JointTypesUsingSecond else 0.0,
+            "App::PropertyLength",
+            Dynamic=True,
+        ),
+        FloatProp("LengthMin", ParamValues.get("LengthMin", 0.0), "App::PropertyLength", Dynamic=True),
+        FloatProp("LengthMax", ParamValues.get("LengthMax", 0.0), "App::PropertyLength", Dynamic=True),
+        FloatProp("AngleMin", ParamValues.get("AngleMin", 0.0), "App::PropertyAngle", Dynamic=True),
+        FloatProp("AngleMax", ParamValues.get("AngleMax", 0.0), "App::PropertyAngle", Dynamic=True),
+        BoolProp("EnableLengthMin", "LengthMin" in ParamValues, Dynamic=True),
+        BoolProp("EnableLengthMax", "LengthMax" in ParamValues, Dynamic=True),
+        BoolProp("EnableAngleMin", "AngleMin" in ParamValues, Dynamic=True),
+        BoolProp("EnableAngleMax", "AngleMax" in ParamValues, Dynamic=True),
+        *ConnectorProperties,
+        PythonProxyProp("JointObject", "Joint"),
+        BoolProp("Visibility", False),
+    ]
+
+
+# this definition exists because mate object indexes and dependencies must update together
+def RecordMateMut(
+    MatesState: AsmMates,
+    ObjValue: Object,
+    MateId: str,
+    ConnectorTargets: list[str],
+) -> None:
+    ObjValue.dependencies.extend(ConnectorTargets)
+    MatesState.MateObjects.append(ObjValue.name)
+    MatesState.MateNames[MateId] = ObjValue.name
+
+
+# this definition exists because one mate coordinates references properties execution and diagnostics
+def AddMateMut(
+    Context: AsmContext,
+    RootData: AsmRoot,
+    ItemsState: AsmItems,
+    MatesState: AsmMates,
+    EntityById: Mapping[str, Mapping[str, Any]],
+    MateValue: Mapping[str, Any],
+) -> None:
+    MateId = TextAction(MateValue.get("id"))
+    MateName = TextAction(MateValue.get("name"), MateId)
+    OwnerId = TextAction(MateValue.get("owner_definition_id"))
+    EntityIds = [TextAction(Value) for Value in Sequence(MateValue.get("entity_ids", []))]
+    Ignored, NativeMate, NativeReferences = MateAttributes(MateValue)
+    LinkedEntities = [MatesState.EntityNames[Value] for Value in EntityIds if Value in MatesState.EntityNames]
+    LinkedComponents = list(
+        dict.fromkeys(
+            MatesState.EntityComponents[Value]
+            for Value in EntityIds
+            if Value in MatesState.EntityComponents
+        )
+    )
+    RefEntityIds = MateRefGroups(EntityIds, EntityById)
+    ConnectorTargets, ConnectorSubelements = MateConnectors(
+        NativeReferences,
+        RefEntityIds,
+        EntityById,
+        RootData,
+        ItemsState,
+        MatesState,
+    )
+    HasConnectorPair = len(ConnectorTargets) == 2 and all(ConnectorTargets)
+    JointType = MateJointType(MateValue.get("kind"))
+    NativeSupported = JointType is not None and HasConnectorPair
+    ObjValue = Context.Graph.add(
+        TextAction(NativeMate.get("type_id"), "App::FeaturePython"),
+        NativeMate.get("name", MateName),
+        "Mate",
+        Touched=bool(NativeMate.get("touched")),
+        Extensions=Native(NativeMate)
+        or (("App::SuppressibleExtensionPython",) if NativeSupported else ()),
+    )
+    ConnectorProperties = ConnectorProps(
+        RefEntityIds,
+        ConnectorTargets,
+        ConnectorSubelements,
+        EntityById,
+        MatesState,
+    )
+    MetaProperties = MateMetaProps(
+        MateValue, MateId, OwnerId, EntityIds, LinkedEntities, LinkedComponents
+    )
+    if not NativeSupported:
+        AddCarrierMut(
+            ObjValue,
+            NativeMate,
+            MateName,
+            JointType,
+            MetaProperties,
+            ConnectorProperties,
+        )
+        RecordMateMut(MatesState, ObjValue, MateId, ConnectorTargets)
+        return
+    assert JointType is not None
+    ParamValues = MateParamValues(MateValue, Context.Parameters)
+    NumericValue = MateScalar(MateValue.get("value"))
+    AngleValue = ParamValues.get("Angle", NumericValue if JointType == "Angle" else 0.0)
+    DistanceValue = ParamValues.get(
+        "Distance", NumericValue if JointType in JointTypesUsingDistance else 0.0
+    )
+    NativeProperties = NativeMate.get("properties", {})
+    Properties = (
+        NativeMateProps(
+            NativeMate,
+            MateValue,
+            MateName,
+            JointType,
+            HasConnectorPair,
+            ParamValues,
+            AngleValue,
+            DistanceValue,
+            MetaProperties,
+            ConnectorProperties,
+        )
+        if isinstance(NativeProperties, Mapping) and NativeProperties
+        else NeutralJoint(
+            MateValue,
+            MateName,
+            JointType,
+            HasConnectorPair,
+            ParamValues,
+            AngleValue,
+            DistanceValue,
+            MetaProperties,
+            ConnectorProperties,
+        )
+    )
+    ObjValue.properties.extend(Properties)
+    RecordMateMut(MatesState, ObjValue, MateId, ConnectorTargets)
+
+
+# this definition exists because mates must preserve their source ordering
+def AddMatesMut(
+    Context: AsmContext,
+    RootData: AsmRoot,
+    ItemsState: AsmItems,
+    MatesState: AsmMates,
+) -> None:
+    EntityById = {
+        TextAction(Value.get("id")): Value for Value in MatesState.EntityItems
+    }
+    for MateValue in MatesState.MateItems:
+        AddMateMut(
+            Context,
+            RootData,
+            ItemsState,
+            MatesState,
+            EntityById,
+            MateValue,
         )
 
-    for MateValue in MateItems:
-        MateId = TextAction(MateValue.get("id"))
-        MateName = TextAction(MateValue.get("name"), MateId)
-        OwnerId = TextAction(MateValue.get("owner_definition_id"))
-        EntityIds = [
-            TextAction(Value) for Value in Sequence(MateValue.get("entity_ids", []))
-        ]
-        MateAttributes = MateValue.get("attributes", {})
-        if not isinstance(MateAttributes, Mapping):
-            MateAttributes = {}
-        NativeMate = MateAttributes.get("freecad", {})
-        if not isinstance(NativeMate, Mapping):
-            NativeMate = {}
-        NativeReferences = Items(MateAttributes.get("references", []))
-        LinkedEntities = [
-            EntityNames[Value] for Value in EntityIds if Value in EntityNames
-        ]
-        LinkedComponents = list(
-            dict.fromkeys(
-                (
-                    EntityComponents[Value]
-                    for Value in EntityIds
-                    if Value in EntityComponents
-                )
-            )
-        )
-        RefEntityIds: list[list[str]] = [[], []]
-        for EntityId in EntityIds:
-            Entity = EntityById.get(EntityId, {})
-            Attributes = Entity.get("attributes", {})
-            PropName = (
-                TextAction(Attributes.get("reference_property"))
-                if isinstance(Attributes, Mapping)
-                else ""
-            )
-            RefIndex = JointRefIndexByProp.get(PropName)
-            if RefIndex is not None:
-                RefEntityIds[RefIndex].append(EntityId)
-        if not any(RefEntityIds):
-            for Index, EntityId in enumerate(EntityIds[:2]):
-                RefEntityIds[Index].append(EntityId)
-        ConnectorTargets: list[str] = []
-        ConnectorSubelements: list[list[str]] = []
-        NativeRootName = TextAction(NativeRootSource.get("name"))
-        for Index, GroupedIds in enumerate(RefEntityIds):
-            NativeRef = NativeReferences[Index] if Index < len(NativeReferences) else {}
-            if NativeRef:
-                SourceTarget = TextAction(NativeRef.get("name"))
-                Target = (
-                    RootValue.name
-                    if SourceTarget == NativeRootName
-                    else ItemByNativeName.get(SourceTarget, SourceTarget)
-                )
-                Subelements = []
-                for Value in Sequence(NativeRef.get("subelements", [])):
-                    SourceValue = TextAction(Value)
-                    Prefix, Separator, Suffix = SourceValue.partition(".")
-                    Mapped = ItemByNativeName.get(Prefix, Prefix)
-                    Subelements.append(f"{Mapped}.{Suffix}" if Separator else Mapped)
-            else:
-                Target = ConnectorTarget(GroupedIds[0]) if GroupedIds else ""
-                Subelements = []
-                for EntityId in GroupedIds:
-                    Entity = EntityById.get(EntityId, {})
-                    Values = MateSubelements(Entity)
-                    if len(GroupedIds) == 1:
-                        Subelements.extend(Values)
-                    elif Values:
-                        Subelements.append(Values[0])
-            ConnectorTargets.append(Target)
-            ConnectorSubelements.append(Subelements)
-        HasConnectorPair = len(ConnectorTargets) == 2 and all(ConnectorTargets)
-        ResolvedJointType = MateJointType(MateValue.get("kind"))
-        NativeJointSupported = ResolvedJointType is not None and HasConnectorPair
-        NativeMateExtensions = Native(NativeMate)
-        ObjValue = Graph.add(
-            TextAction(NativeMate.get("type_id"), "App::FeaturePython"),
-            NativeMate.get("name", MateName),
-            "Mate",
-            Touched=bool(NativeMate.get("touched")),
-            Extensions=NativeMateExtensions
-            or (("App::SuppressibleExtensionPython",) if NativeJointSupported else ()),
-        )
-        ConnectorProperties: list[XmlTree.Element] = []
-        for Index in range(1, 3):
-            GroupedIds = RefEntityIds[Index - 1]
-            EntityId = GroupedIds[0] if GroupedIds else ""
-            ComponentName = (
-                ConnectorTargets[Index - 1] if Index <= len(ConnectorTargets) else ""
-            )
-            Entity = EntityById.get(EntityId, {})
-            Subelements = ConnectorSubelements[Index - 1]
-            HasRealSubelements = bool(Subelements)
-            ComponentPrefix = EntityPrefixes.get(EntityId, "")
-            if ComponentPrefix:
-                Subelements = [
-                    f"{ComponentPrefix}.{Value}" if Value else f"{ComponentPrefix}."
-                    for Value in Subelements or ["", ""]
-                ]
-            elif ComponentName and (not Subelements):
-                Subelements = ["", ""]
-            ConnectorProperties.append(
-                XlinkSubProp(
-                    f"Reference{Index}", ComponentName, Subelements, Dynamic=True
-                )
-            )
-            Frame = Entity.get("frame")
-            Matrix = (
-                MatrixValues(Frame) if isinstance(Frame, Mapping) else KIdentityMatrix
-            )
-            ConnectorProperties.extend(
-                [
-                    MakePlacement(
-                        f"Placement{Index}", MatrixTransform(Matrix), Dynamic=True
-                    ),
-                    MakePlacement(
-                        f"Offset{Index}", MatrixTransform(KIdentityMatrix), Dynamic=True
-                    ),
-                    BoolProp(
-                        f"Detach{Index}",
-                        isinstance(Frame, Mapping) and (not HasRealSubelements),
-                        Dynamic=True,
-                    ),
-                ]
-            )
-        MetaProperties = [
-            StringProp("MateId", MateId, Dynamic=True),
-            StringListProp("OwnerOccurrencePath", [], Dynamic=True),
-            StringProp(
-                "MateType", TextAction(EnumAction(MateValue.get("kind"))), Dynamic=True
+
+# this definition exists because nested mate groups need a stable parent lookup
+def GroupParent(GroupId: str, GroupItems: list[dict[str, Any]]) -> str:
+    return TextAction(
+        next(
+            (
+                Value.get("parent_group_id")
+                for Value in GroupItems
+                if TextAction(Value.get("id")) == GroupId
             ),
-            StringProp("OwnerDefinitionId", OwnerId, Dynamic=True),
-            StringListProp("EntityLinks", LinkedEntities, Dynamic=True),
-            StringListProp("ComponentLinks", LinkedComponents, Dynamic=True),
-            StringListProp("EntityIds", EntityIds, Dynamic=True),
-            StringListProp(
-                "ParameterIds",
-                [
-                    TextAction(Value)
-                    for Value in Sequence(MateValue.get("parameter_ids", []))
-                ],
-                Dynamic=True,
-            ),
-            StringProp(
-                "Alignment",
-                TextAction(EnumAction(MateValue.get("alignment"))),
-                Dynamic=True,
-            ),
-            BoolProp(
-                "SourceSuppressed", bool(MateValue.get("suppressed")), Dynamic=True
-            ),
-            BoolProp("Driving", bool(MateValue.get("driving", True)), Dynamic=True),
-            JsonProp("MateValueJSON", MateValue.get("value")),
-            JsonProp("MateDataJSON", MateValue),
-        ]
-        if not NativeJointSupported:
-            ObjValue.properties.extend(NativeA(NativeMate))
-            for PropElem in (
-                StringProp("Label", MateName),
-                BoolProp("KitMateCarrier", True, Dynamic=True),
-                StringProp(
-                    "NativeExecutionReason",
-                    (
-                        "unsupported_mate_kind"
-                        if ResolvedJointType is None
-                        else "missing_connector_pair"
-                    ),
-                    Dynamic=True,
-                ),
-                *MetaProperties,
-                *ConnectorProperties,
-                BoolProp("Visibility", False),
-            ):
-                ReplaceNameMut(ObjValue.properties, PropElem.get("name", ""), PropElem)
-            ObjValue.dependencies.extend(ConnectorTargets)
-            MateObjects.append(ObjValue.name)
-            MateNames[MateId] = ObjValue.name
-            continue
-        JointType = ResolvedJointType
-        NumericValue = MateScalar(MateValue.get("value"))
-        ParamValues = {
-            PathValue: Parameters.value(ParamId)
-            for ParamId in (
-                TextAction(Value)
-                for Value in Sequence(MateValue.get("parameter_ids", []))
-            )
-            if (PathValue := Parameters.source_path(ParamId))
-        }
-        AngleValue = ParamValues.get(
-            "Angle", NumericValue if JointType == "Angle" else 0.0
+            "",
         )
-        DistanceValue = ParamValues.get(
-            "Distance", NumericValue if JointType in JointTypesUsingDistance else 0.0
-        )
-        NativeMateProperties = NativeMate.get("properties", {})
-        if isinstance(NativeMateProperties, Mapping) and NativeMateProperties:
-            Properties = [
-                ElemValue
-                for Value in NativeMateProperties.values()
-                if (ElemValue := ElemFromData(Value)) is not None
-                and ElemValue.tag == "Property"
-            ]
-            Replacements = [
-                StringProp("Label", MateName),
-                EnumerationProp("JointType", JointTypes, JointTypes.index(JointType)),
-                BoolProp(
-                    "Suppressed",
-                    bool(MateValue.get("suppressed"))
-                    or not HasConnectorPair
-                    or (not NativeJointSupported),
-                ),
-                FloatProp("Angle", AngleValue, "App::PropertyAngle"),
-                FloatProp("Distance", DistanceValue, "App::PropertyLength"),
-                *[
-                    ItemValue
-                    for ItemValue in ConnectorProperties
-                    if ItemValue.get("name", "").startswith(AsmConnectorPropPrefixes)
-                ],
-            ]
-            for PropName, PropType in (
-                ("Distance2", "App::PropertyLength"),
-                ("LengthMin", "App::PropertyLength"),
-                ("LengthMax", "App::PropertyLength"),
-                ("AngleMin", "App::PropertyAngle"),
-                ("AngleMax", "App::PropertyAngle"),
-            ):
-                if PropName in ParamValues:
-                    Replacements.append(
-                        FloatProp(PropName, ParamValues[PropName], PropType)
-                    )
-            for Replacement in Replacements:
-                MergeNamedMut(Properties, Replacement)
-            Properties.extend(MetaProperties)
-        else:
-            Properties = [
-                StringProp("Label", MateName),
-                *MetaProperties,
-                EnumerationProp(
-                    "JointType", JointTypes, JointTypes.index(JointType), Dynamic=True
-                ),
-                BoolProp(
-                    "Suppressed",
-                    bool(MateValue.get("suppressed"))
-                    or not HasConnectorPair
-                    or (not NativeJointSupported),
-                ),
-                FloatProp("Angle", AngleValue, "App::PropertyAngle", Dynamic=True),
-                FloatProp(
-                    "Distance", DistanceValue, "App::PropertyLength", Dynamic=True
-                ),
-                FloatProp(
-                    "Distance2",
-                    (
-                        ParamValues.get("Distance2", 0.0)
-                        if JointType in JointTypesUsingSecond
-                        else 0.0
-                    ),
-                    "App::PropertyLength",
-                    Dynamic=True,
-                ),
-                FloatProp(
-                    "LengthMin",
-                    ParamValues.get("LengthMin", 0.0),
-                    "App::PropertyLength",
-                    Dynamic=True,
-                ),
-                FloatProp(
-                    "LengthMax",
-                    ParamValues.get("LengthMax", 0.0),
-                    "App::PropertyLength",
-                    Dynamic=True,
-                ),
-                FloatProp(
-                    "AngleMin",
-                    ParamValues.get("AngleMin", 0.0),
-                    "App::PropertyAngle",
-                    Dynamic=True,
-                ),
-                FloatProp(
-                    "AngleMax",
-                    ParamValues.get("AngleMax", 0.0),
-                    "App::PropertyAngle",
-                    Dynamic=True,
-                ),
-                BoolProp("EnableLengthMin", "LengthMin" in ParamValues, Dynamic=True),
-                BoolProp("EnableLengthMax", "LengthMax" in ParamValues, Dynamic=True),
-                BoolProp("EnableAngleMin", "AngleMin" in ParamValues, Dynamic=True),
-                BoolProp("EnableAngleMax", "AngleMax" in ParamValues, Dynamic=True),
-                *ConnectorProperties,
-                PythonProxyProp("JointObject", "Joint"),
-                BoolProp("Visibility", False),
-            ]
-        ObjValue.properties.extend(Properties)
-        ObjValue.dependencies.extend(ConnectorTargets)
-        MateObjects.append(ObjValue.name)
-        MateNames[MateId] = ObjValue.name
-    GroupItems = [Group for Group in GroupItems if Group is not NativeJointGroup]
+    )
+
+
+# this definition exists because mate groups preserve nesting and source membership metadata
+def AddGroupsMut(
+    Context: AsmContext, RootData: AsmRoot, MatesState: AsmMates
+) -> None:
+    GroupItems = [
+        Group for Group in RootData.GroupItems if Group is not RootData.NativeJointGroup
+    ]
     GroupNames: dict[str, str] = {}
     GroupObjects: list[Object] = []
     for Group in GroupItems:
         GroupId = TextAction(Group.get("id"))
-        ObjValue = Graph.add(
+        ObjValue = Context.Graph.add(
             "App::DocumentObjectGroup", Group.get("name", GroupId), "MateGroup"
         )
         GroupNames[GroupId] = ObjValue.name
         GroupObjects.append(ObjValue)
     for Group, ObjValue in zip(GroupItems, GroupObjects):
         Members = [
-            MateNames[Value]
+            MatesState.MateNames[Value]
             for Value in (
                 TextAction(ItemValue)
                 for ItemValue in Sequence(Group.get("mate_ids", []))
             )
-            if Value in MateNames
+            if Value in MatesState.MateNames
         ]
-        Nested = [
+        GroupId = TextAction(Group.get("id"))
+        Children = [
             NameValue
-            for GroupId, NameValue in GroupNames.items()
-            if TextAction(
-                next(
-                    (
-                        ItemValue.get("parent_group_id")
-                        for ItemValue in GroupItems
-                        if TextAction(ItemValue.get("id")) == GroupId
-                    ),
-                    "",
-                )
-            )
-            == TextAction(Group.get("id"))
+            for ChildId, NameValue in GroupNames.items()
+            if GroupParent(ChildId, GroupItems) == GroupId
         ]
-        Children = Nested
         ObjValue.properties.extend(
             [
                 StringProp("Label", Group.get("name", Group.get("id", ""))),
@@ -4764,77 +5654,87 @@ def AddAsmMut(
             ]
         )
         ObjValue.dependencies.extend(Children)
-    DefinitionsGroup.properties.extend(
+
+
+# this definition exists because assembly support groups need their canonical memberships and labels
+def SetAsmGroupsMut(
+    RootData: AsmRoot, ItemsState: AsmItems, MatesState: AsmMates
+) -> None:
+    RootData.DefinitionsGroup.properties.extend(
         [
             StringProp("Label", "Component Definitions"),
-            LinkListProp("Group", DefinitionObjects),
+            LinkListProp("Group", ItemsState.DefinitionObjects),
             BoolProp("Visibility", False),
         ]
     )
-    DefinitionsGroup.dependencies.extend(DefinitionObjects)
-    ComponentsGroup.properties.extend(
+    RootData.DefinitionsGroup.dependencies.extend(ItemsState.DefinitionObjects)
+    RootData.ComponentsGroup.properties.extend(
         [
             StringProp("Label", "Components"),
             LinkListProp("Group", []),
-            StringListProp("ComponentObjects", ItemObjects, Dynamic=True),
+            StringListProp("ComponentObjects", ItemsState.ItemObjects, Dynamic=True),
             BoolProp("Visibility", True),
         ]
     )
-    EntitiesGroup.properties.extend(
+    RootData.EntitiesGroup.properties.extend(
         [
             StringProp("Label", "Mate Entities"),
-            LinkListProp("Group", EntityObjects),
+            LinkListProp("Group", MatesState.EntityObjects),
             BoolProp("Visibility", False),
         ]
     )
-    EntitiesGroup.dependencies.extend(EntityObjects)
-    MateChildren = [*GroundedObjects, *MateObjects]
-    MatesGroup.properties.extend(NativeA(NativeJointSource))
+    RootData.EntitiesGroup.dependencies.extend(MatesState.EntityObjects)
+
+
+# this definition exists because native joint groups need their emitted child link list replaced
+def GroupLinksMut(MatesGroup: Object, MateChildren: list[str]) -> None:
     GroupProp = next(
-        (
-            ItemValue
-            for ItemValue in MatesGroup.properties
-            if ItemValue.get("name") == "Group"
-        ),
+        (Value for Value in MatesGroup.properties if Value.get("name") == "Group"),
         None,
     )
     if GroupProp is None:
-        GroupProp = LinkListProp("Group", MateChildren)
-        MatesGroup.properties.append(GroupProp)
-    else:
-        LinkList = GroupProp.find("./LinkList")
-        if LinkList is None:
-            LinkList = XmlTree.SubElement(GroupProp, "LinkList")
-        LinkList.clear()
-        LinkList.set("count", str(len(MateChildren)))
-        for Target in MateChildren:
-            XmlTree.SubElement(LinkList, "Link", {"value": Target})
-    if not any(
-        (
-            ItemValue.get("name") == "ExpressionEngine"
-            for ItemValue in MatesGroup.properties
-        )
-    ):
+        MatesGroup.properties.append(LinkListProp("Group", MateChildren))
+        return
+    LinkList = GroupProp.find("./LinkList")
+    if LinkList is None:
+        LinkList = XmlTree.SubElement(GroupProp, "LinkList")
+    LinkList.clear()
+    LinkList.set("count", str(len(MateChildren)))
+    for Target in MateChildren:
+        XmlTree.SubElement(LinkList, "Link", {"value": Target})
+
+
+# this definition exists because joint groups require standard label expression and visibility properties
+def JointPropsMut(MatesGroup: Object) -> None:
+    if not any(Value.get("name") == "ExpressionEngine" for Value in MatesGroup.properties):
         MatesGroup.properties.insert(0, ExpressionProp([]))
-    if not any(
-        (ItemValue.get("name") == "Label" for ItemValue in MatesGroup.properties)
-    ):
+    if not any(Value.get("name") == "Label" for Value in MatesGroup.properties):
         LabelProp = PropAction("Label", "App::PropertyString", Status="134217728")
         XmlTree.SubElement(LabelProp, "String", {"value": "Joints"})
         MatesGroup.properties.append(LabelProp)
-    if not any(
-        (ItemValue.get("name") == "Label2" for ItemValue in MatesGroup.properties)
-    ):
+    if not any(Value.get("name") == "Label2" for Value in MatesGroup.properties):
         LabelTwoProp = PropAction("Label2", "App::PropertyString", Status="67108992")
         XmlTree.SubElement(LabelTwoProp, "String", {"value": ""})
         MatesGroup.properties.append(LabelTwoProp)
-    if not any(
-        (ItemValue.get("name") == "Visibility" for ItemValue in MatesGroup.properties)
-    ):
+    if not any(Value.get("name") == "Visibility" for Value in MatesGroup.properties):
         VisibilityProp = PropAction("Visibility", "App::PropertyBool", Status="648")
         XmlTree.SubElement(VisibilityProp, "Bool", {"value": "true"})
         MatesGroup.properties.append(VisibilityProp)
-    MatesGroup.transient_properties.append(
+
+
+# this definition exists because assembly finalization synchronizes groups root properties and counts
+def FinalizeAsmMut(
+    Context: AsmContext,
+    RootData: AsmRoot,
+    ItemsState: AsmItems,
+    MatesState: AsmMates,
+) -> tuple[str, int, int]:
+    SetAsmGroupsMut(RootData, ItemsState, MatesState)
+    MateChildren = [*ItemsState.GroundedObjects, *MatesState.MateObjects]
+    RootData.MatesGroup.properties.extend(NativeA(RootData.NativeJoint))
+    GroupLinksMut(RootData.MatesGroup, MateChildren)
+    JointPropsMut(RootData.MatesGroup)
+    RootData.MatesGroup.transient_properties.append(
         XmlTree.Element(
             "_Property",
             {
@@ -4844,22 +5744,58 @@ def AddAsmMut(
             },
         )
     )
-    MatesGroup.dependencies.extend(MateChildren)
-    RootChildren = [MatesGroup.name, *ItemObjects, *GroundedObjects, *MateObjects]
+    RootData.MatesGroup.dependencies.extend(MateChildren)
+    RootChildren = [
+        RootData.MatesGroup.name,
+        *ItemsState.ItemObjects,
+        *ItemsState.GroundedObjects,
+        *MatesState.MateObjects,
+    ]
     for PropElem in (
-        StringProp("Label", RootLabel),
+        StringProp("Label", RootData.RootLabel),
         StringProp("Type", "Assembly"),
         LinkListProp("Group", RootChildren),
         MakePlacement("Placement", MatrixTransform(KIdentityMatrix)),
-        StringProp("RootDefinitionId", RootDefinitionId, Dynamic=True),
-        IntegerProp("DefinitionCount", len(Definitions), Dynamic=True),
-        IntegerProp("OccurrenceCount", len(DirectInstances), Dynamic=True),
-        IntegerProp("MateCount", len(MateObjects), Dynamic=True),
+        StringProp("RootDefinitionId", Context.RootDefId, Dynamic=True),
+        IntegerProp("DefinitionCount", len(Context.Definitions), Dynamic=True),
+        IntegerProp("OccurrenceCount", len(ItemsState.DirectInstances), Dynamic=True),
+        IntegerProp("MateCount", len(MatesState.MateObjects), Dynamic=True),
         BoolProp("Visibility", True),
     ):
-        ReplaceNameMut(RootValue.properties, PropElem.get("name", ""), PropElem)
-    RootValue.dependencies.extend(RootChildren)
-    return (RootValue.name, len(DirectInstances), len(MateObjects))
+        ReplaceNameMut(
+            RootData.RootObject.properties, PropElem.get("name", ""), PropElem
+        )
+    RootData.RootObject.dependencies.extend(RootChildren)
+    return (
+        RootData.RootObject.name,
+        len(ItemsState.DirectInstances),
+        len(MatesState.MateObjects),
+    )
+
+
+# this definition exists because assembly conversion coordinates each ordered transfer phase
+def AddAsmMut(
+    Graph: _Graph,
+    Manifest: Mapping[str, Any],
+    PayloadEntries: dict[str, bytes],
+    OuterLinks: Mapping[str, Mapping[str, Any]],
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
+) -> tuple[str, int, int]:
+    Context = BuildAsmContext(
+        Graph, Manifest, PayloadEntries, OuterLinks, TrustedNativeBreps
+    )
+    if Context is None:
+        return ("", 0, 0)
+    RootData = BuildAsmRootMut(Context)
+    ItemsState = CreateAsmItems()
+    AddDefsMut(Context, ItemsState)
+    AddInstancesMut(Context, ItemsState)
+    AddOutersMut(Context, ItemsState)
+    MatesState = CreateAsmMates(Context)
+    AddEntitiesMut(Context, RootData, ItemsState, MatesState)
+    AddMatesMut(Context, RootData, ItemsState, MatesState)
+    AddGroupsMut(Context, RootData, MatesState)
+    return FinalizeAsmMut(Context, RootData, ItemsState, MatesState)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -5086,6 +6022,1011 @@ def Represented(Manifest: Mapping[str, Any], AsmValue: Mapping[str, Any]) -> set
     return Result
 
 
+# this class exists because document phases share source native graph and root objects
+@Dataclass
+class DocContext:
+    Manifest: Mapping[str, Any]
+    ManifestData: str
+    ManifestHash: str
+    OuterLinks: Mapping[str, Mapping[str, Any]]
+    NativeOuterLinks: Mapping[str, str]
+    Timestamp: str
+    TrustedBreps: frozenset[KNativeBrepKey]
+    NativeDocHash: str
+    SourceFormat: str
+    FreecadMeta: Mapping[str, Any]
+    NativeValues: list[dict[str, Any]]
+    NativeReplay: bool
+    ReplayValues: list[dict[str, Any]]
+    Graph: ObjectGraph
+    NativeGraph: dict[str, Object]
+    NativeTargets: dict[str, str]
+    ParametersData: list[dict[str, Any]]
+    Parameters: _Parameters
+    ParamSheet: Object
+    MetaObject: Object
+    PlanesGroup: Object
+    SketchesGroup: Object
+    SelectionsGroup: Object
+    ConfigsGroup: Object
+    TimelineGroup: Object
+    BodiesGroup: Object
+
+
+# this class exists because planes and sketches share support and profile indexes
+@Dataclass
+class DocGeometry:
+    PlaneItems: list[dict[str, Any]]
+    PlaneById: dict[str, dict[str, Any]]
+    PlaneNames: dict[str, str]
+    PlaneObjects: list[str]
+    SketchItems: list[dict[str, Any]]
+    SketchNames: dict[str, str]
+    SketchProfCounts: dict[str, int]
+    SketchProfSound: dict[str, bool]
+    SketchObjects: list[str]
+    SelectionItems: dict[str, dict[str, Any]]
+
+
+# this class exists because document feature phases share emitted names payloads and representations
+@Dataclass
+class DocFeatures:
+    FeatureItems: list[dict[str, Any]]
+    FeatureNames: dict[str, str]
+    SolidNames: dict[str, str]
+    FeatureObjects: list[str]
+    CurrentName: str
+    FinalShapeFile: str
+    PayloadEntries: dict[str, bytes]
+    BodyObjects: list[str]
+    BodyNames: dict[str, str]
+    BodyTargets: dict[str, str]
+    SelectionNames: dict[str, str]
+    SelectionObjects: list[str]
+    ConfigItems: list[dict[str, Any]]
+    ConfigNames: dict[str, str]
+    ConfigObjects: list[str]
+    DocBreps: list[str]
+    DocMeshes: list[str]
+    AssemblyRoot: str
+    AssemblyItems: int
+    AssemblyMates: int
+    OuterTarget: str
+
+
+# this definition exists because native replay objects need stable source ordering
+def NativeOrder(Value: Mapping[str, Any]) -> int:
+    return int(Number(Value.get("order")))
+
+
+# this definition exists because partial native replay must retain a dependency closed object set
+def ReplaySubset(
+    Manifest: Mapping[str, Any],
+    NativeValues: list[dict[str, Any]],
+    AsmValue: Mapping[str, Any] | None,
+) -> tuple[bool, list[dict[str, Any]]]:
+    NativeReplay = bool(NativeValues) and AsmValue is None
+    if NativeReplay:
+        return (True, NativeValues)
+    RepresentedNames = Represented(Manifest, AsmValue) if AsmValue is not None else set()
+    ReplayValues = [
+        Value
+        for Value in NativeValues
+        if TextAction(Value.get("name")) not in RepresentedNames
+    ]
+    while True:
+        ReplayNames = {TextAction(Value.get("name")) for Value in ReplayValues}
+        ClosedValues = [
+            Value
+            for Value in ReplayValues
+            if all(
+                TextAction(Dependency) in ReplayNames
+                for Dependency in Sequence(Value.get("dependencies", []))
+            )
+        ]
+        if len(ClosedValues) == len(ReplayValues):
+            return (False, ReplayValues)
+        ReplayValues = ClosedValues
+
+
+# this definition exists because replay objects must seed graph names before generated objects
+def AddReplayMut(
+    Graph: ObjectGraph, ReplayValues: list[dict[str, Any]]
+) -> dict[str, Object]:
+    NativeGraph: dict[str, Object] = {}
+    for Value in sorted(ReplayValues, key=NativeOrder):
+        ObjValue = NativeObject(Value)
+        if ObjValue.name in NativeGraph:
+            raise ValueError(f"duplicate native FreeCAD object metadata: {ObjValue.name}")
+        NativeGraph[ObjValue.name] = ObjValue
+        Graph.Names.add(ObjValue.name)
+        Graph.Objects.append(ObjValue)
+    return NativeGraph
+
+
+# this definition exists because freecad metadata may be absent or malformed
+def FreecadMetaData(Manifest: Mapping[str, Any]) -> Mapping[str, Any]:
+    ManifestMeta = Manifest.get("metadata", {})
+    FreecadMeta = (
+        ManifestMeta.get("freecad", {}) if isinstance(ManifestMeta, Mapping) else {}
+    )
+    return FreecadMeta if isinstance(FreecadMeta, Mapping) else {}
+
+
+# this definition exists because document root groups require a stable creation order
+def AddDocBaseMut(
+    Graph: ObjectGraph,
+    Manifest: Mapping[str, Any],
+    ManifestData: str,
+    ManifestHash: str,
+    Parameters: _Parameters,
+) -> tuple[Object, Object, Object, Object, Object, Object, Object, Object]:
+    ParamSheet = Graph.add("Spreadsheet::Sheet", "Parameters", "Parameters")
+    ParamSheet.properties.extend(Parameters.sheet_properties())
+    MetaObject = Graph.add("App::FeaturePython", "KitMetadata", "Metadata")
+    MetaObject.properties.extend(
+        [
+            StringProp("Label", "Kit Metadata"),
+            StringProp(KManifestEncodingProp, KManifestEncoding, Dynamic=True),
+            StringProp(KManifestShaTwoFiveSixPrA, ManifestHash, Dynamic=True),
+            StringProp(KManifestDataProp, ManifestData, Dynamic=True),
+            StringProp("SchemaVersion", Manifest.get("schema_version", "1.0"), Dynamic=True),
+            JsonProp("ParameterAliasesJSON", Parameters.Aliases),
+            BoolProp("Visibility", False),
+        ]
+    )
+    PlanesGroup = Graph.add("App::DocumentObjectGroup", "SupportPlanes", "Group")
+    SketchesGroup = Graph.add("App::DocumentObjectGroup", "Sketches", "Group")
+    SelectionsGroup = Graph.add("App::DocumentObjectGroup", "Selections", "Group")
+    ConfigsGroup = Graph.add("App::DocumentObjectGroup", "Configurations", "Group")
+    TimelineGroup = Graph.add("App::DocumentObjectGroup", "FeatureTimeline", "Group")
+    BodiesGroup = Graph.add("App::DocumentObjectGroup", "Bodies", "Group")
+    return (
+        ParamSheet,
+        MetaObject,
+        PlanesGroup,
+        SketchesGroup,
+        SelectionsGroup,
+        ConfigsGroup,
+        TimelineGroup,
+        BodiesGroup,
+    )
+
+
+# this definition exists because document conversion needs one initialized shared context
+def BuildDocContext(
+    Manifest: Mapping[str, Any],
+    ManifestData: str,
+    ManifestHash: str,
+    OuterLinks: Mapping[str, Mapping[str, Any]] | None,
+    NativeOuterLinks: Mapping[str, str] | None,
+    Timestamp: str,
+    TrustedBreps: frozenset[KNativeBrepKey],
+) -> DocContext:
+    SourceData = Manifest.get("source", {})
+    SourceFormat = (
+        TextAction(SourceData.get("format_id")) if isinstance(SourceData, Mapping) else ""
+    )
+    FreecadMeta = FreecadMetaData(Manifest)
+    NativeValues = Items(FreecadMeta.get("objects", []))
+    NativeReplay, ReplayValues = ReplaySubset(Manifest, NativeValues, AsmData(Manifest))
+    Graph = ObjectGraph()
+    NativeGraph = AddReplayMut(Graph, ReplayValues)
+    NativeTargets = {NameValue: Value.name for NameValue, Value in NativeGraph.items()}
+    ParametersData = Items(Manifest.get("parameters", []))
+    Parameters = ParamCatalog(ParametersData)
+    BaseObjects = AddDocBaseMut(
+        Graph, Manifest, ManifestData, ManifestHash, Parameters
+    )
+    return DocContext(
+        Manifest,
+        ManifestData,
+        ManifestHash,
+        OuterLinks or {},
+        NativeOuterLinks or {},
+        Timestamp,
+        TrustedBreps,
+        NativeDocShaTwo(Manifest),
+        SourceFormat,
+        FreecadMeta,
+        NativeValues,
+        NativeReplay,
+        ReplayValues,
+        Graph,
+        NativeGraph,
+        NativeTargets,
+        ParametersData,
+        Parameters,
+        *BaseObjects,
+    )
+
+
+# this definition exists because plane sketch and selection indexes need independent collections
+def BuildDocGeom(Context: DocContext) -> DocGeometry:
+    PlaneItems = Items(
+        Context.Manifest.get("support_planes", Context.Manifest.get("planes", []))
+    )
+    PlaneById = {TextAction(Value.get("id")): Value for Value in PlaneItems}
+    SketchItems = Items(Context.Manifest.get("sketches", []))
+    SelectionItems = {
+        TextAction(Value.get("id")): Value
+        for Value in Items(Context.Manifest.get("selections", []))
+    }
+    return DocGeometry(
+        PlaneItems,
+        PlaneById,
+        {},
+        [],
+        SketchItems,
+        {},
+        {},
+        {},
+        [],
+        SelectionItems,
+    )
+
+
+# this definition exists because feature timeline entries need stable source ordering
+def FeatureOrder(Value: Mapping[str, Any]) -> int:
+    return int(Number(Value.get("order")))
+
+
+# this definition exists because document feature state needs independent mutable collections
+def BuildDocItems(Context: DocContext) -> DocFeatures:
+    FeatureItems = sorted(
+        Items(
+            Context.Manifest.get(
+                "feature_timeline", Context.Manifest.get("timeline", [])
+            )
+        ),
+        key=FeatureOrder,
+    )
+    ConfigItems = Items(Context.Manifest.get("configurations", []))
+    return DocFeatures(
+        FeatureItems,
+        {},
+        {},
+        [],
+        "",
+        "",
+        {},
+        [],
+        {},
+        {},
+        {},
+        [],
+        ConfigItems,
+        {},
+        [],
+        [],
+        [],
+        "",
+        0,
+        0,
+        "",
+    )
+
+
+# this definition exists because partial replay imports only payloads referenced by replay objects
+def ReplayEntrySet(Context: DocContext) -> set[str] | None:
+    if Context.NativeReplay:
+        return None
+    return {
+        FileName
+        for Value in Context.ReplayValues
+        for PropElem in NativeA(Value)
+        for NodeValue in PropElem.iter()
+        if NodeValue.tag != "XLink" and (FileName := NodeValue.get("file", ""))
+    }
+
+
+# this definition exists because native entry metadata must remain conflict free and complete
+def AddEntryDataMut(Context: DocContext, Features: DocFeatures) -> None:
+    if not Context.NativeValues:
+        return
+    ReplayEntries = ReplayEntrySet(Context)
+    for ItemValue in Items(Context.FreecadMeta.get("entries", [])):
+        SourceStream = TextAction(ItemValue.get("source_stream"))
+        DataValue = PayloadBytes(ItemValue)
+        if not SourceStream or DataValue is None:
+            raise ValueError("native FreeCAD entry metadata is incomplete")
+        if ReplayEntries is not None and SourceStream not in ReplayEntries:
+            continue
+        Entry = ValidatedEntry(SourceStream)
+        if Entry in {KDocEntry, KManifestEntry} or Entry in Features.PayloadEntries:
+            raise ValueError("native FreeCAD entry metadata conflicts with the archive")
+        Features.PayloadEntries[Entry] = DataValue
+
+
+# this definition exists because neutral records may carry optional freecad object metadata
+def FreecadAttrs(Value: Mapping[str, Any]) -> Mapping[str, Any]:
+    Attributes = Value.get("attributes", {})
+    NativeValue = Attributes.get("freecad", {}) if isinstance(Attributes, Mapping) else {}
+    return NativeValue if isinstance(NativeValue, Mapping) else {}
+
+
+# this definition exists because offset planes can retain a direct parameter expression
+def PlaneExpressions(
+    Plane: Mapping[str, Any], Transform: Mapping[str, Any], Parameters: _Parameters
+) -> list[tuple[str, str]]:
+    ParamId = TextAction(Plane.get("offset_parameter_id"))
+    if not ParamId:
+        return []
+    Expression = Parameters.expression(ParamId)
+    Origin = Vector(Transform.get("origin"), (0.0, 0.0, 0.0))
+    Normal = Normalize(Vector(Transform.get("z_axis"), (0.0, 0.0, 1.0)))
+    ParamValue = Parameters.value(ParamId)
+    Result: list[tuple[str, str]] = []
+    for Coordinate, Component, OriginValue in zip(("x", "y", "z"), Normal, Origin):
+        if abs(Component) > 0.999999 and MathValue.isclose(
+            abs(OriginValue), abs(ParamValue), rel_tol=1e-09, abs_tol=1e-09
+        ):
+            SignValue = "-" if OriginValue * ParamValue < 0 else ""
+            Result.append(
+                (f"Placement.Base.{Coordinate}", SignValue + TextAction(Expression))
+            )
+    return Result
+
+
+# this definition exists because one support plane coordinates native replay placement and indexes
+def AddPlaneMut(
+    Context: DocContext, Geometry: DocGeometry, Plane: Mapping[str, Any]
+) -> None:
+    PlaneId = TextAction(Plane.get("id"))
+    NativePlane = FreecadAttrs(Plane)
+    NativeName = TextAction(NativePlane.get("name"))
+    ObjValue = Context.NativeGraph.get(NativeName) if Context.NativeReplay else None
+    if ObjValue is None:
+        ObjValue = Context.Graph.add(
+            TextAction(NativePlane.get("type_id"), "App::Plane"),
+            NativePlane.get("name", Plane.get("name", PlaneId)),
+            "Plane",
+        )
+    if NativeName:
+        Context.NativeTargets[NativeName] = ObjValue.name
+    Geometry.PlaneNames[PlaneId] = ObjValue.name
+    Geometry.PlaneObjects.append(ObjValue.name)
+    Transform = (
+        Plane.get("transform", {})
+        if isinstance(Plane.get("transform"), Mapping)
+        else {}
+    )
+    Expressions = PlaneExpressions(Plane, Transform, Context.Parameters)
+    NativeProperties = NativePlane.get("properties", {})
+    if isinstance(NativeProperties, Mapping) and NativeProperties:
+        Properties = NativeA(NativePlane)
+        for Replacement in (
+            StringProp("Label", Plane.get("name", PlaneId)),
+            MakePlacement("Placement", Transform),
+            BoolProp("Visibility", False),
+        ):
+            MergeNamedMut(Properties, Replacement)
+        if not Context.NativeReplay:
+            Properties.extend(
+                [
+                    StringProp("KitId", PlaneId, Dynamic=True),
+                    JsonProp("SourcePlaneJSON", Plane),
+                ]
+            )
+        setattr(ObjValue, "properties", Properties)
+    else:
+        ObjValue.properties.extend(
+            [
+                StringProp("Label", Plane.get("name", PlaneId)),
+                MakePlacement("Placement", Transform),
+                ExpressionProp(Expressions),
+                StringProp("KitId", PlaneId, Dynamic=True),
+                JsonProp("SourcePlaneJSON", Plane),
+                BoolProp("Visibility", False),
+            ]
+        )
+    if Expressions and not Context.NativeReplay:
+        ObjValue.dependencies.append(Context.ParamSheet.name)
+
+
+# this definition exists because support planes must preserve their source ordering
+def AddPlanesMut(Context: DocContext, Geometry: DocGeometry) -> None:
+    for Plane in Geometry.PlaneItems:
+        AddPlaneMut(Context, Geometry, Plane)
+
+
+# this definition exists because one sketch coordinates profile evidence support and native replay
+def AddSketchMut(
+    Context: DocContext, Geometry: DocGeometry, Sketch: Mapping[str, Any]
+) -> None:
+    SketchId = TextAction(Sketch.get("id"))
+    Geometry.SketchProfCounts[SketchId] = NativeClosed(Sketch)
+    Geometry.SketchProfSound[SketchId] = HasNativeProf(Sketch)
+    PlaneId = TextAction(Sketch.get("support_plane_id"))
+    Plane = Geometry.PlaneById.get(PlaneId, {"transform": {}})
+    PlaneName = Geometry.PlaneNames.get(PlaneId, "")
+    NativeSketch = FreecadAttrs(Sketch)
+    NativeName = TextAction(NativeSketch.get("name"))
+    ObjValue = Context.NativeGraph.get(NativeName) if Context.NativeReplay else None
+    if ObjValue is None:
+        ObjValue = Context.Graph.add(
+            TextAction(NativeSketch.get("type_id"), SketchTypeId),
+            NativeSketch.get("name", Sketch.get("name", SketchId)),
+            "Sketch",
+            Touched=True,
+            Extensions=("Part::AttachExtension",),
+        )
+    Geometry.SketchNames[SketchId] = ObjValue.name
+    if NativeName:
+        Context.NativeTargets[NativeName] = ObjValue.name
+    Geometry.SketchObjects.append(ObjValue.name)
+    Properties, Dependencies = BuildSketch(
+        Sketch,
+        Plane,
+        PlaneName,
+        Context.Parameters,
+        Context.NativeReplay,
+        Context.SourceFormat == "solidworks.sldprt",
+    )
+    if Context.NativeReplay and NativeSketch:
+        setattr(ObjValue, "properties", Properties)
+    else:
+        ObjValue.properties.extend(Properties)
+    if NativeSketch and not Context.NativeReplay:
+        ObjValue.transient_properties.append(
+            XmlTree.Element(
+                "_Property",
+                {
+                    "name": "_ElementMapVersion",
+                    "type": "App::PropertyString",
+                    "status": "234881024",
+                },
+            )
+        )
+    ObjValue.dependencies.extend(Value for Value in Dependencies if Value)
+
+
+# this definition exists because sketches must preserve their source ordering
+def AddSketchesMut(Context: DocContext, Geometry: DocGeometry) -> None:
+    for Sketch in Geometry.SketchItems:
+        AddSketchMut(Context, Geometry, Sketch)
+
+
+# this class exists because one feature branch shares parsed source and native metadata
+@Dataclass
+class FeatureData:
+    Source: Mapping[str, Any]
+    FeatureId: str
+    FeatureName: str
+    KindValue: str
+    Operation: str
+    Attributes: Mapping[str, Any]
+    Definition: Mapping[str, Any]
+    NativeDef: Mapping[str, Any]
+    InputBase: str
+    BaseName: str
+    SketchId: str
+    SketchName: str
+    NativeFeature: Mapping[str, Any]
+    NativeName: str
+
+
+# this definition exists because feature writers need one normalized source record
+def BuildFeatureData(
+    Geometry: DocGeometry, Features: DocFeatures, Feature: Mapping[str, Any]
+) -> FeatureData:
+    FeatureId = TextAction(Feature.get("id"))
+    Attributes = Feature.get("attributes", {})
+    Attributes = Attributes if isinstance(Attributes, Mapping) else {}
+    Definition = Feature.get("definition", {})
+    Definition = Definition if isinstance(Definition, Mapping) else {}
+    NativeDef = (
+        Definition.get("object_data", {})
+        if TextAction(Definition.get("$type")) == "NativeFeatureDefinition"
+        and TextAction(Definition.get("format_id")) == FormatId
+        and isinstance(Definition.get("object_data"), Mapping)
+        else {}
+    )
+    Inputs = [TextAction(Value) for Value in Sequence(Feature.get("input_feature_ids", []))]
+    InputBase = next(
+        (Features.SolidNames[Value] for Value in reversed(Inputs) if Value in Features.SolidNames),
+        "",
+    )
+    SketchId = TextAction(Feature.get("sketch_id"))
+    NativeFeature = Attributes.get("freecad", {})
+    NativeFeature = NativeFeature if isinstance(NativeFeature, Mapping) else {}
+    return FeatureData(
+        Feature,
+        FeatureId,
+        TextAction(Feature.get("name"), FeatureId),
+        TextAction(EnumAction(Feature.get("kind"))).lower(),
+        TextAction(EnumAction(Feature.get("operation"))).lower(),
+        Attributes,
+        Definition,
+        NativeDef,
+        InputBase,
+        InputBase or Features.CurrentName,
+        SketchId,
+        Geometry.SketchNames.get(SketchId, ""),
+        NativeFeature,
+        TextAction(NativeFeature.get("name")),
+    )
+
+
+# this definition exists because replayed feature properties need current semantic parameter values
+def PatchReplayMut(Data: FeatureData, Properties: list[XmlTree.Element]) -> None:
+    PropNames = {Value.get("name", "") for Value in Properties}
+    if "Label" in PropNames:
+        MergeNamedMut(Properties, StringProp("Label", Data.FeatureName))
+    if Data.KindValue == "extrusion":
+        Length = abs(
+            Number(Data.Definition.get("length"), Number(Data.Attributes.get("length_mm")))
+        )
+        Replacements = [
+            FloatProp("Length", Length, "App::PropertyLength"),
+            FloatProp(
+                "Length2",
+                abs(Number(Data.Definition.get("second_length"))),
+                "App::PropertyLength",
+            ),
+            BoolProp("Midplane", bool(Data.Definition.get("symmetric"))),
+            BoolProp("Reversed", bool(Data.Definition.get("reversed"))),
+        ]
+        Direction = Data.Definition.get("direction")
+        if Direction is not None:
+            Replacements.append(VectorProp("Direction", Vector(Direction, (0.0, 0.0, 1.0))))
+        for Replacement in Replacements:
+            if Replacement.get("name", "") in PropNames:
+                MergeNamedMut(Properties, Replacement)
+    elif Data.KindValue == "fillet":
+        Radius = abs(
+            Number(Data.Definition.get("radius"), Number(Data.Attributes.get("radius_mm")))
+        )
+        for NameValue in ("Radius", "DrivingRadius"):
+            if NameValue in PropNames:
+                MergeNamedMut(Properties, FloatProp(NameValue, Radius, "App::PropertyLength"))
+    if "Suppressed" in PropNames or bool(Data.Source.get("suppressed")):
+        MergeNamedMut(
+            Properties,
+            BoolProp(
+                "Suppressed",
+                bool(Data.Source.get("suppressed")),
+                Dynamic="Suppressed" not in PropNames,
+            ),
+        )
+
+
+# this definition exists because native replay should short circuit generated feature construction
+def HasReplayMut(
+    Context: DocContext, Features: DocFeatures, Data: FeatureData
+) -> bool:
+    if not Context.NativeReplay or Data.NativeName not in Context.NativeGraph:
+        return False
+    Final = Context.NativeGraph[Data.NativeName]
+    NativeSource = Data.NativeDef or Data.NativeFeature
+    Properties = NativeA(NativeSource)
+    NativeType = TextAction(Data.Definition.get("type_id"))
+    if Data.NativeDef and NativeType:
+        setattr(Final, "type_id", NativeType)
+    PatchReplayMut(Data, Properties)
+    setattr(Final, "properties", Properties)
+    Features.FeatureNames[Data.FeatureId] = Final.name
+    Features.SolidNames[Data.FeatureId] = Final.name
+    Features.FeatureObjects.append(Final.name)
+    Features.CurrentName = Final.name
+    Context.NativeTargets[Data.NativeName] = Final.name
+    return True
+
+
+# this definition exists because unproven solidworks profiles require nonexecuting feature carriers
+def IsRawExtrude(
+    Context: DocContext, Geometry: DocGeometry, Data: FeatureData
+) -> bool:
+    if Data.KindValue != "extrusion":
+        return False
+    ProfileCount = Geometry.SketchProfCounts.get(Data.SketchId, 0)
+    ProfileSound = Geometry.SketchProfSound.get(Data.SketchId, False)
+    return (
+        Context.SourceFormat == "solidworks.sldprt" and (not ProfileCount or not ProfileSound)
+    ) or bool(Data.Source.get("suppressed"))
+
+
+# this definition exists because extrusion carriers need a precise nonexecution reason
+def ExtrudeReason(Geometry: DocGeometry, Data: FeatureData) -> str:
+    if bool(Data.Source.get("suppressed")):
+        return "suppressed"
+    if not Geometry.SketchProfCounts.get(Data.SketchId, 0):
+        return "no_native_closed_profile"
+    return "profile_topology_not_statically_sound"
+
+
+# this definition exists because unsafe extrusions must preserve parameters without native execution
+def AddRawExtMut(
+    Context: DocContext,
+    Geometry: DocGeometry,
+    Features: DocFeatures,
+    Data: FeatureData,
+) -> None:
+    Length = abs(
+        Number(Data.Definition.get("length"), Number(Data.Attributes.get("length_mm")))
+    )
+    SecondLength = abs(Number(Data.Definition.get("second_length")))
+    ParamId = FeatureParam(Data.Source, Context.Parameters, Length)
+    Expression = Context.Parameters.expression(ParamId)
+    Final = Context.Graph.add("Part::Feature", Data.FeatureName, "Feature")
+    Final.properties.extend(
+        [
+            StringProp("Label", Data.FeatureName),
+            ExpressionProp([("Length", Expression)] if Expression else []),
+            FloatProp("Length", Length, "App::PropertyLength", Dynamic=True),
+            FloatProp("SecondLength", SecondLength, "App::PropertyLength", Dynamic=True),
+            BoolProp("Midplane", bool(Data.Definition.get("symmetric")), Dynamic=True),
+            BoolProp("Reversed", bool(Data.Definition.get("reversed")), Dynamic=True),
+            VectorProp(
+                "Direction",
+                Vector(Data.Definition.get("direction"), (0.0, 0.0, 1.0)),
+                Dynamic=True,
+            ),
+            *FeatureMeta(Data.Source, "feature-data"),
+            BoolProp("NativeExecutable", False, Dynamic=True),
+            StringProp("NativeExecutionReason", ExtrudeReason(Geometry, Data), Dynamic=True),
+            *DefinitionProps(Data.Definition),
+            JsonProp("NativeDefinitionJSON", Data.Definition),
+            ShapeProp(),
+            BoolProp("Visibility", False),
+        ]
+    )
+    if Data.SketchName:
+        Final.properties.append(LinkProp("Profile", Data.SketchName, Dynamic=True))
+        Final.dependencies.append(Data.SketchName)
+    if Expression:
+        Final.dependencies.append(Context.ParamSheet.name)
+    Features.FeatureNames[Data.FeatureId] = Final.name
+    Features.FeatureObjects.append(Final.name)
+    if Data.InputBase:
+        Features.SolidNames[Data.FeatureId] = Data.InputBase
+        Features.CurrentName = Data.InputBase
+
+
+# this definition exists because extrusion direction follows its support plane and reversal semantics
+def ExtrudeDirection(
+    Geometry: DocGeometry, Data: FeatureData
+) -> tuple[float, float, float]:
+    PlaneId = TextAction(
+        next(
+            (
+                Value.get("support_plane_id")
+                for Value in Geometry.SketchItems
+                if TextAction(Value.get("id")) == Data.SketchId
+            ),
+            "",
+        )
+    )
+    Plane = Geometry.PlaneById.get(PlaneId, {})
+    Transform = Plane.get("transform", {}) if isinstance(Plane.get("transform"), Mapping) else {}
+    Normal = Normalize(Vector(Transform.get("z_axis"), (0.0, 0.0, 1.0)))
+    Reversed = bool(
+        Data.Definition.get(
+            "reversed",
+            Number(
+                Data.Attributes.get("direction_multiplier"),
+                -1.0 if Data.Operation == "cut" else 1.0,
+            )
+            < 0,
+        )
+    )
+    Explicit = Data.Definition.get("direction")
+    if Explicit is not None:
+        return Normalize(Vector(Explicit, Normal))
+    return tuple(Component * (-1.0 if Reversed else 1.0) for Component in Normal)
+
+
+# this definition exists because extrusion tools need canonical profile length and expression properties
+def AddExtrudeToolMut(
+    Context: DocContext,
+    Data: FeatureData,
+    Direction: tuple[float, float, float],
+    Length: float,
+    SecondLength: float,
+    Symmetric: bool,
+    Expression: str | None,
+) -> Object:
+    ToolType = BoolOperationTypeByKind["create"]
+    ToolRequested = Data.FeatureName if not Data.BaseName else f"{Data.FeatureName}_Profile"
+    ToolValue = Context.Graph.add(
+        ToolType.type_id, ToolRequested, ToolType.label, Touched=True
+    )
+    ToolValue.properties.extend(
+        [
+            StringProp(
+                "Label",
+                Data.FeatureName
+                if ToolRequested == Data.FeatureName
+                else f"{Data.FeatureName} profile extrusion",
+            ),
+            LinkProp("Base", Data.SketchName),
+            VectorProp("Dir", Direction),
+            EnumerationProA("DirMode", 0),
+            FloatProp("LengthFwd", Length, "App::PropertyDistance"),
+            FloatProp("LengthRev", SecondLength, "App::PropertyDistance"),
+            BoolProp("Solid", True),
+            BoolProp("Reversed", False),
+            BoolProp("Symmetric", Symmetric),
+            StringProp(
+                "EndCondition",
+                TextAction(EnumAction(Data.Definition.get("end_condition")), "blind"),
+                Dynamic=True,
+            ),
+            ExpressionProp([("LengthFwd", Expression)] if Expression else []),
+            ShapeProp(),
+            *FeatureMeta(Data.Source, "profile-extrusion" if Data.BaseName else "feature"),
+            BoolProp("Visibility", not Data.BaseName),
+        ]
+    )
+    ToolValue.dependencies.append(Data.SketchName)
+    if Expression:
+        ToolValue.dependencies.append(Context.ParamSheet.name)
+    return ToolValue
+
+
+# this definition exists because boolean extrusion results need the protocol selected input layout
+def AddBoolResultMut(Context: DocContext, Data: FeatureData, ToolValue: Object) -> Object:
+    OperationKind = (
+        "join"
+        if Data.BaseName and Data.Operation in CreateOperationNames
+        else Data.Operation or "create"
+    )
+    OperationType = BoolOperationTypeByKind.get(OperationKind)
+    if not Data.BaseName or OperationType is None:
+        return ToolValue
+    InputProp = (
+        [LinkProp("Base", Data.BaseName), LinkProp("Tool", ToolValue.name)]
+        if OperationType.input_mode == "base_tool"
+        else [LinkListProp("Shapes", [Data.BaseName, ToolValue.name])]
+        if OperationType.input_mode == "shapes"
+        else []
+    )
+    if not InputProp:
+        return ToolValue
+    Final = Context.Graph.add(
+        OperationType.type_id, Data.FeatureName, OperationType.label, Touched=True
+    )
+    Final.properties.extend(
+        [
+            StringProp("Label", Data.FeatureName),
+            *InputProp,
+            BoolProp("Refine", True),
+            ExpressionProp([]),
+            ShapeProp(),
+            *FeatureMeta(Data.Source, "feature"),
+            BoolProp("Visibility", True),
+        ]
+    )
+    Final.dependencies.extend([Data.BaseName, ToolValue.name])
+    ToolValue.properties[-1] = BoolProp("Visibility", False)
+    return Final
+
+
+# this definition exists because executable extrusions coordinate tool boolean and solid state
+def AddExtrudeMut(
+    Context: DocContext,
+    Geometry: DocGeometry,
+    Features: DocFeatures,
+    Data: FeatureData,
+) -> Object:
+    Direction = ExtrudeDirection(Geometry, Data)
+    Length = abs(
+        Number(Data.Definition.get("length"), Number(Data.Attributes.get("length_mm")))
+    )
+    SecondLength = abs(Number(Data.Definition.get("second_length")))
+    Symmetric = bool(Data.Definition.get("symmetric"))
+    ParamId = FeatureParam(Data.Source, Context.Parameters, Length)
+    Expression = Context.Parameters.expression(ParamId)
+    ToolValue = AddExtrudeToolMut(
+        Context, Data, Direction, Length, SecondLength, Symmetric, Expression
+    )
+    Final = AddBoolResultMut(Context, Data, ToolValue)
+    Features.FeatureNames[Data.FeatureId] = Final.name
+    Features.SolidNames[Data.FeatureId] = Final.name
+    Features.FeatureObjects.append(Final.name)
+    Features.CurrentName = Final.name
+    return Final
+
+
+# this definition exists because solidworks fillets require nonexecuting topology carriers
+def AddRawFilletMut(
+    Context: DocContext, Features: DocFeatures, Data: FeatureData
+) -> Object:
+    Radius = abs(
+        Number(Data.Definition.get("radius"), Number(Data.Attributes.get("radius_mm")))
+    )
+    ParamId = FeatureParam(Data.Source, Context.Parameters, Radius)
+    Expression = Context.Parameters.expression(ParamId)
+    Final = Context.Graph.add("Part::Feature", Data.FeatureName, "Feature")
+    Final.properties.extend(
+        [
+            StringProp("Label", Data.FeatureName),
+            ExpressionProp([("DrivingRadius", Expression)] if Expression else []),
+            FloatProp("DrivingRadius", Radius, "App::PropertyLength", Dynamic=True),
+            *FeatureMeta(Data.Source, "feature-data"),
+            BoolProp("NativeExecutable", False, Dynamic=True),
+            StringProp(
+                "NativeExecutionReason",
+                "topology_selection_not_statically_provable",
+                Dynamic=True,
+            ),
+            *DefinitionProps(Data.Definition),
+            JsonProp("NativeDefinitionJSON", Data.Definition),
+            ShapeProp(),
+            BoolProp("Visibility", False),
+        ]
+    )
+    if Data.InputBase:
+        Final.properties.append(LinkProp("InputFeature", Data.InputBase, Dynamic=True))
+        Final.dependencies.append(Data.InputBase)
+    if Expression:
+        Final.dependencies.append(Context.ParamSheet.name)
+    Features.FeatureNames[Data.FeatureId] = Final.name
+    Features.FeatureObjects.append(Final.name)
+    if Data.InputBase:
+        Features.SolidNames[Data.FeatureId] = Data.InputBase
+        Features.CurrentName = Data.InputBase
+    return Final
+
+
+# this definition exists because fillet selections need deterministic native edge indexes
+def FilletIndices(Data: FeatureData, Geometry: DocGeometry) -> list[int]:
+    EdgeIndices: list[int] = []
+    SemanticIndices: list[int] = []
+    for KeyValue in (
+        "selected_native_local_edge_ids",
+        "native_local_edge_ids",
+        "edge_ids",
+        "edges",
+    ):
+        EdgeIndices.extend(
+            int(Number(Value))
+            for Value in Sequence(Data.Attributes.get(KeyValue, []))
+            if Number(Value) > 0
+        )
+    for SelectionId in Sequence(Data.Source.get("selection_ids", [])):
+        Selection = Geometry.SelectionItems.get(TextAction(SelectionId), {})
+        for PathItem in Items(Selection.get("path", [])):
+            Match = RegexLib.fullmatch(
+                "(?:Edge|edge:)(\\d+)",
+                TextAction(PathItem.get("subelement")),
+                RegexLib.IGNORECASE,
+            )
+            if Match:
+                EdgeIndices.append(int(Match.group(1)))
+        Query = Selection.get("query", {})
+        Query = Query if isinstance(Query, Mapping) else {}
+        if TextAction(Query.get("topology_role")) == "extrusion_terminal_profile_boundary":
+            SemanticIndices.append(3)
+        for KeyValue in ("edge_index", "native_local_id", "index"):
+            if Number(Query.get(KeyValue)) > 0:
+                EdgeIndices.append(int(Number(Query.get(KeyValue))))
+    return list(dict.fromkeys(SemanticIndices or EdgeIndices)) or [1]
+
+
+# this definition exists because executable fillets need edge payload radius and source links
+def AddFilletMut(
+    Context: DocContext,
+    Geometry: DocGeometry,
+    Features: DocFeatures,
+    Data: FeatureData,
+) -> Object:
+    Radius = abs(
+        Number(Data.Definition.get("radius"), Number(Data.Attributes.get("radius_mm")))
+    )
+    ParamId = FeatureParam(Data.Source, Context.Parameters, Radius)
+    Expression = Context.Parameters.expression(ParamId)
+    EdgeIndices = FilletIndices(Data, Geometry)
+    Final = Context.Graph.add("Part::Fillet", Data.FeatureName, "Fillet", Touched=True)
+    EdgeFileName = f"{Final.name}.Edges"
+    Features.PayloadEntries[EdgeFileName] = FilletEdgesData(EdgeIndices, Radius)
+    Expressions = [("DrivingRadius", Expression)] if Expression else []
+    Final.properties.extend(
+        [
+            StringProp("Label", Data.FeatureName),
+            LinkProp("Base", Data.BaseName),
+            FilletEdgesProp(EdgeFileName),
+            EdgeLinkProp(Data.BaseName, EdgeIndices),
+            ExpressionProp(Expressions),
+            FloatProp("DrivingRadius", Radius, "App::PropertyLength", Dynamic=True),
+            ShapeProp(),
+            *FeatureMeta(Data.Source, "feature"),
+            BoolProp("Visibility", True),
+        ]
+    )
+    Final.dependencies.extend(
+        [Data.BaseName] + ([Context.ParamSheet.name] if Expression else [])
+    )
+    Features.FeatureNames[Data.FeatureId] = Final.name
+    Features.SolidNames[Data.FeatureId] = Final.name
+    Features.FeatureObjects.append(Final.name)
+    Features.CurrentName = Final.name
+    return Final
+
+
+# this definition exists because generic features preserve complete definitions and dependency links
+def AddGenericMut(
+    Context: DocContext, Features: DocFeatures, Data: FeatureData
+) -> Object:
+    Imported = Data.KindValue == "imported"
+    Final = Context.Graph.add("Part::Feature", Data.FeatureName, "Feature", Touched=True)
+    Final.properties.extend(
+        [
+            StringProp("Label", Data.FeatureName),
+            ExpressionProp([]),
+            *FeatureMeta(Data.Source, "imported" if Imported else "feature-data"),
+            StringProp("NativeTypeId", Data.Definition.get("type_id", ""), Dynamic=True),
+            *DefinitionProps(Data.Definition),
+            JsonProp("NativeDefinitionJSON", Data.Definition),
+            BoolProp("Visibility", not bool(Data.Source.get("suppressed"))),
+            ShapeProp(),
+        ]
+    )
+    if Data.BaseName:
+        Final.properties.append(LinkProp("InputFeature", Data.BaseName, Dynamic=True))
+        Final.dependencies.append(Data.BaseName)
+    if Data.SketchName:
+        Final.properties.append(LinkProp("Profile", Data.SketchName, Dynamic=True))
+        Final.dependencies.append(Data.SketchName)
+    if Context.ParametersData:
+        Final.properties.extend(
+            [
+                LinkProp("Parameters", Context.ParamSheet.name, Dynamic=True),
+                StringListProp(
+                    "ParameterIds",
+                    [TextAction(Value) for Value in Sequence(Data.Source.get("parameter_ids", []))],
+                    Dynamic=True,
+                ),
+            ]
+        )
+        Final.dependencies.append(Context.ParamSheet.name)
+    Features.FeatureNames[Data.FeatureId] = Final.name
+    Features.FeatureObjects.append(Final.name)
+    if Context.SourceFormat == "solidworks.sldprt":
+        if Data.InputBase:
+            Features.SolidNames[Data.FeatureId] = Data.InputBase
+            Features.CurrentName = Data.InputBase
+    elif Data.KindValue not in {"native", "reference"}:
+        Features.SolidNames[Data.FeatureId] = Final.name
+        Features.CurrentName = Final.name
+    return Final
+
+
+# this definition exists because one timeline feature selects exactly one semantic writer branch
+def AddFeatureMut(
+    Context: DocContext,
+    Geometry: DocGeometry,
+    Features: DocFeatures,
+    Feature: Mapping[str, Any],
+) -> None:
+    Data = BuildFeatureData(Geometry, Features, Feature)
+    if HasReplayMut(Context, Features, Data):
+        return
+    if IsRawExtrude(Context, Geometry, Data):
+        AddRawExtMut(Context, Geometry, Features, Data)
+        return
+    if Data.KindValue == "extrusion":
+        Final = AddExtrudeMut(Context, Geometry, Features, Data)
+    elif Data.KindValue == "fillet" and Context.SourceFormat == "solidworks.sldprt":
+        Final = AddRawFilletMut(Context, Features, Data)
+    elif Data.KindValue == "fillet" and Data.InputBase:
+        Final = AddFilletMut(Context, Geometry, Features, Data)
+    else:
+        Final = AddGenericMut(Context, Features, Data)
+    if bool(Data.Source.get("suppressed")) and not Context.NativeReplay:
+        ReplaceNameMut(Final.properties, "Visibility", BoolProp("Visibility", False))
+    if Data.NativeName:
+        Context.NativeTargets[Data.NativeName] = Final.name
+
+
+# this definition exists because timeline features must preserve their source ordering
+def AddFeaturesMut(
+    Context: DocContext, Geometry: DocGeometry, Features: DocFeatures
+) -> None:
+    for Feature in Features.FeatureItems:
+        AddFeatureMut(Context, Geometry, Features, Feature)
+
+
 # this definition exists because focused behavior needs one stable owner
 def BuildDocXml(
     Manifest: Mapping[str, Any],
@@ -5094,7 +7035,7 @@ def BuildDocXml(
     OuterLinks: Mapping[str, Mapping[str, Any]] | None = None,
     NativeOuterLinks: Mapping[str, str] | None = None,
     DocTimestamp: str = "1980-01-01T00:00:00Z",
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
 ) -> tuple[bytes, dict[str, bytes]]:
     OuterLinks = OuterLinks or {}
     NativeOuterLinks = NativeOuterLinks or {}
@@ -5256,7 +7197,7 @@ def BuildDocXml(
                         JsonProp("SourcePlaneJSON", Plane),
                     ]
                 )
-            ObjValue.properties = Properties
+            setattr(ObjValue, "properties", Properties)
         else:
             ObjValue.properties.extend(
                 [
@@ -5311,7 +7252,7 @@ def BuildDocXml(
             SourceFormatId == "solidworks.sldprt",
         )
         if NativeReplay and NativeSketch:
-            ObjValue.properties = Properties
+            setattr(ObjValue, "properties", Properties)
         else:
             ObjValue.properties.extend(Properties)
         if NativeSketch and (not NativeReplay):
@@ -5419,7 +7360,7 @@ def BuildDocXml(
             Properties = NativeA(NativePropSource)
             NativeDefinitionType = TextAction(Definition.get("type_id"))
             if NativeDefinitionData and NativeDefinitionType:
-                Final.type_id = NativeDefinitionType
+                setattr(Final, "type_id", NativeDefinitionType)
             PropNames = {ItemValue.get("name", "") for ItemValue in Properties}
             if "Label" in PropNames:
                 MergeNamedMut(Properties, StringProp("Label", FeatureName))
@@ -5468,7 +7409,7 @@ def BuildDocXml(
                         Dynamic="Suppressed" not in PropNames,
                     ),
                 )
-            Final.properties = Properties
+            setattr(Final, "properties", Properties)
             FeatureNames[FeatureId] = Final.name
             SolidFeatureNames[FeatureId] = Final.name
             FeatureObjects.append(Final.name)
@@ -5931,7 +7872,7 @@ def BuildDocXml(
             )
             if FinalFeature:
                 MergeNamedMut(Properties, LinkProp("Tip", FinalFeature))
-            ObjValue.properties = Properties
+            setattr(ObjValue, "properties", Properties)
             NativeObjectTargets[NativeBodyName] = ObjValue.name
         else:
             ObjValue = Graph.add(
@@ -6387,9 +8328,9 @@ def BuildDocXml(
 # this definition exists because focused behavior needs one stable owner
 def ZipEntry(NameValue: str, DataValue: bytes) -> tuple[Zipfile.ZipInfo, bytes]:
     InfoValue = Zipfile.ZipInfo(NameValue, (1980, 1, 1, 0, 0, 0))
-    InfoValue.compress_type = Zipfile.ZIP_DEFLATED
-    InfoValue.external_attr = 384 << 16
-    InfoValue.create_system = 3
+    setattr(InfoValue, "compress_type", Zipfile.ZIP_DEFLATED)
+    setattr(InfoValue, "external_attr", 384 << 16)
+    setattr(InfoValue, "create_system", 3)
     return (InfoValue, DataValue)
 
 
@@ -6399,7 +8340,7 @@ def BuildFcstd(
     OuterLinks: Mapping[str, Mapping[str, Any]] | None = None,
     NativeOuterLinks: Mapping[str, str] | None = None,
     DocTimestamp: str | None = None,
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
 ) -> bytes:
     Canonical = CanonicalJson(Manifest)
     Digest = Hashlib.sha256(Canonical).hexdigest()
@@ -6445,7 +8386,7 @@ def BuildFcstdApi(
     OuterLinks: Mapping[str, Mapping[str, Any]] | None = None,
     NativeOuterLinks: Mapping[str, str] | None = None,
     DocTimestamp: str | None = None,
-    TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
+    TrustedNativeBreps: frozenset[KNativeBrepKey] = frozenset(),
     **LegacyValues: object,
 ) -> bytes:
     LegacyCopy = dict(LegacyValues)
@@ -6876,7 +8817,7 @@ globals()["_mesh_property"] = MeshProp
 globals()["_midpoint_slots"] = MidpointSlots
 
 # this binding exists because shared behavior needs one stable value
-globals()["_native_brep_key"] = NativeBrepKey
+globals()["_native_brep_key"] = BuildBrepKey
 
 # this binding exists because shared behavior needs one stable value
 globals()["_native_closed_profile_count"] = NativeClosed

@@ -958,6 +958,33 @@ def IsFocusedAssign(SourcePath: FilePath, NameText: str) -> bool:
     return NormalName == NormalStem
 
 
+# generated program tables stay atomic because semantic method boundaries must not become arbitrary chunks
+def IsProgramTable(SourcePath: FilePath, NameText: str) -> bool:
+    PartNames = tuple((PartText.casefold() for PartText in SourcePath.parts))
+    RootParts = (
+        "src",
+        "convert",
+        "adapters",
+        "solidworks",
+        "programs",
+    )
+    RootIndex = next(
+        (
+            PartIndex
+            for PartIndex in range(len(PartNames) - len(RootParts) + 1)
+            if PartNames[PartIndex : PartIndex + len(RootParts)] == RootParts
+        ),
+        None,
+    )
+    if RootIndex is None:
+        return False
+    RelativeParts = PartNames[RootIndex + len(RootParts) :]
+    IsMethod = "methods" in RelativeParts[:-1] and NameText == "KMethodProgram"
+    IsOwner = "owners" in RelativeParts[:-1] and NameText == "KOwnerSites"
+    IsRegistry = SourcePath.name == "Registry.py" and NameText == "KMethodPrograms"
+    return IsMethod or IsOwner or IsRegistry
+
+
 # split diagnostics exist because oversized declarations obscure independently reviewable responsibilities
 def CheckSplits(
     SourcePath: FilePath, SourceText: str, SyntaxTree: AstLib.Module
@@ -974,8 +1001,9 @@ def CheckSplits(
             NameText = GetAssignName(AstNode, ParentMap)
         if NameText is None:
             continue
-        if isinstance(AstNode, (AstLib.Assign, AstLib.AnnAssign)) and IsFocusedAssign(
-            SourcePath, NameText
+        if isinstance(AstNode, (AstLib.Assign, AstLib.AnnAssign)) and (
+            IsFocusedAssign(SourcePath, NameText)
+            or IsProgramTable(SourcePath, NameText)
         ):
             continue
         StartLine, ColNum = GetStartPos(AstNode)

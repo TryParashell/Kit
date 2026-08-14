@@ -8,73 +8,88 @@
 
 from __future__ import annotations
 
-import hashlib
-from pathlib import Path
+import hashlib as Hashlib
+from pathlib import Path as PathValue
 
 import pytest as PytestLib
 
-import convert.geometry.Opencascade as opencascade
-from convert.adapters.freecad.Brep import triangle_mesh_brep
-from convert.adapters.freecad.Native import _decoded_document_brep, read_native_fcstd
-from convert.geometry.Opencascade import decode_ascii_brep, is_structurally_valid_ascii_brep
-from interchange import Body, BrepPayload, PayloadRole, Vector3
+import convert.geometry.Opencascade as Opencascade
+from convert.adapters.freecad.Brep import triangle_mesh_brep as TriangleMeshBrep
+from convert.adapters.freecad.Native import (
+    _decoded_document_brep as DecodedDocumentBrep,
+    read_native_fcstd as ReadNativeFcstd,
+)
+from convert.geometry.Opencascade import (
+    decode_ascii_brep as DecodeAsciiBrep,
+    is_structurally_valid_ascii_brep as IsSVAB,
+)
+from interchange import (
+    Body as BodyValue,
+    BrepPayload,
+    PayloadRole,
+    Vector3 as VectorThree,
+)
 
-EXAMPLES = Path(__file__).parents[3] / "examples" / "Random" / "V8_engine"
+# this binding exists because shared behavior needs one stable value
+KExamples = PathValue(__file__).parents[3] / "examples" / "Random" / "V8_engine"
 
 
-# tolerance-equivalent Boolean vertices must close a wire despite distinct records
-def test_canonical_vertex_records_join_transform_roundoff() -> None:
+# this definition exists because focused behavior needs one stable owner
+def TestCVRJTR() -> None:
     RecordsData = {
-        1: opencascade._ShapeRecord(
+        1: Opencascade._ShapeRecord(
             b"Ve",
             "0101101",
             (),
-            opencascade._VertexData(
+            Opencascade._VertexData(
                 1.0e-7,
-                Vector3(-4.253254041760199, 3.090169943749473, 5.0),
+                VectorThree(-4.253254041760199, 3.090169943749473, 5.0),
             ),
         ),
-        2: opencascade._ShapeRecord(
+        2: Opencascade._ShapeRecord(
             b"Ve",
             "0101101",
             (),
-            opencascade._VertexData(
+            Opencascade._VertexData(
                 1.0e-7,
-                Vector3(-4.253254041760199, 3.0901699437494736, 5.0),
+                VectorThree(-4.253254041760199, 3.0901699437494736, 5.0),
             ),
         ),
     }
-    CanonicalData = opencascade._CanonicalVertexRecords(RecordsData)
+    CanonicalData = Opencascade._CanonicalVertexRecords(RecordsData)
     assert CanonicalData[1] == CanonicalData[2]
 
 
-def _replace_geometry_line(data: bytes, table: bytes, replacement: bytes) -> bytes:
-    lines = data.splitlines(keepends=True)
-    table_index = next(
-        index for index, line in enumerate(lines) if line.startswith(table)
+# this definition exists because focused behavior needs one stable owner
+def ReplaceGL(DataValueA: bytes, Table: bytes, Replacement: bytes) -> bytes:
+    Lines = DataValueA.splitlines(keepends=True)
+    TableIndex = next(
+        Index for Index, LineValue in enumerate(Lines) if LineValue.startswith(Table)
     )
-    lines[table_index + 1] = replacement + b"\n"
-    return b"".join(lines)
+    Lines[TableIndex + 1] = Replacement + b"\n"
+    return b"".join(Lines)
 
 
-def _located_triangle_brep() -> bytes:
-    data = triangle_mesh_brep(
+# this definition exists because focused behavior needs one stable owner
+def LocatedTB() -> bytes:
+    DataValueA = TriangleMeshBrep(
         ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0)),
         ((0, 1, 2),),
     )
-    data = data.replace(
+    DataValueA = DataValueA.replace(
         b"Locations 0\n",
         b"Locations 1\n1\n1 0 0 0\n0 1 0 0\n0 0 1 0\n",
         1,
     )
-    head, separator, tail = data.rpartition(b"+1 0")
-    assert separator
-    return head + b"+1 1" + tail
+    HeadValue, Separator, TailValue = DataValueA.rpartition(b"+1 0")
+    assert Separator
+    return HeadValue + b"+1 1" + TailValue
 
 
-def _face_triangulation_fixture(surface: int, tail: bytes) -> bytes:
-    surfaces = (
-        b"Surfaces 0\n" if surface == 0 else b"Surfaces 1\n1 0 0 0 0 0 1 1 0 0 0 1 0\n"
+# this definition exists because focused behavior needs one stable owner
+def FaceTF(Surface: int, TailValue: bytes) -> bytes:
+    Surfaces = (
+        b"Surfaces 0\n" if Surface == 0 else b"Surfaces 1\n1 0 0 0 0 0 1 1 0 0 0 1 0\n"
     )
     return b"".join(
         (
@@ -82,16 +97,17 @@ def _face_triangulation_fixture(surface: int, tail: bytes) -> bytes:
             b"CASCADE Topology V1, (c) Matra-Datavision\n"
             b"Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n"
             b"PolygonOnTriangulations 0\n",
-            surfaces,
+            Surfaces,
             b"Triangulations 1\n3 1 0 0\n0 0 0 1 0 0 0 1 0 1 2 3\nTShapes 1\nFa\n",
-            f"0 0 {surface} 0".encode("ascii"),
-            tail,
+            f"0 0 {Surface} 0".encode("ascii"),
+            TailValue,
             b"0101000\n*\n+1 0\n",
         )
     )
 
 
-def _polygon_triangulation_fixture() -> bytes:
+# this definition exists because focused behavior needs one stable owner
+def PolygonTF() -> bytes:
     return b"".join(
         (
             b"DBRep_DrawableShape\n\n"
@@ -113,95 +129,103 @@ def _polygon_triangulation_fixture() -> bytes:
     )
 
 
-def test_ascii_brep_decoder_normalizes_open_shell_topology() -> None:
-    data = triangle_mesh_brep(
+# this definition exists because focused behavior needs one stable owner
+def TestABDNOST() -> None:
+    DataValueA = TriangleMeshBrep(
         ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0)),
         ((0, 1, 2),),
     )
-    model = decode_ascii_brep(data, id_prefix="test:triangle")
-    assert model is not None
-    assert len(model.curves) == 3
-    assert len(model.surfaces) == 1
-    assert len(model.vertices) == 3
-    assert len(model.edges) == 3
-    assert len(model.faces) == 1
-    assert len(model.shells) == 1
-    assert len(model.regions) == 1
-    assert not model.regions[0].solid
-    assert model.validate() == ()
+    Model = DecodeAsciiBrep(DataValueA, id_prefix="test:triangle")
+    assert Model is not None
+    assert len(Model.curves) == 3
+    assert len(Model.surfaces) == 1
+    assert len(Model.vertices) == 3
+    assert len(Model.edges) == 3
+    assert len(Model.faces) == 1
+    assert len(Model.shells) == 1
+    assert len(Model.regions) == 1
+    assert not Model.regions[0].solid
+    assert Model.validate() == ()
 
 
-def test_ascii_brep_decoder_normalizes_closed_solid_topology() -> None:
-    data = triangle_mesh_brep(
+# this definition exists because focused behavior needs one stable owner
+def TestABDNCST() -> None:
+    DataValueA = TriangleMeshBrep(
         ((0, 0, 0), (2, 0, 0), (0, 3, 0), (0, 0, 4)),
         ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3)),
     )
-    model = decode_ascii_brep(data, id_prefix="test:solid")
-    assert model is not None
-    assert len(model.faces) == 4
-    assert len(model.shells) == 1
-    assert model.shells[0].closed
-    assert len(model.regions) == 1
-    assert model.regions[0].solid
-    assert model.validate() == ()
+    Model = DecodeAsciiBrep(DataValueA, id_prefix="test:solid")
+    assert Model is not None
+    assert len(Model.faces) == 4
+    assert len(Model.shells) == 1
+    assert Model.shells[0].closed
+    assert len(Model.regions) == 1
+    assert Model.regions[0].solid
+    assert Model.validate() == ()
 
 
-def test_ascii_brep_decoder_rejects_non_unit_line_direction() -> None:
-    data = triangle_mesh_brep(
+# this definition exists because focused behavior needs one stable owner
+def TestABDRNULD() -> None:
+    DataValueA = TriangleMeshBrep(
         ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
         ((0, 1, 2),),
     )
-    malformed = _replace_geometry_line(data, b"Curves ", b"1 0 0 0 2 0 0 ")
-    assert decode_ascii_brep(malformed) is None
+    Malformed = ReplaceGL(DataValueA, b"Curves ", b"1 0 0 0 2 0 0 ")
+    assert DecodeAsciiBrep(Malformed) is None
 
 
-def test_ascii_brep_decoder_accepts_indirect_plane_frame() -> None:
-    data = triangle_mesh_brep(
+# this definition exists because focused behavior needs one stable owner
+def TestABDAIPF() -> None:
+    DataValueA = TriangleMeshBrep(
         ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
         ((0, 1, 2),),
     )
-    indirect = _replace_geometry_line(
-        data,
+    Indirect = ReplaceGL(
+        DataValueA,
         b"Surfaces ",
         b"1 0 0 0 0 0 1 1 0 0 0 -1 0 ",
     )
-    assert decode_ascii_brep(indirect) is not None
+    assert DecodeAsciiBrep(Indirect) is not None
 
 
-def test_ascii_brep_decoder_rejects_nonorthogonal_plane_frame() -> None:
-    data = triangle_mesh_brep(
+# this definition exists because focused behavior needs one stable owner
+def TestABDRNPF() -> None:
+    DataValueA = TriangleMeshBrep(
         ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
         ((0, 1, 2),),
     )
-    malformed = _replace_geometry_line(
-        data,
+    Malformed = ReplaceGL(
+        DataValueA,
         b"Surfaces ",
         b"1 0 0 0 0 0 1 1 0 0 1 0 0 ",
     )
-    assert decode_ascii_brep(malformed) is None
+    assert DecodeAsciiBrep(Malformed) is None
 
 
-def test_ascii_brep_decoder_rejects_unsupported_curve_family() -> None:
-    data = triangle_mesh_brep(
+# this definition exists because focused behavior needs one stable owner
+def TestABDRUCF() -> None:
+    DataValueA = TriangleMeshBrep(
         ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
         ((0, 1, 2),),
     )
-    malformed = _replace_geometry_line(
-        data,
+    Malformed = ReplaceGL(
+        DataValueA,
         b"Curves ",
         b"3 0 0 0 0 0 1 1 0 0 0 1 0 2 1 ",
     )
-    assert decode_ascii_brep(malformed) is None
+    assert DecodeAsciiBrep(Malformed) is None
 
 
-def test_ascii_brep_decoder_applies_complete_native_location() -> None:
-    data = _located_triangle_brep()
-    assert is_structurally_valid_ascii_brep(data)
-    model = decode_ascii_brep(data)
-    assert model is not None
-    assert model.validate() == ()
+# this definition exists because focused behavior needs one stable owner
+def TestABDACNL() -> None:
+    DataValueA = LocatedTB()
+    assert IsSVAB(DataValueA)
+    Model = DecodeAsciiBrep(DataValueA)
+    assert Model is not None
+    assert Model.validate() == ()
     assert {
-        (vertex.point.x, vertex.point.y, vertex.point.z) for vertex in model.vertices
+        (VertexA.point.x, VertexA.point.y, VertexA.point.z)
+        for VertexA in Model.vertices
     } == {
         (0.0, 0.0, 0.0),
         (2.0, 0.0, 0.0),
@@ -209,22 +233,24 @@ def test_ascii_brep_decoder_applies_complete_native_location() -> None:
     }
 
 
-def test_ascii_brep_decoder_applies_location_translation() -> None:
-    data = _located_triangle_brep().replace(
+# this definition exists because focused behavior needs one stable owner
+def TestABDALT() -> None:
+    DataValueA = LocatedTB().replace(
         b"1 0 0 0\n0 1 0 0\n0 0 1 0\n",
         b"1 0 0 11\n0 1 0 -7\n0 0 1 5\n",
         1,
     )
-    model = decode_ascii_brep(data)
-    assert model is not None
+    Model = DecodeAsciiBrep(DataValueA)
+    assert Model is not None
     assert {
-        (vertex.point.x, vertex.point.y, vertex.point.z) for vertex in model.vertices
+        (VertexA.point.x, VertexA.point.y, VertexA.point.z)
+        for VertexA in Model.vertices
     } == {
         (11.0, -7.0, 5.0),
         (13.0, -7.0, 5.0),
         (11.0, -4.0, 5.0),
     }
-    ChildData = triangle_mesh_brep(
+    ChildData = TriangleMeshBrep(
         ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0)),
         ((0, 1, 2),),
     ).replace(
@@ -234,7 +260,7 @@ def test_ascii_brep_decoder_applies_location_translation() -> None:
     )
     ShellHead, ShellMarker, ShellTail = ChildData.rpartition(b"+2 0 *")
     assert ShellMarker
-    ChildModel = decode_ascii_brep(ShellHead + b"+2 1 *" + ShellTail)
+    ChildModel = DecodeAsciiBrep(ShellHead + b"+2 1 *" + ShellTail)
     assert ChildModel is not None
     assert ChildModel.validate() == ()
     assert {
@@ -247,9 +273,9 @@ def test_ascii_brep_decoder_applies_location_translation() -> None:
     }
 
 
-# nested placements use OpenCascade's child-before-parent composition convention
-def test_ascii_brep_decoder_composes_nested_locations_in_native_order() -> None:
-    DataValue = triangle_mesh_brep(
+# this definition exists because focused behavior needs one stable owner
+def TestABDCNLINO() -> None:
+    DataValue = TriangleMeshBrep(
         ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0)),
         ((0, 1, 2),),
     )
@@ -261,7 +287,7 @@ def test_ascii_brep_decoder_composes_nested_locations_in_native_order() -> None:
     DataValue = DataValue.replace(b"+2 0 *", b"+2 2 *", 1)
     HeadData, MarkerData, TailData = DataValue.rpartition(b"+1 0")
     assert MarkerData
-    DecodedData = decode_ascii_brep(HeadData + b"+1 1" + TailData)
+    DecodedData = DecodeAsciiBrep(HeadData + b"+1 1" + TailData)
     assert DecodedData is not None
     assert DecodedData.validate() == ()
     assert {
@@ -274,189 +300,201 @@ def test_ascii_brep_decoder_composes_nested_locations_in_native_order() -> None:
     }
 
 
-def test_structural_validator_requires_exact_physical_version_line() -> None:
-    data = _located_triangle_brep()
-    version = b"CASCADE Topology V1, (c) Matra-Datavision"
-    split = data.replace(
-        version,
+# this definition exists because focused behavior needs one stable owner
+def TestSVREPVL() -> None:
+    DataValueA = LocatedTB()
+    Version = b"CASCADE Topology V1, (c) Matra-Datavision"
+    Split = DataValueA.replace(
+        Version,
         b"CASCADE\nTopology V1, (c) Matra-Datavision",
         1,
     )
-    unsupported_first = data.replace(
-        version,
-        b"CASCADE Topology V2, (c) Matra-Datavision\n" + version,
+    UnsupportedFirst = DataValueA.replace(
+        Version,
+        b"CASCADE Topology V2, (c) Matra-Datavision\n" + Version,
         1,
     )
-    payload = data[data.index(version) :]
-    bare_carriage_return = b"junk\r" + payload
-    assert not is_structurally_valid_ascii_brep(split)
-    assert not is_structurally_valid_ascii_brep(unsupported_first)
-    assert not is_structurally_valid_ascii_brep(bare_carriage_return)
+    Payload = DataValueA[DataValueA.index(Version) :]
+    BareCarriageReturn = b"junk\r" + Payload
+    assert not IsSVAB(Split)
+    assert not IsSVAB(UnsupportedFirst)
+    assert not IsSVAB(BareCarriageReturn)
 
 
-def test_structural_validator_matches_location_table_normalization() -> None:
-    data = _located_triangle_brep()
-    location = b"1\n1 0 0 0\n0 1 0 0\n0 0 1 0\n"
-    unique = data.replace(
-        b"Locations 1\n" + location,
-        b"Locations 2\n" + location + b"2 1 2 0\n",
+# this definition exists because focused behavior needs one stable owner
+def TestSVMLTN() -> None:
+    DataValueA = LocatedTB()
+    Location = b"1\n1 0 0 0\n0 1 0 0\n0 0 1 0\n"
+    Unique = DataValueA.replace(
+        b"Locations 1\n" + Location,
+        b"Locations 2\n" + Location + b"2 1 2 0\n",
         1,
     )
-    duplicate = unique.replace(b"2 1 2 0", b"2 1 1 0", 1)
-    identity = unique.replace(b"2 1 2 0", b"2 1 1 1 -1 0", 1)
-    singular = data.replace(
-        location,
+    Duplicate = Unique.replace(b"2 1 2 0", b"2 1 1 0", 1)
+    Identity = Unique.replace(b"2 1 2 0", b"2 1 1 1 -1 0", 1)
+    Singular = DataValueA.replace(
+        Location,
         b"1\n0 0 0 0\n0 0 0 0\n0 0 0 0\n",
         1,
     )
-    assert is_structurally_valid_ascii_brep(unique)
-    assert not is_structurally_valid_ascii_brep(duplicate)
-    assert not is_structurally_valid_ascii_brep(identity)
-    assert not is_structurally_valid_ascii_brep(singular)
+    assert IsSVAB(Unique)
+    assert not IsSVAB(Duplicate)
+    assert not IsSVAB(Identity)
+    assert not IsSVAB(Singular)
 
 
-def test_structural_validator_requires_face_triangulation_line_position() -> None:
-    immediate = _face_triangulation_fixture(1, b"\n2 1\n\n")
-    same_line = _face_triangulation_fixture(1, b" 2 1\n\n")
-    blank_line = _face_triangulation_fixture(1, b"\n\n2 1\n\n")
-    indented = _face_triangulation_fixture(1, b"\n 2 1\n\n")
-    split_index = _face_triangulation_fixture(1, b"\n2\n1\n\n")
-    trailing = _face_triangulation_fixture(1, b"\n2 1 0101000\n\n")
-    surface_zero_valid = _face_triangulation_fixture(0, b"\n2 1\n\n")
-    surface_zero_missing = _face_triangulation_fixture(0, b"\n\n")
-    assert is_structurally_valid_ascii_brep(immediate)
-    assert not is_structurally_valid_ascii_brep(same_line)
-    assert not is_structurally_valid_ascii_brep(blank_line)
-    assert not is_structurally_valid_ascii_brep(indented)
-    assert not is_structurally_valid_ascii_brep(split_index)
-    assert not is_structurally_valid_ascii_brep(trailing)
-    assert is_structurally_valid_ascii_brep(surface_zero_valid)
-    assert not is_structurally_valid_ascii_brep(surface_zero_missing)
+# this definition exists because focused behavior needs one stable owner
+def TestSVRFTLP() -> None:
+    Immediate = FaceTF(1, b"\n2 1\n\n")
+    SameLine = FaceTF(1, b" 2 1\n\n")
+    BlankLine = FaceTF(1, b"\n\n2 1\n\n")
+    Indented = FaceTF(1, b"\n 2 1\n\n")
+    SplitIndex = FaceTF(1, b"\n2\n1\n\n")
+    Trailing = FaceTF(1, b"\n2 1 0101000\n\n")
+    SurfaceZeroValid = FaceTF(0, b"\n2 1\n\n")
+    SurfaceZeroMissing = FaceTF(0, b"\n\n")
+    assert IsSVAB(Immediate)
+    assert not IsSVAB(SameLine)
+    assert not IsSVAB(BlankLine)
+    assert not IsSVAB(Indented)
+    assert not IsSVAB(SplitIndex)
+    assert not IsSVAB(Trailing)
+    assert IsSVAB(SurfaceZeroValid)
+    assert not IsSVAB(SurfaceZeroMissing)
 
 
-def test_structural_validator_binds_polygon_nodes_to_triangulation() -> None:
-    data = _polygon_triangulation_fixture()
-    wrong = data.replace(b"6 1 1 0", b"6 1 2 0", 1)
-    closed = data.replace(
+# this definition exists because focused behavior needs one stable owner
+def TestSVBPNTT() -> None:
+    DataValueA = PolygonTF()
+    Wrong = DataValueA.replace(b"6 1 1 0", b"6 1 2 0", 1)
+    Closed = DataValueA.replace(
         b"PolygonOnTriangulations 1\n2 1 4\np 0 0\n",
         b"PolygonOnTriangulations 2\n2 1 2\np 0 0\n2 1 4\np 0 0\n",
         1,
     ).replace(b"6 1 1 0", b"7 1 2 1 0", 1)
-    closed_wrong = closed.replace(b"7 1 2 1 0", b"7 1 2 2 0", 1)
-    assert is_structurally_valid_ascii_brep(data)
-    assert not is_structurally_valid_ascii_brep(wrong)
-    assert is_structurally_valid_ascii_brep(closed)
-    assert not is_structurally_valid_ascii_brep(closed_wrong)
+    ClosedWrong = Closed.replace(b"7 1 2 1 0", b"7 1 2 2 0", 1)
+    assert IsSVAB(DataValueA)
+    assert not IsSVAB(Wrong)
+    assert IsSVAB(Closed)
+    assert not IsSVAB(ClosedWrong)
 
 
-def test_structural_validator_rejects_incomplete_or_ambiguous_brep() -> None:
-    data = _located_triangle_brep()
-    tshapes = next(line for line in data.splitlines() if line.startswith(b"TShapes "))
-    shape_count = int(tshapes.split()[1])
-    surface_line = next(
-        line
-        for index, line in enumerate(data.splitlines())
-        if index > 0 and data.splitlines()[index - 1].startswith(b"Surfaces ")
+# this definition exists because focused behavior needs one stable owner
+def TestSVRIOAB() -> None:
+    DataValueA = LocatedTB()
+    Tshapes = next(
+        LineValue
+        for LineValue in DataValueA.splitlines()
+        if LineValue.startswith(b"TShapes ")
     )
-    surface_tokens = surface_line.split()
-    surface_tokens[-1] = b"0" * 40
-    long_number = data.replace(
-        surface_line,
-        b" ".join(surface_tokens),
+    ShapeCount = int(Tshapes.split()[1])
+    SurfaceLine = next(
+        LineValue
+        for Index, LineValue in enumerate(DataValueA.splitlines())
+        if Index > 0 and DataValueA.splitlines()[Index - 1].startswith(b"Surfaces ")
+    )
+    SurfaceTokens = SurfaceLine.split()
+    SurfaceTokens[-1] = b"0" * 40
+    LongNumber = DataValueA.replace(
+        SurfaceLine,
+        b" ".join(SurfaceTokens),
         1,
     )
-    root_head, root_separator, root_tail = data.rpartition(b"+1 1")
-    assert root_separator
-    malformed = (
+    RootHead, RootSeparator, RootTail = DataValueA.rpartition(b"+1 1")
+    assert RootSeparator
+    Malformed = (
         b"CASCADE Topology V1, (c) Matra-Datavision\n",
-        data[: len(data) // 2],
-        data[:-10],
-        data + b" trailing",
-        data.replace(b"V1,", b"V2,", 1),
-        data.replace(tshapes, f"TShapes {shape_count + 1}".encode("ascii"), 1),
-        data.replace(b"+1 1", b"+999999 1", 1),
-        data.replace(b"Locations 1\n1\n1 ", b"Locations 1\n1\nnan ", 1),
-        long_number,
-        root_head + b"+2 1" + root_tail,
+        DataValueA[: len(DataValueA) // 2],
+        DataValueA[:-10],
+        DataValueA + b" trailing",
+        DataValueA.replace(b"V1,", b"V2,", 1),
+        DataValueA.replace(Tshapes, f"TShapes {ShapeCount + 1}".encode("ascii"), 1),
+        DataValueA.replace(b"+1 1", b"+999999 1", 1),
+        DataValueA.replace(b"Locations 1\n1\n1 ", b"Locations 1\n1\nnan ", 1),
+        LongNumber,
+        RootHead + b"+2 1" + RootTail,
     )
-    assert all(not is_structurally_valid_ascii_brep(value) for value in malformed)
+    assert all(not IsSVAB(Value) for Value in Malformed)
 
 
-def test_native_fcstd_decodes_only_provable_final_shape_and_keeps_raw() -> None:
-    path = EXAMPLES / "Piston_shaft.FCStd"
-    if not path.is_file():
-        PytestLib.skip(f"bundled FreeCAD example is unavailable: {path.name}")
-    document = read_native_fcstd(path.read_bytes(), str(path))
-    payloads = tuple(
-        value for value in document.brep_payloads if value.role == PayloadRole.BREP
+# this definition exists because focused behavior needs one stable owner
+def TestNFDOPFSAKR() -> None:
+    PathValueA = KExamples / "Piston_shaft.FCStd"
+    if not PathValueA.is_file():
+        PytestLib.skip(f"bundled FreeCAD example is unavailable: {PathValueA.name}")
+    Document = ReadNativeFcstd(PathValueA.read_bytes(), str(PathValueA))
+    Payloads = tuple(
+        Value for Value in Document.brep_payloads if Value.role == PayloadRole.BREP
     )
-    assert len(payloads) == 1
-    assert payloads[0].data is not None
-    assert document.brep is not None
-    assert document.brep.bodies[0].design_body_id == document.bodies[0].id
-    assert document.brep.bodies[0].attributes["brep_payload_id"] == payloads[0].id
-    assert document.brep.validate(frozenset({document.bodies[0].id})) == ()
+    assert len(Payloads) == 1
+    assert Payloads[0].data is not None
+    assert Document.brep is not None
+    assert Document.brep.bodies[0].design_body_id == Document.bodies[0].id
+    assert Document.brep.bodies[0].attributes["brep_payload_id"] == Payloads[0].id
+    assert Document.brep.validate(frozenset({Document.bodies[0].id})) == ()
 
 
-def test_native_fcstd_leaves_intermediate_shape_raw_only() -> None:
-    path = EXAMPLES / "Alternator.FCStd"
-    if not path.is_file():
-        PytestLib.skip(f"bundled FreeCAD example is unavailable: {path.name}")
-    document = read_native_fcstd(path.read_bytes(), str(path))
-    payloads = tuple(
-        value for value in document.brep_payloads if value.role == PayloadRole.BREP
+# this definition exists because focused behavior needs one stable owner
+def TestNFLISRO() -> None:
+    PathValueA = KExamples / "Alternator.FCStd"
+    if not PathValueA.is_file():
+        PytestLib.skip(f"bundled FreeCAD example is unavailable: {PathValueA.name}")
+    Document = ReadNativeFcstd(PathValueA.read_bytes(), str(PathValueA))
+    Payloads = tuple(
+        Value for Value in Document.brep_payloads if Value.role == PayloadRole.BREP
     )
-    assert len(payloads) == 1
-    assert payloads[0].data is not None
-    assert payloads[0].attributes["feature_id"] != document.bodies[0].final_feature_id
-    assert document.brep is None
+    assert len(Payloads) == 1
+    assert Payloads[0].data is not None
+    assert Payloads[0].attributes["feature_id"] != Document.bodies[0].final_feature_id
+    assert Document.brep is None
 
 
-def test_final_shape_ownership_merges_multiple_design_bodies() -> None:
-    data = triangle_mesh_brep(
+# this definition exists because focused behavior needs one stable owner
+def TestFSOMMDB() -> None:
+    DataValueA = TriangleMeshBrep(
         ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
         ((0, 1, 2),),
     )
-    digest = hashlib.sha256(data).hexdigest()
-    bodies = (
-        Body("body:first", "First", "feature:first"),
-        Body("body:second", "Second", "feature:second"),
+    Digest = Hashlib.sha256(DataValueA).hexdigest()
+    Bodies = (
+        BodyValue("body:first", "First", "feature:first"),
+        BodyValue("body:second", "Second", "feature:second"),
     )
-    payloads = tuple(
+    Payloads = tuple(
         BrepPayload(
-            f"payload:{index}",
+            f"payload:{Index}",
             "opencascade",
             "shape",
             "CASCADE Topology V1",
-            digest,
-            data=data,
-            attributes={"feature_id": body.final_feature_id},
+            Digest,
+            data=DataValueA,
+            attributes={"feature_id": BodyValueA.final_feature_id},
             role=PayloadRole.BREP,
             file_extension=".brep",
         )
-        for index, body in enumerate(bodies, 1)
+        for Index, BodyValueA in enumerate(Bodies, 1)
     )
-    model = _decoded_document_brep(payloads, bodies)
-    assert model is not None
-    assert {value.design_body_id for value in model.bodies} == {
+    Model = DecodedDocumentBrep(Payloads, Bodies)
+    assert Model is not None
+    assert {Value.design_body_id for Value in Model.bodies} == {
         "body:first",
         "body:second",
     }
-    assert model.validate(frozenset(value.id for value in bodies)) == ()
+    assert Model.validate(frozenset(Value.id for Value in Bodies)) == ()
     OwnedPayload = BrepPayload(
         "payload:owned",
         "opencascade",
         "shape",
         "CASCADE Topology V1",
-        digest,
-        data=data,
-        attributes={"body_id": bodies[0].id},
+        Digest,
+        data=DataValueA,
+        attributes={"body_id": Bodies[0].id},
         role=PayloadRole.BREP,
         file_extension=".brep",
     )
-    SelectedModel = _decoded_document_brep(
-        (OwnedPayload, *payloads),
-        bodies,
+    SelectedModel = DecodedDocumentBrep(
+        (OwnedPayload, *Payloads),
+        Bodies,
     )
     assert SelectedModel is not None
     assert len(SelectedModel.bodies) == 2

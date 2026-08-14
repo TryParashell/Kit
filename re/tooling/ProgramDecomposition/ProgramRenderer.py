@@ -105,11 +105,51 @@ def RenderMethod(OwnerModule: str, MethodData: MethodData) -> str:
     return FormatSource("\n".join(SourceLines))
 
 
+# canonical constant names keep generated registries compliant without changing legacy public symbols
+def GetConstNames(ProgramData: ProgramData) -> tuple[str, str]:
+    OwnerConst = (
+        ProgramData.OwnerName
+        if ProgramData.OwnerName.startswith("K")
+        else "K" + ProgramData.OwnerName
+    )
+    OpsConst = (
+        ProgramData.OpsName
+        if ProgramData.OpsName.startswith("K")
+        else "K" + ProgramData.OpsName
+    )
+    return OwnerConst, OpsConst
+
+
+# explicit dynamic bindings preserve legacy imports while canonical source bindings retain compliant casing
+def AddAliasesMut(
+    SourceLines: list[str], ProgramData: ProgramData, OwnerConst: str, OpsConst: str
+) -> None:
+    AliasPairs = tuple(
+        (OriginalName, ConstName)
+        for OriginalName, ConstName in (
+            (ProgramData.OwnerName, OwnerConst),
+            (ProgramData.OpsName, OpsConst),
+        )
+        if OriginalName != ConstName
+    )
+    if not AliasPairs:
+        return
+    for OriginalName, ConstName in AliasPairs:
+        SourceLines.extend(
+            (
+                "",
+                "# compatibility binding preserves its established public import after decomposition",
+                f"globals()[{OriginalName!r}] = {ConstName}",
+            )
+        )
+
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def RenderRegistry(ProgramData: ProgramData, ModulePaths: tuple[str, ...]) -> str:
     BuildName = (
         "BuildStreams" if ProgramData.OpsName == "StreamPrograms" else "BuildProgram"
     )
+    OwnerConst, OpsConst = GetConstNames(ProgramData)
     SourceLines = [
         KHeaderText.rstrip(),
         "",
@@ -136,27 +176,24 @@ def RenderRegistry(ProgramData: ProgramData, ModulePaths: tuple[str, ...]) -> st
             ")",
             "",
             "",
-            "# compatibility tables preserve every established public import after decomposition",
+            "# composed tables stay immutable because generated registries expose stable format facts",
         )
     )
     if ProgramData.OpsName == "StreamPrograms":
         StreamNames = tuple(
             (StreamName for StreamName, SpareValue in ProgramData.Streams)
         )
-        SourceLines.append(
-            f"{ProgramData.OwnerName}, {ProgramData.OpsName} = BuildStreams("
-        )
+        SourceLines.append(f"{OwnerConst}, {OpsConst} = BuildStreams(")
         SourceLines.append("    KMethodPrograms,")
         SourceLines.append(f"    {RenderValue(StreamNames)},")
         SourceLines.append(")")
     else:
         StreamName = ProgramData.Streams[0][0]
-        SourceLines.append(
-            f"{ProgramData.OwnerName}, {ProgramData.OpsName} = BuildProgram("
-        )
+        SourceLines.append(f"{OwnerConst}, {OpsConst} = BuildProgram(")
         SourceLines.append("    KMethodPrograms,")
         SourceLines.append(f"    {StreamName!r},")
         SourceLines.append(")")
+    AddAliasesMut(SourceLines, ProgramData, OwnerConst, OpsConst)
     SourceLines.append("")
     return FormatSource("\n".join(SourceLines))
 

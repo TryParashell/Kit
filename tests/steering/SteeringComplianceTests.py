@@ -418,6 +418,49 @@ class TestDataSplits(Unittest.TestCase):
             CaseSelf.assertNotIn("SPL001", ReadCodes(SourcePath))
 
 
+# generated table cases stay separate because the path scoped exception needs focused boundary coverage
+class TestPrograms(Unittest.TestCase):
+
+    # generated method tables stay intact because each file already represents one natural serializer method
+    def CheckProgram(CaseSelf) -> None:
+        TableLines = "\n".join(
+            f"    ({IndexValue}, 1, 'Owner', 'primitive', {IndexValue}),"
+            for IndexValue in range(31)
+        )
+        BodyText = (
+            "# method operations stay atomic because offsets describe one recovered serializer method\n"
+            "KMethodProgram = (\n"
+            f"{TableLines}\n"
+            ")\n"
+        )
+        with Tempfile.TemporaryDirectory() as TmpPath:
+            SourcePath = (
+                FilePath(TmpPath)
+                / "src/convert/adapters/solidworks/programs/resolved/box/Methods/Serialize.py"
+            )
+            SourcePath.parent.mkdir(parents=True)
+            SourcePath.write_text(MakeSource(BodyText), encoding="utf-8")
+            CaseSelf.assertNotIn("SPL001", ReadCodes(SourcePath))
+
+    # near misses remain violations because only generated bindings at exact semantic paths are exceptional
+    def CheckNearMiss(CaseSelf) -> None:
+        TableLines = "\n".join(f"    {IndexValue}," for IndexValue in range(31))
+        BodyText = (
+            "# unrelated data stays large because this fixture must prove the exception remains narrow\n"
+            "KUnrelatedTable = (\n"
+            f"{TableLines}\n"
+            ")\n"
+        )
+        with Tempfile.TemporaryDirectory() as TmpPath:
+            SourcePath = (
+                FilePath(TmpPath)
+                / "src/convert/adapters/solidworks/programs/resolved/box/Methods/Serialize.py"
+            )
+            SourcePath.parent.mkdir(parents=True)
+            SourcePath.write_text(MakeSource(BodyText), encoding="utf-8")
+            CaseSelf.assertIn("SPL001", ReadCodes(SourcePath))
+
+
 # header fixtures stay together because exact notices and shebang placement share prefix logic
 class TestHeaders(Unittest.TestCase):
 

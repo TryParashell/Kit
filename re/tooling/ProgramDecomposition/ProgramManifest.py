@@ -8,7 +8,8 @@
 
 from __future__ import annotations
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
+
+# global counts catch missing variants streams owners methods or recovered operations
 KGlobalStats = (43, 75, 212, 2078, 3857, 185090)
 
 # focused program manifest data preserves all variant evidence in one dedicated module

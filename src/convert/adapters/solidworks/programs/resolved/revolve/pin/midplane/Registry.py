@@ -308,7 +308,7 @@ KMethodPrograms = (
 )
 
 
-# compatibility tables preserve every established public import after decomposition
+# composed tables stay immutable because generated registries expose stable format facts
 KFieldOwners, KResolvedOps = BuildProgram(
     KMethodPrograms,
     "ResolvedFeatures",

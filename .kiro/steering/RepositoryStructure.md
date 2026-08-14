@@ -33,6 +33,7 @@ Standard repository governance names and copied third party assets may retain ex
 - Give every independently selectable reverse engineering method parser serializer writer adapter strategy and validation rule its own focused module and focused test file
 - Add a new behavior by creating its module importing its exact public symbol and adding one declarative registry or composition entry
 - Keep registries declarative and free of feature specific control flow
+- Keep a generated serializer method table whole when it is the atomic representation of one natural recovered method and deterministic generation plus decomposition equivalence verify it Do not split it into numbered size based or otherwise arbitrary chunks
 - Prefer one substantial exported declaration per file and apply `SplitLargeDefinitions.md` at every boundary
 - Share immutable format facts through focused schema or catalog modules rather than copying large tables between implementations
 - Keep compatibility facades thin and never place implementation logic in `__init__.py`

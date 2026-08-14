@@ -9,480 +9,588 @@
 from __future__ import annotations
 
 from collections import Counter
-from functools import lru_cache
-import gc
-import hashlib
-from pathlib import Path
-import re
-import shutil
-import struct
+from functools import lru_cache as LruCache
+import gc as GcValue
+import hashlib as Hashlib
+from pathlib import Path as PathValue
+import re as RegexLib
+import shutil as Shutil
+import struct as Struct
 
-import pytest
+import pytest as Pytest
 
-from convert import CarrierReason, convert, open_document, registry
+from convert import (
+    CarrierReason,
+    convert as Convert,
+    open_document as OpenDocument,
+    registry as Registry,
+)
 from convert.adapters.solidworks import SldprtFormatError
-from interchange import AssemblyData, CadDocument, Capability, source_payload_indexes
+from interchange import (
+    AssemblyData,
+    CadDocument,
+    Capability,
+    source_payload_indexes as SourcePayloadIndexes,
+)
 
-ROOT = Path(__file__).parents[3]
-README = ROOT / "README.md"
-EXAMPLES = ROOT / "examples"
-FORMAT_BY_SUFFIX = {
+# this binding exists because shared behavior needs one stable value
+KRootValue = PathValue(__file__).parents[3]
+
+# this binding exists because shared behavior needs one stable value
+KReadme = KRootValue / "README.md"
+
+# this binding exists because shared behavior needs one stable value
+KExamples = KRootValue / "examples"
+
+# this binding exists because shared behavior needs one stable value
+KFormatBySuffix = {
     ".SLDPRT": "solidworks.sldprt",
     ".SLDASM": "solidworks.sldasm",
     ".FCStd": "freecad.fcstd",
     ".CATPart": "catia.v5",
     ".CATProduct": "catia.v5",
 }
-PART_SUFFIXES = (".SLDPRT", ".FCStd", ".CATPart")
-ASSEMBLY_SUFFIXES = (".SLDASM", ".FCStd", ".CATProduct")
-SUPPORTED_SUFFIXES = frozenset(FORMAT_BY_SUFFIX)
-EXPECTED_SUFFIX_COUNTS = {
+
+# this binding exists because shared behavior needs one stable value
+KPartSuffixes = (".SLDPRT", ".FCStd", ".CATPart")
+
+# this binding exists because shared behavior needs one stable value
+KAssemblySuffixes = (".SLDASM", ".FCStd", ".CATProduct")
+
+# this binding exists because shared behavior needs one stable value
+KSupportedSuffixes = frozenset(KFormatBySuffix)
+
+# this binding exists because shared behavior needs one stable value
+KExpectedSuffixCounts = {
     ".SLDPRT": 111,
     ".SLDASM": 9,
     ".FCStd": 68,
     ".CATPart": 27,
     ".CATProduct": 3,
 }
-FCSTD_ASSEMBLIES = frozenset(
+
+# this binding exists because shared behavior needs one stable value
+KFcstdAssemblies = frozenset(
     {
-        EXAMPLES / "Random" / "V8_engine" / "Conrod_2.FCStd",
-        EXAMPLES / "Random" / "V8_engine" / "Piston_2.FCStd",
-        EXAMPLES / "Random" / "V8_engine.FCStd",
+        KExamples / "Random" / "V8_engine" / "Conrod_2.FCStd",
+        KExamples / "Random" / "V8_engine" / "Piston_2.FCStd",
+        KExamples / "Random" / "V8_engine.FCStd",
     }
 )
-MATRIX_SOURCES = (
+
+# these sources exercise every supported part format reader
+KPartSources = (
     (
         "sldprt",
         ".SLDPRT",
-        EXAMPLES / ".SLDPRT" / "example.SLDPRT",
+        KExamples / ".SLDPRT" / "example.SLDPRT",
         False,
     ),
     (
         "fcstd_part",
         ".FCStd",
-        EXAMPLES / "Random" / "V8_engine" / "hex bolt gradeb_iso.FCStd",
+        KExamples / "Random" / "V8_engine" / "hex bolt gradeb_iso.FCStd",
         False,
     ),
     (
         "catpart",
         ".CATPart",
-        EXAMPLES / ".CATPart" / "Banjo.CATPart",
+        KExamples / ".CATPart" / "Banjo.CATPart",
         False,
     ),
-    (
-        "sldasm",
-        ".SLDASM",
-        EXAMPLES / "Random" / "Pistons" / "Piston.SLDASM",
-        True,
-    ),
+)
+
+# these sources exercise every supported assembly format reader
+KAssemblySources = (
+    ("sldasm", ".SLDASM", KExamples / "Random" / "Pistons" / "Piston.SLDASM", True),
     (
         "fcstd_assembly",
         ".FCStd",
-        EXAMPLES / "Random" / "V8_engine" / "Conrod_2.FCStd",
+        KExamples / "Random" / "V8_engine" / "Conrod_2.FCStd",
         True,
     ),
     (
         "catproduct",
         ".CATProduct",
-        EXAMPLES / ".CATProduct" / "Brake_Pedal_Assembly - Backup 2.CATProduct",
+        KExamples / ".CATProduct" / "Brake_Pedal_Assembly - Backup 2.CATProduct",
         True,
     ),
 )
-MATRIX_CASES = tuple(
-    (name, source_suffix, source, is_assembly, destination_suffix)
-    for name, source_suffix, source, is_assembly in MATRIX_SOURCES
-    for destination_suffix in (ASSEMBLY_SUFFIXES if is_assembly else PART_SUFFIXES)
+
+# this ordered source matrix preserves part before assembly test execution
+KMatrixSources = KPartSources + KAssemblySources
+
+# this binding exists because shared behavior needs one stable value
+KMatrixCases = tuple(
+    (NameValue, SourceSuffix, Source, IsAssembly, DestinationSuffix)
+    for NameValue, SourceSuffix, Source, IsAssembly in KMatrixSources
+    for DestinationSuffix in (KAssemblySuffixes if IsAssembly else KPartSuffixes)
 )
-CORPUS_FILES = tuple(
+
+# this binding exists because shared behavior needs one stable value
+KCorpusFiles = tuple(
     sorted(
-        path
-        for path in EXAMPLES.rglob("*")
-        if path.is_file()
-        and path.suffix.casefold() in {value.casefold() for value in SUPPORTED_SUFFIXES}
+        PathValueA
+        for PathValueA in KExamples.rglob("*")
+        if PathValueA.is_file()
+        and PathValueA.suffix.casefold()
+        in {Value.casefold() for Value in KSupportedSuffixes}
     )
 )
-MISSING_REFERENCE_FILES = {
-    EXAMPLES
+
+# this binding exists because shared behavior needs one stable value
+KMissingReferenceFiles = {
+    KExamples
     / "Single Turbo Dual Overhead Cam V8 - KDP - 2024"
     / "ENSAMBLAJE DE MOTOR V8.SLDASM": "ENSAMBLAJE TURBO.SLDASM",
 }
-SUPPORTED_FILES = tuple(
-    path for path in CORPUS_FILES if path not in MISSING_REFERENCE_FILES
+
+# this binding exists because shared behavior needs one stable value
+KSupportedFiles = tuple(
+    PathValueA
+    for PathValueA in KCorpusFiles
+    if PathValueA not in KMissingReferenceFiles
 )
 
 
-def _assembly_signature(assembly: AssemblyData | None):
-    if assembly is None:
+# this definition exists because focused behavior needs one stable owner
+def AssemblyS(Assembly: AssemblyData | None):
+    if Assembly is None:
         return None
     return (
-        assembly.root_definition_id,
-        assembly.definitions,
-        assembly.instances,
+        Assembly.root_definition_id,
+        Assembly.definitions,
+        Assembly.instances,
         tuple(
-            (component.id, _document_signature(component.document))
-            for component in assembly.documents
+            (Component.id, DocumentS(Component.document))
+            for Component in Assembly.documents
         ),
-        assembly.mate_entities,
-        assembly.mates,
-        assembly.mate_groups,
-        assembly.attributes,
+        Assembly.mate_entities,
+        Assembly.mates,
+        Assembly.mate_groups,
+        Assembly.attributes,
     )
 
 
-def _document_signature(document: CadDocument):
-    envelope_indexes = (
-        source_payload_indexes(document)
-        if isinstance(document.source.attributes.get("embedded_source_format_id"), str)
+# this definition exists because focused behavior needs one stable owner
+def DocumentS(Document: CadDocument):
+    EnvelopeIndexes = (
+        SourcePayloadIndexes(Document)
+        if isinstance(Document.source.attributes.get("embedded_source_format_id"), str)
         else frozenset()
     )
     return (
-        document.configurations,
-        document.parameters,
-        document.support_planes,
-        document.sketches,
-        document.selections,
-        document.feature_timeline,
-        document.bodies,
-        tuple(_mesh_signature(mesh) for mesh in document.meshes),
+        Document.configurations,
+        Document.parameters,
+        Document.support_planes,
+        Document.sketches,
+        Document.selections,
+        Document.feature_timeline,
+        Document.bodies,
+        tuple(MeshSignature(MeshValue) for MeshValue in Document.meshes),
         tuple(
-            _brep_signature(payload)
-            for index, payload in enumerate(document.brep_payloads)
-            if index not in envelope_indexes
+            BrepSignature(Payload)
+            for Index, Payload in enumerate(Document.brep_payloads)
+            if Index not in EnvelopeIndexes
         ),
-        document.capabilities,
-        document.units,
-        document.schema_version,
-        _assembly_signature(document.assembly),
+        Document.capabilities,
+        Document.units,
+        Document.schema_version,
+        AssemblyS(Document.assembly),
     )
 
 
-def _mesh_signature(mesh):
-    digest = hashlib.sha256()
-    for vertex in mesh.vertices:
-        digest.update(struct.pack("!ddd", vertex.x, vertex.y, vertex.z))
-    for triangle in mesh.triangles:
-        digest.update(struct.pack("!qqq", *triangle))
-    for normal in mesh.normals:
-        digest.update(struct.pack("!ddd", normal.x, normal.y, normal.z))
+# this definition exists because focused behavior needs one stable owner
+def MeshSignature(MeshValue):
+    Digest = Hashlib.sha256()
+    for Vertex in MeshValue.vertices:
+        Digest.update(Struct.pack("!ddd", Vertex.x, Vertex.y, Vertex.z))
+    for Triangle in MeshValue.triangles:
+        Digest.update(Struct.pack("!qqq", *Triangle))
+    for Normal in MeshValue.normals:
+        Digest.update(Struct.pack("!ddd", Normal.x, Normal.y, Normal.z))
     return (
-        mesh.id,
-        mesh.name,
-        len(mesh.vertices),
-        len(mesh.triangles),
-        len(mesh.normals),
-        digest.hexdigest(),
-        mesh.provenance,
-        mesh.attributes,
+        MeshValue.id,
+        MeshValue.name,
+        len(MeshValue.vertices),
+        len(MeshValue.triangles),
+        len(MeshValue.normals),
+        Digest.hexdigest(),
+        MeshValue.provenance,
+        MeshValue.attributes,
     )
 
 
-def _brep_signature(payload):
-    payload_id = payload.id
-    attributes = payload.attributes
-    if payload.format_id == "catia.v5.cfv2" and payload.kind == "native_document":
-        payload_id = "catia:native-document"
-        attributes = {
-            key: value
-            for key, value in attributes.items()
-            if key != "catia.replay_semantic_sha256"
+# this definition exists because focused behavior needs one stable owner
+def BrepSignature(Payload):
+    PayloadId = Payload.id
+    Attributes = Payload.attributes
+    if Payload.format_id == "catia.v5.cfv2" and Payload.kind == "native_document":
+        PayloadId = "catia:native-document"
+        Attributes = {
+            KeyValue: Value
+            for KeyValue, Value in Attributes.items()
+            if KeyValue != "catia.replay_semantic_sha256"
         }
     elif (
-        payload.format_id == "catia.v5.sha256"
-        and payload.kind == "native_document_binding"
+        Payload.format_id == "catia.v5.sha256"
+        and Payload.kind == "native_document_binding"
     ):
-        payload_id = "catia:native-document-binding"
+        PayloadId = "catia:native-document-binding"
     return (
-        payload_id,
-        payload.format_id,
-        payload.kind,
-        payload.schema,
-        payload.sha256,
-        len(payload.data) if payload.data is not None else None,
+        PayloadId,
+        Payload.format_id,
+        Payload.kind,
+        Payload.schema,
+        Payload.sha256,
+        len(Payload.data) if Payload.data is not None else None,
         (
-            hashlib.sha256(payload.data).hexdigest()
-            if payload.data is not None
+            Hashlib.sha256(Payload.data).hexdigest()
+            if Payload.data is not None
             else None
         ),
-        payload.source_stream,
-        payload.provenance,
-        attributes,
-        payload.role,
-        payload.file_extension,
+        Payload.source_stream,
+        Payload.provenance,
+        Attributes,
+        Payload.role,
+        Payload.file_extension,
     )
 
 
-def _suffix(path: Path) -> str:
+# this definition exists because focused behavior needs one stable owner
+def Suffix(PathValueA: PathValue) -> str:
     return next(
-        value
-        for value in FORMAT_BY_SUFFIX
-        if value.casefold() == path.suffix.casefold()
+        Value
+        for Value in KFormatBySuffix
+        if Value.casefold() == PathValueA.suffix.casefold()
     )
 
 
-def _target_suffixes(document: CadDocument) -> tuple[str, ...]:
-    return ASSEMBLY_SUFFIXES if document.assembly is not None else PART_SUFFIXES
+# this definition exists because focused behavior needs one stable owner
+def TargetSuffixes(Document: CadDocument) -> tuple[str, ...]:
+    return KAssemblySuffixes if Document.assembly is not None else KPartSuffixes
 
 
-def _expected_assembly(source: Path) -> bool:
-    suffix = _suffix(source)
-    return suffix in {".SLDASM", ".CATProduct"} or source in FCSTD_ASSEMBLIES
+# this definition exists because focused behavior needs one stable owner
+def IsAssemblyFile(Source: PathValue) -> bool:
+    SuffixA = Suffix(Source)
+    return SuffixA in {".SLDASM", ".CATProduct"} or Source in KFcstdAssemblies
 
 
-def _assert_target(
-    document: CadDocument,
-    suffix: str,
-    source: Path | bytes,
-    is_assembly: bool,
+# this definition exists because focused behavior needs one stable owner
+def AssertTarget(
+    Document: CadDocument,
+    SuffixA: str,
+    Source: PathValue | bytes,
+    IsAssembly: bool,
 ) -> None:
-    assert (document.assembly is not None) == is_assembly
-    if suffix in {".SLDPRT", ".SLDASM"}:
-        assert document.source.format_id == FORMAT_BY_SUFFIX[suffix]
-    elif suffix in {".CATPart", ".CATProduct"}:
-        assert document.metadata["catia.document_type"] == suffix[1:]
+    assert (Document.assembly is not None) == IsAssembly
+    if SuffixA in {".SLDPRT", ".SLDASM"}:
+        assert Document.source.format_id == KFormatBySuffix[SuffixA]
+    elif SuffixA in {".CATPart", ".CATProduct"}:
+        assert Document.metadata["catia.document_type"] == SuffixA[1:]
     else:
-        assert registry.select_reader(source).info.format_id == "freecad.fcstd"
+        assert Registry.select_reader(Source).info.format_id == "freecad.fcstd"
 
 
-def _assert_truthful_vendor_result(
-    result,
-    suffix: str,
-    is_assembly: bool,
-) -> None:
-    assert not result.application_usable or result.vendor_loadable
-    expected_near_lossless = (
-        result.application_usable
-        and result.vendor_loadable
-        and not result.requirements
-        and not result.dropped
+# this helper verifies the cross format transfer and losslessness contract
+def AssertTransfer(Result, SuffixA: str) -> None:
+    assert not Result.application_usable or Result.vendor_loadable
+    ExpectedNearLossless = (
+        Result.application_usable
+        and Result.vendor_loadable
+        and not Result.requirements
+        and not Result.dropped
         and all(
-            transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
-            for transfer in result.transfers
-            if transfer.carrier_reason is not None
+            Transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
+            for Transfer in Result.transfers
+            if Transfer.carrier_reason is not None
         )
     )
-    assert result.near_lossless is expected_near_lossless
-    geometry_transfers = {
-        transfer.capability
-        for transfer in result.transfers
-        if transfer.capability in {Capability.BREP, Capability.TESSELLATION}
+    assert Result.near_lossless is ExpectedNearLossless
+    GeometryTransfers = {
+        Transfer.capability
+        for Transfer in Result.transfers
+        if Transfer.capability in {Capability.BREP, Capability.TESSELLATION}
     }
-    if suffix == ".FCStd" and geometry_transfers and result.application_usable:
-        assert geometry_transfers & result.output.native_capabilities
-    if suffix not in {".SLDPRT", ".SLDASM", ".CATPart", ".CATProduct"}:
-        return
-    metadata = result.output.metadata
-    assert isinstance(metadata["vendor_loadable"], bool)
-    assert isinstance(metadata["native_geometry"], bool)
-    assert isinstance(metadata["native_history"], bool)
-    assert isinstance(metadata["native_assembly"], bool)
-    assert isinstance(metadata["native_self_contained"], bool)
-    referenced_files_written = metadata["referenced_files_written"]
-    assert isinstance(referenced_files_written, int)
-    assert referenced_files_written >= 0
-    if referenced_files_written:
-        assert is_assembly
-        path = result.output.path
-        assert path is not None
-        siblings = tuple(
-            item for item in path.parent.iterdir() if item.is_file() and item != path
+    if SuffixA == ".FCStd" and GeometryTransfers and Result.application_usable:
+        assert GeometryTransfers & Result.output.native_capabilities
+
+
+# this helper verifies native metadata types and emitted reference files
+def AssertMetaShape(Result, IsAssembly: bool) -> None:
+    Metadata = Result.output.metadata
+    assert isinstance(Metadata["vendor_loadable"], bool)
+    assert isinstance(Metadata["native_geometry"], bool)
+    assert isinstance(Metadata["native_history"], bool)
+    assert isinstance(Metadata["native_assembly"], bool)
+    assert isinstance(Metadata["native_self_contained"], bool)
+    ReferencedFilesWritten = Metadata["referenced_files_written"]
+    assert isinstance(ReferencedFilesWritten, int)
+    assert ReferencedFilesWritten >= 0
+    if ReferencedFilesWritten:
+        assert IsAssembly
+        PathValueA = Result.output.path
+        assert PathValueA is not None
+        Siblings = tuple(
+            ItemValue
+            for ItemValue in PathValueA.parent.iterdir()
+            if ItemValue.is_file() and ItemValue != PathValueA
         )
-        assert len(siblings) == referenced_files_written
-        assert all(item.stat().st_size > 0 for item in siblings)
-        assert metadata["native_self_contained"] is result.application_usable
-    if metadata["compatibility"] == "native-exact":
-        assert metadata["vendor_loadable"] is True
-        assert metadata["native_geometry"] is True
-        assert metadata["native_history"] is True
-        assert metadata["native_assembly"] is is_assembly
-        assert metadata["native_self_contained"] is (not is_assembly)
+        assert len(Siblings) == ReferencedFilesWritten
+        assert all(ItemValue.stat().st_size > 0 for ItemValue in Siblings)
+        assert Metadata["native_self_contained"] is Result.application_usable
+
+
+# this helper verifies native capability claims against emitted metadata
+def AssertNative(Result, IsAssembly: bool) -> None:
+    Metadata = Result.output.metadata
+    if Metadata["compatibility"] == "native-exact":
+        assert Metadata["vendor_loadable"] is True
+        assert Metadata["native_geometry"] is True
+        assert Metadata["native_history"] is True
+        assert Metadata["native_assembly"] is IsAssembly
+        assert Metadata["native_self_contained"] is (not IsAssembly)
         return
-    native = result.output.native_capabilities
-    if metadata["native_geometry"]:
-        assert Capability.BREP in native
-    if metadata["native_history"]:
-        history = tuple(
-            transfer
-            for transfer in result.output.transfers
-            if transfer.capability is Capability.PARAMETRIC_HISTORY
+    Native = Result.output.native_capabilities
+    if Metadata["native_geometry"]:
+        assert Capability.BREP in Native
+    if Metadata["native_history"]:
+        History = tuple(
+            Transfer
+            for Transfer in Result.output.transfers
+            if Transfer.capability is Capability.PARAMETRIC_HISTORY
         )
-        assert not history or Capability.PARAMETRIC_HISTORY in native
-    if metadata["native_assembly"]:
-        assert is_assembly
-        assert Capability.ASSEMBLIES in native
-    if metadata["native_self_contained"]:
-        assert result.application_usable is True
-        assert result.vendor_loadable is True
+        assert not History or Capability.PARAMETRIC_HISTORY in Native
+    if Metadata["native_assembly"]:
+        assert IsAssembly
+        assert Capability.ASSEMBLIES in Native
+    if Metadata["native_self_contained"]:
+        assert Result.application_usable is True
+        assert Result.vendor_loadable is True
 
 
-def _convert_with_application_gate(source, destination):
-    result = convert(source, destination)
-    assert result.requirements == ()
-    assert result.dropped == frozenset()
-    assert result.roundtrip_safe is True
-    return result
+# this helper applies the complete target verification rules to one result
+def AssertTVR(
+    Result,
+    SuffixA: str,
+    IsAssembly: bool,
+) -> None:
+    AssertTransfer(Result, SuffixA)
+    if SuffixA not in {".SLDPRT", ".SLDASM", ".CATPart", ".CATProduct"}:
+        return
+    AssertMetaShape(Result, IsAssembly)
+    AssertNative(Result, IsAssembly)
 
 
-@lru_cache(maxsize=len(MATRIX_SOURCES))
-def _matrix_document(source: Path) -> CadDocument:
-    return open_document(source)
+# this definition exists because focused behavior needs one stable owner
+def ConvertWAG(Source, Destination):
+    Result = Convert(Source, Destination)
+    assert Result.requirements == ()
+    assert Result.dropped == frozenset()
+    assert Result.roundtrip_safe is True
+    return Result
 
 
-def test_swap_formats_match_readme_and_document_kinds() -> None:
-    supported = README.read_text(encoding="utf-8").split("## Supported formats", 1)[1]
-    supported = supported.split("\n## ", 1)[0]
-    readme_suffixes = set(re.findall(r"`(\.[A-Za-z0-9]+)`", supported))
-    assert readme_suffixes == set(FORMAT_BY_SUFFIX)
-    assert set(PART_SUFFIXES) | set(ASSEMBLY_SUFFIXES) == readme_suffixes
-    assert set(PART_SUFFIXES) & set(ASSEMBLY_SUFFIXES) == {".FCStd"}
-    counts = Counter(_suffix(path) for path in CORPUS_FILES)
+# this definition exists because focused behavior needs one stable owner
+@LruCache(maxsize=len(KMatrixSources))
+def MatrixDocument(Source: PathValue) -> CadDocument:
+    return OpenDocument(Source)
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestSFMRADK() -> None:
+    Supported = KReadme.read_text(encoding="utf-8").split("## Supported formats", 1)[1]
+    Supported = Supported.split("\n## ", 1)[0]
+    ReadmeSuffixes = set(RegexLib.findall(r"`(\.[A-Za-z0-9]+)`", Supported))
+    assert ReadmeSuffixes == set(KFormatBySuffix)
+    assert set(KPartSuffixes) | set(KAssemblySuffixes) == ReadmeSuffixes
+    assert set(KPartSuffixes) & set(KAssemblySuffixes) == {".FCStd"}
+    Counts = Counter(Suffix(PathValueA) for PathValueA in KCorpusFiles)
     MissingSuffixes = tuple(
         SuffixName
-        for SuffixName, ExpectedCount in EXPECTED_SUFFIX_COUNTS.items()
-        if counts[SuffixName] == 0 and ExpectedCount
+        for SuffixName, ExpectedCount in KExpectedSuffixCounts.items()
+        if Counts[SuffixName] == 0 and ExpectedCount
     )
-    for SuffixName, ExpectedCount in EXPECTED_SUFFIX_COUNTS.items():
+    for SuffixName, ExpectedCount in KExpectedSuffixCounts.items():
         if SuffixName not in MissingSuffixes:
-            assert counts[SuffixName] == ExpectedCount
+            assert Counts[SuffixName] == ExpectedCount
     if MissingSuffixes:
-        pytest.skip(
+        Pytest.skip(
             "bundled example corpus is unavailable for " + ", ".join(MissingSuffixes)
         )
-    assert len(CORPUS_FILES) == 218
-    assert len(SUPPORTED_FILES) == 217
-    assert counts == EXPECTED_SUFFIX_COUNTS
-    assert len(FCSTD_ASSEMBLIES) == 3
-    assert FCSTD_ASSEMBLIES <= set(SUPPORTED_FILES)
-    assert set(MISSING_REFERENCE_FILES) <= set(CORPUS_FILES)
+    assert len(KCorpusFiles) == 218
+    assert len(KSupportedFiles) == 217
+    assert Counts == KExpectedSuffixCounts
+    assert len(KFcstdAssemblies) == 3
+    assert KFcstdAssemblies <= set(KSupportedFiles)
+    assert set(KMissingReferenceFiles) <= set(KCorpusFiles)
 
 
-@pytest.mark.parametrize(
-    ("name", "source_suffix", "source", "is_assembly", "destination_suffix"),
-    MATRIX_CASES,
-    ids=[f"{case[0]}-to-{case[4][1:].lower()}" for case in MATRIX_CASES],
+# this helper verifies one forward conversion and its restored document
+def VerifyForward(
+    Source,
+    SourceSuffix,
+    DestinationSuffix,
+    OriginalSignature,
+    TmpPath,
+    Index,
+    IsAssembly,
+):
+    ForwardDirectory = TmpPath / f"forward_{Index}"
+    ForwardDirectory.mkdir()
+    Destination = ForwardDirectory / f"converted{DestinationSuffix}"
+    Forward = Convert(Source, Destination)
+    assert Forward.source_format == KFormatBySuffix[SourceSuffix]
+    assert Forward.destination_format == KFormatBySuffix[DestinationSuffix]
+    assert Forward.output.bytes_written == Destination.stat().st_size
+    assert Forward.requirements == ()
+    assert Forward.dropped == frozenset()
+    assert Forward.roundtrip_safe is True
+    AssertTVR(Forward, DestinationSuffix, IsAssembly)
+    del Forward
+    GcValue.collect()
+    Restored = OpenDocument(Destination)
+    assert Restored.validate() == ()
+    assert DocumentS(Restored) == OriginalSignature
+    AssertTarget(Restored, DestinationSuffix, Destination, IsAssembly)
+    del Restored
+    GcValue.collect()
+    return ForwardDirectory, Destination
+
+
+# this helper verifies one reverse conversion and its restored document
+def VerifyReverse(
+    Destination,
+    SourceSuffix,
+    DestinationSuffix,
+    OriginalSignature,
+    TmpPath,
+    Index,
+    IsAssembly,
+):
+    ReverseDirectory = TmpPath / f"reverse_{Index}"
+    ReverseDirectory.mkdir()
+    Reverse = ReverseDirectory / f"converted{SourceSuffix}"
+    Backward = Convert(Destination, Reverse)
+    assert Backward.source_format == KFormatBySuffix[DestinationSuffix]
+    assert Backward.destination_format == KFormatBySuffix[SourceSuffix]
+    assert Backward.output.bytes_written == Reverse.stat().st_size
+    assert Backward.requirements == ()
+    assert Backward.dropped == frozenset()
+    assert Backward.roundtrip_safe is True
+    AssertTVR(Backward, SourceSuffix, IsAssembly)
+    del Backward
+    GcValue.collect()
+    ReversedDocument = OpenDocument(Reverse)
+    assert ReversedDocument.validate() == ()
+    assert DocumentS(ReversedDocument) == OriginalSignature
+    AssertTarget(ReversedDocument, SourceSuffix, Reverse, IsAssembly)
+    del ReversedDocument
+    GcValue.collect()
+    return ReverseDirectory
+
+
+# this test exhaustively swaps each example through every compatible format
+@Pytest.mark.parametrize(
+    ("NameValue", "SourceSuffix", "Source", "IsAssembly", "DestinationSuffix"),
+    KMatrixCases,
+    ids=[f"{CaseValue[0]}-to-{CaseValue[4][1:].lower()}" for CaseValue in KMatrixCases],
 )
-def test_every_valid_format_swap_runs_both_directions(
-    name: str,
-    source_suffix: str,
-    source: Path,
-    is_assembly: bool,
-    destination_suffix: str,
-    tmp_path: Path,
+def TestEVFSRBD(
+    NameValue: str,
+    SourceSuffix: str,
+    Source: PathValue,
+    IsAssembly: bool,
+    DestinationSuffix: str,
+    TmpPath: PathValue,
 ) -> None:
-    original = (
-        _matrix_document(source)
-        if source.is_file()
-        else pytest.skip(f"bundled example source is unavailable: {source.name}")
+    Original = (
+        MatrixDocument(Source)
+        if Source.is_file()
+        else Pytest.skip(f"bundled example source is unavailable: {Source.name}")
     )
-    assert (original.assembly is not None) == is_assembly
-    original_signature = _document_signature(original)
-    forward_directory = tmp_path / f"{name}_forward"
-    forward_directory.mkdir()
-    destination = forward_directory / f"{name}_swapped{destination_suffix}"
-    result = _convert_with_application_gate(source, destination)
-    restored = open_document(destination)
-    assert result.source_format == FORMAT_BY_SUFFIX[source_suffix]
-    assert result.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
-    assert result.output.path == destination.resolve()
-    assert result.output.bytes_written == destination.stat().st_size
-    assert restored.validate() == ()
-    assert _document_signature(restored) == original_signature
-    _assert_target(restored, destination_suffix, destination, is_assembly)
-    _assert_truthful_vendor_result(result, destination_suffix, is_assembly)
-    reverse_directory = tmp_path / f"{name}_reverse"
-    reverse_directory.mkdir()
-    reverse = reverse_directory / f"{name}_reversed{source_suffix}"
-    reverse_result = _convert_with_application_gate(destination, reverse)
-    reversed_document = open_document(reverse)
-    assert reverse_result.source_format == FORMAT_BY_SUFFIX[destination_suffix]
-    assert reverse_result.destination_format == FORMAT_BY_SUFFIX[source_suffix]
-    assert reverse_result.output.bytes_written == reverse.stat().st_size
-    assert reversed_document.validate() == ()
-    assert _document_signature(reversed_document) == original_signature
-    _assert_target(reversed_document, source_suffix, reverse, is_assembly)
-    _assert_truthful_vendor_result(reverse_result, source_suffix, is_assembly)
+    assert (Original.assembly is not None) == IsAssembly
+    OriginalSignature = DocumentS(Original)
+    ForwardDirectory = TmpPath / f"{NameValue}_forward"
+    ForwardDirectory.mkdir()
+    Destination = ForwardDirectory / f"{NameValue}_swapped{DestinationSuffix}"
+    Result = ConvertWAG(Source, Destination)
+    Restored = OpenDocument(Destination)
+    assert Result.source_format == KFormatBySuffix[SourceSuffix]
+    assert Result.destination_format == KFormatBySuffix[DestinationSuffix]
+    assert Result.output.path == Destination.resolve()
+    assert Result.output.bytes_written == Destination.stat().st_size
+    assert Restored.validate() == ()
+    assert DocumentS(Restored) == OriginalSignature
+    AssertTarget(Restored, DestinationSuffix, Destination, IsAssembly)
+    AssertTVR(Result, DestinationSuffix, IsAssembly)
+    ReverseDirectory = TmpPath / f"{NameValue}_reverse"
+    ReverseDirectory.mkdir()
+    Reverse = ReverseDirectory / f"{NameValue}_reversed{SourceSuffix}"
+    ReverseResult = ConvertWAG(Destination, Reverse)
+    ReversedDocument = OpenDocument(Reverse)
+    assert ReverseResult.source_format == KFormatBySuffix[DestinationSuffix]
+    assert ReverseResult.destination_format == KFormatBySuffix[SourceSuffix]
+    assert ReverseResult.output.bytes_written == Reverse.stat().st_size
+    assert ReversedDocument.validate() == ()
+    assert DocumentS(ReversedDocument) == OriginalSignature
+    AssertTarget(ReversedDocument, SourceSuffix, Reverse, IsAssembly)
+    AssertTVR(ReverseResult, SourceSuffix, IsAssembly)
 
 
-@pytest.mark.parametrize(
-    "source",
-    tuple(MISSING_REFERENCE_FILES),
-    ids=lambda path: str(path.relative_to(EXAMPLES)),
+# this definition exists because focused behavior needs one stable owner
+@Pytest.mark.parametrize(
+    "Source",
+    tuple(KMissingReferenceFiles),
+    ids=lambda PathValueA: str(PathValueA.relative_to(KExamples)),
 )
-def test_assemblies_missing_a_referenced_file_are_refused_by_name(source: Path) -> None:
-    missing = MISSING_REFERENCE_FILES[source]
-    assert not tuple(EXAMPLES.rglob(missing))
-    with pytest.raises(SldprtFormatError) as captured:
-        open_document(source)
-    message = str(captured.value)
-    assert message.startswith("nested assembly mate source is unavailable: ")
-    assert message.endswith(missing)
+def TestAMIRFARBN(Source: PathValue) -> None:
+    Missing = KMissingReferenceFiles[Source]
+    assert not tuple(KExamples.rglob(Missing))
+    with Pytest.raises(SldprtFormatError) as Captured:
+        OpenDocument(Source)
+    Message = str(Captured.value)
+    assert Message.startswith("nested assembly mate source is unavailable: ")
+    assert Message.endswith(Missing)
 
 
-@pytest.mark.parametrize(
-    "source",
-    SUPPORTED_FILES,
-    ids=lambda path: str(path.relative_to(EXAMPLES)),
+# this definition exists because focused behavior needs one stable owner
+@Pytest.mark.parametrize(
+    "Source",
+    KSupportedFiles,
+    ids=lambda PathValueA: str(PathValueA.relative_to(KExamples)),
 )
-def test_every_supported_example_swaps_to_every_valid_format_and_back(
-    source: Path,
-    tmp_path: Path,
+def TestESESTEVFAB(
+    Source: PathValue,
+    TmpPath: PathValue,
 ) -> None:
-    source_suffix = _suffix(source)
-    original = open_document(source)
-    is_assembly = original.assembly is not None
-    assert is_assembly is _expected_assembly(source)
-    original_signature = _document_signature(original)
-    target_suffixes = _target_suffixes(original)
-    del original
-    gc.collect()
-    for index, destination_suffix in enumerate(target_suffixes):
-        forward_directory = tmp_path / f"forward_{index}"
-        forward_directory.mkdir()
-        destination = forward_directory / f"converted{destination_suffix}"
-        forward = convert(
-            source,
-            destination,
+    SourceSuffix = Suffix(Source)
+    Original = OpenDocument(Source)
+    IsAssembly = Original.assembly is not None
+    assert IsAssembly is IsAssemblyFile(Source)
+    OriginalSignature = DocumentS(Original)
+    TargetSuffixesA = TargetSuffixes(Original)
+    del Original
+    GcValue.collect()
+    for Index, DestinationSuffix in enumerate(TargetSuffixesA):
+        ForwardDirectory, Destination = VerifyForward(
+            Source,
+            SourceSuffix,
+            DestinationSuffix,
+            OriginalSignature,
+            TmpPath,
+            Index,
+            IsAssembly,
         )
-        assert forward.source_format == FORMAT_BY_SUFFIX[source_suffix]
-        assert forward.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
-        assert forward.output.bytes_written == destination.stat().st_size
-        assert forward.requirements == ()
-        assert forward.dropped == frozenset()
-        assert forward.roundtrip_safe is True
-        _assert_truthful_vendor_result(forward, destination_suffix, is_assembly)
-        del forward
-        gc.collect()
-        restored = open_document(destination)
-        assert restored.validate() == ()
-        assert _document_signature(restored) == original_signature
-        _assert_target(
-            restored,
-            destination_suffix,
-            destination,
-            is_assembly,
+        ReverseDirectory = VerifyReverse(
+            Destination,
+            SourceSuffix,
+            DestinationSuffix,
+            OriginalSignature,
+            TmpPath,
+            Index,
+            IsAssembly,
         )
-        del restored
-        gc.collect()
-        reverse_directory = tmp_path / f"reverse_{index}"
-        reverse_directory.mkdir()
-        reverse = reverse_directory / f"converted{source_suffix}"
-        backward = convert(
-            destination,
-            reverse,
-        )
-        assert backward.source_format == FORMAT_BY_SUFFIX[destination_suffix]
-        assert backward.destination_format == FORMAT_BY_SUFFIX[source_suffix]
-        assert backward.output.bytes_written == reverse.stat().st_size
-        assert backward.requirements == ()
-        assert backward.dropped == frozenset()
-        assert backward.roundtrip_safe is True
-        _assert_truthful_vendor_result(backward, source_suffix, is_assembly)
-        del backward
-        gc.collect()
-        reversed_document = open_document(reverse)
-        assert reversed_document.validate() == ()
-        assert _document_signature(reversed_document) == original_signature
-        _assert_target(reversed_document, source_suffix, reverse, is_assembly)
-        del reversed_document
-        gc.collect()
-        shutil.rmtree(forward_directory)
-        shutil.rmtree(reverse_directory)
+        Shutil.rmtree(ForwardDirectory)
+        Shutil.rmtree(ReverseDirectory)

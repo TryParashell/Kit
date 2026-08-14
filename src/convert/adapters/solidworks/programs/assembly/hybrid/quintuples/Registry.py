@@ -680,8 +680,8 @@ KMethodPrograms = (
 )
 
 
-# compatibility tables preserve every established public import after decomposition
-FieldOwners, StreamPrograms = BuildStreams(
+# composed tables stay immutable because generated registries expose stable format facts
+KFieldOwners, KStreamPrograms = BuildStreams(
     KMethodPrograms,
     (
         "Contents/CMgr",
@@ -691,3 +691,9 @@ FieldOwners, StreamPrograms = BuildStreams(
         "Contents/Config-0-ModelHeader",
     ),
 )
+
+# compatibility binding preserves its established public import after decomposition
+globals()["FieldOwners"] = KFieldOwners
+
+# compatibility binding preserves its established public import after decomposition
+globals()["StreamPrograms"] = KStreamPrograms
