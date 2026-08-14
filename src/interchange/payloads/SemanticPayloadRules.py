@@ -7,7 +7,7 @@
 # to you under it immediately and permanently.
 
 from interchange.payloads.PayloadRoles import PayloadRole
-from interchange.payloads.PayloadRules import PayloadRule
+from interchange.payloads.PayloadRuleModel import PayloadRule
 
 
 # semantic evidence recovers payload roles when native format tags are incomplete

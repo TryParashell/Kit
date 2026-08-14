@@ -6,28 +6,8 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
-from interchange.core.ModelBase import ModelBase, ModelDataMut
 from interchange.payloads.PayloadRoles import PayloadRole
-
-
-# legacy payload inference needs declarative evidence that remains independently testable
-@ModelDataMut(
-    DefaultMap={
-        "FormatIds": frozenset(),
-        "Kinds": frozenset(),
-        "Schemas": frozenset(),
-        "SourceSuffixes": frozenset(),
-    }
-)
-class PayloadRule(ModelBase):
-    ValueRole: PayloadRole
-    FileExtension: str
-    FormatIds: frozenset[str]
-    Kinds: frozenset[str]
-    Schemas: frozenset[str]
-    SourceSuffixes: frozenset[str]
+from interchange.payloads.PayloadRuleModel import PayloadRule
 
 
 # suffix evidence remains explicit because unknown formats still expose useful filenames

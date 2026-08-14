@@ -7,7 +7,7 @@
 # to you under it immediately and permanently.
 
 from interchange.payloads.PayloadRoles import PayloadRole
-from interchange.payloads.PayloadRules import PayloadRule
+from interchange.payloads.PayloadRuleModel import PayloadRule
 
 
 # direct format evidence preserves exact roles before generic semantic fallbacks

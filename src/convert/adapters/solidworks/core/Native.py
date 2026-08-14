@@ -409,7 +409,6 @@ def ApplySketchMut(StateData, Feature):
 
 # focused operation decoder preserves one native feature family
 def DecodeExtrude(StateData, Feature):
-    FeatureType = Feature.kind.casefold()
     Record = StateData.RecordById.get(Feature.object_id)
     if Record is None:
         return None
@@ -471,7 +470,6 @@ def DecodeExtrude(StateData, Feature):
 
 # focused operation decoder preserves one native feature family
 def DecodeLinear(StateData, Feature):
-    FeatureType = Feature.kind.casefold()
     Record = StateData.RecordById.get(Feature.object_id)
     CountValue = DimensionValue(Feature.dimensions, "instance_count")
     SpacingValue = DimensionValue(Feature.dimensions, "spacing")
@@ -535,7 +533,6 @@ def DecodeLinear(StateData, Feature):
 
 # focused operation decoder preserves one native feature family
 def DecodeCircular(StateData, Feature):
-    FeatureType = Feature.kind.casefold()
     Record = StateData.RecordById.get(Feature.object_id)
     CountValue = DimensionValue(Feature.dimensions, "instance_count")
     AngleValue = DimensionValue(Feature.dimensions, "angle")
@@ -675,7 +672,6 @@ def DecodeRevolve(StateData, Feature):
 
 # focused operation decoder preserves one native feature family
 def DecodeHole(StateData, Feature):
-    FeatureType = Feature.kind.casefold()
     Record = StateData.RecordById.get(Feature.object_id)
     if Record is None:
         return None
@@ -720,7 +716,6 @@ def DecodeHole(StateData, Feature):
 
 # focused operation decoder preserves one native feature family
 def DecodeDome(StateData, Feature):
-    FeatureType = Feature.kind.casefold()
     Selections = OperationAfter(
         StateData.Resolved,
         Feature.native_offset or 0,
@@ -773,7 +768,6 @@ def DecodeDome(StateData, Feature):
 
 # focused operation decoder preserves one native feature family
 def DecodeMoveBody(StateData, Feature):
-    FeatureType = Feature.kind.casefold()
     Selections = OperationAfter(
         StateData.Resolved,
         Feature.native_offset or 0,
@@ -827,7 +821,6 @@ def DecodeMoveBody(StateData, Feature):
 
 # focused operation decoder preserves one native feature family
 def DecodeCombine(StateData, Feature):
-    FeatureType = Feature.kind.casefold()
     Selections = OperationAfter(
         StateData.Resolved,
         Feature.native_offset or 0,
@@ -880,7 +873,6 @@ def DecodeCombine(StateData, Feature):
 
 # focused operation decoder preserves one native feature family
 def DecodeScale(StateData, Feature):
-    FeatureType = Feature.kind.casefold()
     Factors = NativeScale(
         StateData.Resolved,
         Feature.native_offset or 0,
@@ -980,7 +972,6 @@ def DecodeFinish(StateData, Feature):
 
 # focused operation decoder preserves one native feature family
 def DecodeSurface(StateData, Feature):
-    FeatureType = Feature.kind.casefold()
     Record = StateData.RecordById.get(Feature.object_id)
     if Record is None:
         return None
