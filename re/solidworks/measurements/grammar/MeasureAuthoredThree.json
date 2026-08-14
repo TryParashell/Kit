@@ -1,0 +1,35 @@
+[
+  {
+    "path": ".rescratch\\grammar\\authored\\A1_one_boss_front.SLDPRT",
+    "returncode": 0,
+    "seconds": 9.923369799995271,
+    "opened": false,
+    "open_exception": "com_error(-2147023170, 'The remote procedure call failed.', None, None)",
+    "volume_mm3": null,
+    "centre_mm": null,
+    "status": "solidworks-crashed-on-open",
+    "attempts": 1
+  },
+  {
+    "path": ".rescratch\\grammar\\authored\\A4_one_circle_boss.SLDPRT",
+    "returncode": 0,
+    "seconds": 10.43608879999374,
+    "opened": false,
+    "open_exception": "com_error(-2147023170, 'The remote procedure call failed.', None, None)",
+    "volume_mm3": null,
+    "centre_mm": null,
+    "status": "solidworks-crashed-on-open",
+    "attempts": 1
+  },
+  {
+    "path": ".rescratch\\grammar\\authored\\A5_three_features.SLDPRT",
+    "returncode": 0,
+    "seconds": 9.40720770000189,
+    "opened": false,
+    "open_exception": "com_error(-2147023170, 'The remote procedure call failed.', None, None)",
+    "volume_mm3": null,
+    "centre_mm": null,
+    "status": "solidworks-crashed-on-open",
+    "attempts": 1
+  }
+]

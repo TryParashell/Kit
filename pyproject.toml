@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+[build-system]
+requires = ["hatchling==1.31.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kit"
+version = "0.1.0"
+description = "CAD interchange SDK by Parashell."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "LicenseRef-PolyForm-Strict-1.0.0"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Parashell, Inc." },
+    { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
+]
+maintainers = [
+    { name = "Odin Glynn-Martin", email = "odin.glynn@parashell.cloud" },
+]
+keywords = ["cad"]
+classifiers = [
+    "Private :: Do Not Upload",
+]
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/TryParashell/Kit"
+Issues = "https://github.com/TryParashell/Kit/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pywin32==312 ; sys_platform == 'win32'",
+]
+
+[project.entry-points."kit"]
+convert = "convert:convert"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/interchange", "src/convert"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/LICENSE",
+    "/README.md",
+    "/pyproject.toml",
+    "/src",
+    "/uv.lock",
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+python_files = ["*Test.py", "*Tests.py"]
+python_functions = ["test_*", "Test*", "Check*"]
+collect_imported_tests = false
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[dependency-groups]
+dev = [
+    "black==25.12.0",
+]

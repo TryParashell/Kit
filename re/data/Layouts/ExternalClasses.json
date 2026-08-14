@@ -1,0 +1,1638 @@
+{
+  "stream": "Contents/Config-0-ResolvedFeatures",
+  "question": "the four class references whose index is below the ResolvedFeatures base map index and whose class name is therefore never written in this stream",
+  "method": "each external class reference was matched to the child object that its parent's decompiled Serialize reads at that position, then confirmed against the stream bytes; independently, the class map of Contents/Config-0 was replayed with the +2/+1/0/0 counter rule and its final counter reproduces the ResolvedFeatures base exactly",
+  "slots": {
+    "node_name": {
+      "class_name": "moNodeName_c",
+      "confidence": "confirmed",
+      "class_index_per_trace": {
+        "baseline": 4,
+        "circle": 4,
+        "planetop": 4,
+        "twopad": 4,
+        "cutbase": 4,
+        "padplane": 4,
+        "three": 4,
+        "vendor_ring": 4,
+        "vendor_cojinete": 4
+      },
+      "class_index_fixed": true,
+      "class_index_rule": "constant 4 in all nine traces; it is the first class definition of Contents/Config-0, whose map index is 4 in every part observed",
+      "occurrences_per_trace": {
+        "baseline": 21,
+        "circle": 21,
+        "planetop": 21,
+        "twopad": 22,
+        "cutbase": 24,
+        "padplane": 24,
+        "three": 25,
+        "vendor_ring": 33,
+        "vendor_cojinete": 25
+      },
+      "parent_classes": [
+        "moCommentsFolder_c",
+        "moDetailCabinet_c",
+        "moDocsFolder_c",
+        "moEqnFolder_c",
+        "moExtrusion_c",
+        "moFavoriteFolder_c",
+        "moHistoryFolder_c",
+        "moICE_c",
+        "moInkMarkupFolder_c",
+        "moLengthParameter_c",
+        "moMaterialFolder_c",
+        "moNotesAreaFtrFolder_c",
+        "moOriginProfileFeature_c",
+        "moProfileFeature_c",
+        "moRefPlane_c",
+        "moSelectionSetFolder_c",
+        "moSensorFolder_c",
+        "moSolidBodyFolder_c",
+        "moSurfaceBodyFolder_c"
+      ],
+      "traced_span_lengths": [
+        30, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 64, 66, 78
+      ],
+      "own_body_lengths": [
+        8, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 38, 40, 52
+      ],
+      "decompiled_reader": "moNode_c::Serialize @0x4c1db8f0 -> su_CArchive::ReadObject(&moNodeName_c::classmoNodeName_c)",
+      "decompiled_serialize": "moNodeName_c::Serialize @0x4c1db8a0 reads exactly one CString",
+      "caveat": "the class name is written literally in the decompiled reader, as the CRuntimeClass argument of ReadObject",
+      "defined_by_name_in_parts": 108,
+      "config0_class_index": {
+        "boss1": 4,
+        "boss2": 4,
+        "boss3": 4
+      }
+    },
+    "component": {
+      "class_name": "moUnitComponent_c",
+      "confidence": "confirmed",
+      "class_index_per_trace": {
+        "baseline": 43,
+        "circle": 43,
+        "planetop": 43,
+        "twopad": 43,
+        "cutbase": 43,
+        "padplane": 43,
+        "three": 43,
+        "vendor_ring": 43,
+        "vendor_cojinete": 45
+      },
+      "class_index_fixed": false,
+      "class_index_rule": "document specific: the map index this class received while Contents/Config-0 was being read; not a function of the ResolvedFeatures base",
+      "occurrences_per_trace": {
+        "baseline": 4,
+        "circle": 5,
+        "planetop": 4,
+        "twopad": 6,
+        "cutbase": 8,
+        "padplane": 8,
+        "three": 10,
+        "vendor_ring": 12,
+        "vendor_cojinete": 5
+      },
+      "parent_classes": [
+        "moCompEdge_c",
+        "moCompFace_c",
+        "moCompFeature_c",
+        "moCompRefPlane_c",
+        "moCompSketchEntHandle_c",
+        "moCompSolidBody_c"
+      ],
+      "traced_span_lengths": [2],
+      "own_body_lengths": [0],
+      "decompiled_reader": "moCompRef_c::Serialize @0x4bc22f00 -> ::operator>>(archive, &owner) into the moComponent_c* member at +0x58",
+      "decompiled_serialize": "moUnitComponent_c::Serialize @0x4c288670 -> moComponent_c::Serialize @0x4c279a90 reads one nested object and no scalar first",
+      "caveat": "the decompiled reader names the base class moComponent_c, which is the declared type of the member it fills; the concrete class is pinned by two further measurements: moComponent_c is never defined by name in any stream of any part scanned, so it cannot be the referent, while moUnitComponent_c is defined in Contents/Config-0 and the replayed Contents/Config-0 map places it at exactly the observed index",
+      "defined_by_name_in_parts": 108,
+      "config0_class_index": {
+        "boss1": 43,
+        "boss2": 43,
+        "boss3": 43
+      }
+    },
+    "object_list": {
+      "class_name": "suObList",
+      "confidence": "confirmed",
+      "class_index_per_trace": {
+        "baseline": 82,
+        "circle": 82,
+        "planetop": 82,
+        "twopad": 83,
+        "cutbase": 83,
+        "padplane": 83,
+        "three": 84,
+        "vendor_ring": 83,
+        "vendor_cojinete": 85
+      },
+      "class_index_fixed": false,
+      "class_index_rule": "document specific: the map index this class received while Contents/Config-0 was being read; not a function of the ResolvedFeatures base",
+      "occurrences_per_trace": {
+        "baseline": 5,
+        "circle": 5,
+        "planetop": 5,
+        "twopad": 8,
+        "cutbase": 8,
+        "padplane": 8,
+        "three": 11,
+        "vendor_ring": 9,
+        "vendor_cojinete": 7
+      },
+      "parent_classes": [
+        "moSketchRegion_c",
+        "null",
+        "sgCircleDim",
+        "sgLLDist",
+        "sgSketch"
+      ],
+      "traced_span_lengths": [4, 63, 174],
+      "own_body_lengths": [2],
+      "decompiled_reader": "moSketchRegion_c::Serialize @0x4b9d81e0 -> ::operator>>(archive, (suObList **)(this + 8)) and sgSketch::Serialize @0x4c5d28c0 -> ::operator>>(archive, (suObList **)(this + 0x5d0))",
+      "decompiled_serialize": "u16 element count followed by that many nested objects",
+      "caveat": "the read itself is polymorphic; suObList is the declared type of the member it fills, and suObList is also defined by name in Contents/Config-0, Contents/CMgr and Contents/Config-0-ModelHeader, where the replayed Contents/Config-0 map places it at exactly the observed index",
+      "defined_by_name_in_parts": 108,
+      "config0_class_index": {
+        "boss1": 82,
+        "boss2": 83,
+        "boss3": 84
+      }
+    },
+    "pmark_record": {
+      "class_name": "moPMarkRecord_c",
+      "confidence": "confirmed",
+      "class_index_per_trace": {
+        "baseline": 102,
+        "circle": 102,
+        "planetop": 102,
+        "twopad": 103,
+        "cutbase": 103,
+        "padplane": 103,
+        "three": 104,
+        "vendor_ring": 104,
+        "vendor_cojinete": 106
+      },
+      "class_index_fixed": false,
+      "class_index_rule": "document specific: the map index this class received while Contents/Config-0 was being read; not a function of the ResolvedFeatures base",
+      "occurrences_per_trace": {
+        "baseline": 1,
+        "circle": 1,
+        "planetop": 1,
+        "twopad": 1,
+        "cutbase": 2,
+        "padplane": 2,
+        "three": 2,
+        "vendor_ring": 2,
+        "vendor_cojinete": 1
+      },
+      "parent_classes": ["moExtrusion_c", "moICE_c"],
+      "traced_span_lengths": [58],
+      "own_body_lengths": [4],
+      "decompiled_reader": "FUN_4bb886c0 (base Serialize invoked first by moBodyFeature_c::Serialize @0x4bb8aa10) reads AR_get_int then, when non-zero, ::operator>>(archive, (moPMarkRecord_c **)(this + 0x3c8))",
+      "decompiled_serialize": "moPMarkRecord_c::Serialize @0x4bb97ca0 reads exactly one long",
+      "caveat": "the class name is written literally at the call site and in the demangled symbol of the extraction operator, ??5@YAAEAVsu_CArchive@@AEAV0@AEAPEAVmoPMarkRecord_c@@@Z",
+      "defined_by_name_in_parts": 108,
+      "config0_class_index": {
+        "boss1": 102,
+        "boss2": 103,
+        "boss3": 104
+      }
+    }
+  },
+  "config0_continuation": {
+    "boss1": {
+      "config0_final_counter": 109,
+      "resolved_features_base": 109,
+      "matches": true,
+      "class_index_of_slot": {
+        "moNodeName_c": 4,
+        "moUnitComponent_c": 43,
+        "suObList": 82,
+        "moPMarkRecord_c": 102
+      }
+    },
+    "boss2": {
+      "config0_final_counter": 110,
+      "resolved_features_base": 110,
+      "matches": true,
+      "class_index_of_slot": {
+        "moNodeName_c": 4,
+        "moUnitComponent_c": 43,
+        "suObList": 83,
+        "moPMarkRecord_c": 103
+      }
+    },
+    "boss3": {
+      "config0_final_counter": 111,
+      "resolved_features_base": 111,
+      "matches": true,
+      "class_index_of_slot": {
+        "moNodeName_c": 4,
+        "moUnitComponent_c": 43,
+        "suObList": 84,
+        "moPMarkRecord_c": 104
+      }
+    }
+  },
+  "class_definition_scan": {
+    "parts_scanned": 108,
+    "defined_in_parts": {
+      "moNodeName_c": 108,
+      "moUnitComponent_c": 108,
+      "suObList": 108,
+      "moPMarkRecord_c": 108,
+      "moComponent_c": 0,
+      "moAsmFeatData_c": 0
+    }
+  },
+  "traces": {
+    "baseline": {
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\BASELINE_40x20x10.SLDPRT",
+      "stream_length": 11075,
+      "base_map_index": 109,
+      "slots": {
+        "node_name": {
+          "class_index": 4,
+          "occurrences": 21,
+          "parents": [
+            "moCommentsFolder_c",
+            "moDetailCabinet_c",
+            "moDocsFolder_c",
+            "moEqnFolder_c",
+            "moExtrusion_c",
+            "moFavoriteFolder_c",
+            "moHistoryFolder_c",
+            "moInkMarkupFolder_c",
+            "moLengthParameter_c",
+            "moMaterialFolder_c",
+            "moNotesAreaFtrFolder_c",
+            "moOriginProfileFeature_c",
+            "moProfileFeature_c",
+            "moRefPlane_c",
+            "moSelectionSetFolder_c",
+            "moSensorFolder_c",
+            "moSolidBodyFolder_c",
+            "moSurfaceBodyFolder_c"
+          ],
+          "traced_span_lengths": [
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
+          ],
+          "example_spans": [
+            {
+              "segment_index": 1,
+              "offset": 30,
+              "end": 76,
+              "depth": 1,
+              "parent_class": "moCommentsFolder_c"
+            },
+            {
+              "segment_index": 6,
+              "offset": 227,
+              "end": 275,
+              "depth": 1,
+              "parent_class": "moFavoriteFolder_c"
+            },
+            {
+              "segment_index": 11,
+              "offset": 433,
+              "end": 477,
+              "depth": 1,
+              "parent_class": "moHistoryFolder_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
+          }
+        },
+        "component": {
+          "class_index": 43,
+          "occurrences": 4,
+          "parents": ["moCompFeature_c", "moCompRefPlane_c"],
+          "traced_span_lengths": [2],
+          "example_spans": [
+            {
+              "segment_index": 18,
+              "offset": 678,
+              "end": 680,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 23,
+              "offset": 797,
+              "end": 799,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 145,
+              "offset": 5673,
+              "end": 5675,
+              "depth": 2,
+              "parent_class": "moCompRefPlane_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
+          }
+        },
+        "object_list": {
+          "class_index": 82,
+          "occurrences": 5,
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
+          "example_spans": [
+            {
+              "segment_index": 141,
+              "offset": 5412,
+              "end": 5586,
+              "depth": 3,
+              "parent_class": "null"
+            },
+            {
+              "segment_index": 142,
+              "offset": 5586,
+              "end": 5649,
+              "depth": 2,
+              "parent_class": "sgSketch"
+            },
+            {
+              "segment_index": 199,
+              "offset": 7459,
+              "end": 7633,
+              "depth": 4,
+              "parent_class": "null"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
+            "count_matches_children": 2
+          }
+        },
+        "pmark_record": {
+          "class_index": 102,
+          "occurrences": 1,
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
+          "example_spans": [
+            {
+              "segment_index": 277,
+              "offset": 8963,
+              "end": 9021,
+              "depth": 1,
+              "parent_class": "moExtrusion_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [4],
+            "pmark_ids": [5]
+          }
+        }
+      }
+    },
+    "circle": {
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\CIRCLE_r10.SLDPRT",
+      "stream_length": 10556,
+      "base_map_index": 109,
+      "slots": {
+        "node_name": {
+          "class_index": 4,
+          "occurrences": 21,
+          "parents": [
+            "moCommentsFolder_c",
+            "moDetailCabinet_c",
+            "moDocsFolder_c",
+            "moEqnFolder_c",
+            "moExtrusion_c",
+            "moFavoriteFolder_c",
+            "moHistoryFolder_c",
+            "moInkMarkupFolder_c",
+            "moLengthParameter_c",
+            "moMaterialFolder_c",
+            "moNotesAreaFtrFolder_c",
+            "moOriginProfileFeature_c",
+            "moProfileFeature_c",
+            "moRefPlane_c",
+            "moSelectionSetFolder_c",
+            "moSensorFolder_c",
+            "moSolidBodyFolder_c",
+            "moSurfaceBodyFolder_c"
+          ],
+          "traced_span_lengths": [
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
+          ],
+          "example_spans": [
+            {
+              "segment_index": 1,
+              "offset": 30,
+              "end": 76,
+              "depth": 1,
+              "parent_class": "moCommentsFolder_c"
+            },
+            {
+              "segment_index": 6,
+              "offset": 227,
+              "end": 275,
+              "depth": 1,
+              "parent_class": "moFavoriteFolder_c"
+            },
+            {
+              "segment_index": 11,
+              "offset": 433,
+              "end": 477,
+              "depth": 1,
+              "parent_class": "moHistoryFolder_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
+          }
+        },
+        "component": {
+          "class_index": 43,
+          "occurrences": 5,
+          "parents": [
+            "moCompFeature_c",
+            "moCompRefPlane_c",
+            "moCompSketchEntHandle_c"
+          ],
+          "traced_span_lengths": [2],
+          "example_spans": [
+            {
+              "segment_index": 18,
+              "offset": 678,
+              "end": 680,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 23,
+              "offset": 797,
+              "end": 799,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 145,
+              "offset": 5673,
+              "end": 5675,
+              "depth": 2,
+              "parent_class": "moCompRefPlane_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
+          }
+        },
+        "object_list": {
+          "class_index": 82,
+          "occurrences": 5,
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
+          "example_spans": [
+            {
+              "segment_index": 141,
+              "offset": 5412,
+              "end": 5586,
+              "depth": 3,
+              "parent_class": "null"
+            },
+            {
+              "segment_index": 142,
+              "offset": 5586,
+              "end": 5649,
+              "depth": 2,
+              "parent_class": "sgSketch"
+            },
+            {
+              "segment_index": 190,
+              "offset": 7108,
+              "end": 7282,
+              "depth": 4,
+              "parent_class": "null"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [2],
+            "counts": [0, 1],
+            "count_matches_children": 2
+          }
+        },
+        "pmark_record": {
+          "class_index": 102,
+          "occurrences": 1,
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
+          "example_spans": [
+            {
+              "segment_index": 241,
+              "offset": 8444,
+              "end": 8502,
+              "depth": 1,
+              "parent_class": "moExtrusion_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [4],
+            "pmark_ids": [5]
+          }
+        }
+      }
+    },
+    "planetop": {
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus\\parts\\PLANE_TOP.SLDPRT",
+      "stream_length": 11075,
+      "base_map_index": 109,
+      "slots": {
+        "node_name": {
+          "class_index": 4,
+          "occurrences": 21,
+          "parents": [
+            "moCommentsFolder_c",
+            "moDetailCabinet_c",
+            "moDocsFolder_c",
+            "moEqnFolder_c",
+            "moExtrusion_c",
+            "moFavoriteFolder_c",
+            "moHistoryFolder_c",
+            "moInkMarkupFolder_c",
+            "moLengthParameter_c",
+            "moMaterialFolder_c",
+            "moNotesAreaFtrFolder_c",
+            "moOriginProfileFeature_c",
+            "moProfileFeature_c",
+            "moRefPlane_c",
+            "moSelectionSetFolder_c",
+            "moSensorFolder_c",
+            "moSolidBodyFolder_c",
+            "moSurfaceBodyFolder_c"
+          ],
+          "traced_span_lengths": [
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
+          ],
+          "example_spans": [
+            {
+              "segment_index": 1,
+              "offset": 30,
+              "end": 76,
+              "depth": 1,
+              "parent_class": "moCommentsFolder_c"
+            },
+            {
+              "segment_index": 6,
+              "offset": 227,
+              "end": 275,
+              "depth": 1,
+              "parent_class": "moFavoriteFolder_c"
+            },
+            {
+              "segment_index": 11,
+              "offset": 433,
+              "end": 477,
+              "depth": 1,
+              "parent_class": "moHistoryFolder_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
+          }
+        },
+        "component": {
+          "class_index": 43,
+          "occurrences": 4,
+          "parents": ["moCompFeature_c", "moCompRefPlane_c"],
+          "traced_span_lengths": [2],
+          "example_spans": [
+            {
+              "segment_index": 18,
+              "offset": 678,
+              "end": 680,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 23,
+              "offset": 797,
+              "end": 799,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 145,
+              "offset": 5673,
+              "end": 5675,
+              "depth": 2,
+              "parent_class": "moCompRefPlane_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
+          }
+        },
+        "object_list": {
+          "class_index": 82,
+          "occurrences": 5,
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
+          "example_spans": [
+            {
+              "segment_index": 141,
+              "offset": 5412,
+              "end": 5586,
+              "depth": 3,
+              "parent_class": "null"
+            },
+            {
+              "segment_index": 142,
+              "offset": 5586,
+              "end": 5649,
+              "depth": 2,
+              "parent_class": "sgSketch"
+            },
+            {
+              "segment_index": 199,
+              "offset": 7459,
+              "end": 7633,
+              "depth": 4,
+              "parent_class": "null"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
+            "count_matches_children": 2
+          }
+        },
+        "pmark_record": {
+          "class_index": 102,
+          "occurrences": 1,
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
+          "example_spans": [
+            {
+              "segment_index": 277,
+              "offset": 9035,
+              "end": 9093,
+              "depth": 1,
+              "parent_class": "moExtrusion_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [4],
+            "pmark_ids": [5]
+          }
+        }
+      }
+    },
+    "twopad": {
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\TWOPAD_d5.SLDPRT",
+      "stream_length": 19390,
+      "base_map_index": 110,
+      "slots": {
+        "node_name": {
+          "class_index": 4,
+          "occurrences": 22,
+          "parents": [
+            "moCommentsFolder_c",
+            "moDetailCabinet_c",
+            "moDocsFolder_c",
+            "moEqnFolder_c",
+            "moExtrusion_c",
+            "moFavoriteFolder_c",
+            "moHistoryFolder_c",
+            "moInkMarkupFolder_c",
+            "moLengthParameter_c",
+            "moMaterialFolder_c",
+            "moNotesAreaFtrFolder_c",
+            "moOriginProfileFeature_c",
+            "moProfileFeature_c",
+            "moRefPlane_c",
+            "moSelectionSetFolder_c",
+            "moSensorFolder_c",
+            "moSolidBodyFolder_c",
+            "moSurfaceBodyFolder_c"
+          ],
+          "traced_span_lengths": [
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
+          ],
+          "example_spans": [
+            {
+              "segment_index": 1,
+              "offset": 30,
+              "end": 76,
+              "depth": 1,
+              "parent_class": "moCommentsFolder_c"
+            },
+            {
+              "segment_index": 6,
+              "offset": 227,
+              "end": 275,
+              "depth": 1,
+              "parent_class": "moFavoriteFolder_c"
+            },
+            {
+              "segment_index": 11,
+              "offset": 433,
+              "end": 477,
+              "depth": 1,
+              "parent_class": "moHistoryFolder_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
+          }
+        },
+        "component": {
+          "class_index": 43,
+          "occurrences": 6,
+          "parents": ["moCompFeature_c", "moCompRefPlane_c"],
+          "traced_span_lengths": [2],
+          "example_spans": [
+            {
+              "segment_index": 18,
+              "offset": 678,
+              "end": 680,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 23,
+              "offset": 797,
+              "end": 799,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 28,
+              "offset": 916,
+              "end": 918,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
+          }
+        },
+        "object_list": {
+          "class_index": 83,
+          "occurrences": 8,
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
+          "example_spans": [
+            {
+              "segment_index": 151,
+              "offset": 5650,
+              "end": 5824,
+              "depth": 3,
+              "parent_class": "null"
+            },
+            {
+              "segment_index": 152,
+              "offset": 5824,
+              "end": 5887,
+              "depth": 2,
+              "parent_class": "sgSketch"
+            },
+            {
+              "segment_index": 209,
+              "offset": 7697,
+              "end": 7871,
+              "depth": 4,
+              "parent_class": "null"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
+            "count_matches_children": 4
+          }
+        },
+        "pmark_record": {
+          "class_index": 103,
+          "occurrences": 1,
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
+          "example_spans": [
+            {
+              "segment_index": 287,
+              "offset": 9199,
+              "end": 9257,
+              "depth": 1,
+              "parent_class": "moExtrusion_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [4],
+            "pmark_ids": [5]
+          }
+        }
+      }
+    },
+    "cutbase": {
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\CUTBASE_cd5.SLDPRT",
+      "stream_length": 16579,
+      "base_map_index": 110,
+      "slots": {
+        "node_name": {
+          "class_index": 4,
+          "occurrences": 24,
+          "parents": [
+            "moCommentsFolder_c",
+            "moDetailCabinet_c",
+            "moDocsFolder_c",
+            "moEqnFolder_c",
+            "moExtrusion_c",
+            "moFavoriteFolder_c",
+            "moHistoryFolder_c",
+            "moICE_c",
+            "moInkMarkupFolder_c",
+            "moLengthParameter_c",
+            "moMaterialFolder_c",
+            "moNotesAreaFtrFolder_c",
+            "moOriginProfileFeature_c",
+            "moProfileFeature_c",
+            "moRefPlane_c",
+            "moSelectionSetFolder_c",
+            "moSensorFolder_c",
+            "moSolidBodyFolder_c",
+            "moSurfaceBodyFolder_c"
+          ],
+          "traced_span_lengths": [
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
+          ],
+          "example_spans": [
+            {
+              "segment_index": 1,
+              "offset": 30,
+              "end": 76,
+              "depth": 1,
+              "parent_class": "moCommentsFolder_c"
+            },
+            {
+              "segment_index": 6,
+              "offset": 227,
+              "end": 275,
+              "depth": 1,
+              "parent_class": "moFavoriteFolder_c"
+            },
+            {
+              "segment_index": 11,
+              "offset": 433,
+              "end": 477,
+              "depth": 1,
+              "parent_class": "moHistoryFolder_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
+          }
+        },
+        "component": {
+          "class_index": 43,
+          "occurrences": 8,
+          "parents": [
+            "moCompFeature_c",
+            "moCompRefPlane_c",
+            "moCompSolidBody_c"
+          ],
+          "traced_span_lengths": [2],
+          "example_spans": [
+            {
+              "segment_index": 18,
+              "offset": 678,
+              "end": 680,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 23,
+              "offset": 797,
+              "end": 799,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 28,
+              "offset": 916,
+              "end": 918,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
+          }
+        },
+        "object_list": {
+          "class_index": 83,
+          "occurrences": 8,
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
+          "example_spans": [
+            {
+              "segment_index": 151,
+              "offset": 5650,
+              "end": 5824,
+              "depth": 3,
+              "parent_class": "null"
+            },
+            {
+              "segment_index": 152,
+              "offset": 5824,
+              "end": 5887,
+              "depth": 2,
+              "parent_class": "sgSketch"
+            },
+            {
+              "segment_index": 209,
+              "offset": 7697,
+              "end": 7871,
+              "depth": 4,
+              "parent_class": "null"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
+            "count_matches_children": 4
+          }
+        },
+        "pmark_record": {
+          "class_index": 103,
+          "occurrences": 2,
+          "parents": ["moExtrusion_c", "moICE_c"],
+          "traced_span_lengths": [58],
+          "example_spans": [
+            {
+              "segment_index": 287,
+              "offset": 9199,
+              "end": 9257,
+              "depth": 1,
+              "parent_class": "moExtrusion_c"
+            },
+            {
+              "segment_index": 492,
+              "offset": 14626,
+              "end": 14684,
+              "depth": 1,
+              "parent_class": "moICE_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [4],
+            "pmark_ids": [5, 8]
+          }
+        }
+      }
+    },
+    "padplane": {
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\PADPLANE_rev_d5.SLDPRT",
+      "stream_length": 16581,
+      "base_map_index": 110,
+      "slots": {
+        "node_name": {
+          "class_index": 4,
+          "occurrences": 24,
+          "parents": [
+            "moCommentsFolder_c",
+            "moDetailCabinet_c",
+            "moDocsFolder_c",
+            "moEqnFolder_c",
+            "moExtrusion_c",
+            "moFavoriteFolder_c",
+            "moHistoryFolder_c",
+            "moICE_c",
+            "moInkMarkupFolder_c",
+            "moLengthParameter_c",
+            "moMaterialFolder_c",
+            "moNotesAreaFtrFolder_c",
+            "moOriginProfileFeature_c",
+            "moProfileFeature_c",
+            "moRefPlane_c",
+            "moSelectionSetFolder_c",
+            "moSensorFolder_c",
+            "moSolidBodyFolder_c",
+            "moSurfaceBodyFolder_c"
+          ],
+          "traced_span_lengths": [
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
+          ],
+          "example_spans": [
+            {
+              "segment_index": 1,
+              "offset": 30,
+              "end": 76,
+              "depth": 1,
+              "parent_class": "moCommentsFolder_c"
+            },
+            {
+              "segment_index": 6,
+              "offset": 227,
+              "end": 275,
+              "depth": 1,
+              "parent_class": "moFavoriteFolder_c"
+            },
+            {
+              "segment_index": 11,
+              "offset": 433,
+              "end": 477,
+              "depth": 1,
+              "parent_class": "moHistoryFolder_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
+          }
+        },
+        "component": {
+          "class_index": 43,
+          "occurrences": 8,
+          "parents": [
+            "moCompFeature_c",
+            "moCompRefPlane_c",
+            "moCompSolidBody_c"
+          ],
+          "traced_span_lengths": [2],
+          "example_spans": [
+            {
+              "segment_index": 18,
+              "offset": 678,
+              "end": 680,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 23,
+              "offset": 797,
+              "end": 799,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 28,
+              "offset": 916,
+              "end": 918,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
+          }
+        },
+        "object_list": {
+          "class_index": 83,
+          "occurrences": 8,
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
+          "example_spans": [
+            {
+              "segment_index": 151,
+              "offset": 5650,
+              "end": 5824,
+              "depth": 3,
+              "parent_class": "null"
+            },
+            {
+              "segment_index": 152,
+              "offset": 5824,
+              "end": 5887,
+              "depth": 2,
+              "parent_class": "sgSketch"
+            },
+            {
+              "segment_index": 209,
+              "offset": 7697,
+              "end": 7871,
+              "depth": 4,
+              "parent_class": "null"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
+            "count_matches_children": 4
+          }
+        },
+        "pmark_record": {
+          "class_index": 103,
+          "occurrences": 2,
+          "parents": ["moExtrusion_c", "moICE_c"],
+          "traced_span_lengths": [58],
+          "example_spans": [
+            {
+              "segment_index": 287,
+              "offset": 9199,
+              "end": 9257,
+              "depth": 1,
+              "parent_class": "moExtrusion_c"
+            },
+            {
+              "segment_index": 492,
+              "offset": 14628,
+              "end": 14686,
+              "depth": 1,
+              "parent_class": "moICE_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [4],
+            "pmark_ids": [5, 8]
+          }
+        }
+      }
+    },
+    "three": {
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\corpus2\\parts\\THREEFEATURE_pad_cut_pad.SLDPRT",
+      "stream_length": 24805,
+      "base_map_index": 111,
+      "slots": {
+        "node_name": {
+          "class_index": 4,
+          "occurrences": 25,
+          "parents": [
+            "moCommentsFolder_c",
+            "moDetailCabinet_c",
+            "moDocsFolder_c",
+            "moEqnFolder_c",
+            "moExtrusion_c",
+            "moFavoriteFolder_c",
+            "moHistoryFolder_c",
+            "moICE_c",
+            "moInkMarkupFolder_c",
+            "moLengthParameter_c",
+            "moMaterialFolder_c",
+            "moNotesAreaFtrFolder_c",
+            "moOriginProfileFeature_c",
+            "moProfileFeature_c",
+            "moRefPlane_c",
+            "moSelectionSetFolder_c",
+            "moSensorFolder_c",
+            "moSolidBodyFolder_c",
+            "moSurfaceBodyFolder_c"
+          ],
+          "traced_span_lengths": [
+            30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66, 78
+          ],
+          "example_spans": [
+            {
+              "segment_index": 1,
+              "offset": 30,
+              "end": 76,
+              "depth": 1,
+              "parent_class": "moCommentsFolder_c"
+            },
+            {
+              "segment_index": 6,
+              "offset": 227,
+              "end": 275,
+              "depth": 1,
+              "parent_class": "moFavoriteFolder_c"
+            },
+            {
+              "segment_index": 11,
+              "offset": 433,
+              "end": 477,
+              "depth": 1,
+              "parent_class": "moHistoryFolder_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40, 52],
+            "trailing_bytes": [20, 24]
+          }
+        },
+        "component": {
+          "class_index": 43,
+          "occurrences": 10,
+          "parents": [
+            "moCompFeature_c",
+            "moCompRefPlane_c",
+            "moCompSolidBody_c"
+          ],
+          "traced_span_lengths": [2],
+          "example_spans": [
+            {
+              "segment_index": 18,
+              "offset": 678,
+              "end": 680,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 23,
+              "offset": 797,
+              "end": 799,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 28,
+              "offset": 916,
+              "end": 918,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
+          }
+        },
+        "object_list": {
+          "class_index": 84,
+          "occurrences": 11,
+          "parents": ["moSketchRegion_c", "null", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
+          "example_spans": [
+            {
+              "segment_index": 161,
+              "offset": 5888,
+              "end": 6062,
+              "depth": 3,
+              "parent_class": "null"
+            },
+            {
+              "segment_index": 162,
+              "offset": 6062,
+              "end": 6125,
+              "depth": 2,
+              "parent_class": "sgSketch"
+            },
+            {
+              "segment_index": 219,
+              "offset": 7935,
+              "end": 8109,
+              "depth": 4,
+              "parent_class": "null"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [2],
+            "counts": [0, 1, 4],
+            "count_matches_children": 6
+          }
+        },
+        "pmark_record": {
+          "class_index": 104,
+          "occurrences": 2,
+          "parents": ["moExtrusion_c", "moICE_c"],
+          "traced_span_lengths": [58],
+          "example_spans": [
+            {
+              "segment_index": 297,
+              "offset": 9439,
+              "end": 9497,
+              "depth": 1,
+              "parent_class": "moExtrusion_c"
+            },
+            {
+              "segment_index": 502,
+              "offset": 14866,
+              "end": 14924,
+              "depth": 1,
+              "parent_class": "moICE_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [4],
+            "pmark_ids": [5, 8]
+          }
+        }
+      }
+    },
+    "vendor_ring": {
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\examples\\Single Turbo Dual Overhead Cam V8 - KDP - 2024\\Piston Ring KF.SLDPRT",
+      "stream_length": 25998,
+      "base_map_index": 111,
+      "slots": {
+        "node_name": {
+          "class_index": 4,
+          "occurrences": 33,
+          "parents": [
+            "moCommentsFolder_c",
+            "moDetailCabinet_c",
+            "moDocsFolder_c",
+            "moEqnFolder_c",
+            "moExtrusion_c",
+            "moFavoriteFolder_c",
+            "moHistoryFolder_c",
+            "moICE_c",
+            "moInkMarkupFolder_c",
+            "moLengthParameter_c",
+            "moMaterialFolder_c",
+            "moNotesAreaFtrFolder_c",
+            "moOriginProfileFeature_c",
+            "moProfileFeature_c",
+            "moRefPlane_c",
+            "moSelectionSetFolder_c",
+            "moSensorFolder_c",
+            "moSolidBodyFolder_c",
+            "moSurfaceBodyFolder_c"
+          ],
+          "traced_span_lengths": [30, 40, 42, 44, 46, 48, 52, 54, 56, 58, 66],
+          "example_spans": [
+            {
+              "segment_index": 1,
+              "offset": 30,
+              "end": 76,
+              "depth": 1,
+              "parent_class": "moCommentsFolder_c"
+            },
+            {
+              "segment_index": 6,
+              "offset": 227,
+              "end": 275,
+              "depth": 1,
+              "parent_class": "moFavoriteFolder_c"
+            },
+            {
+              "segment_index": 11,
+              "offset": 433,
+              "end": 477,
+              "depth": 1,
+              "parent_class": "moHistoryFolder_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 26, 28, 30, 32, 40],
+            "trailing_bytes": [20, 24]
+          }
+        },
+        "component": {
+          "class_index": 43,
+          "occurrences": 12,
+          "parents": [
+            "moCompEdge_c",
+            "moCompFace_c",
+            "moCompFeature_c",
+            "moCompRefPlane_c",
+            "moCompSketchEntHandle_c",
+            "moCompSolidBody_c"
+          ],
+          "traced_span_lengths": [2],
+          "example_spans": [
+            {
+              "segment_index": 18,
+              "offset": 678,
+              "end": 680,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 23,
+              "offset": 793,
+              "end": 795,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 28,
+              "offset": 908,
+              "end": 910,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
+          }
+        },
+        "object_list": {
+          "class_index": 83,
+          "occurrences": 9,
+          "parents": [
+            "moSketchRegion_c",
+            "null",
+            "sgCircleDim",
+            "sgLLDist",
+            "sgSketch"
+          ],
+          "traced_span_lengths": [4, 63, 174],
+          "example_spans": [
+            {
+              "segment_index": 151,
+              "offset": 5597,
+              "end": 5771,
+              "depth": 3,
+              "parent_class": "null"
+            },
+            {
+              "segment_index": 152,
+              "offset": 5771,
+              "end": 5834,
+              "depth": 2,
+              "parent_class": "sgSketch"
+            },
+            {
+              "segment_index": 238,
+              "offset": 8169,
+              "end": 8173,
+              "depth": 5,
+              "parent_class": "sgCircleDim"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [2],
+            "counts": [0, 1, 2, 4],
+            "count_matches_children": 7
+          }
+        },
+        "pmark_record": {
+          "class_index": 104,
+          "occurrences": 2,
+          "parents": ["moExtrusion_c", "moICE_c"],
+          "traced_span_lengths": [58],
+          "example_spans": [
+            {
+              "segment_index": 386,
+              "offset": 13192,
+              "end": 13250,
+              "depth": 1,
+              "parent_class": "moExtrusion_c"
+            },
+            {
+              "segment_index": 905,
+              "offset": 25788,
+              "end": 25846,
+              "depth": 1,
+              "parent_class": "moICE_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [4],
+            "pmark_ids": [26, 29]
+          }
+        }
+      }
+    },
+    "vendor_cojinete": {
+      "part": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\examples\\Single Turbo Dual Overhead Cam V8 - KDP - 2024\\COJINETE INFERIOR.SLDPRT",
+      "stream_length": 17601,
+      "base_map_index": 111,
+      "slots": {
+        "node_name": {
+          "class_index": 4,
+          "occurrences": 25,
+          "parents": [
+            "moCommentsFolder_c",
+            "moDetailCabinet_c",
+            "moDocsFolder_c",
+            "moEqnFolder_c",
+            "moExtrusion_c",
+            "moFavoriteFolder_c",
+            "moHistoryFolder_c",
+            "moInkMarkupFolder_c",
+            "moLengthParameter_c",
+            "moMaterialFolder_c",
+            "moNotesAreaFtrFolder_c",
+            "moOriginProfileFeature_c",
+            "moProfileFeature_c",
+            "moRefPlane_c",
+            "moSelectionSetFolder_c",
+            "moSensorFolder_c",
+            "moSolidBodyFolder_c",
+            "moSurfaceBodyFolder_c"
+          ],
+          "traced_span_lengths": [
+            30, 40, 42, 44, 46, 48, 50, 52, 56, 64, 66, 78
+          ],
+          "example_spans": [
+            {
+              "segment_index": 1,
+              "offset": 30,
+              "end": 82,
+              "depth": 1,
+              "parent_class": "moCommentsFolder_c"
+            },
+            {
+              "segment_index": 6,
+              "offset": 233,
+              "end": 281,
+              "depth": 1,
+              "parent_class": "moFavoriteFolder_c"
+            },
+            {
+              "segment_index": 11,
+              "offset": 439,
+              "end": 487,
+              "depth": 1,
+              "parent_class": "moHistoryFolder_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [8, 14, 16, 18, 20, 22, 24, 26, 30, 38, 40, 52],
+            "trailing_bytes": [20, 24]
+          }
+        },
+        "component": {
+          "class_index": 45,
+          "occurrences": 5,
+          "parents": [
+            "moCompFeature_c",
+            "moCompRefPlane_c",
+            "moCompSketchEntHandle_c"
+          ],
+          "traced_span_lengths": [2],
+          "example_spans": [
+            {
+              "segment_index": 18,
+              "offset": 688,
+              "end": 690,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 23,
+              "offset": 803,
+              "end": 805,
+              "depth": 3,
+              "parent_class": "moCompFeature_c"
+            },
+            {
+              "segment_index": 145,
+              "offset": 5696,
+              "end": 5698,
+              "depth": 2,
+              "parent_class": "moCompRefPlane_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [0],
+            "nested_first_child": ["objectref"]
+          }
+        },
+        "object_list": {
+          "class_index": 85,
+          "occurrences": 7,
+          "parents": ["moSketchRegion_c", "null", "sgCircleDim", "sgSketch"],
+          "traced_span_lengths": [4, 63, 174],
+          "example_spans": [
+            {
+              "segment_index": 141,
+              "offset": 5435,
+              "end": 5609,
+              "depth": 3,
+              "parent_class": "null"
+            },
+            {
+              "segment_index": 142,
+              "offset": 5609,
+              "end": 5672,
+              "depth": 2,
+              "parent_class": "sgSketch"
+            },
+            {
+              "segment_index": 362,
+              "offset": 10410,
+              "end": 10414,
+              "depth": 6,
+              "parent_class": "sgCircleDim"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [2],
+            "counts": [0, 1, 2, 3, 4],
+            "count_matches_children": 5
+          }
+        },
+        "pmark_record": {
+          "class_index": 106,
+          "occurrences": 1,
+          "parents": ["moExtrusion_c"],
+          "traced_span_lengths": [58],
+          "example_spans": [
+            {
+              "segment_index": 529,
+              "offset": 15547,
+              "end": 15605,
+              "depth": 1,
+              "parent_class": "moExtrusion_c"
+            }
+          ],
+          "byte_evidence": {
+            "own_body_lengths": [4],
+            "pmark_ids": [8]
+          }
+        }
+      }
+    }
+  }
+}

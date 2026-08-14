@@ -1,0 +1,1582 @@
+[
+ {
+  "part": "BASELINE_40x20x10.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CIRCLE_r10.SLDPRT",
+  "marker": 8512,
+  "data": 8529,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CIRCLE_r11.SLDPRT",
+  "marker": 8512,
+  "data": 8529,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CIRCLE_r20.SLDPRT",
+  "marker": 8512,
+  "data": 8529,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CONTROL_A.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CONTROL_B.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "DEPTH_d10.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "DEPTH_d11.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "DEPTH_d12.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "DEPTH_d20.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "DEPTH_d50.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "HEIGHT_h20.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "HEIGHT_h21.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "HEIGHT_h22.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "HEIGHT_h30.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "HEIGHT_h50.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "MIDPLANE_d10.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 6,
+  "type1": 0
+ },
+ {
+  "part": "OFFSET_x0_y5.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "OFFSET_x10_y7.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "OFFSET_x5_y0.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "PLANE_FRONT.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "PLANE_RIGHT.SLDPRT",
+  "marker": 9103,
+  "data": 9120,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "PLANE_TOP.SLDPRT",
+  "marker": 9103,
+  "data": 9120,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "REVERSED_d10.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "step1_pad.SLDPRT",
+  "marker": 9029,
+  "data": 9046,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "TWOFEATURES_pad_pad.SLDPRT",
+  "marker": 9269,
+  "data": 9286,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "WIDTH_w100.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "WIDTH_w40.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "WIDTH_w41.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "WIDTH_w42.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "WIDTH_w60.SLDPRT",
+  "marker": 9031,
+  "data": 9048,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CIRCLECUT_r4.SLDPRT",
+  "marker": 9269,
+  "data": 9286,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CIRCLECUT_r6.SLDPRT",
+  "marker": 9269,
+  "data": 9286,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CONTROL2_A.SLDPRT",
+  "marker": 9269,
+  "data": 9286,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CONTROL2_B.SLDPRT",
+  "marker": 9269,
+  "data": 9286,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CONTROL2PAD_A.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CONTROL2PAD_B.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUTBASE_cd3.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUTBASE_cd5.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUTBASE_cd7.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUTBASE_s10.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUTBASE_s14.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUTBASE_s8.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUTFACE_d5.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUTMID_d5.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUTTHROUGH_s10.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "PADPLANE_rev_d5.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "THREEFEATURE_pad_cut_pad.SLDPRT",
+  "marker": 9507,
+  "data": 9524,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "TWOPAD_d3.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "TWOPAD_d5.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "TWOPAD_d8.SLDPRT",
+  "marker": 9269,
+  "data": 9286,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "A_cutbase_both_features.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "B_cutbase_second_feature_only.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "C_twopad_both_features.SLDPRT",
+  "marker": 9267,
+  "data": 9284,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "D_threefeature_all_three.SLDPRT",
+  "marker": 9507,
+  "data": 9524,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "T3_3_boss.SLDPRT",
+  "marker": 9505,
+  "data": 9522,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "T3H_3_boss.SLDPRT",
+  "marker": 9505,
+  "data": 9522,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "T4_4_boss.SLDPRT",
+  "marker": 9743,
+  "data": 9760,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "T4all_4_boss.SLDPRT",
+  "marker": 9743,
+  "data": 9760,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "T4cmgr_4_boss.SLDPRT",
+  "marker": 9743,
+  "data": 9760,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "T4H_4_boss.SLDPRT",
+  "marker": 9743,
+  "data": 9760,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "example.SLDPRT",
+  "marker": 14485,
+  "data": 14502,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Alternator.SLDPRT",
+  "marker": 13573,
+  "data": 13590,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Alternator_belt.SLDPRT",
+  "marker": 19235,
+  "data": 19252,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Alternator_pulley.SLDPRT",
+  "marker": 37752,
+  "data": 37769,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Belt_tensioner.SLDPRT",
+  "marker": 63395,
+  "data": 63412,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Belt_tensioner_pulley.SLDPRT",
+  "marker": 12365,
+  "data": 12382,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Power_steering_pump.SLDPRT",
+  "marker": 30968,
+  "data": 30985,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Serpentine_belt.SLDPRT",
+  "marker": 51822,
+  "data": 51839,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Water_pump.SLDPRT",
+  "marker": 23187,
+  "data": 23204,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Cover.SLDPRT",
+  "marker": 53568,
+  "data": 53585,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Cranckshaft_pulley.SLDPRT",
+  "marker": 22866,
+  "data": 22883,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Crankshaft.SLDPRT",
+  "marker": 11556,
+  "data": 11573,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Crankshaft_bearing_cap.SLDPRT",
+  "marker": 23011,
+  "data": 23028,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Crankshaft_bearing_cap_end.SLDPRT",
+  "marker": 17536,
+  "data": 17553,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Cam_roller.SLDPRT",
+  "marker": 29295,
+  "data": 29312,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 9,
+  "type1": 1
+ },
+ {
+  "part": "Camshaft.SLDPRT",
+  "marker": 86944,
+  "data": 86961,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Cylinder_head.SLDPRT",
+  "marker": 19116,
+  "data": 19133,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Cylinder_head_cover.SLDPRT",
+  "marker": 27661,
+  "data": 27678,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Cylinder_head_cover_2.SLDPRT",
+  "marker": 27439,
+  "data": 27456,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Exhaust_manifold.SLDPRT",
+  "marker": 188767,
+  "data": 188784,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Exhaust_manifold_2.SLDPRT",
+  "marker": 188775,
+  "data": 188792,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Fuel_rail_1.SLDPRT",
+  "marker": 23960,
+  "data": 23977,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Fuel_rail_2.SLDPRT",
+  "marker": 23960,
+  "data": 23977,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Ingition_coil.SLDPRT",
+  "marker": 51462,
+  "data": 51479,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Inlet_manifold.SLDPRT",
+  "marker": 161972,
+  "data": 161989,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Spark_plug.SLDPRT",
+  "marker": 84914,
+  "data": 84931,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Engine_Block.SLDPRT",
+  "marker": 45687,
+  "data": 45704,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Engine_mount_support.SLDPRT",
+  "marker": 28273,
+  "data": 28290,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Oil pan.SLDPRT",
+  "marker": 70154,
+  "data": 70171,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Conrod.SLDPRT",
+  "marker": 34934,
+  "data": 34951,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Conrod_bearing_cap.SLDPRT",
+  "marker": 23355,
+  "data": 23372,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Piston.SLDPRT",
+  "marker": 43929,
+  "data": 43946,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 9,
+  "type1": 1
+ },
+ {
+  "part": "Piston_ring.SLDPRT",
+  "marker": 12347,
+  "data": 12364,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Piston_shaft.SLDPRT",
+  "marker": 12719,
+  "data": 12736,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Gear.SLDPRT",
+  "marker": 14998,
+  "data": 15015,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Power_steering_pump.SLDPRT",
+  "marker": 30980,
+  "data": 30997,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Screw_1.SLDPRT",
+  "marker": 47901,
+  "data": 47918,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Screw_2.SLDPRT",
+  "marker": 61229,
+  "data": 61246,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Supercharger_housing.SLDPRT",
+  "marker": 24826,
+  "data": 24843,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Supercharger_pulley.SLDPRT",
+  "marker": 22999,
+  "data": 23016,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Throttle_flap.SLDPRT",
+  "marker": 11011,
+  "data": 11028,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Throttle_housing.SLDPRT",
+  "marker": 8930,
+  "data": 8947,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Timing_Belt.SLDPRT",
+  "marker": 46911,
+  "data": 46928,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Timing_cover.SLDPRT",
+  "marker": 68101,
+  "data": 68118,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "ABRAZADERA DE CUBIERTA DE TURBINA.SLDPRT",
+  "marker": 17982,
+  "data": 17999,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "ARBOL DE LEVAS DE ADMISIO?N_DERECHO.SLDPRT",
+  "marker": 30486,
+  "data": 30503,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "ARBOL DE LEVAS DE ADMISIO?N_IZQUIERDO.SLDPRT",
+  "marker": 30498,
+  "data": 30515,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "ARBOL DE LEVAS DE ESCAPE_DERECHO.SLDPRT",
+  "marker": 30478,
+  "data": 30495,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "ARBOL DE LEVAS DE ESCAPE_IZQUIERDO.SLDPRT",
+  "marker": 30570,
+  "data": 30587,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "BIELA.SLDPRT",
+  "marker": 13957,
+  "data": 13974,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 6,
+  "type1": 0
+ },
+ {
+  "part": "BLOQUE V8.SLDPRT",
+  "marker": 34532,
+  "data": 34549,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "BULO?N.SLDPRT",
+  "marker": 13289,
+  "data": 13306,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 6,
+  "type1": 0
+ },
+ {
+  "part": "CARRERA DE EMPUJE.SLDPRT",
+  "marker": 11536,
+  "data": 11553,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CARTER.SLDPRT",
+  "marker": 20866,
+  "data": 20883,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CIGUEN?AL.SLDPRT",
+  "marker": 24696,
+  "data": 24713,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "COJINETE INFERIOR.SLDPRT",
+  "marker": 15615,
+  "data": 15632,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 6,
+  "type1": 0
+ },
+ {
+  "part": "COJINETE SUPERIOR.SLDPRT",
+  "marker": 15960,
+  "data": 15977,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 6,
+  "type1": 0
+ },
+ {
+  "part": "COJINETE.SLDPRT",
+  "marker": 13186,
+  "data": 13203,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 6,
+  "type1": 0
+ },
+ {
+  "part": "CUBIERTA DE SOPORTE DE ARBOL DE LEVAS.SLDPRT",
+  "marker": 23497,
+  "data": 23514,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUBIERTA DE TURBINA 1.SLDPRT",
+  "marker": 17109,
+  "data": 17126,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUBIERTA.SLDPRT",
+  "marker": 11367,
+  "data": 11384,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CUIETA DE ENTRADA DE GASES.SLDPRT",
+  "marker": 17133,
+  "data": 17150,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CULATA_DERECHO.SLDPRT",
+  "marker": 23996,
+  "data": 24013,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "CULATA_IZQUIERDO.SLDPRT",
+  "marker": 24194,
+  "data": 24211,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "EJE DE CONTROL DE VA?LVULAS.SLDPRT",
+  "marker": 28720,
+  "data": 28737,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "ENGRANE ARBOL DE LEVAS.SLDPRT",
+  "marker": 26443,
+  "data": 26460,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "ENGRANE CIGUEN?AL.SLDPRT",
+  "marker": 34287,
+  "data": 34304,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Left Side Exhaust Tube.SLDPRT",
+  "marker": 91802,
+  "data": 91819,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "MULTIPLE DE ADMISIO?N.SLDPRT",
+  "marker": 88003,
+  "data": 88020,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "MULTIPLE DE ESCAPE.SLDPRT",
+  "marker": 94557,
+  "data": 94574,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "PERNO HEXAGONAL HUECO_PARA SOPORTE DE RODAMIENTO DE BANDA.SLDPRT",
+  "marker": 11599,
+  "data": 11616,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "PINZA DE COMPRESOR.SLDPRT",
+  "marker": 30998,
+  "data": 31015,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Piston Ring KF.SLDPRT",
+  "marker": 13260,
+  "data": 13277,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "PISTO?N.SLDPRT",
+  "marker": 11608,
+  "data": 11625,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "PLATO DEL COMPRESOR.SLDPRT",
+  "marker": 11167,
+  "data": 11184,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "RESORTE DE VA?LVULA.SLDPRT",
+  "marker": 11836,
+  "data": 11853,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Right Side Exhaust Tube.SLDPRT",
+  "marker": 91806,
+  "data": 91823,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "RODAMIENTO DE BANDA.SLDPRT",
+  "marker": 14017,
+  "data": 14034,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "RUEDA DE TURBINA.SLDPRT",
+  "marker": 11418,
+  "data": 11435,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SEGUIDOR DE LEVA.SLDPRT",
+  "marker": 13158,
+  "data": 13175,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SEGUIDOR DE VA?VULA.SLDPRT",
+  "marker": 13626,
+  "data": 13643,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SEGURO DE CIGU?EN?AL DE 18mm.SLDPRT",
+  "marker": 24940,
+  "data": 24957,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SEGURO DE CIGU?EN?AL DE 36mm.SLDPRT",
+  "marker": 24221,
+  "data": 24238,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SEGURO DE CIGU?EN?AL DE 38mm.SLDPRT",
+  "marker": 24449,
+  "data": 24466,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SELLO DEL COMPRESOR.SLDPRT",
+  "marker": 44406,
+  "data": 44423,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 1,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SOMBRERETE DE BIELA.SLDPRT",
+  "marker": 17155,
+  "data": 17172,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SOPORTE DE ARBOL DE LEVAS.SLDPRT",
+  "marker": 22988,
+  "data": 23005,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SOPORTE DE RODAMIENTO PARA LA BANDA.SLDPRT",
+  "marker": 19212,
+  "data": 19229,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SOPORTE DE SEGUIDOR DE VA?LVULA.SLDPRT",
+  "marker": 42402,
+  "data": 42419,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "SOPORTE EXTERNO DE ARBOL DE LEVAS.SLDPRT",
+  "marker": 25234,
+  "data": 25251,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "TAPA DE CULATA DERECHO.SLDPRT",
+  "marker": 24594,
+  "data": 24611,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "TAPA DE CULATA IZQUIERDO.SLDPRT",
+  "marker": 22873,
+  "data": 22890,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "TAPA RECTANGULAR DE LA CUBIERTA DE LA TURBINA.SLDPRT",
+  "marker": 17643,
+  "data": 17660,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "TORNILLO CABEZA HEXAGONAL_RODAMIENTO.SLDPRT",
+  "marker": 11860,
+  "data": 11877,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "TURBINA.SLDPRT",
+  "marker": 11167,
+  "data": 11184,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "Turbo Tube.SLDPRT",
+  "marker": 91285,
+  "data": 91302,
+  "singleEnd": 0,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ },
+ {
+  "part": "VA?LVULA.SLDPRT",
+  "marker": 31011,
+  "data": 31028,
+  "singleEnd": 1,
+  "reverse1": 0,
+  "reverse0": 0,
+  "type0": 0,
+  "type1": 0
+ }
+]

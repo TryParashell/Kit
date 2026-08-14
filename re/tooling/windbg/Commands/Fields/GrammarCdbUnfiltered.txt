@@ -1,0 +1,7 @@
+.symopt+0x4000
+.sympath srv*c:\symbols*https://msdl.microsoft.com/download/symbols
+.reload /f mfc140u.dll
+bp mfc140u!CArchive::ReadObject ".printf \"RO span=%x pos=%x map=%d\\n\", poi(@rcx+0x40)-poi(@rcx+0x48), poi(@rcx+0x38)-poi(@rcx+0x48), dwo(@rcx+0x50); gc"
+bp mfc140u!CArchive::CArchive ".printf \"NEWARCH mode=%d bufsize=%x\\n\", dwo(@rcx+0x20), dwo(@rcx+0x28); gc"
+bl
+g

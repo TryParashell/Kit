@@ -1,0 +1,488 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+from __future__ import annotations
+
+from collections import Counter
+from functools import lru_cache
+import gc
+import hashlib
+from pathlib import Path
+import re
+import shutil
+import struct
+
+import pytest
+
+from convert import CarrierReason, convert, open_document, registry
+from convert.adapters.solidworks import SldprtFormatError
+from interchange import AssemblyData, CadDocument, Capability, source_payload_indexes
+
+ROOT = Path(__file__).parents[3]
+README = ROOT / "README.md"
+EXAMPLES = ROOT / "examples"
+FORMAT_BY_SUFFIX = {
+    ".SLDPRT": "solidworks.sldprt",
+    ".SLDASM": "solidworks.sldasm",
+    ".FCStd": "freecad.fcstd",
+    ".CATPart": "catia.v5",
+    ".CATProduct": "catia.v5",
+}
+PART_SUFFIXES = (".SLDPRT", ".FCStd", ".CATPart")
+ASSEMBLY_SUFFIXES = (".SLDASM", ".FCStd", ".CATProduct")
+SUPPORTED_SUFFIXES = frozenset(FORMAT_BY_SUFFIX)
+EXPECTED_SUFFIX_COUNTS = {
+    ".SLDPRT": 111,
+    ".SLDASM": 9,
+    ".FCStd": 68,
+    ".CATPart": 27,
+    ".CATProduct": 3,
+}
+FCSTD_ASSEMBLIES = frozenset(
+    {
+        EXAMPLES / "Random" / "V8_engine" / "Conrod_2.FCStd",
+        EXAMPLES / "Random" / "V8_engine" / "Piston_2.FCStd",
+        EXAMPLES / "Random" / "V8_engine.FCStd",
+    }
+)
+MATRIX_SOURCES = (
+    (
+        "sldprt",
+        ".SLDPRT",
+        EXAMPLES / ".SLDPRT" / "example.SLDPRT",
+        False,
+    ),
+    (
+        "fcstd_part",
+        ".FCStd",
+        EXAMPLES / "Random" / "V8_engine" / "hex bolt gradeb_iso.FCStd",
+        False,
+    ),
+    (
+        "catpart",
+        ".CATPart",
+        EXAMPLES / ".CATPart" / "Banjo.CATPart",
+        False,
+    ),
+    (
+        "sldasm",
+        ".SLDASM",
+        EXAMPLES / "Random" / "Pistons" / "Piston.SLDASM",
+        True,
+    ),
+    (
+        "fcstd_assembly",
+        ".FCStd",
+        EXAMPLES / "Random" / "V8_engine" / "Conrod_2.FCStd",
+        True,
+    ),
+    (
+        "catproduct",
+        ".CATProduct",
+        EXAMPLES / ".CATProduct" / "Brake_Pedal_Assembly - Backup 2.CATProduct",
+        True,
+    ),
+)
+MATRIX_CASES = tuple(
+    (name, source_suffix, source, is_assembly, destination_suffix)
+    for name, source_suffix, source, is_assembly in MATRIX_SOURCES
+    for destination_suffix in (ASSEMBLY_SUFFIXES if is_assembly else PART_SUFFIXES)
+)
+CORPUS_FILES = tuple(
+    sorted(
+        path
+        for path in EXAMPLES.rglob("*")
+        if path.is_file()
+        and path.suffix.casefold() in {value.casefold() for value in SUPPORTED_SUFFIXES}
+    )
+)
+MISSING_REFERENCE_FILES = {
+    EXAMPLES
+    / "Single Turbo Dual Overhead Cam V8 - KDP - 2024"
+    / "ENSAMBLAJE DE MOTOR V8.SLDASM": "ENSAMBLAJE TURBO.SLDASM",
+}
+SUPPORTED_FILES = tuple(
+    path for path in CORPUS_FILES if path not in MISSING_REFERENCE_FILES
+)
+
+
+def _assembly_signature(assembly: AssemblyData | None):
+    if assembly is None:
+        return None
+    return (
+        assembly.root_definition_id,
+        assembly.definitions,
+        assembly.instances,
+        tuple(
+            (component.id, _document_signature(component.document))
+            for component in assembly.documents
+        ),
+        assembly.mate_entities,
+        assembly.mates,
+        assembly.mate_groups,
+        assembly.attributes,
+    )
+
+
+def _document_signature(document: CadDocument):
+    envelope_indexes = (
+        source_payload_indexes(document)
+        if isinstance(document.source.attributes.get("embedded_source_format_id"), str)
+        else frozenset()
+    )
+    return (
+        document.configurations,
+        document.parameters,
+        document.support_planes,
+        document.sketches,
+        document.selections,
+        document.feature_timeline,
+        document.bodies,
+        tuple(_mesh_signature(mesh) for mesh in document.meshes),
+        tuple(
+            _brep_signature(payload)
+            for index, payload in enumerate(document.brep_payloads)
+            if index not in envelope_indexes
+        ),
+        document.capabilities,
+        document.units,
+        document.schema_version,
+        _assembly_signature(document.assembly),
+    )
+
+
+def _mesh_signature(mesh):
+    digest = hashlib.sha256()
+    for vertex in mesh.vertices:
+        digest.update(struct.pack("!ddd", vertex.x, vertex.y, vertex.z))
+    for triangle in mesh.triangles:
+        digest.update(struct.pack("!qqq", *triangle))
+    for normal in mesh.normals:
+        digest.update(struct.pack("!ddd", normal.x, normal.y, normal.z))
+    return (
+        mesh.id,
+        mesh.name,
+        len(mesh.vertices),
+        len(mesh.triangles),
+        len(mesh.normals),
+        digest.hexdigest(),
+        mesh.provenance,
+        mesh.attributes,
+    )
+
+
+def _brep_signature(payload):
+    payload_id = payload.id
+    attributes = payload.attributes
+    if payload.format_id == "catia.v5.cfv2" and payload.kind == "native_document":
+        payload_id = "catia:native-document"
+        attributes = {
+            key: value
+            for key, value in attributes.items()
+            if key != "catia.replay_semantic_sha256"
+        }
+    elif (
+        payload.format_id == "catia.v5.sha256"
+        and payload.kind == "native_document_binding"
+    ):
+        payload_id = "catia:native-document-binding"
+    return (
+        payload_id,
+        payload.format_id,
+        payload.kind,
+        payload.schema,
+        payload.sha256,
+        len(payload.data) if payload.data is not None else None,
+        (
+            hashlib.sha256(payload.data).hexdigest()
+            if payload.data is not None
+            else None
+        ),
+        payload.source_stream,
+        payload.provenance,
+        attributes,
+        payload.role,
+        payload.file_extension,
+    )
+
+
+def _suffix(path: Path) -> str:
+    return next(
+        value
+        for value in FORMAT_BY_SUFFIX
+        if value.casefold() == path.suffix.casefold()
+    )
+
+
+def _target_suffixes(document: CadDocument) -> tuple[str, ...]:
+    return ASSEMBLY_SUFFIXES if document.assembly is not None else PART_SUFFIXES
+
+
+def _expected_assembly(source: Path) -> bool:
+    suffix = _suffix(source)
+    return suffix in {".SLDASM", ".CATProduct"} or source in FCSTD_ASSEMBLIES
+
+
+def _assert_target(
+    document: CadDocument,
+    suffix: str,
+    source: Path | bytes,
+    is_assembly: bool,
+) -> None:
+    assert (document.assembly is not None) == is_assembly
+    if suffix in {".SLDPRT", ".SLDASM"}:
+        assert document.source.format_id == FORMAT_BY_SUFFIX[suffix]
+    elif suffix in {".CATPart", ".CATProduct"}:
+        assert document.metadata["catia.document_type"] == suffix[1:]
+    else:
+        assert registry.select_reader(source).info.format_id == "freecad.fcstd"
+
+
+def _assert_truthful_vendor_result(
+    result,
+    suffix: str,
+    is_assembly: bool,
+) -> None:
+    assert not result.application_usable or result.vendor_loadable
+    expected_near_lossless = (
+        result.application_usable
+        and result.vendor_loadable
+        and not result.requirements
+        and not result.dropped
+        and all(
+            transfer.carrier_reason is CarrierReason.TARGET_UNSUPPORTED
+            for transfer in result.transfers
+            if transfer.carrier_reason is not None
+        )
+    )
+    assert result.near_lossless is expected_near_lossless
+    geometry_transfers = {
+        transfer.capability
+        for transfer in result.transfers
+        if transfer.capability in {Capability.BREP, Capability.TESSELLATION}
+    }
+    if suffix == ".FCStd" and geometry_transfers and result.application_usable:
+        assert geometry_transfers & result.output.native_capabilities
+    if suffix not in {".SLDPRT", ".SLDASM", ".CATPart", ".CATProduct"}:
+        return
+    metadata = result.output.metadata
+    assert isinstance(metadata["vendor_loadable"], bool)
+    assert isinstance(metadata["native_geometry"], bool)
+    assert isinstance(metadata["native_history"], bool)
+    assert isinstance(metadata["native_assembly"], bool)
+    assert isinstance(metadata["native_self_contained"], bool)
+    referenced_files_written = metadata["referenced_files_written"]
+    assert isinstance(referenced_files_written, int)
+    assert referenced_files_written >= 0
+    if referenced_files_written:
+        assert is_assembly
+        path = result.output.path
+        assert path is not None
+        siblings = tuple(
+            item for item in path.parent.iterdir() if item.is_file() and item != path
+        )
+        assert len(siblings) == referenced_files_written
+        assert all(item.stat().st_size > 0 for item in siblings)
+        assert metadata["native_self_contained"] is result.application_usable
+    if metadata["compatibility"] == "native-exact":
+        assert metadata["vendor_loadable"] is True
+        assert metadata["native_geometry"] is True
+        assert metadata["native_history"] is True
+        assert metadata["native_assembly"] is is_assembly
+        assert metadata["native_self_contained"] is (not is_assembly)
+        return
+    native = result.output.native_capabilities
+    if metadata["native_geometry"]:
+        assert Capability.BREP in native
+    if metadata["native_history"]:
+        history = tuple(
+            transfer
+            for transfer in result.output.transfers
+            if transfer.capability is Capability.PARAMETRIC_HISTORY
+        )
+        assert not history or Capability.PARAMETRIC_HISTORY in native
+    if metadata["native_assembly"]:
+        assert is_assembly
+        assert Capability.ASSEMBLIES in native
+    if metadata["native_self_contained"]:
+        assert result.application_usable is True
+        assert result.vendor_loadable is True
+
+
+def _convert_with_application_gate(source, destination):
+    result = convert(source, destination)
+    assert result.requirements == ()
+    assert result.dropped == frozenset()
+    assert result.roundtrip_safe is True
+    return result
+
+
+@lru_cache(maxsize=len(MATRIX_SOURCES))
+def _matrix_document(source: Path) -> CadDocument:
+    return open_document(source)
+
+
+def test_swap_formats_match_readme_and_document_kinds() -> None:
+    supported = README.read_text(encoding="utf-8").split("## Supported formats", 1)[1]
+    supported = supported.split("\n## ", 1)[0]
+    readme_suffixes = set(re.findall(r"`(\.[A-Za-z0-9]+)`", supported))
+    assert readme_suffixes == set(FORMAT_BY_SUFFIX)
+    assert set(PART_SUFFIXES) | set(ASSEMBLY_SUFFIXES) == readme_suffixes
+    assert set(PART_SUFFIXES) & set(ASSEMBLY_SUFFIXES) == {".FCStd"}
+    counts = Counter(_suffix(path) for path in CORPUS_FILES)
+    MissingSuffixes = tuple(
+        SuffixName
+        for SuffixName, ExpectedCount in EXPECTED_SUFFIX_COUNTS.items()
+        if counts[SuffixName] == 0 and ExpectedCount
+    )
+    for SuffixName, ExpectedCount in EXPECTED_SUFFIX_COUNTS.items():
+        if SuffixName not in MissingSuffixes:
+            assert counts[SuffixName] == ExpectedCount
+    if MissingSuffixes:
+        pytest.skip(
+            "bundled example corpus is unavailable for " + ", ".join(MissingSuffixes)
+        )
+    assert len(CORPUS_FILES) == 218
+    assert len(SUPPORTED_FILES) == 217
+    assert counts == EXPECTED_SUFFIX_COUNTS
+    assert len(FCSTD_ASSEMBLIES) == 3
+    assert FCSTD_ASSEMBLIES <= set(SUPPORTED_FILES)
+    assert set(MISSING_REFERENCE_FILES) <= set(CORPUS_FILES)
+
+
+@pytest.mark.parametrize(
+    ("name", "source_suffix", "source", "is_assembly", "destination_suffix"),
+    MATRIX_CASES,
+    ids=[f"{case[0]}-to-{case[4][1:].lower()}" for case in MATRIX_CASES],
+)
+def test_every_valid_format_swap_runs_both_directions(
+    name: str,
+    source_suffix: str,
+    source: Path,
+    is_assembly: bool,
+    destination_suffix: str,
+    tmp_path: Path,
+) -> None:
+    original = (
+        _matrix_document(source)
+        if source.is_file()
+        else pytest.skip(f"bundled example source is unavailable: {source.name}")
+    )
+    assert (original.assembly is not None) == is_assembly
+    original_signature = _document_signature(original)
+    forward_directory = tmp_path / f"{name}_forward"
+    forward_directory.mkdir()
+    destination = forward_directory / f"{name}_swapped{destination_suffix}"
+    result = _convert_with_application_gate(source, destination)
+    restored = open_document(destination)
+    assert result.source_format == FORMAT_BY_SUFFIX[source_suffix]
+    assert result.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
+    assert result.output.path == destination.resolve()
+    assert result.output.bytes_written == destination.stat().st_size
+    assert restored.validate() == ()
+    assert _document_signature(restored) == original_signature
+    _assert_target(restored, destination_suffix, destination, is_assembly)
+    _assert_truthful_vendor_result(result, destination_suffix, is_assembly)
+    reverse_directory = tmp_path / f"{name}_reverse"
+    reverse_directory.mkdir()
+    reverse = reverse_directory / f"{name}_reversed{source_suffix}"
+    reverse_result = _convert_with_application_gate(destination, reverse)
+    reversed_document = open_document(reverse)
+    assert reverse_result.source_format == FORMAT_BY_SUFFIX[destination_suffix]
+    assert reverse_result.destination_format == FORMAT_BY_SUFFIX[source_suffix]
+    assert reverse_result.output.bytes_written == reverse.stat().st_size
+    assert reversed_document.validate() == ()
+    assert _document_signature(reversed_document) == original_signature
+    _assert_target(reversed_document, source_suffix, reverse, is_assembly)
+    _assert_truthful_vendor_result(reverse_result, source_suffix, is_assembly)
+
+
+@pytest.mark.parametrize(
+    "source",
+    tuple(MISSING_REFERENCE_FILES),
+    ids=lambda path: str(path.relative_to(EXAMPLES)),
+)
+def test_assemblies_missing_a_referenced_file_are_refused_by_name(source: Path) -> None:
+    missing = MISSING_REFERENCE_FILES[source]
+    assert not tuple(EXAMPLES.rglob(missing))
+    with pytest.raises(SldprtFormatError) as captured:
+        open_document(source)
+    message = str(captured.value)
+    assert message.startswith("nested assembly mate source is unavailable: ")
+    assert message.endswith(missing)
+
+
+@pytest.mark.parametrize(
+    "source",
+    SUPPORTED_FILES,
+    ids=lambda path: str(path.relative_to(EXAMPLES)),
+)
+def test_every_supported_example_swaps_to_every_valid_format_and_back(
+    source: Path,
+    tmp_path: Path,
+) -> None:
+    source_suffix = _suffix(source)
+    original = open_document(source)
+    is_assembly = original.assembly is not None
+    assert is_assembly is _expected_assembly(source)
+    original_signature = _document_signature(original)
+    target_suffixes = _target_suffixes(original)
+    del original
+    gc.collect()
+    for index, destination_suffix in enumerate(target_suffixes):
+        forward_directory = tmp_path / f"forward_{index}"
+        forward_directory.mkdir()
+        destination = forward_directory / f"converted{destination_suffix}"
+        forward = convert(
+            source,
+            destination,
+        )
+        assert forward.source_format == FORMAT_BY_SUFFIX[source_suffix]
+        assert forward.destination_format == FORMAT_BY_SUFFIX[destination_suffix]
+        assert forward.output.bytes_written == destination.stat().st_size
+        assert forward.requirements == ()
+        assert forward.dropped == frozenset()
+        assert forward.roundtrip_safe is True
+        _assert_truthful_vendor_result(forward, destination_suffix, is_assembly)
+        del forward
+        gc.collect()
+        restored = open_document(destination)
+        assert restored.validate() == ()
+        assert _document_signature(restored) == original_signature
+        _assert_target(
+            restored,
+            destination_suffix,
+            destination,
+            is_assembly,
+        )
+        del restored
+        gc.collect()
+        reverse_directory = tmp_path / f"reverse_{index}"
+        reverse_directory.mkdir()
+        reverse = reverse_directory / f"converted{source_suffix}"
+        backward = convert(
+            destination,
+            reverse,
+        )
+        assert backward.source_format == FORMAT_BY_SUFFIX[destination_suffix]
+        assert backward.destination_format == FORMAT_BY_SUFFIX[source_suffix]
+        assert backward.output.bytes_written == reverse.stat().st_size
+        assert backward.requirements == ()
+        assert backward.dropped == frozenset()
+        assert backward.roundtrip_safe is True
+        _assert_truthful_vendor_result(backward, source_suffix, is_assembly)
+        del backward
+        gc.collect()
+        reversed_document = open_document(reverse)
+        assert reversed_document.validate() == ()
+        assert _document_signature(reversed_document) == original_signature
+        _assert_target(reversed_document, source_suffix, reverse, is_assembly)
+        del reversed_document
+        gc.collect()
+        shutil.rmtree(forward_directory)
+        shutil.rmtree(reverse_directory)

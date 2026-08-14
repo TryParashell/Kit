@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+moBBoxCenterData_c
+moCStringHandle_c
+moCommentsFolder_c
+moCompFeature_c
+moCompRefPlane_c
+moDefaultRefPlnData_c
+moDetailCabinet_c
+moDocsFolder_c
+moEqnFolder_c
+moExtObject_c
+moFR_c
+moFaceRef_c
+moFavoriteFolder_c
+moFavoriteHandle_c
+moFeatureDimHandle_c
+moFromSktEntSurfIdRep_c
+moHistoryFeatItemData_c
+moHistoryFolder_c
+moInkMarkupFolder_c
+moMaterialFolder_c
+moNotesAreaFtrFolder_c
+moOriginProfileFeature_c
+moPerBodyChooserData_c
+moProfileFeature_c
+moRefPlane_c
+moSelectionSetFolder_c
+moSensorFolder_c
+moSketchChain_c
+moSolidBodyFolder_c
+moSurfaceBodyFolder_c
+sgPointHandle
+sgSketch
+sgLineHandle
+moSketchRegion_c
+ParallelPlaneDistanceDim_c
+moDisplayDistanceDim_c
+moEndFaceSurfIdRep_c
+moEndSpec_c
+moExtrusion_c
+moFromEndSpec_c
+moLengthParameter_c
+moFromSktEnt3IntSurfIdRep_c
+moICE_c
+moEndFace3IntSurfIdRep_c
+moCompSolidBody_c
+moPointBackedUpData_c
+moSketchExtRef_w
+sgExtEnt_c
+moCompSketchEntHandle_c
+AngleDim_c
+moAngleParameter_c
+moDisplayAngularDim_c
+moLineRef_w
+moRevEndSpec_c
+sgArcHandle
+moRevolution_c
+moCompEdge_c
+moCompVertex_c
+moConstraintCoincPlaneRefplaneData_c
+moConstraintRefplaneInterfaceData_c
+moEdgeRef_c
+moLineBackedUpData_c
+moPlaneRef_w
+moRefPlaneCoincidentGeom_c
+moRevCut_c
+moVertexRef_c

@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+from __future__ import annotations
+
+from convert.adapters.solidworks.programs.Owners.Sldmfcu.UtLineWidthC.Serialize import (
+    KOwnerSites,
+)
+
+
+# isolated method data lets new reverse engineered serializers compose independently
+KMethodProgram = (
+    KOwnerSites,
+    {
+        "ResolvedFeatures": (
+            (143, 2, 210, "primitive:short", -1),
+            (145, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (342, 2, 210, "primitive:short", -1),
+            (344, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (544, 2, 210, "primitive:short", -1),
+            (546, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (1043, 2, 210, "primitive:short", -1),
+            (1045, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (1242, 2, 210, "primitive:short", -1),
+            (1244, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (1445, 2, 210, "primitive:short", -1),
+            (1447, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (1719, 2, 210, "primitive:short", -1),
+            (1721, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (1914, 2, 210, "primitive:short", -1),
+            (1916, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (2073, 2, 210, "primitive:short", -1),
+            (2075, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (2309, 2, 210, "primitive:short", -1),
+            (2311, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (2527, 2, 210, "primitive:short", -1),
+            (2529, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (2737, 2, 210, "primitive:short", -1),
+            (2739, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (2931, 2, 210, "primitive:short", -1),
+            (2933, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (3160, 2, 210, "primitive:short", -1),
+            (3162, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (3365, 2, 210, "primitive:short", -1),
+            (3367, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (3884, 2, 210, "primitive:short", -1),
+            (3886, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (4454, 2, 210, "primitive:short", -1),
+            (4456, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (5042, 2, 210, "primitive:short", -1),
+            (5044, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (5147, 2, 210, "primitive:short", -1),
+            (5149, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (5165, 2, 210, "primitive:short", 0),
+            (5167, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (5508, 2, 210, "primitive:short", -1),
+            (5510, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (5971, 2, 210, "primitive:short", -1),
+            (5973, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (6064, 2, 210, "primitive:short", -1),
+            (6066, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (6082, 2, 210, "primitive:short", 0),
+            (6084, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (6206, 2, 210, "primitive:short", -1),
+            (6208, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (6224, 2, 210, "primitive:short", 0),
+            (6226, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (6373, 2, 210, "primitive:short", -1),
+            (6375, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (6391, 2, 210, "primitive:short", 0),
+            (6393, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (6854, 2, 210, "primitive:short", -1),
+            (6856, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (6872, 2, 210, "primitive:short", 1),
+            (6874, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (7362, 2, 210, "primitive:short", 0),
+            (7364, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (7529, 2, 210, "primitive:short", 0),
+            (7531, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (7543, 2, 210, "primitive:short", 0),
+            (7545, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (7581, 2, 210, "primitive:short", 0),
+            (7583, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (9009, 2, 210, "primitive:short", -1),
+            (9011, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (9586, 2, 210, "primitive:short", -1),
+            (9588, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (10611, 2, 210, "primitive:short", 0),
+            (10613, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (10778, 2, 210, "primitive:short", 0),
+            (10780, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (10792, 2, 210, "primitive:short", 0),
+            (10794, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+            (10830, 2, 210, "primitive:short", 0),
+            (10832, 4, 222, "primitive:float", float.fromhex("-0x1.0000000000000p+0")),
+        ),
+    },
+)

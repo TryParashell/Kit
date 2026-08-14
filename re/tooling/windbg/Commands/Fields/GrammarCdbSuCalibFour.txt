@@ -1,0 +1,9 @@
+.symopt+0x4000
+.symopt-0x20000
+.exepath+ C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS
+.reload /f swccu.dll
+x swccu!*su_CArchive*
+bm swccu!?ReadClass@su_CArchive@@QEAAPEAUCRuntimeClass@@PEBU2@PEAIPEAK@Z ".printf \"CALIBHIT\\n\"; dq @rcx L18; bc *; g"
+bl
+g
+q

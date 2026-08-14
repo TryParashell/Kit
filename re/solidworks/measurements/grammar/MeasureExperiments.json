@@ -1,0 +1,788 @@
+[
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E1_op_cut_to_boss.SLDPRT",
+    "returncode": 1,
+    "seconds": 57.462039999998524,
+    "status": "crashed",
+    "stderr_tail": "spatch\n    IDispatch = pythoncom.connect(IDispatch)\npywintypes.com_error: (-2147221021, 'Operation unavailable', None, None)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 149, in __init__\n    self._app = Dispatch(\"SldWorks.Application\")\n                ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\__init__.py\", line 116, in Dispatch\n    dispatch, userName = dynamic._GetGoodDispatchAndUserName(dispatch, userName, clsctx)\n                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 101, in _GetGoodDispatchAndUserName\n    return (_GetGoodDispatch(IDispatch, clsctx), userName)\n            ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 83, in _GetGoodDispatch\n    IDispatch = pythoncom.CoCreateInstance(\n        IDispatch, None, clsctx, pythoncom.IID_IDispatch\n    )\npywintypes.com_error: (-2146959355, 'Server execution failed', None, None)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 50, in <module>\n    raise SystemExit(main())\n                     ~~~~^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 19, in main\n    session = SolidWorksSession()\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 153, in __init__\n    raise SolidWorksUnavailable(\n        f\"cannot start SOLIDWORKS via COM: {exc}\"\n    ) from exc\ntests.oracle.session.SolidWorksUnavailable: cannot start SOLIDWORKS via COM: (-2146959355, 'Server execution failed', None, None)\n",
+    "stdout_tail": ""
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E10_comp_feature_drop_last.SLDPRT",
+    "returncode": 1,
+    "seconds": 57.35556460000225,
+    "status": "crashed",
+    "stderr_tail": "spatch\n    IDispatch = pythoncom.connect(IDispatch)\npywintypes.com_error: (-2147221021, 'Operation unavailable', None, None)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 149, in __init__\n    self._app = Dispatch(\"SldWorks.Application\")\n                ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\__init__.py\", line 116, in Dispatch\n    dispatch, userName = dynamic._GetGoodDispatchAndUserName(dispatch, userName, clsctx)\n                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 101, in _GetGoodDispatchAndUserName\n    return (_GetGoodDispatch(IDispatch, clsctx), userName)\n            ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 83, in _GetGoodDispatch\n    IDispatch = pythoncom.CoCreateInstance(\n        IDispatch, None, clsctx, pythoncom.IID_IDispatch\n    )\npywintypes.com_error: (-2146959355, 'Server execution failed', None, None)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 50, in <module>\n    raise SystemExit(main())\n                     ~~~~^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 19, in main\n    session = SolidWorksSession()\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 153, in __init__\n    raise SolidWorksUnavailable(\n        f\"cannot start SOLIDWORKS via COM: {exc}\"\n    ) from exc\ntests.oracle.session.SolidWorksUnavailable: cannot start SOLIDWORKS via COM: (-2146959355, 'Server execution failed', None, None)\n",
+    "stdout_tail": ""
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E2_op_boss_to_cut.SLDPRT",
+    "returncode": 1,
+    "seconds": 57.368820100004086,
+    "status": "crashed",
+    "stderr_tail": "spatch\n    IDispatch = pythoncom.connect(IDispatch)\npywintypes.com_error: (-2147221021, 'Operation unavailable', None, None)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 149, in __init__\n    self._app = Dispatch(\"SldWorks.Application\")\n                ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\__init__.py\", line 116, in Dispatch\n    dispatch, userName = dynamic._GetGoodDispatchAndUserName(dispatch, userName, clsctx)\n                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 101, in _GetGoodDispatchAndUserName\n    return (_GetGoodDispatch(IDispatch, clsctx), userName)\n            ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 83, in _GetGoodDispatch\n    IDispatch = pythoncom.CoCreateInstance(\n        IDispatch, None, clsctx, pythoncom.IID_IDispatch\n    )\npywintypes.com_error: (-2146959355, 'Server execution failed', None, None)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 50, in <module>\n    raise SystemExit(main())\n                     ~~~~^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 19, in main\n    session = SolidWorksSession()\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 153, in __init__\n    raise SolidWorksUnavailable(\n        f\"cannot start SOLIDWORKS via COM: {exc}\"\n    ) from exc\ntests.oracle.session.SolidWorksUnavailable: cannot start SOLIDWORKS via COM: (-2146959355, 'Server execution failed', None, None)\n",
+    "stdout_tail": ""
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E3_blind_to_through_all.SLDPRT",
+    "returncode": 1,
+    "seconds": 57.33912939999573,
+    "status": "crashed",
+    "stderr_tail": "spatch\n    IDispatch = pythoncom.connect(IDispatch)\npywintypes.com_error: (-2147221021, 'Operation unavailable', None, None)\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 149, in __init__\n    self._app = Dispatch(\"SldWorks.Application\")\n                ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\__init__.py\", line 116, in Dispatch\n    dispatch, userName = dynamic._GetGoodDispatchAndUserName(dispatch, userName, clsctx)\n                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 101, in _GetGoodDispatchAndUserName\n    return (_GetGoodDispatch(IDispatch, clsctx), userName)\n            ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.venv\\Lib\\site-packages\\win32com\\client\\dynamic.py\", line 83, in _GetGoodDispatch\n    IDispatch = pythoncom.CoCreateInstance(\n        IDispatch, None, clsctx, pythoncom.IID_IDispatch\n    )\npywintypes.com_error: (-2146959355, 'Server execution failed', None, None)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 50, in <module>\n    raise SystemExit(main())\n                     ~~~~^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 19, in main\n    session = SolidWorksSession()\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 153, in __init__\n    raise SolidWorksUnavailable(\n        f\"cannot start SOLIDWORKS via COM: {exc}\"\n    ) from exc\ntests.oracle.session.SolidWorksUnavailable: cannot start SOLIDWORKS via COM: (-2146959355, 'Server execution failed', None, None)\n",
+    "stdout_tail": ""
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E4_blind_to_mid_plane.SLDPRT",
+    "returncode": 0,
+    "seconds": 47.166796599994996,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@E4_blind_to_mid_plane.Part",
+            10.0
+          ]
+        ]
+      },
+      {
+        "name": "Sketch2",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Cut-Extrude1",
+        "type": "ICE",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Cut-Extrude1@E4_blind_to_mid_plane.Part",
+            5.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 7750.000000000002,
+    "surface_mm2": 2899.9999999999995,
+    "centre_mm": [
+      0.0,
+      0.0,
+      5.120967741935484
+    ],
+    "status": "measured"
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E5_plane_front_to_top.SLDPRT",
+    "returncode": 1,
+    "seconds": 14.660284900004626,
+    "status": "crashed",
+    "stderr_tail": "Traceback (most recent call last):\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 50, in <module>\n    raise SystemExit(main())\n                     ~~~~^^\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\MeasureOne.py\", line 21, in main\n    inspection = session.inspect_part(target)\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 222, in inspect_part\n    with self._document(path, SWDOC_PART) as (model, errors, warnings):\n         ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\odin\\AppData\\Roaming\\uv\\python\\cpython-3.13.5-windows-x86_64-none\\Lib\\contextlib.py\", line 141, in __enter__\n    return next(self.gen)\n  File \"C:\\Users\\odin\\Documents\\Parashell\\Kit\\tests\\oracle\\Session.py\", line 196, in _document\n    model = self._app.OpenDoc6(\n        str(path),\n    ...<4 lines>...\n        warnings,\n    )\n  File \"<COMObject SldWorks.Application>\", line 2, in OpenDoc6\npywintypes.com_error: (-2147023170, 'The remote procedure call failed.', None, None)\n",
+    "stdout_tail": ""
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E6_plane_front_to_right.SLDPRT",
+    "returncode": 0,
+    "seconds": 20.255958100002317,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@E6_plane_front_to_right.Part",
+            10.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 8000.000000000001,
+    "surface_mm2": 2800.0,
+    "centre_mm": [
+      5.0,
+      0.0,
+      0.0
+    ],
+    "status": "measured"
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E7_reverse_first_feature.SLDPRT",
+    "returncode": 0,
+    "seconds": 19.349264500000572,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@E7_reverse_first_feature.Part",
+            10.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 8000.000000000001,
+    "surface_mm2": 2800.0,
+    "centre_mm": [
+      0.0,
+      0.0,
+      -5.0
+    ],
+    "status": "measured"
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E8_first_feature_mid_plane.SLDPRT",
+    "returncode": 0,
+    "seconds": 18.26413319999847,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@E8_first_feature_mid_plane.Part",
+            10.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 8000.000000000001,
+    "surface_mm2": 2800.0,
+    "centre_mm": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "status": "measured"
+  },
+  {
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E9_comp_feature_reorder.SLDPRT",
+    "returncode": 0,
+    "seconds": 28.2305594999998,
+    "opened": true,
+    "load_errors": [],
+    "load_warnings": [],
+    "rebuilt": true,
+    "body_count": 1,
+    "features": [
+      {
+        "name": "Comments",
+        "type": "CommentsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Favorites",
+        "type": "FavoriteFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "History",
+        "type": "HistoryFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Selection Sets",
+        "type": "SelectionSetFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sensors",
+        "type": "SensorFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Design Binder",
+        "type": "DocsFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Annotations",
+        "type": "DetailCabinet",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Surface Bodies",
+        "type": "SurfaceBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Solid Bodies",
+        "type": "SolidBodyFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Lights and Cameras",
+        "type": "EnvFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Markups",
+        "type": "InkMarkupFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Equations",
+        "type": "EqnFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Material <not specified>",
+        "type": "MaterialFolder",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Front Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Top Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Right Plane",
+        "type": "RefPlane",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Origin",
+        "type": "OriginProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Sketch1",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude1",
+        "type": "Extrusion",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude1@E9_comp_feature_reorder.Part",
+            10.0
+          ]
+        ]
+      },
+      {
+        "name": "Sketch2",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Cut-Extrude1",
+        "type": "ICE",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Cut-Extrude1@E9_comp_feature_reorder.Part",
+            5.0
+          ]
+        ]
+      },
+      {
+        "name": "Sketch3",
+        "type": "ProfileFeature",
+        "suppressed": false,
+        "dimensions": []
+      },
+      {
+        "name": "Boss-Extrude2",
+        "type": "ICE",
+        "suppressed": false,
+        "dimensions": [
+          [
+            "D1@Boss-Extrude2@E9_comp_feature_reorder.Part",
+            4.0
+          ]
+        ]
+      }
+    ],
+    "volume_mm3": 7756.0000000000055,
+    "surface_mm2": 3128.0,
+    "centre_mm": [
+      3.3328254438218275e-17,
+      -2.6662603550574624e-17,
+      5.392212480660135
+    ],
+    "status": "measured"
+  }
+]

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+#
+# This SPDX license identifier and copyright notice must not be
+# removed, altered, or obscured. Doing so is a material breach of
+# the PolyForm Strict License 1.0.0 and voids all licenses granted
+# to you under it immediately and permanently.
+
+0x4c732bc0
+0x4c281240
+0x4c1d9b60
+0x4c1d9b70
+0x4c411cf0
+0x4bd68d80
+0x4c392f10
+0x4bc868d0
+0x4bc87310
+0x4bc868e0
+0x4c940070
+0x4c274100
+0x4b38b750
+0x4b704690
+0x4c288eb0
+0x4bf23ca0
+0x4c1db8a0
+0x4c288670
+0x4bb97ca0

@@ -1,0 +1,80 @@
+{
+  "arc_counts": [0, 0, 1, 0, 0],
+  "axis_directions": [null, null, null, null, [0.0, 1.0]],
+  "container_streams": [
+    {
+      "file": "Contents__CMgr.bin",
+      "name": "Contents/CMgr"
+    },
+    {
+      "file": "Contents__Config-0.bin",
+      "name": "Contents/Config-0"
+    },
+    {
+      "file": "Contents__Config-0-ModelHeader.bin",
+      "name": "Contents/Config-0-ModelHeader"
+    },
+    {
+      "file": "Contents__Definition.bin",
+      "name": "Contents/Definition"
+    },
+    {
+      "file": "Header2.bin",
+      "name": "Header2"
+    }
+  ],
+  "depth_present": [true, true, true, false, false],
+  "donor_id": "arcboss_cut_cut_cut_through_rev_meta",
+  "mo_version": 18000,
+  "feature_ids": [32, 40, 47, 54, 60],
+  "feature_names": [
+    "Boss-Extrude1",
+    "Cut-Extrude1",
+    "Cut-Extrude2",
+    "Cut-Extrude3",
+    "Revolve1"
+  ],
+  "features": [
+    ["boss", "polyline-3-arc-1-ccw", "front", "blind"],
+    ["cut", "rectangle", "front", "blind"],
+    ["cut", "circle", "front", "blind"],
+    ["cut", "polyline-12", "top", "through-all"],
+    ["revolve-boss", "polyline-6", "top-sketch-axis", "full-revolution"]
+  ],
+  "inherited_directions": [null, null, null, false, null],
+  "measured": true,
+  "point_counts": [4, 4, 0, 12, 6],
+  "sketch_ids": [26, 33, 41, 48, 55],
+  "sketch_names": ["Sketch1", "Sketch2", "Sketch3", "Sketch4", "Sketch5"],
+  "spare_equations": [
+    "\"KitVar01\"= 1",
+    "\"KitVar02\"= 2",
+    "\"KitVar03\"= 3",
+    "\"KitVar04\"= 4",
+    "\"KitVar05\"= 5",
+    "\"KitVar06\"= 6",
+    "\"KitVar07\"= 7",
+    "\"KitVar08\"= 8",
+    "\"KitVar09\"= 9",
+    "\"KitVar10\"= 10",
+    "\"KitVar11\"= 11",
+    "\"KitVar12\"= 12",
+    "\"KitVar13\"= 13",
+    "\"KitVar14\"= 14",
+    "\"KitVar15\"= 15",
+    "\"KitVar16\"= 16",
+    "\"KitVar17\"= 17",
+    "\"KitVar18\"= 18",
+    "\"KitVar19\"= 19",
+    "\"KitVar20\"= 20",
+    "\"KitVar21\"= 21",
+    "\"KitVar22\"= 22",
+    "\"KitVar23\"= 23",
+    "\"KitVar24\"= 24"
+  ],
+  "spare_plane_frames": [32840, 33966, 35007, 36048],
+  "spare_plane_ids": [61, 62, 63, 64],
+  "spare_plane_names": ["Plane1", "Plane2", "Plane3", "Plane4"],
+  "stream_bytes": 36774,
+  "swept_arc_counts": [1, 0, 0, 0, 0]
+}

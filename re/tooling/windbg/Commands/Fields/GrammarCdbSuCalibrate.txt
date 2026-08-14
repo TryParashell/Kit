@@ -1,0 +1,3 @@
+.symopt+0x4000
+bp swccu!?ReadClass@su_CArchive@@QEAAPEAUCRuntimeClass@@PEBU2@PEAIPEAK@Z "dq @rcx L18; bc 0; g"
+g

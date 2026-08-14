@@ -1,0 +1,33 @@
+$$ SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+$$ SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+$$
+$$ This SPDX license identifier and copyright notice must not be
+$$ removed, altered, or obscured. Doing so is a material breach of
+$$ the PolyForm Strict License 1.0.0 and voids all licenses granted
+$$ to you under it immediately and permanently.
+$$ This script is reserved for the isolated oracle lane after explicit handoff.
+.symopt+0x4000
+.symopt-0x20000
+.exepath+ C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS
+.reload /f swccu.dll
+sxi 80090016
+sxi 80290410
+sxi e06d7363
+sxi e0434352
+sxi 04242420
+bu swccu+0x4290 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F char %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x42a0 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F uchar %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x4300 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F short %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x4310 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F ushort %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x4370 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F int %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x4380 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F long %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x43e0 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F ulong %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x4440 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F float %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x44a0 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F double %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x4500 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F dbkey %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x4510 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F int64 %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu+0x4570 ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"F uint64 %x %p %y %p %p\\n\", poi(@rcx+0x38)-poi(@rcx+0x48), poi(@rsp), poi(@rsp), @rdx, @rsp }; gc"
+bu swccu!su_CArchive::ReadObject ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"RO %p %x %d %p %x\\n\", poi(@rcx+0x48), poi(@rcx+0x38)-poi(@rcx+0x48), dwo(@rcx+0x50), @rsp, poi(@rcx+0x40)-poi(@rcx+0x48) }; gc"
+bu swccu!su_CArchive::ReadClass ".if (((poi(@rcx+0x40)-poi(@rcx+0x48))==0x4442) | ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x629e)) { .printf \"RC %p %x %d %p %x\\n\", poi(@rcx+0x48), poi(@rcx+0x38)-poi(@rcx+0x48), dwo(@rcx+0x50), @rsp, poi(@rcx+0x40)-poi(@rcx+0x48) }; gc"
+bl
+g

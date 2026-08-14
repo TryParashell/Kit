@@ -1,0 +1,433 @@
+[
+  {
+    "name": "E1_op_cut_to_boss",
+    "question": "does the operation word alone turn a cut into a boss",
+    "donor": "CUTBASE_cd5.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E1_op_cut_to_boss.SLDPRT",
+    "notes": [
+      "flags[1] @13584 -> 0x40000140"
+    ],
+    "resolved_before": 16579,
+    "resolved_after": 16579,
+    "container_bytes": 46063,
+    "predicted_mm3": 8500.0,
+    "predicted_centre_mm": null,
+    "expected_kinds": [
+      "boss",
+      "boss"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        0,
+        false
+      ],
+      [
+        1,
+        "Cut-Extrude1",
+        "boss",
+        40,
+        5.0,
+        0,
+        true
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32,
+      33,
+      40
+    ]
+  },
+  {
+    "name": "E2_op_boss_to_cut",
+    "question": "does the operation word alone turn a face-supported boss into a cut",
+    "donor": "TWOPAD_d5.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E2_op_boss_to_cut.SLDPRT",
+    "notes": [
+      "flags[1] @16395 -> 0x400201ca",
+      "reverse[1] @17517 0 -> 1"
+    ],
+    "resolved_before": 19390,
+    "resolved_after": 19390,
+    "container_bytes": 50317,
+    "predicted_mm3": 7500.0,
+    "predicted_centre_mm": null,
+    "expected_kinds": [
+      "boss",
+      "cut"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        0,
+        false
+      ],
+      [
+        1,
+        "Boss-Extrude2",
+        "cut",
+        40,
+        5.0,
+        0,
+        true
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32,
+      33,
+      40
+    ]
+  },
+  {
+    "name": "E3_blind_to_through_all",
+    "question": "can blind become ThroughAll with the dimension object left in place",
+    "donor": "CUTBASE_cd5.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E3_blind_to_through_all.SLDPRT",
+    "notes": [
+      "end_condition[1] @14712 0 -> 1"
+    ],
+    "resolved_before": 16579,
+    "resolved_after": 16579,
+    "container_bytes": 46070,
+    "predicted_mm3": 7000.0,
+    "predicted_centre_mm": null,
+    "expected_kinds": [
+      "boss",
+      "cut"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        0,
+        false
+      ],
+      [
+        1,
+        "Cut-Extrude1",
+        "cut",
+        40,
+        5.0,
+        1,
+        true
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32,
+      33,
+      40
+    ]
+  },
+  {
+    "name": "E4_blind_to_mid_plane",
+    "question": "can a later feature switch blind to MidPlane by one byte",
+    "donor": "CUTBASE_cd5.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E4_blind_to_mid_plane.SLDPRT",
+    "notes": [
+      "end_condition[1] @14712 0 -> 6"
+    ],
+    "resolved_before": 16579,
+    "resolved_after": 16579,
+    "container_bytes": 46071,
+    "predicted_mm3": 7750.0,
+    "predicted_centre_mm": null,
+    "expected_kinds": [
+      "boss",
+      "cut"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        0,
+        false
+      ],
+      [
+        1,
+        "Cut-Extrude1",
+        "cut",
+        40,
+        5.0,
+        6,
+        true
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32,
+      33,
+      40
+    ]
+  },
+  {
+    "name": "E5_plane_front_to_top",
+    "question": "can the sketch support plane be switched Front -> Top",
+    "donor": "BASELINE_40x20x10.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E5_plane_front_to_top.SLDPRT",
+    "notes": [
+      "sketch_plane @7958 2 -> 3 (axis 2)"
+    ],
+    "resolved_before": 11075,
+    "resolved_after": 11075,
+    "container_bytes": 44373,
+    "predicted_mm3": 8000.0,
+    "predicted_centre_mm": [
+      0.0,
+      5.0,
+      0.0
+    ],
+    "expected_kinds": [
+      "boss"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        0,
+        false
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32
+    ]
+  },
+  {
+    "name": "E6_plane_front_to_right",
+    "question": "can the sketch support plane be switched Front -> Right",
+    "donor": "BASELINE_40x20x10.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E6_plane_front_to_right.SLDPRT",
+    "notes": [
+      "sketch_plane @7958 2 -> 4 (axis 1)"
+    ],
+    "resolved_before": 11075,
+    "resolved_after": 11075,
+    "container_bytes": 44376,
+    "predicted_mm3": 8000.0,
+    "predicted_centre_mm": [
+      5.0,
+      0.0,
+      0.0
+    ],
+    "expected_kinds": [
+      "boss"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        0,
+        false
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32
+    ]
+  },
+  {
+    "name": "E7_reverse_first_feature",
+    "question": "does the direction byte pair reverse feature 1",
+    "donor": "BASELINE_40x20x10.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E7_reverse_first_feature.SLDPRT",
+    "notes": [
+      "reverse[0] @9058 0 -> 1",
+      "from_reverse @11043 0 -> 1"
+    ],
+    "resolved_before": 11075,
+    "resolved_after": 11075,
+    "container_bytes": 44369,
+    "predicted_mm3": 8000.0,
+    "predicted_centre_mm": [
+      0.0,
+      0.0,
+      -5.0
+    ],
+    "expected_kinds": [
+      "boss"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        0,
+        true
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32
+    ]
+  },
+  {
+    "name": "E8_first_feature_mid_plane",
+    "question": "does the end-condition byte switch feature 1 to MidPlane",
+    "donor": "BASELINE_40x20x10.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E8_first_feature_mid_plane.SLDPRT",
+    "notes": [
+      "end_condition[0] @9064 0 -> 6"
+    ],
+    "resolved_before": 11075,
+    "resolved_after": 11075,
+    "container_bytes": 44371,
+    "predicted_mm3": 8000.0,
+    "predicted_centre_mm": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "expected_kinds": [
+      "boss"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        6,
+        false
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32
+    ]
+  },
+  {
+    "name": "E9_comp_feature_reorder",
+    "question": "is the rebuild order taken from the moCompFeature_c array order",
+    "donor": "THREEFEATURE_pad_cut_pad.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E9_comp_feature_reorder.SLDPRT",
+    "notes": [
+      "swapped moCompFeature_c entries [2:4) and [4:6) (890..1128 <-> 1128..1366)"
+    ],
+    "resolved_before": 24805,
+    "resolved_after": 24805,
+    "container_bytes": 52073,
+    "predicted_mm3": 7756.0,
+    "predicted_centre_mm": null,
+    "expected_kinds": [
+      "boss",
+      "boss",
+      "cut"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        0,
+        false
+      ],
+      [
+        1,
+        "Cut-Extrude1",
+        "cut",
+        40,
+        5.0,
+        0,
+        true
+      ],
+      [
+        2,
+        "Boss-Extrude2",
+        "boss",
+        47,
+        4.0,
+        0,
+        false
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32,
+      41,
+      47,
+      33,
+      40
+    ]
+  },
+  {
+    "name": "E10_comp_feature_drop_last",
+    "question": "does deleting the last moCompFeature_c entry pair delete the feature",
+    "donor": "THREEFEATURE_pad_cut_pad.SLDPRT",
+    "path": "C:\\Users\\odin\\Documents\\Parashell\\Kit\\.rescratch\\grammar\\parts\\E10_comp_feature_drop_last.SLDPRT",
+    "notes": [
+      "deleted moCompFeature_c entries 1128..1366 (238 bytes)"
+    ],
+    "resolved_before": 24805,
+    "resolved_after": 24567,
+    "container_bytes": 52060,
+    "predicted_mm3": 7500.0,
+    "predicted_centre_mm": null,
+    "expected_kinds": [
+      "boss",
+      "cut"
+    ],
+    "features_after": [
+      [
+        0,
+        "Boss-Extrude1",
+        "boss",
+        32,
+        10.0,
+        0,
+        false
+      ],
+      [
+        1,
+        "Cut-Extrude1",
+        "cut",
+        40,
+        5.0,
+        0,
+        true
+      ],
+      [
+        2,
+        "Boss-Extrude2",
+        "boss",
+        47,
+        4.0,
+        0,
+        false
+      ]
+    ],
+    "comp_entries_after": [
+      26,
+      32,
+      33,
+      40
+    ]
+  }
+]

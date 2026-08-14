@@ -1,0 +1,5405 @@
+{
+  "summary": {
+    "parts_scanned": 111,
+    "parts_with_revolves": 40,
+    "revolve_features": 67,
+    "revolved_bosses": 39,
+    "revolved_cuts": 28,
+    "class_file_counts": {
+      "moRevEndSpec_c": 40,
+      "moAngleParameter_c": 36,
+      "moDisplayAngularDim_c": 36,
+      "moRevolution_c": 30,
+      "moTempAxisRef_w": 26,
+      "moDisplayRevolveDim_c": 19,
+      "moRevCut_c": 17,
+      "moRefAxis_c": 10,
+      "moCompRefAxis_c": 10,
+      "moSurfaceAxisData_c": 7
+    },
+    "distinct_tree_flags": {
+      "0x40000000": 67
+    },
+    "axis_kinds": {
+      "sketch-entity": 56,
+      "reference-axis": 11
+    },
+    "angle_degrees_histogram": {
+      "360.0": 67
+    },
+    "angle_matches_keywords": 67,
+    "angle_marker_relative_first_instance": {
+      "56": 19
+    },
+    "boss_and_cut_class_coexistence": {
+      "moRevolution_c": 28,
+      "moRevCut_c": 20,
+      "both": 19
+    },
+    "angle_copy_check": {
+      "angle_copies_verified": 67,
+      "failures": []
+    }
+  },
+  "decoder": {
+    "counters": {
+      "angle-copies-not-modelled": 67,
+      "angle-native-offset-correct": 67,
+      "end-spec-not-read": 67,
+      "locate-features-includes-revolve": 67,
+      "feature-kind-returns-none": 67,
+      "axis-unresolved": 54,
+      "native-end-is-end-of-stream": 6
+    },
+    "findings": [
+      {
+        "file": "examples/Random/Addons/Alternator_pulley.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 53,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 27198"
+      },
+      {
+        "file": "examples/Random/Addons/Belt_tensioner.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 50,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 32908"
+      },
+      {
+        "file": "examples/Random/Addons/Idle_pulley.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 50,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 7755"
+      },
+      {
+        "file": "examples/Random/Addons/Power_steering_pump_pulley.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 50,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 7813"
+      },
+      {
+        "file": "examples/Random/Addons/Water_pump_pulley.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 50,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 36126"
+      },
+      {
+        "file": "examples/Random/Crank/Journal_bearig_crank.SLDPRT",
+        "feature": "Cut-Revolve1",
+        "feature_id": 71,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch3' at offset 40819"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Cam_roller.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 48,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 23064"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Camshaft.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 53,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch2' at offset 39869"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Fuel_injector.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 99,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 67477"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Ingition_coil.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 75,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 35028"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Journal_bearig_camshaft.SLDPRT",
+        "feature": "Cut-Revolve1",
+        "feature_id": 71,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch3' at offset 41152"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Poppet.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 52,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 30746"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Spark_plug.SLDPRT",
+        "feature": "Revolve2",
+        "feature_id": 81,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch2' at offset 29039"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Spark_plug.SLDPRT",
+        "feature": "Revolve3",
+        "feature_id": 94,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch3' at offset 45101"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Spark_plug.SLDPRT",
+        "feature": "Revolve4",
+        "feature_id": 106,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch4' at offset 58993"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Timing_belt_roller.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 48,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 23315"
+      },
+      {
+        "file": "examples/Random/Cylinder_heads/Timing_belt_roller_2.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 48,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 23327"
+      },
+      {
+        "file": "examples/Random/Engine_Block.SLDPRT",
+        "feature": "Cut-Revolve1",
+        "feature_id": 127,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch3' at offset 140869"
+      },
+      {
+        "file": "examples/Random/Engine_Block.SLDPRT",
+        "feature": "Cut-Revolve2",
+        "feature_id": 148,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch4' at offset 148600"
+      },
+      {
+        "file": "examples/Random/Engine_Block.SLDPRT",
+        "feature": "Cut-Revolve3",
+        "feature_id": 158,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch5' at offset 156072"
+      },
+      {
+        "file": "examples/Random/Engine_Block.SLDPRT",
+        "feature": "Cut-Revolve4",
+        "feature_id": 170,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch6' at offset 163779"
+      },
+      {
+        "file": "examples/Random/Engine_Block.SLDPRT",
+        "feature": "Cut-Revolve5",
+        "feature_id": 182,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch7' at offset 173710"
+      },
+      {
+        "file": "examples/Random/Engine_Block.SLDPRT",
+        "feature": "Cut-Revolve6",
+        "feature_id": 199,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch8' at offset 194038"
+      },
+      {
+        "file": "examples/Random/Engine_Block.SLDPRT",
+        "feature": "Cut-Revolve7",
+        "feature_id": 209,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch9' at offset 201668"
+      },
+      {
+        "file": "examples/Random/Engine_Block.SLDPRT",
+        "feature": "Cut-Revolve8",
+        "feature_id": 219,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch10' at offset 209393"
+      },
+      {
+        "file": "examples/Random/Pistons/Journal_bearig_conrod.SLDPRT",
+        "feature": "Cut-Revolve1",
+        "feature_id": 71,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch3' at offset 40827"
+      },
+      {
+        "file": "examples/Random/Pistons/Piston.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 56,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 15757"
+      },
+      {
+        "file": "examples/Random/Pistons/Piston.SLDPRT",
+        "feature": "Cut-Revolve1",
+        "feature_id": 126,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch5' at offset 71563"
+      },
+      {
+        "file": "examples/Random/Supercharger/Supercharger_housing.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 412,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch24' at offset 448962"
+      },
+      {
+        "file": "examples/Random/Supercharger/Supercharger_pulley.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 114,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch5' at offset 82441"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/10MM x 20MM x 13MM head 316 Stainless Steel Socket Head Screw.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 144,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 8917"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/10MM x 20MM x 13MM head 316 Stainless Steel Socket Head Screw.SLDPRT",
+        "feature": "Revolve2",
+        "feature_id": 256,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch11' at offset 80781"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/6MM x 12MM -  Steel 12-Point Screw.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 153,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 7861"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/6MM x 12MM -  Steel 12-Point Screw.SLDPRT",
+        "feature": "Cut-Revolve3",
+        "feature_id": 218,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch6' at offset 88808"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/6MM x 12MM -  Steel 12-Point Screw.SLDPRT",
+        "feature": "Revolve3",
+        "feature_id": 256,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch8' at offset 93390"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/8MM x 15mm - 12 point screw.SLDPRT",
+        "feature": "Revolve1",
+        "feature_id": 153,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch1' at offset 8206"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/8MM x 15mm - 12 point screw.SLDPRT",
+        "feature": "Cut-Revolve3",
+        "feature_id": 218,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch6' at offset 91463"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/8MM x 15mm - 12 point screw.SLDPRT",
+        "feature": "Revolve3",
+        "feature_id": 256,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Sketch8' at offset 96045"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA DE TURBINA 1.SLDPRT",
+        "feature": "Cortar-Revolución1",
+        "feature_id": 240,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 148763"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA.SLDPRT",
+        "feature": "Cortar-Revolución1",
+        "feature_id": 74,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Croquis3' at offset 35445"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA.SLDPRT",
+        "feature": "Cortar-Revolución2",
+        "feature_id": 214,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 156117"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA.SLDPRT",
+        "feature": "Cortar-Revolución3",
+        "feature_id": 399,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 300319"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUIETA DE ENTRADA DE GASES.SLDPRT",
+        "feature": "Cortar-Revolución1",
+        "feature_id": 240,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 148810"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/PISTÓN.SLDPRT",
+        "feature": "Cortar-Revolución1",
+        "feature_id": 84,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Croquis3' at offset 50038"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/PISTÓN.SLDPRT",
+        "feature": "Cortar-Revolución2",
+        "feature_id": 189,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Croquis10' at offset 110356"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/RUEDA DE TURBINA.SLDPRT",
+        "feature": "Cortar-Revolución1",
+        "feature_id": 99,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 69014"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/RUEDA DE TURBINA.SLDPRT",
+        "feature": "Cortar-Revolución2",
+        "feature_id": 156,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 138726"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/RUEDA DE TURBINA.SLDPRT",
+        "feature": "Revolución1",
+        "feature_id": 192,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 177431"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TAPA RECTANGULAR DE LA CUBIERTA DE LA TURBINA.SLDPRT",
+        "feature": "Cortar-Revolución1",
+        "feature_id": 240,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 149372"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TURBINA.SLDPRT",
+        "feature": "Cortar-Revolución1",
+        "feature_id": 139,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 110732"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TURBINA.SLDPRT",
+        "feature": "Revolución1",
+        "feature_id": 275,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 202812"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TURBINA.SLDPRT",
+        "feature": "Revolución2",
+        "feature_id": 308,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is reference-axis referencing 'Eje1' at offset 227262"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/VÁLVULA.SLDPRT",
+        "feature": "Revolución1",
+        "feature_id": 54,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Croquis1' at offset 21670"
+      },
+      {
+        "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/VÁLVULA.SLDPRT",
+        "feature": "Cortar-Revolución1",
+        "feature_id": 126,
+        "defect": "axis-unresolved",
+        "detail": "axis_marker_offset is None; stream axis kind is sketch-entity referencing 'Croquis5' at offset 72482"
+      }
+    ]
+  },
+  "donor_candidates": [
+    {
+      "file": "examples/Random/Addons/Idle_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 13125,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        0
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Power_steering_pump_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 13183,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        0
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Timing_belt_roller.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 25200,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        16
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Timing_belt_roller_2.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 25212,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        16
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Cam_roller.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 39452,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        14
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/EJE DE CONTROL DE VÁLVULAS.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 39792,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        6
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Water_pump_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 41496,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        19
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Alternator_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 42974,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        17
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Crank/Journal_bearig_crank.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 50787,
+      "revolves": 1,
+      "bosses": 0,
+      "cuts": 1,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        11
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Pistons/Journal_bearig_conrod.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 50795,
+      "revolves": 1,
+      "bosses": 0,
+      "cuts": 1,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        11
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Journal_bearig_camshaft.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 51120,
+      "revolves": 1,
+      "bosses": 0,
+      "cuts": 1,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        12
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Poppet.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 52503,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        14
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Ingition_coil.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 57287,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        17
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TORNILLO CABEZA HEXAGONAL_RODAMIENTO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 61345,
+      "revolves": 1,
+      "bosses": 0,
+      "cuts": 1,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        10
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Fuel_injector.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 69315,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        35
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Supercharger/Supercharger_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 84302,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        17
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Belt_tensioner.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 87572,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        19
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Crank/Cranckshaft_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 94684,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        18
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Water_pump.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 102050,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        13
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Camshaft.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 131225,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moDisplayRevolveDim_c"
+      ],
+      "profile_point_counts": [
+        38
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/ARBOL DE LEVAS DE ESCAPE_IZQUIERDO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 222627,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        6
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/ARBOL DE LEVAS DE ADMISIÓN_DERECHO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 229494,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        6
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/ARBOL DE LEVAS DE ESCAPE_DERECHO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 233077,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        6
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/ARBOL DE LEVAS DE ADMISIÓN_IZQUIERDO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 238270,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        6
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Supercharger/Supercharger_housing.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 483412,
+      "revolves": 1,
+      "bosses": 1,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        12
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA DE TURBINA 1.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 574406,
+      "revolves": 1,
+      "bosses": 0,
+      "cuts": 1,
+      "axis_kinds": [
+        "reference-axis"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        10
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TAPA RECTANGULAR DE LA CUBIERTA DE LA TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 594111,
+      "revolves": 1,
+      "bosses": 0,
+      "cuts": 1,
+      "axis_kinds": [
+        "reference-axis"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        10
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUIETA DE ENTRADA DE GASES.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 712277,
+      "revolves": 1,
+      "bosses": 0,
+      "cuts": 1,
+      "axis_kinds": [
+        "reference-axis"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        10
+      ],
+      "angles": [
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/10MM x 20MM x 13MM head 316 Stainless Steel Socket Head Screw.SLDPRT",
+      "lane": "Contents/Config-579-ResolvedFeatures",
+      "lane_length": 82717,
+      "revolves": 2,
+      "bosses": 2,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        0,
+        0
+      ],
+      "angles": [
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/VÁLVULA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 103154,
+      "revolves": 2,
+      "bosses": 1,
+      "cuts": 1,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        9,
+        11
+      ],
+      "angles": [
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Pistons/Piston.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 138700,
+      "revolves": 2,
+      "bosses": 1,
+      "cuts": 1,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        9,
+        18
+      ],
+      "angles": [
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/PISTÓN.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 151639,
+      "revolves": 2,
+      "bosses": 0,
+      "cuts": 2,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        32,
+        15
+      ],
+      "angles": [
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/6MM x 12MM -  Steel 12-Point Screw.SLDPRT",
+      "lane": "Contents/Config-962-ResolvedFeatures",
+      "lane_length": 115996,
+      "revolves": 3,
+      "bosses": 2,
+      "cuts": 1,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        0,
+        0,
+        0
+      ],
+      "angles": [
+        360.0,
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/8MM x 15mm - 12 point screw.SLDPRT",
+      "lane": "Contents/Config-970-ResolvedFeatures",
+      "lane_length": 120111,
+      "revolves": 3,
+      "bosses": 2,
+      "cuts": 1,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        0,
+        0,
+        0
+      ],
+      "angles": [
+        360.0,
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 252912,
+      "revolves": 3,
+      "bosses": 2,
+      "cuts": 1,
+      "axis_kinds": [
+        "reference-axis"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        28,
+        26,
+        11
+      ],
+      "angles": [
+        360.0,
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/RUEDA DE TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 273429,
+      "revolves": 3,
+      "bosses": 1,
+      "cuts": 2,
+      "axis_kinds": [
+        "reference-axis"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        16,
+        5,
+        10
+      ],
+      "angles": [
+        360.0,
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Cylinder_head.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 589029,
+      "revolves": 3,
+      "bosses": 2,
+      "cuts": 1,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        14,
+        12,
+        11
+      ],
+      "angles": [
+        360.0,
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 746886,
+      "revolves": 3,
+      "bosses": 0,
+      "cuts": 3,
+      "axis_kinds": [
+        "reference-axis",
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        12,
+        11,
+        18
+      ],
+      "angles": [
+        360.0,
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Spark_plug.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 116115,
+      "revolves": 5,
+      "bosses": 5,
+      "cuts": 0,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ],
+      "profile_point_counts": [
+        12,
+        0,
+        20,
+        15,
+        13
+      ],
+      "angles": [
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0
+      ]
+    },
+    {
+      "file": "examples/Random/Engine_Block.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 1096147,
+      "revolves": 8,
+      "bosses": 0,
+      "cuts": 8,
+      "axis_kinds": [
+        "sketch-entity"
+      ],
+      "classes": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ],
+      "profile_point_counts": [
+        8,
+        8,
+        8,
+        8,
+        6,
+        9,
+        9,
+        8
+      ],
+      "angles": [
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0
+      ]
+    }
+  ],
+  "revolves": [
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/10MM x 20MM x 13MM head 316 Stainless Steel Socket Head Screw.SLDPRT",
+      "lane": "Contents/Config-579-ResolvedFeatures",
+      "lane_length": 82717,
+      "feature_id": 144,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 7730,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 9851,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        9851,
+        10364,
+        10388
+      ],
+      "angle_marker_relative": null,
+      "end_spec_object_offset": 9062,
+      "end_spec_data_offset": 9082,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 8917,
+      "axis_reference_id": 63,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch3",
+      "profile_sketch_id": 130,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/10MM x 20MM x 13MM head 316 Stainless Steel Socket Head Screw.SLDPRT",
+      "lane": "Contents/Config-579-ResolvedFeatures",
+      "lane_length": 82717,
+      "feature_id": 256,
+      "name": "Revolve2",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 79206,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 81683,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        81683,
+        82196,
+        82220
+      ],
+      "angle_marker_relative": null,
+      "end_spec_object_offset": 80926,
+      "end_spec_data_offset": 80928,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 80781,
+      "axis_reference_id": 238,
+      "axis_reference_name": "Sketch11",
+      "profile_sketch_name": "Sketch11",
+      "profile_sketch_id": 238,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/6MM x 12MM -  Steel 12-Point Screw.SLDPRT",
+      "lane": "Contents/Config-962-ResolvedFeatures",
+      "lane_length": 115996,
+      "feature_id": 153,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 6893,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 8791,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        8791,
+        9304,
+        9328
+      ],
+      "angle_marker_relative": null,
+      "end_spec_object_offset": 8006,
+      "end_spec_data_offset": 8026,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 7861,
+      "axis_reference_id": 138,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 138,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/6MM x 12MM -  Steel 12-Point Screw.SLDPRT",
+      "lane": "Contents/Config-962-ResolvedFeatures",
+      "lane_length": 115996,
+      "feature_id": 218,
+      "name": "Cut-Revolve3",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 80674,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 89706,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        89706,
+        90219,
+        90243
+      ],
+      "angle_marker_relative": null,
+      "end_spec_object_offset": 88953,
+      "end_spec_data_offset": 88955,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 88808,
+      "axis_reference_id": 201,
+      "axis_reference_name": "Sketch6",
+      "profile_sketch_name": "Sketch6",
+      "profile_sketch_id": 201,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/6MM x 12MM -  Steel 12-Point Screw.SLDPRT",
+      "lane": "Contents/Config-962-ResolvedFeatures",
+      "lane_length": 115996,
+      "feature_id": 256,
+      "name": "Revolve3",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 91271,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 94288,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        94288,
+        94801,
+        94825
+      ],
+      "angle_marker_relative": null,
+      "end_spec_object_offset": 93535,
+      "end_spec_data_offset": 93537,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 93390,
+      "axis_reference_id": 242,
+      "axis_reference_name": "Sketch8",
+      "profile_sketch_name": "Sketch8",
+      "profile_sketch_id": 242,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/8MM x 15mm - 12 point screw.SLDPRT",
+      "lane": "Contents/Config-970-ResolvedFeatures",
+      "lane_length": 120111,
+      "feature_id": 153,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 7238,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 9136,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        9136,
+        9649,
+        9673
+      ],
+      "angle_marker_relative": null,
+      "end_spec_object_offset": 8351,
+      "end_spec_data_offset": 8371,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 8206,
+      "axis_reference_id": 138,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 138,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/8MM x 15mm - 12 point screw.SLDPRT",
+      "lane": "Contents/Config-970-ResolvedFeatures",
+      "lane_length": 120111,
+      "feature_id": 218,
+      "name": "Cut-Revolve3",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 83329,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 92361,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        92361,
+        92874,
+        92898
+      ],
+      "angle_marker_relative": null,
+      "end_spec_object_offset": 91608,
+      "end_spec_data_offset": 91610,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 91463,
+      "axis_reference_id": 201,
+      "axis_reference_name": "Sketch6",
+      "profile_sketch_name": "Sketch6",
+      "profile_sketch_id": 201,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/8MM x 15mm - 12 point screw.SLDPRT",
+      "lane": "Contents/Config-970-ResolvedFeatures",
+      "lane_length": 120111,
+      "feature_id": 256,
+      "name": "Revolve3",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 93926,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 96943,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        96943,
+        97456,
+        97480
+      ],
+      "angle_marker_relative": null,
+      "end_spec_object_offset": 96190,
+      "end_spec_data_offset": 96192,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 96045,
+      "axis_reference_id": 242,
+      "axis_reference_name": "Sketch8",
+      "profile_sketch_name": "Sketch8",
+      "profile_sketch_id": 242,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/ARBOL DE LEVAS DE ADMISIÓN_DERECHO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 229494,
+      "feature_id": 33,
+      "name": "Revolución1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 13592,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 16136,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        16136,
+        16649,
+        16673
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 15276,
+      "end_spec_data_offset": 15296,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 15131,
+      "axis_reference_id": 23,
+      "axis_reference_name": "Croquis1",
+      "profile_sketch_name": "Croquis1",
+      "profile_sketch_id": 23,
+      "profile_point_count": 6,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          2
+        ],
+        [
+          0,
+          3,
+          2
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/ARBOL DE LEVAS DE ADMISIÓN_IZQUIERDO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 238270,
+      "feature_id": 33,
+      "name": "Revolución1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 13592,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 16148,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        16148,
+        16661,
+        16685
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 15288,
+      "end_spec_data_offset": 15308,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 15143,
+      "axis_reference_id": 23,
+      "axis_reference_name": "Croquis1",
+      "profile_sketch_name": "Croquis1",
+      "profile_sketch_id": 23,
+      "profile_point_count": 6,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          2
+        ],
+        [
+          0,
+          3,
+          2
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/ARBOL DE LEVAS DE ESCAPE_DERECHO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 233077,
+      "feature_id": 33,
+      "name": "Revolución1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 13592,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 16128,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        16128,
+        16641,
+        16665
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 15268,
+      "end_spec_data_offset": 15288,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 15123,
+      "axis_reference_id": 23,
+      "axis_reference_name": "Croquis1",
+      "profile_sketch_name": "Croquis1",
+      "profile_sketch_id": 23,
+      "profile_point_count": 6,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          2
+        ],
+        [
+          0,
+          3,
+          2
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/ARBOL DE LEVAS DE ESCAPE_IZQUIERDO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 222627,
+      "feature_id": 33,
+      "name": "Revolución1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 13592,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 16220,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        16220,
+        16733,
+        16757
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 15360,
+      "end_spec_data_offset": 15380,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 15215,
+      "axis_reference_id": 23,
+      "axis_reference_name": "Croquis1",
+      "profile_sketch_name": "Croquis1",
+      "profile_sketch_id": 23,
+      "profile_point_count": 6,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          2
+        ],
+        [
+          0,
+          3,
+          2
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA DE TURBINA 1.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 574406,
+      "feature_id": 240,
+      "name": "Cortar-Revolución1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 147517,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 149708,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        149708,
+        150221,
+        150245
+      ],
+      "angle_marker_relative": 90850,
+      "end_spec_object_offset": 148894,
+      "end_spec_data_offset": 148914,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 148763,
+      "axis_reference_id": 205,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis6",
+      "profile_sketch_id": 208,
+      "profile_point_count": 10,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          5
+        ],
+        [
+          1,
+          0,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 746886,
+      "feature_id": 74,
+      "name": "Cortar-Revolución1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 34418,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 36426,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        36426,
+        36939,
+        36963
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 35590,
+      "end_spec_data_offset": 35610,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 35445,
+      "axis_reference_id": 53,
+      "axis_reference_name": "Croquis3",
+      "profile_sketch_name": "Croquis3",
+      "profile_sketch_id": 53,
+      "profile_point_count": 12,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          3
+        ],
+        [
+          0,
+          2,
+          3
+        ],
+        [
+          6,
+          0,
+          3
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 746886,
+      "feature_id": 214,
+      "name": "Cortar-Revolución2",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 154258,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 157005,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        157005,
+        157518,
+        157542
+      ],
+      "angle_marker_relative": 120635,
+      "end_spec_object_offset": 156248,
+      "end_spec_data_offset": 156250,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 156117,
+      "axis_reference_id": 193,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis10",
+      "profile_sketch_id": 195,
+      "profile_point_count": 11,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          5
+        ],
+        [
+          1,
+          0,
+          2
+        ],
+        [
+          6,
+          0,
+          3
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUBIERTA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 746886,
+      "feature_id": 399,
+      "name": "Cortar-Revolución3",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 298531,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 301207,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        301207,
+        301720,
+        301744
+      ],
+      "angle_marker_relative": 264837,
+      "end_spec_object_offset": 300450,
+      "end_spec_data_offset": 300452,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 300319,
+      "axis_reference_id": 193,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis18",
+      "profile_sketch_id": 386,
+      "profile_point_count": 18,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          6
+        ],
+        [
+          8,
+          0,
+          2
+        ],
+        [
+          8,
+          1,
+          4
+        ],
+        [
+          14,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/CUIETA DE ENTRADA DE GASES.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 712277,
+      "feature_id": 240,
+      "name": "Cortar-Revolución1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 147564,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 149755,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        149755,
+        150268,
+        150292
+      ],
+      "angle_marker_relative": 90850,
+      "end_spec_object_offset": 148941,
+      "end_spec_data_offset": 148961,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 148810,
+      "axis_reference_id": 205,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis6",
+      "profile_sketch_id": 208,
+      "profile_point_count": 10,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          5
+        ],
+        [
+          1,
+          0,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/EJE DE CONTROL DE VÁLVULAS.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 39792,
+      "feature_id": 50,
+      "name": "Revolución1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 13696,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 16160,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        16160,
+        16673,
+        16697
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 15300,
+      "end_spec_data_offset": 15320,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 15155,
+      "axis_reference_id": 23,
+      "axis_reference_name": "Croquis1",
+      "profile_sketch_name": "Croquis1",
+      "profile_sketch_id": 23,
+      "profile_point_count": 6,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          2
+        ],
+        [
+          0,
+          3,
+          2
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/PISTÓN.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 151639,
+      "feature_id": 84,
+      "name": "Cortar-Revolución1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 48832,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 50972,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        50972,
+        51485,
+        51509
+      ],
+      "angle_marker_relative": 24971,
+      "end_spec_object_offset": 50183,
+      "end_spec_data_offset": 50203,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 50038,
+      "axis_reference_id": 35,
+      "axis_reference_name": "Croquis3",
+      "profile_sketch_name": "Croquis3",
+      "profile_sketch_id": 35,
+      "profile_point_count": 32,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          0,
+          3,
+          13
+        ],
+        [
+          1,
+          0,
+          3
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          6
+        ],
+        [
+          14,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/PISTÓN.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 151639,
+      "feature_id": 189,
+      "name": "Cortar-Revolución2",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 109344,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 111258,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        111258,
+        111771,
+        111795
+      ],
+      "angle_marker_relative": 85257,
+      "end_spec_object_offset": 110501,
+      "end_spec_data_offset": 110503,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 110356,
+      "axis_reference_id": 160,
+      "axis_reference_name": "Croquis10",
+      "profile_sketch_name": "Croquis10",
+      "profile_sketch_id": 160,
+      "profile_point_count": 15,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          4
+        ],
+        [
+          0,
+          2,
+          8
+        ],
+        [
+          6,
+          0,
+          3
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/RUEDA DE TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 273429,
+      "feature_id": 99,
+      "name": "Cortar-Revolución1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 67860,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 69920,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        69920,
+        70433,
+        70457
+      ],
+      "angle_marker_relative": 29501,
+      "end_spec_object_offset": 69145,
+      "end_spec_data_offset": 69165,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 69014,
+      "axis_reference_id": 46,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis4",
+      "profile_sketch_id": 66,
+      "profile_point_count": 16,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          8
+        ],
+        [
+          6,
+          0,
+          2
+        ],
+        [
+          8,
+          1,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/RUEDA DE TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 273429,
+      "feature_id": 156,
+      "name": "Cortar-Revolución2",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 137592,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 139614,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        139614,
+        140127,
+        140151
+      ],
+      "angle_marker_relative": 99195,
+      "end_spec_object_offset": 138857,
+      "end_spec_data_offset": 138859,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 138726,
+      "axis_reference_id": 46,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis10",
+      "profile_sketch_id": 145,
+      "profile_point_count": 5,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          2,
+          2,
+          1
+        ],
+        [
+          6,
+          0,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/RUEDA DE TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 273429,
+      "feature_id": 192,
+      "name": "Revolución1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 176051,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 178319,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        178319,
+        178832,
+        178856
+      ],
+      "angle_marker_relative": 137900,
+      "end_spec_object_offset": 177562,
+      "end_spec_data_offset": 177564,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 177431,
+      "axis_reference_id": 46,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis13",
+      "profile_sketch_id": 179,
+      "profile_point_count": 10,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TAPA RECTANGULAR DE LA CUBIERTA DE LA TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 594111,
+      "feature_id": 240,
+      "name": "Cortar-Revolución1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 148126,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 150317,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        150317,
+        150830,
+        150854
+      ],
+      "angle_marker_relative": 90902,
+      "end_spec_object_offset": 149503,
+      "end_spec_data_offset": 149523,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 149372,
+      "axis_reference_id": 205,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis6",
+      "profile_sketch_id": 208,
+      "profile_point_count": 10,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          5
+        ],
+        [
+          1,
+          0,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TORNILLO CABEZA HEXAGONAL_RODAMIENTO.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 61345,
+      "feature_id": 102,
+      "name": "Cortar-Revolución1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 57990,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 60313,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        60313,
+        60826,
+        60850
+      ],
+      "angle_marker_relative": 12665,
+      "end_spec_object_offset": 59524,
+      "end_spec_data_offset": 59544,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 59379,
+      "axis_reference_id": 83,
+      "axis_reference_name": "Croquis7",
+      "profile_sketch_name": "Croquis7",
+      "profile_sketch_id": 83,
+      "profile_point_count": 10,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 252912,
+      "feature_id": 139,
+      "name": "Cortar-Revolución1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 108736,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 111638,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        111638,
+        112151,
+        112175
+      ],
+      "angle_marker_relative": 55329,
+      "end_spec_object_offset": 110863,
+      "end_spec_data_offset": 110883,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 110732,
+      "axis_reference_id": 52,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis5",
+      "profile_sketch_id": 91,
+      "profile_point_count": 28,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          13
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          10
+        ],
+        [
+          6,
+          0,
+          2
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 252912,
+      "feature_id": 275,
+      "name": "Revolución1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 201368,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 203700,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        203700,
+        204213,
+        204237
+      ],
+      "angle_marker_relative": 147391,
+      "end_spec_object_offset": 202943,
+      "end_spec_data_offset": 202945,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 202812,
+      "axis_reference_id": 52,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis9",
+      "profile_sketch_id": 255,
+      "profile_point_count": 26,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          11
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          2
+        ],
+        [
+          8,
+          1,
+          8
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/TURBINA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 252912,
+      "feature_id": 308,
+      "name": "Revolución2",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 226020,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 228150,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        228150,
+        228663,
+        228687
+      ],
+      "angle_marker_relative": 171841,
+      "end_spec_object_offset": 227393,
+      "end_spec_data_offset": 227395,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "reference-axis",
+      "axis_reference_offset": 227262,
+      "axis_reference_id": 52,
+      "axis_reference_name": "Eje1",
+      "profile_sketch_name": "Croquis11",
+      "profile_sketch_id": 292,
+      "profile_point_count": 11,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          3
+        ],
+        [
+          6,
+          0,
+          3
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/VÁLVULA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 103154,
+      "feature_id": 54,
+      "name": "Revolución1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 20402,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 22675,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        22675,
+        23188,
+        23212
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 21815,
+      "end_spec_data_offset": 21835,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 21670,
+      "axis_reference_id": 23,
+      "axis_reference_name": "Croquis1",
+      "profile_sketch_name": "Croquis1",
+      "profile_sketch_id": 23,
+      "profile_point_count": 9,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          5
+        ],
+        [
+          0,
+          3,
+          2
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Single Turbo Dual Overhead Cam V8 - KDP - 2024/VÁLVULA.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 103154,
+      "feature_id": 126,
+      "name": "Cortar-Revolución1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 70698,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 73384,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        73384,
+        73897,
+        73921
+      ],
+      "angle_marker_relative": 50765,
+      "end_spec_object_offset": 72627,
+      "end_spec_data_offset": 72629,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 72482,
+      "axis_reference_id": 119,
+      "axis_reference_name": "Croquis5",
+      "profile_sketch_name": "Croquis5",
+      "profile_sketch_id": 119,
+      "profile_point_count": 11,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          2
+        ],
+        [
+          0,
+          3,
+          2
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Alternator_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 42974,
+      "feature_id": 53,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 25906,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 28051,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        28051,
+        28564,
+        28588
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 27343,
+      "end_spec_data_offset": 27363,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 27198,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 17,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          3
+        ],
+        [
+          0,
+          2,
+          12
+        ],
+        [
+          6,
+          0,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Belt_tensioner.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 87572,
+      "feature_id": 50,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 31628,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 33761,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        33761,
+        34274,
+        34298
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 33053,
+      "end_spec_data_offset": 33073,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 32908,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 19,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          7
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          8
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          14,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Idle_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 13125,
+      "feature_id": 50,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 6461,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 8608,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        8608,
+        9121,
+        9145
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 7900,
+      "end_spec_data_offset": 7920,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 7755,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Power_steering_pump_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 13183,
+      "feature_id": 50,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 6459,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 8666,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        8666,
+        9179,
+        9203
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 7958,
+      "end_spec_data_offset": 7978,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 7813,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Water_pump.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 102050,
+      "feature_id": 157,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 56168,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 58226,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        58226,
+        58739,
+        58763
+      ],
+      "angle_marker_relative": 46005,
+      "end_spec_object_offset": 57603,
+      "end_spec_data_offset": 57623,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 57458,
+      "axis_reference_id": 145,
+      "axis_reference_name": "Sketch6",
+      "profile_sketch_name": "Sketch6",
+      "profile_sketch_id": 145,
+      "profile_point_count": 13,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          0,
+          2
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moSurfaceAxisData_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Addons/Water_pump_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 41496,
+      "feature_id": 50,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 34808,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 36979,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        36979,
+        37492,
+        37516
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 36271,
+      "end_spec_data_offset": 36291,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 36126,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 19,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          2,
+          16
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Crank/Cranckshaft_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 94684,
+      "feature_id": 119,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 88174,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 90182,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        90182,
+        90695,
+        90719
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 89498,
+      "end_spec_data_offset": 89518,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 89353,
+      "axis_reference_id": 98,
+      "axis_reference_name": "Sketch5",
+      "profile_sketch_name": "Sketch5",
+      "profile_sketch_id": 98,
+      "profile_point_count": 18,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          12
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Crank/Journal_bearig_crank.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 50787,
+      "feature_id": 71,
+      "name": "Cut-Revolve1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 39298,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 41625,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        41625,
+        42138,
+        42162
+      ],
+      "angle_marker_relative": 12465,
+      "end_spec_object_offset": 40964,
+      "end_spec_data_offset": 40984,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 40819,
+      "axis_reference_id": 49,
+      "axis_reference_name": "Sketch3",
+      "profile_sketch_name": "Sketch3",
+      "profile_sketch_id": 49,
+      "profile_point_count": 11,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          5
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          0,
+          5,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Cam_roller.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 39452,
+      "feature_id": 48,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 21968,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 23917,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        23917,
+        24430,
+        24454
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 23209,
+      "end_spec_data_offset": 23229,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 23064,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 14,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          2,
+          10
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          14,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Camshaft.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 131225,
+      "feature_id": 53,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 38597,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 40675,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        40675,
+        41188,
+        41212
+      ],
+      "angle_marker_relative": null,
+      "end_spec_object_offset": 40014,
+      "end_spec_data_offset": 40034,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 39869,
+      "axis_reference_id": 34,
+      "axis_reference_name": "Sketch2",
+      "profile_sketch_name": "Sketch2",
+      "profile_sketch_id": 34,
+      "profile_point_count": 38,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          2,
+          29
+        ],
+        [
+          0,
+          24,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          14,
+          0,
+          5
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moDisplayRevolveDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Cylinder_head.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 589029,
+      "feature_id": 215,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 107941,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 109894,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        109894,
+        110407,
+        110431
+      ],
+      "angle_marker_relative": 100412,
+      "end_spec_object_offset": 109257,
+      "end_spec_data_offset": 109277,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 109112,
+      "axis_reference_id": 196,
+      "axis_reference_name": "Sketch22",
+      "profile_sketch_name": "Sketch22",
+      "profile_sketch_id": 196,
+      "profile_point_count": 14,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          4
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Cylinder_head.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 589029,
+      "feature_id": 465,
+      "name": "Cut-Revolve1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 414411,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 417209,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        417209,
+        417722,
+        417746
+      ],
+      "angle_marker_relative": 407727,
+      "end_spec_object_offset": 416604,
+      "end_spec_data_offset": 416606,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 416459,
+      "axis_reference_id": 447,
+      "axis_reference_name": "Sketch33",
+      "profile_sketch_name": "Sketch33",
+      "profile_sketch_id": 447,
+      "profile_point_count": 12,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          5
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          0,
+          3,
+          1
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Cylinder_head.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 589029,
+      "feature_id": 490,
+      "name": "Revolve2",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 457242,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 459430,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        459430,
+        459943,
+        459967
+      ],
+      "angle_marker_relative": 449948,
+      "end_spec_object_offset": 458825,
+      "end_spec_data_offset": 458827,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 458680,
+      "axis_reference_id": 476,
+      "axis_reference_name": "Sketch34",
+      "profile_sketch_name": "Sketch34",
+      "profile_sketch_id": 476,
+      "profile_point_count": 11,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          3
+        ],
+        [
+          0,
+          2,
+          3
+        ],
+        [
+          0,
+          3,
+          1
+        ],
+        [
+          6,
+          0,
+          2
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Fuel_injector.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 69315,
+      "feature_id": 99,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 66159,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 68283,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        68283,
+        68796,
+        68820
+      ],
+      "angle_marker_relative": 51541,
+      "end_spec_object_offset": 67622,
+      "end_spec_data_offset": 67642,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 67477,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 35,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          4
+        ],
+        [
+          0,
+          2,
+          28
+        ],
+        [
+          0,
+          29,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          14,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Ingition_coil.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 57287,
+      "feature_id": 75,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 33920,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 35834,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        35834,
+        36347,
+        36371
+      ],
+      "angle_marker_relative": 20008,
+      "end_spec_object_offset": 35173,
+      "end_spec_data_offset": 35193,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 35028,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 17,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          12
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Journal_bearig_camshaft.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 51120,
+      "feature_id": 71,
+      "name": "Cut-Revolve1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 39631,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 41958,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        41958,
+        42471,
+        42495
+      ],
+      "angle_marker_relative": 12465,
+      "end_spec_object_offset": 41297,
+      "end_spec_data_offset": 41317,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 41152,
+      "axis_reference_id": 49,
+      "axis_reference_name": "Sketch3",
+      "profile_sketch_name": "Sketch3",
+      "profile_sketch_id": 49,
+      "profile_point_count": 12,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          5
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          0,
+          5,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Poppet.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 52503,
+      "feature_id": 52,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 29508,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 31552,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        31552,
+        32065,
+        32089
+      ],
+      "angle_marker_relative": 19770,
+      "end_spec_object_offset": 30891,
+      "end_spec_data_offset": 30911,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 30746,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 14,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          10
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Spark_plug.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 116115,
+      "feature_id": 49,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 24988,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 26673,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        26673,
+        27186,
+        27210
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 25965,
+      "end_spec_data_offset": 25985,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 25820,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 12,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          8
+        ],
+        [
+          0,
+          3,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Spark_plug.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 116115,
+      "feature_id": 81,
+      "name": "Revolve2",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 28270,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 29789,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        29789,
+        30302,
+        30326
+      ],
+      "angle_marker_relative": 3172,
+      "end_spec_object_offset": 29184,
+      "end_spec_data_offset": 29186,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 29039,
+      "axis_reference_id": 50,
+      "axis_reference_name": "Sketch2",
+      "profile_sketch_name": "Sketch2",
+      "profile_sketch_id": 50,
+      "profile_point_count": 0,
+      "profile_point_roles": [],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Spark_plug.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 116115,
+      "feature_id": 94,
+      "name": "Revolve3",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 44174,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 45851,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        45851,
+        46364,
+        46388
+      ],
+      "angle_marker_relative": 19234,
+      "end_spec_object_offset": 45246,
+      "end_spec_data_offset": 45248,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 45101,
+      "axis_reference_id": 82,
+      "axis_reference_name": "Sketch3",
+      "profile_sketch_name": "Sketch3",
+      "profile_sketch_id": 82,
+      "profile_point_count": 20,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          3
+        ],
+        [
+          0,
+          1,
+          4
+        ],
+        [
+          0,
+          2,
+          6
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          6
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Spark_plug.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 116115,
+      "feature_id": 106,
+      "name": "Revolve4",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 58224,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 59743,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        59743,
+        60256,
+        60280
+      ],
+      "angle_marker_relative": 33126,
+      "end_spec_object_offset": 59138,
+      "end_spec_data_offset": 59140,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 58993,
+      "axis_reference_id": 95,
+      "axis_reference_name": "Sketch4",
+      "profile_sketch_name": "Sketch4",
+      "profile_sketch_id": 95,
+      "profile_point_count": 15,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          4
+        ],
+        [
+          0,
+          2,
+          6
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Spark_plug.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 116115,
+      "feature_id": 119,
+      "name": "Revolve5",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 72484,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 74025,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        74025,
+        74538,
+        74562
+      ],
+      "angle_marker_relative": 47408,
+      "end_spec_object_offset": 73420,
+      "end_spec_data_offset": 73422,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 73275,
+      "axis_reference_id": 107,
+      "axis_reference_name": "Sketch5",
+      "profile_sketch_name": "Sketch5",
+      "profile_sketch_id": 107,
+      "profile_point_count": 13,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          5
+        ],
+        [
+          1,
+          0,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Timing_belt_roller.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 25200,
+      "feature_id": 48,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 21977,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 24168,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        24168,
+        24681,
+        24705
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 23460,
+      "end_spec_data_offset": 23480,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 23315,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 16,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          3
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          8
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          14,
+          0,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Cylinder_heads/Timing_belt_roller_2.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 25212,
+      "feature_id": 48,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 21981,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 24180,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        24180,
+        24693,
+        24717
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 23472,
+      "end_spec_data_offset": 23492,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 23327,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 16,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          3
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          8
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          14,
+          0,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Engine_Block.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 1096147,
+      "feature_id": 127,
+      "name": "Cut-Revolve1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 139616,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 141651,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        141651,
+        142164,
+        142188
+      ],
+      "angle_marker_relative": 125663,
+      "end_spec_object_offset": 141014,
+      "end_spec_data_offset": 141034,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 140869,
+      "axis_reference_id": 113,
+      "axis_reference_name": "Sketch3",
+      "profile_sketch_name": "Sketch3",
+      "profile_sketch_id": 113,
+      "profile_point_count": 8,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          3
+        ],
+        [
+          0,
+          3,
+          1
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Engine_Block.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 1096147,
+      "feature_id": 148,
+      "name": "Cut-Revolve2",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 147358,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 149350,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        149350,
+        149863,
+        149887
+      ],
+      "angle_marker_relative": 133362,
+      "end_spec_object_offset": 148745,
+      "end_spec_data_offset": 148747,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 148600,
+      "axis_reference_id": 139,
+      "axis_reference_name": "Sketch4",
+      "profile_sketch_name": "Sketch4",
+      "profile_sketch_id": 139,
+      "profile_point_count": 8,
+      "profile_point_roles": [
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Engine_Block.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 1096147,
+      "feature_id": 158,
+      "name": "Cut-Revolve3",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 154826,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 156822,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        156822,
+        157335,
+        157359
+      ],
+      "angle_marker_relative": 140834,
+      "end_spec_object_offset": 156217,
+      "end_spec_data_offset": 156219,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 156072,
+      "axis_reference_id": 149,
+      "axis_reference_name": "Sketch5",
+      "profile_sketch_name": "Sketch5",
+      "profile_sketch_id": 149,
+      "profile_point_count": 8,
+      "profile_point_roles": [
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Engine_Block.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 1096147,
+      "feature_id": 170,
+      "name": "Cut-Revolve4",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 162529,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 164529,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        164529,
+        165042,
+        165066
+      ],
+      "angle_marker_relative": 148541,
+      "end_spec_object_offset": 163924,
+      "end_spec_data_offset": 163926,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 163779,
+      "axis_reference_id": 159,
+      "axis_reference_name": "Sketch6",
+      "profile_sketch_name": "Sketch6",
+      "profile_sketch_id": 159,
+      "profile_point_count": 8,
+      "profile_point_roles": [
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Engine_Block.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 1096147,
+      "feature_id": 182,
+      "name": "Cut-Revolve5",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 172456,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 174460,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        174460,
+        174973,
+        174997
+      ],
+      "angle_marker_relative": 158472,
+      "end_spec_object_offset": 173855,
+      "end_spec_data_offset": 173857,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 173710,
+      "axis_reference_id": 171,
+      "axis_reference_name": "Sketch7",
+      "profile_sketch_name": "Sketch7",
+      "profile_sketch_id": 171,
+      "profile_point_count": 6,
+      "profile_point_roles": [
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Engine_Block.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 1096147,
+      "feature_id": 199,
+      "name": "Cut-Revolve6",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 192780,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 194788,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        194788,
+        195301,
+        195325
+      ],
+      "angle_marker_relative": 178800,
+      "end_spec_object_offset": 194183,
+      "end_spec_data_offset": 194185,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 194038,
+      "axis_reference_id": 190,
+      "axis_reference_name": "Sketch8",
+      "profile_sketch_name": "Sketch8",
+      "profile_sketch_id": 190,
+      "profile_point_count": 9,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Engine_Block.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 1096147,
+      "feature_id": 209,
+      "name": "Cut-Revolve7",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 200406,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 202418,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        202418,
+        202931,
+        202955
+      ],
+      "angle_marker_relative": 186430,
+      "end_spec_object_offset": 201813,
+      "end_spec_data_offset": 201815,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 201668,
+      "axis_reference_id": 200,
+      "axis_reference_name": "Sketch9",
+      "profile_sketch_name": "Sketch9",
+      "profile_sketch_id": 200,
+      "profile_point_count": 9,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Engine_Block.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 1096147,
+      "feature_id": 219,
+      "name": "Cut-Revolve8",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 208127,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 210143,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        210143,
+        210656,
+        210680
+      ],
+      "angle_marker_relative": 194155,
+      "end_spec_object_offset": 209538,
+      "end_spec_data_offset": 209540,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 209393,
+      "axis_reference_id": 210,
+      "axis_reference_name": "Sketch10",
+      "profile_sketch_name": "Sketch10",
+      "profile_sketch_id": 210,
+      "profile_point_count": 8,
+      "profile_point_roles": [
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Pistons/Journal_bearig_conrod.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 50795,
+      "feature_id": 71,
+      "name": "Cut-Revolve1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 39306,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 41633,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        41633,
+        42146,
+        42170
+      ],
+      "angle_marker_relative": 12465,
+      "end_spec_object_offset": 40972,
+      "end_spec_data_offset": 40992,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 40827,
+      "axis_reference_id": 49,
+      "axis_reference_name": "Sketch3",
+      "profile_sketch_name": "Sketch3",
+      "profile_sketch_id": 49,
+      "profile_point_count": 11,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          5
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          0,
+          5,
+          1
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moRefAxis_c",
+        "moCompRefAxis_c",
+        "moDisplayAngularDim_c"
+      ]
+    },
+    {
+      "file": "examples/Random/Pistons/Piston.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 138700,
+      "feature_id": 56,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 14507,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 16610,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        16610,
+        17123,
+        17147
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 15902,
+      "end_spec_data_offset": 15922,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 15757,
+      "axis_reference_id": 26,
+      "axis_reference_name": "Sketch1",
+      "profile_sketch_name": "Sketch1",
+      "profile_sketch_id": 26,
+      "profile_point_count": 9,
+      "profile_point_roles": [
+        [
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          1
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Pistons/Piston.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 138700,
+      "feature_id": 126,
+      "name": "Cut-Revolve1",
+      "kind": "Cut-Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 70441,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 72313,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        72313,
+        72826,
+        72850
+      ],
+      "angle_marker_relative": 55759,
+      "end_spec_object_offset": 71708,
+      "end_spec_data_offset": 71710,
+      "end_spec_is_first_instance": false,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 71563,
+      "axis_reference_id": 99,
+      "axis_reference_name": "Sketch5",
+      "profile_sketch_name": "Sketch5",
+      "profile_sketch_id": 99,
+      "profile_point_count": 18,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          12
+        ],
+        [
+          6,
+          0,
+          2
+        ],
+        [
+          8,
+          1,
+          2
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevCut_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Supercharger/Supercharger_housing.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 483412,
+      "feature_id": 412,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 447728,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 449744,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        449744,
+        450257,
+        450281
+      ],
+      "angle_marker_relative": 67399,
+      "end_spec_object_offset": 449107,
+      "end_spec_data_offset": 449127,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 448962,
+      "axis_reference_id": 392,
+      "axis_reference_name": "Sketch24",
+      "profile_sketch_name": "Sketch24",
+      "profile_sketch_id": 392,
+      "profile_point_count": 12,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          6
+        ],
+        [
+          8,
+          1,
+          4
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayRevolveDim_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    },
+    {
+      "file": "examples/Random/Supercharger/Supercharger_pulley.SLDPRT",
+      "lane": "Contents/Config-0-ResolvedFeatures",
+      "lane_length": 84302,
+      "feature_id": 114,
+      "name": "Revolve1",
+      "kind": "Revolve",
+      "keyword_angle_degrees": 360.0,
+      "tree_node_offset": 81450,
+      "tree_flags": "0x40000000",
+      "angle_scalar_name": "D1",
+      "angle_scalar_offset": 83270,
+      "angle_radians": 6.2831853071796,
+      "angle_degrees": 360.0000000000008,
+      "angle_copy_offsets": [
+        83270,
+        83783,
+        83807
+      ],
+      "angle_marker_relative": 56,
+      "end_spec_object_offset": 82586,
+      "end_spec_data_offset": 82606,
+      "end_spec_is_first_instance": true,
+      "axis_kind": "sketch-entity",
+      "axis_reference_offset": 82441,
+      "axis_reference_id": 98,
+      "axis_reference_name": "Sketch5",
+      "profile_sketch_name": "Sketch5",
+      "profile_sketch_id": 98,
+      "profile_point_count": 17,
+      "profile_point_roles": [
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          8
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          6
+        ]
+      ],
+      "classes_present": [
+        "moRevolution_c",
+        "moRevEndSpec_c",
+        "moAngleParameter_c",
+        "moDisplayAngularDim_c",
+        "moTempAxisRef_w"
+      ]
+    }
+  ]
+}

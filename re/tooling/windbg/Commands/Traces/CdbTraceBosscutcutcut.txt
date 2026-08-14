@@ -1,0 +1,15 @@
+$$ SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+$$ SPDX-FileCopyrightText: Copyright (c) 2026 Parashell, Odin Glynn-Martin
+$$
+$$ This SPDX license identifier and copyright notice must not be
+$$ removed, altered, or obscured. Doing so is a material breach of
+$$ the PolyForm Strict License 1.0.0 and voids all licenses granted
+$$ to you under it immediately and permanently.
+.symopt+0x4000
+.symopt-0x20000
+.exepath+ C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS
+.reload /f swccu.dll
+bp swccu!su_CArchive::ReadObject ".if ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x69d4) { .printf \"RO %p %x %d %p\\n\", poi(@rcx+0x48), poi(@rcx+0x38)-poi(@rcx+0x48), dwo(@rcx+0x50), @rsp }; gc"
+bp swccu!su_CArchive::ReadClass ".if ((poi(@rcx+0x40)-poi(@rcx+0x48))==0x69d4) { .printf \"RC %p %x %d %p\\n\", poi(@rcx+0x48), poi(@rcx+0x38)-poi(@rcx+0x48), dwo(@rcx+0x50), @rsp }; gc"
+bl
+g
