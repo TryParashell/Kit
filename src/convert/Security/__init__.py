@@ -7,7 +7,7 @@
 # to you under it immediately and permanently.
 
 from convert.Security.PathBoundary import (
-    ResolveCommandInput,
+    ResolveArgPath,
     ResolveFolder,
     ResolveInput,
     ResolveLocal,
@@ -24,7 +24,7 @@ from convert.Security.ProgramBoundary import GetArgPath, GetFreecadPath
 __all__ = [
     "GetArgPath",
     "GetFreecadPath",
-    "ResolveCommandInput",
+    "ResolveArgPath",
     "ResolveFolder",
     "ResolveInput",
     "ResolveLocal",

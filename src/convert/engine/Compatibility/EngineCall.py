@@ -21,7 +21,6 @@ from convert.adapters.base.WriteOptions import WriteOptions
 from convert.adapters.base.WriteResult import WriteResult
 from convert.adapters.registry import AdapterRegistry
 
-# explicit annotation globals keep reflected legacy signatures resolvable at runtime
 globals().update(
     {
         "AdapterRegistry": AdapterRegistry,

@@ -14,7 +14,7 @@ import pytest as Pytest
 
 import convert.Security.ProgramBoundary as ProgramBoundary
 from convert.Security.PathBoundary import (
-    ResolveCommandInput,
+    ResolveArgPath,
     ResolveWithin,
     UnsafePath,
     ValidateLabel,
@@ -29,7 +29,7 @@ def TestNestedPath(TmpPath: PathInfo) -> None:
 
 
 # parent traversal must fail before any filesystem sink receives the path
-def TestBlocksEscape(TmpPath: PathInfo) -> None:
+def TestPathEscape(TmpPath: PathInfo) -> None:
     OutsidePath = TmpPath.parent / "Outside.bin"
     with Pytest.raises(UnsafePath):
         ResolveWithin(OutsidePath, TmpPath)
@@ -58,7 +58,7 @@ def TestFreecadPath(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> None:
 
 
 # executable validation rejects allowed looking paths with the wrong program identity
-def TestBlocksProgram(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> None:
+def TestBadProgram(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     ProgramPath = TmpPath / "OtherProgram.exe"
     ProgramPath.write_bytes(b"program")
     MonkeyPatch.setenv("KIT_FREECAD_ORACLE", str(ProgramPath))
@@ -67,7 +67,7 @@ def TestBlocksProgram(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> Non
         ProgramBoundary.GetFreecadPath()
 
 
-# argument-list paths become absolute so filenames cannot become process options
+# argument list paths become absolute so filenames cannot become process options
 def TestArgPath(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     ProgramPath = TmpPath / "-Option.sldprt"
     ProgramPath.write_bytes(b"part")
@@ -78,14 +78,12 @@ def TestArgPath(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> None:
 
 
 # command argument paths reject metacharacters even when the contained file exists
-def TestBlocksArgMetacharacters(
-    TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch
-) -> None:
+def TestBadArgPath(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> None:
     ProgramPath = TmpPath / "Bad&Part.sldprt"
     ProgramPath.write_bytes(b"part")
     MonkeyPatch.chdir(TmpPath)
     with Pytest.raises(UnsafePath):
-        ResolveCommandInput(ProgramPath.name)
+        ResolveArgPath(ProgramPath.name)
 
 
 # debugger labels reject metacharacters before they enter generated command scripts

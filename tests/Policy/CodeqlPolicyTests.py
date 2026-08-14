@@ -22,8 +22,8 @@ KQueryExcludes = frozenset(
     )
 )
 
-# modeled path barriers correspond only to fixed root containment functions
-KPathBarriers = frozenset(
+# common path barriers correspond only to fixed root containment functions
+KCorePathBarriers = frozenset(
     (
         (
             "convert",
@@ -45,6 +45,12 @@ KPathBarriers = frozenset(
             "convert",
             "Member[Security].Member[PathBoundary].Member[ResolveTemp].ReturnValue",
         ),
+    )
+)
+
+# specialized path barriers keep strict labels and executable roots explicit
+KEdgePathBarriers = frozenset(
+    (
         (
             "convert",
             "Member[Security].Member[PathBoundary].Member[ValidateLabel].ReturnValue",
@@ -56,6 +62,9 @@ KPathBarriers = frozenset(
     )
 )
 
+# one expected set keeps model validation independent from yaml ordering
+KPathBarriers = KCorePathBarriers | KEdgePathBarriers
+
 # modeled command barriers correspond only to strict allowlist validation functions
 KCommandBarriers = frozenset(
     (
@@ -65,7 +74,7 @@ KCommandBarriers = frozenset(
         ),
         (
             "convert",
-            "Member[Security].Member[PathBoundary].Member[ResolveCommandInput].ReturnValue",
+            "Member[Security].Member[PathBoundary].Member[ResolveArgPath].ReturnValue",
         ),
         (
             "convert",

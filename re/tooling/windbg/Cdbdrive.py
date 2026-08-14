@@ -20,7 +20,7 @@ import time as TimeInfo
 KRootInfo = PathInfo(__file__).resolve().parents[2]
 System.path.insert(0, str(KRootInfo / "src"))
 from convert.Security.PathBoundary import (
-    ResolveCommandInput,
+    ResolveArgPath,
     ResolveInput,
     ResolveOutput,
 )
@@ -221,7 +221,7 @@ def RunTask(
     LogInfo = ResolveOutput(LogInfo)
     PartArgInfo: PathInfo | None = None
     if PartInfoInfo is not None:
-        PartArgInfo = ResolveCommandInput(PartInfoInfo)
+        PartArgInfo = ResolveArgPath(PartInfoInfo)
     Sweep()
     LogInfo.parent.mkdir(parents=True, exist_ok=True)
     if LogInfo.exists():

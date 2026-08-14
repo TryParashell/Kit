@@ -34,7 +34,7 @@ extensions:
         - "Member[Security].Member[PathBoundary].Member[ValidateLabel].ReturnValue"
         - "path-injection"
       - - "convert"
-        - "Member[Security].Member[PathBoundary].Member[ResolveCommandInput].ReturnValue"
+        - "Member[Security].Member[PathBoundary].Member[ResolveArgPath].ReturnValue"
         - "command-injection"
       - - "convert"
         - "Member[Security].Member[ProgramBoundary].Member[GetFreecadPath].ReturnValue"
