@@ -11,11 +11,43 @@ extensions:
       pack: codeql/python-all
       extensible: barrierModel
     data:
-      - ["convert.Security.PathBoundary", "Member[ResolveInput].ReturnValue", "path-injection"]
-      - ["convert.Security.PathBoundary", "Member[ResolveLocal].ReturnValue", "path-injection"]
-      - ["convert.Security.PathBoundary", "Member[ResolveOutput].ReturnValue", "path-injection"]
-      - ["convert.Security.PathBoundary", "Member[ResolveFolder].ReturnValue", "path-injection"]
-      - ["convert.Security.PathBoundary", "Member[ResolveTemp].ReturnValue", "path-injection"]
-      - ["convert.Security.PathBoundary", "Member[ValidateLabel].ReturnValue", "command-injection"]
-      - ["convert.Security.ProgramBoundary", "Member[GetFreecadPath].ReturnValue", "path-injection"]
-      - ["convert.Security.ProgramBoundary", "Member[GetFreecadPath].ReturnValue", "command-injection"]
+      - [
+          "convert.Security.PathBoundary",
+          "Member[ResolveInput].ReturnValue",
+          "path-injection",
+        ]
+      - [
+          "convert.Security.PathBoundary",
+          "Member[ResolveLocal].ReturnValue",
+          "path-injection",
+        ]
+      - [
+          "convert.Security.PathBoundary",
+          "Member[ResolveOutput].ReturnValue",
+          "path-injection",
+        ]
+      - [
+          "convert.Security.PathBoundary",
+          "Member[ResolveFolder].ReturnValue",
+          "path-injection",
+        ]
+      - [
+          "convert.Security.PathBoundary",
+          "Member[ResolveTemp].ReturnValue",
+          "path-injection",
+        ]
+      - [
+          "convert.Security.PathBoundary",
+          "Member[ValidateLabel].ReturnValue",
+          "command-injection",
+        ]
+      - [
+          "convert.Security.ProgramBoundary",
+          "Member[GetFreecadPath].ReturnValue",
+          "path-injection",
+        ]
+      - [
+          "convert.Security.ProgramBoundary",
+          "Member[GetFreecadPath].ReturnValue",
+          "command-injection",
+        ]
