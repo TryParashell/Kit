@@ -5311,7 +5311,7 @@ def CheckBundledAsm(DocValue) -> tuple[bytes, ...]:
 
 
 # this definition exists because each emitted component must contain loadable native shape data
-def EmittedShapes(ComponentFiles: list[FilePath]) -> list[bytes]:
+def CollectShapes(ComponentFiles: list[FilePath]) -> list[bytes]:
     EmittedShapes = []
     for ComponentFile in ComponentFiles:
         with Zipfile.ZipFile(ComponentFile) as Archive:
@@ -5350,7 +5350,7 @@ def TestAsmFcstdAnd(TmpPath) -> None:
     assert Transfers[Capability.NATIVE_PAYLOADS].mode is TransferMode.NATIVE
     ComponentFiles = sorted((TmpPath / "Assembly").glob("*.FCStd"))
     assert len(ComponentFiles) == 13
-    EmittedShapes = EmittedShapes(ComponentFiles)
+    EmittedShapes = CollectShapes(ComponentFiles)
     assert sorted(
         (Hashlib.sha256(DataValue).digest() for DataValue in EmittedShapes)
     ) == sorted((Hashlib.sha256(DataValue).digest() for DataValue in SourceShapes))
