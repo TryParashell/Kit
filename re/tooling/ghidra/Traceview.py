@@ -11,6 +11,8 @@ from pathlib import Path as PathInfo
 import json as JsonData
 import sys as System
 
+from convert.Security.PathBoundary import ResolveInput
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KHereInfo = PathInfo(__file__).resolve().parent
 
@@ -84,8 +86,8 @@ def FinishMain(BaseInfo, ByteBlob, Extra, ItemData, Items, MissingInfo) -> None:
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun() -> None:
-    PartInfoInfo = PathInfo(System.argv[1]).resolve()
-    Report = JsonData.loads(PathInfo(System.argv[2]).read_text(encoding="utf-8"))
+    PartInfoInfo = ResolveInput(System.argv[1])
+    Report = JsonData.loads(ResolveInput(System.argv[2]).read_text(encoding="utf-8"))
     ByteBlob = Streamlib.LoadDonor(PartInfoInfo).resolved
     Items = Report["items"]
     BaseInfo = Report["base_counter"]

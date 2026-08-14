@@ -15,6 +15,14 @@ import re as Regex
 import sys as System
 from typing import Dict as DictInfo, List as ListInfo, Optional, Tuple
 
+from convert.Security.PathBoundary import (
+    ResolveFolder,
+    ResolveInput,
+    ResolveOutput,
+    ResolveWithin,
+    UnsafePath,
+)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KHereInfo = Pathlib.Path(__file__).resolve().parent
 
@@ -56,8 +64,10 @@ KBackref = Regex.compile("backref->(\\d+)$")
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def PartPath(DocInfo: dict) -> Pathlib.Path:
     PartInfoInfo = Pathlib.Path(DocInfo["part"])
-    if PartInfoInfo.exists():
-        return PartInfoInfo
+    try:
+        return ResolveInput(PartInfoInfo)
+    except (FileNotFoundError, UnsafePath):
+        pass
     for BaseInfo in (
         KRootInfo / ".rescratch/corpus/parts",
         KRootInfo / ".rescratch/corpus2",
@@ -65,9 +75,11 @@ def PartPath(DocInfo: dict) -> Pathlib.Path:
         KRootInfo / "examples",
         KRootInfo / ".rescratch",
     ):
-        HitsInfo = list(BaseInfo.rglob(PartInfoInfo.name))
-        if HitsInfo:
-            return HitsInfo[0]
+        if not BaseInfo.is_dir():
+            continue
+        for HitPath in BaseInfo.rglob("*"):
+            if HitPath.name == PartInfoInfo.name and HitPath.is_file():
+                return ResolveWithin(HitPath, BaseInfo, True)
     raise SystemExit("cannot locate part " + str(PartInfoInfo))
 
 
@@ -473,10 +485,8 @@ def MainRun() -> int:
     ParserInfo.add_argument("--segments", default=str(KRootInfo / "re/data/segments"))
     ParserInfo.add_argument("--out", default="")
     ArgValues = ParserInfo.parse_args()
-    Layouts = JsonData.loads(
-        Pathlib.Path(ArgValues.layouts).read_text(encoding="utf-8")
-    )
-    Report = Verify(Layouts, Pathlib.Path(ArgValues.segments))
+    Layouts = JsonData.loads(ResolveInput(ArgValues.layouts).read_text(encoding="utf-8"))
+    Report = Verify(Layouts, ResolveFolder(ArgValues.segments))
     Failures = 0
     print(
         "%-24s %-9s %5s %5s %5s %5s %6s %5s %5s"
@@ -549,7 +559,7 @@ def MainRun() -> int:
         )
     )
     if ArgValues.out:
-        Pathlib.Path(ArgValues.out).write_text(
+        ResolveOutput(ArgValues.out).write_text(
             JsonData.dumps(Report, indent=1), encoding="utf-8"
         )
     return 1 if Failures else 0

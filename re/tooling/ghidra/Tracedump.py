@@ -14,6 +14,8 @@ import re as Regex
 import struct as Struct
 import sys as System
 
+from convert.Security.PathBoundary import ResolveInput, ResolveOutput
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KHereInfo = PathInfo(__file__).resolve().parent
 
@@ -102,7 +104,7 @@ TagInfo.__getattr__ = GetLegacyAttr
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def ReadEvents(PathInfoData: PathInfo) -> tuple[Event, ...]:
     OutputDataInfo: list[Event] = []
-    for RawData in PathInfoData.read_text(errors="replace").splitlines():
+    for RawData in ResolveInput(PathInfoData).read_text(errors="replace").splitlines():
         Match = KEvent.match(RawData.strip())
         if Match is None:
             continue
@@ -214,9 +216,9 @@ def Analyse(ByteBlob: bytes, LogInfo: PathInfo) -> dict[str, object]:
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 def MainRun() -> None:
-    PartInfoInfo = PathInfo(System.argv[1]).resolve()
-    LogInfo = PathInfo(System.argv[2]).resolve()
-    Destination = PathInfo(System.argv[3]).resolve()
+    PartInfoInfo = ResolveInput(System.argv[1])
+    LogInfo = ResolveInput(System.argv[2])
+    Destination = ResolveOutput(System.argv[3])
     ByteBlob = Streamlib.LoadDonor(PartInfoInfo).resolved
     Report = Analyse(ByteBlob, LogInfo)
     Destination.parent.mkdir(parents=True, exist_ok=True)
