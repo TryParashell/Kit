@@ -1994,6 +1994,46 @@ def TestAsmGrouped(TmpPath) -> None:
     assert len(Restored.assembly.instances) == 2
     assert len(Restored.assembly.documents) == 2
 
+# this definition exists because portable external links must survive manifest-free replay
+def VerifyPortableExternalReplay(Adapter: FreeCadAdapter, Target: FilePath) -> None:
+    NativeOnly = Target.parent / 'NativeOnly.FCStd'
+    with Zipfile.ZipFile(Target) as Archive:
+        RootXml = XmlTree.fromstring(Archive.read('Document.xml'))
+        Linked = RootXml.find("./ObjectData/Object[@name='PartLink']/Properties/Property[@name='LinkedObject']/XLink")
+        assert Linked is not None
+        assert Linked.get('file') == 'Portable/Child.FCStd'
+        assert Linked.get('stamp') == ''
+        with Zipfile.ZipFile(NativeOnly, 'w', Zipfile.ZIP_DEFLATED) as Output:
+            for InfoValue in Archive.infolist():
+                if InfoValue.filename != 'interchange/document.json':
+                    Output.writestr(InfoValue, Archive.read(InfoValue))
+    Restored = Adapter.read(NativeOnly)
+    assert Restored.assembly is None
+    assert not any((DiagValue.code == 'freecad.unresolved_external_documents' for DiagValue in Restored.diagnostics))
+
+
+# this definition exists because stream targets must diagnose embedded external references
+def VerifyEmbeddedExternalReplay(Adapter: FreeCadAdapter, DocValue) -> None:
+    PortableStream = IoStream.BytesIO()
+    PortableResult = Adapter.write(DocValue, PortableStream)
+    assert PortableResult.application_usable is False
+    assert PortableResult.metadata['carrier_embedded_reference_count'] == 1
+    assert any((DiagValue.code == 'freecad.references_embedded_without_files' for DiagValue in PortableResult.diagnostics))
+    PortableRestored = Adapter.read(PortableStream.getvalue())
+    assert PortableRestored.metadata['freecad']['external_documents'][0]['document'] == DocValue.metadata['freecad']['external_documents'][0]['document']
+
+
+# this definition exists because nonportable writes must retain their original relative reference
+def VerifyNonportableExternalLink(Adapter: FreeCadAdapter, DocValue) -> None:
+    Nonportable = IoStream.BytesIO()
+    Adapter.write(DocValue, Nonportable, WriteOptions(values={'portable': False}))
+    with Zipfile.ZipFile(IoStream.BytesIO(Nonportable.getvalue())) as Archive:
+        NonportableXml = XmlTree.fromstring(Archive.read('Document.xml'))
+    OriginalLink = NonportableXml.find("./ObjectData/Object[@name='PartLink']/Properties/Property[@name='LinkedObject']/XLink")
+    assert OriginalLink is not None
+    assert OriginalLink.get('file') == 'nested/Child.FCStd'
+
+
 # this definition exists because focused behavior needs one stable owner
 def TestLinkOnlyDoc(TmpPath) -> None:
     SourceFolder = TmpPath / 'source'
@@ -2018,34 +2058,9 @@ def TestLinkOnlyDoc(TmpPath) -> None:
     assert Bundled.is_file()
     assert Result.metadata['external_document_file_count'] == 1
     assert Result.metadata['external_document_bytes_written'] == Bundled.stat().st_size
-    with Zipfile.ZipFile(Target) as Archive:
-        RootXml = XmlTree.fromstring(Archive.read('Document.xml'))
-        Linked = RootXml.find("./ObjectData/Object[@name='PartLink']/Properties/Property[@name='LinkedObject']/XLink")
-        assert Linked is not None
-        assert Linked.get('file') == 'Portable/Child.FCStd'
-        assert Linked.get('stamp') == ''
-        NativeOnly = Target.parent / 'NativeOnly.FCStd'
-        with Zipfile.ZipFile(NativeOnly, 'w', Zipfile.ZIP_DEFLATED) as Output:
-            for InfoValue in Archive.infolist():
-                if InfoValue.filename != 'interchange/document.json':
-                    Output.writestr(InfoValue, Archive.read(InfoValue))
-    Restored = Adapter.read(NativeOnly)
-    assert Restored.assembly is None
-    assert not any((DiagValue.code == 'freecad.unresolved_external_documents' for DiagValue in Restored.diagnostics))
-    PortableStream = IoStream.BytesIO()
-    PortableResult = Adapter.write(DocValue, PortableStream)
-    assert PortableResult.application_usable is False
-    assert PortableResult.metadata['carrier_embedded_reference_count'] == 1
-    assert any((DiagValue.code == 'freecad.references_embedded_without_files' for DiagValue in PortableResult.diagnostics))
-    PortableRestored = Adapter.read(PortableStream.getvalue())
-    assert PortableRestored.metadata['freecad']['external_documents'][0]['document'] == DocValue.metadata['freecad']['external_documents'][0]['document']
-    Nonportable = IoStream.BytesIO()
-    Adapter.write(DocValue, Nonportable, WriteOptions(values={'portable': False}))
-    with Zipfile.ZipFile(IoStream.BytesIO(Nonportable.getvalue())) as Archive:
-        NonportableXml = XmlTree.fromstring(Archive.read('Document.xml'))
-    OriginalLink = NonportableXml.find("./ObjectData/Object[@name='PartLink']/Properties/Property[@name='LinkedObject']/XLink")
-    assert OriginalLink is not None
-    assert OriginalLink.get('file') == 'nested/Child.FCStd'
+    VerifyPortableExternalReplay(Adapter, Target)
+    VerifyEmbeddedExternalReplay(Adapter, DocValue)
+    VerifyNonportableExternalLink(Adapter, DocValue)
 
 # this definition exists because focused behavior needs one stable owner
 def TestNonportable(TmpPath) -> None:
