@@ -31,6 +31,8 @@ import pathlib
 import subprocess
 import sys
 
+from spdx_header_remediation import write_missing_header
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 HEADER_NOTICE_PATH = REPO_ROOT / "HEADER_NOTICE"
 AGENT_SKILLS_DIRECTORY = REPO_ROOT / ".agents" / "skills"
@@ -274,14 +276,86 @@ def diff_files(base: str, head: str) -> list[str]:
     return paths
 
 
+def repair_agent_skill(path: pathlib.Path, lines: list[str]) -> bool:
+    if not lines or lines[0] != "---":
+        return False
+    try:
+        frontmatter_end = lines.index("---", 1)
+    except ValueError:
+        return False
+    if any(line.startswith("license:") for line in lines[1:frontmatter_end]):
+        return False
+    updated = lines[:1] + [AGENT_SKILL_LICENSE_FIELD] + lines[1:]
+    path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+    return True
+
+
+def repair_missing_header(path: pathlib.Path, canonical: list[str]) -> tuple[bool, str]:
+    lines = read_lines(path)
+    if lines is None:
+        return False, "file is not readable as UTF-8 text"
+    if is_agent_skill(path):
+        if repair_agent_skill(path, lines):
+            return True, "added Agent Skills license field"
+        return False, "Agent Skills frontmatter cannot be safely repaired"
+    style = style_for(path)
+    if style is None:
+        return False, "file has no comment syntax"
+    if any("SPDX-" in line for line in lines):
+        return False, "existing SPDX text is not an absent header"
+    header = (
+        render_block_style(canonical)
+        if style == "block"
+        else render_line_style(canonical, "#" if style == "unknown" else style)
+    )
+    write_missing_header(path, lines, header)
+    return True, "added missing SPDX header"
+
+
+def repair_missing_headers(changed: list[str], canonical: list[str]) -> int:
+    failures: list[tuple[str, str]] = []
+    repaired = 0
+    for rel_path in changed:
+        if is_exempt_path(rel_path):
+            continue
+        path = REPO_ROOT / rel_path
+        if not path.is_file():
+            continue
+        ok, reason = check_file(path, canonical)
+        if ok:
+            print(f"OK   {rel_path}: {reason}")
+            continue
+        fixed, repair_reason = repair_missing_header(path, canonical)
+        if fixed:
+            verified, verification_reason = check_file(path, canonical)
+            if verified:
+                repaired += 1
+                print(f"FIXED {rel_path}: {repair_reason}")
+                continue
+            repair_reason = verification_reason
+        failures.append((rel_path, repair_reason))
+        print(f"FAIL {rel_path}: {repair_reason}")
+    print(f"\nRepaired {repaired} in-scope file(s); {len(failures)} failure(s).")
+    if failures:
+        return 1
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True, help="Base git ref/sha to diff from")
     parser.add_argument("--head", required=True, help="Head git ref/sha to diff to")
+    parser.add_argument(
+        "--fix-missing",
+        action="store_true",
+        help="Add only completely absent SPDX headers; never alter existing SPDX text",
+    )
     args = parser.parse_args()
 
     canonical = load_canonical_lines()
     changed = diff_files(args.base, args.head)
+    if args.fix_missing:
+        return repair_missing_headers(changed, canonical)
 
     failures: list[tuple[str, str]] = []
     checked = 0
