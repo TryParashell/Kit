@@ -185,8 +185,8 @@ class OuterState:
     __annotations__["root"] = "FilePath"
     __annotations__["cache"] = "dict[FilePath, CadDoc]"
     __annotations__["active"] = "set[FilePath]"
-    __annotations__["file_count"] = "int"
-    __annotations__["total_bytes"] = "int"
+    __annotations__["FileCount"] = "int"
+    __annotations__["TotalBytes"] = "int"
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2849,8 +2849,8 @@ def OuterDocsMut(
         if (
             SizeValue < 0
             or SizeValue > MaxEntrySize
-            or State.file_count >= MaxOuterFiles
-            or (State.total_bytes + SizeValue > MaxTotalSize)
+            or State.FileCount >= MaxOuterFiles
+            or (State.TotalBytes + SizeValue > MaxTotalSize)
         ):
             Unresolved.append(
                 {"file": FileName, "reason": "external reference exceeds safe limits"}
@@ -2863,8 +2863,8 @@ def OuterDocsMut(
                 {"file": FileName, "reason": "external reference is unreadable"}
             )
             continue
-        State.file_count += 1
-        State.total_bytes += len(ChildData)
+        State.FileCount += 1
+        State.TotalBytes += len(ChildData)
         State.active.add(Choice)
         try:
             try:
