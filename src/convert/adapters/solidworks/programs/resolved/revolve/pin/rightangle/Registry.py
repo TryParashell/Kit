@@ -317,3 +317,6 @@ KFieldOwners, KResolvedOps = BuildProgram(
     KMethodPrograms,
     "ResolvedFeatures",
 )
+
+# generated registry exports remain explicit for facade composition and extension imports
+__all__ = ["KFieldOwners", "KResolvedOps", "KMethodPrograms"]

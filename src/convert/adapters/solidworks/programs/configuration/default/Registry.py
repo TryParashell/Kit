@@ -442,6 +442,9 @@ KFieldOwners, KConfigOps = BuildProgram(
     "Configuration",
 )
 
+# generated registry exports remain explicit for facade composition and extension imports
+__all__ = ["KFieldOwners", "KConfigOps", "KMethodPrograms"]
+
 # compatibility binding preserves its established public import after decomposition
 globals()["FieldOwners"] = KFieldOwners
 
