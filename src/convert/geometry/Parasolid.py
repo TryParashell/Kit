@@ -4734,4 +4734,4 @@ KLegacyExportIndia = {
 KLegacyExportGroups = (KLegacyExportAlpha, KLegacyExportBravo, KLegacyExportCharlie, KLegacyExportDelta, KLegacyExportEcho, KLegacyExportFoxtrot, KLegacyExportGolf, KLegacyExportHotel, KLegacyExportIndia)
 
 for ExportGroup in KLegacyExportGroups:
-    globals().update(ExportGroup
+    globals().update(ExportGroup)
