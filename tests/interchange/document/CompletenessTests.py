@@ -13,10 +13,10 @@ from dataclasses import is_dataclass as IsDataClass
 from dataclasses import replace as ReplaceValue
 from enum import Enum as EnumBase
 import hashlib as HashCodec
+from importlib import import_module as ImportModule
 from typing import get_args as GetTypeArgs
 from typing import get_origin as GetTypeOrigin
 from typing import get_type_hints as GetTypeHints
-import interchange as InterchangeApi
 import pytest as PytestLib
 from interchange import (
     AssemblyData,
@@ -51,6 +51,9 @@ from interchange.geometry import Geometry
 from interchange.serialization import FromData, ToData
 from interchange.serialization.Wire import GetWireField
 from tests.interchange.document.DocumentTests import BuildDocument
+
+# dynamic package loading lets reflection inspect the facade without mixed import forms
+KInterchangeApi = ImportModule("interchange")
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -95,7 +98,7 @@ def CheckIdFields() -> None:
 def CheckGeometry() -> None:
     ExpectedValues = {
         ItemValue
-        for NameValue, ItemValue in vars(InterchangeApi.geometry).items()
+        for NameValue, ItemValue in vars(KInterchangeApi.geometry).items()
         if NameValue.endswith(("Geometry", "Geom"))
         and isinstance(ItemValue, type)
         and IsDataClass(ItemValue)
@@ -109,7 +112,7 @@ def CheckFeatures() -> None:
     assert set(GetTypeArgs(DefinitionHint)) == {FeatureDefinition, type(None)}
     Definitions = {
         ItemValue
-        for ItemValue in vars(InterchangeApi).values()
+        for ItemValue in vars(KInterchangeApi).values()
         if isinstance(ItemValue, type)
         and IsDataClass(ItemValue)
         and issubclass(ItemValue, FeatureDefinition)
@@ -127,7 +130,7 @@ def CheckFeatures() -> None:
 def CheckEnums() -> None:
     EnumTypes = {
         ItemValue
-        for NameValue, ItemValue in vars(InterchangeApi).items()
+        for NameValue, ItemValue in vars(KInterchangeApi).items()
         if not NameValue.startswith("_")
         and isinstance(ItemValue, type)
         and issubclass(ItemValue, EnumBase)

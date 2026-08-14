@@ -7,6 +7,7 @@
 # to you under it immediately and permanently.
 
 from __future__ import annotations
+import builtins as Builtins
 from dataclasses import dataclass as Dataclass, field as Field, replace as Replace
 import hashlib as Hashlib
 import math as MathValue
@@ -1216,7 +1217,9 @@ def MakeLoopOrder(
         FaceData = Topology.faces[Topology.loop_face[LoopData.id]]
         FaceForward = Topology.IsFaceForward(FaceData.id)
         EncodedLoops[LoopData.id] = (
-            LoopData.coedge_ids if FaceForward else tuple(Reversed(LoopData.coedge_ids))
+            LoopData.coedge_ids
+            if FaceForward
+            else tuple(Builtins.reversed(LoopData.coedge_ids))
         )
         for CoedgeId in LoopData.coedge_ids:
             EncodedReversed[CoedgeId] = Topology.coedges[CoedgeId].reversed ^ (
@@ -8007,7 +8010,7 @@ def TrimmedRange(
     ) <= max(EndTol, 1e-07)
     if Direct == Reverse:
         raise ValueError("trimmed curve endpoints are not uniquely bound")
-    return TrimParams if Direct else tuple(Reversed(TrimParams))
+    return TrimParams if Direct else tuple(Builtins.reversed(TrimParams))
 
 
 # line range recovery projects and verifies both endpoints on the carrier

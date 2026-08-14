@@ -11,11 +11,11 @@ from dataclasses import is_dataclass as IsDataClass
 from dataclasses import replace as ReplaceValue
 from enum import Enum as EnumBase
 import hashlib as HashCodec
+from importlib import import_module as ImportModule
 import os as OsSystem
 from pathlib import Path as FilePath
 import subprocess as Subprocess
 import sys as System
-import interchange as InterchangeApi
 import pytest as PytestLib
 from interchange import (
     AssemblyData,
@@ -41,6 +41,9 @@ from interchange.serialization import FromData, KTypeRegistry, RegisterTypes, To
 from tests.interchange.fixtures.DocumentFixture import (
     BuildDocument as BuildFixtureDocument,
 )
+
+# dynamic package loading lets reflection inspect the facade without mixed import forms
+KInterchangeApi = ImportModule("interchange")
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -85,8 +88,8 @@ def CheckStableJson() -> None:
 def CheckRegistry() -> None:
     ExpectedValues = {
         ItemValue
-        for NameValue in InterchangeApi.__all__
-        for ItemValue in (getattr(InterchangeApi, NameValue),)
+        for NameValue in KInterchangeApi.__all__
+        for ItemValue in (getattr(KInterchangeApi, NameValue),)
         if isinstance(ItemValue, type)
         and (IsDataClass(ItemValue) or issubclass(ItemValue, EnumBase))
     }

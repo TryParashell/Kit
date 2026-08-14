@@ -9,7 +9,7 @@
 from __future__ import annotations
 from dataclasses import is_dataclass as IsDataClass
 from dataclasses import replace as ReplaceValue
-import interchange as InterchangeApi
+from importlib import import_module as ImportModule
 from interchange import (
     BrepBody,
     BrepCoedge,
@@ -36,6 +36,9 @@ from interchange import (
     InferCaps,
 )
 from tests.interchange.document.DocumentTests import BuildDocument
+
+# dynamic package loading lets reflection inspect the facade without mixed import forms
+KInterchangeApi = ImportModule("interchange")
 
 
 # behavior coverage protects portable interchange semantics during structural refactors
@@ -166,7 +169,7 @@ def CheckCoverage() -> None:
     FamilyTypes = (BrepCurve, BrepPcurve, BrepSurface)
     ItemValues = {
         ItemValue
-        for NameValue, ItemValue in vars(InterchangeApi).items()
+        for NameValue, ItemValue in vars(KInterchangeApi).items()
         if not NameValue.startswith("_")
         and isinstance(ItemValue, type)
         and IsDataClass(ItemValue)
