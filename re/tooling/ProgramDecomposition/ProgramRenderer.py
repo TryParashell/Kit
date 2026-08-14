@@ -96,14 +96,10 @@ def RenderRegistry(ProgramData: ProgramData, ModulePaths: tuple[str, ...]) -> st
     return FormatSource('\n'.join(SourceLines))
 
 
-# needed to keep reverse engineering responsibilities isolated and maintainable
-def RewriteFacade(ProgramData: ProgramData) -> str:
-    SourceLines = ProgramData.SourceText.splitlines()
-    TreeData = AstLib.parse(ProgramData.SourceText, filename=str(ProgramData.SourcePath))
-    TargetNames = {ProgramData.OwnerName, ProgramData.OpsName}
-    RegistryNames = {AliasData.asname or AliasData.name for NodeData in TreeData.body if isinstance(NodeData, AstLib.ImportFrom) and NodeData.level == 1 and (NodeData.module == 'Registry') for AliasData in NodeData.names}
-    if TargetNames.issubset(RegistryNames):
-        return FormatSource(ProgramData.SourceText)
+# removal discovery stays isolated so facade parsing and source reconstruction have separate contracts
+def GetRemovedLines(
+    TreeData: AstLib.Module, SourceLines: list[str], TargetNames: set[str]
+) -> set[int]:
     RemovedLines: set[int] = set()
     for NodeData in TreeData.body:
         if isinstance(NodeData, AstLib.Assign):
@@ -118,9 +114,16 @@ def RewriteFacade(ProgramData: ProgramData) -> str:
         CommentIndex = NodeData.lineno - 2
         if CommentIndex >= 0 and SourceLines[CommentIndex].lstrip().startswith('#'):
             RemovedLines.add(CommentIndex + 1)
-    ImportEnds = (NodeData.end_lineno for NodeData in TreeData.body if isinstance(NodeData, (AstLib.Import, AstLib.ImportFrom)))
-    InsertAfter = max(ImportEnds)
-    ImportLines = ['', 'from .Registry import (', f'    {ProgramData.OwnerName},', f'    {ProgramData.OpsName},', ')']
+    return RemovedLines
+
+
+# registry insertion stays isolated so source ordering remains deterministic across generated facades
+def InsertRegistry(
+    SourceLines: list[str],
+    RemovedLines: set[int],
+    InsertAfter: int,
+    ImportLines: list[str],
+) -> str:
     OutputLines: list[str] = []
     for LineNumber, SourceLine in enumerate(SourceLines, start=1):
         if LineNumber not in RemovedLines:
@@ -129,6 +132,21 @@ def RewriteFacade(ProgramData: ProgramData) -> str:
             OutputLines.extend(ImportLines)
     OutputLines.append('')
     return FormatSource('\n'.join(OutputLines))
+
+
+# facade rewriting stays small so parsing removal and insertion can evolve independently
+def RewriteFacade(ProgramData: ProgramData) -> str:
+    SourceLines = ProgramData.SourceText.splitlines()
+    TreeData = AstLib.parse(ProgramData.SourceText, filename=str(ProgramData.SourcePath))
+    TargetNames = {ProgramData.OwnerName, ProgramData.OpsName}
+    RegistryNames = {AliasData.asname or AliasData.name for NodeData in TreeData.body if isinstance(NodeData, AstLib.ImportFrom) and NodeData.level == 1 and (NodeData.module == 'Registry') for AliasData in NodeData.names}
+    if TargetNames.issubset(RegistryNames):
+        return FormatSource(ProgramData.SourceText)
+    RemovedLines = GetRemovedLines(TreeData, SourceLines, TargetNames)
+    ImportEnds = (NodeData.end_lineno for NodeData in TreeData.body if isinstance(NodeData, (AstLib.Import, AstLib.ImportFrom)))
+    InsertAfter = max(ImportEnds)
+    ImportLines = ['', 'from .Registry import (', f'    {ProgramData.OwnerName},', f'    {ProgramData.OpsName},', ')']
+    return InsertRegistry(SourceLines, RemovedLines, InsertAfter, ImportLines)
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
