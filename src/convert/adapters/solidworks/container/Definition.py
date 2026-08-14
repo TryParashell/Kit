@@ -245,58 +245,63 @@ class ViewRecord:
 
 
 # this binding exists because shared behavior needs one stable value
-KViewRecords = (
-    ViewRecord(
-        rotation=(
-            0.8844181216774213,
-            -0.24036589468392133,
-            0.400036026779314,
-            1.3877787807814457e-17,
-            0.8571673007021341,
-            0.5150380749100181,
-            -0.4666953889300622,
-            -0.4555090068042732,
-            0.7580942940502868,
-        ),
-        translation=(0.0, 0.0, 0.0),
-        scale=1.0,
-        gap=0,
-        centre=(0.03568485564735271, 0.004222922958999075, -0.007028124036209772),
-        height=6.180518783629107,
-        trailer_flag=0,
-        trailer_first=3,
-        trailer_second=1,
-        trailer_value=-1.0,
-        name="",
-        has_window_placement=True,
+KPrimaryView = ViewRecord(
+    rotation=(
+        0.8844181216774213,
+        -0.24036589468392133,
+        0.400036026779314,
+        1.3877787807814457e-17,
+        0.8571673007021341,
+        0.5150380749100181,
+        -0.4666953889300622,
+        -0.4555090068042732,
+        0.7580942940502868,
     ),
-    ViewRecord(
-        rotation=(),
-        translation=(0.0, 0.0, 0.0),
-        scale=1.0,
-        gap=0,
-        centre=(0.0, 0.0, 0.0),
-        height=1.0,
-        trailer_flag=0,
-        trailer_first=65535,
-        trailer_second=0,
-        trailer_value=-1.0,
-        name="",
-    ),
-    ViewRecord(
-        rotation=(),
-        translation=(0.0, 0.0, 0.0),
-        scale=1.0,
-        gap=0,
-        centre=(0.0, 0.0, 0.0),
-        height=1.0,
-        trailer_flag=0,
-        trailer_first=65535,
-        trailer_second=0,
-        trailer_value=-1.0,
-        name="",
-    ),
+    translation=(0.0, 0.0, 0.0),
+    scale=1.0,
+    gap=0,
+    centre=(0.03568485564735271, 0.004222922958999075, -0.007028124036209772),
+    height=6.180518783629107,
+    trailer_flag=0,
+    trailer_first=3,
+    trailer_second=1,
+    trailer_value=-1.0,
+    name="",
+    has_window_placement=True,
 )
+
+# this binding exists because shared behavior needs one stable value
+KSecondaryView = ViewRecord(
+    rotation=(),
+    translation=(0.0, 0.0, 0.0),
+    scale=1.0,
+    gap=0,
+    centre=(0.0, 0.0, 0.0),
+    height=1.0,
+    trailer_flag=0,
+    trailer_first=65535,
+    trailer_second=0,
+    trailer_value=-1.0,
+    name="",
+)
+
+# this binding exists because shared behavior needs one stable value
+KTertiaryView = ViewRecord(
+    rotation=(),
+    translation=(0.0, 0.0, 0.0),
+    scale=1.0,
+    gap=0,
+    centre=(0.0, 0.0, 0.0),
+    height=1.0,
+    trailer_flag=0,
+    trailer_first=65535,
+    trailer_second=0,
+    trailer_value=-1.0,
+    name="",
+)
+
+# this binding exists because shared behavior needs one stable value
+KViewRecords = (KPrimaryView, KSecondaryView, KTertiaryView)
 
 # this binding exists because shared behavior needs one stable value
 KBomManagerClass = "moBomInfoMgr_c"
