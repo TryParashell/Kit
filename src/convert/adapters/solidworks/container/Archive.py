@@ -1213,10 +1213,10 @@ def SegmentWalkMut(BlobValue: bytes, BaseValue: int, Layouts: LayoutTable, Heade
             if Layout.groups:
                 AmountA = RunLength(BlobValue, Cursor, Layout, KLeadRun, Offset, BaseValue, MoVersion)
                 Cursor = Advance(BlobValue, Cursor, AmountA, Layout, KLeadRun, Offset, BaseValue)
-                Frame = Frame(node=NodeValue, class_name=NameValue, layout=Layout, slot=0, total=-1)
-                Cursor, Opened = GroupOpenMut(BlobValue, Cursor, Frame, Offset, BaseValue, MoVersion)
+                FrameData = Frame(node=NodeValue, class_name=NameValue, layout=Layout, slot=0, total=-1)
+                Cursor, Opened = GroupOpenMut(BlobValue, Cursor, FrameData, Offset, BaseValue, MoVersion)
                 if Opened:
-                    Frames.append(Frame)
+                    Frames.append(FrameData)
                     Pushed = True
             elif Layout.child_slots:
                 AmountA = RunLength(BlobValue, Cursor, Layout, KLeadRun, Offset, BaseValue, MoVersion)
@@ -1379,33 +1379,33 @@ def BuildModel(BlobValue: bytes, Segments: Sequence[StaticSegment], BaseValue: i
         TrailerSize = GetTailSize(BlobValue, BaseValue, HeaderSize)
     ContentEnd = len(BlobValue) - TrailerSize
     Trailer = BlobValue[len(BlobValue) - TrailerSize:] if TrailerSize else b''
-    Model = Model(header=BlobValue[:HeaderSize], base=BaseValue, Trailer=Trailer)
+    ModelData = Model(header=BlobValue[:HeaderSize], base=BaseValue, Trailer=Trailer)
     ClassPosition: dict[int, int] = {}
     ObjectPosition: dict[int, int] = {}
     for Position, ItemValue in enumerate(Segments):
         BodyEnd = min(ItemValue.end, ContentEnd)
         BodyValue = BlobValue[ItemValue.offset + ItemValue.header:BodyEnd]
         if ItemValue.kind == KDefinitionKind:
-            Model.nodes.append(NodeAction(kind=KDefinitionKind, body=BodyValue, schema=ItemValue.schema, class_name=ItemValue.class_name, origin=ItemValue.offset))
+            ModelData.nodes.append(NodeAction(kind=KDefinitionKind, body=BodyValue, schema=ItemValue.schema, class_name=ItemValue.class_name, origin=ItemValue.offset))
             ClassPosition[ItemValue.class_index] = Position
             ObjectPosition[ItemValue.object_index] = Position
         elif ItemValue.kind == KClassRefKind:
-            Model.nodes.append(NodeAction(kind=KClassRefKind, body=BodyValue, class_name=ItemValue.class_name, literal=ItemValue.class_index, wide=ItemValue.wide, target=ClassPosition.get(ItemValue.class_index, -1), origin=ItemValue.offset))
+            ModelData.nodes.append(NodeAction(kind=KClassRefKind, body=BodyValue, class_name=ItemValue.class_name, literal=ItemValue.class_index, wide=ItemValue.wide, target=ClassPosition.get(ItemValue.class_index, -1), origin=ItemValue.offset))
             ObjectPosition[ItemValue.object_index] = Position
         elif ItemValue.kind == KObjectRefKind:
-            Model.nodes.append(NodeAction(kind=KObjectRefKind, body=BodyValue, literal=ItemValue.object_index, wide=ItemValue.wide, target=ObjectPosition.get(ItemValue.object_index, -1), origin=ItemValue.offset))
+            ModelData.nodes.append(NodeAction(kind=KObjectRefKind, body=BodyValue, literal=ItemValue.object_index, wide=ItemValue.wide, target=ObjectPosition.get(ItemValue.object_index, -1), origin=ItemValue.offset))
         elif ItemValue.kind == KNullKind:
-            Model.nodes.append(NodeAction(kind=KNullKind, body=BodyValue, origin=ItemValue.offset))
+            ModelData.nodes.append(NodeAction(kind=KNullKind, body=BodyValue, origin=ItemValue.offset))
         else:
             raise ArchiveError(f'unsupported tag kind {ItemValue.kind!r} at offset {ItemValue.offset}')
     for Position, ItemValue in enumerate(Segments):
-        NodeValue = Model.nodes[Position]
+        NodeValue = ModelData.nodes[Position]
         if NodeValue.kind == KObjectRefKind and NodeValue.target < 0 and (ItemValue.object_index >= BaseValue) and ItemValue.class_name.startswith(KOuterPrefix):
             raise ArchiveError(f'object reference {ItemValue.object_index} at offset {ItemValue.offset} is unresolved')
         if NodeValue.kind == KClassRefKind and NodeValue.target < 0 and (ItemValue.class_index >= BaseValue) and ItemValue.class_name.startswith(KOuterPrefix):
             raise ArchiveError(f'class reference {ItemValue.class_index} at offset {ItemValue.offset} is unresolved')
-    Model.assign()
-    return Model
+    ModelData.assign()
+    return ModelData
 
 # this definition exists because focused behavior needs one stable owner
 def Tiling(BlobValue: bytes, Segments: Sequence[StaticSegment], HeaderSize: int, TrailerSize: int=0) -> dict[str, object]:

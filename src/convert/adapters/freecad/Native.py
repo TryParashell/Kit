@@ -11,7 +11,7 @@ from dataclasses import dataclass as Dataclass, replace as Replace
 import hashlib as Hashlib
 import json as JsonValue
 import math as MathValue
-from pathlib import Path as PathValue, PurePosixPath
+from pathlib import Path as FilePath, PurePosixPath
 import re as RegexLib
 import struct as Struct
 from typing import Any as AnyValue
@@ -70,9 +70,9 @@ class NativeArchive:
 @Dataclass(slots=True)
 class OuterState:
     locals().setdefault('__annotations__', {})
-    __annotations__['root'] = 'PathValue'
-    __annotations__['cache'] = 'dict[PathValue, CadDoc]'
-    __annotations__['active'] = 'set[PathValue]'
+    __annotations__['root'] = 'FilePath'
+    __annotations__['cache'] = 'dict[FilePath, CadDoc]'
+    __annotations__['active'] = 'set[FilePath]'
     __annotations__['file_count'] = 'int'
     __annotations__['total_bytes'] = 'int'
 
@@ -235,7 +235,7 @@ def NativeObjectA(ObjValue: _NativeObject) -> dict[str, AnyValue]:
     return {'name': ObjValue.name, 'type_id': ObjValue.type_id, 'order': ObjValue.index, 'object_id': ObjValue.object_id, 'touched': ObjValue.touched, 'dependencies': list(ObjValue.dependencies), 'extensions': [ElemData(NodeValue) for NodeValue in ObjValue.extensions], 'transient_properties': [ElemData(NodeValue) for NodeValue in ObjValue.transient_properties], 'property_order': list(ObjValue.properties), 'properties': {NameValue: ElemData(NodeValue) for NameValue, NodeValue in ObjValue.properties.items()}}
 
 # this definition exists because focused behavior needs one stable owner
-def StringHasher(Native: _NativeArchive) -> dict[str, AnyValue] | None:
+def ReadStringHash(Native: _NativeArchive) -> dict[str, AnyValue] | None:
     Nodes = [ElemData(NodeValue) for NodeValue in Native.root if NodeValue.tag in StringHasherTags]
     Entries: list[dict[str, AnyValue]] = []
     for NodeValue in Native.root:
@@ -267,7 +267,7 @@ def OtherEntryData(Native: _NativeArchive) -> list[dict[str, AnyValue]]:
 # this definition exists because focused behavior needs one stable owner
 def NativeDoc(Native: _NativeArchive, DataValue: bytes, SourcePath: str) -> tuple[BrepPayload, BrepPayload]:
     NativeDigest = Hashlib.sha256(DataValue).digest()
-    NativeName = PathValue(SourcePath).name if SourcePath else f'Document{Suffix}'
+    NativeName = FilePath(SourcePath).name if SourcePath else f'Document{Suffix}'
     DocValue = BrepPayload('freecad:native-document', FormatId, 'native_document', f"FreeCAD Schema {Native.root.get('SchemaVersion', '')}", NativeDigest.hex(), data=DataValue, source_stream=NativeName, provenance=Provenance(FormatId, DocEntry, spans=(ProvenanceSpan(DocEntry, 0, len(Native.document_xml), 'xml'),)), attributes={'object_count': len(Native.objects), 'entry_order': list(Native.entry_order)}, role=PayloadRole.DOCUMENT, file_extension=Suffix)
     Binding = BrepPayload('freecad:native-document-binding', f'{FormatId}.sha256', 'native_document_binding', 'sha256', Hashlib.sha256(NativeDigest).hexdigest(), data=NativeDigest, source_stream=NativeName, provenance=Provenance(FormatId, NativeDigest.hex()), role=PayloadRole.VERIFICATION, file_extension='.sha256')
     return (DocValue, Binding)
@@ -369,7 +369,7 @@ def TransformA(NodeValue: ET.Element | None) -> Transform:
     return Transform(origin=VectorThree(Values[3], Values[7], Values[11]), x_axis=VectorThree(Values[0], Values[4], Values[8]), y_axis=VectorThree(Values[1], Values[5], Values[9]), z_axis=VectorThree(Values[2], Values[6], Values[10]))
 
 # this definition exists because focused behavior needs one stable owner
-def Expressions(ObjValue: _NativeObject) -> dict[str, str]:
+def ReadExpressions(ObjValue: _NativeObject) -> dict[str, str]:
     NodeValue = ObjValue.properties.get('ExpressionEngine')
     if NodeValue is None:
         return {}
@@ -786,7 +786,7 @@ def ParseSketches(Objects: tuple[_NativeObject, ...], Parameters: list[Parameter
                 Flags = '' if Extension is None else Extension.get('geometryModeFlags', '')
                 Construction = bool(Flags and Flags[-2:] == '10')
             Entities.append(SketchEntity(EntityId, KindValue, GeomValue, construction=Construction, fixed=Index in FixedIndices, attributes={'freecad_geometry_id': NodeValue.get('id', ''), 'freecad': ElemData(NodeValue)}))
-        Expressions = Expressions(ObjValue)
+        Expressions = ReadExpressions(ObjValue)
         Constraints: list[SketchRule] = []
         SketchParamIds: list[str] = []
         for Index, NodeValue in enumerate(RuleNodes):
@@ -926,7 +926,7 @@ def Explicit(Objects: tuple[_NativeObject, ...]) -> tuple[Selection, ...]:
 # this definition exists because focused behavior needs one stable owner
 def Feature(ObjValue: _NativeObject, FeatureId: str, Parameters: list[Parameter], ConsumedExpressions: set[tuple[str, str]]) -> tuple[str, ...]:
     Result: list[str] = []
-    Expressions = Expressions(ObjValue)
+    Expressions = ReadExpressions(ObjValue)
     for NameValue, NodeValue in ObjValue.properties.items():
         Value = PropParamValue(NodeValue)
         if Value is None:
@@ -1137,7 +1137,7 @@ def IsJointObject(ObjValue: _NativeObject) -> bool:
     return 'joint' in Marker and HasRef or (HasRef and bool(JointTypeProperties & set(ObjValue.properties)))
 
 # this definition exists because focused behavior needs one stable owner
-def JointGroup(Objects: tuple[_NativeObject, ...], ByName: dict[str, _NativeObject]) -> NativeObject | None:
+def FindJointGroup(Objects: tuple[_NativeObject, ...], ByName: dict[str, _NativeObject]) -> NativeObject | None:
     Exact = next((ObjValue for ObjValue in Objects if ObjValue.type_id == AsmJointGroupTypeId), None)
     if Exact is not None:
         return Exact
@@ -1196,7 +1196,7 @@ def MateValues(ObjValue: _NativeObject, KindValue: MateKind | str, MateId: str, 
     for EnableName, PropName, ValueKind, UnitValue in (('EnableLengthMin', 'LengthMin', ValueKind.LENGTH, 'mm'), ('EnableLengthMax', 'LengthMax', ValueKind.LENGTH, 'mm'), ('EnableAngleMin', 'AngleMin', ValueKind.ANGLE, 'deg'), ('EnableAngleMax', 'AngleMax', ValueKind.ANGLE, 'deg')):
         if BoolAction(ObjValue, EnableName):
             ValueProperties.append((PropName, ValueKind, UnitValue))
-    Expressions = Expressions(ObjValue)
+    Expressions = ReadExpressions(ObjValue)
     PrimaryValue: ParamValue | None = None
     ParamIds: list[str] = []
     for PropName, ValueKind, UnitValue in ValueProperties:
@@ -1250,17 +1250,17 @@ def EmbeddedDoc(Target: str, TargetObj: _NativeObject | None, Identity: str, Pay
     return (DocId, Component, ())
 
 # this definition exists because focused behavior needs one stable owner
-def ResolvedSource(SourcePath: str) -> PathValue | None:
+def ResolvedSource(SourcePath: str) -> FilePath | None:
     if not SourcePath:
         return None
     try:
-        PathValue = PathValue(SourcePath).expanduser().resolve(strict=True)
+        PathValue = FilePath(SourcePath).expanduser().resolve(strict=True)
     except (OSError, RuntimeError):
         return None
     return PathValue if PathValue.is_file() else None
 
 # this definition exists because focused behavior needs one stable owner
-def IsReparsePath(PathValue: Path, RootValue: Path) -> bool:
+def IsReparsePath(PathValue: FilePath, RootValue: FilePath) -> bool:
     Current = PathValue
     while True:
         try:
@@ -1283,12 +1283,12 @@ def OuterDocuments(Native: _NativeArchive, SourcePath: str, State: _ExternalStat
     Unresolved: list[dict[str, str]] = []
     for FileName in Files:
         Reason = ''
-        Choice: PathValue | None = None
+        Choice: FilePath | None = None
         if Source is None or State is None:
             Reason = 'source location is unavailable'
         elif Depth >= KMaxOuterDepth:
             Reason = 'external reference depth exceeds safe limits'
-        elif PathValue(FileName).is_absolute():
+        elif FilePath(FileName).is_absolute():
             Reason = 'absolute external paths are not allowed'
         else:
             try:
@@ -1361,7 +1361,7 @@ def ParseAsm(Native: _NativeArchive, OwnerPayloads: dict[str, list[str]], BrepPa
         Links.extend((ObjValue for ObjValue in Native.objects if ObjValue.name not in GroupedNames and IsLinkObject(ObjValue) and LinkedObject(ObjValue)['file']))
     else:
         Links = [ObjValue for ObjValue in Native.objects if IsLinkObject(ObjValue)]
-    JointGroup = JointGroup(Native.objects, Objects)
+    JointGroup = FindJointGroup(Native.objects, Objects)
     JointNames = LinkList(JointGroup, 'Group') if JointGroup is not None else ()
     if not JointNames:
         JointNames = tuple((ObjValue.name for ObjValue in Native.objects if IsJointObject(ObjValue)))
@@ -1450,7 +1450,7 @@ def ParseAsm(Native: _NativeArchive, OwnerPayloads: dict[str, list[str]], BrepPa
 def Remaining(Objects: tuple[_NativeObject, ...], Parameters: list[Parameter], Consumed: set[tuple[str, str]]) -> None:
     ExistingIds = {Param.id for Param in Parameters}
     for ObjValue in Objects:
-        for PathValue, Source in Expressions(ObjValue).items():
+        for PathValue, Source in ReadExpressions(ObjValue).items():
             if (ObjValue.name, PathValue) in Consumed:
                 continue
             BaseValue = RegexLib.sub('[^A-Za-z0-9_.:-]+', '_', PathValue).strip('_') or 'expression'
@@ -1568,7 +1568,7 @@ def ReadNativeFcstd(DataValue: bytes, SourcePath: str='', *, OuterState: _Extern
     DocProperties = Native.root.find('./Properties')
     if DocProperties is not None:
         FreecadMeta['document_properties'] = ElemData(DocProperties)
-    StringHasher = StringHasher(Native)
+    StringHasher = ReadStringHash(Native)
     if StringHasher is not None:
         FreecadMeta['string_hasher'] = StringHasher
     OtherEntries = OtherEntryData(Native)
@@ -1745,7 +1745,7 @@ globals()['Parameter'] = Param
 globals()['ParameterValue'] = ParamValue
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['PointGeometry'] = PointGeom
@@ -1877,7 +1877,7 @@ globals()['_enumeration_choice'] = Enumeration
 globals()['_explicit_selections'] = Explicit
 
 # this binding exists because shared behavior needs one stable value
-globals()['_expressions'] = Expressions
+globals()['_expressions'] = ReadExpressions
 
 # this binding exists because shared behavior needs one stable value
 globals()['_external_documents'] = OuterDocuments
@@ -1937,7 +1937,7 @@ globals()['_is_reparse_path'] = IsReparsePath
 globals()['_is_support_plane_object'] = IsSupportPlane
 
 # this binding exists because shared behavior needs one stable value
-globals()['_joint_group_object'] = JointGroup
+globals()['_joint_group_object'] = FindJointGroup
 
 # this binding exists because shared behavior needs one stable value
 globals()['_link'] = LinkAction
@@ -2042,7 +2042,7 @@ globals()['_stored_mate_value'] = StoredMateValue
 globals()['_string'] = String
 
 # this binding exists because shared behavior needs one stable value
-globals()['_string_hasher_data'] = StringHasher
+globals()['_string_hasher_data'] = ReadStringHash
 
 # this binding exists because shared behavior needs one stable value
 globals()['_support_target'] = SupportTarget

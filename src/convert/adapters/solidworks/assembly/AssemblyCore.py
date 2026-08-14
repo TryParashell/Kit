@@ -34,14 +34,14 @@ KCoreOpaqueBytes = 0
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class AsmCoreItem:
-    KOccurName: str
-    KCompPath: str
-    KTransX: float = 0.0
-    KTransY: float = 0.0
-    KTransZ: float = 0.0
-    KConfigName: str = 'Default'
-    KFileStamp: int = 0
-    KBasisVals: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    OccurName: str
+    CompPath: str
+    TransX: float = 0.0
+    TransY: float = 0.0
+    TransZ: float = 0.0
+    ConfigName: str = 'Default'
+    FileStamp: int = 0
+    BasisVals: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 
 # this definition exists because focused behavior needs one stable owner
 def EncodeAsmCore(ModelName: str, ConfigName: str, CoreItems: tuple[AsmCoreItem, ...]) -> Mapping[str, bytes]:

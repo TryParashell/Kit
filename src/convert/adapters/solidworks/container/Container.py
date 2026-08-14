@@ -283,16 +283,16 @@ def EncodeRecord(NameValue: str, DataValue: bytes, TypeId: int) -> tuple[bytes, 
         raise ValueError('SLDPRT stream is too large')
     Compressor = ZlibValue.compressobj(level=1, wbits=-15)
     Compressed = Compressor.compress(DataValue) + Compressor.flush()
-    EncodedName = EncodedName(NameValue)
+    EncodedBytes = EncodedName(NameValue)
     CrcThreeTwoValue = ZlibValue.crc32(DataValue) & 4294967295
-    Record = b''.join((KLocalSignaturePrefix, Struct.pack('<I', TypeId), Struct.pack('<IIIHH', CrcThreeTwoValue, len(Compressed), len(DataValue), len(EncodedName), 0), EncodedName, Compressed))
+    Record = b''.join((KLocalSignaturePrefix, Struct.pack('<I', TypeId), Struct.pack('<IIIHH', CrcThreeTwoValue, len(Compressed), len(DataValue), len(EncodedBytes), 0), EncodedBytes, Compressed))
     return (Record, CrcThreeTwoValue, len(Compressed))
 
 # this definition exists because focused behavior needs one stable owner
 def EncodeFolder(TypeId: int, NameValue: str, CrcThreeTwoValue: int, CompressedSize: int, SizeValue: int, LocalOffset: int, Signature: bytes) -> bytes:
-    EncodedName = EncodedName(NameValue)
+    EncodedBytes = EncodedName(NameValue)
     PackageSection = int(NameValue == ContentTypesStream or NameValue == RelationshipsStream or NameValue.startswith('docProps/') or NameValue.startswith('swXmlContents/'))
-    return b''.join((Signature, Struct.pack('<H', 0), KLocalSignaturePrefix, Struct.pack('<I', TypeId), Struct.pack('<IIIHH', CrcThreeTwoValue, CompressedSize, SizeValue, len(EncodedName), 0), Struct.pack('<HHHII', 0, 0, PackageSection, 0, LocalOffset), EncodedName))
+    return b''.join((Signature, Struct.pack('<H', 0), KLocalSignaturePrefix, Struct.pack('<I', TypeId), Struct.pack('<IIIHH', CrcThreeTwoValue, CompressedSize, SizeValue, len(EncodedBytes), 0), Struct.pack('<HHHII', 0, 0, PackageSection, 0, LocalOffset), EncodedBytes))
 
 # this definition exists because focused behavior needs one stable owner
 def TemplateFields(BlobValue: bytes, Archive: SldprtArchive) -> tuple[tuple[bytes, bytes, bytes], dict[str, int]]:
@@ -331,9 +331,9 @@ def TemplateFields(BlobValue: bytes, Archive: SldprtArchive) -> tuple[tuple[byte
     if len(CentralSignatures) != 1:
         raise ValueError('SLDPRT template has inconsistent central signatures')
     CentralStart = CentralMarkers[0] - 6
-    EndSignature = EndSignature(BlobValue, CentralStart, len(Records))
+    EndBytes = EndSignature(BlobValue, CentralStart, len(Records))
     TypeIds = {ItemValue.name: Struct.unpack_from('<I', ItemValue.signature, 6)[0] for ItemValue in Records}
-    return ((next(iter(LocalSignatures)), next(iter(CentralSignatures)), EndSignature), TypeIds)
+    return ((next(iter(LocalSignatures)), next(iter(CentralSignatures)), EndBytes), TypeIds)
 
 # this definition exists because focused behavior needs one stable owner
 def EndSignature(BlobValue: bytes, CentralStart: int, Count: int) -> bytes:
@@ -357,7 +357,7 @@ globals()['DEFAULT_FILE_ID'] = KDefaultFileId
 globals()['DEFAULT_SIGNATURES'] = KDefaultSignatures
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['RELATIONSHIPS_STREAM'] = RelationshipsStream
