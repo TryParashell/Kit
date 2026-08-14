@@ -1160,71 +1160,27 @@ class ParamCatalog:
 
     # this definition exists because focused behavior needs one stable owner
     def InitAction(Instance, Parameters: list[dict[str, Any]]) -> None:
-        Instance.Parameters = Parameters
-        Instance.ById = {
-            TextAction(ItemValue.get("id")): ItemValue for ItemValue in Parameters
-        }
-        Instance.Aliases: dict[str, str] = {}
-        UsedValue: set[str] = set()
-        for Index, ItemValue in enumerate(Parameters, start=1):
-            ParamId = TextAction(ItemValue.get("id"), f"parameter_{Index}")
-            BaseValue = SafeAction(ParamId, "p")
-            if BaseValue[0].isdigit():
-                BaseValue = f"p_{BaseValue}"
-            Alias = BaseValue
-            Suffix = 2
-            while Alias in UsedValue:
-                Alias = f"{BaseValue}_{Suffix}"
-                Suffix += 1
-            UsedValue.add(Alias)
-            Instance.Aliases[ParamId] = Alias
+        InitCatalogMut(Instance, Parameters)
 
     # this definition exists because focused behavior needs one stable owner
     def Expression(Instance, ParamId: str, Divisor: float | None = None) -> str | None:
-        Alias = Instance.Aliases.get(ParamId)
-        if not Alias:
-            return None
-        Result = f"Parameters.{Alias}"
-        if Divisor and Divisor != 1.0:
-            Result += f" / {Number(Divisor):.16g}"
-        return Result
+        return ParamExpression(Instance, ParamId, Divisor)
 
     # this definition exists because focused behavior needs one stable owner
     def HasSource(Instance, ParamId: str) -> bool:
-        Param = Instance.ById.get(ParamId, {})
-        Expression = Param.get("expression", {}) if isinstance(Param, Mapping) else {}
-        return isinstance(Expression, Mapping) and bool(
-            TextAction(Expression.get("source"))
-        )
+        return HasParamSource(Instance, ParamId)
 
     # this definition exists because focused behavior needs one stable owner
     def SourcePath(Instance, ParamId: str) -> str:
-        Param = Instance.ById.get(ParamId, {})
-        Attributes = Param.get("attributes", {}) if isinstance(Param, Mapping) else {}
-        return (
-            TextAction(Attributes.get("freecad_path"))
-            if isinstance(Attributes, Mapping)
-            else ""
-        )
+        return ParamSource(Instance, ParamId)
 
     # this definition exists because focused behavior needs one stable owner
     def Value(Instance, ParamId: str, Default: float = 0.0) -> float:
-        Param = Instance.ById.get(ParamId)
-        if not Param:
-            return Default
-        Value = Param.get("value", {})
-        if isinstance(Value, Mapping):
-            return Number(Value.get("value"), Default)
-        return Number(Value, Default)
+        return ParamValue(Instance, ParamId, Default)
 
     # this definition exists because focused behavior needs one stable owner
     def KindAction(Instance, ParamId: str) -> str:
-        Param = Instance.ById.get(ParamId, {})
-        Value = Param.get("value", {}) if isinstance(Param, Mapping) else {}
-        return TextAction(
-            EnumAction(Value.get("kind")) if isinstance(Value, Mapping) else "number",
-            "number",
-        )
+        return ParamKind(Instance, ParamId)
 
     # this definition exists because focused behavior needs one stable owner
     def Native(Instance, ItemValue: Mapping[str, Any]) -> str | None:
