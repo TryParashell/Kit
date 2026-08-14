@@ -2653,7 +2653,7 @@ def OuterDocsMut(
                 ):
                     raise NativeFreeCad(str(ErrorInfo)) from ErrorInfo
                 Child = ReadNativeFcstd(
-                    ChildData, str(Choice), OuterState=State, OuterDepth=Depth + 1
+                    ChildData, str(Choice), StateValue=State, OuterDepth=Depth + 1
                 )
             else:
                 Child = CadDoc.from_dict(Manifest)
@@ -2734,7 +2734,7 @@ def ParseAsm(
         Linked = LinkedObject(LinkObj)
         Target = str(Linked["name"]) or LinkObj.name
         SourceFile = str(Linked["file"]).replace("\\", "/")
-        Outer = OuterDocsMut.get(str(Linked["file"]))
+        Outer = OuterDocuments.get(str(Linked["file"]))
         SourceIdentity = (
             Outer[0]
             if Outer is not None
@@ -3017,12 +3017,12 @@ def ReadNativeFcstd(
     DataValue: bytes,
     SourcePath: str = "",
     *,
-    OuterState: _ExternalState | None = None,
+    StateValue: _ExternalState | None = None,
     OuterDepth: int = 0,
 ) -> CadDoc:
     Native = LoadNative(DataValue)
     SourceFile = ResolvedSource(SourcePath)
-    OuterStateA = OuterState
+    OuterStateA = StateValue
     if OuterStateA is None and SourceFile is not None:
         OuterStateA = OuterState(SourceFile.parent, {}, {SourceFile}, 1, len(DataValue))
     ResolvedOuter, UnresolvedOuter = OuterDocsMut(

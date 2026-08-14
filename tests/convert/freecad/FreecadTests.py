@@ -981,6 +981,25 @@ def TestAllCurrent() -> None:
     assert len(Sketch.parameter_ids) == 8
     assert Sketch.entities[0].fixed
 
+# this definition exists because unavailable geometry diagnostics have one focused XML contract
+def VerifyUnavailableGeometry(RootValue: ET.Element, Kinds: tuple[GeomKind, ...]) -> None:
+    SketchObject = next((ItemValue for ItemValue in RootValue.findall('./ObjectData/Object') if ItemValue.find("./Properties/Property[@name='Geometry']") is not None))
+    GeomList = SketchObject.find("./Properties/Property[@name='Geometry']/GeometryList")
+    assert GeomList is not None
+    assert GeomList.get('count') == '0'
+    assert GeomList.findall('./Geometry') == []
+    assert GeomList.findall('.//GeomPoint') == []
+    DiagnosticsNode = SketchObject.find("./Properties/Property[@name='KitSketchDiagnosticsJSON']/String")
+    assert DiagnosticsNode is not None
+    Diagnostics = JsonValue.loads(DiagnosticsNode.get('value', ''))
+    assert {ItemValue['kind'] for ItemValue in Diagnostics} == {KindValue.value for KindValue in Kinds}
+    assert {ItemValue['mode'] for ItemValue in Diagnostics} == {'carrier_only'}
+    SourceNode = SketchObject.find("./Properties/Property[@name='SourceSketchJSON']/String")
+    assert SourceNode is not None
+    SourceSketch = JsonValue.loads(SourceNode.get('value', ''))
+    assert len(SourceSketch['entities']['$tuple']) == len(Kinds)
+
+
 # this definition exists because focused behavior needs one stable owner
 def TestUnavailable() -> None:
     Source = NeutralDoc()
@@ -997,21 +1016,7 @@ def TestUnavailable() -> None:
     assert Transfers[Capability.EDITABLE_SKETCHES].carrier_reason is CarrierReason.SOURCE_OPAQUE
     with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
-    SketchObject = next((ItemValue for ItemValue in RootValue.findall('./ObjectData/Object') if ItemValue.find("./Properties/Property[@name='Geometry']") is not None))
-    GeomList = SketchObject.find("./Properties/Property[@name='Geometry']/GeometryList")
-    assert GeomList is not None
-    assert GeomList.get('count') == '0'
-    assert GeomList.findall('./Geometry') == []
-    assert GeomList.findall('.//GeomPoint') == []
-    DiagnosticsNode = SketchObject.find("./Properties/Property[@name='KitSketchDiagnosticsJSON']/String")
-    assert DiagnosticsNode is not None
-    Diagnostics = JsonValue.loads(DiagnosticsNode.get('value', ''))
-    assert {ItemValue['kind'] for ItemValue in Diagnostics} == {KindValue.value for KindValue in Kinds}
-    assert {ItemValue['mode'] for ItemValue in Diagnostics} == {'carrier_only'}
-    SourceNode = SketchObject.find("./Properties/Property[@name='SourceSketchJSON']/String")
-    assert SourceNode is not None
-    SourceSketch = JsonValue.loads(SourceNode.get('value', ''))
-    assert len(SourceSketch['entities']['$tuple']) == len(Kinds)
+    VerifyUnavailableGeometry(RootValue, Kinds)
     assert Adapter.read(Output.getvalue()) == DocValue
 
 # this definition exists because focused behavior needs one stable owner
@@ -1087,23 +1092,8 @@ def TestGeomPayload() -> None:
     assert SketchObject.findall('.//GeomPoint') == []
     assert Adapter.read(Output.getvalue()) == DocValue
 
-# this definition exists because focused behavior needs one stable owner
-def TestRuleCarrier() -> None:
-    Source = NeutralDoc()
-    LineValue = Source.sketches[0].entities[0]
-    Point = SketchEntity('sketch:1:point:1', GeomKind.POINT, PointGeom(VectorTwo(5.0, 0.0)))
-    CarrierConstraints = tuple((SketchRule(f'carrier:{KindValue.value}', KindValue, ()) for KindValue in RuleKind))
-    Midpoint = SketchRule('midpoint:sound', RuleKind.MIDPOINT, (RuleRef(LineValue.id), RuleRef(Point.id)))
-    Sketch = Replace(Source.sketches[0], entities=(LineValue, Point), constraints=(*CarrierConstraints, Midpoint))
-    DocValue = Replace(Source, sketches=(Sketch,))
-    DocValue.assert_valid()
-    Output = IoStream.BytesIO()
-    Adapter = FreeCadAdapter()
-    Result = Adapter.write(DocValue, Output)
-    Transfers = {Transfer.capability: Transfer.mode for Transfer in Result.transfers}
-    assert Transfers[Capability.EDITABLE_SKETCHES] == TransferMode.MIXED
-    with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
-        RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
+# this definition exists because carrier and composed constraints share one diagnostic contract
+def VerifyRuleCarrierXml(RootValue: ET.Element, Midpoint: SketchRule) -> None:
     SketchObject = next((ItemValue for ItemValue in RootValue.findall('./ObjectData/Object') if ItemValue.find("./Properties/Property[@name='Constraints']") is not None))
     Encoded = SketchObject.findall("./Properties/Property[@name='Constraints']/ConstraintList/Constrain")
     assert len(Encoded) == 1
@@ -1121,6 +1111,26 @@ def TestRuleCarrier() -> None:
     assert SourceNode is not None
     SourceSketch = JsonValue.loads(SourceNode.get('value', ''))
     assert len(SourceSketch['constraints']['$tuple']) == len(RuleKind) + 1
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestRuleCarrier() -> None:
+    Source = NeutralDoc()
+    LineValue = Source.sketches[0].entities[0]
+    Point = SketchEntity('sketch:1:point:1', GeomKind.POINT, PointGeom(VectorTwo(5.0, 0.0)))
+    CarrierConstraints = tuple((SketchRule(f'carrier:{KindValue.value}', KindValue, ()) for KindValue in RuleKind))
+    Midpoint = SketchRule('midpoint:sound', RuleKind.MIDPOINT, (RuleRef(LineValue.id), RuleRef(Point.id)))
+    Sketch = Replace(Source.sketches[0], entities=(LineValue, Point), constraints=(*CarrierConstraints, Midpoint))
+    DocValue = Replace(Source, sketches=(Sketch,))
+    DocValue.assert_valid()
+    Output = IoStream.BytesIO()
+    Adapter = FreeCadAdapter()
+    Result = Adapter.write(DocValue, Output)
+    Transfers = {Transfer.capability: Transfer.mode for Transfer in Result.transfers}
+    assert Transfers[Capability.EDITABLE_SKETCHES] == TransferMode.MIXED
+    with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
+        RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
+    VerifyRuleCarrierXml(RootValue, Midpoint)
     assert Adapter.read(Output.getvalue()) == DocValue
 
 # this definition exists because focused behavior needs one stable owner
@@ -1318,32 +1328,37 @@ def TestCurrentAsm(JointIndex: int, Expected: str) -> None:
     assert DocValue.assembly is not None
     assert str(DocValue.assembly.mates[0].kind) == Expected
 
+# this definition exists because gear-joint fixtures need one reusable XML mutation
+def GearActionMut(RootValue: ET.Element) -> None:
+    Properties = RootValue.find("./ObjectData/Object[@name='Revolute']/Properties")
+    assert Properties is not None
+    JointType = Properties.find("./Property[@name='JointType']")
+    assert JointType is not None
+    Selected = JointType.find('./Integer')
+    assert Selected is not None
+    Selected.set('value', '11')
+    EnumList = JointType.find('./CustomEnumList')
+    assert EnumList is not None
+    EnumList.clear()
+    Choices = JointTypes
+    EnumList.set('count', str(len(Choices)))
+    for Choice in Choices:
+        XmlTree.SubElement(EnumList, 'Enum', {'value': Choice})
+    RefValue = Properties.find("./Property[@name='Reference1']/XLink")
+    assert RefValue is not None
+    for Child in list(RefValue.findall('./Sub')):
+        RefValue.remove(Child)
+    XmlTree.SubElement(RefValue, 'Sub', {'value': ''})
+    Properties.extend((NativeProp('Distance', 'App::PropertyLength', 'Float', {'value': '4'}), NativeProp('Distance2', 'App::PropertyLength', 'Float', {'value': '2'}), NativeProp('LengthMin', 'App::PropertyLength', 'Float', {'value': '1'}), NativeProp('AngleMax', 'App::PropertyAngle', 'Float', {'value': '35'}), NativeProp('EnableLengthMin', 'App::PropertyBool', 'Bool', {'value': 'true'}), NativeProp('EnableAngleMax', 'App::PropertyBool', 'Bool', {'value': 'true'})))
+    Properties.set('Count', str(len(Properties.findall('./Property'))))
+
+
 # this definition exists because focused behavior needs one stable owner
 def TestJointValues() -> None:
 
     # this definition exists because focused behavior needs one stable owner
     def GearAction(RootValue: ET.Element) -> None:
-        Properties = RootValue.find("./ObjectData/Object[@name='Revolute']/Properties")
-        assert Properties is not None
-        JointType = Properties.find("./Property[@name='JointType']")
-        assert JointType is not None
-        Selected = JointType.find('./Integer')
-        assert Selected is not None
-        Selected.set('value', '11')
-        EnumList = JointType.find('./CustomEnumList')
-        assert EnumList is not None
-        EnumList.clear()
-        Choices = JointTypes
-        EnumList.set('count', str(len(Choices)))
-        for Choice in Choices:
-            XmlTree.SubElement(EnumList, 'Enum', {'value': Choice})
-        RefValue = Properties.find("./Property[@name='Reference1']/XLink")
-        assert RefValue is not None
-        for Child in list(RefValue.findall('./Sub')):
-            RefValue.remove(Child)
-        XmlTree.SubElement(RefValue, 'Sub', {'value': ''})
-        Properties.extend((NativeProp('Distance', 'App::PropertyLength', 'Float', {'value': '4'}), NativeProp('Distance2', 'App::PropertyLength', 'Float', {'value': '2'}), NativeProp('LengthMin', 'App::PropertyLength', 'Float', {'value': '1'}), NativeProp('AngleMax', 'App::PropertyAngle', 'Float', {'value': '35'}), NativeProp('EnableLengthMin', 'App::PropertyBool', 'Bool', {'value': 'true'}), NativeProp('EnableAngleMax', 'App::PropertyBool', 'Bool', {'value': 'true'})))
-        Properties.set('Count', str(len(Properties.findall('./Property'))))
+        GearActionMut(RootValue)
     DocValue = FreeCadAdapter().read(RewriteDocXml(NativeAsm(), GearAction))
     assert DocValue.assembly is not None
     MateValue = DocValue.assembly.mates[0]
@@ -1476,12 +1491,8 @@ def TestGenericIsAs() -> None:
         Archive.writestr('Document.xml', '<Document/>')
     assert FreeCadAdapter().probe(Stream.getvalue()).confidence == 0.0
 
-# this definition exists because focused behavior needs one stable owner
-def TestOpaqueOnly() -> None:
-    Source = NativeArchive((('Opaque', 'App::FeaturePython', (), (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Opaque'}), NativeProp('Token', 'App::PropertyString', 'String', {'value': 'retained'}))),), {}, {'Opaque': {'id': '41', 'touched': True}})
-    Adapter = FreeCadAdapter()
-    assert Adapter.probe(Source).confidence == 0.95
-    DocValue = Adapter.read(Source)
+# this definition exists because opaque-only reads must retain their exact native payload
+def VerifyOpaqueRead(DocValue, Source: bytes) -> None:
     assert DocValue.validate() == ()
     assert DocValue.feature_timeline == ()
     assert len(DocValue.brep_payloads) == 2
@@ -1493,11 +1504,11 @@ def TestOpaqueOnly() -> None:
     assert Payload.data == Source
     assert Capability.NATIVE_PAYLOADS in DocValue.capabilities
     assert Capability.BREP not in DocValue.capabilities
-    WithoutBrep = Adapter.read(Source, ReadOptions(include_brep=False))
-    assert WithoutBrep.brep_payloads == DocValue.brep_payloads
-    Output = IoStream.BytesIO()
-    Adapter.write(DocValue, Output)
-    with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
+
+
+# this definition exists because opaque-only writes must retain XML declarations exactly
+def VerifyOpaqueArchive(PayloadData: bytes) -> None:
+    with Zipfile.ZipFile(IoStream.BytesIO(PayloadData)) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
         Opaque = RootValue.find("./ObjectData/Object[@name='Opaque']")
         assert Opaque is not None
@@ -1508,6 +1519,20 @@ def TestOpaqueOnly() -> None:
         assert DeclValue is not None
         assert DeclValue.attrib == {'type': 'App::FeaturePython', 'name': 'Opaque', 'id': '41', 'Touched': '1'}
         assert 'interchange/document.json' not in Archive.namelist()
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestOpaqueOnly() -> None:
+    Source = NativeArchive((('Opaque', 'App::FeaturePython', (), (NativeProp('Label', 'App::PropertyString', 'String', {'value': 'Opaque'}), NativeProp('Token', 'App::PropertyString', 'String', {'value': 'retained'}))),), {}, {'Opaque': {'id': '41', 'touched': True}})
+    Adapter = FreeCadAdapter()
+    assert Adapter.probe(Source).confidence == 0.95
+    DocValue = Adapter.read(Source)
+    VerifyOpaqueRead(DocValue, Source)
+    WithoutBrep = Adapter.read(Source, ReadOptions(include_brep=False))
+    assert WithoutBrep.brep_payloads == DocValue.brep_payloads
+    Output = IoStream.BytesIO()
+    Adapter.write(DocValue, Output)
+    VerifyOpaqueArchive(Output.getvalue())
     assert Output.getvalue() == Source
     assert Adapter.read(Output.getvalue()) == DocValue
 
@@ -1533,12 +1558,8 @@ def TestUnknownData(CarrierSuffix: str, TmpPath: Path) -> None:
     with Zipfile.ZipFile(Restored) as Archive:
         assert Archive.read('FutureWorkbench/state.bin') == b'future opaque state\x00\xff'
 
-# this definition exists because focused behavior needs one stable owner
-def TestSelfPart() -> None:
-    DataValue = NativePart()
-    Adapter = FreeCadAdapter()
-    assert Adapter.probe(DataValue).confidence == 0.95
-    DocValue = Adapter.read(DataValue)
+# this definition exists because native part reads have a focused interchange contract
+def VerifyNativePartRead(DocValue) -> None:
     assert DocValue.validate() == ()
     assert len(DocValue.sketches) == 1
     assert [str(Entity.kind) for Entity in DocValue.sketches[0].entities] == ['circle', 'point', 'ellipse', 'spline']
@@ -1553,15 +1574,19 @@ def TestSelfPart() -> None:
     NativeRule = DocValue.sketches[0].constraints[2]
     Slots = NativeRule.attributes['freecad_reference_slots']
     assert [SlotValue['freecad_geometry_index'] for SlotValue in Slots] == [1, -3, -2000]
+
+
+# this definition exists because circle edits should alter only the intended sketch entity
+def EditNativeCircle(DocValue):
     SketchModel = DocValue.sketches[0]
     CircleEntity = SketchModel.entities[0]
     EditedCircle = Replace(CircleEntity, geometry=Replace(CircleEntity.geometry, radius=7.5))
     EditedSketch = Replace(SketchModel, entities=(EditedCircle, *SketchModel.entities[1:]))
-    DocValue = Replace(DocValue, sketches=(EditedSketch,))
-    Output = IoStream.BytesIO()
-    Adapter.write(DocValue, Output)
-    with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
-        RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
+    return Replace(DocValue, sketches=(EditedSketch,))
+
+
+# this definition exists because native part XML must retain geometry and constraint structure
+def VerifyNativePartXml(RootValue: ET.Element) -> None:
     Sketch = RootValue.find("./ObjectData/Object[@name='Sketch']")
     assert Sketch is not None
     assert [ItemValue.get('type') for ItemValue in Sketch.findall("./Properties/Property[@name='Geometry']/GeometryList/Geometry")] == ['Part::GeomCircle', 'Part::GeomPoint', 'Part::GeomEllipse', 'Part::GeomBSplineCurve']
@@ -1575,6 +1600,21 @@ def TestSelfPart() -> None:
     PadValue = RootValue.find("./ObjectData/Object[@name='Pad']")
     assert PadValue is not None
     assert len(PadValue.findall("./Properties/Property[@name='Shape']")) == 1
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestSelfPart() -> None:
+    DataValue = NativePart()
+    Adapter = FreeCadAdapter()
+    assert Adapter.probe(DataValue).confidence == 0.95
+    DocValue = Adapter.read(DataValue)
+    VerifyNativePartRead(DocValue)
+    DocValue = EditNativeCircle(DocValue)
+    Output = IoStream.BytesIO()
+    Adapter.write(DocValue, Output)
+    with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
+        RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
+    VerifyNativePartXml(RootValue)
 
 # this definition exists because focused behavior needs one stable owner
 def TestReplayPlane() -> None:

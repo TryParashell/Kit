@@ -2732,27 +2732,18 @@ def GeneratedA(Value: Any) -> int:
         return 0
 
 
-# this definition exists because focused behavior needs one stable owner
-def PatchNativeMut(
-    DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]
-) -> Generated:
-    Native = set[Capability]()
-    OriginalStreams = dict(Streams)
-    if KeywordsStream not in Streams or ResolvedFeaturesStream not in Streams:
-        return Generated(
-            Streams,
-            "template",
-            frozenset(),
-            "native-source-with-kit-neutral",
-            False,
-            False,
-        )
-    SelectedStream = ResolvedStream(Streams, ResolvedFeaturesStream)
+# this definition exists because native model patching needs before and after snapshots
+def PatchModelsMut(
+    DocValue: CadDocument, StreamsMut: dict[str, bytes]
+) -> tuple[NativeModel, NativeModel]:
+    SelectedStream = ResolvedStream(StreamsMut, ResolvedFeaturesStream)
     OriginalModel = DecodeNativeModel(
-        Streams[KeywordsStream], Streams[SelectedStream], resolved_stream=SelectedStream
+        StreamsMut[KeywordsStream],
+        StreamsMut[SelectedStream],
+        resolved_stream=SelectedStream,
     )
-    Keywords = KeywordsRoot(Streams[KeywordsStream])
-    Resolved = bytearray(Streams[SelectedStream])
+    Keywords = KeywordsRoot(StreamsMut[KeywordsStream])
+    Resolved = bytearray(StreamsMut[SelectedStream])
     KeywordsChanged = IsPatchFeatuMut(DocValue, OriginalModel, Keywords[1], Resolved)
     KeywordsChanged = (
         IsPatchParamete(DocValue, OriginalModel, Keywords[1], Resolved)
@@ -2761,14 +2752,25 @@ def PatchNativeMut(
     PatchSupport(DocValue, OriginalModel, Resolved)
     PatchSketchGeom(DocValue, OriginalModel, Resolved)
     if KeywordsChanged:
-        Streams[KeywordsStream] = KeywordsBytes(*Keywords)
-    Streams[SelectedStream] = bytes(Resolved)
+        StreamsMut[KeywordsStream] = KeywordsBytes(*Keywords)
+    StreamsMut[SelectedStream] = bytes(Resolved)
     PatchedModel = DecodeNativeModel(
-        Streams[KeywordsStream], Streams[SelectedStream], resolved_stream=SelectedStream
+        StreamsMut[KeywordsStream],
+        StreamsMut[SelectedStream],
+        resolved_stream=SelectedStream,
     )
+    return (OriginalModel, PatchedModel)
+
+
+# this definition exists because patched part semantics determine native capabilities
+def NativePartCaps(
+    DocValue: CadDocument, OriginalModel: NativeModel, PatchedModel: NativeModel
+) -> set[Capability]:
+    Native: set[Capability] = set()
     PatchedParameters = Parameters(PatchedModel)
-    PatchedPlanes = Planes(PatchedModel, {Param.id for Param in PatchedParameters})
-    PatchedSketches = Sketches(PatchedModel, {Param.id for Param in PatchedParameters})
+    ParamIds = {Param.id for Param in PatchedParameters}
+    PatchedPlanes = Planes(PatchedModel, ParamIds)
+    PatchedSketches = Sketches(PatchedModel, ParamIds)
     PatchedSelections = Selections(PatchedModel)
     PatchedTimeline = Timeline(PatchedModel, PatchedSelections)
     OriginalParameters = Parameters(OriginalModel)
@@ -2788,38 +2790,69 @@ def PatchNativeMut(
         PatchedSketches
     ) or DesiredSketchValues == SketchValues(OriginalSketches):
         Native.add(Capability.EDITABLE_SKETCHES)
-    if FeatureValues(DocValue.feature_timeline, DocValue.parameters) == FeatureValues(
+    DesiredFeatures = FeatureValues(DocValue.feature_timeline, DocValue.parameters)
+    if DesiredFeatures == FeatureValues(
         PatchedTimeline, PatchedParameters
     ) and IsNativeFeature(DocValue.feature_timeline, OriginalTimeline):
         Native.add(Capability.PARAMETRIC_HISTORY)
     if SelectionValues(DocValue.selections) == SelectionValues(OriginalSelections):
         Native.add(Capability.SELECTIONS)
-    OriginalConfigurations = Configurations(OriginalModel, None)
-    if ConfigValues(DocValue.configurations) == ConfigValues(OriginalConfigurations):
+    OriginalConfigs = Configurations(OriginalModel, None)
+    if ConfigValues(DocValue.configurations) == ConfigValues(OriginalConfigs):
         Native.add(Capability.CONFIGURATIONS)
     if DocValue.assembly is None and BodyValues(DocValue.bodies) == NativeBody(
         OriginalModel, OriginalTimeline
     ):
         Native.add(Capability.BODY_STRUCTURE)
+    return Native
+
+
+# this definition exists because brep patching contributes independent capabilities
+def PatchBrepCapsMut(
+    DocValue: CadDocument,
+    StreamsMut: dict[str, bytes],
+    OriginalStreams: Mapping[str, bytes],
+    NativeMut: set[Capability],
+) -> tuple[str, bool]:
     NativeBrep, BrepNative, PayloadsNative = PatchTemplatMut(
-        DocValue, Streams, OriginalStreams
+        DocValue, StreamsMut, OriginalStreams
     )
     if BrepNative:
-        Native.add(Capability.BREP)
+        NativeMut.add(Capability.BREP)
     if PayloadsNative:
-        Native.add(Capability.NATIVE_PAYLOADS)
+        NativeMut.add(Capability.NATIVE_PAYLOADS)
     if DocValue.assembly is None and DocValue.meshes == ():
-        Native.add(Capability.TESSELLATION)
-    Divergences: tuple[str, ...] = ()
-    if DocValue.assembly is not None:
-        Patch = PatchNativeAMut(DocValue, Streams, BundleNames)
-        Native.update(Patch.capabilities)
-        Divergences = Patch.divergences
-        if Capability.COMPONENT_DOCUMENTS in Patch.capabilities and BrepNative:
-            Native.add(Capability.NATIVE_PAYLOADS)
-    NeededCaps = Required(DocValue)
-    Blockers = NeededCaps - Native - KTargetUnsupported
-    Usable = not Blockers
+        NativeMut.add(Capability.TESSELLATION)
+    return (NativeBrep, BrepNative)
+
+
+# this definition exists because assembly patching contributes nested capabilities
+def PatchAsmCapsMut(
+    DocValue: CadDocument,
+    StreamsMut: dict[str, bytes],
+    BundleNames: Mapping[str, str],
+    BrepNative: bool,
+    NativeMut: set[Capability],
+) -> tuple[str, ...]:
+    if DocValue.assembly is None:
+        return ()
+    Patch = PatchNativeAMut(DocValue, StreamsMut, BundleNames)
+    NativeMut.update(Patch.capabilities)
+    if Capability.COMPONENT_DOCUMENTS in Patch.capabilities and BrepNative:
+        NativeMut.add(Capability.NATIVE_PAYLOADS)
+    return Patch.divergences
+
+
+# this definition exists because template results differ for parts and assemblies
+def PatchResult(
+    DocValue: CadDocument,
+    Streams: dict[str, bytes],
+    OriginalStreams: Mapping[str, bytes],
+    NativeBrep: str,
+    Native: set[Capability],
+    Divergences: tuple[str, ...],
+) -> Generated:
+    Usable = not (Required(DocValue) - Native - KTargetUnsupported)
     if DocValue.assembly is None:
         return Generated(
             Streams,
@@ -2841,6 +2874,33 @@ def PatchNativeMut(
         Usable and Loadable,
         Loadable,
         reader_gaps=ReaderGaps,
+    )
+
+
+# this definition exists because focused behavior needs one stable owner
+def PatchNativeMut(
+    DocValue: CadDocument, Streams: dict[str, bytes], BundleNames: Mapping[str, str]
+) -> Generated:
+    OriginalStreams = dict(Streams)
+    if KeywordsStream not in Streams or ResolvedFeaturesStream not in Streams:
+        return Generated(
+            Streams,
+            "template",
+            frozenset(),
+            "native-source-with-kit-neutral",
+            False,
+            False,
+        )
+    OriginalModel, PatchedModel = PatchModelsMut(DocValue, Streams)
+    Native = NativePartCaps(DocValue, OriginalModel, PatchedModel)
+    NativeBrep, BrepNative = PatchBrepCapsMut(
+        DocValue, Streams, OriginalStreams, Native
+    )
+    Divergences = PatchAsmCapsMut(
+        DocValue, Streams, BundleNames, BrepNative, Native
+    )
+    return PatchResult(
+        DocValue, Streams, OriginalStreams, NativeBrep, Native, Divergences
     )
 
 

@@ -2652,35 +2652,8 @@ def ExtrusionEdit(PayloadData: bytes) -> tuple[int, int] | None:
     return (DirectionCode, TerminationCode)
 
 
-# this definition exists because focused behavior needs one stable owner
-def WriteObjectIds(DocValue: CadDocument) -> dict[str, int]:
-    UsedValue = set(range(1, 26))
-    Result: dict[str, int] = {}
-    NextId = 26
-
-    # this definition exists because focused behavior needs one stable owner
-    def Assign(KeyValue: str, Native: Any = None) -> int:
-        nonlocal NextId
-        Choice = Native if isinstance(Native, int) and Native > 25 else None
-        if Choice is None or Choice in UsedValue or Choice > 4294967294:
-            while NextId in UsedValue:
-                NextId += 1
-            Choice = NextId
-            NextId += 1
-        UsedValue.add(Choice)
-        Result[KeyValue] = Choice
-        return Choice
-
-    Principal = PrincipalPlaneB(DocValue.support_planes)
-    for Plane in DocValue.support_planes:
-        KeyValue = f"plane:{Plane.id}"
-        if Plane.id in Principal:
-            Result[KeyValue] = Principal[Plane.id]
-        else:
-            Assign(KeyValue, Plane.attributes.get("native_object_id"))
-    for Sketch in DocValue.sketches:
-        Assign(f"sketch:{Sketch.id}", Sketch.attributes.get("native_object_id"))
-
+# focused continuation isolates the remaining native serialization phase
+def FinishIdsMut(DocValue, Result, Assign):
     # this callback exists because local behavior needs one focused transformation
     for Feature in sorted(
         DocValue.feature_timeline, key=lambda ItemValue: ItemValue.order
@@ -2716,6 +2689,38 @@ def WriteObjectIds(DocValue: CadDocument) -> dict[str, int]:
         ConfigIds.add(Choice)
         Result[f"configuration:{Config.id}"] = Choice
     return Result
+
+
+# this definition exists because focused behavior needs one stable owner
+def WriteObjectIds(DocValue: CadDocument) -> dict[str, int]:
+    UsedValue = set(range(1, 26))
+    Result: dict[str, int] = {}
+    NextId = 26
+
+    # this definition exists because focused behavior needs one stable owner
+    def Assign(KeyValue: str, Native: Any = None) -> int:
+        nonlocal NextId
+        Choice = Native if isinstance(Native, int) and Native > 25 else None
+        if Choice is None or Choice in UsedValue or Choice > 4294967294:
+            while NextId in UsedValue:
+                NextId += 1
+            Choice = NextId
+            NextId += 1
+        UsedValue.add(Choice)
+        Result[KeyValue] = Choice
+        return Choice
+
+    Principal = PrincipalPlaneB(DocValue.support_planes)
+    for Plane in DocValue.support_planes:
+        KeyValue = f"plane:{Plane.id}"
+        if Plane.id in Principal:
+            Result[KeyValue] = Principal[Plane.id]
+        else:
+            Assign(KeyValue, Plane.attributes.get("native_object_id"))
+    for Sketch in DocValue.sketches:
+        Assign(f"sketch:{Sketch.id}", Sketch.attributes.get("native_object_id"))
+
+    return FinishIdsMut(DocValue, Result, Assign)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2986,79 +2991,8 @@ def HasCadCylBrep(DocData: CadDocument, RadiusValue: float, HeightValue: float) 
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def FreeCadBoxMut(
-    DocData: CadDocument, ObjectIds: dict[str, int]
-) -> tuple[WriteObject, ...] | None:
-
-    # this callback exists because local behavior needs one focused transformation
-    TimelineData = tuple(
-        (
-            FeatureData
-            for FeatureData in sorted(
-                DocData.feature_timeline, key=lambda FeatureData: FeatureData.order
-            )
-            if not IsNativeSystem(FeatureData)
-        )
-    )
-    if len(TimelineData) != 1:
-        return None
-    FeatureData = TimelineData[0]
-    DefinitionData = FeatureData.definition
-    if (
-        DocData.source.format_id.casefold() != "freecad.fcstd"
-        or DocData.assembly is not None
-        or DocData.support_planes
-        or DocData.sketches
-        or DocData.selections
-        or (len(DocData.bodies) != 1)
-        or (DocData.bodies[0].final_feature_id != FeatureData.id)
-        or (len(DocData.configurations) != 1)
-        or (DocData.configurations[0].name.casefold() != "default")
-        or (not DocData.configurations[0].active)
-        or (DocData.configurations[0].parent_id is not None)
-        or DocData.configurations[0].overrides
-        or DocData.configurations[0].suppressed_feature_ids
-        or (FeatureData.order != 0)
-        or FeatureData.input_feature_ids
-        or (FeatureData.sketch_id is not None)
-        or FeatureData.selection_ids
-        or FeatureData.configuration_states
-        or FeatureData.suppressed
-        or (str(FeatureData.kind).casefold() != FeatureKind.PRIMITIVE.value)
-        or (FeatureData.operation is not None)
-        or (not isinstance(DefinitionData, NativeFeatureDefinition))
-        or (DefinitionData.format_id.casefold() != "freecad.fcstd")
-        or (DefinitionData.type_id not in {"Part::Box", "PartDesign::AdditiveBox"})
-        or (FeatureData.provenance is None)
-        or any((ItemData.expression is not None for ItemData in DocData.parameters))
-    ):
-        return None
-    PathData: dict[str, Param] = {}
-    for ItemData in DocData.parameters:
-        if ItemData.owner_id != FeatureData.id:
-            return None
-        PathValue = ItemData.attributes.get("freecad_path")
-        if not isinstance(PathValue, str) or not PathValue or PathValue in PathData:
-            return None
-        PathData[PathValue] = ItemData
-    ExpectedData = {
-        "Length": (ValueKind.LENGTH, None),
-        "Width": (ValueKind.LENGTH, None),
-        "Height": (ValueKind.LENGTH, None),
-        "MapMode": (ValueKind.INTEGER, 0),
-        "MapPathParameter": (ValueKind.NUMBER, 0.0),
-        "MapReversed": (ValueKind.BOOLEAN, False),
-        "Visibility": (ValueKind.BOOLEAN, True),
-    }
-    if not set(ExpectedData) <= set(PathData) or any(
-        (
-            not IsFreecadParam(PathData[PathName], KindData, ValueData)
-            for PathName, (KindData, ValueData) in ExpectedData.items()
-            if ValueData is not None
-        )
-    ):
-        return None
+# focused continuation isolates the remaining native serialization phase
+def FinishBoxMut(PathData, DefinitionData, DocData, FeatureData, ObjectIds):
     DimensionsData = tuple(
         (
             ParamDimension(PathData[PathName])
@@ -3143,7 +3077,7 @@ def FreeCadBoxMut(
 
 
 # this definition exists because focused behavior needs one stable owner
-def BuildCadCylOMut(
+def FreeCadBoxMut(
     DocData: CadDocument, ObjectIds: dict[str, int]
 ) -> tuple[WriteObject, ...] | None:
 
@@ -3185,7 +3119,7 @@ def BuildCadCylOMut(
         or (FeatureData.operation is not None)
         or (not isinstance(DefinitionData, NativeFeatureDefinition))
         or (DefinitionData.format_id.casefold() != "freecad.fcstd")
-        or (DefinitionData.type_id != "Part::Cylinder")
+        or (DefinitionData.type_id not in {"Part::Box", "PartDesign::AdditiveBox"})
         or (FeatureData.provenance is None)
         or any((ItemData.expression is not None for ItemData in DocData.parameters))
     ):
@@ -3198,6 +3132,28 @@ def BuildCadCylOMut(
         if not isinstance(PathValue, str) or not PathValue or PathValue in PathData:
             return None
         PathData[PathValue] = ItemData
+    ExpectedData = {
+        "Length": (ValueKind.LENGTH, None),
+        "Width": (ValueKind.LENGTH, None),
+        "Height": (ValueKind.LENGTH, None),
+        "MapMode": (ValueKind.INTEGER, 0),
+        "MapPathParameter": (ValueKind.NUMBER, 0.0),
+        "MapReversed": (ValueKind.BOOLEAN, False),
+        "Visibility": (ValueKind.BOOLEAN, True),
+    }
+    if not set(ExpectedData) <= set(PathData) or any(
+        (
+            not IsFreecadParam(PathData[PathName], KindData, ValueData)
+            for PathName, (KindData, ValueData) in ExpectedData.items()
+            if ValueData is not None
+        )
+    ):
+        return None
+    return FinishBoxMut(PathData, DefinitionData, DocData, FeatureData, ObjectIds)
+
+
+# focused continuation isolates the remaining native serialization phase
+def FinishCylMut(PathData, DefinitionData, DocData, FeatureData, ObjectIds):
     ExpectedData = {
         "Angle": (ValueKind.ANGLE, 360.0),
         "FirstAngle": (ValueKind.ANGLE, 0.0),
@@ -3285,6 +3241,91 @@ def BuildCadCylOMut(
 
 
 # this definition exists because focused behavior needs one stable owner
+def BuildCadCylOMut(
+    DocData: CadDocument, ObjectIds: dict[str, int]
+) -> tuple[WriteObject, ...] | None:
+
+    # this callback exists because local behavior needs one focused transformation
+    TimelineData = tuple(
+        (
+            FeatureData
+            for FeatureData in sorted(
+                DocData.feature_timeline, key=lambda FeatureData: FeatureData.order
+            )
+            if not IsNativeSystem(FeatureData)
+        )
+    )
+    if len(TimelineData) != 1:
+        return None
+    FeatureData = TimelineData[0]
+    DefinitionData = FeatureData.definition
+    if (
+        DocData.source.format_id.casefold() != "freecad.fcstd"
+        or DocData.assembly is not None
+        or DocData.support_planes
+        or DocData.sketches
+        or DocData.selections
+        or (len(DocData.bodies) != 1)
+        or (DocData.bodies[0].final_feature_id != FeatureData.id)
+        or (len(DocData.configurations) != 1)
+        or (DocData.configurations[0].name.casefold() != "default")
+        or (not DocData.configurations[0].active)
+        or (DocData.configurations[0].parent_id is not None)
+        or DocData.configurations[0].overrides
+        or DocData.configurations[0].suppressed_feature_ids
+        or (FeatureData.order != 0)
+        or FeatureData.input_feature_ids
+        or (FeatureData.sketch_id is not None)
+        or FeatureData.selection_ids
+        or FeatureData.configuration_states
+        or FeatureData.suppressed
+        or (str(FeatureData.kind).casefold() != FeatureKind.PRIMITIVE.value)
+        or (FeatureData.operation is not None)
+        or (not isinstance(DefinitionData, NativeFeatureDefinition))
+        or (DefinitionData.format_id.casefold() != "freecad.fcstd")
+        or (DefinitionData.type_id != "Part::Cylinder")
+        or (FeatureData.provenance is None)
+        or any((ItemData.expression is not None for ItemData in DocData.parameters))
+    ):
+        return None
+    PathData: dict[str, Param] = {}
+    for ItemData in DocData.parameters:
+        if ItemData.owner_id != FeatureData.id:
+            return None
+        PathValue = ItemData.attributes.get("freecad_path")
+        if not isinstance(PathValue, str) or not PathValue or PathValue in PathData:
+            return None
+        PathData[PathValue] = ItemData
+    return FinishCylMut(PathData, DefinitionData, DocData, FeatureData, ObjectIds)
+
+
+# focused continuation isolates the remaining native serialization phase
+def FinishItemsMut(DocValue, Result, Parameters, ObjectIds):
+    Sketches = {Sketch.id: Sketch for Sketch in DocValue.sketches}
+    EmittedSketches: set[str] = set()
+
+    # this callback exists because local behavior needs one focused transformation
+    for Feature in sorted(
+        DocValue.feature_timeline, key=lambda ItemValue: ItemValue.order
+    ):
+        if IsNativeSystem(Feature):
+            continue
+        if Feature.sketch_id is not None and Feature.sketch_id in Sketches:
+            Sketch = Sketches[Feature.sketch_id]
+            if Sketch.id not in EmittedSketches:
+                Result.append(WriteSketch(Sketch, Parameters, ObjectIds, Feature))
+                EmittedSketches.add(Sketch.id)
+        FeatureId = ObjectIds[f"feature:{Feature.id}"]
+        if any((ItemValue.object_id == FeatureId for ItemValue in Result)):
+            continue
+        Result.append(WriteFeature(Feature, Parameters, ObjectIds))
+    for Sketch in DocValue.sketches:
+        if Sketch.id not in EmittedSketches:
+            Result.append(WriteSketch(Sketch, Parameters, ObjectIds))
+    return tuple(Result)
+
+
+# this definition exists because focused behavior needs one stable owner
 def WriteObjects(
     DocValue: CadDocument, ObjectIds: dict[str, int]
 ) -> tuple[WriteObject, ...]:
@@ -3317,28 +3358,7 @@ def WriteObjects(
                 payload=PlanePayload(Plane),
             )
         )
-    Sketches = {Sketch.id: Sketch for Sketch in DocValue.sketches}
-    EmittedSketches: set[str] = set()
-
-    # this callback exists because local behavior needs one focused transformation
-    for Feature in sorted(
-        DocValue.feature_timeline, key=lambda ItemValue: ItemValue.order
-    ):
-        if IsNativeSystem(Feature):
-            continue
-        if Feature.sketch_id is not None and Feature.sketch_id in Sketches:
-            Sketch = Sketches[Feature.sketch_id]
-            if Sketch.id not in EmittedSketches:
-                Result.append(WriteSketch(Sketch, Parameters, ObjectIds, Feature))
-                EmittedSketches.add(Sketch.id)
-        FeatureId = ObjectIds[f"feature:{Feature.id}"]
-        if any((ItemValue.object_id == FeatureId for ItemValue in Result)):
-            continue
-        Result.append(WriteFeature(Feature, Parameters, ObjectIds))
-    for Sketch in DocValue.sketches:
-        if Sketch.id not in EmittedSketches:
-            Result.append(WriteSketch(Sketch, Parameters, ObjectIds))
-    return tuple(Result)
+    return FinishItemsMut(DocValue, Result, Parameters, ObjectIds)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3368,6 +3388,36 @@ def ExprParams(DocValue: CadDocument) -> tuple[Param, ...]:
     )
 
 
+# focused continuation isolates the remaining native serialization phase
+def FinishExprMut(Parameters, IdAction, Values, References, Bindings):
+    for Param in Parameters:
+        Expression = Param.expression
+        if Expression is None:
+            return None
+        Source = Expression.source.strip()
+        if not KEquationRefSource.fullmatch(Source):
+            return None
+        Literal = EquationLiteral(Param.value)
+        if Literal is None:
+            return None
+        RefValue = IdAction(f"reference:{Source}", Source)
+        Driven = IdAction(f"parameter:{Param.id}", Param.name)
+        if RefValue is None or Driven is None or RefValue == Driven:
+            return None
+        if RefValue in Values:
+            if Values[RefValue] != Literal:
+                return None
+        else:
+            Values[RefValue] = Literal
+            References.append((RefValue, Literal))
+        Bindings.append((Driven, RefValue))
+    Texts = [f'"{NameValue}"= {Literal}' for NameValue, Literal in References]
+    Texts.extend((f'"{Driven}"= "{RefValue}"' for Driven, RefValue in Bindings))
+    if len(set(Texts)) != len(Texts):
+        return None
+    return tuple(Texts)
+
+
 # this definition exists because focused behavior needs one stable owner
 def ExpressionTexts(DocValue: CadDocument) -> tuple[str, ...] | None:
     Parameters = ExprParams(DocValue)
@@ -3395,32 +3445,7 @@ def ExpressionTexts(DocValue: CadDocument) -> tuple[str, ...] | None:
     References: list[tuple[str, str]] = []
     Values: dict[str, str] = {}
     Bindings: list[tuple[str, str]] = []
-    for Param in Parameters:
-        Expression = Param.expression
-        if Expression is None:
-            return None
-        Source = Expression.source.strip()
-        if not KEquationRefSource.fullmatch(Source):
-            return None
-        Literal = EquationLiteral(Param.value)
-        if Literal is None:
-            return None
-        RefValue = IdAction(f"reference:{Source}", Source)
-        Driven = IdAction(f"parameter:{Param.id}", Param.name)
-        if RefValue is None or Driven is None or RefValue == Driven:
-            return None
-        if RefValue in Values:
-            if Values[RefValue] != Literal:
-                return None
-        else:
-            Values[RefValue] = Literal
-            References.append((RefValue, Literal))
-        Bindings.append((Driven, RefValue))
-    Texts = [f'"{NameValue}"= {Literal}' for NameValue, Literal in References]
-    Texts.extend((f'"{Driven}"= "{RefValue}"' for Driven, RefValue in Bindings))
-    if len(set(Texts)) != len(Texts):
-        return None
-    return tuple(Texts)
+    return FinishExprMut(Parameters, IdAction, Values, References, Bindings)
 
 
 # this definition exists because focused behavior needs one stable owner
