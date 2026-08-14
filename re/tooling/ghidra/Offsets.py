@@ -23,7 +23,7 @@ def Blocks(PathInfoData):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     PathInfoData = KOutInfo / (System.argv[1] if len(System.argv) > 1 else 'sldmodu_accessors.c')
     KeysInfo = System.argv[2:]
     for NameTextInfo, BodyInfo in Blocks(PathInfoData):
@@ -38,4 +38,4 @@ def MainRunInfo():
         Lines = len(BodyInfo.splitlines())
         print(f'{NameTextInfo:56s} lines={Lines:4d} offs={[hex(OInfo) for OInfo in OffsInfo[:8]]} types={Types}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

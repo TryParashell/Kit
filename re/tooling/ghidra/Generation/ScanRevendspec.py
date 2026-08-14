@@ -37,7 +37,7 @@ def Decode(ByteBlob, DataValue):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     Roots = System.argv[1:] or ['.rescratch/corpus/parts', '.rescratch/corpus2', 'examples']
     Needle = Marker(KLASS)
     Histogram = Collects.Counter()
@@ -67,4 +67,4 @@ def MainRunInfo():
     KOutInfo.mkdir(parents=True, exist_ok=True)
     (KOutInfo / 'ScanRevendspec.json').write_text(JsonData.dumps(GetRows, indent=1))
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

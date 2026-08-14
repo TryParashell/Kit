@@ -36,7 +36,7 @@ def RandomRun(ByteBlob, Anchor):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     PathInfoData = Pathlib.Path(System.argv[1]) if len(System.argv) > 1 else KDefault
     ByteBlob = PathInfoData.read_bytes()
     for Anchor in (5666652, 5676340):
@@ -74,4 +74,4 @@ def MainRunInfo():
         for IndexInfo, FidInfo, TripInfo in GetRows[-4:]:
             print(IndexInfo, f'0x{FidInfo:08x}', [f'{ValueData:08x}' for ValueData in TripInfo])
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

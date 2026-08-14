@@ -25,7 +25,7 @@ KTargets = ('Contents/Config-0-ResolvedFeatures', 'Contents/CMgr', 'Contents/Con
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     for ItemData in System.argv[1:]:
         PartInfoInfo = PathInfo(ItemData).resolve()
         DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
@@ -40,4 +40,4 @@ def MainRunInfo() -> int:
             print(f'    {NameTextInfo:38s} {Sizes[NameTextInfo]:7d} 0x{Sizes[NameTextInfo]:x} collides={Collisions[NameTextInfo]}')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

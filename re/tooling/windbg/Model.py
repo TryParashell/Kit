@@ -22,6 +22,20 @@ for CandInfo in (KHereInfo, KGrammar):
         System.path.insert(0, str(CandInfo))
 import Segment as Segmentlib
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KNewClassTag = 65535
 
@@ -54,19 +68,11 @@ class NodeInfo:
     ObjectIndex: int = 0
     KAliasNames = {'kind': 'KindNameInfo', 'body': 'BodyInfo', 'schema': 'Schema', 'class_name': 'ClassNameData', 'target': 'Target', 'literal': 'Literal', 'origin': 'Origin', 'class_index': 'ClassIndex', 'object_index': 'ObjectIndex'}
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+NodeInfo.__getattr__ = GetLegacyAttr
 
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
-
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __setattr__(SelfRef, NameText, ValueData):
-        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
-        object.__setattr__(SelfRef, TargetName, ValueData)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+NodeInfo.__setattr__ = SetLegacyMut
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -137,19 +143,11 @@ class Model:
         return bytes(OutputDataInfo)
     KAliasNames = {'header': 'Header', 'base': 'BaseInfo', 'nodes': 'Nodes', 'clone': 'Clone', 'definition_index': 'DefnIndex', 'assign': 'Assign', 'emit': 'EmitData'}
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Model.__getattr__ = GetLegacyAttr
 
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
-
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __setattr__(SelfRef, NameText, ValueData):
-        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
-        object.__setattr__(SelfRef, TargetName, ValueData)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Model.__setattr__ = SetLegacyMut
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -222,7 +220,7 @@ def NodeOffsets(ModelInfo: Model) -> list[int]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ArgsInfo = System.argv[1:]
     if len(ArgsInfo) % 3:
         raise SystemExit('usage: Model.py <label> <part> <log> [...]')
@@ -238,4 +236,4 @@ def MainRunInfo() -> int:
         print(f'{LabelInfo:14s} nodes={len(ModelInfo.nodes):4d} base={ModelInfo.base} external classrefs={ExternClasses:3d} objectrefs={ExternObjects:3d} round-trip={Status} {len(Rebuilt)}/{len(ByteBlob)}')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

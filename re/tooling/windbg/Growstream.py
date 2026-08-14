@@ -24,6 +24,20 @@ import Renumber as Renumberlib
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
 class GrowError(RuntimeError):
     __slots__ = ()
 
@@ -52,13 +66,8 @@ class CountField:
         setattr(NodeInfoInfo, 'body', bytes(BodyInfo))
     KAliasNames = {'node': 'NodeInfoInfo', 'body_offset': 'BodyOffset', 'width': 'WidthInfo', 'read': 'ReadData', 'write': 'Write'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+CountField.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

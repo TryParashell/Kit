@@ -160,9 +160,9 @@ def Verify(FixtureRoot: PathInfo) -> dict[str, object]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     Summary = Verify(KFixtureRoot)
     System.stdout.write(JsonData.dumps(Summary, indent=2, sort_keys=True) + '\n')
     return 1 if Summary['failures'] else 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

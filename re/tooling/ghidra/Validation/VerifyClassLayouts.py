@@ -25,6 +25,20 @@ System.path.insert(0, str(KHereInfo))
 from convert.adapters.solidworks.container.Container import SldprtArchive
 from solve_runs import Solver, load_traces as LoadTraces
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KStream = 'Contents/Config-0-ResolvedFeatures'
 
@@ -249,19 +263,11 @@ class Walker:
         return Limit - HeadInfo
     KAliasNames = {'layout_for': 'LayoutFor', 'body_end': 'BodyEnd', 'compute': 'Compute', 'predicted_child_offsets': 'ChildOffsets', 'bound': 'Bound'}
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Walker.__getattr__ = GetLegacyAttr
 
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
-
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __setattr__(SelfRef, NameText, ValueData):
-        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
-        object.__setattr__(SelfRef, TargetName, ValueData)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Walker.__setattr__ = SetLegacyMut
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -309,7 +315,7 @@ def Verify(Layouts: dict, SegmentsDir: Pathlib.Path) -> dict:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ParserInfo = Argparse.ArgumentParser()
     ParserInfo.add_argument('--layouts', default=str(KRootInfo / 're/data/Layouts/ClassLayoutsDecompiled.json'))
     ParserInfo.add_argument('--segments', default=str(KRootInfo / 're/data/segments'))
@@ -340,4 +346,4 @@ def MainRunInfo() -> int:
         Pathlib.Path(ArgValues.out).write_text(JsonData.dumps(Report, indent=1), encoding='utf-8')
     return 1 if Failures else 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

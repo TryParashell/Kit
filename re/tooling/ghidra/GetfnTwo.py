@@ -33,7 +33,7 @@ def Blocks(PathInfoData):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     PathInfoData = KOutInfo / System.argv[1]
     Wanted = System.argv[2]
     ModeInfo = System.argv[3] if len(System.argv) > 3 else 'skeleton'
@@ -47,4 +47,4 @@ def MainRunInfo():
                 print(f'{IndexData:5d} {Stripped[:160]}')
         print()
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

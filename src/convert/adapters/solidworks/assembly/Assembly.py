@@ -418,74 +418,168 @@ class NativeAsmB:
     __annotations__['unsupported_mate_reasons'] = 'Mapping[str, tuple[str, ...]]'
     locals()['unsupported_mate_reasons'] = Field(default_factory=EmptyTupleMap)
 
-# this definition exists because focused behavior needs one stable owner
-def EncodeNativeAsm(AsmValue: AssemblyData, Configurations: Sequence[Configuration], ModelName: str, BundleNames: Mapping[str, str] | None=None) -> NativeAsmB:
+# assembly encoding needs one immutable plan so xml phases share consistent identifiers
+@Dataclass(frozen=True, slots=True)
+class AsmEncodePlan:
+    Definitions: tuple[ComponentDefinition, ...]
+    Instances: tuple[ComponentInstance, ...]
+    DefinitionById: Mapping[str, ComponentDefinition]
+    SelectedConfigs: tuple[Configuration, ...]
+    SourcePaths: Mapping[str, str]
+    FileKeys: Mapping[str, tuple[str, str]]
+    UniqueFileKeys: tuple[tuple[str, str], ...]
+    DefinitionIds: Mapping[str, int]
+    FileIds: Mapping[tuple[str, str], int]
+    ItemIds: Mapping[str, int]
+    ConfigIds: Mapping[str, int]
+
+
+# native object allocation stays isolated so every xml phase consumes identical references
+def BuildObjPrefs(
+    Definitions: tuple[ComponentDefinition, ...],
+    Instances: tuple[ComponentInstance, ...],
+    Configs: tuple[Configuration, ...],
+    FileKeys: Mapping[str, tuple[str, str]],
+    UniqueKeys: tuple[tuple[str, str], ...],
+) -> dict[tuple[str, str], int | None]:
+    FilePrefs = {
+        KeyValue: next(
+            (
+                PositiveInteger(Definition.attributes.get('native_file_id'))
+                for Definition in Definitions
+                if FileKeys[Definition.id] == KeyValue
+                and PositiveInteger(Definition.attributes.get('native_file_id')) is not None
+            ),
+            None,
+        )
+        for KeyValue in UniqueKeys
+    }
+    ObjectPrefs: dict[tuple[str, str], int | None] = {}
+    for Config in Configs:
+        ObjectPrefs['configuration', Config.id] = PositiveInteger(Config.attributes.get('native_object_id'))
+    for Definition in Definitions:
+        ObjectPrefs['definition', Definition.id] = PreferredNative(Definition.id, 'sldasm:definition:', Definition.attributes.get('native_object_id'))
+    for KeyValue in UniqueKeys:
+        ObjectPrefs['file', repr(KeyValue)] = FilePrefs[KeyValue]
+    for Instance in Instances:
+        ObjectPrefs['occurrence', Instance.id] = PreferredNative(Instance.id, 'sldasm:instance:', Instance.attributes.get('native_object_id'))
+    return ObjectPrefs
+
+
+# assembly validation and allocation belong together so later phases only render trusted state
+def BuildAsmPlan(
+    AsmValue: AssemblyData,
+    Configurations: Sequence[Configuration],
+    ModelName: str,
+    BundleNames: Mapping[str, str] | None,
+) -> AsmEncodePlan:
     Definitions = tuple(AsmValue.definitions)
     Instances = tuple(AsmValue.instances)
     DefinitionById = {ItemValue.id: ItemValue for ItemValue in Definitions}
     if AsmValue.root_definition_id not in DefinitionById:
         raise SldprtFormatError('assembly root definition is missing')
 
-    # this callback exists because local behavior needs one focused transformation
-    SelectedConfigurations = tuple(sorted(Configurations, key=lambda ItemValue: (not ItemValue.active, Configurations.index(ItemValue))))
-    if not SelectedConfigurations:
+    # active configuration ordering must remain deterministic across equivalent input sequences
+    SelectedConfigs = tuple(sorted(Configurations, key=lambda ItemValue: (not ItemValue.active, Configurations.index(ItemValue))))
+    if not SelectedConfigs:
         raise SldprtFormatError('assembly contains no configuration')
     Names = BundleNames or {}
     SourcePaths = {Definition.id: DefinitionPath(Definition, Definition.id == AsmValue.root_definition_id, ModelName, Names) for Definition in Definitions}
     FileKeys = {Definition.id: DefinitionFile(Definition, SourcePaths[Definition.id]) for Definition in Definitions}
-    UniqueFileKeys = tuple(dict.fromkeys(FileKeys.values()))
-    FilePreferred = {KeyValue: next((PositiveInteger(Definition.attributes.get('native_file_id')) for Definition in Definitions if FileKeys[Definition.id] == KeyValue and PositiveInteger(Definition.attributes.get('native_file_id')) is not None), None) for KeyValue in UniqueFileKeys}
-    ObjectPreferred: dict[tuple[str, str], int | None] = {}
-    for Config in SelectedConfigurations:
-        ObjectPreferred['configuration', Config.id] = PositiveInteger(Config.attributes.get('native_object_id'))
-    for Definition in Definitions:
-        ObjectPreferred['definition', Definition.id] = PreferredNative(Definition.id, 'sldasm:definition:', Definition.attributes.get('native_object_id'))
-    for KeyValue in UniqueFileKeys:
-        ObjectPreferred['file', repr(KeyValue)] = FilePreferred[KeyValue]
-    for Instance in Instances:
-        ObjectPreferred['occurrence', Instance.id] = PreferredNative(Instance.id, 'sldasm:instance:', Instance.attributes.get('native_object_id'))
-    ObjectIds = AllocateObject(ObjectPreferred)
-    DefinitionIds = {Definition.id: ObjectIds['definition', Definition.id] for Definition in Definitions}
-    FileIds = {KeyValue: ObjectIds['file', repr(KeyValue)] for KeyValue in UniqueFileKeys}
-    ItemIds = {Instance.id: ObjectIds['occurrence', Instance.id] for Instance in Instances}
-    ConfigIds = {Config.id: ObjectIds['configuration', Config.id] for Config in SelectedConfigurations}
-    RootValue = XmlTree.Element('swSolidWorks', {'xmlns': 'http://www.solidworks.com/sw2003/schema', 'swObjCount': str(max(ObjectIds.values(), default=0)), 'swVersion': '18000'})
-    Header = XmlTree.SubElement(RootValue, 'swHeader', {'swObjCount': str(len(UniqueFileKeys))})
-    for KeyValue in UniqueFileKeys:
-        Definition = next((ItemValue for ItemValue in Definitions if FileKeys[ItemValue.id] == KeyValue))
-        XmlTree.SubElement(Header, 'swFile', {'id': str(FileIds[KeyValue]), 'swDocType': DefinitionDoc(Definition), 'swCreationTime': str(IntegerAttr(Definition, 'native_creation_time', 0)), 'swPath': SourcePaths[Definition.id]})
-    ModelList = XmlTree.SubElement(RootValue, 'swModelList', {'swObjCount': str(len(Definitions))})
-    Children: dict[str, list[tuple[int, ComponentInstance]]] = {}
-    for Index, Instance in enumerate(Instances):
-        Children.setdefault(Instance.owner_definition_id, []).append((Index, Instance))
-    for Definition in Definitions:
-        Attributes = {'id': str(DefinitionIds[Definition.id]), 'swName': Definition.name, 'swConfigurationName': Definition.configuration_name or 'Default', 'swConfigurationId': str(ConfigInteger(Definition.configuration_id)), 'swLastModifiedStamp': str(IntegerAttr(Definition, 'last_modified_stamp', 0)), 'swConfigurationFlags': str(IntegerAttr(Definition, 'configuration_flags', 0)), 'swFileRef': str(FileIds[FileKeys[Definition.id]])}
-        Alternate = Definition.attributes.get('alternate_configuration_name')
-        if isinstance(Alternate, str) and Alternate:
-            Attributes['swConfigurationAlternateName'] = Alternate
-        BoundingBox = NativeBounding(Definition)
-        if BoundingBox:
-            Attributes['swBoundingBox'] = BoundingBox
-        if Definition.id == AsmValue.root_definition_id:
-            Attributes['swAssemblyFeatureEffectedComponents'] = ''
-        Model = XmlTree.SubElement(ModelList, 'swModel', Attributes)
+    UniqueKeys = tuple(dict.fromkeys(FileKeys.values()))
+    ObjectIds = AllocateObject(BuildObjPrefs(Definitions, Instances, SelectedConfigs, FileKeys, UniqueKeys))
+    return AsmEncodePlan(
+        Definitions,
+        Instances,
+        DefinitionById,
+        SelectedConfigs,
+        SourcePaths,
+        FileKeys,
+        UniqueKeys,
+        {Definition.id: ObjectIds['definition', Definition.id] for Definition in Definitions},
+        {KeyValue: ObjectIds['file', repr(KeyValue)] for KeyValue in UniqueKeys},
+        {Instance.id: ObjectIds['occurrence', Instance.id] for Instance in Instances},
+        {Config.id: ObjectIds['configuration', Config.id] for Config in SelectedConfigs},
+    )
 
-        # this callback exists because local behavior needs one focused transformation
-        Owned = sorted(Children.get(Definition.id, ()), key=lambda ItemValue: (ItemValue[1].order, ItemValue[0]))
-        for Index, Instance in Owned:
-            Target = DefinitionById.get(Instance.definition_id)
-            if Target is None:
-                continue
-            RefNumber = RefNumber(Instance, Index + 1)
-            XmlTree.SubElement(Model, 'swReference', {'id': str(ItemIds[Instance.id]), 'swName': InstanceBase(Instance, RefNumber), 'swReferenceNumber': str(RefNumber), 'swComponentReference': str(Instance.attributes.get('component_reference', '')), 'swID': str(NativeFeatureId(Instance, Index)), 'swIsVirtualComponent': YesText(bool(Instance.attributes.get('virtual', False))), 'swConfigurationId': str(ConfigInteger(Instance.configuration_id)), 'swConfigurationName': Instance.configuration_name or Target.configuration_name or 'Default', 'swDisplayMode': str(IntegerAttr(Instance, 'display_mode', 6)), 'swHlrDisplayQuality': str(IntegerAttr(Instance, 'display_quality', 1)), 'swSuppressed': YesText(Instance.suppressed), 'swHidden': YesText(Instance.hidden), 'swEdgesInShadedMode': YesText(bool(Instance.attributes.get('edges_in_shaded_mode', False))), 'swFlexible': YesText(Instance.flexible), 'swExcludeFromBOM': YesText(Instance.exclude_from_bom), 'swZone': YesText(bool(Instance.attributes.get('zone', False))), 'swModelRef': str(DefinitionIds[Target.id]), 'swTransform': ' '.join((format(Value, '.17g') for Value in NativeMatrix(Instance.transform))), 'swTransformStamp': str(IntegerAttr(Instance, 'transform_stamp', 0))})
-    ConfigList = XmlTree.SubElement(RootValue, 'swConfigurationList', {'swObjCount': str(len(SelectedConfigurations))})
-    for Config in SelectedConfigurations:
-        XmlTree.SubElement(ConfigList, 'swConfiguration', {'id': str(ConfigIds[Config.id]), 'swName': Config.name, 'swID': str(ConfigInteger(Config.attributes.get('native_configuration_id', 0))), 'swReference': DefinitionById[AsmValue.root_definition_id].name, 'swMostRecentConfiguration': YesText(Config.active), 'swConfigurationNeedsUpdate': 'NO', 'swModelRef': str(DefinitionIds[AsmValue.root_definition_id])})
+
+# file declarations remain separate because models may share one physical component source
+def AddAsmHeader(RootValue: AnyValue, PlanValue: AsmEncodePlan) -> None:
+    Header = XmlTree.SubElement(RootValue, 'swHeader', {'swObjCount': str(len(PlanValue.UniqueFileKeys))})
+    for KeyValue in PlanValue.UniqueFileKeys:
+        Definition = next((ItemValue for ItemValue in PlanValue.Definitions if PlanValue.FileKeys[ItemValue.id] == KeyValue))
+        XmlTree.SubElement(Header, 'swFile', {'id': str(PlanValue.FileIds[KeyValue]), 'swDocType': DefinitionDoc(Definition), 'swCreationTime': str(IntegerAttr(Definition, 'native_creation_time', 0)), 'swPath': PlanValue.SourcePaths[Definition.id]})
+
+
+# occurrence rendering stays focused so definition metadata cannot drift from child references
+def AddAsmReference(
+    ModelValue: AnyValue,
+    Instance: ComponentInstance,
+    Target: ComponentDefinition,
+    ItemIndex: int,
+    PlanValue: AsmEncodePlan,
+) -> None:
+    RefValue = RefNumber(Instance, ItemIndex + 1)
+    XmlTree.SubElement(ModelValue, 'swReference', {'id': str(PlanValue.ItemIds[Instance.id]), 'swName': InstanceBase(Instance, RefValue), 'swReferenceNumber': str(RefValue), 'swComponentReference': str(Instance.attributes.get('component_reference', '')), 'swID': str(NativeFeatureId(Instance, ItemIndex)), 'swIsVirtualComponent': YesText(bool(Instance.attributes.get('virtual', False))), 'swConfigurationId': str(ConfigInteger(Instance.configuration_id)), 'swConfigurationName': Instance.configuration_name or Target.configuration_name or 'Default', 'swDisplayMode': str(IntegerAttr(Instance, 'display_mode', 6)), 'swHlrDisplayQuality': str(IntegerAttr(Instance, 'display_quality', 1)), 'swSuppressed': YesText(Instance.suppressed), 'swHidden': YesText(Instance.hidden), 'swEdgesInShadedMode': YesText(bool(Instance.attributes.get('edges_in_shaded_mode', False))), 'swFlexible': YesText(Instance.flexible), 'swExcludeFromBOM': YesText(Instance.exclude_from_bom), 'swZone': YesText(bool(Instance.attributes.get('zone', False))), 'swModelRef': str(PlanValue.DefinitionIds[Target.id]), 'swTransform': ' '.join((format(Value, '.17g') for Value in NativeMatrix(Instance.transform))), 'swTransformStamp': str(IntegerAttr(Instance, 'transform_stamp', 0))})
+
+
+# one model renderer keeps optional metadata and owned occurrences under the same definition
+def AddAsmModel(
+    ModelList: AnyValue,
+    Definition: ComponentDefinition,
+    OwnedItems: list[tuple[int, ComponentInstance]],
+    PlanValue: AsmEncodePlan,
+    RootId: str,
+) -> None:
+    Attributes = {'id': str(PlanValue.DefinitionIds[Definition.id]), 'swName': Definition.name, 'swConfigurationName': Definition.configuration_name or 'Default', 'swConfigurationId': str(ConfigInteger(Definition.configuration_id)), 'swLastModifiedStamp': str(IntegerAttr(Definition, 'last_modified_stamp', 0)), 'swConfigurationFlags': str(IntegerAttr(Definition, 'configuration_flags', 0)), 'swFileRef': str(PlanValue.FileIds[PlanValue.FileKeys[Definition.id]])}
+    Alternate = Definition.attributes.get('alternate_configuration_name')
+    if isinstance(Alternate, str) and Alternate:
+        Attributes['swConfigurationAlternateName'] = Alternate
+    BoundingValue = NativeBounding(Definition)
+    if BoundingValue:
+        Attributes['swBoundingBox'] = BoundingValue
+    if Definition.id == RootId:
+        Attributes['swAssemblyFeatureEffectedComponents'] = ''
+    ModelValue = XmlTree.SubElement(ModelList, 'swModel', Attributes)
+
+    # occurrence order is part of the vendor tree identity and must remain stable
+    SortedItems = sorted(OwnedItems, key=lambda ItemValue: (ItemValue[1].order, ItemValue[0]))
+    for ItemIndex, Instance in SortedItems:
+        Target = PlanValue.DefinitionById.get(Instance.definition_id)
+        if Target is not None:
+            AddAsmReference(ModelValue, Instance, Target, ItemIndex, PlanValue)
+
+
+# model collection rendering stays independent because component ownership drives its own traversal
+def AddAsmModels(RootValue: AnyValue, PlanValue: AsmEncodePlan, RootId: str) -> None:
+    ModelList = XmlTree.SubElement(RootValue, 'swModelList', {'swObjCount': str(len(PlanValue.Definitions))})
+    ChildItems: dict[str, list[tuple[int, ComponentInstance]]] = {}
+    for ItemIndex, Instance in enumerate(PlanValue.Instances):
+        ChildItems.setdefault(Instance.owner_definition_id, []).append((ItemIndex, Instance))
+    for Definition in PlanValue.Definitions:
+        AddAsmModel(ModelList, Definition, ChildItems.get(Definition.id, []), PlanValue, RootId)
+
+
+# configuration rendering remains separate because active state does not affect component topology
+def AddAsmConfigs(RootValue: AnyValue, PlanValue: AsmEncodePlan, RootId: str) -> None:
+    ConfigList = XmlTree.SubElement(RootValue, 'swConfigurationList', {'swObjCount': str(len(PlanValue.SelectedConfigs))})
+    for Config in PlanValue.SelectedConfigs:
+        XmlTree.SubElement(ConfigList, 'swConfiguration', {'id': str(PlanValue.ConfigIds[Config.id]), 'swName': Config.name, 'swID': str(ConfigInteger(Config.attributes.get('native_configuration_id', 0))), 'swReference': PlanValue.DefinitionById[RootId].name, 'swMostRecentConfiguration': YesText(Config.active), 'swConfigurationNeedsUpdate': 'NO', 'swModelRef': str(PlanValue.DefinitionIds[RootId])})
+
+
+# top level assembly encoding composes focused allocation xml and mate phases
+def EncodeNativeAsm(AsmValue: AssemblyData, Configurations: Sequence[Configuration], ModelName: str, BundleNames: Mapping[str, str] | None=None) -> NativeAsmB:
+    PlanValue = BuildAsmPlan(AsmValue, Configurations, ModelName, BundleNames)
+    ObjectCount = max((*PlanValue.DefinitionIds.values(), *PlanValue.FileIds.values(), *PlanValue.ItemIds.values(), *PlanValue.ConfigIds.values()), default=0)
+    RootValue = XmlTree.Element('swSolidWorks', {'xmlns': 'http://www.solidworks.com/sw2003/schema', 'swObjCount': str(ObjectCount), 'swVersion': '18000'})
+    AddAsmHeader(RootValue, PlanValue)
+    AddAsmModels(RootValue, PlanValue, AsmValue.root_definition_id)
+    AddAsmConfigs(RootValue, PlanValue, AsmValue.root_definition_id)
     XmlTree.SubElement(RootValue, 'swExtFeatureList', {'swObjCount': '0'})
-    Mates = EncodeMateA(AsmValue, Definitions, DefinitionById, DefinitionIds)
+    Mates = EncodeMateA(AsmValue, PlanValue.Definitions, PlanValue.DefinitionById, PlanValue.DefinitionIds)
     ComponentTree = XmlTree.tostring(RootValue, encoding='utf-8', xml_declaration=True, short_empty_elements=True)
-    StructureComplete = all((Definition(Definition) for Definition in Definitions)) and all((Instance.definition_id in DefinitionById and Instance.owner_definition_id in DefinitionById for Instance in Instances)) and HasCoreState(AsmValue) and HasCoreBasis(AsmValue)
-    return NativeAsmB(component_tree=ComponentTree, mate_streams=Mates.streams, definition_ids=MappingProxyType(DefinitionIds), occurrence_ids=MappingProxyType(ItemIds), structure_complete=StructureComplete, mates_complete=Mates.complete, unsupported_mate_ids=Mates.unsupported_mate_ids, generated_mate_ids=Mates.encoded_mate_ids, generated_mate_losses=Mates.losses, unsupported_mate_reasons=Mates.unsupported_reasons)
+    StructureComplete = all((IsDefinition(Definition) for Definition in PlanValue.Definitions)) and all((Instance.definition_id in PlanValue.DefinitionById and Instance.owner_definition_id in PlanValue.DefinitionById for Instance in PlanValue.Instances)) and HasCoreState(AsmValue) and HasCoreBasis(AsmValue)
+    return NativeAsmB(component_tree=ComponentTree, mate_streams=Mates.streams, definition_ids=MappingProxyType(PlanValue.DefinitionIds), occurrence_ids=MappingProxyType(PlanValue.ItemIds), structure_complete=StructureComplete, mates_complete=Mates.complete, unsupported_mate_ids=Mates.unsupported_mate_ids, generated_mate_ids=Mates.encoded_mate_ids, generated_mate_losses=Mates.losses, unsupported_mate_reasons=Mates.unsupported_reasons)
 
 # this definition exists because focused behavior needs one stable owner
 def HasCoreState(AsmValue: AssemblyData) -> bool:

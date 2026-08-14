@@ -27,7 +27,7 @@ def Needles():
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     Roots = [KSwInfo]
     if len(System.argv) > 1:
         Roots = [Pathlib.Path(FirstValue) for FirstValue in System.argv[1:]]
@@ -55,4 +55,4 @@ def MainRunInfo():
                 for NameTextInfo, IdxInfo in HitsInfo[:40]:
                     print(f'   {NameTextInfo} @ 0x{IdxInfo:x}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

@@ -29,7 +29,7 @@ def GetRows(LabelInfo, NameTextInfo, KindNameInfo):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     NameTextInfo = System.argv[1]
     KindNameInfo = System.argv[2] if len(System.argv) > 2 else 'definition'
     for LabelInfo in KLabels:
@@ -50,4 +50,4 @@ def MainRunInfo():
             SigInfo = ' '.join((f'{KeyIndex}{ValueData}' if KeyIndex == 'S' else f'O:{ValueData}' for KeyIndex, ValueData, *SpareValue in SeqInfo))
             print(f'{LabelInfo:16s} {PartInfoInfo[:26]:26s} node={IndexData:4d} {SigInfo}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

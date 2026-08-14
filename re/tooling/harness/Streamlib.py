@@ -24,6 +24,20 @@ from convert.adapters.solidworks.container.Container import SldprtArchive, _temp
 from convert.adapters.solidworks import resolved as Resolvedlib
 import Carchive as Carchive
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KResolved = 'Contents/Config-0-ResolvedFeatures'
 
@@ -107,13 +121,8 @@ class Donor:
         return SelfRef.StreamsInfo[KResolved]
     KAliasNames = {'path': 'PathInfoData', 'blob': 'ByteBlob', 'file_id': 'FileId', 'format_version': 'FormatVersion', 'signatures': 'Signatures', 'type_ids': 'TypeIds', 'order': 'Order', 'streams': 'StreamsInfo', 'resolved': 'Resolved'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Donor.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

@@ -20,7 +20,7 @@ def Blocks(PathInfoData):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     PathInfoData = System.argv[1]
     PatsInfo = System.argv[2:]
     for NameTextInfo, BodyInfo in Blocks(PathInfoData):
@@ -28,4 +28,4 @@ def MainRunInfo():
             print(BodyInfo)
             print('-' * 78)
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

@@ -19,6 +19,20 @@ for CandInfo in (KRootInfo, KRootInfo / 'src'):
         System.path.insert(0, str(CandInfo))
 from convert.adapters.solidworks.container.Container import SldprtArchive
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KResolved = 'Contents/Config-0-ResolvedFeatures'
 
@@ -60,13 +74,8 @@ class ClassDefinition:
     DataOffset: int
     KAliasNames = {'tag_offset': 'TagOffset', 'schema': 'Schema', 'name': 'NameTextInfo', 'name_offset': 'NameOffset', 'data_offset': 'DataOffset'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+ClassDefinition.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -76,13 +85,8 @@ class ClassReference:
     IndexData: int
     KAliasNames = {'offset': 'Offset', 'index': 'IndexData'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+ClassReference.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

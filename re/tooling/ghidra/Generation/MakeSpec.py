@@ -44,7 +44,7 @@ def Observed():
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     SmapInfo = JsonData.loads((KOutInfo / 'SerializeMap.json').read_text())
     WantInfo = []
     for NameTextInfo in KPriority:
@@ -69,4 +69,4 @@ def MainRunInfo():
     MissingInfo = [ItemCountInfo for ItemCountInfo in KPriority if ItemCountInfo not in SmapInfo]
     print('priority classes with no vtable entry:', MissingInfo)
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

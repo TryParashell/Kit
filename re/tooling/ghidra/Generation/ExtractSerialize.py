@@ -12,6 +12,20 @@ import json as JsonData
 import re as Regex
 from typing import Dict as DictInfo, List as ListInfo, Optional, Tuple
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KScalarWidth = {'uchar': 1, 'char': 1, 'ushort': 2, 'short': 2, 'long': 4, 'ulong': 4, 'int': 4, 'uint': 4, 'float': 4, 'double': 8, '__int64': 8, 'int64': 8}
 
@@ -119,19 +133,11 @@ class DumpRecord:
         return SelfRef.ByName.get(Token)
     KAliasNames = {'get': 'GetValue', 'resolve': 'ResolveInfo'}
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+DumpRecord.__getattr__ = GetLegacyAttr
 
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
-
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __setattr__(SelfRef, NameText, ValueData):
-        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
-        object.__setattr__(SelfRef, TargetName, ValueData)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+DumpRecord.__setattr__ = SetLegacyMut
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -264,7 +270,7 @@ def ExtractOps(Record: dict) -> dict:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ParserInfo = Argparse.ArgumentParser()
     ParserInfo.add_argument('dumps', nargs='+')
     ParserInfo.add_argument('--map', required=True)
@@ -312,4 +318,4 @@ def MainRunInfo() -> int:
     print('classes=%d extracted=%d missing=%d' % (len(PayloadInfo), OkInfo, len(PayloadInfo) - OkInfo))
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

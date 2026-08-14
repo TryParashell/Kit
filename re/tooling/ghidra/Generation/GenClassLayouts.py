@@ -20,6 +20,20 @@ if str(KHereInfo) not in System.path:
     System.path.insert(0, str(KHereInfo))
 import solve_runs as SolveRuns
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KRootInfo = KHereInfo.parents[2]
 
@@ -160,19 +174,11 @@ class TilingSolver(SolveRuns.Solver):
                 SelfRef.EndIndex[LabelInfo, NodeInfoInfo] = ValueInfo
     KAliasNames = {'seed': 'SeedInfo'}
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+TilingSolver.__getattr__ = GetLegacyAttr
 
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
-
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __setattr__(SelfRef, NameText, ValueData):
-        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
-        object.__setattr__(SelfRef, TargetName, ValueData)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+TilingSolver.__setattr__ = SetLegacyMut
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -621,7 +627,7 @@ def Generate(SegmentsDir: PathInfo, Decompiled: PathInfo, Extern: PathInfo, Vers
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ParserInfo = Argparse.ArgumentParser()
     ParserInfo.add_argument('--segments', default=str(KDefaultValue))
     ParserInfo.add_argument('--decompiled', default=str(KDefaultInfo))
@@ -639,4 +645,4 @@ def MainRunInfo() -> int:
     print('classes=%d confirmed=%d partial=%d opaque_runs=%d decompiled=%d versioned=%d version_gated=%d external=%d' % (PayloadInfo['class_count'], PayloadInfo['confirmed_classes'], PayloadInfo['partial_classes'], PayloadInfo['opaque_runs'], PayloadInfo['decompiled_classes'], PayloadInfo['versioned_classes'], len(PayloadInfo['version_gated_classes']), PayloadInfo['external_classes']))
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

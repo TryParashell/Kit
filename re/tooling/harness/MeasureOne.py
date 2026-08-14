@@ -23,7 +23,7 @@ from tests.oracle.Session import SolidWorksSession
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     Target = PathInfo(System.argv[1])
     PayloadInfo: dict[str, object] = {'path': str(Target)}
     Session = SolidWorksSession()
@@ -55,4 +55,4 @@ def MainRunInfo() -> int:
     System.stdout.write('@@RESULT@@' + JsonData.dumps(PayloadInfo) + '\n')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

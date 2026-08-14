@@ -11,7 +11,7 @@ import sys as System
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     PathInfoData = Pathlib.Path(System.argv[1])
     StartRun = int(System.argv[2], 0)
     Length = int(System.argv[3], 0)
@@ -24,4 +24,4 @@ def MainRunInfo():
         TextValueData = ''.join((chr(SecondValue) if 32 <= SecondValue < 127 else '.' for SecondValue in Chunk))
         print(f'{OffInfo:08x}  {Hexpart:<47s}  {TextValueData}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

@@ -73,7 +73,7 @@ def Build(PathInfoData=KVtInfo, SlotIndex=KSlotInfo):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     PathInfoData = KVtInfo
     if len(System.argv) > 1:
         PathInfoData = Pathlib.Path(System.argv[1])
@@ -91,4 +91,4 @@ def MainRunInfo():
             if KeyName.lower() in NameTextInfo.lower():
                 print(f"{NameTextInfo:34s} {ValueData['serialize_addr']} {ValueData['serialize_name']} shared_with={len(Shared[ValueData['serialize_addr']])}")
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

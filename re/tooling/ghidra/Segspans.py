@@ -46,7 +46,7 @@ def ResolveInfo(DocInfo):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     WantInfo = [FirstValue for FirstValue in System.argv[1:]]
     DocsInfo = LoadData()
 
@@ -68,4 +68,4 @@ def MainRunInfo():
             for OffInfo, LnInfo, Depth, KindNameInfo in GetRows[:12]:
                 print(f'      off={OffInfo:6d} len={LnInfo:5d} depth={Depth} kind={KindNameInfo}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

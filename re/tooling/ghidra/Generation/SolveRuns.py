@@ -14,6 +14,20 @@ import json as JsonData
 import os as OsLayer
 from typing import Dict as DictInfo, List as ListInfo, Optional, Sequence, Tuple
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KNoBodyKinds = ('null', 'objectref')
 
@@ -190,19 +204,11 @@ class Solver:
         return Result
     KAliasNames = {'key': 'KeyName', 'seed': 'SeedInfo', 'set_run': 'IsSetRun', 'set_end': 'IsSetEnd', 'pass_once': 'PassOnce', 'solve': 'Solve', 'bodies': 'Bodies'}
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Solver.__getattr__ = GetLegacyAttr
 
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
-
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __setattr__(SelfRef, NameText, ValueData):
-        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
-        object.__setattr__(SelfRef, TargetName, ValueData)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Solver.__setattr__ = SetLegacyMut
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -229,7 +235,7 @@ def Summarise(Bodies: DictInfo[str, ListInfo[dict]], SolverInfo: Solver) -> dict
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ParserInfo = Argparse.ArgumentParser()
     ParserInfo.add_argument('--segments', default='re/data/segments')
     ParserInfo.add_argument('--labels', default='')
@@ -248,4 +254,4 @@ def MainRunInfo() -> int:
     print('objects=%d resolved=%d runkeys=%d variable=%d conflicts=%d' % (Total, Resolved, len(SolverInfo.runs), len(SolverInfo.variable), len(SolverInfo.conflicts)))
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

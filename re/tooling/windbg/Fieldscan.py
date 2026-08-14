@@ -45,7 +45,7 @@ def Matches(ByteBlob: bytes, ValueInfo: int) -> set[tuple[int, int]]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     Formula = System.argv[1]
     if Formula not in KFormulas:
         raise SystemExit(f'formula must be one of {sorted(KFormulas)}')
@@ -80,4 +80,4 @@ def MainRunInfo() -> int:
     (KOutInfo / f'fieldscan_{Formula}.json').write_text(JsonData.dumps({'formula': Formula, 'parts': [str(PartInfoInfo) for PartInfoInfo in Parts], 'feature_counts': Counts, 'shared': Report}, indent=2), encoding='utf-8')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

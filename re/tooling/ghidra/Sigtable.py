@@ -59,7 +59,7 @@ def ScanParts(Roots):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     GetRows = Extract()
     Table = {}
     for IndexInfo, FileId, TripInfo in GetRows:
@@ -93,4 +93,4 @@ def MainRunInfo():
             print('MISMATCH', NameTextInfo, f'0x{FileId:08x}', f'index={HitInfo[0]}', [SourceData.hex() for SourceData in Signatures], [TextData.hex() for TextData in HitInfo[1]])
     print(f'parts={len(Parts)} match={OkInfo} mismatch={BadInfo} unknown={Unknown} unreadable={Broken}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

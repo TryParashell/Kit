@@ -35,11 +35,11 @@ def DumpData(LabelInfo, NameTextInfo, KindNameInfo, Limit):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     LabelInfo = System.argv[1]
     NameTextInfo = System.argv[2]
     KindNameInfo = System.argv[3] if len(System.argv) > 3 else 'definition'
     Limit = int(System.argv[4]) if len(System.argv) > 4 else 2
     DumpData(LabelInfo, NameTextInfo, KindNameInfo, Limit)
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

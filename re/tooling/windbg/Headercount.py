@@ -21,6 +21,20 @@ for CandInfo in (KHereInfo, KGrammar):
         System.path.insert(0, str(CandInfo))
 import Streamlib as Streamlib
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KModelHeader = 'Contents/Config-0-ModelHeader'
 
@@ -70,13 +84,8 @@ class Field:
         raise KeyError(SelfRef.LabelInfo)
     KAliasNames = {'stream': 'Stream', 'offset': 'Offset', 'width': 'WidthInfo', 'label': 'LabelInfo', 'read': 'ReadData', 'write': 'Write', 'expected': 'Expect'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Field.__getattr__ = GetLegacyAttr
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KFields = (Field(KModelHeader, KNodeOffset, 2, '24+2n'), Field(KHeaderTwo, KNodeOffset, 2, '24+2n'), Field(KCmgrInfo, KCmgrOffset, 2, 'n'))
@@ -105,7 +114,7 @@ def PatchedStreams(DonorInfo: Streamlib.Donor, FeatInfoInfo: int, Group: str) ->
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     for ItemData in System.argv[1:]:
         PartInfoInfo = PathInfo(ItemData).resolve()
         DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
@@ -117,4 +126,4 @@ def MainRunInfo() -> int:
         print(' '.join(RowDataInfo))
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

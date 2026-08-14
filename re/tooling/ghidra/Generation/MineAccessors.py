@@ -111,7 +111,7 @@ def StripComments(BodyInfo: str) -> str:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ParserInfo = Argparse.ArgumentParser()
     ParserInfo.add_argument('dumps', nargs='+')
     ParserInfo.add_argument('--classes', required=True)
@@ -160,4 +160,4 @@ def MainRunInfo() -> int:
     print(f'blocks={Scanned} recognised={Matched} classes={len(PayloadInfo)} accessors={Total}')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

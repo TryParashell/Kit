@@ -25,6 +25,20 @@ import Carchive as Carchive
 import Streamlib as Streamlib
 from convert.adapters.solidworks import resolved as Resolvedlib
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KSkeletons = KScratch / 'grammar' / 'skeletons'
 
@@ -111,13 +125,8 @@ class Rectangle:
         return (SelfRef.CentreXMm - HalfX, SelfRef.CentreYMm - HalfY, SelfRef.CentreXMm + HalfX, SelfRef.CentreYMm + HalfY)
     KAliasNames = {'width_mm': 'WidthMm', 'height_mm': 'HeightMm', 'centre_x_mm': 'CentreXMm', 'centre_y_mm': 'CentreYMm', 'kind': 'KindNameInfo', 'area_mm2': 'AreaMmTwo', 'corners_mm': 'CornersMm', 'bounds_mm': 'BoundsMm'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Rectangle.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -145,13 +154,8 @@ class Circle:
         return (SelfRef.CentreXMm - SelfRef.RadiusMm, SelfRef.CentreYMm - SelfRef.RadiusMm, SelfRef.CentreXMm + SelfRef.RadiusMm, SelfRef.CentreYMm + SelfRef.RadiusMm)
     KAliasNames = {'radius_mm': 'RadiusMm', 'centre_x_mm': 'CentreXMm', 'centre_y_mm': 'CentreYMm', 'kind': 'KindNameInfo', 'area_mm2': 'AreaMmTwo', 'bounds_mm': 'BoundsMm'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Circle.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -172,13 +176,8 @@ class Extrude:
         return (SelfRef.OpInfo, SelfRef.Profile.kind, SelfRef.Support, SelfRef.EndCondition != 'throughall')
     KAliasNames = {'profile': 'Profile', 'depth_mm': 'DepthMm', 'operation': 'OpInfo', 'plane': 'Plane', 'end_condition': 'EndCondition', 'reversed': 'Reversed', 'support': 'Support', 'shape': 'Shape'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Extrude.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -199,13 +198,8 @@ class PartInfo:
         return tuple((FeatInfo.shape for FeatInfo in SelfRef.FeatInfoInfo))
     KAliasNames = {'features': 'FeatInfoInfo', 'name': 'NameTextInfo', 'document_name': 'DocumentName', 'author_ids': 'AuthorIds', 'dedupe_ids': 'DedupeIds', 'write_depth_copies': 'WriteCopies', 'write_bbox_cache': 'WriteBboxCache', 'shape': 'Shape'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+PartInfo.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -227,13 +221,8 @@ class Skeleton:
         return SelfRef.LabelInfo or SelfRef.Source.name
     KAliasNames = {'shape': 'Shape', 'source': 'Source', 'resolved': 'Resolved', 'keywords': 'Keywords', 'features_xml': 'FeatXml', 'donor': 'DonorInfo', 'grown': 'Grown', 'label': 'LabelInfo', 'name': 'NameTextInfo'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Skeleton.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -246,19 +235,11 @@ class Emission:
     SkeletonInfo: str = ''
     KAliasNames = {'resolved': 'Resolved', 'keywords': 'Keywords', 'features_xml': 'FeatXml', 'writes': 'Writes', 'skeleton': 'SkeletonInfo'}
 
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Emission.__getattr__ = GetLegacyAttr
 
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
-
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __setattr__(SelfRef, NameText, ValueData):
-        TargetName = SelfRef.KAliasNames.get(NameText, NameText)
-        object.__setattr__(SelfRef, TargetName, ValueData)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Emission.__setattr__ = SetLegacyMut
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

@@ -15,6 +15,20 @@ import subprocess as Subprocess
 import threading as Threading
 import time as TimeInfo
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KCdbInfo = PathInfo('C:\\Users\\odin\\AppData\\Local\\Microsoft\\WindowsApps\\cdbX64.exe')
 
@@ -43,13 +57,8 @@ class RunResult:
     Reason: str
     KAliasNames = {'log': 'LogInfo', 'seconds': 'Seconds', 'markers': 'Markers', 'reason': 'Reason'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+RunResult.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

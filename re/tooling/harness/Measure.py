@@ -102,7 +102,7 @@ def Describe(Record: dict) -> None:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     KOutInfo.mkdir(parents=True, exist_ok=True)
     StopInfo, Dismissed, Thread = StartDismisser()
     LabelInfo = System.argv[1]
@@ -131,4 +131,4 @@ def MainRunInfo() -> int:
     print(f'wrote {Destination}')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

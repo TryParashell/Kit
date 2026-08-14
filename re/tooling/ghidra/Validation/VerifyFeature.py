@@ -79,7 +79,7 @@ def NodeRecords(SegsInfo, ByteBlob, IndexData):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     Report = {}
     Total = 0
     DecodedInfo = 0
@@ -114,4 +114,4 @@ def MainRunInfo():
     (KOutInfo / 'VerifyFeature.json').write_text(JsonData.dumps(Report, indent=1))
     return 0 if DecodedInfo == Total and DecodedInfo else 1
 if __name__ == '__main__':
-    System.exit(MainRunInfo())
+    System.exit(MainRun())

@@ -137,7 +137,7 @@ def Verify(Dumps: tuple[Tracelog.DumpRecord, ...], Layout: dict[str, int]) -> di
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     HitsInfo = int(System.argv[1]) if len(System.argv) > 1 else 200
     ModeInfo = System.argv[2] if len(System.argv) > 2 else 'run'
     KOutInfo.mkdir(parents=True, exist_ok=True)
@@ -157,4 +157,4 @@ def MainRunInfo() -> int:
     print(JsonData.dumps(PayloadInfo, indent=2))
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

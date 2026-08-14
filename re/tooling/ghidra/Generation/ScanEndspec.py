@@ -53,7 +53,7 @@ def Decode(ByteBlob, PosInfo, Klass):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     Roots = System.argv[1:] or ['.rescratch/corpus/parts', '.rescratch/corpus2', '.rescratch/trace/parts', 'examples']
     Klass = 'moEndSpec_c'
     Needle = Marker(Klass)
@@ -91,4 +91,4 @@ def MainRunInfo():
     KOutInfo.mkdir(parents=True, exist_ok=True)
     (KOutInfo / 'ScanEndspec.json').write_text(JsonData.dumps(GetRows, indent=1))
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

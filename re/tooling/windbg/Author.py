@@ -113,7 +113,7 @@ def Build(CountInfo: int, Group: str) -> dict[str, object]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     KParts.mkdir(parents=True, exist_ok=True)
     KOutInfo.mkdir(parents=True, exist_ok=True)
     Group = System.argv[1]
@@ -124,4 +124,4 @@ def MainRunInfo() -> int:
         print(f"{Record['label']}: {Record['path']}")
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

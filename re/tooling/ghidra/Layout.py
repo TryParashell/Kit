@@ -165,11 +165,11 @@ def Check(LabelInfo, NameTextInfo, SpecInfo, KindNameInfo='definition'):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     if len(System.argv) < 3:
         print('Layout.py <label> <ClassName> [kind]')
         return
     KindNameInfo = System.argv[3] if len(System.argv) > 3 else 'definition'
     ShowData(System.argv[1], System.argv[2], KindNameInfo)
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

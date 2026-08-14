@@ -200,7 +200,7 @@ def RunTask(Fixtures: PathInfo, LayoutsPath: PathInfo, SegmentsDir: PathInfo) ->
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ParserInfo = Argparse.ArgumentParser()
     ParserInfo.add_argument('--fixtures', default=str(KDefaultData))
     ParserInfo.add_argument('--layouts', default=str(KDefaultLayouts))
@@ -218,4 +218,4 @@ def MainRunInfo() -> int:
         print('  blocked by %-38s %d' % (NameTextInfo, Tally))
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

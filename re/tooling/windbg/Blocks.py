@@ -27,6 +27,20 @@ for CandInfo in (KHereInfo, KGrammar):
 import Model as Modellib
 import Segment as Segmentlib
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KOutInfo = KScratch / 'trace' / 'out'
 
@@ -49,13 +63,8 @@ class Insertion:
         return SelfRef.HighValue - SelfRef.LowValue
     KAliasNames = {'low': 'LowValue', 'high': 'HighValue', 'size': 'ByteSize'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Insertion.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -117,7 +126,7 @@ def Compare(Stream: str, GetRows: list[tuple[str, PathInfo, PathInfo]]) -> dict[
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ArgsInfo = System.argv[1:]
     if len(ArgsInfo) < 4 or (len(ArgsInfo) - 1) % 3:
         raise SystemExit('usage: Blocks.py <stream> <label> <part> <log> [...]')
@@ -139,4 +148,4 @@ def MainRunInfo() -> int:
             print('      ' + ' '.join(BlockInfo['nodes'][:24]))
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

@@ -28,6 +28,20 @@ import Segment as Segmentlib
 import Streamlib as Streamlib
 from convert.adapters.solidworks import resolved as Resolvedlib
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KOutInfo = KScratch / 'trace' / 'out'
 
@@ -61,13 +75,8 @@ class Block:
         return SelfRef.StartRun <= PosInfoInfo < SelfRef.StopInfo
     KAliasNames = {'start': 'StartRun', 'stop': 'StopInfo', 'size': 'ByteSize'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Block.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -247,7 +256,7 @@ def GrowInfo(PartInfoInfo: PathInfo, LogInfo: PathInfo, Copies: int) -> tuple[by
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     PartInfoInfo = PathInfo(System.argv[1]).resolve()
     LogInfo = PathInfo(System.argv[2]).resolve()
     Copies = int(System.argv[3]) if len(System.argv) > 3 else 1
@@ -268,4 +277,4 @@ def MainRunInfo() -> int:
     print(f'comp ids={[Entry[2] for Entry in Streamlib.CompFeatEntries(PayloadInfo)]}')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

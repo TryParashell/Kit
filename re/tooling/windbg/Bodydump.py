@@ -22,7 +22,7 @@ import Blocks as Blockslib
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     Stream = System.argv[1]
     Wanted = {int(ValueInfo) for ValueInfo in System.argv[2].split(',')}
     GetRows = System.argv[3:]
@@ -40,4 +40,4 @@ def MainRunInfo() -> int:
             print('    ' + NodeInfoInfo.body.hex())
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

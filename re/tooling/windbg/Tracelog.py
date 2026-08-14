@@ -11,6 +11,20 @@ from dataclasses import dataclass as DataClass
 from pathlib import Path as PathInfo
 import re as Regex
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KEvent = Regex.compile('^(RO|RC) ([0-9a-fA-F`]+) ([0-9a-fA-F]+) (\\d+) ([0-9a-fA-F`]+)(?: ([0-9a-fA-F`]+))?\\s*$')
 
@@ -35,13 +49,8 @@ class Event:
     SpanInfo: int = 0
     KAliasNames = {'kind': 'KindNameInfo', 'buffer': 'Buffer', 'offset': 'Offset', 'counter': 'CounterInfo', 'rsp': 'RspInfo', 'span': 'SpanInfo'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Event.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -71,13 +80,8 @@ class DumpRecord:
         return bytes(OutputDataInfo)
     KAliasNames = {'index': 'IndexData', 'this': 'ThisValue', 'words': 'Words', 'u64': 'UintWide', 'u32': 'UintLong', 'raw': 'RawData'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+DumpRecord.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

@@ -910,12 +910,12 @@ def NativePayload(DocValue: CadDocument, DataValue: bytes, DocType: str, NativeD
         Choice = NativePayloads(Archive, DataValue, DocType, ReadOptions(include_brep=True, include_tessellation=IncludeTessellation))
     except (CatiaAdapterA, CfvTwoFormatError, TypeError, ValueError, ZlibValue.error):
         return False
-    ChoiceNative = {Payload.id: Payload(Payload) for Payload in Choice if not IsCatiaDocA(Payload) and (not IsCatiaDoc(Payload))}
-    Expected = {Payload.id: Payload(Payload) for Payload in DocValue.brep_payloads if Payload.id in ChoiceNative}
+    ChoiceNative = {Payload.id: PayloadDigest(Payload) for Payload in Choice if not IsCatiaDocA(Payload) and (not IsCatiaDoc(Payload))}
+    Expected = {Payload.id: PayloadDigest(Payload) for Payload in DocValue.brep_payloads if Payload.id in ChoiceNative}
     return Expected == ChoiceNative
 
 # this definition exists because focused behavior needs one stable owner
-def Payload(Payload: BrepPayload) -> tuple[str, str, str, str, str, str]:
+def PayloadDigest(Payload: BrepPayload) -> tuple[str, str, str, str, str, str]:
     return (Payload.format_id, Payload.kind, Payload.schema, Payload.role.value, Payload.file_extension, Hashlib.sha256(Payload.data).hexdigest() if Payload.data is not None else Payload.sha256)
 
 # this definition exists because focused behavior needs one stable owner
@@ -1217,7 +1217,7 @@ globals()['_part_planes'] = PartPlanes
 globals()['_part_semantic_digest'] = PartSemantic
 
 # this binding exists because shared behavior needs one stable value
-globals()['_payload_signature'] = Payload
+globals()['_payload_signature'] = PayloadDigest
 
 # this binding exists because shared behavior needs one stable value
 globals()['_preserved_replay_digest'] = SavedReplay

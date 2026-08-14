@@ -52,7 +52,7 @@ def Align(Models: list[tuple[str, Modellib.Model]]) -> list[list[int | None]]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ArgsInfo = System.argv[1:]
     Stream = ArgsInfo[0]
     Models: list[tuple[str, Modellib.Model]] = []
@@ -92,4 +92,4 @@ def MainRunInfo() -> int:
     (KOutInfo / f'nodediff_{TagInfoInfo}.json').write_text(JsonData.dumps({'stream': Stream, 'labels': Labels, 'rows': PayloadInfo}, indent=2), encoding='utf-8')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

@@ -48,7 +48,7 @@ def Exports(PathInfoData):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     PathInfoData = Pathlib.Path(System.argv[1])
     KeysInfo = System.argv[2:]
     ImageBase, Table = Exports(PathInfoData)
@@ -58,4 +58,4 @@ def MainRunInfo():
             continue
         print(f'  0x{VaInfo:x} rva=0x{RvaInfo:x} {NameTextInfo}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

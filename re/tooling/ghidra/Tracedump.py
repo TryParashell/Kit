@@ -24,6 +24,20 @@ for CandInfo in (KHereInfo, KGrammar):
         System.path.insert(0, str(CandInfo))
 import Streamlib as Streamlib
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KEvent = Regex.compile('^(RO|RC) ([0-9a-fA-F]+) ([0-9a-fA-F]+) (\\d+)\\s*$')
 
@@ -49,13 +63,8 @@ class Event:
     CounterInfo: int
     KAliasNames = {'kind': 'KindNameInfo', 'buffer': 'Buffer', 'offset': 'Offset', 'counter': 'CounterInfo'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Event.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -70,13 +79,8 @@ class TagInfo:
     IndexData: int
     KAliasNames = {'offset': 'Offset', 'token': 'Token', 'kind': 'KindNameInfo', 'header': 'Header', 'schema': 'Schema', 'name': 'NameTextInfo', 'index': 'IndexData'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+TagInfo.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -148,7 +152,7 @@ def Analyse(ByteBlob: bytes, LogInfo: PathInfo) -> dict[str, object]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> None:
+def MainRun() -> None:
     PartInfoInfo = PathInfo(System.argv[1]).resolve()
     LogInfo = PathInfo(System.argv[2]).resolve()
     Destination = PathInfo(System.argv[3]).resolve()
@@ -164,4 +168,4 @@ def MainRunInfo() -> None:
     for TextValueData in Report['counter_rule_mismatches'][:20]:
         print(f'  {TextValueData}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

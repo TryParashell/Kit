@@ -37,7 +37,7 @@ def Tables():
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     Wanted = System.argv[1:]
     ModeSlot = None
     if Wanted and Wanted[0].startswith('slot='):
@@ -55,4 +55,4 @@ def MainRunInfo():
         for SlotIndex, Target, FnInfo in GetRows:
             print(f'  {SlotIndex:4d} {Target} {FnInfo}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

@@ -26,7 +26,7 @@ def RunsInfo(LabelInfo, NameTextInfo, KindNameInfo):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     NameTextInfo = System.argv[1]
     LeftInfo, Right = (System.argv[2], System.argv[3])
     KindNameInfo = System.argv[4] if len(System.argv) > 4 else 'definition'
@@ -51,4 +51,4 @@ def MainRunInfo():
                 if FirstValue[2][KeyIndex] != SecondValue[2][KeyIndex]:
                     print(f'        +{KeyIndex:4d}  {FirstValue[2][KeyIndex]:02x} -> {SecondValue[2][KeyIndex]:02x}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

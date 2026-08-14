@@ -110,7 +110,7 @@ def ShippedRow() -> tuple[int, bytes] | None:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ParserInfo = Argparse.ArgumentParser()
     ParserInfo.add_argument('--dll')
     ParserInfo.add_argument('--check', action='store_true')
@@ -151,4 +151,4 @@ def MainRunInfo() -> int:
     print(f'wrote {KRecord.relative_to(KRootInfo)}')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

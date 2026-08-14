@@ -23,7 +23,7 @@ from convert.adapters.solidworks import resolved as Resolvedlib
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     for ItemData in System.argv[1:]:
         PartInfoInfo = PathInfo(ItemData).resolve()
         DonorInfo = Streamlib.LoadDonor(PartInfoInfo)
@@ -37,4 +37,4 @@ def MainRunInfo() -> int:
         print('  comp ids: ' + ', '.join((str(Entry[2]) for Entry in Entries)))
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

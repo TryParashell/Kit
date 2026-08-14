@@ -32,7 +32,7 @@ def Sections(ByteBlob):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     PathInfoData = Pathlib.Path(System.argv[1])
     ByteBlob = PathInfoData.read_bytes()
     ImageBase, SecsInfo = Sections(ByteBlob)
@@ -49,4 +49,4 @@ def MainRunInfo():
         else:
             print(f'file 0x{OffInfo:x} -> not in any section raw range')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

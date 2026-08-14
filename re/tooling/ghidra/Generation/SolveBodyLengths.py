@@ -176,7 +176,7 @@ def ResidualCheck(Equations: Sequence[dict], Determined: DictInfo[str, Fraction]
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ParserInfo = Argparse.ArgumentParser()
     ParserInfo.add_argument('--segments', default='re/data/segments')
     ParserInfo.add_argument('--out', default='re/data/body_scalars.json')
@@ -197,4 +197,4 @@ def MainRunInfo() -> int:
     print(f"equations={len(Equations)} variables={Result['variables']} rank={Result['rank']} consistent={Result['consistent']} determined={len(Determined)} residual_failures={len(Failures)}")
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

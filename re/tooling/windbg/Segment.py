@@ -27,6 +27,20 @@ for CandInfo in (KHereInfo, KGrammar):
 import Tracelog as Tracelog
 import Streamlib as Streamlib
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KOutInfo = KScratch / 'trace' / 'out'
 
@@ -69,13 +83,8 @@ class Segment:
     ObjectIndex: int
     KAliasNames = {'index': 'IndexData', 'offset': 'Offset', 'end': 'EndIndex', 'length': 'Length', 'scope_end': 'ScopeEnd', 'depth': 'Depth', 'parent': 'Parent', 'rsp': 'RspInfo', 'tag': 'TagInfoInfo', 'kind': 'KindNameInfo', 'header': 'Header', 'class_index': 'ClassIndex', 'class_name': 'ClassNameData', 'map_index': 'MapIndex', 'modelled_index': 'ModelledIndex', 'object_index': 'ObjectIndex'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Segment.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -233,7 +242,7 @@ def Report(LabelInfo: str, PartInfoInfo: PathInfo, LogInfo: PathInfo, *, Stream:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ArgsInfo = System.argv[1:]
     if len(ArgsInfo) % 3:
         raise SystemExit('usage: Segment.py <label> <part> <log> [...]')
@@ -244,4 +253,4 @@ def MainRunInfo() -> int:
         Report(LabelInfo, PartInfoInfo, LogInfo)
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

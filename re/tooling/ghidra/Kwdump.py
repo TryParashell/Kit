@@ -17,7 +17,7 @@ from convert.adapters.solidworks.container.Container import SldprtArchive
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     for NameTextInfo in System.argv[1:]:
         HitsInfo = list((KRootInfo / '.rescratch').rglob(NameTextInfo + '.SLDPRT'))
         if not HitsInfo:
@@ -35,4 +35,4 @@ def MainRunInfo():
                 continue
             print(f'   {TagInfoInfo:16s} {AttrsInfo.strip()[:160]}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

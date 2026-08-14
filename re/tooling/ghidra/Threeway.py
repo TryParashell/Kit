@@ -36,7 +36,7 @@ def Shape(SeqInfo):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     LabelInfo = System.argv[1]
     Names = set(System.argv[2:]) or {'moExtrusion_c', 'moICE_c'}
     PartInfoInfo, GetRows = Collect(LabelInfo, Names)
@@ -61,4 +61,4 @@ def MainRunInfo():
                 for KeyIndex in Diffs[:24]:
                     print(f'          +{KeyIndex:4d} {FirstValue[2][KeyIndex]:02x} -> {SecondValue[2][KeyIndex]:02x}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

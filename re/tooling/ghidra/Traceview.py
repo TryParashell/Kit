@@ -25,7 +25,7 @@ import Tracedump as Tracedump
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> None:
+def MainRun() -> None:
     PartInfoInfo = PathInfo(System.argv[1]).resolve()
     Report = JsonData.loads(PathInfo(System.argv[2]).read_text(encoding='utf-8'))
     ByteBlob = Streamlib.LoadDonor(PartInfoInfo).resolved
@@ -68,4 +68,4 @@ def MainRunInfo() -> None:
         LabelInfo = ItemData['name'] or SlotOfClass.get(ItemData['index'], '')
         print(f"{ItemData['offset']:>6} {ItemData['counter']:>5} {ItemData['kind']:>10} {ItemData['token']:#06x} {ItemData['index']:>5} {ByteSize:>6} {LabelInfo}")
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

@@ -87,7 +87,7 @@ def TraceOne(LabelInfo: str, PartInfoInfo: PathInfo, Fields: dict[str, int], Mod
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ArgsInfo = System.argv[1:]
     if not ArgsInfo:
         raise SystemExit('usage: Runtrace.py <mode> <label> <part> [<label> <part> ...]')
@@ -107,4 +107,4 @@ def MainRunInfo() -> int:
         (KOutInfo / 'Runtrace.json').write_text(JsonData.dumps(RecordsInfo, indent=2), encoding='utf-8')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

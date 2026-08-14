@@ -37,7 +37,7 @@ def Anchors(ByteBlob: bytes) -> dict[int, str]:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     PartInfoInfo = PathInfo(System.argv[1]).resolve()
     LogInfo = PathInfo(System.argv[2]).resolve()
     LowValue = int(System.argv[3]) if len(System.argv) > 3 else 0
@@ -58,4 +58,4 @@ def MainRunInfo() -> int:
     SpareValue = Offsets
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

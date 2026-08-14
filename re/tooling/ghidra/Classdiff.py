@@ -24,7 +24,7 @@ def Names(LabelInfo):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     LeftInfo, Right = (System.argv[1], System.argv[2])
     Lname, LcInfo = Names(LeftInfo)
     Rname, RcInfo = Names(Right)
@@ -36,4 +36,4 @@ def MainRunInfo():
         if FirstValue != SecondValue:
             print(f'  {KeyName:40s} {FirstValue:4d} {SecondValue:4d}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

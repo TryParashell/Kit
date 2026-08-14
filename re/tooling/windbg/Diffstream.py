@@ -22,7 +22,7 @@ import Streamlib as Streamlib
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     NameTextInfo = System.argv[3] if len(System.argv) > 3 else Streamlib.KResolved
     LeftInfo = Streamlib.LoadDonor(PathInfo(System.argv[1]).resolve()).streams[NameTextInfo]
     Right = Streamlib.LoadDonor(PathInfo(System.argv[2]).resolve()).streams[NameTextInfo]
@@ -45,4 +45,4 @@ def MainRunInfo() -> int:
         print(f"  [{Begin}, {EndIndex}) left={LeftInfo[Begin:EndIndex].hex(' ')} right={Right[Begin:EndIndex].hex(' ')}")
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

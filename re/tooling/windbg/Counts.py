@@ -76,7 +76,7 @@ def Candidates(ModelInfo: Modellib.Model, CountInfo: int, Keying: str) -> set[tu
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     ModeInfo = System.argv[1]
     ArgsInfo = System.argv[2:]
     if not ArgsInfo or len(ArgsInfo) % 3:
@@ -102,4 +102,4 @@ def MainRunInfo() -> int:
     (KOutInfo / f'counts_{ModeInfo}.json').write_text(JsonData.dumps({'mode': ModeInfo, 'parts': [{'label': LabelInfo, 'part': str(PartInfoInfo), 'target': CountInfo} for LabelInfo, PartInfoInfo, SpareValue, SpareValue, CountInfo in Loaded], 'shared': Report}, indent=2), encoding='utf-8')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

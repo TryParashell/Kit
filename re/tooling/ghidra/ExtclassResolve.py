@@ -247,7 +247,7 @@ def Assign(DocInfo, ByteBlob):
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo():
+def MainRun():
     PerTrace = {}
     for LabelInfo in KTraces:
         DocInfo = LoadTrace(LabelInfo)
@@ -280,4 +280,4 @@ def MainRunInfo():
         print(f'  {NameTextInfo}: {CountInfo}')
     print(f'wrote {KOutput}')
 if __name__ == '__main__':
-    MainRunInfo()
+    MainRun()

@@ -33,7 +33,7 @@ def Render(ByteBlob: bytes, StartRun: int, StopInfo: int) -> None:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     PartInfoInfo = PathInfo(System.argv[1]).resolve()
     NameTextInfo = System.argv[2]
     StartRun = int(System.argv[3])
@@ -43,4 +43,4 @@ def MainRunInfo() -> int:
     Render(ByteBlob, max(0, StartRun), min(len(ByteBlob), StopInfo))
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

@@ -22,7 +22,7 @@ import Streamlib as Streamlib
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     Parts = [PathInfo(ItemData).resolve() for ItemData in System.argv[1:]]
     if not Parts:
         raise SystemExit('usage: Streamgrowth.py <part> <part> [...]')
@@ -42,4 +42,4 @@ def MainRunInfo() -> int:
         print(f'{NameTextInfo:<{WidthInfo}}  {Sizes} {Trend}')
     return 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())

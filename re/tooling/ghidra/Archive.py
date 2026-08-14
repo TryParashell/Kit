@@ -10,6 +10,20 @@ from __future__ import annotations
 from dataclasses import dataclass as DataClass
 import struct as Struct
 
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def GetLegacyAttr(SelfRef, NameText):
+    AliasName = SelfRef.KAliasNames.get(NameText)
+    if AliasName is None:
+        raise AttributeError(NameText)
+    return getattr(SelfRef, AliasName)
+
+
+# needed to keep reverse engineering responsibilities isolated and maintainable
+def SetLegacyMut(SelfRef, NameText, ValueData):
+    TargetName = SelfRef.KAliasNames.get(NameText, NameText)
+    object.__setattr__(SelfRef, TargetName, ValueData)
+
 # needed to keep reverse engineering responsibilities isolated and maintainable
 KNewClassTag = 65535
 
@@ -58,13 +72,8 @@ class TagInfo:
     IndexData: int
     KAliasNames = {'offset': 'Offset', 'token': 'Token', 'kind': 'KindNameInfo', 'header': 'Header', 'schema': 'Schema', 'name': 'NameTextInfo', 'index': 'IndexData'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+TagInfo.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
@@ -99,13 +108,8 @@ class Object:
         return SelfRef.EndIndex - SelfRef.Offset - SelfRef.Header
     KAliasNames = {'order': 'Order', 'offset': 'Offset', 'end': 'EndIndex', 'kind': 'KindNameInfo', 'token': 'Token', 'class_slot': 'ClassSlot', 'object_slot': 'ObjectSlot', 'class_name': 'ClassNameData', 'header': 'Header', 'length': 'Length', 'body_offset': 'BodyOffset', 'body_length': 'BodyLength'}
 
-
-    # needed to keep reverse engineering responsibilities isolated and maintainable
-    def __getattr__(SelfRef, NameText):
-        AliasName = SelfRef.KAliasNames.get(NameText)
-        if AliasName is None:
-            raise AttributeError(NameText)
-        return getattr(SelfRef, AliasName)
+# needed to keep reverse engineering responsibilities isolated and maintainable
+Object.__getattr__ = GetLegacyAttr
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable

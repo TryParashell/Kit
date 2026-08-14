@@ -49,7 +49,7 @@ def ContainFileName(NameTextInfo: str) -> str:
 
 
 # needed to keep reverse engineering responsibilities isolated and maintainable
-def MainRunInfo() -> int:
+def MainRun() -> int:
     if not KManifest.is_file():
         print(f'missing fixture manifest {KManifest}')
         return 1
@@ -83,4 +83,4 @@ def MainRunInfo() -> int:
     print(f'fixtures={len(Donors)} parts_missing={MissingInfo} stream_mismatches={Mismatches}')
     return 1 if Mismatches else 0
 if __name__ == '__main__':
-    raise SystemExit(MainRunInfo())
+    raise SystemExit(MainRun())
