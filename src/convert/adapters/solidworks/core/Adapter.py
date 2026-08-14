@@ -310,7 +310,6 @@ KWrapperMetaKeys = KSourceKeys | frozenset(
 )
 
 
-
 # this definition exists because focused behavior needs one stable owner
 class SldprtAdapter:
     __slots__ = ()
@@ -2718,6 +2717,69 @@ def DimensionText(Source: str, Millimeters: float) -> str:
     return KNumberText.sub(Value, Source, count=1)
 
 
+# parameter lookup isolates native feature ownership from scalar replacement
+def ParamDimMap(Model: NativeModel) -> dict[str, tuple[int, NativeDimension]]:
+    Result: dict[str, tuple[int, NativeDimension]] = {}
+    for Feature in Model.features:
+        for Dimension, ParamId in ParamEntries(Feature.object_id, Feature.dimensions):
+            Result[ParamId] = (Feature.object_id, Dimension)
+    return Result
+
+
+# scalar patching validates one compatible parameter before mutating native bytes
+def IsPatchParamMut(
+    ParamId: str,
+    Source: Parameter,
+    Target: Parameter,
+    Record: tuple[int, NativeDimension] | None,
+    Elements: Mapping[int, ET.Element],
+    Resolved: bytearray,
+) -> bool:
+    TargetMm = ParamA(Target)
+    SourceMm = ParamA(Source)
+    if (
+        TargetMm is None
+        or SourceMm is None
+        or MathValue.isclose(TargetMm, SourceMm, rel_tol=1e-12, abs_tol=1e-12)
+    ):
+        return False
+    if (Target.name, Target.role, Target.owner_id, Target.expression) != (
+        Source.name,
+        Source.role,
+        Source.owner_id,
+        Source.expression,
+    ):
+        return False
+    if Record is None or Record[1].native_offset is None:
+        return False
+    ObjectId, Dimension = Record
+    Struct.pack_into("<d", Resolved, Dimension.native_offset, TargetMm / 1000.0)
+    ElemValue = Elements.get(ObjectId)
+    if ElemValue is None:
+        return False
+    ItemValue = (
+        int(ParamId.rsplit(":", 1)[-1]) - 1
+        if ParamId.rsplit(":", 1)[-1].isdigit() and ParamId.count(":") > 3
+        else 0
+    )
+    Matches = tuple(
+        (
+            Child
+            for Child in ElemValue
+            if Child.tag.rsplit("}", 1)[-1] == "Dimension"
+            and Child.attrib.get("Name", "") == Dimension.name
+        )
+    )
+    if ItemValue >= len(Matches):
+        return False
+    setattr(
+        Matches[ItemValue],
+        "text",
+        DimensionText(Matches[ItemValue].text or Dimension.source_text, TargetMm),
+    )
+    return True
+
+
 # this definition exists because focused behavior needs one stable owner
 def IsPatchParamete(
     DocValue: CadDocument,
@@ -2730,58 +2792,20 @@ def IsPatchParamete(
     if set(Original) != set(Desired):
         return False
     Elements = XmlElementsById(RootValue)
-    Dimensions: dict[str, tuple[int, NativeDimension]] = {}
-    for Feature in Model.features:
-        for Dimension, ParamId in ParamEntries(Feature.object_id, Feature.dimensions):
-            Dimensions[ParamId] = (Feature.object_id, Dimension)
+    Dimensions = ParamDimMap(Model)
     Changed = False
     for ParamId, Target in Desired.items():
-        Source = Original[ParamId]
-        TargetMm = ParamA(Target)
-        SourceMm = ParamA(Source)
-        if (
-            TargetMm is None
-            or SourceMm is None
-            or MathValue.isclose(TargetMm, SourceMm, rel_tol=1e-12, abs_tol=1e-12)
-        ):
-            continue
-        if (
-            Target.name != Source.name
-            or Target.role != Source.role
-            or Target.owner_id != Source.owner_id
-            or (Target.expression != Source.expression)
-        ):
-            continue
-        Record = Dimensions.get(ParamId)
-        if Record is None or Record[1].native_offset is None:
-            continue
-        ObjectId, Dimension = Record
-        Struct.pack_into("<d", Resolved, Dimension.native_offset, TargetMm / 1000.0)
-        ElemValue = Elements.get(ObjectId)
-        if ElemValue is None:
-            continue
-        ItemValue = (
-            int(ParamId.rsplit(":", 1)[-1]) - 1
-            if ParamId.rsplit(":", 1)[-1].isdigit() and ParamId.count(":") > 3
-            else 0
-        )
-        Matches = tuple(
-            (
-                Child
-                for Child in ElemValue
-                if Child.tag.rsplit("}", 1)[-1] == "Dimension"
-                and Child.attrib.get("Name", "") == Dimension.name
+        Changed = (
+            IsPatchParamMut(
+                ParamId,
+                Original[ParamId],
+                Target,
+                Dimensions.get(ParamId),
+                Elements,
+                Resolved,
             )
+            or Changed
         )
-        if ItemValue < len(Matches):
-            setattr(
-                Matches[ItemValue],
-                "text",
-                DimensionText(
-                    Matches[ItemValue].text or Dimension.source_text, TargetMm
-                ),
-            )
-            Changed = True
     return Changed
 
 
@@ -2820,6 +2844,44 @@ def IsOrthonormal(Transform: Transform) -> bool:
     )
 
 
+# plane patching validates one frame before writing its native layout
+def PatchPlaneMut(
+    Source: SupportPlane, Target: SupportPlane, Resolved: bytearray
+) -> None:
+    if Target.transform == Source.transform:
+        return
+    if (Target.name, Target.support_selection_id, Target.offset_parameter_id) != (
+        Source.name,
+        Source.support_selection_id,
+        Source.offset_parameter_id,
+    ) or not IsOrthonormal(Target.transform):
+        return
+    Offset = Source.attributes.get("native_frame_offset")
+    Length = Source.attributes.get("native_frame_length")
+    if not isinstance(Offset, int) or Length not in {81, 121}:
+        return
+    Origin = tuple((Value / 1000.0 for Value in VectorValues(Target.transform.origin)))
+    XAxis = VectorValues(Target.transform.x_axis)
+    YAxis = VectorValues(Target.transform.y_axis)
+    ZAxis = VectorValues(Target.transform.z_axis)
+    if not all((MathValue.isfinite(Value) for Value in Origin)):
+        return
+    if Length == 81:
+        if (
+            XAxis != (1.0, 0.0, 0.0)
+            or YAxis != (0.0, 1.0, 0.0)
+            or ZAxis != (0.0, 0.0, 1.0)
+        ):
+            return
+        Struct.pack_into("<3d", Resolved, Offset, *Origin)
+        Struct.pack_into("<3d", Resolved, Offset + 57, 0.0, -Origin[2], 1.0)
+        return
+    Struct.pack_into("<3d", Resolved, Offset, *Origin)
+    Struct.pack_into("<3d", Resolved, Offset + 24, *ZAxis)
+    for Index, RowValue in enumerate(zip(XAxis, YAxis, ZAxis, strict=True)):
+        Struct.pack_into("<3d", Resolved, Offset + 49 + Index * 24, *RowValue)
+
+
 # this definition exists because focused behavior needs one stable owner
 def PatchSupport(
     DocValue: CadDocument, Model: NativeModel, Resolved: bytearray
@@ -2832,43 +2894,7 @@ def PatchSupport(
     if set(Original) != set(Desired):
         return
     for PlaneId, Target in Desired.items():
-        Source = Original[PlaneId]
-        if Target.transform == Source.transform:
-            continue
-        if (
-            Target.name != Source.name
-            or Target.support_selection_id != Source.support_selection_id
-            or Target.offset_parameter_id != Source.offset_parameter_id
-            or (not IsOrthonormal(Target.transform))
-        ):
-            continue
-        Offset = Source.attributes.get("native_frame_offset")
-        Length = Source.attributes.get("native_frame_length")
-        if not isinstance(Offset, int) or Length not in {81, 121}:
-            continue
-        Origin = tuple(
-            (Value / 1000.0 for Value in VectorValues(Target.transform.origin))
-        )
-        XAxis = VectorValues(Target.transform.x_axis)
-        YAxis = VectorValues(Target.transform.y_axis)
-        ZAxis = VectorValues(Target.transform.z_axis)
-        if not all((MathValue.isfinite(Value) for Value in Origin)):
-            continue
-        if Length == 81:
-            if (
-                XAxis != (1.0, 0.0, 0.0)
-                or YAxis != (0.0, 1.0, 0.0)
-                or ZAxis != (0.0, 0.0, 1.0)
-            ):
-                continue
-            Struct.pack_into("<3d", Resolved, Offset, *Origin)
-            Struct.pack_into("<3d", Resolved, Offset + 57, 0.0, -Origin[2], 1.0)
-            continue
-        Struct.pack_into("<3d", Resolved, Offset, *Origin)
-        Struct.pack_into("<3d", Resolved, Offset + 24, *ZAxis)
-        RowsValue = tuple(zip(XAxis, YAxis, ZAxis, strict=True))
-        for Index, RowValue in enumerate(RowsValue):
-            Struct.pack_into("<3d", Resolved, Offset + 49 + Index * 24, *RowValue)
+        PatchPlaneMut(Original[PlaneId], Target, Resolved)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -2900,6 +2926,85 @@ def PointValues(Value: Vector2) -> tuple[float, float]:
     return (Value.x, Value.y)
 
 
+# point patching isolates marker coordinates from profile geometry changes
+def PatchPointsMut(
+    Sketch: NativeSketch,
+    Sources: Mapping[str, SketchEntity],
+    Targets: Mapping[str, SketchEntity],
+    Resolved: bytearray,
+) -> None:
+    for EntityId, TargetEntity in Targets.items():
+        SourceEntity = Sources[EntityId]
+        if TargetEntity.geometry == SourceEntity.geometry:
+            continue
+        if (TargetEntity.kind, TargetEntity.construction, TargetEntity.fixed) != (
+            SourceEntity.kind,
+            SourceEntity.construction,
+            SourceEntity.fixed,
+        ):
+            continue
+        if isinstance(SourceEntity.geometry, PointGeom) and isinstance(
+            TargetEntity.geometry, PointGeom
+        ):
+            MarkerOffset = NativeId(
+                EntityId, f"sldprt:sketch:{Sketch.object_id}:native:"
+            )
+            if MarkerOffset is not None:
+                IsPatchCoordina(
+                    Resolved, MarkerOffset, PointValues(TargetEntity.geometry.point)
+                )
+
+
+# profile patching isolates circle and rectangle byte layouts from sketch selection
+def PatchShapesMut(
+    Sketch: NativeSketch,
+    Sources: Mapping[str, SketchEntity],
+    Targets: Mapping[str, SketchEntity],
+    Resolved: bytearray,
+) -> None:
+    for ProfileIndex, Profile in enumerate(Sketch.profiles):
+        if Profile.kind == "rectangle":
+            PatchRectangle(Resolved, Sketch, ProfileIndex, Profile, Targets)
+            continue
+        if Profile.kind != "circle":
+            continue
+        EntityId = ProfileId(Sketch.object_id, ProfileIndex)
+        SourceEntity = Sources.get(EntityId)
+        TargetEntity = Targets.get(EntityId)
+        if (
+            SourceEntity is None
+            or TargetEntity is None
+            or TargetEntity.geometry == SourceEntity.geometry
+            or not isinstance(TargetEntity.geometry, CircleGeom)
+            or len(Profile.marker_offsets) < 2
+        ):
+            continue
+        Center = PointValues(TargetEntity.geometry.center)
+        SourceCenter = Profile.coordinates[:2]
+        SourceEdge = next(
+            (
+                Marker.coordinates_mm
+                for Marker in Sketch.markers
+                if Marker.offset == Profile.marker_offsets[1]
+                and Marker.coordinates_mm is not None
+            ),
+            None,
+        )
+        if SourceEdge is None or TargetEntity.geometry.radius <= 0.0:
+            continue
+        DxValue = SourceEdge[0] - SourceCenter[0]
+        DyValue = SourceEdge[1] - SourceCenter[1]
+        Length = MathValue.hypot(DxValue, DyValue)
+        if Length <= 1e-12:
+            DxValue, DyValue, Length = (1.0, 0.0, 1.0)
+        EdgeValue = (
+            Center[0] + DxValue / Length * TargetEntity.geometry.radius,
+            Center[1] + DyValue / Length * TargetEntity.geometry.radius,
+        )
+        IsPatchCoordina(Resolved, Profile.marker_offsets[0], Center)
+        IsPatchCoordina(Resolved, Profile.marker_offsets[1], EdgeValue)
+
+
 # this definition exists because focused behavior needs one stable owner
 def PatchSketchGeom(
     DocValue: CadDocument, Model: NativeModel, Resolved: bytearray
@@ -2926,67 +3031,8 @@ def PatchSketchGeom(
         TargetEntities = {Entity.id: Entity for Entity in Target.entities}
         if set(SourceEntities) != set(TargetEntities):
             continue
-        for EntityId, TargetEntity in TargetEntities.items():
-            SourceEntity = SourceEntities[EntityId]
-            if TargetEntity.geometry == SourceEntity.geometry:
-                continue
-            if (
-                TargetEntity.kind != SourceEntity.kind
-                or TargetEntity.construction != SourceEntity.construction
-                or TargetEntity.fixed != SourceEntity.fixed
-            ):
-                continue
-            if isinstance(SourceEntity.geometry, PointGeom) and isinstance(
-                TargetEntity.geometry, PointGeom
-            ):
-                MarkerOffset = NativeId(
-                    EntityId, f"sldprt:sketch:{NativeSketch.object_id}:native:"
-                )
-                if MarkerOffset is not None:
-                    IsPatchCoordina(
-                        Resolved, MarkerOffset, PointValues(TargetEntity.geometry.point)
-                    )
-        for ProfileIndex, Profile in enumerate(NativeSketch.profiles):
-            if Profile.kind == "circle":
-                EntityId = ProfileId(NativeSketch.object_id, ProfileIndex)
-                SourceEntity = SourceEntities.get(EntityId)
-                TargetEntity = TargetEntities.get(EntityId)
-                if (
-                    SourceEntity is None
-                    or TargetEntity is None
-                    or TargetEntity.geometry == SourceEntity.geometry
-                    or (not isinstance(TargetEntity.geometry, CircleGeom))
-                    or (len(Profile.marker_offsets) < 2)
-                ):
-                    continue
-                Center = PointValues(TargetEntity.geometry.center)
-                SourceCenter = Profile.coordinates[:2]
-                SourceEdge = next(
-                    (
-                        Marker.coordinates_mm
-                        for Marker in NativeSketch.markers
-                        if Marker.offset == Profile.marker_offsets[1]
-                        and Marker.coordinates_mm is not None
-                    ),
-                    None,
-                )
-                if SourceEdge is None or TargetEntity.geometry.radius <= 0.0:
-                    continue
-                DxValue = SourceEdge[0] - SourceCenter[0]
-                DyValue = SourceEdge[1] - SourceCenter[1]
-                Length = MathValue.hypot(DxValue, DyValue)
-                if Length <= 1e-12:
-                    DxValue, DyValue, Length = (1.0, 0.0, 1.0)
-                EdgeValue = (
-                    Center[0] + DxValue / Length * TargetEntity.geometry.radius,
-                    Center[1] + DyValue / Length * TargetEntity.geometry.radius,
-                )
-                IsPatchCoordina(Resolved, Profile.marker_offsets[0], Center)
-                IsPatchCoordina(Resolved, Profile.marker_offsets[1], EdgeValue)
-            elif Profile.kind == "rectangle":
-                PatchRectangle(
-                    Resolved, NativeSketch, ProfileIndex, Profile, TargetEntities
-                )
+        PatchPointsMut(NativeSketch, SourceEntities, TargetEntities, Resolved)
+        PatchShapesMut(NativeSketch, SourceEntities, TargetEntities, Resolved)
 
 
 # this definition exists because focused behavior needs one stable owner
@@ -3781,7 +3827,9 @@ def InstanceValues(Instance: ComponentInstance) -> tuple[AnyValue, ...]:
 def AsmStructure(AsmValue: AssemblyData) -> tuple[AnyValue, ...]:
     return (
         AsmValue.root_definition_id,
-        tuple((Definition(DefinitionValue) for DefinitionValue in AsmValue.definitions)),
+        tuple(
+            (Definition(DefinitionValue) for DefinitionValue in AsmValue.definitions)
+        ),
         tuple((InstanceValues(Instance) for Instance in AsmValue.instances)),
     )
 
@@ -6843,7 +6891,9 @@ def BuildFeature(
                     )
                 ),
                 "record_data": Feature.data,
-                "operation": OperationAttrs(Operation) if Operation is not None else None,
+                "operation": (
+                    OperationAttrs(Operation) if Operation is not None else None
+                ),
             }
         ),
     )
