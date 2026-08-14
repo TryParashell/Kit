@@ -10414,6 +10414,148 @@ def DocAxisBindings(
     return frozenset(Result)
 
 
+# record ordering exists because native feature spans follow stream offsets
+def RecordOffset(Record):
+    return Record.offset
+
+
+# native feature construction owns scalar binding and stream span recovery
+def BuildNativeList(XmlFeatures, Names, Resolved, Classes, Scalars, ResolvedStream):
+    RecordById = FeatureRecords(XmlFeatures, Names)
+    OrderedRecords = sorted(
+        {Record.offset: Record for Record in RecordById.values()}.values(),
+        key=RecordOffset,
+    )
+    EndsValue = {
+        Record.offset: (
+            OrderedRecords[Index + 1].offset
+            if Index + 1 < len(OrderedRecords)
+            else len(Resolved)
+        )
+        for Index, Record in enumerate(OrderedRecords)
+    }
+    ScalarOwner = ScalarOwners(Scalars, OrderedRecords, EndsValue)
+    NativeFeatures: list[NativeFeature] = []
+    for Feature in XmlFeatures:
+        Record = RecordById.get(Feature.object_id)
+        NameValue = Feature.name or (Record.name if Record is not None else '')
+        if not NameValue:
+            NameValue = f'{Feature.kind or Feature.xml_tag} {Feature.object_id}'
+        Owned = ScalarOwner.get(Feature.object_id, ())
+        Dimensions = tuple((BindDimension(ItemValue, Owned) for ItemValue in Semantic(Feature.kind, tuple(Feature.dimensions))))
+        NativeEnd = EndsValue.get(Record.offset) if Record is not None else None
+        NativeFeatures.append(NativeFeature(object_id=Feature.object_id, name=NameValue, kind=Feature.kind, xml_tag=Feature.xml_tag, native_offset=Record.offset if Record else None, native_end=NativeEnd, properties=dict(Feature.properties), dimensions=Dimensions, data=Resolved[Record.offset:NativeEnd] if Record is not None and NativeEnd is not None else b'', class_name=RecordClassName(Classes, Record.offset) if Record is not None else '', native_stream=ResolvedStream))
+    return (RecordById, ScalarOwner, NativeFeatures)
+
+
+# dimension rebinding owns child scalar recovery for native features
+def RebindDimsMut(NativeFeatures, ScalarOwner):
+    FeatureIndexes = {
+        Feature.object_id: Index for Index, Feature in enumerate(NativeFeatures)
+    }
+    for Index, Feature in enumerate(NativeFeatures):
+        ChildId = IntegerProp(Feature.properties.get('DissectableChildren'))
+        ChildScalars = ScalarOwner.get(ChildId or -1, ())
+        if not ChildScalars:
+            continue
+        Rebound = tuple((BindDimension(Dimension, ChildScalars) if Dimension.native_offset is None else Dimension for Dimension in Feature.dimensions))
+        NativeFeatures[Index] = Replace(Feature, dimensions=Rebound)
+    return FeatureIndexes
+
+
+# feature ordering exists because author history follows resolved stream offsets
+def FeatureOffset(Feature):
+    return Feature.native_offset or 0
+
+
+# state creation owns decoded plane context and authored feature ordering
+def CreateState(
+    Resolved, ResolvedStream, Classes, RecordById, NativeFeatures, FeatureIndexes
+):
+    Planes = DecodePlanes(Resolved, NativeFeatures, NativeStream=ResolvedStream)
+    PlaneById = {Plane.object_id: Plane for Plane in Planes}
+    PrincipalPlaneFrames = PrincipalPlaneA(NativeFeatures)
+    PrincipalPlaneIds = frozenset(PrincipalPlaneFrames)
+    Author = sorted(
+        (
+            Feature
+            for Feature in NativeFeatures
+            if Feature.native_offset is not None
+            and not IsOriginFeature(Feature)
+            and Feature.object_id not in PrincipalPlaneIds
+        ),
+        key=FeatureOffset,
+    )
+    UnframedPlanes = tuple(
+        Feature
+        for Feature in NativeFeatures
+        if IsPlaneFeature(Feature)
+        and Feature.native_offset is not None
+        and Feature.object_id not in PlaneById
+    )
+    UnframedPlaneIds = frozenset(Feature.object_id for Feature in UnframedPlanes)
+    Revolutions = {
+        Layout.feature_id: Layout
+        for Layout in LocateFeatures(Resolved)
+        if Layout.is_revolution
+    }
+    LatestPlaneId = next(iter(PrincipalPlaneFrames), next(iter(PlaneById), 0))
+    StateData = DecodeState(
+        Resolved,
+        ResolvedStream,
+        Classes,
+        RecordById,
+        NativeFeatures,
+        FeatureIndexes,
+        PlaneById,
+        UnframedPlaneIds,
+        Revolutions,
+        [],
+        [],
+        None,
+        None,
+        LatestPlaneId,
+        None,
+    )
+    return (StateData, Author, Planes, UnframedPlanes)
+
+
+# diagnostic construction owns unresolved native identity and support reporting
+def DecodeNotices(NativeFeatures, UnframedPlanes, Sketches):
+    Diagnostics = []
+    Unresolved = [
+        Feature
+        for Feature in NativeFeatures
+        if Feature.native_offset is None
+        and Feature.object_id > 0
+        and Feature.object_id not in KeywordOnlyObjectIds
+    ]
+    if Unresolved:
+        Diagnostics.append(
+            "native name records unavailable for "
+            + ", ".join(f"{Feature.object_id}:{Feature.name}" for Feature in Unresolved)
+        )
+    if UnframedPlanes:
+        Diagnostics.append(
+            "reference plane frames unavailable for "
+            + ", ".join(
+                f"{Feature.object_id}:{Feature.name}" for Feature in UnframedPlanes
+            )
+        )
+    DependentSketches = tuple(
+        Sketch for Sketch in Sketches if Sketch.unframed_support_plane_id is not None
+    )
+    if DependentSketches:
+        Diagnostics.append(
+            "sketch supports fall back to decoded planes for "
+            + ", ".join(
+                f"{Sketch.object_id}:{Sketch.name}->{Sketch.unframed_support_plane_id}:{Sketch.support_plane_id}"
+                for Sketch in DependentSketches
+            )
+        )
+    return tuple(Diagnostics)
+
+
 # this definition exists because focused behavior needs one stable owner
 def DecodeNative(
     Keywords: bytes,
@@ -10446,730 +10588,23 @@ def DecodeNative(
         RebindIds(XmlFeatures, Names)
     Classes = ParseClasses(Resolved)
     Scalars = ParseScalars(Resolved, Names)
-    RecordById = FeatureRecords(XmlFeatures, Names)
-
-    # this callback exists because local behavior needs one focused transformation
-    OrderedRecords = sorted(
-        {Record.offset: Record for Record in RecordById.values()}.values(),
-        key=lambda Record: Record.offset,
+    RecordById, ScalarOwner, NativeFeatures = BuildNativeList(
+        XmlFeatures, Names, Resolved, Classes, Scalars, ResolvedStream
     )
-    EndsValue = {
-        Record.offset: (
-            OrderedRecords[Index + 1].offset
-            if Index + 1 < len(OrderedRecords)
-            else len(Resolved)
-        )
-        for Index, Record in enumerate(OrderedRecords)
-    }
-    ScalarOwner = ScalarOwners(Scalars, OrderedRecords, EndsValue)
-    NativeFeatures: list[NativeFeature] = []
-    for Feature in XmlFeatures:
-        Record = RecordById.get(Feature.object_id)
-        NameValue = Feature.name or (Record.name if Record is not None else "")
-        if not NameValue:
-            NameValue = f"{Feature.kind or Feature.xml_tag} {Feature.object_id}"
-        Owned = ScalarOwner.get(Feature.object_id, ())
-        Dimensions = tuple(
-            (
-                BindDimension(ItemValue, Owned)
-                for ItemValue in Semantic(Feature.kind, tuple(Feature.dimensions))
-            )
-        )
-        NativeEnd = EndsValue.get(Record.offset) if Record is not None else None
-        NativeFeatures.append(
-            NativeFeature(
-                object_id=Feature.object_id,
-                name=NameValue,
-                kind=Feature.kind,
-                xml_tag=Feature.xml_tag,
-                native_offset=Record.offset if Record else None,
-                native_end=NativeEnd,
-                properties=dict(Feature.properties),
-                dimensions=Dimensions,
-                data=(
-                    Resolved[Record.offset : NativeEnd]
-                    if Record is not None and NativeEnd is not None
-                    else b""
-                ),
-                class_name=(
-                    RecordClassName(Classes, Record.offset)
-                    if Record is not None
-                    else ""
-                ),
-                native_stream=ResolvedStream,
-            )
-        )
-    FeatureIndexes = {
-        Feature.object_id: Index for Index, Feature in enumerate(NativeFeatures)
-    }
-    for Index, Feature in enumerate(NativeFeatures):
-        ChildId = IntegerProp(Feature.properties.get("DissectableChildren"))
-        ChildScalars = ScalarOwner.get(ChildId or -1, ())
-        if not ChildScalars:
-            continue
-        Rebound = tuple(
-            (
-                (
-                    BindDimension(Dimension, ChildScalars)
-                    if Dimension.native_offset is None
-                    else Dimension
-                )
-                for Dimension in Feature.dimensions
-            )
-        )
-        NativeFeatures[Index] = Replace(Feature, dimensions=Rebound)
-    Planes = DecodePlanes(Resolved, NativeFeatures, NativeStream=ResolvedStream)
-    PlaneById = {Plane.object_id: Plane for Plane in Planes}
-    PrincipalPlaneFrames = PrincipalPlaneA(NativeFeatures)
-    PrincipalPlaneIds = frozenset(PrincipalPlaneFrames)
-
-    # this callback exists because local behavior needs one focused transformation
-    Author = sorted(
-        (
-            Feature
-            for Feature in NativeFeatures
-            if Feature.native_offset is not None
-            and (not IsOriginFeature(Feature))
-            and (Feature.object_id not in PrincipalPlaneIds)
-        ),
-        key=lambda Feature: Feature.native_offset or 0,
+    FeatureIndexes = RebindDimsMut(NativeFeatures, ScalarOwner)
+    StateData, Author, Planes, UnframedPlanes = CreateState(
+        Resolved,
+        ResolvedStream,
+        Classes,
+        RecordById,
+        NativeFeatures,
+        FeatureIndexes,
     )
-    UnframedPlanes = tuple(
-        (
-            Feature
-            for Feature in NativeFeatures
-            if IsPlaneFeature(Feature)
-            and Feature.native_offset is not None
-            and (Feature.object_id not in PlaneById)
-        )
-    )
-    UnframedPlaneIds = frozenset((Feature.object_id for Feature in UnframedPlanes))
-    Sketches: list[NativeSketch] = []
-    Operations: list[NativeOperation] = []
-    Revolutions = {
-        Layout.feature_id: Layout
-        for Layout in LocateFeatures(Resolved)
-        if Layout.is_revolution
-    }
-    NativeIndexById = FeatureIndexes
-    LatestSketch: NativeSketch | None = None
-    LatestOperation: NativeOperation | None = None
-    LatestPlaneId = next(iter(PrincipalPlaneFrames), next(iter(PlaneById), 0))
-    LatestUnframedPlaneId: int | None = None
-    for Feature in Author:
-        if IsPlaneFeature(Feature):
-            if Feature.object_id in PlaneById:
-                LatestPlaneId = Feature.object_id
-                LatestUnframedPlaneId = None
-            else:
-                LatestUnframedPlaneId = Feature.object_id
-            continue
-        if Feature.kind.casefold() == "sketch":
-            SketchStart = Feature.native_offset or 0
-            SketchEnd = Feature.native_end or len(Resolved)
-            RefValue = SketchPlaneRef(Resolved, Classes, SketchStart, SketchEnd)
-            Support, SupportSource, UnframedSupport = SupportPlaneRef(
-                Resolved,
-                SketchStart,
-                SketchEnd,
-                RefValue,
-                LatestPlaneId,
-                LatestUnframedPlaneId,
-                PlaneById,
-                UnframedPlaneIds,
-            )
-            LatestSketch = DecodeSketch(
-                Resolved,
-                Feature,
-                Support,
-                NativeStream=ResolvedStream,
-                SupportKind=SketchSupport(Classes, RefValue, SketchStart, SketchEnd),
-                SupportPlane=RefValue,
-                SupportSource=SupportSource,
-                UnframedSupportPlaneId=UnframedSupport,
-            )
-            NativeIndex = NativeIndexById[Feature.object_id]
-            NativeFeatures[NativeIndex] = Replace(
-                NativeFeatures[NativeIndex], dimensions=LatestSketch.dimensions
-            )
-            Sketches.append(LatestSketch)
-            continue
-        if Feature.kind.casefold() == "extrusion":
-            Record = RecordById.get(Feature.object_id)
-            if Record is None:
-                continue
-            Child = IntegerProp(Feature.properties.get("DissectableChildren"))
-            ProfileId = Child or (LatestSketch.object_id if LatestSketch else None)
-            Dependencies = tuple(
-                (
-                    Value
-                    for Value in (
-                        LatestOperation.object_id if LatestOperation else None,
-                        ProfileId,
-                    )
-                    if Value is not None
-                )
-            )
-            Family, OperationCode, Schema = OperationFields(Resolved, Record)
-            OperationStart = Feature.native_offset or 0
-            OperationEnd = Feature.native_end or len(Resolved)
-            EndData = EndSpec(Resolved, OperationStart, OperationEnd, Classes)
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind=(
-                    "join"
-                    if OperationCode == 0
-                    else "cut" if OperationCode == 2 else "native"
-                ),
-                profile_id=ProfileId,
-                dependencies=Dependencies,
-                native_offset=OperationStart,
-                native_end=ClassRecordEnd(Resolved, Classes, OperationStart)
-                or OperationEnd,
-                length_mm=DimensionValue(Feature.dimensions, "length"),
-                radius_mm=None,
-                family_code=Family,
-                operation_code=OperationCode,
-                schema_code=Schema,
-                direction_code=EndData.direction_code if EndData else None,
-                termination_code=EndData.termination_code if EndData else None,
-                selection_offsets=(),
-                selected_local_ids=(),
-                native_stream=ResolvedStream,
-                depth_copies=DepthCopies(
-                    Resolved, OperationOffset(Feature.dimensions, "length")
-                ),
-                mirrored_direction_offset=(
-                    EndData.mirrored_direction_offset if EndData else None
-                ),
-                mirrored_direction_code=(
-                    EndData.mirrored_direction_code if EndData else None
-                ),
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        FeatureType = Feature.kind.casefold()
-        if FeatureType in {"lpattern", "linearpattern"}:
-            Record = RecordById.get(Feature.object_id)
-            CountValue = DimensionValue(Feature.dimensions, "instance_count")
-            SpacingValue = DimensionValue(Feature.dimensions, "spacing")
-            if (
-                Record is None
-                or LatestOperation is None
-                or CountValue is None
-                or (CountValue != int(CountValue))
-                or (SpacingValue is None)
-            ):
-                continue
-            SelectionData = OperationA(
-                Resolved,
-                Feature.native_offset or 0,
-                Feature.native_end or len(Resolved),
-                Feature,
-                NativeFeatures,
-            )
-            FamilyValue, OperationValue, SchemaValue = OperationFields(Resolved, Record)
-            DirectionOffset = (
-                Feature.native_offset + KLinearPatternDirection
-                if Feature.native_offset is not None
-                else -1
-            )
-            DirectionCode = (
-                Resolved[DirectionOffset]
-                if 0 <= DirectionOffset < (Feature.native_end or 0)
-                and Resolved[DirectionOffset] in {0, 1}
-                else None
-            )
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind="linear_pattern",
-                profile_id=None,
-                dependencies=(LatestOperation.object_id,),
-                native_offset=Feature.native_offset or 0,
-                native_end=Feature.native_end or len(Resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=FamilyValue,
-                operation_code=OperationValue,
-                schema_code=SchemaValue,
-                direction_code=DirectionCode,
-                termination_code=None,
-                selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)),
-                selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)),
-                selection_kind="edge",
-                mode="linear",
-                native_stream=ResolvedStream,
-                selection_references=tuple(
-                    ((ItemData[1], ItemData[2]) for ItemData in SelectionData)
-                ),
-                instance_count=int(CountValue),
-                spacing_mm=SpacingValue,
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        if FeatureType in {"cirpattern", "circularpattern"}:
-            Record = RecordById.get(Feature.object_id)
-            CountValue = DimensionValue(Feature.dimensions, "instance_count")
-            AngleValue = DimensionValue(Feature.dimensions, "angle")
-            if (
-                Record is None
-                or LatestOperation is None
-                or CountValue is None
-                or (CountValue != int(CountValue))
-                or (AngleValue is None)
-            ):
-                continue
-            SelectionData = OperationA(
-                Resolved,
-                Feature.native_offset or 0,
-                Feature.native_end or len(Resolved),
-                Feature,
-                NativeFeatures,
-            )
-            FamilyValue, OperationValue, SchemaValue = OperationFields(Resolved, Record)
-            DirectionOffset = (
-                Feature.native_offset + KCircularPatternDirection
-                if Feature.native_offset is not None
-                else -1
-            )
-            DirectionCode = (
-                Resolved[DirectionOffset]
-                if 0 <= DirectionOffset < (Feature.native_end or 0)
-                and Resolved[DirectionOffset] in {0, 1}
-                else None
-            )
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind="circular_pattern",
-                profile_id=None,
-                dependencies=(LatestOperation.object_id,),
-                native_offset=Feature.native_offset or 0,
-                native_end=Feature.native_end or len(Resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=FamilyValue,
-                operation_code=OperationValue,
-                schema_code=SchemaValue,
-                direction_code=DirectionCode,
-                termination_code=None,
-                selection_offsets=tuple((ItemData[0] for ItemData in SelectionData)),
-                selected_local_ids=tuple((ItemData[2] for ItemData in SelectionData)),
-                angle_degrees=AngleValue,
-                selection_kind="edge",
-                mode="circular",
-                native_stream=ResolvedStream,
-                selection_references=tuple(
-                    ((ItemData[1], ItemData[2]) for ItemData in SelectionData)
-                ),
-                instance_count=int(CountValue),
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        if FeatureType in KRevolutionFeatureTypes:
-            Record = RecordById.get(Feature.object_id)
-            if Record is None:
-                continue
-            ProfileId = LatestSketch.object_id if LatestSketch else None
-            Dependencies = tuple(
-                (
-                    Value
-                    for Value in (
-                        LatestOperation.object_id if LatestOperation else None,
-                        ProfileId,
-                    )
-                    if Value is not None
-                )
-            )
-            Family, OperationCode, Schema = OperationFields(Resolved, Record)
-            Layout = Revolutions.get(Feature.object_id)
-            AxisSketch = LatestSketch
-            if Layout is not None and Layout.axis_kind == RevolutionAxisSketch:
-                AxisSketch = next(
-                    (
-                        ItemValue
-                        for ItemValue in Sketches
-                        if ItemValue.object_id == Layout.axis_feature_id
-                    ),
-                    None,
-                )
-            elif Layout is not None:
-                AxisSketch = None
-            AxisMarker = RevolutionAxis(AxisSketch)
-            RevolutionStart = Feature.native_offset or 0
-            AngleOffset = OperationOffset(Feature.dimensions, "angle")
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind=(
-                    "revolve_cut"
-                    if FeatureType in {"cut-revolve", "revcut"}
-                    else "revolve_join"
-                ),
-                profile_id=ProfileId,
-                dependencies=Dependencies,
-                native_offset=RevolutionStart,
-                native_end=ClassRecordEnd(Resolved, Classes, RevolutionStart)
-                or Feature.native_end
-                or len(Resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=Family,
-                operation_code=OperationCode,
-                schema_code=Schema,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=(),
-                selected_local_ids=(),
-                angle_degrees=DimensionValue(Feature.dimensions, "angle"),
-                axis_marker_offset=AxisMarker.offset if AxisMarker else None,
-                native_stream=ResolvedStream,
-                axis_source_kind=None if Layout is None else Layout.axis_kind,
-                axis_source_id=None if Layout is None else Layout.axis_feature_id,
-                axis_source_offset=None if Layout is None else Layout.axis_offset,
-                end_spec_offset=None if Layout is None else Layout.end_spec_offset,
-                angle_offset=AngleOffset,
-                angle_copies=AngleCopies(Resolved, AngleOffset),
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        if Feature.class_name in KHoleClassNames:
-            Record = RecordById.get(Feature.object_id)
-            if Record is None:
-                continue
-            Child = IntegerProp(Feature.properties.get("DissectableChildren"))
-            Family, OperationCode, Schema = OperationFields(Resolved, Record)
-            Dependencies = tuple(
-                (
-                    Value
-                    for Value in (
-                        LatestOperation.object_id if LatestOperation else None,
-                        Child,
-                    )
-                    if Value is not None
-                )
-            )
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind="hole",
-                profile_id=Child,
-                dependencies=Dependencies,
-                native_offset=Feature.native_offset or 0,
-                native_end=Feature.native_end or len(Resolved),
-                length_mm=DimensionValue(Feature.dimensions, "depth"),
-                radius_mm=None,
-                family_code=Family,
-                operation_code=OperationCode,
-                schema_code=Schema,
-                direction_code=None,
-                termination_code=0,
-                selection_offsets=(),
-                selected_local_ids=(),
-                selection_kind="face",
-                native_stream=ResolvedStream,
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        if FeatureType == "dome":
-            Selections = OperationAfter(
-                Resolved,
-                Feature.native_offset or 0,
-                Feature.native_end or len(Resolved),
-                Feature,
-                NativeFeatures,
-                "moCompFace_c",
-            )
-            Height = DimensionValue(Feature.dimensions, "height")
-            if Height is None or not Selections:
-                continue
-            ProducerIds = tuple(
-                dict.fromkeys((Selection[1] for Selection in Selections))
-            )
-            Dependencies = tuple(
-                dict.fromkeys(
-                    (
-                        *((LatestOperation.object_id,) if LatestOperation else ()),
-                        *ProducerIds,
-                    )
-                )
-            )
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind="dome",
-                profile_id=None,
-                dependencies=Dependencies,
-                native_offset=Feature.native_offset or 0,
-                native_end=Feature.native_end or len(Resolved),
-                length_mm=Height,
-                radius_mm=None,
-                family_code=None,
-                operation_code=None,
-                schema_code=None,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)),
-                selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)),
-                selection_kind="face",
-                native_stream=ResolvedStream,
-                selection_references=tuple(
-                    ((ItemValue[1], ItemValue[2]) for ItemValue in Selections)
-                ),
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        if FeatureType in KMoveBodyFeatureTypes:
-            Selections = OperationAfter(
-                Resolved,
-                Feature.native_offset or 0,
-                Feature.native_end or len(Resolved),
-                Feature,
-                NativeFeatures,
-                "moCompSolidBody_c",
-            )
-            Translation = Native(Feature.dimensions)
-            if Translation is None or not Selections:
-                continue
-            ProducerIds = tuple(
-                dict.fromkeys((Selection[1] for Selection in Selections))
-            )
-            Dependencies = tuple(
-                dict.fromkeys(
-                    (
-                        *((LatestOperation.object_id,) if LatestOperation else ()),
-                        *ProducerIds,
-                    )
-                )
-            )
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind="move_body",
-                profile_id=None,
-                dependencies=Dependencies,
-                native_offset=Feature.native_offset or 0,
-                native_end=Feature.native_end or len(Resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=None,
-                operation_code=None,
-                schema_code=None,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)),
-                selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)),
-                selection_kind="body",
-                native_stream=ResolvedStream,
-                selection_references=tuple(
-                    ((ItemValue[1], ItemValue[2]) for ItemValue in Selections)
-                ),
-                translation_mm=Translation,
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        if FeatureType in KCombineFeatureTypes:
-            Selections = OperationAfter(
-                Resolved,
-                Feature.native_offset or 0,
-                Feature.native_end or len(Resolved),
-                Feature,
-                NativeFeatures,
-                "moSolidRef_w",
-            )
-            if len(Selections) < 2:
-                continue
-            ProducerIds = tuple(
-                dict.fromkeys((Selection[1] for Selection in Selections))
-            )
-            Dependencies = tuple(
-                dict.fromkeys(
-                    (
-                        *((LatestOperation.object_id,) if LatestOperation else ()),
-                        *ProducerIds,
-                    )
-                )
-            )
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind="combine_join",
-                profile_id=None,
-                dependencies=Dependencies,
-                native_offset=Feature.native_offset or 0,
-                native_end=Feature.native_end or len(Resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=None,
-                operation_code=0,
-                schema_code=None,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=tuple((ItemValue[0] for ItemValue in Selections)),
-                selected_local_ids=tuple((ItemValue[2] for ItemValue in Selections)),
-                selection_kind="body",
-                mode="join",
-                native_stream=ResolvedStream,
-                selection_references=tuple(
-                    ((ItemValue[1], ItemValue[2]) for ItemValue in Selections)
-                ),
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        if FeatureType == "scale":
-            Factors = NativeScale(
-                Resolved,
-                Feature.native_offset or 0,
-                Feature.native_end or len(Resolved),
-            )
-            if Factors is None or LatestOperation is None:
-                continue
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind="scale",
-                profile_id=None,
-                dependencies=(LatestOperation.object_id,),
-                native_offset=Feature.native_offset or 0,
-                native_end=Feature.native_end or len(Resolved),
-                length_mm=None,
-                radius_mm=None,
-                family_code=None,
-                operation_code=None,
-                schema_code=None,
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=(),
-                selected_local_ids=(),
-                native_stream=ResolvedStream,
-                scale_factors=Factors,
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        if FeatureType in {"fillet", "chamfer", "shell"}:
-            Selections = OperationA(
-                Resolved,
-                Feature.native_offset or 0,
-                Feature.native_end or len(Resolved),
-                Feature,
-                NativeFeatures,
-            )
-            ProducerIds = tuple(
-                dict.fromkeys((Selection[1] for Selection in Selections))
-            )
-            Dependencies = tuple(
-                dict.fromkeys(
-                    (
-                        *((LatestOperation.object_id,) if LatestOperation else ()),
-                        *ProducerIds,
-                    )
-                )
-            )
-            Record = RecordById.get(Feature.object_id)
-            Fields = (
-                OperationFields(Resolved, Record)
-                if Record is not None
-                else (None, None, None)
-            )
-            DimensionKind = {
-                "fillet": "radius",
-                "chamfer": "distance",
-                "shell": "thickness",
-            }[FeatureType]
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind=FeatureType,
-                profile_id=None,
-                dependencies=Dependencies,
-                native_offset=Feature.native_offset or 0,
-                native_end=Feature.native_end or len(Resolved),
-                length_mm=(
-                    DimensionValue(Feature.dimensions, DimensionKind)
-                    if FeatureType != "fillet"
-                    else None
-                ),
-                radius_mm=(
-                    DimensionValue(Feature.dimensions, DimensionKind)
-                    if FeatureType == "fillet"
-                    else None
-                ),
-                family_code=Fields[0],
-                operation_code=Fields[1],
-                schema_code=Fields[2],
-                direction_code=None,
-                termination_code=None,
-                selection_offsets=tuple((Selection[0] for Selection in Selections)),
-                selected_local_ids=tuple((Selection[2] for Selection in Selections)),
-                selection_kind="face" if FeatureType == "shell" else "edge",
-                mode=(
-                    "equal_distance"
-                    if FeatureType == "chamfer" and Fields[0] == 1
-                    else None
-                ),
-                native_stream=ResolvedStream,
-                selection_references=tuple(
-                    ((Selection[1], Selection[2]) for Selection in Selections)
-                ),
-            )
-            Operations.append(Operation)
-            LatestOperation = Operation
-            continue
-        if FeatureType in KSurfaceExtrusionFeature:
-            Record = RecordById.get(Feature.object_id)
-            if Record is None:
-                continue
-            ProfileId = LatestSketch.object_id if LatestSketch else None
-            Family, OperationCode, Schema = OperationFields(Resolved, Record)
-            EndData = EndSpec(
-                Resolved,
-                Feature.native_offset or 0,
-                Feature.native_end or len(Resolved),
-                Classes,
-            )
-            Lengths = tuple(
-                (
-                    Dimension.value_mm
-                    for Dimension in Feature.dimensions
-                    if Dimension.kind in {"length", "second_length"}
-                )
-            )
-            Operation = NativeOperation(
-                object_id=Feature.object_id,
-                name=Feature.name,
-                kind="surface",
-                profile_id=ProfileId,
-                dependencies=(ProfileId,) if ProfileId is not None else (),
-                native_offset=Feature.native_offset or 0,
-                native_end=Feature.native_end or len(Resolved),
-                length_mm=Lengths[0] if Lengths else None,
-                radius_mm=None,
-                family_code=Family,
-                operation_code=OperationCode,
-                schema_code=Schema,
-                direction_code=EndData.direction_code if EndData else None,
-                termination_code=EndData.termination_code if EndData else None,
-                selection_offsets=(),
-                selected_local_ids=(),
-                second_length_mm=Lengths[1] if len(Lengths) > 1 else None,
-                native_stream=ResolvedStream,
-            )
-            Operations.append(Operation)
-    SketchesById = {Sketch.object_id: Sketch for Sketch in Sketches}
-    Operations = [
+    DecodeTreeMut(StateData, Author)
+    SketchesById = {Sketch.object_id: Sketch for Sketch in StateData.Sketches}
+    StateData.Operations = [
         ResolveProfile(Operation, SketchesById, Resolved, NativeFeatures)
-        for Operation in Operations
+        for Operation in StateData.Operations
     ]
     ActiveConfigId = (
         ConfigId if ConfigId is not None else Configurations[0].configuration_id
@@ -11177,51 +10612,18 @@ def DecodeNative(
     Equations = ParseNative(
         ConfigData, ActiveConfigId, ConfigStream or f"Contents/Config-{ActiveConfigId}"
     )
-    Diagnostics = []
-    Unresolved = [
-        Feature
-        for Feature in NativeFeatures
-        if Feature.native_offset is None
-        and Feature.object_id > 0
-        and (Feature.object_id not in KeywordOnlyObjectIds)
-    ]
-    if Unresolved:
-        Diagnostics.append(
-            "native name records unavailable for "
-            + ", ".join(
-                (f"{Feature.object_id}:{Feature.name}" for Feature in Unresolved)
-            )
-        )
-    if UnframedPlanes:
-        Diagnostics.append(
-            "reference plane frames unavailable for "
-            + ", ".join(
-                (f"{Feature.object_id}:{Feature.name}" for Feature in UnframedPlanes)
-            )
-        )
-    DependentSketches = tuple(
-        (Sketch for Sketch in Sketches if Sketch.unframed_support_plane_id is not None)
-    )
-    if DependentSketches:
-        Diagnostics.append(
-            "sketch supports fall back to decoded planes for "
-            + ", ".join(
-                (
-                    f"{Sketch.object_id}:{Sketch.name}->{Sketch.unframed_support_plane_id}:{Sketch.support_plane_id}"
-                    for Sketch in DependentSketches
-                )
-            )
-        )
     return NativeModel(
         configurations=Configurations,
         features=tuple(sorted(NativeFeatures, key=NativeFeatureA)),
         planes=tuple(Planes),
-        sketches=tuple(Sketches),
-        operations=tuple(Operations),
+        sketches=tuple(StateData.Sketches),
+        operations=tuple(StateData.Operations),
         names=Names,
         classes=Classes,
         scalars=Scalars,
-        diagnostics=tuple(Diagnostics),
+        diagnostics=DecodeNotices(
+            NativeFeatures, UnframedPlanes, StateData.Sketches
+        ),
         equations=Equations,
         active_configuration_id=ActiveConfigId,
         bounding_box=BoundingBox(Resolved, Classes),
