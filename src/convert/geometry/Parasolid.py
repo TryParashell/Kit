@@ -284,53 +284,181 @@ def FinIndex(Descriptor: object, Coedges: Mapping[str, int], DummyFins: Mapping[
         return DummyFins.get(IdValue)
     return None
 
-# this declaration exists because focused behavior needs one stable owner
+# encoder configuration owns vendor mode decisions shared by all output phases
+@Dataclass(slots=True)
+class EncodeConfig:
+    KFeatureIds: dict[str, int]
+    KAttrBases: dict[str, int]
+    KSolidTri: bool
+    KSolidSolid: bool
+    KDummyEdges: tuple[BrepEdge, ...]
+
+
+# index allocation state owns reserved and consumed native record identifiers
+@Dataclass(slots=True)
+class IndexAllocator:
+    KReservedIndices: set[int]
+    KReservedTopologyIndices: set[int]
+    KUsedIndices: set[int]
+    KNextIndex: int
+
+
+# encoded index storage gives every topology and attribute family one owner
+@Dataclass(slots=True)
+class EncodeIndexState:
+    KBodies: dict[str, int]
+    KRegions: dict[str, int]
+    KShells: dict[str, int]
+    KSurfaces: dict[str, int]
+    KCurves: dict[str, int]
+    KPoints: dict[str, int]
+    KVertices: dict[str, int]
+    KEdges: dict[str, int]
+    KCoedges: dict[str, int]
+    KDummyFins: dict[str, int]
+    KLoops: dict[str, int]
+    KFaces: dict[str, int]
+    KExteriorRegions: dict[str, int]
+    KExteriorShells: dict[str, int]
+    KSolidFaceAttrs: dict[str, tuple[int, int, int]]
+    KSolidFaceValues: dict[str, tuple[int, int, int]]
+    KSolidFaceDefinitions: dict[str, int]
+    KSolidFaceDefNext: dict[str, int]
+    KSolidFaceIds: dict[str, int]
+    KSolidBodyAttrs: dict[str, int]
+    KSolidBodyValues: dict[str, int]
+    KSolidBodyDefinitions: dict[str, int]
+    KSolidBodyDefNext: dict[str, int]
+    KSolidBodyIds: dict[str, int]
+    KSheet: bool
+
+
+# ownership storage centralizes body membership and percarrier linked ordering
+@Dataclass(slots=True)
+class EncodeOwnerState:
+    KFaceShell: dict[str, str]
+    KFaceRegion: dict[str, str]
+    KFaceBody: dict[str, str]
+    KShellRegion: dict[str, str]
+    KShellBody: dict[str, str]
+    KEdgeBody: dict[str, str]
+    KVertexBody: dict[str, str]
+    KSurfFaces: dict[str, list[str]]
+    KCurveEdges: dict[str, list[str]]
+    KBodySurfaces: dict[str, list[str]]
+    KBodyCurves: dict[str, list[str]]
+    KBodyPoints: dict[str, list[str]]
+    KBodyVertices: dict[str, list[str]]
+    KBodyEdges: dict[str, list[str]]
+
+
+# node storage tracks perbody numbering independently from native record identifiers
+@Dataclass(slots=True)
+class EncodeNodeState:
+    KNodeIds: dict[int, int]
+    KNextNodeId: dict[str, int]
+
+
+# fin storage owns encoded orientations vertex rings and opposite fin relationships
+@Dataclass(slots=True)
+class EncodeFinState:
+    KEncodedLoopCoedges: dict[str, tuple[str, ...]]
+    KEncodedCoedgeReversed: dict[str, bool]
+    KVertexFins: dict[str, list[int]]
+    KFinVertex: dict[int, str]
+    KFinOther: dict[int, int]
+    KFirstFaceByBody: dict[str, str]
+
+
+# brep encoding composes allocation ownership topology and focused binary emitters
 def EncodeBrepBody(Model: BrepModel, Topology: BrepTopology, *, PartValue: bool=True, SolidFeatureIds: Mapping[str, int] | None=None) -> tuple[bytes, bool]:
+    Config = MakeEncodeConfig(Model, Topology, SolidFeatureIds)
+    Allocator = MakeAllocator(Config, PartValue)
+    Indices = MakeEncodeIndex(Model, Topology, Config, Allocator)
+    Owners = MakeEncodeOwners(Model, Topology)
+    Nodes = MakeNodeState(Model, Topology, Config, Indices, Owners)
+    Fins = MakeFinState(Model, Topology, Indices, Owners)
+    Output = bytearray()
+    WriteHeadMut(Output, Model, PartValue, Indices)
+    EmitBodiesMut(Output, Model, Topology, PartValue, Config, Indices, Owners, Nodes)
+    EmitRegionsMut(Output, Model, Topology, Indices, Owners, Nodes)
+    EmitShellsMut(Output, Model, Topology, Indices, Owners, Nodes)
+    EmitSurfacesMut(Output, Model, Config, Indices, Owners, Nodes)
+    EmitCurvesMut(Output, Model, Config, Indices, Owners, Nodes)
+    EmitPointsMut(Output, Model, Indices, Owners, Nodes)
+    EmitVerticesMut(Output, Model, Indices, Owners, Nodes, Fins)
+    EmitEdgesMut(Output, Model, Topology, Indices, Owners, Nodes, Fins)
+    EmitCoedgesMut(Output, Model, Topology, Indices, Owners, Fins)
+    EmitDummyMut(Output, Config, Topology, Indices, Fins)
+    EmitLoopsMut(Output, Model, Topology, Indices, Nodes, Fins)
+    EmitFacesMut(Output, Model, Topology, Config, Indices, Owners, Nodes, Fins)
+    EmitVendorMut(Output, Model, Config, Indices, Nodes, Fins)
+    WriteTagMut(Output, 1)
+    WritePointerMut(Output, 0)
+    Result = OrderTriRecords(bytes(Output)) if Config.KSolidTri and not PartValue else bytes(Output)
+    return Result, Indices.KSheet
+
+
+# encoder configuration derives deterministic vendor layout modes from model topology
+def MakeEncodeConfig(Model: BrepModel, Topology: BrepTopology, SolidFeatureIds: Mapping[str, int] | None) -> EncodeConfig:
     FeatureIds = dict(SolidFeatureIds or {})
     AttrBases = {BodyData.id: Position * 100 for Position, BodyData in enumerate(Model.bodies)} if FeatureIds else {}
-    SolidTri = bool(FeatureIds) and (len(Model.bodies) == 1 and len(Model.regions) == 1 and (len(Model.shells) == 1) and (len(Model.surfaces) == 1) and (len(Model.curves) == 3) and (len(Model.vertices) == 3) and (len(Model.edges) == 3) and (len(Model.coedges) == 3) and (len(Model.loops) == 1) and (len(Model.faces) == 1) and (not Model.regions[0].solid) and isinstance(Model.surfaces[0], PlaneSurface) and all((isinstance(Curve, LineCurve) for Curve in Model.curves)) and all((len(Topology.edge_coedges[EdgeData.id]) == 1 for EdgeData in Model.edges)))
+    SolidTri = bool(FeatureIds) and len(Model.bodies) == 1 and len(Model.regions) == 1 and len(Model.shells) == 1 and len(Model.surfaces) == 1 and len(Model.curves) == 3 and len(Model.vertices) == 3 and len(Model.edges) == 3 and len(Model.coedges) == 3 and len(Model.loops) == 1 and len(Model.faces) == 1 and not Model.regions[0].solid and isinstance(Model.surfaces[0], PlaneSurface) and all((isinstance(Curve, LineCurve) for Curve in Model.curves)) and all((len(Topology.edge_coedges[EdgeData.id]) == 1 for EdgeData in Model.edges))
     SolidSolid = bool(FeatureIds) and len(Model.bodies) == 1 and all((Region.solid for Region in Model.regions))
-    ReservedIndices = {BaseValue + OffsetData for BaseValue in AttrBases.values() for OffsetData in (*range(2, 5), *range(12, 16), *range(32, 60))}
-    ReservedTopologyIndices = set(range(5, 12)) if FeatureIds else set()
-    UsedIndices: set[int] = set()
-    NextIndex = 2 if PartValue else 1
-
-    # this declaration exists because focused behavior needs one stable owner
-    def AllocateIndex(Preferred: int=0) -> int:
-        nonlocal NextIndex
-        if Preferred and Preferred not in ReservedIndices and (Preferred not in UsedIndices):
-            UsedIndices.add(Preferred)
-            return Preferred
-        while NextIndex in ReservedIndices or NextIndex in ReservedTopologyIndices or NextIndex in UsedIndices:
-            NextIndex += 1
-        Result = NextIndex
-        UsedIndices.add(Result)
-        NextIndex += 1
-        return Result
-
-    # this declaration exists because focused behavior needs one stable owner
-    def AllocateData(Values: Iterable[object], Preferred: Sequence[int]=()) -> dict[str, int]:
-        Result: dict[str, int] = {}
-        for Position, ValueData in enumerate(Values):
-            ItemId = getattr(ValueData, 'id')
-            Result[ItemId] = AllocateIndex(Preferred[Position] if Position < len(Preferred) else 0)
-        return Result
-    Bodies = {BodyData.id: AttrBases[BodyData.id] + 1 for BodyData in Model.bodies} if AttrBases else AllocateData(Model.bodies)
-    UsedIndices.update(Bodies.values())
-    Regions = AllocateData(Model.regions, (17,) if SolidSolid else (9,) if FeatureIds else ())
-    Shells = AllocateData(Model.shells, (5,) if FeatureIds else ())
-    Surfaces = AllocateData(Model.surfaces, (6,) if FeatureIds else ())
-    Curves = AllocateData(Model.curves, (7, 17, 31) if SolidTri else (7,) if FeatureIds else ())
-    Points = AllocateData(Model.vertices, (8, 18, 29) if SolidTri else (8,) if FeatureIds else ())
-    Vertices = AllocateData(Model.vertices, (11, 21, 27) if SolidTri else (11,) if FeatureIds else ())
-    Edges = AllocateData(Model.edges, (10, 20, 30) if SolidTri else (10,) if FeatureIds else ())
-    Coedges = AllocateData(Model.coedges, (19, 23, 24) if SolidTri else ())
     DummyEdges = tuple((EdgeData for EdgeData in Model.edges if len(Topology.edge_coedges[EdgeData.id]) == 1))
-    DummyFins = AllocateData(DummyEdges, (25, 28, 26) if SolidTri else ())
-    Loops = AllocateData(Model.loops, (22,) if SolidTri else ())
-    Faces = AllocateData(Model.faces, (16,) if SolidTri else ())
-    ExteriorRegions: dict[str, int] = {}
-    ExteriorShells: dict[str, int] = {}
+    return EncodeConfig(FeatureIds, AttrBases, SolidTri, SolidSolid, DummyEdges)
+
+
+# allocator creation reserves vendor controlled attribute and topology identifier ranges
+def MakeAllocator(Config: EncodeConfig, PartValue: bool) -> IndexAllocator:
+    Reserved = {BaseValue + OffsetData for BaseValue in Config.KAttrBases.values() for OffsetData in (*range(2, 5), *range(12, 16), *range(32, 60))}
+    ReservedTopology = set(range(5, 12)) if Config.KFeatureIds else set()
+    return IndexAllocator(Reserved, ReservedTopology, set(), 2 if PartValue else 1)
+
+
+# index allocation selects preferred identifiers without colliding with reserved ranges
+def AllocIndexMut(Allocator: IndexAllocator, Preferred: int=0) -> int:
+    if Preferred and Preferred not in Allocator.KReservedIndices and Preferred not in Allocator.KUsedIndices:
+        Allocator.KUsedIndices.add(Preferred)
+        return Preferred
+    while Allocator.KNextIndex in Allocator.KReservedIndices or Allocator.KNextIndex in Allocator.KReservedTopologyIndices or Allocator.KNextIndex in Allocator.KUsedIndices:
+        Allocator.KNextIndex += 1
+    Result = Allocator.KNextIndex
+    Allocator.KUsedIndices.add(Result)
+    Allocator.KNextIndex += 1
+    return Result
+
+
+# collection allocation maps interchange identifiers to deterministic native record indices
+def AllocItemsMut(Allocator: IndexAllocator, Values: Iterable[object], Preferred: Sequence[int]=()) -> dict[str, int]:
+    Result: dict[str, int] = {}
+    for Position, ValueData in enumerate(Values):
+        ItemId = getattr(ValueData, 'id')
+        Result[ItemId] = AllocIndexMut(Allocator, Preferred[Position] if Position < len(Preferred) else 0)
+    return Result
+
+
+# standard index allocation covers all direct topology and geometry record families
+def BaseIndexData(Model: BrepModel, Config: EncodeConfig, Allocator: IndexAllocator) -> tuple[dict[str, int], ...]:
+    Bodies = {BodyData.id: Config.KAttrBases[BodyData.id] + 1 for BodyData in Model.bodies} if Config.KAttrBases else AllocItemsMut(Allocator, Model.bodies)
+    Allocator.KUsedIndices.update(Bodies.values())
+    Regions = AllocItemsMut(Allocator, Model.regions, (17,) if Config.KSolidSolid else (9,) if Config.KFeatureIds else ())
+    Shells = AllocItemsMut(Allocator, Model.shells, (5,) if Config.KFeatureIds else ())
+    Surfaces = AllocItemsMut(Allocator, Model.surfaces, (6,) if Config.KFeatureIds else ())
+    Curves = AllocItemsMut(Allocator, Model.curves, (7, 17, 31) if Config.KSolidTri else (7,) if Config.KFeatureIds else ())
+    Points = AllocItemsMut(Allocator, Model.vertices, (8, 18, 29) if Config.KSolidTri else (8,) if Config.KFeatureIds else ())
+    Vertices = AllocItemsMut(Allocator, Model.vertices, (11, 21, 27) if Config.KSolidTri else (11,) if Config.KFeatureIds else ())
+    Edges = AllocItemsMut(Allocator, Model.edges, (10, 20, 30) if Config.KSolidTri else (10,) if Config.KFeatureIds else ())
+    Coedges = AllocItemsMut(Allocator, Model.coedges, (19, 23, 24) if Config.KSolidTri else ())
+    DummyFins = AllocItemsMut(Allocator, Config.KDummyEdges, (25, 28, 26) if Config.KSolidTri else ())
+    Loops = AllocItemsMut(Allocator, Model.loops, (22,) if Config.KSolidTri else ())
+    Faces = AllocItemsMut(Allocator, Model.faces, (16,) if Config.KSolidTri else ())
+    return Bodies, Regions, Shells, Surfaces, Curves, Points, Vertices, Edges, Coedges, DummyFins, Loops, Faces
+
+
+# exterior index allocation creates complement regions and shells for solid bodies
+def ExteriorIndexes(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Allocator: IndexAllocator) -> tuple[dict[str, int], dict[str, int], bool]:
+    ExteriorRegions, ExteriorShells = {}, {}
     Sheet = False
     for BodyData in Model.bodies:
         Kinds = {Topology.regions[RegionId].solid for RegionId in BodyData.region_ids}
@@ -339,61 +467,70 @@ def EncodeBrepBody(Model: BrepModel, Topology: BrepTopology, *, PartValue: bool=
         if Kinds == {False}:
             Sheet = True
             continue
-        ExteriorRegions[BodyData.id] = AllocateIndex(9 if SolidSolid else 0)
+        ExteriorRegions[BodyData.id] = AllocIndexMut(Allocator, 9 if Config.KSolidSolid else 0)
         for RegionId in BodyData.region_ids:
-            Region = Topology.regions[RegionId]
-            for ShellUseId in Region.shell_use_ids:
+            for ShellUseId in Topology.regions[RegionId].shell_use_ids:
                 ShellId = Topology.shell_uses[ShellUseId].shell_id
-                ExteriorShells[ShellId] = AllocateIndex()
-    SolidFaceAttrs: dict[str, tuple[int, int, int]] = {}
-    SolidFaceValues: dict[str, tuple[int, int, int]] = {}
-    SolidFaceDefinitions: dict[str, int] = {}
-    SolidFaceDefNext: dict[str, int] = {}
-    SolidFaceIds: dict[str, int] = {}
-    SolidBodyAttrs: dict[str, int] = {}
-    SolidBodyValues: dict[str, int] = {}
-    SolidBodyDefinitions: dict[str, int] = {}
-    SolidBodyDefNext: dict[str, int] = {}
-    SolidBodyIds: dict[str, int] = {}
-    if SolidSolid:
+                ExteriorShells[ShellId] = AllocIndexMut(Allocator)
+    return ExteriorRegions, ExteriorShells, Sheet
+
+
+# vendor attribute allocation creates solidworks face and body record chains
+def SolidIndexes(Model: BrepModel, Config: EncodeConfig, Allocator: IndexAllocator) -> tuple[dict[str, object], ...]:
+    FaceAttrs, FaceValues, FaceDefinitions, FaceDefNext, FaceIds = {}, {}, {}, {}, {}
+    BodyAttrs, BodyValues, BodyDefinitions, BodyDefNext, BodyIds = {}, {}, {}, {}, {}
+    if Config.KSolidSolid:
         for NameValue in ('unchanged', 'downstream', 'colour'):
-            SolidFaceDefinitions[NameValue] = AllocateIndex()
-            SolidFaceDefNext[NameValue] = 0 if NameValue == 'colour' else AllocateIndex()
-            SolidFaceIds[NameValue] = AllocateIndex()
-        for FaceDataData in Model.faces:
-            SolidFaceAttrs[FaceDataData.id] = tuple((AllocateIndex() for Ignored in range(3)))
-            SolidFaceValues[FaceDataData.id] = tuple((AllocateIndex() for Ignored in range(3)))
-        SolidBodyAttrs = {'timestamp': AllocateIndex(), 'feature': AllocateIndex(), 'implicit': AllocateIndex(), 'match': AllocateIndex(), 'density': AllocateIndex(), 'lightweight': AllocateIndex(), 'recipe': 13}
+            FaceDefinitions[NameValue] = AllocIndexMut(Allocator)
+            FaceDefNext[NameValue] = 0 if NameValue == 'colour' else AllocIndexMut(Allocator)
+            FaceIds[NameValue] = AllocIndexMut(Allocator)
+        for FaceData in Model.faces:
+            FaceAttrs[FaceData.id] = tuple((AllocIndexMut(Allocator) for Ignored in range(3)))
+            FaceValues[FaceData.id] = tuple((AllocIndexMut(Allocator) for Ignored in range(3)))
+        BodyAttrs = {'timestamp': AllocIndexMut(Allocator), 'feature': AllocIndexMut(Allocator), 'implicit': AllocIndexMut(Allocator), 'match': AllocIndexMut(Allocator), 'density': AllocIndexMut(Allocator), 'lightweight': AllocIndexMut(Allocator), 'recipe': 13}
         for NameValue in ('timestamp', 'feature', 'implicit', 'match', 'density', 'lightweight', 'recipe'):
-            SolidBodyDefinitions[NameValue] = AllocateIndex()
-            SolidBodyDefNext[NameValue] = AllocateIndex()
-            SolidBodyIds[NameValue] = AllocateIndex()
+            BodyDefinitions[NameValue] = AllocIndexMut(Allocator)
+            BodyDefNext[NameValue] = AllocIndexMut(Allocator)
+            BodyIds[NameValue] = AllocIndexMut(Allocator)
         for NameValue in ('timestamp', 'feature', 'implicit', 'match', 'density', 'lightweight'):
-            SolidBodyValues[NameValue] = AllocateIndex()
-    if max((*ReservedIndices, *UsedIndices), default=0) >= 32767:
+            BodyValues[NameValue] = AllocIndexMut(Allocator)
+    return FaceAttrs, FaceValues, FaceDefinitions, FaceDefNext, FaceIds, BodyAttrs, BodyValues, BodyDefinitions, BodyDefNext, BodyIds
+
+
+# complete index construction combines standard exterior and vendor attribute families
+def MakeEncodeIndex(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Allocator: IndexAllocator) -> EncodeIndexState:
+    BaseData = BaseIndexData(Model, Config, Allocator)
+    ExteriorRegions, ExteriorShells, Sheet = ExteriorIndexes(Model, Topology, Config, Allocator)
+    SolidData = SolidIndexes(Model, Config, Allocator)
+    if max((*Allocator.KReservedIndices, *Allocator.KUsedIndices), default=0) >= 32767:
         raise ParaWriteError('Parasolid V12 writer node space is exhausted')
-    FaceShell: dict[str, str] = {}
-    FaceRegion: dict[str, str] = {}
-    FaceBody: dict[str, str] = {}
-    ShellRegion: dict[str, str] = {}
-    ShellBody: dict[str, str] = {}
-    for Region in Model.regions:
-        BodyId = Topology.region_body[Region.id]
-        for ShellUseId in Region.shell_use_ids:
+    return EncodeIndexState(*BaseData, ExteriorRegions, ExteriorShells, *SolidData, Sheet)
+
+
+# face ownership mapping links faces shells regions and bodies without duplication
+def MakeFaceOwners(Model: BrepModel, Topology: BrepTopology) -> tuple[dict[str, str], ...]:
+    FaceShell, FaceRegion, FaceBody, ShellRegion, ShellBody = {}, {}, {}, {}, {}
+    for RegionData in Model.regions:
+        BodyId = Topology.region_body[RegionData.id]
+        for ShellUseId in RegionData.shell_use_ids:
             ShellUse = Topology.shell_uses[ShellUseId]
-            Shell = Topology.shells[ShellUse.shell_id]
-            ShellRegion[Shell.id] = Region.id
-            ShellBody[Shell.id] = BodyId
-            for FaceUseId in Shell.face_use_ids:
+            ShellData = Topology.shells[ShellUse.shell_id]
+            ShellRegion[ShellData.id] = RegionData.id
+            ShellBody[ShellData.id] = BodyId
+            for FaceUseId in ShellData.face_use_ids:
                 FaceId = Topology.face_uses[FaceUseId].face_id
-                FaceShell[FaceId] = Shell.id
-                FaceRegion[FaceId] = Region.id
+                FaceShell[FaceId] = ShellData.id
+                FaceRegion[FaceId] = RegionData.id
                 FaceBody[FaceId] = BodyId
-    EdgeBody: dict[str, str] = {}
-    VertexBody: dict[str, str] = {}
+    return FaceShell, FaceRegion, FaceBody, ShellRegion, ShellBody
+
+
+# edge ownership mapping proves each edge and vertex belongs to one body
+def MakeEdgeOwners(Model: BrepModel, Topology: BrepTopology, FaceBody: Mapping[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+    EdgeBody, VertexBody = {}, {}
     for EdgeData in Model.edges:
         UsesValue = Topology.edge_coedges[EdgeData.id]
-        BodyIdsData = {FaceBody[Topology.loop_face[Topology.coedge_loop[CoedgeIdData]]] for CoedgeIdData in UsesValue}
+        BodyIdsData = {FaceBody[Topology.loop_face[Topology.coedge_loop[CoedgeId]]] for CoedgeId in UsesValue}
         if len(BodyIdsData) != 1:
             raise ParaWriteError(f'Parasolid edge {EdgeData.id} spans multiple bodies')
         BodyId = next(iter(BodyIdsData))
@@ -402,21 +539,26 @@ def EncodeBrepBody(Model: BrepModel, Topology: BrepTopology, *, PartValue: bool=
             Prior = VertexBody.setdefault(VertexId, BodyId)
             if Prior != BodyId:
                 raise ParaWriteError(f'Parasolid vertex {VertexId} spans multiple bodies')
-    SurfFaces: dict[str, list[str]] = {SurfValue.id: [] for SurfValue in Model.surfaces}
-    CurveEdges: dict[str, list[str]] = {Curve.id: [] for Curve in Model.curves}
-    for FaceDataData in Model.faces:
-        SurfFaces[FaceDataData.surface_id].append(FaceDataData.id)
+    return EdgeBody, VertexBody
+
+
+# geometry link construction orders faces per surface and edges per curve
+def MakeGeomLinks(Model: BrepModel, Topology: BrepTopology) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    SurfFaces = {SurfValue.id: [] for SurfValue in Model.surfaces}
+    CurveEdges = {Curve.id: [] for Curve in Model.curves}
+    for FaceData in Model.faces:
+        SurfFaces[FaceData.surface_id].append(FaceData.id)
     for EdgeData in Model.edges:
         CurveEdges[EdgeData.curve_id].append(EdgeData.id)
-    for SurfId, FaceIdsData in SurfFaces.items():
-        SurfFaces[SurfId] = OrderIds(FaceIdsData, Topology.faces, 'parasolid.surface_face_order')
+    for SurfId, FaceIds in SurfFaces.items():
+        SurfFaces[SurfId] = OrderIds(FaceIds, Topology.faces, 'parasolid.surface_face_order')
     for CurveId, EdgeIds in CurveEdges.items():
         CurveEdges[CurveId] = OrderIds(EdgeIds, Topology.edges, 'parasolid.curve_edge_order')
-    BodySurfaces: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
-    BodyCurves: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
-    BodyPoints: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
-    BodyVertices: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
-    BodyEdges: dict[str, list[str]] = {BodyData.id: [] for BodyData in Model.bodies}
+    return SurfFaces, CurveEdges
+
+
+# body group filling proves each geometry record has one owning body
+def FillBodyMut(Model: BrepModel, FaceBody: Mapping[str, str], EdgeBody: Mapping[str, str], VertexBody: Mapping[str, str], SurfFaces: Mapping[str, Sequence[str]], CurveEdges: Mapping[str, Sequence[str]], BodySurfaces: dict[str, list[str]], BodyCurves: dict[str, list[str]], BodyPoints: dict[str, list[str]], BodyVertices: dict[str, list[str]], BodyEdges: dict[str, list[str]]) -> None:
     for SurfValue in Model.surfaces:
         Owners = {FaceBody[FaceId] for FaceId in SurfFaces[SurfValue.id]}
         if len(Owners) != 1:
@@ -435,315 +577,443 @@ def EncodeBrepBody(Model: BrepModel, Topology: BrepTopology, *, PartValue: bool=
         BodyVertices[BodyId].append(Vertex.id)
     for EdgeData in Model.edges:
         BodyEdges[EdgeBody[EdgeData.id]].append(EdgeData.id)
+
+
+# body group ordering applies native metadata independently to every record family
+def OrderBodyMut(Model: BrepModel, Topology: BrepTopology, BodySurfaces: dict[str, list[str]], BodyCurves: dict[str, list[str]], BodyPoints: dict[str, list[str]], BodyVertices: dict[str, list[str]], BodyEdges: dict[str, list[str]]) -> None:
     for BodyData in Model.bodies:
         BodySurfaces[BodyData.id] = OrderIds(BodySurfaces[BodyData.id], Topology.surface_by_id, 'parasolid.surface_order')
         BodyCurves[BodyData.id] = OrderIds(BodyCurves[BodyData.id], Topology.curve_by_id, 'parasolid.curve_order')
         BodyPoints[BodyData.id] = OrderIds(BodyPoints[BodyData.id], Topology.vertex_by_id, 'parasolid.point_order')
         BodyVertices[BodyData.id] = OrderIds(BodyVertices[BodyData.id], Topology.vertex_by_id, 'parasolid.vertex_order')
         BodyEdges[BodyData.id] = OrderIds(BodyEdges[BodyData.id], Topology.edges, 'parasolid.edge_order')
-    NodeIds: dict[int, int] = {}
-    NextNodeId: dict[str, int] = {BodyData.id: 1 for BodyData in Model.bodies}
 
-    # this declaration exists because focused behavior needs one stable owner
-    def NodeId(Index: int, BodyId: str) -> int:
-        ValueData = NextNodeId[BodyId]
-        if BodyId in AttrBases and 18 <= ValueData <= 28:
-            ValueData = 29
-        NextNodeId[BodyId] = ValueData + 1
-        NodeIds[Index] = ValueData
-        return ValueData
-    for Region in Model.regions:
-        NodeId(Regions[Region.id], Topology.region_body[Region.id])
-    for BodyId, Index in ExteriorRegions.items():
-        NodeId(Index, BodyId)
-    for Shell in Model.shells:
-        NodeId(Shells[Shell.id], ShellBody[Shell.id])
-    for ShellId, Index in ExteriorShells.items():
-        NodeId(Index, ShellBody[ShellId])
+
+# body group construction partitions each ordered geometry family by owning body
+def MakeBodyGroups(Model: BrepModel, Topology: BrepTopology, FaceBody: Mapping[str, str], EdgeBody: Mapping[str, str], VertexBody: Mapping[str, str], SurfFaces: Mapping[str, Sequence[str]], CurveEdges: Mapping[str, Sequence[str]]) -> tuple[dict[str, list[str]], ...]:
+    BodySurfaces = {BodyData.id: [] for BodyData in Model.bodies}
+    BodyCurves = {BodyData.id: [] for BodyData in Model.bodies}
+    BodyPoints = {BodyData.id: [] for BodyData in Model.bodies}
+    BodyVertices = {BodyData.id: [] for BodyData in Model.bodies}
+    BodyEdges = {BodyData.id: [] for BodyData in Model.bodies}
+    FillBodyMut(Model, FaceBody, EdgeBody, VertexBody, SurfFaces, CurveEdges, BodySurfaces, BodyCurves, BodyPoints, BodyVertices, BodyEdges)
+    OrderBodyMut(Model, Topology, BodySurfaces, BodyCurves, BodyPoints, BodyVertices, BodyEdges)
+    return BodySurfaces, BodyCurves, BodyPoints, BodyVertices, BodyEdges
+
+
+# ownership construction composes topology membership geometry links and body groups
+def MakeEncodeOwners(Model: BrepModel, Topology: BrepTopology) -> EncodeOwnerState:
+    FaceShell, FaceRegion, FaceBody, ShellRegion, ShellBody = MakeFaceOwners(Model, Topology)
+    EdgeBody, VertexBody = MakeEdgeOwners(Model, Topology, FaceBody)
+    SurfFaces, CurveEdges = MakeGeomLinks(Model, Topology)
+    BodyGroups = MakeBodyGroups(Model, Topology, FaceBody, EdgeBody, VertexBody, SurfFaces, CurveEdges)
+    return EncodeOwnerState(FaceShell, FaceRegion, FaceBody, ShellRegion, ShellBody, EdgeBody, VertexBody, SurfFaces, CurveEdges, *BodyGroups)
+
+
+# node allocation records one monotonic perbody identifier with vendor range gaps
+def AssignNodeIdMut(Index: int, BodyId: str, Config: EncodeConfig, Nodes: EncodeNodeState) -> int:
+    ValueData = Nodes.KNextNodeId[BodyId]
+    if BodyId in Config.KAttrBases and 18 <= ValueData <= 28:
+        ValueData = 29
+    Nodes.KNextNodeId[BodyId] = ValueData + 1
+    Nodes.KNodeIds[Index] = ValueData
+    return ValueData
+
+
+# topology node assignment numbers regions shells and their exterior complements
+def SetTopoNodesMut(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+    for RegionData in Model.regions:
+        AssignNodeIdMut(Indices.KRegions[RegionData.id], Topology.region_body[RegionData.id], Config, Nodes)
+    for BodyId, Index in Indices.KExteriorRegions.items():
+        AssignNodeIdMut(Index, BodyId, Config, Nodes)
+    for ShellData in Model.shells:
+        AssignNodeIdMut(Indices.KShells[ShellData.id], Owners.KShellBody[ShellData.id], Config, Nodes)
+    for ShellId, Index in Indices.KExteriorShells.items():
+        AssignNodeIdMut(Index, Owners.KShellBody[ShellId], Config, Nodes)
+
+
+# geometry node assignment numbers carriers vertices edges loops and faces
+def SetGeomNodesMut(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
     for SurfValue in Model.surfaces:
-        NodeId(Surfaces[SurfValue.id], FaceBody[SurfFaces[SurfValue.id][0]])
+        AssignNodeIdMut(Indices.KSurfaces[SurfValue.id], Owners.KFaceBody[Owners.KSurfFaces[SurfValue.id][0]], Config, Nodes)
     for Curve in Model.curves:
-        NodeId(Curves[Curve.id], EdgeBody[CurveEdges[Curve.id][0]])
+        AssignNodeIdMut(Indices.KCurves[Curve.id], Owners.KEdgeBody[Owners.KCurveEdges[Curve.id][0]], Config, Nodes)
     for Vertex in Model.vertices:
-        NodeId(Points[Vertex.id], VertexBody[Vertex.id])
-        NodeId(Vertices[Vertex.id], VertexBody[Vertex.id])
+        AssignNodeIdMut(Indices.KPoints[Vertex.id], Owners.KVertexBody[Vertex.id], Config, Nodes)
+        AssignNodeIdMut(Indices.KVertices[Vertex.id], Owners.KVertexBody[Vertex.id], Config, Nodes)
     for EdgeData in Model.edges:
-        NodeId(Edges[EdgeData.id], EdgeBody[EdgeData.id])
-    for LoopDataData in Model.loops:
-        NodeId(Loops[LoopDataData.id], FaceBody[Topology.loop_face[LoopDataData.id]])
-    for FaceDataData in Model.faces:
-        NodeId(Faces[FaceDataData.id], FaceBody[FaceDataData.id])
-    if SolidSolid:
-        BodyId = Model.bodies[0].id
-        for FaceDataData in Model.faces:
-            for Index in SolidFaceAttrs[FaceDataData.id]:
-                NodeId(Index, BodyId)
-        for NameValue in ('timestamp', 'feature', 'implicit', 'match', 'density', 'lightweight', 'recipe'):
-            NodeId(SolidBodyAttrs[NameValue], BodyId)
-    EncodedLoopCoedges: dict[str, tuple[str, ...]] = {}
-    EncodedCoedgeReversed: dict[str, bool] = {}
+        AssignNodeIdMut(Indices.KEdges[EdgeData.id], Owners.KEdgeBody[EdgeData.id], Config, Nodes)
+    for LoopData in Model.loops:
+        AssignNodeIdMut(Indices.KLoops[LoopData.id], Owners.KFaceBody[Topology.loop_face[LoopData.id]], Config, Nodes)
+    for FaceData in Model.faces:
+        AssignNodeIdMut(Indices.KFaces[FaceData.id], Owners.KFaceBody[FaceData.id], Config, Nodes)
+
+
+# vendor attribute node assignment numbers solidworks face and body chains
+def SetAttrNodesMut(Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndexState, Nodes: EncodeNodeState) -> None:
+    if not Config.KSolidSolid:
+        return
+    BodyId = Model.bodies[0].id
+    for FaceData in Model.faces:
+        for Index in Indices.KSolidFaceAttrs[FaceData.id]:
+            AssignNodeIdMut(Index, BodyId, Config, Nodes)
+    for NameValue in ('timestamp', 'feature', 'implicit', 'match', 'density', 'lightweight', 'recipe'):
+        AssignNodeIdMut(Indices.KSolidBodyAttrs[NameValue], BodyId, Config, Nodes)
+
+
+# node state construction runs topology geometry and vendor numbering phases
+def MakeNodeState(Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState) -> EncodeNodeState:
+    Nodes = EncodeNodeState({}, {BodyData.id: 1 for BodyData in Model.bodies})
+    SetTopoNodesMut(Model, Topology, Config, Indices, Owners, Nodes)
+    SetGeomNodesMut(Model, Topology, Config, Indices, Owners, Nodes)
+    SetAttrNodesMut(Model, Config, Indices, Nodes)
+    return Nodes
+
+
+# loop orientation converts face reversals into encoded coedge traversal directions
+def MakeLoopOrder(Model: BrepModel, Topology: BrepTopology) -> tuple[dict[str, tuple[str, ...]], dict[str, bool]]:
+    EncodedLoops, EncodedReversed = {}, {}
     for LoopData in Model.loops:
         FaceData = Topology.faces[Topology.loop_face[LoopData.id]]
         FaceForward = Topology.IsFaceForward(FaceData.id)
-        EncodedLoopCoedges[LoopData.id] = LoopData.coedge_ids if FaceForward else tuple(Reversed(LoopData.coedge_ids))
+        EncodedLoops[LoopData.id] = LoopData.coedge_ids if FaceForward else tuple(Reversed(LoopData.coedge_ids))
         for CoedgeId in LoopData.coedge_ids:
-            EncodedCoedgeReversed[CoedgeId] = Topology.coedges[CoedgeId].reversed ^ (not FaceForward)
-    VertexFins: dict[str, list[int]] = {Vertex.id: [] for Vertex in Model.vertices}
-    FinVertex: dict[int, str] = {}
-    FinOther: dict[int, int] = {}
-    for EdgeData in Model.edges:
-        UsesValue = Topology.edge_coedges[EdgeData.id]
-        if len(UsesValue) == 1:
-            RealIndex = Coedges[UsesValue[0]]
-            DummyIndex = DummyFins[EdgeData.id]
-            FinOther[RealIndex] = DummyIndex
-            FinOther[DummyIndex] = RealIndex
-            RealValue = Topology.coedges[UsesValue[0]]
-            RealReversed = EncodedCoedgeReversed[RealValue.id]
-            RealVertex = EdgeData.end_vertex_id if RealReversed else EdgeData.start_vertex_id
-            DummyVertex = EdgeData.start_vertex_id if RealReversed else EdgeData.end_vertex_id
-            FinVertex[RealIndex] = RealVertex
-            FinVertex[DummyIndex] = DummyVertex
-            VertexFins[RealVertex].append(RealIndex)
-            VertexFins[DummyVertex].append(DummyIndex)
-        else:
-            for Position, CoedgeIdData in enumerate(UsesValue):
-                Index = Coedges[CoedgeIdData]
-                Other = Coedges[UsesValue[(Position + 1) % len(UsesValue)]]
-                FinOther[Index] = Other
-                CoedgeReversed = EncodedCoedgeReversed[CoedgeIdData]
-                VertexId = EdgeData.end_vertex_id if CoedgeReversed else EdgeData.start_vertex_id
-                FinVertex[Index] = VertexId
-                VertexFins[VertexId].append(Index)
+            EncodedReversed[CoedgeId] = Topology.coedges[CoedgeId].reversed ^ (not FaceForward)
+    return EncodedLoops, EncodedReversed
+
+
+# edge fin construction assigns opposite fins and their incident vertices
+def AddEdgeFinsMut(EdgeData: BrepEdge, Topology: BrepTopology, Indices: EncodeIndexState, EncodedReversed: Mapping[str, bool], VertexFins: dict[str, list[int]], FinVertex: dict[int, str], FinOther: dict[int, int]) -> None:
+    UsesValue = Topology.edge_coedges[EdgeData.id]
+    if len(UsesValue) == 1:
+        RealIndex, DummyIndex = Indices.KCoedges[UsesValue[0]], Indices.KDummyFins[EdgeData.id]
+        FinOther[RealIndex], FinOther[DummyIndex] = DummyIndex, RealIndex
+        RealValue = Topology.coedges[UsesValue[0]]
+        RealVertex = EdgeData.end_vertex_id if EncodedReversed[RealValue.id] else EdgeData.start_vertex_id
+        DummyVertex = EdgeData.start_vertex_id if EncodedReversed[RealValue.id] else EdgeData.end_vertex_id
+        FinVertex[RealIndex], FinVertex[DummyIndex] = RealVertex, DummyVertex
+        VertexFins[RealVertex].append(RealIndex)
+        VertexFins[DummyVertex].append(DummyIndex)
+        return
+    for Position, CoedgeId in enumerate(UsesValue):
+        Index = Indices.KCoedges[CoedgeId]
+        FinOther[Index] = Indices.KCoedges[UsesValue[(Position + 1) % len(UsesValue)]]
+        VertexId = EdgeData.end_vertex_id if EncodedReversed[CoedgeId] else EdgeData.start_vertex_id
+        FinVertex[Index] = VertexId
+        VertexFins[VertexId].append(Index)
+
+
+# requested fin ordering is accepted only when it exactly covers the vertex ring
+def SetFinOrderMut(Model: BrepModel, Indices: EncodeIndexState, VertexFins: dict[str, list[int]]) -> None:
     for Vertex in Model.vertices:
         Requested = Vertex.attributes.get('parasolid.vertex_fins')
         if not isinstance(Requested, (tuple, list)):
             continue
-        OrderData = [FinIndex(Descriptor, Coedges, DummyFins) for Descriptor in Requested]
-        if all((Index is not None for Index in OrderData)) and len(set(OrderData)) == len(OrderData) and (set(OrderData) == set(VertexFins[Vertex.id])):
+        OrderData = [FinIndex(Descriptor, Indices.KCoedges, Indices.KDummyFins) for Descriptor in Requested]
+        IsComplete = all((Index is not None for Index in OrderData)) and len(set(OrderData)) == len(OrderData)
+        if IsComplete and set(OrderData) == set(VertexFins[Vertex.id]):
             VertexFins[Vertex.id] = [Index for Index in OrderData if Index is not None]
-    FirstFaceByBody: dict[str, str] = {}
-    for FaceDataData in Model.faces:
-        FirstFaceByBody.setdefault(FaceBody[FaceDataData.id], FaceDataData.id)
-    Output = bytearray()
-    if PartValue:
-        VTwelveNode(Output, 101, 1)
-        for ValueData in (0, 0, Bodies[Model.bodies[0].id] if Model.bodies else 0, 0, 0, 0, 0):
-            WritePointerMut(Output, ValueData)
-        Output.append(1)
-        WritePointerMut(Output, 0)
-        WriteSignedMut(Output, 0)
-        WriteSignedMut(Output, 0)
+
+
+# fin state construction combines orientation adjacency ordering and body face anchors
+def MakeFinState(Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState) -> EncodeFinState:
+    EncodedLoops, EncodedReversed = MakeLoopOrder(Model, Topology)
+    VertexFins = {Vertex.id: [] for Vertex in Model.vertices}
+    FinVertex, FinOther = {}, {}
+    for EdgeData in Model.edges:
+        AddEdgeFinsMut(EdgeData, Topology, Indices, EncodedReversed, VertexFins, FinVertex, FinOther)
+    SetFinOrderMut(Model, Indices, VertexFins)
+    FirstFaceByBody = {}
+    for FaceData in Model.faces:
+        FirstFaceByBody.setdefault(Owners.KFaceBody[FaceData.id], FaceData.id)
+    return EncodeFinState(EncodedLoops, EncodedReversed, VertexFins, FinVertex, FinOther, FirstFaceByBody)
+
+
+# partition header emission writes the optional root node and fixed framing values
+def WriteHeadMut(Output: bytearray, Model: BrepModel, PartValue: bool, Indices: EncodeIndexState) -> None:
+    if not PartValue:
+        return
+    VTwelveNode(Output, 101, 1)
+    for ValueData in (0, 0, Indices.KBodies[Model.bodies[0].id] if Model.bodies else 0, 0, 0, 0, 0):
+        WritePointerMut(Output, ValueData)
+    Output.append(1)
+    WritePointerMut(Output, 0)
+    WriteSignedMut(Output, 0)
+    WriteSignedMut(Output, 0)
+
+
+# body emission serializes every body root in deterministic model order
+def EmitBodiesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, PartValue: bool, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
     for Position, BodyData in enumerate(Model.bodies):
-        BodyIndex = Bodies[BodyData.id]
-        RegionValues = [Regions[RegionId] for RegionId in BodyData.region_ids]
-        Solid = all((Topology.regions[RegionId].solid for RegionId in BodyData.region_ids))
-        if Solid:
-            RegionValues.insert(0, ExteriorRegions[BodyData.id])
-        BodyShells = [ShellId for ShellId, Owner in ShellBody.items() if Owner == BodyData.id]
-        AttrBase = AttrBases.get(BodyData.id)
-        HighestNodeId = max(NextNodeId[BodyData.id] - 1, 28 if AttrBase is not None else 0)
-        VTwelveNode(Output, 12, BodyIndex)
-        WriteSignedMut(Output, HighestNodeId)
-        for ValueData in (AttrBase + 2 if AttrBase is not None else 0, AttrBase + 3 if AttrBase is not None else 0, 0, 0, 0, 0):
-            WritePointerMut(Output, ValueData)
-        WriteFloatMut(Output, MathValue.nextafter(1000.0, MathValue.inf) if SolidSolid else 1000.0)
-        WriteFloatMut(Output, 1e-08)
-        for ValueData in (0, Bodies[Model.bodies[Position + 1].id] if Position + 1 < len(Model.bodies) else AttrBase + 4 if len(Model.bodies) == 1 and AttrBase is not None else 0, Bodies[Model.bodies[Position - 1].id] if Position else 0):
-            WritePointerMut(Output, ValueData)
-        Output.append(1)
-        WritePointerMut(Output, 1 if PartValue else 0)
-        Output.append(1 if Solid else 3)
-        Output.append(1)
-        WritePointerMut(Output, Shells[BodyShells[0]] if BodyShells else 0)
-        WritePointerMut(Output, Surfaces[BodySurfaces[BodyData.id][0]] if BodySurfaces[BodyData.id] else 0)
-        WritePointerMut(Output, Curves[BodyCurves[BodyData.id][0]] if BodyCurves[BodyData.id] else 0)
-        WritePointerMut(Output, Points[BodyPoints[BodyData.id][0]] if BodyPoints[BodyData.id] else 0)
-        WritePointerMut(Output, RegionValues[0] if RegionValues else 0)
-        WritePointerMut(Output, Edges[BodyEdges[BodyData.id][0]] if BodyEdges[BodyData.id] else 0)
-        WritePointerMut(Output, Vertices[BodyVertices[BodyData.id][0]] if BodyVertices[BodyData.id] else 0)
-        if AttrBase is not None:
-            WriteBodyPrefix(Output, AttrBase, BodyIndex, 11 if SolidSolid else 7)
+        EmitBodyMut(Output, Position, BodyData, Model, Topology, PartValue, Config, Indices, Owners, Nodes)
+
+
+# body record emission writes node links geometry heads and vendor attribute prefixes
+def EmitBodyMut(Output: bytearray, Position: int, BodyData: BrepBody, Model: BrepModel, Topology: BrepTopology, PartValue: bool, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+    BodyIndex = Indices.KBodies[BodyData.id]
+    RegionValues = [Indices.KRegions[RegionId] for RegionId in BodyData.region_ids]
+    Solid = all((Topology.regions[RegionId].solid for RegionId in BodyData.region_ids))
+    if Solid:
+        RegionValues.insert(0, Indices.KExteriorRegions[BodyData.id])
+    BodyShells = [ShellId for ShellId, Owner in Owners.KShellBody.items() if Owner == BodyData.id]
+    AttrBase = Config.KAttrBases.get(BodyData.id)
+    HighestNodeId = max(Nodes.KNextNodeId[BodyData.id] - 1, 28 if AttrBase is not None else 0)
+    VTwelveNode(Output, 12, BodyIndex)
+    WriteSignedMut(Output, HighestNodeId)
+    for ValueData in (AttrBase + 2 if AttrBase is not None else 0, AttrBase + 3 if AttrBase is not None else 0, 0, 0, 0, 0):
+        WritePointerMut(Output, ValueData)
+    WriteFloatMut(Output, MathValue.nextafter(1000.0, MathValue.inf) if Config.KSolidSolid else 1000.0)
+    WriteFloatMut(Output, 1e-08)
+    NextBody = Indices.KBodies[Model.bodies[Position + 1].id] if Position + 1 < len(Model.bodies) else AttrBase + 4 if len(Model.bodies) == 1 and AttrBase is not None else 0
+    PreviousBody = Indices.KBodies[Model.bodies[Position - 1].id] if Position else 0
+    for ValueData in (0, NextBody, PreviousBody):
+        WritePointerMut(Output, ValueData)
+    Output.append(1)
+    WritePointerMut(Output, 1 if PartValue else 0)
+    Output.extend((1 if Solid else 3, 1))
+    Heads = (Indices.KShells[BodyShells[0]] if BodyShells else 0, Indices.KSurfaces[Owners.KBodySurfaces[BodyData.id][0]] if Owners.KBodySurfaces[BodyData.id] else 0, Indices.KCurves[Owners.KBodyCurves[BodyData.id][0]] if Owners.KBodyCurves[BodyData.id] else 0, Indices.KPoints[Owners.KBodyPoints[BodyData.id][0]] if Owners.KBodyPoints[BodyData.id] else 0, RegionValues[0] if RegionValues else 0, Indices.KEdges[Owners.KBodyEdges[BodyData.id][0]] if Owners.KBodyEdges[BodyData.id] else 0, Indices.KVertices[Owners.KBodyVertices[BodyData.id][0]] if Owners.KBodyVertices[BodyData.id] else 0)
+    for ValueData in Heads:
+        WritePointerMut(Output, ValueData)
+    if AttrBase is not None:
+        WritePrefixMut(Output, AttrBase, BodyIndex, 11 if Config.KSolidSolid else 7)
+
+
+# region emission writes exterior complements before each body's native regions
+def EmitRegionsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
     for BodyData in Model.bodies:
         RegionValues = list(BodyData.region_ids)
         Solid = all((Topology.regions[RegionId].solid for RegionId in BodyData.region_ids))
         if Solid:
-            ExteriorIndex = ExteriorRegions[BodyData.id]
-            VTwelveNode(Output, 19, ExteriorIndex)
-            WriteSignedMut(Output, NodeIds[ExteriorIndex])
-            WritePointerMut(Output, 0)
-            WritePointerMut(Output, Bodies[BodyData.id])
-            WritePointerMut(Output, Regions[RegionValues[0]] if RegionValues else 0)
-            WritePointerMut(Output, 0)
-            Exterior = [ExteriorShells[ShellId] for ShellId, Owner in ShellBody.items() if Owner == BodyData.id and ShellId in ExteriorShells]
-            WritePointerMut(Output, Exterior[0] if Exterior else 0)
-            Output.extend(b'V')
+            EmitOuterMut(Output, BodyData.id, RegionValues, Indices, Owners, Nodes)
         for Position, RegionId in enumerate(RegionValues):
-            Region = Topology.regions[RegionId]
-            RegionIndex = Regions[RegionId]
-            ShellIds = [Topology.shell_uses[ShellUseId].shell_id for ShellUseId in Region.shell_use_ids]
-            VTwelveNode(Output, 19, RegionIndex)
-            WriteSignedMut(Output, NodeIds[RegionIndex])
-            WritePointerMut(Output, 0)
-            WritePointerMut(Output, Bodies[BodyData.id])
-            WritePointerMut(Output, Regions[RegionValues[Position + 1]] if Position + 1 < len(RegionValues) else 0)
-            WritePointerMut(Output, ExteriorRegions[BodyData.id] if Solid and Position == 0 else Regions[RegionValues[Position - 1]] if Position else 0)
-            WritePointerMut(Output, Shells[ShellIds[0]] if ShellIds else 0)
-            Output.extend(b'S' if Region.solid else b'V')
-    for Shell in Model.shells:
-        ShellIndex = Shells[Shell.id]
-        RegionId = ShellRegion[Shell.id]
-        Region = Topology.regions[RegionId]
-        BodyId = ShellBody[Shell.id]
-        ShellIds = [Topology.shell_uses[ShellUseId].shell_id for ShellUseId in Region.shell_use_ids]
-        Position = ShellIds.index(Shell.id)
-        FaceIdsData = OrderIds([Topology.face_uses[FaceUseId].face_id for FaceUseId in Shell.face_use_ids], Topology.faces, 'parasolid.face_order')
-        VTwelveNode(Output, 13, ShellIndex)
-        WriteSignedMut(Output, NodeIds[ShellIndex])
-        WritePointerMut(Output, 0)
-        WritePointerMut(Output, Bodies[BodyId])
-        WritePointerMut(Output, Shells[ShellIds[Position + 1]] if Position + 1 < len(ShellIds) else 0)
-        WritePointerMut(Output, Faces[FaceIdsData[0]] if FaceIdsData else 0)
-        WritePointerMut(Output, 0)
-        WritePointerMut(Output, 0)
-        WritePointerMut(Output, Regions[RegionId])
-        WritePointerMut(Output, 0)
-        if Shell.id in ExteriorShells:
-            ExteriorIndex = ExteriorShells[Shell.id]
-            ExteriorIds = [ShellId for ShellId, Owner in ShellBody.items() if Owner == BodyId and ShellId in ExteriorShells]
-            ExteriorPosition = ExteriorIds.index(Shell.id)
-            VTwelveNode(Output, 13, ExteriorIndex)
-            WriteSignedMut(Output, NodeIds[ExteriorIndex])
-            WritePointerMut(Output, 0)
-            WritePointerMut(Output, 0)
-            WritePointerMut(Output, ExteriorShells[ExteriorIds[ExteriorPosition + 1]] if ExteriorPosition + 1 < len(ExteriorIds) else 0)
-            WritePointerMut(Output, 0)
-            WritePointerMut(Output, 0)
-            WritePointerMut(Output, 0)
-            WritePointerMut(Output, ExteriorRegions[BodyId])
-            WritePointerMut(Output, Faces[FaceIdsData[0]] if FaceIdsData else 0)
+            EmitRegionMut(Output, Position, RegionId, RegionValues, BodyData.id, Solid, Topology, Indices, Nodes)
+
+
+# exterior region emission connects solid complement shells to their native body
+def EmitOuterMut(Output: bytearray, BodyId: str, RegionValues: Sequence[str], Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+    ExteriorIndex = Indices.KExteriorRegions[BodyId]
+    VTwelveNode(Output, 19, ExteriorIndex)
+    WriteSignedMut(Output, Nodes.KNodeIds[ExteriorIndex])
+    for ValueData in (0, Indices.KBodies[BodyId], Indices.KRegions[RegionValues[0]] if RegionValues else 0, 0):
+        WritePointerMut(Output, ValueData)
+    Exterior = [Indices.KExteriorShells[ShellId] for ShellId, Owner in Owners.KShellBody.items() if Owner == BodyId and ShellId in Indices.KExteriorShells]
+    WritePointerMut(Output, Exterior[0] if Exterior else 0)
+    Output.extend(b'V')
+
+
+# native region emission writes body sibling and shell relationships
+def EmitRegionMut(Output: bytearray, Position: int, RegionId: str, RegionValues: Sequence[str], BodyId: str, Solid: bool, Topology: BrepTopology, Indices: EncodeIndexState, Nodes: EncodeNodeState) -> None:
+    RegionData = Topology.regions[RegionId]
+    RegionIndex = Indices.KRegions[RegionId]
+    ShellIds = [Topology.shell_uses[ShellUseId].shell_id for ShellUseId in RegionData.shell_use_ids]
+    VTwelveNode(Output, 19, RegionIndex)
+    WriteSignedMut(Output, Nodes.KNodeIds[RegionIndex])
+    Previous = Indices.KExteriorRegions[BodyId] if Solid and Position == 0 else Indices.KRegions[RegionValues[Position - 1]] if Position else 0
+    Values = (0, Indices.KBodies[BodyId], Indices.KRegions[RegionValues[Position + 1]] if Position + 1 < len(RegionValues) else 0, Previous, Indices.KShells[ShellIds[0]] if ShellIds else 0)
+    for ValueData in Values:
+        WritePointerMut(Output, ValueData)
+    Output.extend(b'S' if RegionData.solid else b'V')
+
+
+# shell emission writes native shells followed by optional solid complement shells
+def EmitShellsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+    for ShellData in Model.shells:
+        FaceIds = EmitShellMut(Output, ShellData, Topology, Indices, Owners, Nodes)
+        if ShellData.id in Indices.KExteriorShells:
+            EmitOuterShMut(Output, ShellData.id, FaceIds, Indices, Owners, Nodes)
+
+
+# native shell emission writes region sibling and ordered face relationships
+def EmitShellMut(Output: bytearray, ShellData: BrepShell, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> list[str]:
+    ShellIndex = Indices.KShells[ShellData.id]
+    RegionId = Owners.KShellRegion[ShellData.id]
+    RegionData = Topology.regions[RegionId]
+    BodyId = Owners.KShellBody[ShellData.id]
+    ShellIds = [Topology.shell_uses[ShellUseId].shell_id for ShellUseId in RegionData.shell_use_ids]
+    Position = ShellIds.index(ShellData.id)
+    FaceIds = OrderIds([Topology.face_uses[FaceUseId].face_id for FaceUseId in ShellData.face_use_ids], Topology.faces, 'parasolid.face_order')
+    VTwelveNode(Output, 13, ShellIndex)
+    WriteSignedMut(Output, Nodes.KNodeIds[ShellIndex])
+    Values = (0, Indices.KBodies[BodyId], Indices.KShells[ShellIds[Position + 1]] if Position + 1 < len(ShellIds) else 0, Indices.KFaces[FaceIds[0]] if FaceIds else 0, 0, 0, Indices.KRegions[RegionId], 0)
+    for ValueData in Values:
+        WritePointerMut(Output, ValueData)
+    return FaceIds
+
+
+# exterior shell emission writes complement sibling region and face relationships
+def EmitOuterShMut(Output: bytearray, ShellId: str, FaceIds: Sequence[str], Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
+    BodyId = Owners.KShellBody[ShellId]
+    ExteriorIndex = Indices.KExteriorShells[ShellId]
+    ExteriorIds = [ValueData for ValueData, Owner in Owners.KShellBody.items() if Owner == BodyId and ValueData in Indices.KExteriorShells]
+    Position = ExteriorIds.index(ShellId)
+    VTwelveNode(Output, 13, ExteriorIndex)
+    WriteSignedMut(Output, Nodes.KNodeIds[ExteriorIndex])
+    Values = (0, 0, Indices.KExteriorShells[ExteriorIds[Position + 1]] if Position + 1 < len(ExteriorIds) else 0, 0, 0, 0, Indices.KExteriorRegions[BodyId], Indices.KFaces[FaceIds[0]] if FaceIds else 0)
+    for ValueData in Values:
+        WritePointerMut(Output, ValueData)
+
+
+# surface emission serializes analytic carriers in their perbody linked order
+def EmitSurfacesMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
     for SurfValue in Model.surfaces:
         if isinstance(SurfValue, NurbsSurface):
             raise ParaWriteError(f'Parasolid V12 writer does not support NURBS surface {SurfValue.id}')
         KindValueData, Values = SurfValues(SurfValue)
-        FaceIdsData = SurfFaces[SurfValue.id]
-        BodyId = FaceBody[FaceIdsData[0]]
-        Chain = BodySurfaces[BodyId]
+        FaceIds = Owners.KSurfFaces[SurfValue.id]
+        BodyId = Owners.KFaceBody[FaceIds[0]]
+        Chain = Owners.KBodySurfaces[BodyId]
         Position = Chain.index(SurfValue.id)
-        WriteGeomMut(Output, KindValueData, Surfaces[SurfValue.id], NodeIds[Surfaces[SurfValue.id]], Faces[FaceIdsData[0]], Surfaces[Chain[Position + 1]] if Position + 1 < len(Chain) else 0, Surfaces[Chain[Position - 1]] if Position else 0, Values)
+        WriteGeomMut(Output, KindValueData, Indices.KSurfaces[SurfValue.id], Nodes.KNodeIds[Indices.KSurfaces[SurfValue.id]], Indices.KFaces[FaceIds[0]], Indices.KSurfaces[Chain[Position + 1]] if Position + 1 < len(Chain) else 0, Indices.KSurfaces[Chain[Position - 1]] if Position else 0, Values)
+
+
+# curve emission serializes analytic carriers in their perbody linked order
+def EmitCurvesMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
     for Curve in Model.curves:
         if isinstance(Curve, NurbsCurve):
             raise ParaWriteError(f'Parasolid V12 writer does not support NURBS curve {Curve.id}')
         KindValueData, Values = CurveValues(Curve)
-        EdgeIds = CurveEdges[Curve.id]
-        BodyId = EdgeBody[EdgeIds[0]]
-        Chain = BodyCurves[BodyId]
+        EdgeIds = Owners.KCurveEdges[Curve.id]
+        BodyId = Owners.KEdgeBody[EdgeIds[0]]
+        Chain = Owners.KBodyCurves[BodyId]
         Position = Chain.index(Curve.id)
-        WriteGeomMut(Output, KindValueData, Curves[Curve.id], NodeIds[Curves[Curve.id]], Edges[EdgeIds[0]], Curves[Chain[Position + 1]] if Position + 1 < len(Chain) else 0, Curves[Chain[Position - 1]] if Position else 0, Values)
+        WriteGeomMut(Output, KindValueData, Indices.KCurves[Curve.id], Nodes.KNodeIds[Indices.KCurves[Curve.id]], Indices.KEdges[EdgeIds[0]], Indices.KCurves[Chain[Position + 1]] if Position + 1 < len(Chain) else 0, Indices.KCurves[Chain[Position - 1]] if Position else 0, Values)
+
+
+# point emission writes coordinate records and their perbody sibling links
+def EmitPointsMut(Output: bytearray, Model: BrepModel, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState) -> None:
     for Vertex in Model.vertices:
-        BodyId = VertexBody[Vertex.id]
-        Chain = BodyPoints[BodyId]
+        BodyId = Owners.KVertexBody[Vertex.id]
+        Chain = Owners.KBodyPoints[BodyId]
         Position = Chain.index(Vertex.id)
-        VTwelveNode(Output, 29, Points[Vertex.id])
-        WriteSignedMut(Output, NodeIds[Points[Vertex.id]])
-        WritePointerMut(Output, 0)
-        WritePointerMut(Output, Vertices[Vertex.id])
-        WritePointerMut(Output, Points[Chain[Position + 1]] if Position + 1 < len(Chain) else 0)
-        WritePointerMut(Output, Points[Chain[Position - 1]] if Position else 0)
+        VTwelveNode(Output, 29, Indices.KPoints[Vertex.id])
+        WriteSignedMut(Output, Nodes.KNodeIds[Indices.KPoints[Vertex.id]])
+        Values = (0, Indices.KVertices[Vertex.id], Indices.KPoints[Chain[Position + 1]] if Position + 1 < len(Chain) else 0, Indices.KPoints[Chain[Position - 1]] if Position else 0)
+        for ValueData in Values:
+            WritePointerMut(Output, ValueData)
         Vector(Output, Vertex.point, KLengthScale)
+
+
+# vertex emission writes fin heads tolerance body and perbody sibling links
+def EmitVerticesMut(Output: bytearray, Model: BrepModel, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
     for Vertex in Model.vertices:
-        BodyId = VertexBody[Vertex.id]
-        Chain = BodyVertices[BodyId]
+        BodyId = Owners.KVertexBody[Vertex.id]
+        Chain = Owners.KBodyVertices[BodyId]
         Position = Chain.index(Vertex.id)
-        FinsValue = VertexFins[Vertex.id]
-        VTwelveNode(Output, 18, Vertices[Vertex.id])
-        WriteSignedMut(Output, NodeIds[Vertices[Vertex.id]])
-        WritePointerMut(Output, 0)
-        WritePointerMut(Output, FinsValue[0] if FinsValue else 0)
-        WritePointerMut(Output, Vertices[Chain[Position - 1]] if Position else 0)
-        WritePointerMut(Output, Vertices[Chain[Position + 1]] if Position + 1 < len(Chain) else 0)
-        WritePointerMut(Output, Points[Vertex.id])
+        FinsValue = Fins.KVertexFins[Vertex.id]
+        VTwelveNode(Output, 18, Indices.KVertices[Vertex.id])
+        WriteSignedMut(Output, Nodes.KNodeIds[Indices.KVertices[Vertex.id]])
+        Values = (0, FinsValue[0] if FinsValue else 0, Indices.KVertices[Chain[Position - 1]] if Position else 0, Indices.KVertices[Chain[Position + 1]] if Position + 1 < len(Chain) else 0, Indices.KPoints[Vertex.id])
+        for ValueData in Values:
+            WritePointerMut(Output, ValueData)
         WriteFloatMut(Output, KMissingParam if Vertex.tolerance == 0.0 else Vertex.tolerance * KLengthScale)
-        WritePointerMut(Output, Bodies[BodyId])
+        WritePointerMut(Output, Indices.KBodies[BodyId])
+
+
+# edge emission writes tolerance fin carrier and both linked ordering dimensions
+def EmitEdgesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
     for EdgeData in Model.edges:
-        BodyId = EdgeBody[EdgeData.id]
-        Chain = BodyEdges[BodyId]
+        BodyId = Owners.KEdgeBody[EdgeData.id]
+        Chain = Owners.KBodyEdges[BodyId]
         Position = Chain.index(EdgeData.id)
-        CurveChain = CurveEdges[EdgeData.curve_id]
+        CurveChain = Owners.KCurveEdges[EdgeData.curve_id]
         CurvePosition = CurveChain.index(EdgeData.id)
-        FirstFin = FinIndex(EdgeData.attributes.get('parasolid.first_fin'), Coedges, DummyFins)
+        FirstFin = FinIndex(EdgeData.attributes.get('parasolid.first_fin'), Indices.KCoedges, Indices.KDummyFins)
         if FirstFin is None:
-            FirstFin = Coedges[Topology.edge_coedges[EdgeData.id][0]]
-        VTwelveNode(Output, 16, Edges[EdgeData.id])
-        WriteSignedMut(Output, NodeIds[Edges[EdgeData.id]])
+            FirstFin = Indices.KCoedges[Topology.edge_coedges[EdgeData.id][0]]
+        VTwelveNode(Output, 16, Indices.KEdges[EdgeData.id])
+        WriteSignedMut(Output, Nodes.KNodeIds[Indices.KEdges[EdgeData.id]])
         WritePointerMut(Output, 0)
         WriteFloatMut(Output, KMissingParam if EdgeData.tolerance == 0.0 else EdgeData.tolerance * KLengthScale)
-        WritePointerMut(Output, FirstFin)
-        WritePointerMut(Output, Edges[Chain[Position - 1]] if Position else 0)
-        WritePointerMut(Output, Edges[Chain[Position + 1]] if Position + 1 < len(Chain) else 0)
-        WritePointerMut(Output, Curves[EdgeData.curve_id])
-        WritePointerMut(Output, Edges[CurveChain[CurvePosition + 1]] if CurvePosition + 1 < len(CurveChain) else 0)
-        WritePointerMut(Output, Edges[CurveChain[CurvePosition - 1]] if CurvePosition else 0)
-        WritePointerMut(Output, Bodies[BodyId])
+        Values = (FirstFin, Indices.KEdges[Chain[Position - 1]] if Position else 0, Indices.KEdges[Chain[Position + 1]] if Position + 1 < len(Chain) else 0, Indices.KCurves[EdgeData.curve_id], Indices.KEdges[CurveChain[CurvePosition + 1]] if CurvePosition + 1 < len(CurveChain) else 0, Indices.KEdges[CurveChain[CurvePosition - 1]] if CurvePosition else 0, Indices.KBodies[BodyId])
+        for ValueData in Values:
+            WritePointerMut(Output, ValueData)
+
+
+# coedge emission writes oriented loop neighbors opposite fins and vertex rings
+def EmitCoedgesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Owners: EncodeOwnerState, Fins: EncodeFinState) -> None:
     for Coedge in Model.coedges:
-        LoopDataData = Topology.loops[Topology.coedge_loop[Coedge.id]]
-        FaceDataData = Topology.faces[Topology.loop_face[LoopDataData.id]]
-        Region = Topology.regions[FaceRegion[FaceDataData.id]]
-        LoopCoedges = EncodedLoopCoedges[LoopDataData.id]
+        LoopData = Topology.loops[Topology.coedge_loop[Coedge.id]]
+        FaceData = Topology.faces[Topology.loop_face[LoopData.id]]
+        RegionData = Topology.regions[Owners.KFaceRegion[FaceData.id]]
+        LoopCoedges = Fins.KEncodedLoopCoedges[LoopData.id]
         Position = LoopCoedges.index(Coedge.id)
-        PreviousId = LoopCoedges[Position - 1]
-        NextId = LoopCoedges[(Position + 1) % len(LoopCoedges)]
-        FinIndexData = Coedges[Coedge.id]
-        WriteFinMut(Output, FinIndexData, 0, Loops[LoopDataData.id], Coedges[PreviousId] if Region.solid else Coedges[NextId], Coedges[NextId] if Region.solid else Coedges[PreviousId], Vertices[FinVertex[FinIndexData]], FinOther[FinIndexData], Edges[Coedge.edge_id], 0, NextFinAtVertex(FinIndexData, VertexFins), not EncodedCoedgeReversed[Coedge.id])
-    for EdgeData in DummyEdges:
-        FinIndexData = DummyFins[EdgeData.id]
+        PreviousId, NextId = LoopCoedges[Position - 1], LoopCoedges[(Position + 1) % len(LoopCoedges)]
+        FinIndexData = Indices.KCoedges[Coedge.id]
+        PreviousFin = Indices.KCoedges[PreviousId] if RegionData.solid else Indices.KCoedges[NextId]
+        NextFin = Indices.KCoedges[NextId] if RegionData.solid else Indices.KCoedges[PreviousId]
+        WriteFinMut(Output, FinIndexData, 0, Indices.KLoops[LoopData.id], PreviousFin, NextFin, Indices.KVertices[Fins.KFinVertex[FinIndexData]], Fins.KFinOther[FinIndexData], Indices.KEdges[Coedge.edge_id], 0, NextFinAtVertex(FinIndexData, Fins.KVertexFins), not Fins.KEncodedCoedgeReversed[Coedge.id])
+
+
+# dummy fin emission closes sheet edges that have only one real coedge
+def EmitDummyMut(Output: bytearray, Config: EncodeConfig, Topology: BrepTopology, Indices: EncodeIndexState, Fins: EncodeFinState) -> None:
+    for EdgeData in Config.KDummyEdges:
+        FinIndexData = Indices.KDummyFins[EdgeData.id]
         RealValue = Topology.coedges[Topology.edge_coedges[EdgeData.id][0]]
-        WriteFinMut(Output, FinIndexData, 0, 0, 0, 0, Vertices[FinVertex[FinIndexData]], FinOther[FinIndexData], Edges[EdgeData.id], 0, NextFinAtVertex(FinIndexData, VertexFins), EncodedCoedgeReversed[RealValue.id])
-    for LoopDataData in Model.loops:
-        FaceDataData = Topology.faces[Topology.loop_face[LoopDataData.id]]
-        Position = FaceDataData.loop_ids.index(LoopDataData.id)
-        NextLoopId = FaceDataData.loop_ids[Position + 1] if Position + 1 < len(FaceDataData.loop_ids) else ''
-        VTwelveNode(Output, 15, Loops[LoopDataData.id])
-        WriteSignedMut(Output, NodeIds[Loops[LoopDataData.id]])
-        for ValueData in (0, Coedges[EncodedLoopCoedges[LoopDataData.id][0]], Faces[FaceDataData.id], Loops.get(NextLoopId, 0)):
+        WriteFinMut(Output, FinIndexData, 0, 0, 0, 0, Indices.KVertices[Fins.KFinVertex[FinIndexData]], Fins.KFinOther[FinIndexData], Indices.KEdges[EdgeData.id], 0, NextFinAtVertex(FinIndexData, Fins.KVertexFins), Fins.KEncodedCoedgeReversed[RealValue.id])
+
+
+# loop emission writes first fin face and sibling loop relationships
+def EmitLoopsMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Indices: EncodeIndexState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
+    for LoopData in Model.loops:
+        FaceData = Topology.faces[Topology.loop_face[LoopData.id]]
+        Position = FaceData.loop_ids.index(LoopData.id)
+        NextLoopId = FaceData.loop_ids[Position + 1] if Position + 1 < len(FaceData.loop_ids) else ''
+        VTwelveNode(Output, 15, Indices.KLoops[LoopData.id])
+        WriteSignedMut(Output, Nodes.KNodeIds[Indices.KLoops[LoopData.id]])
+        for ValueData in (0, Indices.KCoedges[Fins.KEncodedLoopCoedges[LoopData.id][0]], Indices.KFaces[FaceData.id], Indices.KLoops.get(NextLoopId, 0)):
             WritePointerMut(Output, ValueData)
-    for FaceDataData in Model.faces:
-        Shell = Topology.shells[FaceShell[FaceDataData.id]]
-        FaceIdsData = OrderIds([Topology.face_uses[FaceUseId].face_id for FaceUseId in Shell.face_use_ids], Topology.faces, 'parasolid.face_order')
-        Position = FaceIdsData.index(FaceDataData.id)
-        FrontFaceIds = OrderIds(FaceIdsData, Topology.faces, 'parasolid.front_face_order')
-        FrontPosition = FrontFaceIds.index(FaceDataData.id)
-        SurfChain = SurfFaces[FaceDataData.surface_id]
-        SurfPosition = SurfChain.index(FaceDataData.id)
-        Region = Topology.regions[FaceRegion[FaceDataData.id]]
-        VTwelveNode(Output, 14, Faces[FaceDataData.id])
-        WriteSignedMut(Output, NodeIds[Faces[FaceDataData.id]])
-        AttrBase = AttrBases.get(FaceBody[FaceDataData.id])
-        FirstFaceId = FirstFaceByBody.get(FaceBody[FaceDataData.id])
-        WritePointerMut(Output, SolidFaceAttrs[FaceDataData.id][0] if FaceDataData.id in SolidFaceAttrs else AttrBase + 32 if AttrBase is not None and FaceDataData.id == FirstFaceId else 0)
-        WriteFloatMut(Output, KMissingParam if FaceDataData.tolerance == 0.0 else FaceDataData.tolerance * KLengthScale)
-        for ValueData in (Faces[FaceIdsData[Position + 1]] if Position + 1 < len(FaceIdsData) else 0, Faces[FaceIdsData[Position - 1]] if Position else 0, Loops[FaceDataData.loop_ids[0]], Shells[Shell.id], Surfaces[FaceDataData.surface_id]):
-            WritePointerMut(Output, ValueData)
-        Output.extend(b'+' if FaceDataData.same_sense else b'-')
-        WritePointerMut(Output, Faces[SurfChain[SurfPosition + 1]] if SurfPosition + 1 < len(SurfChain) else 0)
-        WritePointerMut(Output, Faces[SurfChain[SurfPosition - 1]] if SurfPosition else 0)
-        WritePointerMut(Output, Faces[FrontFaceIds[FrontPosition + 1]] if FrontPosition + 1 < len(FrontFaceIds) else 0)
-        WritePointerMut(Output, Faces[FrontFaceIds[FrontPosition - 1]] if FrontPosition else 0)
-        WritePointerMut(Output, ExteriorShells[Shell.id] if Region.solid else Shells[Shell.id])
+
+
+# face chain discovery gathers every linked ordering position and ownership record
+def FaceChainData(FaceData: BrepFace, Topology: BrepTopology, Config: EncodeConfig, Owners: EncodeOwnerState, Fins: EncodeFinState) -> tuple[object, ...]:
+    ShellData = Topology.shells[Owners.KFaceShell[FaceData.id]]
+    FaceIds = OrderIds([Topology.face_uses[FaceUseId].face_id for FaceUseId in ShellData.face_use_ids], Topology.faces, 'parasolid.face_order')
+    Position = FaceIds.index(FaceData.id)
+    FrontFaceIds = OrderIds(FaceIds, Topology.faces, 'parasolid.front_face_order')
+    FrontPosition = FrontFaceIds.index(FaceData.id)
+    SurfChain = Owners.KSurfFaces[FaceData.surface_id]
+    SurfPosition = SurfChain.index(FaceData.id)
+    RegionData = Topology.regions[Owners.KFaceRegion[FaceData.id]]
+    AttrBase = Config.KAttrBases.get(Owners.KFaceBody[FaceData.id])
+    FirstFaceId = Fins.KFirstFaceByBody.get(Owners.KFaceBody[FaceData.id])
+    return ShellData, FaceIds, Position, FrontFaceIds, FrontPosition, SurfChain, SurfPosition, RegionData, AttrBase, FirstFaceId
+
+
+# face emission serializes tolerance loops carriers and three linked ordering dimensions
+def EmitFaceMut(Output: bytearray, FaceData: BrepFace, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
+    ShellData, FaceIds, Position, FrontFaceIds, FrontPosition, SurfChain, SurfPosition, RegionData, AttrBase, FirstFaceId = FaceChainData(FaceData, Topology, Config, Owners, Fins)
+    VTwelveNode(Output, 14, Indices.KFaces[FaceData.id])
+    WriteSignedMut(Output, Nodes.KNodeIds[Indices.KFaces[FaceData.id]])
+    FaceAttr = Indices.KSolidFaceAttrs[FaceData.id][0] if FaceData.id in Indices.KSolidFaceAttrs else AttrBase + 32 if AttrBase is not None and FaceData.id == FirstFaceId else 0
+    WritePointerMut(Output, FaceAttr)
+    WriteFloatMut(Output, KMissingParam if FaceData.tolerance == 0.0 else FaceData.tolerance * KLengthScale)
+    Values = (Indices.KFaces[FaceIds[Position + 1]] if Position + 1 < len(FaceIds) else 0, Indices.KFaces[FaceIds[Position - 1]] if Position else 0, Indices.KLoops[FaceData.loop_ids[0]], Indices.KShells[ShellData.id], Indices.KSurfaces[FaceData.surface_id])
+    for ValueData in Values:
+        WritePointerMut(Output, ValueData)
+    Output.extend(b'+' if FaceData.same_sense else b'-')
+    Values = (Indices.KFaces[SurfChain[SurfPosition + 1]] if SurfPosition + 1 < len(SurfChain) else 0, Indices.KFaces[SurfChain[SurfPosition - 1]] if SurfPosition else 0, Indices.KFaces[FrontFaceIds[FrontPosition + 1]] if FrontPosition + 1 < len(FrontFaceIds) else 0, Indices.KFaces[FrontFaceIds[FrontPosition - 1]] if FrontPosition else 0, Indices.KExteriorShells[ShellData.id] if RegionData.solid else Indices.KShells[ShellData.id])
+    for ValueData in Values:
+        WritePointerMut(Output, ValueData)
+
+
+# face collection emission delegates each record after shared state construction
+def EmitFacesMut(Output: bytearray, Model: BrepModel, Topology: BrepTopology, Config: EncodeConfig, Indices: EncodeIndexState, Owners: EncodeOwnerState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
+    for FaceData in Model.faces:
+        EmitFaceMut(Output, FaceData, Topology, Config, Indices, Owners, Nodes, Fins)
+
+
+# vendor attribute emission writes solidworks body or sheet compatibility records
+def EmitVendorMut(Output: bytearray, Model: BrepModel, Config: EncodeConfig, Indices: EncodeIndexState, Nodes: EncodeNodeState, Fins: EncodeFinState) -> None:
     for BodyData in Model.bodies:
-        AttrBase = AttrBases.get(BodyData.id)
-        FirstFaceId = FirstFaceByBody.get(BodyData.id)
+        AttrBase = Config.KAttrBases.get(BodyData.id)
+        FirstFaceId = Fins.KFirstFaceByBody.get(BodyData.id)
         if AttrBase is None or FirstFaceId is None:
             continue
-        if SolidSolid:
-            WriteSolidAttrs(Output, AttrBase, Bodies[BodyData.id], tuple(((FaceDataData.id, Faces[FaceDataData.id], SolidFaceAttrs[FaceDataData.id], SolidFaceValues[FaceDataData.id], FaceDataData.attributes.get('solidworks.unchanged_id'), FaceDataData.attributes) for FaceDataData in Model.faces)), SolidFaceDefinitions, SolidFaceDefNext, SolidFaceIds, SolidBodyAttrs, SolidBodyValues, SolidBodyDefinitions, SolidBodyDefNext, SolidBodyIds, NodeIds, FeatureIds[BodyData.id])
-            continue
-        WriteBodySuffix(Output, AttrBase, Bodies[BodyData.id], Faces[FirstFaceId], FeatureIds[BodyData.id])
-    WriteTagMut(Output, 1)
-    WritePointerMut(Output, 0)
-    if SolidTri and (not PartValue):
-        Output = bytearray(OrderTriRecords(bytes(Output)))
-    return (bytes(Output), Sheet)
+        if Config.KSolidSolid:
+            Faces = tuple(((FaceData.id, Indices.KFaces[FaceData.id], Indices.KSolidFaceAttrs[FaceData.id], Indices.KSolidFaceValues[FaceData.id], FaceData.attributes.get('solidworks.unchanged_id'), FaceData.attributes) for FaceData in Model.faces))
+            WriteSolidAttrs(Output, AttrBase, Indices.KBodies[BodyData.id], Faces, Indices.KSolidFaceDefinitions, Indices.KSolidFaceDefNext, Indices.KSolidFaceIds, Indices.KSolidBodyAttrs, Indices.KSolidBodyValues, Indices.KSolidBodyDefinitions, Indices.KSolidBodyDefNext, Indices.KSolidBodyIds, Nodes.KNodeIds, Config.KFeatureIds[BodyData.id])
+        else:
+            WriteBodySuffix(Output, AttrBase, Indices.KBodies[BodyData.id], Indices.KFaces[FirstFaceId], Config.KFeatureIds[BodyData.id])
 
 # this declaration exists because focused behavior needs one stable owner
 def WritePrefixMut(Output: bytearray, BaseValue: int, BodyData: int, AttrCount: int) -> None:
@@ -4464,4 +4734,4 @@ KLegacyExportIndia = {
 KLegacyExportGroups = (KLegacyExportAlpha, KLegacyExportBravo, KLegacyExportCharlie, KLegacyExportDelta, KLegacyExportEcho, KLegacyExportFoxtrot, KLegacyExportGolf, KLegacyExportHotel, KLegacyExportIndia)
 
 for ExportGroup in KLegacyExportGroups:
-    globals().update(ExportGroup)
+    globals().update(ExportGroup
