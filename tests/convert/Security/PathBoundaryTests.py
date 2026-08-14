@@ -13,7 +13,7 @@ from pathlib import Path as PathInfo
 import pytest as Pytest
 
 import convert.Security.ProgramBoundary as ProgramBoundary
-from convert.Security.PathBoundary import ResolveWithin, UnsafePath
+from convert.Security.PathBoundary import ResolveWithin, UnsafePath, ValidateLabel
 
 
 # valid nested files prove normalization preserves intended local access
@@ -47,3 +47,10 @@ def TestBlocksProgram(TmpPath: PathInfo, MonkeyPatch: Pytest.MonkeyPatch) -> Non
     MonkeyPatch.setattr(ProgramBoundary, "KFreecadRoots", (TmpPath,))
     with Pytest.raises(UnsafePath):
         ProgramBoundary.GetFreecadPath()
+
+
+# debugger labels reject metacharacters before they enter generated command scripts
+def TestBlocksLabel() -> None:
+    assert ValidateLabel("Boss-Cut") == "Boss-Cut"
+    with Pytest.raises(ValueError):
+        ValidateLabel("Boss;g")

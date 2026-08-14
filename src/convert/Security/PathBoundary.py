@@ -37,6 +37,11 @@ def ResolveWithin(
     return ResultPath
 
 
+# local paths need one containment primitive before applying file type rules
+def ResolveLocal(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
+    return ResolveWithin(PathValue, PathInfo.cwd())
+
+
 # tool inputs stay inside the operator selected working directory
 def ResolveInput(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
     return ResolveWithin(PathValue, PathInfo.cwd(), True)
@@ -44,7 +49,7 @@ def ResolveInput(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
 
 # tool output paths stay inside the operator selected working directory
 def ResolveOutput(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
-    return ResolveWithin(PathValue, PathInfo.cwd())
+    return ResolveLocal(PathValue)
 
 
 # tool directory inputs stay inside the operator selected working directory
@@ -58,3 +63,13 @@ def ResolveFolder(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
 # test artifacts stay inside the operating system managed temporary root
 def ResolveTemp(PathValue: str | OsLayer.PathLike[str]) -> PathInfo:
     return ResolveWithin(PathValue, Tempfile.gettempdir())
+
+
+# debugger labels enter command scripts so their character set must stay inert
+def ValidateLabel(LabelText: str) -> str:
+    IsSafe = 1 <= len(LabelText) <= 64 and all(
+        (CharText.isalnum() or CharText in "-_") for CharText in LabelText
+    )
+    if not IsSafe:
+        raise ValueError("debugger label contains unsafe command characters")
+    return LabelText

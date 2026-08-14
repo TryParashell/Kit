@@ -9,10 +9,12 @@
 from convert.Security.PathBoundary import (
     ResolveFolder,
     ResolveInput,
+    ResolveLocal,
     ResolveOutput,
     ResolveTemp,
     ResolveWithin,
     UnsafePath,
+    ValidateLabel,
 )
 from convert.Security.ProgramBoundary import GetFreecadPath
 
@@ -22,8 +24,10 @@ __all__ = [
     "GetFreecadPath",
     "ResolveFolder",
     "ResolveInput",
+    "ResolveLocal",
     "ResolveOutput",
     "ResolveTemp",
     "ResolveWithin",
     "UnsafePath",
+    "ValidateLabel",
 ]
