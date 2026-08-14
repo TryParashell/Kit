@@ -3682,54 +3682,82 @@ def ProveCurveRange(Curve: object, Start: VectorThree, EndValue: VectorThree, St
     TrimParams = getattr(Curve, 'attributes', {}).get('trim_parameters')
     TrimPoints = getattr(Curve, 'attributes', {}).get('trim_points')
     if TrimParams is not None or TrimPoints is not None:
-        if not isinstance(TrimParams, tuple) or len(TrimParams) != 2 or (not all((type(ValueData) is float and MathValue.isfinite(ValueData) for ValueData in TrimParams))) or (not isinstance(TrimPoints, tuple)) or (len(TrimPoints) != 2) or (not all((isinstance(ValueData, VectorThree) for ValueData in TrimPoints))):
-            raise ValueError('trimmed curve range is invalid')
-        Direct = Distance(Start, TrimPoints[0]) <= max(StartTol, 1e-07) and Distance(EndValue, TrimPoints[1]) <= max(EndTol, 1e-07)
-        Reverse = Distance(Start, TrimPoints[1]) <= max(StartTol, 1e-07) and Distance(EndValue, TrimPoints[0]) <= max(EndTol, 1e-07)
-        if Direct == Reverse:
-            raise ValueError('trimmed curve endpoints are not uniquely bound')
-        return TrimParams if Direct else tuple(Reversed(TrimParams))
+        return TrimmedRange(TrimParams, TrimPoints, Start, EndValue, StartTol, EndTol)
     if isinstance(Curve, LineCurve):
-        StartParam = DotProduct(Subtract(Start, Curve.origin), Curve.direction)
-        EndParam = DotProduct(Subtract(EndValue, Curve.origin), Curve.direction)
-        if Distance(LinePoint(Curve, StartParam), Start) > 1e-07 or Distance(LinePoint(Curve, EndParam), EndValue) > 1e-07:
-            raise ValueError('line endpoints do not lie on carrier')
-        return (StartParam, EndParam)
+        return LineCurveRange(Curve, Start, EndValue)
     if isinstance(Curve, (CircleCurve, EllipseCurve)):
-        StartParam = ConicParam(Curve, Start)
-        EndParam = ConicParam(Curve, EndValue)
-        if Distance(Start, EndValue) <= 1e-07:
-            return (StartParam, StartParam + MathValue.tau)
-        while EndParam <= StartParam:
-            EndParam += MathValue.tau
-        return (StartParam, EndParam)
+        return ConicCurveRange(Curve, Start, EndValue)
     if isinstance(Curve, NurbsCurve):
-        Domain = CurveParamRange(Curve)
-        if Domain is None:
-            raise ValueError('NURBS curve domain is not provable')
-        Lower, Upper, Ignored, Ignored = Domain
-        LowerPoint = NurbsCurvePoint(Curve, Lower)
-        UpperPoint = NurbsCurvePoint(Curve, Upper)
-        if LowerPoint is None or UpperPoint is None:
-            raise ValueError('NURBS curve endpoints are not evaluable')
-        Direct = Distance(Start, LowerPoint) <= 1e-07 and Distance(EndValue, UpperPoint) <= 1e-07
-        Reverse = Distance(Start, UpperPoint) <= 1e-07 and Distance(EndValue, LowerPoint) <= 1e-07
-        if Direct == Reverse:
-            raise ValueError('NURBS curve endpoints do not identify its range')
-        return (Lower, Upper) if Direct else (Upper, Lower)
+        return NurbsCurveRange(Curve, Start, EndValue)
     if isinstance(Curve, IntersectionCurve):
-        Params = Curve.attributes.get('chart_parameters')
-        if not isinstance(Params, tuple) or len(Params) != len(Curve.samples) or len(Params) < 2 or (not all((isinstance(ValueData, float) and MathValue.isfinite(ValueData) for ValueData in Params))) or (not all((LeftValue < Right for LeftValue, Right in zip(Params, Params[1:])))):
-            raise ValueError('intersection chart parameters are not provable')
-        TolValue = max(Curve.tolerance, 1e-07)
-        StartParam = InterChartParam(Curve.samples, Params, Start, TolValue)
-        EndParam = InterChartParam(Curve.samples, Params, EndValue, TolValue)
-        if StartParam is None or EndParam is None:
-            raise ValueError('intersection endpoints do not identify a chart range')
-        if StartParam == EndParam and Distance(Start, EndValue) > TolValue:
-            raise ValueError('intersection chart range collapses distinct endpoints')
-        return (StartParam, EndParam)
+        return InterCurveRange(Curve, Start, EndValue)
     raise ValueError('curve parameter range is not provable')
+
+
+# trimmed range validation binds stored parameters to uniquely matched endpoints
+def TrimmedRange(TrimParams: object, TrimPoints: object, Start: VectorThree, EndValue: VectorThree, StartTol: float, EndTol: float) -> tuple[float, float]:
+    if not isinstance(TrimParams, tuple) or len(TrimParams) != 2 or not all((type(ValueData) is float and MathValue.isfinite(ValueData) for ValueData in TrimParams)):
+        raise ValueError('trimmed curve range is invalid')
+    if not isinstance(TrimPoints, tuple) or len(TrimPoints) != 2 or not all((isinstance(ValueData, VectorThree) for ValueData in TrimPoints)):
+        raise ValueError('trimmed curve range is invalid')
+    Direct = Distance(Start, TrimPoints[0]) <= max(StartTol, 1e-07) and Distance(EndValue, TrimPoints[1]) <= max(EndTol, 1e-07)
+    Reverse = Distance(Start, TrimPoints[1]) <= max(StartTol, 1e-07) and Distance(EndValue, TrimPoints[0]) <= max(EndTol, 1e-07)
+    if Direct == Reverse:
+        raise ValueError('trimmed curve endpoints are not uniquely bound')
+    return TrimParams if Direct else tuple(Reversed(TrimParams))
+
+
+# line range recovery projects and verifies both endpoints on the carrier
+def LineCurveRange(Curve: LineCurve, Start: VectorThree, EndValue: VectorThree) -> tuple[float, float]:
+    StartParam = DotProduct(Subtract(Start, Curve.origin), Curve.direction)
+    EndParam = DotProduct(Subtract(EndValue, Curve.origin), Curve.direction)
+    if Distance(LinePoint(Curve, StartParam), Start) > 1e-07 or Distance(LinePoint(Curve, EndParam), EndValue) > 1e-07:
+        raise ValueError('line endpoints do not lie on carrier')
+    return StartParam, EndParam
+
+
+# conic range recovery unwraps the endpoint angles in traversal order
+def ConicCurveRange(Curve: CircleCurve | EllipseCurve, Start: VectorThree, EndValue: VectorThree) -> tuple[float, float]:
+    StartParam = ConicParam(Curve, Start)
+    EndParam = ConicParam(Curve, EndValue)
+    if Distance(Start, EndValue) <= 1e-07:
+        return StartParam, StartParam + MathValue.tau
+    while EndParam <= StartParam:
+        EndParam += MathValue.tau
+    return StartParam, EndParam
+
+
+# nurbs range recovery matches endpoints against the provable knot domain
+def NurbsCurveRange(Curve: NurbsCurve, Start: VectorThree, EndValue: VectorThree) -> tuple[float, float]:
+    Domain = CurveParamRange(Curve)
+    if Domain is None:
+        raise ValueError('NURBS curve domain is not provable')
+    Lower, Upper, Ignored, Ignored = Domain
+    LowerPoint, UpperPoint = NurbsCurvePoint(Curve, Lower), NurbsCurvePoint(Curve, Upper)
+    if LowerPoint is None or UpperPoint is None:
+        raise ValueError('NURBS curve endpoints are not evaluable')
+    Direct = Distance(Start, LowerPoint) <= 1e-07 and Distance(EndValue, UpperPoint) <= 1e-07
+    Reverse = Distance(Start, UpperPoint) <= 1e-07 and Distance(EndValue, LowerPoint) <= 1e-07
+    if Direct == Reverse:
+        raise ValueError('NURBS curve endpoints do not identify its range')
+    return (Lower, Upper) if Direct else (Upper, Lower)
+
+
+# intersection range recovery locates endpoints along monotonic sampled parameters
+def InterCurveRange(Curve: IntersectionCurve, Start: VectorThree, EndValue: VectorThree) -> tuple[float, float]:
+    Params = Curve.attributes.get('chart_parameters')
+    if not isinstance(Params, tuple) or len(Params) != len(Curve.samples) or len(Params) < 2:
+        raise ValueError('intersection chart parameters are not provable')
+    if not all((isinstance(ValueData, float) and MathValue.isfinite(ValueData) for ValueData in Params)) or not all((LeftValue < Right for LeftValue, Right in zip(Params, Params[1:]))):
+        raise ValueError('intersection chart parameters are not provable')
+    TolValue = max(Curve.tolerance, 1e-07)
+    StartParam = InterChartParam(Curve.samples, Params, Start, TolValue)
+    EndParam = InterChartParam(Curve.samples, Params, EndValue, TolValue)
+    if StartParam is None or EndParam is None:
+        raise ValueError('intersection endpoints do not identify a chart range')
+    if StartParam == EndParam and Distance(Start, EndValue) > TolValue:
+        raise ValueError('intersection chart range collapses distinct endpoints')
+    return StartParam, EndParam
 
 # this declaration exists because focused behavior needs one stable owner
 def InterChartParam(Samples: Sequence[VectorThree], Params: Sequence[float], Point: VectorThree, TolValue: float) -> float | None:
@@ -3799,6 +3827,17 @@ def Distance(LeftValue: VectorThree, Right: VectorThree) -> float:
 
 # this declaration exists because focused behavior needs one stable owner
 def DeriveBodyTree(FaceLoops: Mapping[int, tuple[tuple[int, tuple[int, ...]], ...]], Tables: RecordTables) -> tuple[tuple[BrepFaceUse, ...], tuple[BrepShell, ...], tuple[BrepShellUse, ...], tuple[BrepRegion, ...], tuple[BrepBody, ...]]:
+    FacesByEdge, EdgesByFace = FaceEdgeLinks(FaceLoops, Tables)
+    Components = FaceComponents(FaceLoops, FacesByEdge)
+    FaceUses, Shells, ShellUses, Regions, RegionIds = MakeDerivedTree(Components, EdgesByFace)
+    if not RegionIds:
+        raise ValueError('body hierarchy is absent')
+    Bodies = (BrepBody('sldprt:brep:body:derived:1', tuple(RegionIds)),)
+    return tuple(FaceUses), tuple(Shells), tuple(ShellUses), tuple(Regions), Bodies
+
+
+# face edge linking gathers adjacency evidence from nonisolated coedges
+def FaceEdgeLinks(FaceLoops: Mapping[int, tuple[tuple[int, tuple[int, ...]], ...]], Tables: RecordTables) -> tuple[dict[int, set[int]], dict[int, list[int]]]:
     FacesByEdge: dict[int, set[int]] = {}
     EdgesByFace: dict[int, list[int]] = {}
     for FaceAttr, Loops in FaceLoops.items():
@@ -3812,6 +3851,11 @@ def DeriveBodyTree(FaceLoops: Mapping[int, tuple[tuple[int, tuple[int, ...]], ..
                 FaceEdges.append(EdgeAttr)
                 FacesByEdge.setdefault(EdgeAttr, set()).add(FaceAttr)
         EdgesByFace[FaceAttr] = FaceEdges
+    return FacesByEdge, EdgesByFace
+
+
+# face component discovery groups topology connected through shared edges
+def FaceComponents(FaceLoops: Mapping[int, object], FacesByEdge: Mapping[int, set[int]]) -> list[tuple[int, ...]]:
     Neighbors = {FaceAttr: set() for FaceAttr in FaceLoops}
     for FaceAttrs in FacesByEdge.values():
         for FaceAttr in FaceAttrs:
@@ -3830,6 +3874,11 @@ def DeriveBodyTree(FaceLoops: Mapping[int, tuple[tuple[int, tuple[int, ...]], ..
             Pending.extend(Neighbors[FaceAttr] - Component)
         Remain -= Component
         Components.append(tuple(sorted(Component)))
+    return Components
+
+
+# derived hierarchy construction creates one shell and region per face component
+def MakeDerivedTree(Components: Sequence[Sequence[int]], EdgesByFace: Mapping[int, Sequence[int]]) -> tuple[list[BrepFaceUse], list[BrepShell], list[BrepShellUse], list[BrepRegion], list[str]]:
     FaceUses = []
     Shells = []
     ShellUses = []
@@ -3852,9 +3901,7 @@ def DeriveBodyTree(FaceLoops: Mapping[int, tuple[tuple[int, tuple[int, ...]], ..
         ShellUses.append(BrepShellUse(ShellUseId, ShellId))
         Regions.append(BrepRegion(RegionId, (ShellUseId,), Solid))
         RegionIds.append(RegionId)
-    if not RegionIds:
-        raise ValueError('body hierarchy is absent')
-    return (tuple(FaceUses), tuple(Shells), tuple(ShellUses), tuple(Regions), (BrepBody('sldprt:brep:body:derived:1', tuple(RegionIds)),))
+    return FaceUses, Shells, ShellUses, Regions, RegionIds
 
 # this declaration exists because focused behavior needs one stable owner
 def BuildBodyTree(Entities: Mapping[int, EntityRecord], OwnerFaces: Mapping[int, int], ExpectedFaces: set[int]) -> tuple[tuple[BrepFaceUse, ...], tuple[BrepShell, ...], tuple[BrepShellUse, ...], tuple[BrepRegion, ...], tuple[BrepBody, ...]]:
@@ -3867,56 +3914,73 @@ def BuildBodyTree(Entities: Mapping[int, EntityRecord], OwnerFaces: Mapping[int,
     ShellUses: list[BrepShellUse] = []
     Regions: list[BrepRegion] = []
     Bodies: list[BrepBody] = []
-
-    # this callback exists because local behavior needs one focused transformation
     for RootValue in sorted(Roots, key=lambda ValueData: ValueData.attribute):
-        RegionIds: list[str] = []
-        for RegionAttr in Nonnull(RootValue.references):
-            Region = Entities.get(RegionAttr)
-            if Region is None or Region.discriminator not in {27, 29}:
-                raise ValueError('unsupported body region hierarchy')
-            Solid = Region.discriminator == 27
-            NativeShells: list[tuple[int, tuple[int, ...]]] = []
-            if Solid:
-                for LumpAttr in Nonnull(Region.references):
-                    LumpValue = RequireEntity(Entities, LumpAttr, 31)
-                    ShellNode = RequireEntity(Entities, SingleRef(LumpValue), 33)
-                    ShellLink = RequireEntity(Entities, SingleRef(ShellNode), 35)
-                    FaceOwners = FaceOwnerChain(Entities, SingleRef(ShellLink), 19)
-                    NativeShells.append((LumpAttr, FaceOwners))
-            else:
-                HeadValue = SingleRef(Region)
-                NativeShells.append((Region.attribute, FaceOwnerChain(Entities, HeadValue, 21)))
-            ShellUseIds: list[str] = []
-            for ShellAttr, FaceOwners in NativeShells:
-                if not FaceOwners:
-                    raise ValueError('empty native shell')
-                FaceAttrs: list[int] = []
-                for Owner in FaceOwners:
-                    FaceAttr = OwnerFaces.get(Owner)
-                    if FaceAttr is None or FaceAttr in AssignedFaces:
-                        raise ValueError('ambiguous shell face membership')
-                    AssignedFaces.add(FaceAttr)
-                    FaceAttrs.append(FaceAttr)
-                FaceUseIds: list[str] = []
-                for FaceAttr in FaceAttrs:
-                    FaceUseId = NativeId('face-use', FaceAttr)
-                    FaceUses.append(BrepFaceUse(FaceUseId, NativeId('face', FaceAttr)))
-                    FaceUseIds.append(FaceUseId)
-                ShellId = NativeId('shell', ShellAttr)
-                ShellUseId = NativeId('shell-use', ShellAttr)
-                Shells.append(BrepShell(ShellId, tuple(FaceUseIds), Solid))
-                ShellUses.append(BrepShellUse(ShellUseId, ShellId))
-                ShellUseIds.append(ShellUseId)
-            RegionId = NativeId('region', Region.attribute)
-            Regions.append(BrepRegion(RegionId, tuple(ShellUseIds), Solid))
-            RegionIds.append(RegionId)
-        if not RegionIds:
-            raise ValueError('empty native body')
-        Bodies.append(BrepBody(NativeId('body', RootValue.attribute), tuple(RegionIds)))
+        BuildRootMut(RootValue, Entities, OwnerFaces, AssignedFaces, FaceUses, Shells, ShellUses, Regions, Bodies)
     if AssignedFaces != ExpectedFaces:
         raise ValueError('body hierarchy does not own every face')
-    return (tuple(FaceUses), tuple(Shells), tuple(ShellUses), tuple(Regions), tuple(Bodies))
+    return tuple(FaceUses), tuple(Shells), tuple(ShellUses), tuple(Regions), tuple(Bodies)
+
+
+# native root construction connects its validated regions to one body
+def BuildRootMut(RootValue: EntityRecord, Entities: Mapping[int, EntityRecord], OwnerFaces: Mapping[int, int], AssignedFaces: set[int], FaceUses: list[BrepFaceUse], Shells: list[BrepShell], ShellUses: list[BrepShellUse], Regions: list[BrepRegion], Bodies: list[BrepBody]) -> None:
+    RegionIds: list[str] = []
+    for RegionAttr in Nonnull(RootValue.references):
+        RegionId = BuildRegionMut(RegionAttr, Entities, OwnerFaces, AssignedFaces, FaceUses, Shells, ShellUses, Regions)
+        RegionIds.append(RegionId)
+    if not RegionIds:
+        raise ValueError('empty native body')
+    Bodies.append(BrepBody(NativeId('body', RootValue.attribute), tuple(RegionIds)))
+
+
+# native region construction expands its shell chain and preserves solidity
+def BuildRegionMut(RegionAttr: int, Entities: Mapping[int, EntityRecord], OwnerFaces: Mapping[int, int], AssignedFaces: set[int], FaceUses: list[BrepFaceUse], Shells: list[BrepShell], ShellUses: list[BrepShellUse], Regions: list[BrepRegion]) -> str:
+    Region = Entities.get(RegionAttr)
+    if Region is None or Region.discriminator not in {27, 29}:
+        raise ValueError('unsupported body region hierarchy')
+    Solid = Region.discriminator == 27
+    ShellUseIds: list[str] = []
+    for ShellAttr, FaceOwners in NativeShellData(Entities, Region, Solid):
+        ShellUseId = BuildShellMut(ShellAttr, FaceOwners, Solid, OwnerFaces, AssignedFaces, FaceUses, Shells, ShellUses)
+        ShellUseIds.append(ShellUseId)
+    RegionId = NativeId('region', Region.attribute)
+    Regions.append(BrepRegion(RegionId, tuple(ShellUseIds), Solid))
+    return RegionId
+
+
+# native shell discovery follows solid lump chains or direct sheet face lists
+def NativeShellData(Entities: Mapping[int, EntityRecord], Region: EntityRecord, Solid: bool) -> list[tuple[int, tuple[int, ...]]]:
+    NativeShells: list[tuple[int, tuple[int, ...]]] = []
+    if Solid:
+        for LumpAttr in Nonnull(Region.references):
+            LumpValue = RequireEntity(Entities, LumpAttr, 31)
+            ShellNode = RequireEntity(Entities, SingleRef(LumpValue), 33)
+            ShellLink = RequireEntity(Entities, SingleRef(ShellNode), 35)
+            NativeShells.append((LumpAttr, FaceOwnerChain(Entities, SingleRef(ShellLink), 19)))
+    else:
+        NativeShells.append((Region.attribute, FaceOwnerChain(Entities, SingleRef(Region), 21)))
+    return NativeShells
+
+
+# native shell construction claims faces and creates matching use records
+def BuildShellMut(ShellAttr: int, FaceOwners: Sequence[int], Solid: bool, OwnerFaces: Mapping[int, int], AssignedFaces: set[int], FaceUses: list[BrepFaceUse], Shells: list[BrepShell], ShellUses: list[BrepShellUse]) -> str:
+    if not FaceOwners:
+        raise ValueError('empty native shell')
+    FaceAttrs: list[int] = []
+    for Owner in FaceOwners:
+        FaceAttr = OwnerFaces.get(Owner)
+        if FaceAttr is None or FaceAttr in AssignedFaces:
+            raise ValueError('ambiguous shell face membership')
+        AssignedFaces.add(FaceAttr)
+        FaceAttrs.append(FaceAttr)
+    FaceUseIds: list[str] = []
+    for FaceAttr in FaceAttrs:
+        FaceUseId = NativeId('face-use', FaceAttr)
+        FaceUses.append(BrepFaceUse(FaceUseId, NativeId('face', FaceAttr)))
+        FaceUseIds.append(FaceUseId)
+    ShellId, ShellUseId = NativeId('shell', ShellAttr), NativeId('shell-use', ShellAttr)
+    Shells.append(BrepShell(ShellId, tuple(FaceUseIds), Solid))
+    ShellUses.append(BrepShellUse(ShellUseId, ShellId))
+    return ShellUseId
 
 # this declaration exists because focused behavior needs one stable owner
 def Nonnull(Values: Sequence[int]) -> tuple[int, ...]:
