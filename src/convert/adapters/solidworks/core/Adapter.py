@@ -15,7 +15,7 @@ from io import BytesIO as BytesIo
 import json as JsonValue
 import math as MathValue
 import os as OsModule
-from pathlib import Path as PathValue, PureWindowsPath
+from pathlib import Path as FilePath, PureWindowsPath
 import re as RegexLib
 import struct as Struct
 import tempfile as Tempfile
@@ -2229,9 +2229,9 @@ def ValidateSource(Label: str, IsAsm: bool) -> None:
 
 # this definition exists because focused behavior needs one stable owner
 def SourceBytes(Source: Source) -> tuple[bytes, str]:
-    if isinstance(Source, (str, PathValue)):
-        PathValue = PathValue(Source).expanduser().resolve()
-        return (PathValue.read_bytes(), str(PathValue))
+    if isinstance(Source, (str, FilePath)):
+        LocalPath = FilePath(Source).expanduser().resolve()
+        return (LocalPath.read_bytes(), str(LocalPath))
     if isinstance(Source, (bytes, bytearray)):
         return (bytes(Source), '<memory>')
     Position = None
@@ -3183,7 +3183,8 @@ globals()['ParameterRole'] = ParamRole
 globals()['ParameterValue'] = ParamValue
 
 # this binding exists because shared behavior needs one stable value
-globals()['Path'] = PathValue
+globals()['Path'] = FilePath
+globals()['PathValue'] = FilePath
 
 # this binding exists because shared behavior needs one stable value
 globals()['PointGeometry'] = PointGeom

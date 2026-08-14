@@ -955,7 +955,13 @@ def ReadCatia(Source: Source, Options: ReadOptions | None=None) -> CadDoc:
     return CatiaAdapter().read(Source, Options)
 
 # this definition exists because focused behavior needs one stable owner
-def WriteCatia(DocValue: CadDocument, Target: Destination, *, Overwrite: bool=False, Validate: bool=True, AllowNonNative: bool=True) -> WriteResult:
+def WriteCatia(DocValue: CadDocument, Target: Destination, *, Overwrite: bool=False, Validate: bool=True, AllowNonNative: bool=True, **LegacyValues: object) -> WriteResult:
+    Overwrite = bool(LegacyValues.pop('overwrite', Overwrite))
+    Validate = bool(LegacyValues.pop('validate', Validate))
+    AllowNonNative = bool(LegacyValues.pop('allow_non_native', AllowNonNative))
+    if LegacyValues:
+        Unexpected = next(iter(LegacyValues))
+        raise TypeError(f"WriteCatia() got an unexpected keyword argument {Unexpected!r}")
     return CatiaAdapter().write(DocValue, Target, WriteOptions(overwrite=Overwrite, validate=Validate, values=FrozenMapping({'allow_non_native': AllowNonNative})))
 
 # this binding exists because shared behavior needs one stable value
