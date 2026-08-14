@@ -38,7 +38,7 @@ foreach ($entry in $manifest.binaries) {
 
     if (-not $VerifyOnly) {
         if (-not (Test-Path -LiteralPath $source)) {
-            Write-Information ("MISSING SOURCE  {0}  {1}" -f $entry.name, $source) -InformationAction Continue
+            Write-Information ("MISSING SOURCE  {0}  {1}" -f $entry.name, $source) -Tags PSHOST -InformationAction Continue
             $failures++
             continue
         }
@@ -46,7 +46,7 @@ foreach ($entry in $manifest.binaries) {
     }
 
     if (-not (Test-Path -LiteralPath $target)) {
-        Write-Information ("ABSENT          {0}" -f $entry.name) -InformationAction Continue
+        Write-Information ("ABSENT          {0}" -f $entry.name) -Tags PSHOST -InformationAction Continue
         $failures++
         continue
     }
@@ -60,24 +60,24 @@ foreach ($entry in $manifest.binaries) {
     $versionOk = ($info.FileVersion -eq $entry.version.file_version)
 
     if ($sizeOk -and $hashOk -and $versionOk) {
-        Write-Information ("OK              {0}  {1} bytes  {2}" -f $entry.name, $item.Length, $info.FileVersion) -InformationAction Continue
+        Write-Information ("OK              {0}  {1} bytes  {2}" -f $entry.name, $item.Length, $info.FileVersion) -Tags PSHOST -InformationAction Continue
     }
     else {
         $failures++
-        Write-Information ("MISMATCH        {0}" -f $entry.name) -InformationAction Continue
-        if (-not $sizeOk) { Write-Information ("  bytes    expected {0} got {1}" -f $entry.bytes, $item.Length) -InformationAction Continue }
-        if (-not $hashOk) { Write-Information ("  sha256   expected {0} got {1}" -f $entry.sha256, $hash) -InformationAction Continue }
-        if (-not $versionOk) { Write-Information ("  version  expected {0} got {1}" -f $entry.version.file_version, $info.FileVersion) -InformationAction Continue }
+        Write-Information ("MISMATCH        {0}" -f $entry.name) -Tags PSHOST -InformationAction Continue
+        if (-not $sizeOk) { Write-Information ("  bytes    expected {0} got {1}" -f $entry.bytes, $item.Length) -Tags PSHOST -InformationAction Continue }
+        if (-not $hashOk) { Write-Information ("  sha256   expected {0} got {1}" -f $entry.sha256, $hash) -Tags PSHOST -InformationAction Continue }
+        if (-not $versionOk) { Write-Information ("  version  expected {0} got {1}" -f $entry.version.file_version, $info.FileVersion) -Tags PSHOST -InformationAction Continue }
     }
 }
 
 if ($failures -gt 0) {
-    Write-Information "" -InformationAction Continue
-    Write-Information ("$failures of " + $manifest.binaries.Count + " binaries did not match the manifest.") -InformationAction Continue
-    Write-Information "A version mismatch is expected on a different SOLIDWORKS release. Re-derive the offsets in re/solidworks/ before trusting them against other bytes." -InformationAction Continue
+    Write-Information "" -Tags PSHOST -InformationAction Continue
+    Write-Information ("$failures of " + $manifest.binaries.Count + " binaries did not match the manifest.") -Tags PSHOST -InformationAction Continue
+    Write-Information "A version mismatch is expected on a different SOLIDWORKS release. Re-derive the offsets in re/solidworks/ before trusting them against other bytes." -Tags PSHOST -InformationAction Continue
     exit 1
 }
 
-Write-Information "" -InformationAction Continue
-Write-Information ("All " + $manifest.binaries.Count + " binaries match the manifest (" + $manifest.product + ", " + $manifest.binaries[0].version.file_version + ").") -InformationAction Continue
+Write-Information "" -Tags PSHOST -InformationAction Continue
+Write-Information ("All " + $manifest.binaries.Count + " binaries match the manifest (" + $manifest.product + ", " + $manifest.binaries[0].version.file_version + ").") -Tags PSHOST -InformationAction Continue
 exit 0

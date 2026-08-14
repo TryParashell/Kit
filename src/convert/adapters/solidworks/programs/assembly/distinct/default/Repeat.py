@@ -152,7 +152,7 @@ def UniqueItems(CoreItems: tuple[RepeatItem, ...]) -> tuple[RepeatItem, ...]:
     SeenPaths: set[str] = set()
     UniqueItems: list[RepeatItem] = []
     for ItemValue in CoreItems:
-        PathValue = _PathKey(ItemValue.CompPath)
+        PathValue = PathKey(ItemValue.CompPath)
         if PathValue in SeenPaths:
             continue
         SeenPaths.add(PathValue)
@@ -168,9 +168,9 @@ def EncodeCmgr(
 ) -> bytes:
     ItemCount = len(CoreItems)
     DisplayName = f"<{ConfigName}>_Display State 1"
-    InsertPos, UnitWidth = InsertSpecs["Contents/CMgr"]
-    PrefixData = _EmitOps(
-        _SliceOps("Contents/CMgr", 0, InsertPos),
+    InsertPos, UnitWidth = KInsertSpecs["Contents/CMgr"]
+    PrefixData = EncodeOps(
+        SliceOps("Contents/CMgr", 0, InsertPos),
         {
             206: ConfigName,
             365: ItemCount,
@@ -186,11 +186,11 @@ def EncodeCmgr(
     )
     UnitData = bytearray()
     for ItemIndex, ItemValue in enumerate(CoreItems[1:], 2):
-        TemplateIndex = min(ItemIndex, TracedCount)
+        TemplateIndex = min(ItemIndex, KTracedCount)
         UnitStart = InsertPos + ((TemplateIndex - 2) * UnitWidth)
         UnitData.extend(
-            _EmitOps(
-                _SliceOps("Contents/CMgr", UnitStart, UnitStart + UnitWidth),
+            EncodeOps(
+                SliceOps("Contents/CMgr", UnitStart, UnitStart + UnitWidth),
                 {
                     48: DisplayName,
                     184: 23 + ItemIndex,
@@ -201,10 +201,10 @@ def EncodeCmgr(
                 UnitStart,
             )
         )
-    SuffixStart = InsertPos + ((TracedCount - 1) * UnitWidth)
-    SuffixData = _EmitOps(
-        _SliceOps("Contents/CMgr", SuffixStart),
-        {82: 61 + (8 * (ItemCount - TracedCount))},
+    SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
+    SuffixData = EncodeOps(
+        SliceOps("Contents/CMgr", SuffixStart),
+        {82: 61 + (8 * (ItemCount - KTracedCount))},
         SuffixStart,
     )
     return PrefixData + bytes(UnitData) + SuffixData
@@ -218,12 +218,12 @@ def EncodeConfig(
 ) -> bytes:
     ItemCount = len(CoreItems)
     BasisCount = sum(
-        not _IsIdentityBasis(ItemValue.BasisVals) for ItemValue in CoreItems
+        not IsIdentityBasis(ItemValue.BasisVals) for ItemValue in CoreItems
     )
-    BaseShift = ItemCount - TracedCount
-    InsertPos, UnitWidth = InsertSpecs["Contents/Config-0"]
-    PrefixData = _EmitOps(
-        _SliceOps("Contents/Config-0", 0, InsertPos),
+    BaseShift = ItemCount - KTracedCount
+    InsertPos, UnitWidth = KInsertSpecs["Contents/Config-0"]
+    PrefixData = EncodeOps(
+        SliceOps("Contents/Config-0", 0, InsertPos),
         {
             18: 2218 + (UnitWidth * ItemCount) + (72 * BasisCount),
             48: ModelName,
@@ -239,28 +239,28 @@ def EncodeConfig(
             276: CoreItems[0].TransX,
             284: CoreItems[0].TransY,
             292: CoreItems[0].TransZ,
-            **({275: 1} if not _IsIdentityBasis(CoreItems[0].BasisVals) else {}),
+            **({275: 1} if not IsIdentityBasis(CoreItems[0].BasisVals) else {}),
         },
         BasisValues=(
             {275: CoreItems[0].BasisVals}
-            if not _IsIdentityBasis(CoreItems[0].BasisVals)
+            if not IsIdentityBasis(CoreItems[0].BasisVals)
             else None
         ),
     )
     UnitData = bytearray()
     for ItemIndex, ItemValue in enumerate(CoreItems[1:], 2):
-        TemplateIndex = min(ItemIndex, TracedCount)
+        TemplateIndex = min(ItemIndex, KTracedCount)
         UnitStart = InsertPos + ((TemplateIndex - 2) * UnitWidth)
-        UnitOps = _SliceOps("Contents/Config-0", UnitStart, UnitStart + UnitWidth)
+        UnitOps = SliceOps("Contents/Config-0", UnitStart, UnitStart + UnitWidth)
         HashValue = (
             next(
                 Operation[4] for Operation in UnitOps if Operation[0] - UnitStart == 153
             )
-            if ItemIndex <= TracedCount
-            else _OccurHash(ItemValue.OccurName)
+            if ItemIndex <= KTracedCount
+            else OccurHash(ItemValue.OccurName)
         )
         UnitData.extend(
-            _EmitOps(
+            EncodeOps(
                 UnitOps,
                 {
                     0: 11 + BaseShift,
@@ -281,37 +281,37 @@ def EncodeConfig(
                     418: 16 + BaseShift,
                     420: ItemValue.OccurName,
                     440: 12 + (4 * ItemIndex) + BaseShift,
-                    **({168: 1} if not _IsIdentityBasis(ItemValue.BasisVals) else {}),
+                    **({168: 1} if not IsIdentityBasis(ItemValue.BasisVals) else {}),
                 },
                 UnitStart,
                 (
                     {168: ItemValue.BasisVals}
-                    if not _IsIdentityBasis(ItemValue.BasisVals)
+                    if not IsIdentityBasis(ItemValue.BasisVals)
                     else None
                 ),
             )
         )
-    SuffixStart = InsertPos + ((TracedCount - 1) * UnitWidth)
-    SuffixOps = _SliceOps("Contents/Config-0", SuffixStart)
-    SuffixOverrides: dict[int, Any] = {}
-    for StartPos, _Width, _Owner, _Kind, DefaultValue in SuffixOps:
+    SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
+    SuffixOps = SliceOps("Contents/Config-0", SuffixStart)
+    SuffixOverrides: dict[int, AnyValue] = {}
+    for StartPos, FieldWidth, OwnerIndex, KindValue, DefaultValue in SuffixOps:
         RelativePos = StartPos - SuffixStart
-        if RelativePos in ConfigShift5:
+        if RelativePos in KConfigShiftFive:
             SuffixOverrides[RelativePos] = DefaultValue + (5 * BaseShift)
-        elif RelativePos in ConfigShift1:
+        elif RelativePos in KConfigShiftOne:
             SuffixOverrides[RelativePos] = DefaultValue + BaseShift
     SuffixOverrides[23442] = ItemCount
-    SuffixData = _EmitOps(SuffixOps, SuffixOverrides, SuffixStart)
+    SuffixData = EncodeOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
 
 
 # resolved records reconnect every inserted occurrence to shifted feature maps
 def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
     ItemCount = len(CoreItems)
-    BaseShift = ItemCount - TracedCount
-    InsertPos, UnitWidth = InsertSpecs["Contents/Config-0-ResolvedFeatures"]
-    PrefixData = _EmitOps(
-        _SliceOps("Contents/Config-0-ResolvedFeatures", 0, InsertPos),
+    BaseShift = ItemCount - KTracedCount
+    InsertPos, UnitWidth = KInsertSpecs["Contents/Config-0-ResolvedFeatures"]
+    PrefixData = EncodeOps(
+        SliceOps("Contents/Config-0-ResolvedFeatures", 0, InsertPos),
         {
             0: 96 + (5 * ItemCount),
             30: 9 + BaseShift,
@@ -324,20 +324,20 @@ def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
     )
     UnitData = bytearray()
     for ItemIndex in range(2, ItemCount + 1):
-        TemplateIndex = min(ItemIndex, TracedCount)
+        TemplateIndex = min(ItemIndex, KTracedCount)
         UnitStart = InsertPos + ((TemplateIndex - 2) * UnitWidth)
-        UnitOps = _SliceOps(
+        UnitOps = SliceOps(
             "Contents/Config-0-ResolvedFeatures",
             UnitStart,
             UnitStart + UnitWidth,
         )
         RefValues = {
             StartPos - UnitStart: DefaultValue + (5 * BaseShift)
-            for StartPos, _Width, _Owner, KindName, DefaultValue in UnitOps
+            for StartPos, FieldWidth, OwnerIndex, KindName, DefaultValue in UnitOps
             if KindName == "classref"
         }
         UnitData.extend(
-            _EmitOps(
+            EncodeOps(
                 UnitOps,
                 {
                     **RefValues,
@@ -347,18 +347,18 @@ def EncodeResolved(CoreItems: tuple[RepeatItem, ...]) -> bytes:
                 UnitStart,
             )
         )
-    SuffixStart = InsertPos + ((TracedCount - 1) * UnitWidth)
-    SuffixOps = _SliceOps("Contents/Config-0-ResolvedFeatures", SuffixStart)
-    SuffixOverrides: dict[int, Any] = {}
-    for StartPos, _Width, _Owner, _Kind, DefaultValue in SuffixOps:
+    SuffixStart = InsertPos + ((KTracedCount - 1) * UnitWidth)
+    SuffixOps = SliceOps("Contents/Config-0-ResolvedFeatures", SuffixStart)
+    SuffixOverrides: dict[int, AnyValue] = {}
+    for StartPos, FieldWidth, OwnerIndex, KindValue, DefaultValue in SuffixOps:
         RelativePos = StartPos - SuffixStart
-        if RelativePos in ResolvedShift9:
+        if RelativePos in KResolvedShiftNine:
             SuffixOverrides[RelativePos] = DefaultValue + (9 * BaseShift)
-        elif RelativePos in ResolvedShift5:
+        elif RelativePos in KResolvedShiftFive:
             SuffixOverrides[RelativePos] = DefaultValue + (5 * BaseShift)
-        elif RelativePos in ResolvedShift1:
+        elif RelativePos in KResolvedShiftOne:
             SuffixOverrides[RelativePos] = DefaultValue + BaseShift
-    SuffixData = _EmitOps(SuffixOps, SuffixOverrides, SuffixStart)
+    SuffixData = EncodeOps(SuffixOps, SuffixOverrides, SuffixStart)
     return PrefixData + bytes(UnitData) + SuffixData
 
 
@@ -369,12 +369,12 @@ def EncodeHeader(
     CoreItems: tuple[RepeatItem, ...],
 ) -> bytes:
     ItemCount = len(CoreItems)
-    UniqueItems = _UniqueItems(CoreItems)
+    UniqueItems = UniqueItems(CoreItems)
     UniqueCount = len(UniqueItems)
-    BaseShift = ItemCount - TracedCount
-    InsertPos, UnitWidth = InsertSpecs["Contents/Config-0-ModelHeader"]
-    PrefixData = _EmitOps(
-        _SliceOps("Contents/Config-0-ModelHeader", 0, InsertPos),
+    BaseShift = ItemCount - KTracedCount
+    InsertPos, UnitWidth = KInsertSpecs["Contents/Config-0-ModelHeader"]
+    PrefixData = EncodeOps(
+        SliceOps("Contents/Config-0-ModelHeader", 0, InsertPos),
         {
             77: 23 + ItemCount,
             142: ModelName,
@@ -383,11 +383,11 @@ def EncodeHeader(
     )
     OccurData = bytearray()
     for ItemIndex, ItemValue in enumerate(CoreItems[1:], 2):
-        TemplateIndex = min(ItemIndex, TracedCount)
+        TemplateIndex = min(ItemIndex, KTracedCount)
         UnitStart = InsertPos + ((TemplateIndex - 2) * UnitWidth)
         OccurData.extend(
-            _EmitOps(
-                _SliceOps(
+            EncodeOps(
+                SliceOps(
                     "Contents/Config-0-ModelHeader",
                     UnitStart,
                     UnitStart + UnitWidth,
@@ -407,19 +407,19 @@ def EncodeHeader(
     }
     if FirstItem.FileStamp > 0:
         ExtOverrides[232] = FirstItem.FileStamp
-    ExtPrefix = _EmitOps(
-        _SliceOps(
+    ExtPrefix = EncodeOps(
+        SliceOps(
             "Contents/Config-0-ModelHeader",
-            HeaderExtStart,
-            HeaderExtStart + HeaderExtWidth,
+            KHeaderExtStart,
+            KHeaderExtStart + KHeaderExtWidth,
         ),
         ExtOverrides,
-        HeaderExtStart,
+        KHeaderExtStart,
     )
     FileData = bytearray()
     for FileIndex, ItemValue in enumerate(UniqueItems[1:], 2):
-        TemplateIndex = min(FileIndex, TracedCount)
-        FileStart = HeaderFileStart + ((TemplateIndex - 2) * HeaderFileWidth)
+        TemplateIndex = min(FileIndex, KTracedCount)
+        FileStart = KHeaderFileStart + ((TemplateIndex - 2) * KHeaderFileWidth)
         FileStem = PureWindowsPath(ItemValue.CompPath).stem
         FileOverrides = {
             0: 72 + (2 * BaseShift),
@@ -432,18 +432,18 @@ def EncodeHeader(
         if ItemValue.FileStamp > 0:
             FileOverrides[161] = ItemValue.FileStamp
         FileData.extend(
-            _EmitOps(
-                _SliceOps(
+            EncodeOps(
+                SliceOps(
                     "Contents/Config-0-ModelHeader",
                     FileStart,
-                    FileStart + HeaderFileWidth,
+                    FileStart + KHeaderFileWidth,
                 ),
                 FileOverrides,
                 FileStart,
             )
         )
-    TailData = _EmitOps(
-        _SliceOps("Contents/Config-0-ModelHeader", HeaderTailStart),
+    TailData = EncodeOps(
+        SliceOps("Contents/Config-0-ModelHeader", KHeaderTailStart),
         {
             0: 103 + (2 * ItemCount),
             4: 72 + (2 * BaseShift),
@@ -453,7 +453,7 @@ def EncodeHeader(
             67: ConfigName,
             131: ItemCount,
         },
-        HeaderTailStart,
+        KHeaderTailStart,
     )
     return PrefixData + bytes(OccurData) + ExtPrefix + bytes(FileData) + TailData
 
@@ -470,13 +470,13 @@ def EncodePathCore(
     if any(not PureWindowsPath(ItemPath).stem for ItemPath in CompPaths):
         raise SldprtFormatError("distinct assembly component path has no stem")
     StreamsMap = {
-        "Contents/CMgr": _EncodeCMgr(ModelName, ConfigName, CoreItems),
-        "Contents/Config-0": _EncodeConfig(ModelName, ConfigName, CoreItems),
-        "Contents/Config-0-ResolvedFeatures": _EncodeResolved(CoreItems),
-        "Contents/Definition": _EmitOps(
+        "Contents/CMgr": EncodeCmgr(ModelName, ConfigName, CoreItems),
+        "Contents/Config-0": EncodeConfig(ModelName, ConfigName, CoreItems),
+        "Contents/Config-0-ResolvedFeatures": EncodeResolved(CoreItems),
+        "Contents/Definition": EncodeOps(
             StreamPrograms["Contents/Definition"], {3479: len(CoreItems)}
         ),
-        "Contents/Config-0-ModelHeader": _EncodeHeader(
+        "Contents/Config-0-ModelHeader": EncodeHeader(
             ModelName, ConfigName, CoreItems
         ),
     }
