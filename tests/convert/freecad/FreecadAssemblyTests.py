@@ -198,12 +198,8 @@ def GeomFree(Source):
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def TestFcstdAsmHas(TmpPath) -> None:
-    Output = TmpPath / "assembly.FCStd"
-    WriteFreecad(AsmDoc(), Output)
-    with Zipfile.ZipFile(Output) as Archive:
-        RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
+# this definition exists because assembly declarations need focused structural verification
+def VerifyAsmObjectStructure(RootValue: ET.Element) -> None:
     Objects = RootValue.findall("./Objects/Object")
     Types = [ItemValue.get("type") for ItemValue in Objects]
     assert Types.count("Assembly::AssemblyObject") == 1
@@ -217,51 +213,40 @@ def TestFcstdAsmHas(TmpPath) -> None:
     }
     LinkData = [DataValue[ItemValue.get("name", "")] for ItemValue in Links]
     assert all(
-        (
-            PropAction(ItemValue, "LinkTransform").find("Bool").get("value") == "true"
-            for ItemValue in LinkData
-        )
+        PropAction(ItemValue, "LinkTransform").find("Bool").get("value") == "true"
+        for ItemValue in LinkData
     )
     Placement = PropAction(LinkData[0], "Placement").find("PropertyPlacement")
     assert Placement is not None
-    assert (
-        float(Placement.get("Px", "0")),
-        float(Placement.get("Py", "0")),
-        float(Placement.get("Pz", "0")),
-    ) == Pytest.approx((100.0, 20.0, 30.0))
-    MateValue = next(
-        (
-            ItemValue
-            for ItemValue in DataValue.values()
-            if ItemValue.find("./Properties/Property[@name='MateId']") is not None
-        )
-    )
+    assert tuple(float(Placement.get(NameValue, "0")) for NameValue in ("Px", "Py", "Pz")) == Pytest.approx((100.0, 20.0, 30.0))
+
+
+# this definition exists because mate assertions share one precise XML lookup contract
+def AsmMateContext(RootValue: ET.Element) -> tuple[ET.Element, ET.Element, ET.Element, dict[str, ET.Element]]:
+    Objects = RootValue.findall("./Objects/Object")
+    LinkValue = next(ItemValue for ItemValue in Objects if ItemValue.get("type") == "App::Link")
+    DataValue = {ItemValue.get("name", ""): ItemValue for ItemValue in RootValue.findall("./ObjectData/Object")}
+    MateValue = next(ItemValue for ItemValue in DataValue.values() if ItemValue.find("./Properties/Property[@name='MateId']") is not None)
+    AsmRoot = next(ItemValue for ItemValue in DataValue.values() if ItemValue.find("./Properties/Property[@name='RootDefinitionId']") is not None)
+    return MateValue, AsmRoot, LinkValue, DataValue
+
+
+# this definition exists because native mate identity and proxy fields form one contract
+def VerifyAsmMateIdentity(RootValue: ET.Element) -> None:
+    MateValue, Ignored, Ignored, Ignored = AsmMateContext(RootValue)
     JointType = PropAction(MateValue, "JointType").find("Integer")
     EntityIds = PropAction(MateValue, "EntityIds").findall("./StringList/String")
-    ComponentLinks = PropAction(MateValue, "ComponentLinks").findall(
-        "./StringList/String"
-    )
     assert JointType is not None and JointType.get("value") == "0"
     Proxy = PropAction(MateValue, "Proxy").find("Python")
     assert Proxy is not None
-    assert Proxy.attrib == {
-        "value": "bnVsbA==",
-        "encoded": "yes",
-        "module": "JointObject",
-        "class": "Joint",
-    }
-    assert [ItemValue.get("value") for ItemValue in EntityIds] == [
-        "mate-entity:assembly",
-        "mate-entity:part",
-    ]
-    AsmRoot = next(
-        (
-            ItemValue
-            for ItemValue in DataValue.values()
-            if ItemValue.find("./Properties/Property[@name='RootDefinitionId']")
-            is not None
-        )
-    )
+    assert Proxy.attrib == {"value": "bnVsbA==", "encoded": "yes", "module": "JointObject", "class": "Joint"}
+    assert [ItemValue.get("value") for ItemValue in EntityIds] == ["mate-entity:assembly", "mate-entity:part"]
+
+
+# this definition exists because mate references must remain attached to encoded occurrences
+def VerifyAsmMateReferences(RootValue: ET.Element) -> None:
+    MateValue, AsmRoot, LinkValue, DataValue = AsmMateContext(RootValue)
+    ComponentLinks = PropAction(MateValue, "ComponentLinks").findall("./StringList/String")
     RootOrigin = PropAction(AsmRoot, "Origin").find("Link").get("value")
     assert len(ComponentLinks) == 2
     assert ComponentLinks[0].get("value") == RootOrigin
@@ -270,22 +255,26 @@ def TestFcstdAsmHas(TmpPath) -> None:
     assert RefOne is not None
     assert RefTwo is not None
     assert RefOne.get("name") == RootOrigin
-    assert RefTwo.get("name") == Links[0].get("name")
+    assert RefTwo.get("name") == LinkValue.get("name")
     assert [ItemValue.get("value") for ItemValue in RefOne.findall("Sub")] == ["", ""]
     assert PropAction(MateValue, "Suppressed").find("Bool").get("value") == "false"
     assert PropAction(MateValue, "Detach1").find("Bool").get("value") == "false"
     assert PropAction(MateValue, "Detach2").find("Bool").get("value") == "false"
     assert PropAction(AsmRoot, "OccurrenceCount").find("Integer").get("value") == "1"
-    RootChildren = {
-        ItemValue.get("value")
-        for ItemValue in PropAction(AsmRoot, "Group").findall("./LinkList/Link")
-    }
-    MetaGroups = {
-        NameValue
-        for NameValue in DataValue
-        if NameValue.endswith(("_Definitions", "_Components", "_MateEntities"))
-    }
+    RootChildren = {ItemValue.get("value") for ItemValue in PropAction(AsmRoot, "Group").findall("./LinkList/Link")}
+    MetaGroups = {NameValue for NameValue in DataValue if NameValue.endswith(("_Definitions", "_Components", "_MateEntities"))}
     assert MetaGroups.isdisjoint(RootChildren)
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestFcstdAsmHas(TmpPath) -> None:
+    Output = TmpPath / "assembly.FCStd"
+    WriteFreecad(AsmDoc(), Output)
+    with Zipfile.ZipFile(Output) as Archive:
+        RootValue = XmlTree.fromstring(Archive.read("Document.xml"))
+    VerifyAsmObjectStructure(RootValue)
+    VerifyAsmMateIdentity(RootValue)
+    VerifyAsmMateReferences(RootValue)
 
 
 # this definition exists because focused behavior needs one stable owner

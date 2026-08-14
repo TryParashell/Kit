@@ -63,7 +63,7 @@ from interchange.serialization import ToData
 from convert.adapters.freecad.Archive import (
     DOCUMENT_ENTRY as DocEntry,
     MANIFEST_ENTRY as ManifestEntry,
-    NATIVE_DOCUMENT_SHA256_ATTRIBUTE as NativeDocShaTwoFiveSix,
+    NATIVE_DOCUMENT_SHA256_ATTRIBUTE as KNativeDocHashAttr,
     NativeBrepKey,
     _MAX_ENTRY_SIZE as MaxEntrySize,
     _MAX_EXTERNAL_FILES as MaxOuterFiles,
@@ -778,7 +778,7 @@ def IsExactPayload(Payload: BrepPayload) -> bool:
     FreecadObject = Attributes.get("freecad_object")
     FreecadObjectType = Attributes.get("freecad_object_type")
     FreecadProp = Attributes.get("freecad_property")
-    NativeDocShaTwoFiveSix = Attributes.get(NativeDocShaTwoFiveSix)
+    NativeDigestText = Attributes.get(KNativeDocHashAttr)
     PropData = Attributes.get("freecad_property_data")
     PropAttributes = (
         PropData.get("attributes", {}) if isinstance(PropData, Mapping) else {}
@@ -809,8 +809,8 @@ def IsExactPayload(Payload: BrepPayload) -> bool:
         and bool(FreecadObjectType)
         and isinstance(FreecadProp, str)
         and bool(FreecadProp)
-        and isinstance(NativeDocShaTwoFiveSix, str)
-        and (RegexLib.fullmatch("[0-9a-f]{64}", NativeDocShaTwoFiveSix) is not None)
+        and isinstance(NativeDigestText, str)
+        and (RegexLib.fullmatch("[0-9a-f]{64}", NativeDigestText) is not None)
         and (Provenance.native_id == f"{FreecadObject}.{FreecadProp}")
         and (Payload.source_stream == f"{FreecadObject}.{FreecadProp}.brp")
         and isinstance(PropData, Mapping)
@@ -840,7 +840,7 @@ def NativeDocShaTwo(DocValue: CadDocument) -> str:
     Values = {
         Value
         for Payload in DocValue.brep_payloads
-        if isinstance((Value := Payload.attributes.get(NativeDocShaTwoFiveSix)), str)
+        if isinstance((Value := Payload.attributes.get(KNativeDocHashAttr)), str)
         and RegexLib.fullmatch("[0-9a-f]{64}", Value) is not None
     }
     return next(iter(Values)) if len(Values) == 1 else ""
@@ -874,21 +874,9 @@ def ArchiveMember(
         return None
 
 
-# this definition exists because focused behavior needs one stable owner
-def IsPayloadMatch(
-    Payload: BrepPayload,
-    Archive: zipfile.ZipFile,
-    Members: Mapping[str, zipfile.ZipInfo],
-    RootValue: ET.Element,
-    NativeDocShaTwoFiveSix: str,
-) -> bool:
-    if not IsExactPayload(Payload) or Payload.data is None:
-        return False
-    if ArchiveMember(Archive, Members, Payload.source_stream) != Payload.data:
-        return False
+# this definition locates the exact native property represented by a payload
+def FindPayloadProperty(Payload: BrepPayload, RootValue: ET.Element) -> ET.Element | None:
     Attributes = Payload.attributes
-    if Attributes[NativeDocShaTwoFiveSix] != NativeDocShaTwoFiveSix:
-        return False
     ObjectName = str(Attributes["freecad_object"])
     ObjectType = str(Attributes["freecad_object_type"])
     PropName = str(Attributes["freecad_property"])
@@ -907,7 +895,7 @@ def IsPayloadMatch(
         )
     )
     if len(Declarations) != 1 or len(Objects) != 1:
-        return False
+        return None
     Properties = tuple(
         (
             Value
@@ -915,11 +903,17 @@ def IsPayloadMatch(
             if Value.get("name") == PropName
         )
     )
-    if len(Properties) != 1:
-        return False
-    PropElem = Properties[0]
-    if XmlElemData(PropElem) != Attributes["freecad_property_data"]:
-        return False
+    return Properties[0] if len(Properties) == 1 else None
+
+
+# this definition verifies every sidecar referenced by a native payload property
+def HasPayloadSidecars(
+    Payload: BrepPayload,
+    Archive: zipfile.ZipFile,
+    Members: Mapping[str, zipfile.ZipInfo],
+    PropElem: ET.Element,
+) -> bool:
+    Attributes = Payload.attributes
     ReferencedSidecars = tuple(
         (
             NameValue
@@ -948,6 +942,29 @@ def IsPayloadMatch(
     return True
 
 
+# this definition verifies that a payload exactly matches its native archive records
+def IsPayloadMatch(
+    Payload: BrepPayload,
+    Archive: zipfile.ZipFile,
+    Members: Mapping[str, zipfile.ZipInfo],
+    RootValue: ET.Element,
+    NativeDigestText: str,
+) -> bool:
+    if not IsExactPayload(Payload) or Payload.data is None:
+        return False
+    if ArchiveMember(Archive, Members, Payload.source_stream) != Payload.data:
+        return False
+    Attributes = Payload.attributes
+    if Attributes[KNativeDocHashAttr] != NativeDigestText:
+        return False
+    PropElem = FindPayloadProperty(Payload, RootValue)
+    return (
+        PropElem is not None
+        and XmlElemData(PropElem) == Attributes["freecad_property_data"]
+        and HasPayloadSidecars(Payload, Archive, Members, PropElem)
+    )
+
+
 # this definition exists because focused behavior needs one stable owner
 def TrustedNative(DocValue: CadDocument) -> frozenset[NativeBrepKey]:
     Trusted: set[NativeBrepKey] = set()
@@ -962,18 +979,18 @@ def TrustedNative(DocValue: CadDocument) -> frozenset[NativeBrepKey]:
         except (OSError, TypeError, ValueError, Zipfile.BadZipFile):
             continue
         try:
-            NativeDocShaTwoFiveSix = Hashlib.sha256(NativeSource).hexdigest()
+            NativeDigestText = Hashlib.sha256(NativeSource).hexdigest()
             for Payload, Mapped in zip(
                 ItemValue.brep_payloads, MappedPayloads, strict=True
             ):
                 if not IsPayloadMatch(
-                    Payload, Archive, Members, RootValue, NativeDocShaTwoFiveSix
+                    Payload, Archive, Members, RootValue, NativeDigestText
                 ):
                     continue
                 if Payload.data is None:
                     continue
                 KeyValue = ManifestNativeBrepKey(
-                    Mapped, Payload.data, NativeDocShaTwoFiveSix
+                    Mapped, Payload.data, NativeDigestText
                 )
                 if KeyValue is not None:
                     Trusted.add(KeyValue)
@@ -986,7 +1003,7 @@ def TrustedNative(DocValue: CadDocument) -> frozenset[NativeBrepKey]:
 def PayloadNative(
     Payload: BrepPayload,
     MappedPayload: Mapping[str, Any] | None = None,
-    NativeDocShaTwoFiveSix: str = "",
+    NativeDigestText: str = "",
     TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
 ) -> bytes | None:
     if not (
@@ -997,7 +1014,7 @@ def PayloadNative(
         return None
     if MappedPayload is not None:
         KeyValue = ManifestNativeBrepKey(
-            MappedPayload, Payload.data, NativeDocShaTwoFiveSix
+            MappedPayload, Payload.data, NativeDigestText
         )
         if KeyValue in TrustedNativeBreps:
             return Payload.data
@@ -1008,12 +1025,12 @@ def PayloadNative(
 def IsBrepPayload(
     Payload: BrepPayload,
     MappedPayload: Mapping[str, Any] | None = None,
-    NativeDocShaTwoFiveSix: str = "",
+    NativeDigestText: str = "",
     TrustedNativeBreps: frozenset[NativeBrepKey] = frozenset(),
 ) -> bool:
     return (
         PayloadNative(
-            Payload, MappedPayload, NativeDocShaTwoFiveSix, TrustedNativeBreps
+            Payload, MappedPayload, NativeDigestText, TrustedNativeBreps
         )
         is not None
     )
@@ -1084,7 +1101,7 @@ def IsNativeGeom(
             if MappedPayloads
             else {}
         )
-        NativeDocShaTwoFiveSix = NativeDocShaTwo(ItemValue)
+        NativeDigestText = NativeDocShaTwo(ItemValue)
         RawBreps = tuple(
             (
                 Payload
@@ -1101,7 +1118,7 @@ def IsNativeGeom(
                 IsBrepPayload(
                     Payload,
                     MappedByIdentity.get(id(Payload)),
-                    NativeDocShaTwoFiveSix,
+                    NativeDigestText,
                     TrustedNativeBreps,
                 )
                 for Payload in RawBreps
@@ -1180,7 +1197,7 @@ def CapabilityA(
             if MappedPayloads
             else {}
         )
-        NativeDocShaTwoFiveSix = NativeDocShaTwo(ItemValue)
+        NativeDigestText = NativeDocShaTwo(ItemValue)
         SketchParts = NativeSketchParts(Manifest)
         SketchReasonParts = NativeSketchCarrier(Manifest)
         SketchNative: dict[str, bool] = {}
@@ -1248,7 +1265,7 @@ def CapabilityA(
             IsBrepPayload(
                 Payload,
                 MappedByIdentity.get(id(Payload)),
-                NativeDocShaTwoFiveSix,
+                NativeDigestText,
                 TrustedNativeBreps,
             )
             for Payload in ItemValue.brep_payloads
@@ -1311,7 +1328,7 @@ def CapabilityA(
             NativePayload = PayloadNative(
                 Payload,
                 MappedByIdentity.get(id(Payload)),
-                NativeDocShaTwoFiveSix,
+                NativeDigestText,
                 TrustedNativeBreps,
             )
             if NativePayload is not None:
@@ -2410,7 +2427,7 @@ globals()["MATE_WRITE_KINDS"] = MateWriteKinds
 globals()["Mesh"] = MeshValue
 
 # this binding exists because shared behavior needs one stable value
-globals()["NATIVE_DOCUMENT_SHA256_ATTRIBUTE"] = NativeDocShaTwoFiveSix
+globals()["NATIVE_DOCUMENT_SHA256_ATTRIBUTE"] = KNativeDocHashAttr
 
 # this binding exists because shared behavior needs one stable value
 globals()["NativeFreeCADError"] = NativeFreeCadError

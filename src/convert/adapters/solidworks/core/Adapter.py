@@ -5959,8 +5959,8 @@ def Sketches(Model: NativeModel, ParamIds: set[str]) -> tuple[SketchData, ...]:
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
+# this definition exists because profile primitives share one entity mapping pass
+def ProfileSketch(Sketch: NativeSketch) -> tuple[AnyValue, ...]:
     Entities: list[SketchEntity] = []
     RefMap: dict[str, str] = {}
     ProfileEntities: dict[int, str] = {}
@@ -6039,6 +6039,16 @@ def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
             ProfileEntities.update(
                 {Offset: EntityId for Offset in Profile.marker_offsets}
             )
+    return (Entities, RefMap, ProfileEntities, ProfileOffsets)
+
+
+# this definition exists because native markers share coordinate reference context
+def SketchMarkers(
+    Sketch: NativeSketch,
+    ProfileOffsets: set[int],
+    ProfileEntities: Mapping[int, str],
+) -> tuple[list[SketchEntity], dict[int, str]]:
+    Entities: list[SketchEntity] = []
     CoordinatesByPrefix = {
         Prefix: tuple(
             (
@@ -6088,22 +6098,28 @@ def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
         )
         Entities.append(Entity)
         MarkerEntities[MarkerIndex] = Entity.id
-    RefMap.update(
-        {
-            f"native-index:{Index}": EntityId
-            for Index, EntityId in MarkerEntities.items()
-        }
-    )
+    return (Entities, MarkerEntities)
+
+
+# this definition exists because dimension operands extend marker reference lookup
+def MarkerRefsMut(
+    Sketch: NativeSketch,
+    MarkerEntities: Mapping[int, str],
+    RefMapMut: dict[str, str],
+) -> None:
     for Dimension in Sketch.dimensions:
         if Dimension.kind != "length":
             continue
         for Operand in Dimension.operands:
             EntityId = MarkerEntities.get(Operand.entity_index)
             if EntityId is not None:
-                RefMap[f"native:{Operand.kind_code:04x}:{Operand.entity_index}"] = (
+                RefMapMut[f"native:{Operand.kind_code:04x}:{Operand.entity_index}"] = (
                     EntityId
                 )
-    Constraints = SketchB(Sketch, RefMap, ParamIds)
+
+
+# this definition exists because profile loops need canonical closed entity groups
+def ClosedSketch(Sketch: NativeSketch) -> tuple[tuple[str, ...], ...]:
     ClosedProfiles: list[tuple[str, ...]] = []
     for ProfileIndex, Profile in enumerate(Sketch.profiles):
         if Profile.kind == "rectangle":
@@ -6117,6 +6133,25 @@ def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
             )
         elif Profile.kind == "circle":
             ClosedProfiles.append((ProfileId(Sketch.object_id, ProfileIndex),))
+    return tuple(ClosedProfiles)
+
+
+# this definition exists because focused behavior needs one stable owner
+def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
+    Entities, RefMap, ProfileEntities, ProfileOffsets = ProfileSketch(Sketch)
+    MarkerValues, MarkerEntities = SketchMarkers(
+        Sketch, ProfileOffsets, ProfileEntities
+    )
+    Entities.extend(MarkerValues)
+    RefMap.update(
+        {
+            f"native-index:{Index}": EntityId
+            for Index, EntityId in MarkerEntities.items()
+        }
+    )
+    MarkerRefsMut(Sketch, MarkerEntities, RefMap)
+    Constraints = SketchB(Sketch, RefMap, ParamIds)
+    ClosedProfiles = ClosedSketch(Sketch)
     SketchParamIds = tuple(
         (
             ParamId
@@ -6131,7 +6166,7 @@ def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
         entities=tuple(Entities),
         constraints=Constraints,
         parameter_ids=SketchParamIds,
-        closed_profile_entity_ids=tuple(ClosedProfiles),
+        closed_profile_entity_ids=ClosedProfiles,
         provenance=FeatureSpan(Sketch),
         attributes=FrozenMapping(
             {
@@ -6146,6 +6181,74 @@ def SketchA(Sketch: NativeSketch, ParamIds: set[str]) -> SketchData:
     )
 
 
+# this definition exists because point and line markers share coordinate resolution
+def MarkerLinear(
+    Marker: NativeMarker,
+    CoordinatesByPrefix: dict[str, tuple[tuple[float, float] | None, ...]],
+    CoordinatesByIndex: tuple[tuple[float, float] | None, ...],
+    ResolvedSemantic: str,
+) -> tuple[AnyValue, AnyValue] | None:
+    if ResolvedSemantic == "point" and Marker.coordinates_mm is not None:
+        return (GeomKind.POINT, PointGeom(VectorTwo(*Marker.coordinates_mm)))
+    if ResolvedSemantic != "line" or Marker.endpoint_indices is None:
+        return None
+    Coordinates = (
+        CoordinatesByIndex
+        if ResolvedSemantic != Marker.semantic
+        or (Marker.profile_role == 2 and Marker.native_kind == 2)
+        else CoordinatesByPrefix[Marker.prefix]
+    )
+    Start = CoordinateRef(Coordinates, Marker.endpoint_indices[0])
+    EndValue = CoordinateRef(Coordinates, Marker.endpoint_indices[1])
+    if Start is not None and EndValue is not None and (Start != EndValue):
+        return (GeomKind.LINE, LineGeom(VectorTwo(*Start), VectorTwo(*EndValue)))
+    return (GeomKind.NATIVE, NativeMarkerA(Marker))
+
+
+# this definition exists because curved markers share native fallback semantics
+def MarkerCurved(
+    Marker: NativeMarker,
+    CoordinatesByIndex: tuple[tuple[float, float] | None, ...],
+    ResolvedSemantic: str,
+) -> tuple[AnyValue, AnyValue]:
+    KindValue: AnyValue = GeomKind.NATIVE
+    GeomValue: AnyValue = None
+    if ResolvedSemantic in {"circle", "arc"}:
+        Circular = MarkerCircular(Marker, CoordinatesByIndex, ResolvedSemantic)
+        if Circular is not None:
+            return Circular
+    elif ResolvedSemantic == "ellipse":
+        KindValue = GeomKind.ELLIPSE
+        GeomValue = MarkerEllipse(Marker, CoordinatesByIndex)
+    elif ResolvedSemantic == "arc_ellipse":
+        KindValue = GeomKind.ARC_ELLIPSE
+        GeomValue = MarkerArcGeom(Marker, CoordinatesByIndex)
+    elif ResolvedSemantic == "parabola":
+        KindValue = GeomKind.ARC_PARABOLA
+        GeomValue = MarkerParabola(Marker, CoordinatesByIndex)
+    elif ResolvedSemantic == "spline":
+        KindValue = GeomKind.SPLINE
+        GeomValue = MarkerSpline(Marker, CoordinatesByIndex)
+    if GeomValue is None:
+        return (GeomKind.NATIVE, NativeMarkerA(Marker, ResolvedSemantic))
+    return (KindValue, GeomValue)
+
+
+# this definition exists because marker geometry needs ordered semantic dispatch
+def MarkerGeometry(
+    Marker: NativeMarker,
+    CoordinatesByPrefix: dict[str, tuple[tuple[float, float] | None, ...]],
+    CoordinatesByIndex: tuple[tuple[float, float] | None, ...],
+    ResolvedSemantic: str,
+) -> tuple[AnyValue, AnyValue]:
+    Linear = MarkerLinear(
+        Marker, CoordinatesByPrefix, CoordinatesByIndex, ResolvedSemantic
+    )
+    if Linear is not None:
+        return Linear
+    return MarkerCurved(Marker, CoordinatesByIndex, ResolvedSemantic)
+
+
 # this definition exists because focused behavior needs one stable owner
 def MarkerEntity(
     Sketch: NativeSketch,
@@ -6156,66 +6259,9 @@ def MarkerEntity(
 ) -> SketchEntity:
     EntityId = MarkerId(Sketch.object_id, Marker.offset)
     ResolvedSemantic = Semantic or Marker.semantic
-    if ResolvedSemantic == "point" and Marker.coordinates_mm is not None:
-        KindValue = GeomKind.POINT
-        GeomValue: AnyValue = PointGeom(VectorTwo(*Marker.coordinates_mm))
-    elif ResolvedSemantic == "line" and Marker.endpoint_indices is not None:
-        Coordinates = (
-            CoordinatesByIndex
-            if ResolvedSemantic != Marker.semantic
-            or (Marker.profile_role == 2 and Marker.native_kind == 2)
-            else CoordinatesByPrefix[Marker.prefix]
-        )
-        Start = CoordinateRef(Coordinates, Marker.endpoint_indices[0])
-        EndValue = CoordinateRef(Coordinates, Marker.endpoint_indices[1])
-        if Start is not None and EndValue is not None and (Start != EndValue):
-            KindValue = GeomKind.LINE
-            GeomValue = LineGeom(VectorTwo(*Start), VectorTwo(*EndValue))
-        else:
-            KindValue = GeomKind.NATIVE
-            GeomValue = NativeMarkerA(Marker)
-    elif ResolvedSemantic in {"circle", "arc"}:
-        Circular = MarkerCircular(Marker, CoordinatesByIndex, ResolvedSemantic)
-        if Circular is None:
-            KindValue = GeomKind.NATIVE
-            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
-        else:
-            KindValue, GeomValue = Circular
-    elif ResolvedSemantic == "ellipse":
-        Ellipse = MarkerEllipse(Marker, CoordinatesByIndex)
-        if Ellipse is None:
-            KindValue = GeomKind.NATIVE
-            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
-        else:
-            KindValue = GeomKind.ELLIPSE
-            GeomValue = Ellipse
-    elif ResolvedSemantic == "arc_ellipse":
-        Ellipse = MarkerArcGeom(Marker, CoordinatesByIndex)
-        if Ellipse is None:
-            KindValue = GeomKind.NATIVE
-            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
-        else:
-            KindValue = GeomKind.ARC_ELLIPSE
-            GeomValue = Ellipse
-    elif ResolvedSemantic == "parabola":
-        Parabola = MarkerParabola(Marker, CoordinatesByIndex)
-        if Parabola is None:
-            KindValue = GeomKind.NATIVE
-            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
-        else:
-            KindValue = GeomKind.ARC_PARABOLA
-            GeomValue = Parabola
-    elif ResolvedSemantic == "spline":
-        Spline = MarkerSpline(Marker, CoordinatesByIndex)
-        if Spline is None:
-            KindValue = GeomKind.NATIVE
-            GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
-        else:
-            KindValue = GeomKind.SPLINE
-            GeomValue = Spline
-    else:
-        KindValue = GeomKind.NATIVE
-        GeomValue = NativeMarkerA(Marker, ResolvedSemantic)
+    KindValue, GeomValue = MarkerGeometry(
+        Marker, CoordinatesByPrefix, CoordinatesByIndex, ResolvedSemantic
+    )
     return SketchEntity(
         id=EntityId,
         kind=KindValue,
