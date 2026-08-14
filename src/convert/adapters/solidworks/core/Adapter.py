@@ -2200,14 +2200,10 @@ def AsmCoreStreams(
     return EncodeAsmCore(ModelName, ConfigName, tuple(CoreItems))
 
 
-# this definition exists because focused behavior needs one stable owner
-def SavedGenerated(
-    DocValue: CadDocument, Encoding: NativeAssemblyEncoding
-) -> tuple[dict[str, bytes], bool]:
-    AsmValue = DocValue.assembly
-    if AsmValue is None or Encoding.mates_complete:
-        return (dict(Encoding.mate_streams), Encoding.mates_complete)
-    RootId = Encoding.definition_ids[AsmValue.root_definition_id]
+# this definition exists because saved mate streams need strict donor selection
+def SavedMateLists(
+    DocValue: CadDocument, RootId: int
+) -> dict[str, tuple[BrepPayload, NativeMateList]]:
     Candidates: dict[str, tuple[BrepPayload, NativeMateList]] = {}
     for Payload in DocValue.brep_payloads:
         if (
@@ -2230,8 +2226,14 @@ def SavedGenerated(
         if OwnerId != RootId or Payload.source_stream in Candidates:
             continue
         Candidates[Payload.source_stream] = (Payload, Decoded)
-    if not Candidates:
-        return ({}, False)
+    return Candidates
+
+
+# this predicate exists because saved mate payload ownership must be complete
+def IsSavedPayloads(
+    AsmValue: AsmData,
+    Candidates: Mapping[str, tuple[BrepPayload, NativeMateList]],
+) -> bool:
     PayloadIds = {Payload.id for Payload, Ignored in Candidates.values()}
     DesiredPayloadIds = {
         str(Value)
@@ -2247,8 +2249,14 @@ def SavedGenerated(
         )
         if isinstance(Value, str) and Value
     }
-    if DesiredPayloadIds != PayloadIds:
-        return ({}, False)
+    return DesiredPayloadIds == PayloadIds
+
+
+# this predicate exists because saved mate records must match neutral semantics
+def IsSavedMatches(
+    AsmValue: AsmData,
+    Candidates: Mapping[str, tuple[BrepPayload, NativeMateList]],
+) -> bool:
     DesiredMates = {
         (
             str(MateValue.attributes.get("native_payload_id", "")),
@@ -2269,10 +2277,10 @@ def SavedGenerated(
             if MateValue is None or not IsSavedNativeMa(
                 MateValue, NativeMate, DesiredEntities
             ):
-                return ({}, False)
+                return False
             MatchedMates.add(MateValue.id)
     if MatchedMates != {MateValue.id for MateValue in AsmValue.mates}:
-        return ({}, False)
+        return False
     ExpectedGroupOffsets = {
         (
             str(Group.attributes.get("native_payload_id", "")),
@@ -2281,7 +2289,23 @@ def SavedGenerated(
         for Group in AsmValue.mate_groups
         for NameValue in ("start_record_offset", "end_record_offset")
     }
-    if MatchedGroupOffsets != ExpectedGroupOffsets:
+    return MatchedGroupOffsets == ExpectedGroupOffsets
+
+
+# this definition exists because focused behavior needs one stable owner
+def SavedGenerated(
+    DocValue: CadDocument, Encoding: NativeAssemblyEncoding
+) -> tuple[dict[str, bytes], bool]:
+    AsmValue = DocValue.assembly
+    if AsmValue is None or Encoding.mates_complete:
+        return (dict(Encoding.mate_streams), Encoding.mates_complete)
+    RootId = Encoding.definition_ids[AsmValue.root_definition_id]
+    Candidates = SavedMateLists(DocValue, RootId)
+    if (
+        not Candidates
+        or not IsSavedPayloads(AsmValue, Candidates)
+        or not IsSavedMatches(AsmValue, Candidates)
+    ):
         return ({}, False)
     return (
         {
