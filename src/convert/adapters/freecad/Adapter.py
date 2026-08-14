@@ -2240,7 +2240,10 @@ def ProbeSource(Instance: AnyValue, Source: Source) -> ProbeResult:
             try:
                 Value = ExtractManifestFromFcstd(DataValue)
             except ValueError as ErrorInfo:
-                if str(ErrorInfo) != "FCStd archive has no embedded Kit interchange document":
+                if (
+                    str(ErrorInfo)
+                    != "FCStd archive has no embedded Kit interchange document"
+                ):
                     return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
             else:
                 try:
@@ -2252,7 +2255,9 @@ def ProbeSource(Instance: AnyValue, Source: Source) -> ProbeResult:
             return ProbeResult(Instance.info.format_id, Confidence, Reason)
     except (OSError, TypeError, ValueError, Zipfile.BadZipFile) as ErrorInfo:
         return ProbeResult(Instance.info.format_id, 0.0, str(ErrorInfo))
-    return ProbeResult(Instance.info.format_id, 0.0, "ZIP archive has no FreeCAD document")
+    return ProbeResult(
+        Instance.info.format_id, 0.0, "ZIP archive has no FreeCAD document"
+    )
 
 
 # this definition reads an embedded or native archive into the interchange model
@@ -2358,20 +2363,36 @@ def BundleArtifacts(
     Portable: bool,
     NativeOuters: Sequence[tuple[str, CadDoc]],
     TrustedBreps: frozenset[NativeBrepKey],
-) -> tuple[dict[str, dict[str, AnyValue]], dict[str, str], int, int, str | None, float | None, bool]:
+) -> tuple[
+    dict[str, dict[str, AnyValue]],
+    dict[str, str],
+    int,
+    int,
+    str | None,
+    float | None,
+    bool,
+]:
     OuterLinks: dict[str, dict[str, AnyValue]] = {}
     NativeLinks: dict[str, str] = {}
     ComponentBytes = 0
     NativeBytes = 0
     DocTimestamp: str | None = None
     TimestampEpoch: float | None = None
-    CarrierOnly = TargetPath is None and Portable and (
-        bool(NativeOuters) or DocValue.assembly is not None
+    CarrierOnly = (
+        TargetPath is None
+        and Portable
+        and (bool(NativeOuters) or DocValue.assembly is not None)
     )
     if TargetPath is not None and DocValue.assembly is not None:
         DocTimestamp, TimestampEpoch = BundleTimestamp(TargetPath)
         OuterLinks, ComponentBytes = WriteComponents(
-            DocValue, TargetPath, Overwrite, Validate, DocTimestamp, TimestampEpoch, TrustedBreps
+            DocValue,
+            TargetPath,
+            Overwrite,
+            Validate,
+            DocTimestamp,
+            TimestampEpoch,
+            TrustedBreps,
         )
     if TargetPath is not None and NativeOuters and Portable:
         NativeLinks, NativeBytes = WriteNative(
@@ -2405,7 +2426,9 @@ def RebuildMeta(
         "sketch_count": len(DocValue.sketches),
         "timeline_count": len(DocValue.feature_timeline),
         "native_payload_count": len(DocValue.brep_payloads),
-        "assembly_occurrence_count": len(AsmValue.instances) if AsmValue is not None else 0,
+        "assembly_occurrence_count": (
+            len(AsmValue.instances) if AsmValue is not None else 0
+        ),
         "assembly_mate_count": len(AsmValue.mates) if AsmValue is not None else 0,
         "component_file_count": len(OuterLinks),
         "component_bytes_written": ComponentBytes,
@@ -2447,8 +2470,22 @@ def RebuildResult(
     NativeOuters: Sequence[tuple[str, CadDoc]],
     TrustedBreps: frozenset[NativeBrepKey],
 ) -> WriteResult:
-    OuterLinks, NativeLinks, ComponentBytes, NativeBytes, DocStamp, StampEpoch, CarrierOnly = BundleArtifacts(
-        DocValue, TargetPath, Overwrite, Selected.validate, Portable, NativeOuters, TrustedBreps
+    (
+        OuterLinks,
+        NativeLinks,
+        ComponentBytes,
+        NativeBytes,
+        DocStamp,
+        StampEpoch,
+        CarrierOnly,
+    ) = BundleArtifacts(
+        DocValue,
+        TargetPath,
+        Overwrite,
+        Selected.validate,
+        Portable,
+        NativeOuters,
+        TrustedBreps,
     )
     DataValue = BuildFcstdArchive(
         DocToManifest(DocValue),
@@ -2463,7 +2500,14 @@ def RebuildResult(
     Transfers = CapabilityA(DocValue, TargetPath, Portable, False, TrustedBreps)
     AppUsable = not CarrierOnly and IsNativeGeom(DocValue, TrustedBreps)
     MetaValue = RebuildMeta(
-        DocValue, OuterLinks, ComponentBytes, NativeLinks, NativeBytes, NativeOuters, CarrierOnly, AppUsable
+        DocValue,
+        OuterLinks,
+        ComponentBytes,
+        NativeLinks,
+        NativeBytes,
+        NativeOuters,
+        CarrierOnly,
+        AppUsable,
     )
     return WriteResult(
         path=PathValue,
@@ -2502,10 +2546,25 @@ def WriteTarget(
     NativeSource = SelectNative(DocValue, Selected, Portable, NativeOuters)
     if NativeSource is not None:
         return ExactResult(
-            Instance, DocValue, Target, TargetPath, ShouldOverwrite, Portable, NativeOuters, NativeSource
+            Instance,
+            DocValue,
+            Target,
+            TargetPath,
+            ShouldOverwrite,
+            Portable,
+            NativeOuters,
+            NativeSource,
         )
     return RebuildResult(
-        Instance, DocValue, Target, TargetPath, Selected, ShouldOverwrite, Portable, NativeOuters, TrustedBreps
+        Instance,
+        DocValue,
+        Target,
+        TargetPath,
+        Selected,
+        ShouldOverwrite,
+        Portable,
+        NativeOuters,
+        TrustedBreps,
     )
 
 
