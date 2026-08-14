@@ -984,48 +984,91 @@ def EncodeRecord(NameValue: str, ClassName: str, EntityCount: int) -> bytes | No
     Record.extend(BodyValue)
     return bytes(Record)
 
-# this definition exists because focused behavior needs one stable owner
-def EncodeMate(MateValue: MateConstraint, Entities: Mapping[str, MateEntity], AsmValue: AssemblyData, Definitions: Mapping[str, ComponentDefinition]) -> tuple[bytes | None, tuple[str, ...]]:
+# validation remains isolated so unsupported mate states never enter byte construction
+def GetMateClass(MateValue: MateConstraint) -> tuple[str, str, tuple[str, ...]]:
     if MateValue.suppressed:
-        return (None, (KMateLossSuppressed,))
+        return ('', '', (KMateLossSuppressed,))
     if not MateValue.driving:
-        return (None, (KMateLossNotDriving,))
+        return ('', '', (KMateLossNotDriving,))
     NativeKind, ClassName = NativeMateClass(MateValue)
     if not ClassName:
-        return (None, (KMateLossKind,))
+        return ('', '', (KMateLossKind,))
+    return (NativeKind, ClassName, ())
+
+
+# entity collection owns reference validation so record construction only receives serialized values
+def CollectEntities(
+    MateValue: MateConstraint,
+    Entities: Mapping[str, MateEntity],
+    AsmValue: AssemblyData,
+    Definitions: Mapping[str, ComponentDefinition],
+) -> tuple[list[str] | None, list[str]]:
     Reasons: list[str] = [KMateLossExpression] if MateValue.parameter_ids else []
     EntityValues: list[str] = []
     for EntityId in MateValue.entity_ids:
         Entity = Entities.get(EntityId)
         if Entity is None or Entity.owner_definition_id != MateValue.owner_definition_id:
-            return (None, (KMateLossEntityMissing,))
+            return (None, [KMateLossEntityMissing])
         Values, EntityReasons = MateEntityA(Entity, AsmValue, Definitions)
         if Values is None:
-            return (None, EntityReasons)
+            return (None, list(EntityReasons))
         EntityValues.extend(Values)
         Reasons.extend(EntityReasons)
-    AlignmentCode = MateAlignmentB(MateValue.alignment)
-    if AlignmentCode is None:
-        return (None, (KMateLossAlignment,))
-    Dimensions, ValueReasons = MateDimension(MateValue, NativeKind)
-    Reasons.extend(ValueReasons)
+    return (EntityValues, Reasons)
+
+
+# dimension encoding stays independent because scalar records have their own failure contract
+def EncodeDims(Dimensions: tuple[tuple[str, float], ...]) -> bytes | None:
+    ResultData = bytearray()
+    for NameValue, Value in Dimensions:
+        Serialized = Serialized(NameValue)
+        if Serialized is None:
+            return None
+        ResultData.extend(Serialized)
+        ResultData.extend(DimensionScalarHeaders[0])
+        ResultData.extend(Struct.pack('<d', Value))
+    return bytes(ResultData)
+
+
+# byte construction stays focused so validated semantics map deterministically onto one record
+def BuildMateBytes(
+    MateValue: MateConstraint,
+    ClassName: str,
+    AlignmentCode: int,
+    EntityValues: list[str],
+    Dimensions: tuple[tuple[str, float], ...],
+) -> tuple[bytes | None, tuple[str, ...]]:
     Record = bytearray(EncodeRecord(MateValue.name, ClassName, len(MateValue.entity_ids)) or b'')
     if not Record:
         return (None, (KMateLossName,))
     Struct.pack_into('<H', Record, len(Record) - KMateRecordBodySize + KMateAlignmentOffset, AlignmentCode)
     for Value in EntityValues:
-        Serialized = Serialized(Value)
-        if Serialized is None:
+        SerializedValue = Serialized(Value)
+        if SerializedValue is None:
             return (None, (KMateLossEntityRef,))
-        Record.extend(Serialized)
-    for NameValue, Value in Dimensions:
-        Serialized = Serialized(NameValue)
-        if Serialized is None:
-            return (None, (KMateLossName,))
-        Record.extend(Serialized)
-        Record.extend(DimensionScalarHeaders[0])
-        Record.extend(Struct.pack('<d', Value))
-    return (bytes(Record), tuple(dict.fromkeys(Reasons)))
+        Record.extend(SerializedValue)
+    DimensionData = EncodeDims(Dimensions)
+    if DimensionData is None:
+        return (None, (KMateLossName,))
+    Record.extend(DimensionData)
+    return (bytes(Record), ())
+
+
+# complete mate encoding composes validation entity dimensions and record phases
+def EncodeMate(MateValue: MateConstraint, Entities: Mapping[str, MateEntity], AsmValue: AssemblyData, Definitions: Mapping[str, ComponentDefinition]) -> tuple[bytes | None, tuple[str, ...]]:
+    NativeKind, ClassName, FailureReasons = GetMateClass(MateValue)
+    if FailureReasons:
+        return (None, FailureReasons)
+    EntityValues, Reasons = CollectEntities(MateValue, Entities, AsmValue, Definitions)
+    if EntityValues is None:
+        return (None, tuple(Reasons))
+    AlignmentCode = MateAlignmentB(MateValue.alignment)
+    if AlignmentCode is None:
+        return (None, (KMateLossAlignment,))
+    Dimensions, ValueReasons = MateDimension(MateValue, NativeKind)
+    Reasons.extend(ValueReasons)
+    RecordData, BuildReasons = BuildMateBytes(MateValue, ClassName, AlignmentCode, EntityValues, Dimensions)
+    return (RecordData, tuple(dict.fromkeys((*Reasons, *BuildReasons))))
 
 # this definition exists because focused behavior needs one stable owner
 def NativeMateClass(MateValue: MateConstraint) -> tuple[str, str]:
