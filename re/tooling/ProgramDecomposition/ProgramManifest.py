@@ -1105,3 +1105,6 @@ KProgramManifest = (
         "5d7d62a4f5f22504460c62889e7921cdc4de6c6e67609f483fc6816eeb93ba2f",
     ),
 )
+
+# verifier compatibility exposes the focused manifest through its stable public name
+KProgramStats = KProgramManifest
