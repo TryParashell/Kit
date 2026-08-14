@@ -160,8 +160,18 @@ def RenderRegistry(ProgramData: ProgramData, ModulePaths: tuple[str, ...]) -> st
 def RewriteFacade(ProgramData: ProgramData) -> str:
     SourceLines = ProgramData.SourceText.splitlines()
     TreeData = ast.parse(ProgramData.SourceText, filename=str(ProgramData.SourcePath))
-    RemovedLines: set[int] = set()
     TargetNames = {ProgramData.OwnerName, ProgramData.OpsName}
+    RegistryNames = {
+        AliasData.asname or AliasData.name
+        for NodeData in TreeData.body
+        if isinstance(NodeData, ast.ImportFrom)
+        and NodeData.level == 1
+        and NodeData.module == "Registry"
+        for AliasData in NodeData.names
+    }
+    if TargetNames.issubset(RegistryNames):
+        return FormatSource(ProgramData.SourceText)
+    RemovedLines: set[int] = set()
     for NodeData in TreeData.body:
         if isinstance(NodeData, ast.Assign):
             NameTexts = {

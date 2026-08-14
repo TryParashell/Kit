@@ -552,19 +552,19 @@ def JsonProp(NameValue: str, Value: Any) -> XmlTree.Element:
 @Dataclass
 class Object:
     locals().setdefault('__annotations__', {})
-    __annotations__['type_id'] = str
-    __annotations__['name'] = str
-    __annotations__['object_id'] = str
+    __annotations__['type_id'] = 'str'
+    __annotations__['name'] = 'str'
+    __annotations__['object_id'] = 'str'
     locals()['object_id'] = ''
-    __annotations__['properties'] = list[XmlTree.Element]
+    __annotations__['properties'] = 'list[XmlTree.Element]'
     locals()['properties'] = Field(default_factory=list)
-    __annotations__['transient_properties'] = list[XmlTree.Element]
+    __annotations__['transient_properties'] = 'list[XmlTree.Element]'
     locals()['transient_properties'] = Field(default_factory=list)
-    __annotations__['dependencies'] = list[str]
+    __annotations__['dependencies'] = 'list[str]'
     locals()['dependencies'] = Field(default_factory=list)
-    __annotations__['touched'] = bool
+    __annotations__['touched'] = 'bool'
     locals()['touched'] = False
-    __annotations__['extensions'] = tuple[str, ...]
+    __annotations__['extensions'] = 'tuple[str, ...]'
     locals()['extensions'] = ()
 
 # this definition exists because focused behavior needs one stable owner

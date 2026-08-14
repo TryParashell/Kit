@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from ProgramModel import MethodData, ProgramData
-from ProgramReader import ReadAssigns
+from ProgramReader import GetByteStats, ReadAssigns
 from ProgramRenderer import (
     HashProgram,
     HashText,
@@ -211,6 +211,43 @@ def GetLiveStats(
             )
         )
     return tuple(ByteStats)
+
+
+# committed focused modules must be sufficient to regenerate the complete canonical tree
+def LoadCurrentPrograms(
+    ProgramRoot: Path, ManifestPath: Path
+) -> tuple[ProgramData, ...]:
+    _, ProgramStats = LoadManifest(ManifestPath)
+    Catalogs = ReadOwners(ProgramRoot)
+    Programs: list[ProgramData] = []
+    for StatRecord in ProgramStats:
+        (
+            VariantPath,
+            OwnerName,
+            OpsName,
+            StreamNames,
+            _,
+            _,
+            PublicNames,
+            _,
+            _,
+        ) = StatRecord
+        MethodItems = ReadMethods(ProgramRoot, VariantPath, Catalogs)
+        Streams = ComposeStreams(MethodItems, StreamNames)
+        ProgramPath = ProgramRoot / VariantPath / "Program.py"
+        Programs.append(
+            ProgramData(
+                VariantPath=VariantPath,
+                SourcePath=ProgramPath,
+                SourceText=ProgramPath.read_text(encoding="utf-8"),
+                OwnerName=OwnerName,
+                OpsName=OpsName,
+                Streams=Streams,
+                PublicNames=PublicNames,
+                ByteStats=GetByteStats(Streams),
+            )
+        )
+    return tuple(Programs)
 
 
 # one exhaustive verifier guards structure formatting public imports and encoded bytes together

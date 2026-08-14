@@ -32,46 +32,46 @@ class FreeCadBrep(ValueError):
 @Dataclass(frozen=True, slots=True)
 class ShapeRecord:
     locals().setdefault('__annotations__', {})
-    __annotations__['key'] = str
-    __annotations__['kind'] = str
-    __annotations__['geometry'] = tuple[str, ...]
-    __annotations__['flags'] = str
-    __annotations__['children'] = tuple[tuple[str, bool], ...]
+    __annotations__['key'] = 'str'
+    __annotations__['kind'] = 'str'
+    __annotations__['geometry'] = 'tuple[str, ...]'
+    __annotations__['flags'] = 'str'
+    __annotations__['children'] = 'tuple[tuple[str, bool], ...]'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class EdgePcurve:
     locals().setdefault('__annotations__', {})
-    __annotations__['index'] = int
-    __annotations__['first'] = float
-    __annotations__['last'] = float
+    __annotations__['index'] = 'int'
+    __annotations__['first'] = 'float'
+    __annotations__['last'] = 'float'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class GeneratedPcurve:
     locals().setdefault('__annotations__', {})
-    __annotations__['record'] = str
-    __annotations__['first'] = float
-    __annotations__['last'] = float
-    __annotations__['start'] = tuple[float, float]
-    __annotations__['end'] = tuple[float, float]
+    __annotations__['record'] = 'str'
+    __annotations__['first'] = 'float'
+    __annotations__['last'] = 'float'
+    __annotations__['start'] = 'tuple[float, float]'
+    __annotations__['end'] = 'tuple[float, float]'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class SeamBand:
     locals().setdefault('__annotations__', {})
-    __annotations__['face_id'] = str
-    __annotations__['loop_ids'] = tuple[str, str]
-    __annotations__['low_coedge_id'] = str
-    __annotations__['high_coedge_id'] = str
-    __annotations__['low_reversed'] = bool
-    __annotations__['high_reversed'] = bool
-    __annotations__['low_vertex_id'] = str
-    __annotations__['high_vertex_id'] = str
-    __annotations__['curve_record'] = str
-    __annotations__['length'] = float
-    __annotations__['first_pcurve_index'] = int
-    __annotations__['second_pcurve_index'] = int
+    __annotations__['face_id'] = 'str'
+    __annotations__['loop_ids'] = 'tuple[str, str]'
+    __annotations__['low_coedge_id'] = 'str'
+    __annotations__['high_coedge_id'] = 'str'
+    __annotations__['low_reversed'] = 'bool'
+    __annotations__['high_reversed'] = 'bool'
+    __annotations__['low_vertex_id'] = 'str'
+    __annotations__['high_vertex_id'] = 'str'
+    __annotations__['curve_record'] = 'str'
+    __annotations__['length'] = 'float'
+    __annotations__['first_pcurve_index'] = 'int'
+    __annotations__['second_pcurve_index'] = 'int'
 
 # this definition exists because focused behavior needs one stable owner
 class ModelGraph:

@@ -42,28 +42,28 @@ class OsmxFormatError(ValueError):
 @Dataclass(frozen=True, slots=True)
 class CfvTwoExtent:
     locals().setdefault('__annotations__', {})
-    __annotations__['physical_offset'] = int
-    __annotations__['physical_length'] = int
-    __annotations__['logical_offset'] = int
-    __annotations__['flags'] = int
+    __annotations__['physical_offset'] = 'int'
+    __annotations__['physical_length'] = 'int'
+    __annotations__['logical_offset'] = 'int'
+    __annotations__['flags'] = 'int'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CfvTwoStream:
     locals().setdefault('__annotations__', {})
-    __annotations__['name'] = str
-    __annotations__['logical_length'] = int
-    __annotations__['descriptor_offset'] = int
-    __annotations__['extents'] = tuple[CfvTwoExtent, ...]
+    __annotations__['name'] = 'str'
+    __annotations__['logical_length'] = 'int'
+    __annotations__['descriptor_offset'] = 'int'
+    __annotations__['extents'] = 'tuple[CfvTwoExtent, ...]'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class CfvTwoFolder:
     locals().setdefault('__annotations__', {})
-    __annotations__['physical_base'] = int
-    __annotations__['offset'] = int
-    __annotations__['length'] = int
-    __annotations__['streams'] = tuple[CfvTwoStream, ...]
+    __annotations__['physical_base'] = 'int'
+    __annotations__['offset'] = 'int'
+    __annotations__['length'] = 'int'
+    __annotations__['streams'] = 'tuple[CfvTwoStream, ...]'
 
     # this definition exists because focused behavior needs one stable owner
     def Stream(Instance, NameValue: str) -> CfvTwoStream | None:
@@ -81,28 +81,28 @@ class CfvTwoFolder:
 @Dataclass(frozen=True, slots=True)
 class CfvTwoDecl:
     locals().setdefault('__annotations__', {})
-    __annotations__['ordinal'] = int
-    __annotations__['class_name'] = str
-    __annotations__['base_class'] = str
-    __annotations__['stream_name'] = str
+    __annotations__['ordinal'] = 'int'
+    __annotations__['class_name'] = 'str'
+    __annotations__['base_class'] = 'str'
+    __annotations__['stream_name'] = 'str'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class OsmxSymbol:
     locals().setdefault('__annotations__', {})
-    __annotations__['index'] = int
-    __annotations__['offset'] = int
-    __annotations__['value'] = str
+    __annotations__['index'] = 'int'
+    __annotations__['offset'] = 'int'
+    __annotations__['value'] = 'str'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class OsmxArchive:
     locals().setdefault('__annotations__', {})
-    __annotations__['data'] = bytes
-    __annotations__['version'] = str
-    __annotations__['symbol_table_offset'] = int
-    __annotations__['symbol_data_offset'] = int
-    __annotations__['symbols'] = tuple[OsmxSymbol, ...]
+    __annotations__['data'] = 'bytes'
+    __annotations__['version'] = 'str'
+    __annotations__['symbol_table_offset'] = 'int'
+    __annotations__['symbol_data_offset'] = 'int'
+    __annotations__['symbols'] = 'tuple[OsmxSymbol, ...]'
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod
@@ -145,9 +145,9 @@ class OsmxArchive:
 @Dataclass(frozen=True, slots=True)
 class CfvTwoArchive:
     locals().setdefault('__annotations__', {})
-    __annotations__['data'] = bytes
-    __annotations__['outer'] = CfvTwoFolder
-    __annotations__['nested'] = tuple[CfvTwoFolder, ...]
+    __annotations__['data'] = 'bytes'
+    __annotations__['outer'] = 'CfvTwoFolder'
+    __annotations__['nested'] = 'tuple[CfvTwoFolder, ...]'
 
     # this definition exists because focused behavior needs one stable owner
     @classmethod

@@ -27,7 +27,7 @@ from ProgramRenderer import (
     RenderRegistry,
     RewriteFacade,
 )
-from ProgramVerifier import VerifyTree
+from ProgramVerifier import LoadCurrentPrograms, VerifyTree
 
 
 # repository discovery stays anchored to this script so commands work from any directory
@@ -198,9 +198,9 @@ def MainEntry() -> int:
         print(json.dumps(CheckStats, indent=2, sort_keys=True))
         return 0
     if Arguments.SourceRoot is None:
-        raise ValueError("write mode requires a monolithic source root")
-    SourceRoot = Arguments.SourceRoot.resolve()
-    Programs = LoadPrograms(SourceRoot)
+        Programs = LoadCurrentPrograms(ProgramRoot, ManifestPath)
+    else:
+        Programs = LoadPrograms(Arguments.SourceRoot.resolve())
     OutputTexts, ManifestText = BuildOutputs(Programs)
     WriteTree(ProgramRoot, ManifestPath, OutputTexts, ManifestText)
     ClearModules()

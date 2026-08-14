@@ -44,55 +44,55 @@ KDefaultMaxDepth = 8
 @Dataclass(frozen=True, slots=True)
 class NativeProductD:
     locals().setdefault('__annotations__', {})
-    __annotations__['value'] = str
-    __annotations__['offset'] = int
-    __annotations__['length'] = int
-    __annotations__['encoding'] = str
+    __annotations__['value'] = 'str'
+    __annotations__['offset'] = 'int'
+    __annotations__['length'] = 'int'
+    __annotations__['encoding'] = 'str'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProduct:
     locals().setdefault('__annotations__', {})
-    __annotations__['definition_name'] = str
-    __annotations__['instance_name'] = str
-    __annotations__['definition_offset'] = int
-    __annotations__['instance_offset'] = int
-    __annotations__['definition_length'] = int
-    __annotations__['instance_length'] = int
-    __annotations__['reference_number'] = str
+    __annotations__['definition_name'] = 'str'
+    __annotations__['instance_name'] = 'str'
+    __annotations__['definition_offset'] = 'int'
+    __annotations__['instance_offset'] = 'int'
+    __annotations__['definition_length'] = 'int'
+    __annotations__['instance_length'] = 'int'
+    __annotations__['reference_number'] = 'str'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProductB:
     locals().setdefault('__annotations__', {})
-    __annotations__['root_name'] = str
-    __annotations__['stream_name'] = str
-    __annotations__['stream_descriptor_offset'] = int
-    __annotations__['table_offset'] = int
-    __annotations__['tokens'] = tuple[NativeProductD, ...]
-    __annotations__['occurrences'] = tuple[NativeProduct, ...]
-    __annotations__['ambiguous_tokens'] = tuple[NativeProductD, ...]
-    __annotations__['alternatives'] = tuple[NativeProductC, ...]
+    __annotations__['root_name'] = 'str'
+    __annotations__['stream_name'] = 'str'
+    __annotations__['stream_descriptor_offset'] = 'int'
+    __annotations__['table_offset'] = 'int'
+    __annotations__['tokens'] = 'tuple[NativeProductD, ...]'
+    __annotations__['occurrences'] = 'tuple[NativeProduct, ...]'
+    __annotations__['ambiguous_tokens'] = 'tuple[NativeProductD, ...]'
+    __annotations__['alternatives'] = 'tuple[NativeProductC, ...]'
     locals()['alternatives'] = ()
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProductC:
     locals().setdefault('__annotations__', {})
-    __annotations__['root_name'] = str
-    __annotations__['stream_name'] = str
-    __annotations__['stream_descriptor_offset'] = int
-    __annotations__['table_offset'] = int
-    __annotations__['tokens'] = tuple[NativeProductD, ...]
+    __annotations__['root_name'] = 'str'
+    __annotations__['stream_name'] = 'str'
+    __annotations__['stream_descriptor_offset'] = 'int'
+    __annotations__['table_offset'] = 'int'
+    __annotations__['tokens'] = 'tuple[NativeProductD, ...]'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(frozen=True, slots=True)
 class NativeProductA:
     locals().setdefault('__annotations__', {})
-    __annotations__['name'] = str
-    __annotations__['path'] = PathValue
-    __annotations__['document_type'] = str
-    __annotations__['sha256'] = str
+    __annotations__['name'] = 'str'
+    __annotations__['path'] = 'PathValue'
+    __annotations__['document_type'] = 'str'
+    __annotations__['sha256'] = 'str'
 
 # this binding exists because shared behavior needs one stable value
 KComponentReader = Callable[[PathValue, ReadOptions], CadDoc]

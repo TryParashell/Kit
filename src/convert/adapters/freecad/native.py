@@ -46,35 +46,35 @@ class NativeFreeCad(ValueError):
 @Dataclass(slots=True)
 class NativeObject:
     locals().setdefault('__annotations__', {})
-    __annotations__['name'] = str
-    __annotations__['type_id'] = str
-    __annotations__['index'] = int
-    __annotations__['object_id'] = str
-    __annotations__['touched'] = bool
-    __annotations__['dependencies'] = tuple[str, ...]
-    __annotations__['extensions'] = tuple[XmlTree.Element, ...]
-    __annotations__['transient_properties'] = tuple[XmlTree.Element, ...]
-    __annotations__['properties'] = dict[str, XmlTree.Element]
+    __annotations__['name'] = 'str'
+    __annotations__['type_id'] = 'str'
+    __annotations__['index'] = 'int'
+    __annotations__['object_id'] = 'str'
+    __annotations__['touched'] = 'bool'
+    __annotations__['dependencies'] = 'tuple[str, ...]'
+    __annotations__['extensions'] = 'tuple[XmlTree.Element, ...]'
+    __annotations__['transient_properties'] = 'tuple[XmlTree.Element, ...]'
+    __annotations__['properties'] = 'dict[str, XmlTree.Element]'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class NativeArchive:
     locals().setdefault('__annotations__', {})
-    __annotations__['root'] = XmlTree.Element
-    __annotations__['objects'] = tuple[NativeObject, ...]
-    __annotations__['entries'] = dict[str, bytes]
-    __annotations__['document_xml'] = bytes
-    __annotations__['entry_order'] = tuple[str, ...]
+    __annotations__['root'] = 'XmlTree.Element'
+    __annotations__['objects'] = 'tuple[NativeObject, ...]'
+    __annotations__['entries'] = 'dict[str, bytes]'
+    __annotations__['document_xml'] = 'bytes'
+    __annotations__['entry_order'] = 'tuple[str, ...]'
 
 # this definition exists because focused behavior needs one stable owner
 @Dataclass(slots=True)
 class OuterState:
     locals().setdefault('__annotations__', {})
-    __annotations__['root'] = PathValue
-    __annotations__['cache'] = dict[PathValue, CadDoc]
-    __annotations__['active'] = set[PathValue]
-    __annotations__['file_count'] = int
-    __annotations__['total_bytes'] = int
+    __annotations__['root'] = 'PathValue'
+    __annotations__['cache'] = 'dict[PathValue, CadDoc]'
+    __annotations__['active'] = 'set[PathValue]'
+    __annotations__['file_count'] = 'int'
+    __annotations__['total_bytes'] = 'int'
 
 # this definition exists because focused behavior needs one stable owner
 def EntryName(NameValue: str) -> str:

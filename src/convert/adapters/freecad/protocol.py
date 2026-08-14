@@ -96,10 +96,10 @@ KQuantityPropUnits = {'Acceleration': 'mm/s^2', 'AmountOfSubstance': 'mol', 'Ang
 @Dataclass(frozen=True, slots=True)
 class ScalarPropType:
     locals().setdefault('__annotations__', {})
-    __annotations__['type_id'] = str
-    __annotations__['value_kind'] = ValueKind
-    __annotations__['unit'] = str
-    __annotations__['value_tag'] = str
+    __annotations__['type_id'] = 'str'
+    __annotations__['value_kind'] = 'ValueKind'
+    __annotations__['unit'] = 'str'
+    __annotations__['value_tag'] = 'str'
 
 # this binding exists because shared behavior needs one stable value
 KScalarPropTypes = (ScalarPropType('App::PropertyAngle', ValueKind.ANGLE, 'deg', 'Float'), ScalarPropType('App::PropertyBool', ValueKind.BOOLEAN, '', 'Bool'), ScalarPropType('App::PropertyDistance', ValueKind.LENGTH, 'mm', 'Float'), ScalarPropType('App::PropertyFile', ValueKind.STRING, '', 'String'), ScalarPropType('App::PropertyFloat', ValueKind.NUMBER, '', 'Float'), ScalarPropType('App::PropertyFloatConstraint', ValueKind.NUMBER, '', 'Float'), ScalarPropType('App::PropertyFont', ValueKind.STRING, '', 'String'), ScalarPropType('App::PropertyInteger', ValueKind.INTEGER, '', 'Integer'), ScalarPropType('App::PropertyIntegerConstraint', ValueKind.INTEGER, '', 'Integer'), ScalarPropType('App::PropertyLength', ValueKind.LENGTH, 'mm', 'Float'), ScalarPropType('App::PropertyPath', ValueKind.STRING, '', 'Path'), ScalarPropType('App::PropertyPercent', ValueKind.QUANTITY, '%', 'Integer'), ScalarPropType('App::PropertyPersistentObject', ValueKind.STRING, '', 'String'), ScalarPropType('App::PropertyPrecision', ValueKind.NUMBER, '', 'Float'), ScalarPropType('App::PropertyQuantity', ValueKind.QUANTITY, '', 'Float'), ScalarPropType('App::PropertyQuantityConstraint', ValueKind.QUANTITY, '', 'Float'), ScalarPropType('App::PropertyString', ValueKind.STRING, '', 'String'), ScalarPropType('App::PropertyUUID', ValueKind.STRING, '', 'Uuid'))
@@ -111,8 +111,8 @@ KScalarPropKinds = {**{f'App::Property{NameValue}': (ValueKind.QUANTITY, UnitVal
 @Dataclass(frozen=True, slots=True)
 class FeatureType:
     locals().setdefault('__annotations__', {})
-    __annotations__['type_id'] = str
-    __annotations__['kind'] = FeatureKind
+    __annotations__['type_id'] = 'str'
+    __annotations__['kind'] = 'FeatureKind'
 
 # this binding exists because shared behavior needs one stable value
 KFeatureTypes = (FeatureType('Part::Boolean', FeatureKind.BOOLEAN), FeatureType('Part::Chamfer', FeatureKind.CHAMFER), FeatureType('Part::Common', FeatureKind.BOOLEAN), FeatureType('Part::Compound', FeatureKind.BOOLEAN), FeatureType('Part::Compound2', FeatureKind.BOOLEAN), FeatureType('Part::Cut', FeatureKind.BOOLEAN), FeatureType('Part::CurveNet', FeatureKind.SURFACE), FeatureType('Part::CustomFeature', FeatureKind.NATIVE), FeatureType('Part::CustomFeaturePython', FeatureKind.NATIVE), FeatureType('Part::Datum', FeatureKind.REFERENCE), FeatureType('Part::DatumLine', FeatureKind.REFERENCE), FeatureType('Part::DatumPoint', FeatureKind.REFERENCE), FeatureType('Part::Extrusion', FeatureKind.EXTRUSION), FeatureType('Part::Face', FeatureKind.SURFACE), FeatureType('Part::Feature', FeatureKind.NATIVE), FeatureType('Part::FeatureExt', FeatureKind.NATIVE), FeatureType('Part::FeatureGeometrySet', FeatureKind.REFERENCE), FeatureType('Part::FeaturePython', FeatureKind.NATIVE), FeatureType('Part::FeatureReference', FeatureKind.REFERENCE), FeatureType('Part::Fillet', FeatureKind.FILLET), FeatureType('Part::FilletBase', FeatureKind.FILLET), FeatureType('Part::Fuse', FeatureKind.BOOLEAN), FeatureType('Part::Helix', FeatureKind.HELIX), FeatureType('Part::ImportBrep', FeatureKind.IMPORTED), FeatureType('Part::ImportIges', FeatureKind.IMPORTED), FeatureType('Part::ImportStep', FeatureKind.IMPORTED), FeatureType('Part::LocalCoordinateSystem', FeatureKind.REFERENCE), FeatureType('Part::Loft', FeatureKind.LOFT), FeatureType('Part::Mirroring', FeatureKind.MIRROR), FeatureType('Part::MultiCommon', FeatureKind.BOOLEAN), FeatureType('Part::MultiFuse', FeatureKind.BOOLEAN), FeatureType('Part::Offset', FeatureKind.OFFSET), FeatureType('Part::Offset2D', FeatureKind.OFFSET), FeatureType('Part::Part2DObject', FeatureKind.REFERENCE), FeatureType('Part::Part2DObjectPython', FeatureKind.REFERENCE), FeatureType('Part::Polygon', FeatureKind.NATIVE), FeatureType('Part::Primitive', FeatureKind.NATIVE), FeatureType('Part::ProjectOnSurface', FeatureKind.SURFACE), FeatureType('Part::Refine', FeatureKind.REFINE), FeatureType('Part::Revolution', FeatureKind.REVOLUTION), FeatureType('Part::RuledSurface', FeatureKind.SURFACE), FeatureType('Part::Reverse', FeatureKind.REVERSE), FeatureType('Part::Scale', FeatureKind.SCALE), FeatureType('Part::Section', FeatureKind.BOOLEAN), FeatureType('Part::Sweep', FeatureKind.SWEEP), FeatureType('Part::Spline', FeatureKind.NATIVE), FeatureType('Part::Thickness', FeatureKind.SHELL), FeatureType('PartDesign::AdditiveHelix', FeatureKind.HELIX), FeatureType('PartDesign::AdditiveLoft', FeatureKind.LOFT), FeatureType('PartDesign::AdditivePipe', FeatureKind.SWEEP), FeatureType('PartDesign::Boolean', FeatureKind.BOOLEAN), FeatureType('PartDesign::Chamfer', FeatureKind.CHAMFER), FeatureType('PartDesign::CoordinateSystem', FeatureKind.REFERENCE), FeatureType('PartDesign::Draft', FeatureKind.DRAFT), FeatureType('PartDesign::DressUp', FeatureKind.NATIVE), FeatureType('PartDesign::Feature', FeatureKind.NATIVE), FeatureType('PartDesign::FeatureAdditivePython', FeatureKind.NATIVE), FeatureType('PartDesign::FeatureAddSub', FeatureKind.NATIVE), FeatureType('PartDesign::FeatureAddSubPython', FeatureKind.NATIVE), FeatureType('PartDesign::FeatureBase', FeatureKind.REFERENCE), FeatureType('PartDesign::FeatureExtrude', FeatureKind.EXTRUSION), FeatureType('PartDesign::FeaturePrimitive', FeatureKind.NATIVE), FeatureType('PartDesign::FeaturePython', FeatureKind.NATIVE), FeatureType('PartDesign::FeatureRefine', FeatureKind.REFINE), FeatureType('PartDesign::FeatureRefinePython', FeatureKind.REFINE), FeatureType('PartDesign::FeatureSubtractivePython', FeatureKind.NATIVE), FeatureType('PartDesign::Fillet', FeatureKind.FILLET), FeatureType('PartDesign::Groove', FeatureKind.REVOLUTION), FeatureType('PartDesign::Helix', FeatureKind.HELIX), FeatureType('PartDesign::Hole', FeatureKind.HOLE), FeatureType('PartDesign::Line', FeatureKind.REFERENCE), FeatureType('PartDesign::LinearPattern', FeatureKind.PATTERN), FeatureType('PartDesign::Loft', FeatureKind.LOFT), FeatureType('PartDesign::Mirrored', FeatureKind.MIRROR), FeatureType('PartDesign::MultiTransform', FeatureKind.PATTERN), FeatureType('PartDesign::Pad', FeatureKind.EXTRUSION), FeatureType('PartDesign::Pocket', FeatureKind.EXTRUSION), FeatureType('PartDesign::Point', FeatureKind.REFERENCE), FeatureType('PartDesign::PolarPattern', FeatureKind.PATTERN), FeatureType('PartDesign::Pipe', FeatureKind.SWEEP), FeatureType('PartDesign::ProfileBased', FeatureKind.NATIVE), FeatureType('PartDesign::Revolution', FeatureKind.REVOLUTION), FeatureType('PartDesign::Revolved', FeatureKind.REVOLUTION), FeatureType('PartDesign::Scaled', FeatureKind.SCALE), FeatureType('PartDesign::ShapeBinder', FeatureKind.REFERENCE), FeatureType('PartDesign::Solid', FeatureKind.NATIVE), FeatureType('PartDesign::SubShapeBinder', FeatureKind.REFERENCE), FeatureType('PartDesign::SubShapeBinderPython', FeatureKind.REFERENCE), FeatureType('PartDesign::SubtractiveHelix', FeatureKind.HELIX), FeatureType('PartDesign::SubtractiveLoft', FeatureKind.LOFT), FeatureType('PartDesign::SubtractivePipe', FeatureKind.SWEEP), FeatureType('PartDesign::Thickness', FeatureKind.SHELL), FeatureType('PartDesign::Transformed', FeatureKind.PATTERN))
@@ -124,10 +124,10 @@ KFeatureKindByTypeId = {Value.type_id: Value.kind for Value in KFeatureTypes}
 @Dataclass(frozen=True, slots=True)
 class BoolOperationA:
     locals().setdefault('__annotations__', {})
-    __annotations__['operation'] = BoolOperation
-    __annotations__['type_id'] = str
-    __annotations__['label'] = str
-    __annotations__['input_mode'] = str
+    __annotations__['operation'] = 'BoolOperation'
+    __annotations__['type_id'] = 'str'
+    __annotations__['label'] = 'str'
+    __annotations__['input_mode'] = 'str'
 
 # this binding exists because shared behavior needs one stable value
 KBoolOperationTypes = (BoolOperationA(BoolOperation.CREATE, 'Part::Extrusion', 'Extrusion', 'standalone'), BoolOperationA(BoolOperation.JOIN, 'Part::MultiFuse', 'Fuse', 'shapes'), BoolOperationA(BoolOperation.CUT, 'Part::Cut', 'Cut', 'base_tool'), BoolOperationA(BoolOperation.INTERSECT, 'Part::Common', 'Common', 'base_tool'))
@@ -153,9 +153,9 @@ KFeatureCarrierKinds = frozenset(FeatureKind) - KFeatureWriteKinds
 @Dataclass(frozen=True, slots=True)
 class ExtrusionType:
     locals().setdefault('__annotations__', {})
-    __annotations__['code'] = int
-    __annotations__['end_condition'] = ExtrusionEndCondition
-    __annotations__['pocket_end_condition'] = ExtrusionEndCondition | None
+    __annotations__['code'] = 'int'
+    __annotations__['end_condition'] = 'ExtrusionEndCondition'
+    __annotations__['pocket_end_condition'] = 'ExtrusionEndCondition | None'
     locals()['pocket_end_condition'] = None
 
 # this binding exists because shared behavior needs one stable value
@@ -171,9 +171,9 @@ KPocketTypeId = 'PartDesign::Pocket'
 @Dataclass(frozen=True, slots=True)
 class PrimitiveFamily:
     locals().setdefault('__annotations__', {})
-    __annotations__['namespace'] = str
-    __annotations__['prefixes'] = tuple[str, ...]
-    __annotations__['shapes'] = tuple[str, ...]
+    __annotations__['namespace'] = 'str'
+    __annotations__['prefixes'] = 'tuple[str, ...]'
+    __annotations__['shapes'] = 'tuple[str, ...]'
 
 # this binding exists because shared behavior needs one stable value
 KPrimitiveFeatureFamilies = (PrimitiveFamily('Part', ('',), ('Box', 'Circle', 'Cone', 'Cylinder', 'Ellipse', 'Ellipsoid', 'Line', 'Plane', 'Prism', 'RegularPolygon', 'Sphere', 'Spiral', 'Torus', 'Vertex', 'Wedge')), PrimitiveFamily('PartDesign', ('', 'Additive', 'Subtractive'), ('Box', 'Cone', 'Cylinder', 'Ellipsoid', 'Prism', 'Sphere', 'Torus', 'Wedge')))
@@ -194,9 +194,9 @@ KRegisteredPartObjectType = KPartObjectTypeIds - KAdditionalPartObjectType
 @Dataclass(frozen=True, slots=True)
 class RulePoint:
     locals().setdefault('__annotations__', {})
-    __annotations__['index'] = int
-    __annotations__['name'] = str
-    __annotations__['aliases'] = tuple[str, ...]
+    __annotations__['index'] = 'int'
+    __annotations__['name'] = 'str'
+    __annotations__['aliases'] = 'tuple[str, ...]'
     locals()['aliases'] = ()
 
 # this binding exists because shared behavior needs one stable value
@@ -215,13 +215,13 @@ KMidpointRefPointNames = frozenset(('', 'mid', *(NameValue for Value in KRulePoi
 @Dataclass(frozen=True, slots=True)
 class RuleType:
     locals().setdefault('__annotations__', {})
-    __annotations__['code'] = int
-    __annotations__['kind'] = RuleKind
-    __annotations__['value_kind'] = ValueKind | None
+    __annotations__['code'] = 'int'
+    __annotations__['kind'] = 'RuleKind'
+    __annotations__['value_kind'] = 'ValueKind | None'
     locals()['value_kind'] = None
-    __annotations__['unit'] = str
+    __annotations__['unit'] = 'str'
     locals()['unit'] = ''
-    __annotations__['write_kinds'] = tuple[RuleKind, ...]
+    __annotations__['write_kinds'] = 'tuple[RuleKind, ...]'
     locals()['write_kinds'] = ()
 
 # this binding exists because shared behavior needs one stable value
@@ -263,11 +263,11 @@ KDimensionalRuleCodes = frozenset(KRuleValueKindByCode)
 @Dataclass(frozen=True, slots=True)
 class GeomType:
     locals().setdefault('__annotations__', {})
-    __annotations__['type_id'] = str
-    __annotations__['kind'] = GeomKind
-    __annotations__['neutral_type'] = str
+    __annotations__['type_id'] = 'str'
+    __annotations__['kind'] = 'GeomKind'
+    __annotations__['neutral_type'] = 'str'
     locals()['neutral_type'] = ''
-    __annotations__['neutral_default'] = bool
+    __annotations__['neutral_default'] = 'bool'
     locals()['neutral_default'] = False
 
 # this binding exists because shared behavior needs one stable value
@@ -309,15 +309,15 @@ KSplineGeomTypeIds = frozenset((Value.type_id for Value in KGeomTypes if Value.k
 @Dataclass(frozen=True, slots=True)
 class JointType:
     locals().setdefault('__annotations__', {})
-    __annotations__['name'] = str
-    __annotations__['kind'] = MateKind
-    __annotations__['write_kinds'] = tuple[MateKind, ...]
+    __annotations__['name'] = 'str'
+    __annotations__['kind'] = 'MateKind'
+    __annotations__['write_kinds'] = 'tuple[MateKind, ...]'
     locals()['write_kinds'] = ()
-    __annotations__['write_aliases'] = tuple[str, ...]
+    __annotations__['write_aliases'] = 'tuple[str, ...]'
     locals()['write_aliases'] = ()
-    __annotations__['uses_distance'] = bool
+    __annotations__['uses_distance'] = 'bool'
     locals()['uses_distance'] = False
-    __annotations__['uses_second_distance'] = bool
+    __annotations__['uses_second_distance'] = 'bool'
     locals()['uses_second_distance'] = False
 
 # this binding exists because shared behavior needs one stable value
