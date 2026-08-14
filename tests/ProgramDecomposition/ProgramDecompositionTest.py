@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import subprocess as Subprocess
 import sys
+from types import ModuleType
 import unittest as UnitTest
 
 
@@ -45,7 +46,7 @@ KDigestPattern = re.compile(r"[a-f0-9]{64}")
 
 
 # manifest loading isolates generated evidence from reverse engineering package names
-def LoadManifest():
+def LoadManifest() -> ModuleType:
     ManifestPath = KGeneratorPath.with_name("ProgramManifest.py")
     ManifestSpec = ImportLib.util.spec_from_file_location(KManifestName, ManifestPath)
     if ManifestSpec is None or ManifestSpec.loader is None:
@@ -93,7 +94,9 @@ class TestProgramDecomposition(UnitTest.TestCase):
         ManifestData = LoadManifest()
         self.assertEqual(ManifestData.KGlobalStats, (43, 75, 212, 2078, 3857, 185090))
         self.assertEqual(len(ManifestData.KProgramStats), 43)
-        self.assertEqual(sum(ItemData[4] for ItemData in ManifestData.KProgramStats), 185090)
+        self.assertEqual(
+            sum(ItemData[4] for ItemData in ManifestData.KProgramStats), 185090
+        )
         self.assertEqual(
             sum(len(ItemData[7]) for ItemData in ManifestData.KProgramStats), 75
         )
@@ -125,7 +128,11 @@ class TestProgramDecomposition(UnitTest.TestCase):
             )
             ModuleData = ImportLib.import_module(ModuleName)
             self.assertFalse(
-                tuple(NameText for NameText in PublicNames if not hasattr(ModuleData, NameText))
+                tuple(
+                    NameText
+                    for NameText in PublicNames
+                    if not hasattr(ModuleData, NameText)
+                )
             )
             if OpsName == "StreamPrograms":
                 OutputPairs = tuple(
