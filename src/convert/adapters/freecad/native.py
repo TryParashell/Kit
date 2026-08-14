@@ -6,3133 +6,2106 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
+from __future__ import annotations as Annotations
+from dataclasses import dataclass as Dataclass, replace as Replace
+import hashlib as Hashlib
+import json as JsonValue
+import math as MathValue
+from pathlib import Path as PathValue, PurePosixPath
+import re as RegexLib
+import struct as Struct
+from typing import Any as AnyValue
+import xml.etree.ElementTree as XmlTree
+import zipfile as Zipfile
+from interchange import ArcEllipseGeometry as ArcEllipseGeom, ArcGeometry as ArcGeom, ArcHyperbolaGeometry as ArcHyperbolaGeom, ArcParabolaGeometry as ArcParabolaGeom, AssemblyData as AsmData, Body as BodyValue, BooleanOperation as BoolOperation, BrepModel, BrepPayload, CadDocument as CadDoc, CadSource, Capability, ChamferFeature, CircleGeometry as CircleGeom, CircularPatternFeature, ComponentDefinition, ComponentDocument as ComponentDoc, ComponentInstance, ComponentKind, Configuration as Config, ConstraintKind as RuleKind, ConstraintReference as RuleRef, Diagnostic as DiagValue, EllipseGeometry as EllipseGeom, Expression, ExtrusionEndCondition, ExtrusionFeature, FeatureDefinition, FeatureKind, FeatureStep, FilletFeature, GeometryKind as GeomKind, HyperbolaGeometry as HyperbolaGeom, LineGeometry as LineGeom, LinearPatternFeature, MateConstraint as MateRule, MateEntity, MateEntityKind, MateGroup, MateKind, Matrix4 as MatrixFour, Mesh as MeshValue, NativeGeometry as NativeGeom, NativeFeatureDefinition, Parameter as Param, ParameterValue as ParamValue, ParabolaGeometry as ParabolaGeom, PayloadRole, PointGeometry as PointGeom, Provenance, ProvenanceSpan, Selection, SelectionPathElement as SelectionPathElem, Severity, ShellFeature, Sketch, SketchConstraint as SketchRule, SketchEntity, SplineGeometry as SplineGeom, SupportPlane, TopologySummary, Transform, ValueKind, Vector2 as VectorTwo, Vector3 as VectorThree, infer_capabilities as InferCapabilities
+from convert.geometry.Opencascade import decode_ascii_brep as DecodeAsciiBrep
+from convert.adapters.freecad.Archive import DOCUMENT_ENTRY as DocEntry, NATIVE_DOCUMENT_SHA256_ATTRIBUTE as NativeDocShaTwoFiveSix, _MAX_ENTRY_SIZE as MaxEntrySize, _MAX_EXTERNAL_FILES as MaxOuterFiles, _MAX_TOTAL_SIZE as MaxTotalSize, _validated_archive_members as ValidatedArchiveMembers, _validated_document_xml as ValidatedDocXml, _validated_entry_name as ValidatedEntryName, _validated_object_name as ValidatedObjectName, extract_manifest_from_fcstd as ExtractManifestFromFcstd
+from convert.adapters.freecad.Format import FORMAT_ID as FormatId, SUFFIX as Suffix
+from convert.adapters.freecad.Protocol import ASSEMBLY_JOINT_GROUP_TYPE_ID as AsmJointGroupTypeId, ASSEMBLY_OBJECT_TYPE_PREFIX as AsmObjectTypePrefix, ASSEMBLY_ROOT_TYPE_ID as AsmRootTypeId, BODY_CONTAINER_TYPE_IDS as BodyContainerTypeIds, CONSTRAINT_KIND_BY_CODE as RuleKindByCode, CONSTRAINT_POINT_BY_INDEX as RulePointByIndex, CONSTRAINT_VALUE_KIND_BY_CODE as RuleValueKindByCode, DIMENSIONAL_CONSTRAINT_CODES as DimensionalRuleCodes, EXTRUSION_TYPE_BY_CODE as ExtrusionTypeByCode, FEATURE_KIND_BY_TYPE_ID as FeatureKindByTypeId, GEOMETRY_KIND_BY_TYPE_ID as GeomKindByTypeId, JOINT_GROUND_PROPERTY as JointGroundProp, JOINT_REFERENCE_PROPERTIES as JointRefProperties, JOINT_RESERVED_LINK_PROPERTIES as JointReservedLink, JOINT_TYPE_PROPERTIES as JointTypeProperties, MATE_KIND_BY_JOINT_TYPE as MateKindByJointType, MATE_KINDS_USING_DISTANCE as MateKindsUsingDistance, MATE_KINDS_USING_SECOND_DISTANCE as MateKindsUsingSecond, NON_FEATURE_OBJECT_TYPE_IDS as NonFeatureObjectTypeIds, PERMISSIVE_TRUE_VALUES as PermissiveTrueValues, POCKET_TYPE_ID as PocketTypeId, PRIMITIVE_FEATURE_TYPE_IDS as PrimitiveFeatureTypeIds, SCALAR_PROPERTY_KINDS as ScalarPropKinds, SKETCH_TYPE_ID as SketchTypeId, SPLINE_GEOMETRY_TYPE_IDS as SplineGeomTypeIds, STRING_HASHER_TAGS as StringHasherTags, SUBELEMENT_KIND_BY_PREFIX as SubElemKindByPrefix, SUPPORT_PLANE_TYPE_IDS as SupportPlaneTypeIds, XML_TRUE_VALUES as XmlTrueValues
 
-from dataclasses import dataclass, replace
-import hashlib
-import json
-import math
-from pathlib import Path, PurePosixPath
-import re
-import struct
-from typing import Any
-import xml.etree.ElementTree as ET
-import zipfile
+# this binding exists because shared behavior needs one stable value
+KMaxOuterDepth = 16
 
-from interchange import (
-    ArcEllipseGeometry,
-    ArcGeometry,
-    ArcHyperbolaGeometry,
-    ArcParabolaGeometry,
-    AssemblyData,
-    Body,
-    BooleanOperation,
-    BrepModel,
-    BrepPayload,
-    CadDocument,
-    CadSource,
-    Capability,
-    ChamferFeature,
-    CircleGeometry,
-    CircularPatternFeature,
-    ComponentDefinition,
-    ComponentDocument,
-    ComponentInstance,
-    ComponentKind,
-    Configuration,
-    ConstraintKind,
-    ConstraintReference,
-    Diagnostic,
-    EllipseGeometry,
-    Expression,
-    ExtrusionEndCondition,
-    ExtrusionFeature,
-    FeatureDefinition,
-    FeatureKind,
-    FeatureStep,
-    FilletFeature,
-    GeometryKind,
-    HyperbolaGeometry,
-    LineGeometry,
-    LinearPatternFeature,
-    MateConstraint,
-    MateEntity,
-    MateEntityKind,
-    MateGroup,
-    MateKind,
-    Matrix4,
-    Mesh,
-    NativeGeometry,
-    NativeFeatureDefinition,
-    Parameter,
-    ParameterValue,
-    ParabolaGeometry,
-    PayloadRole,
-    PointGeometry,
-    Provenance,
-    ProvenanceSpan,
-    Selection,
-    SelectionPathElement,
-    Severity,
-    ShellFeature,
-    Sketch,
-    SketchConstraint,
-    SketchEntity,
-    SplineGeometry,
-    SupportPlane,
-    TopologySummary,
-    Transform,
-    ValueKind,
-    Vector2,
-    Vector3,
-    infer_capabilities,
-)
+# this binding exists because shared behavior needs one stable value
+KMinObjectGraphSchema = 2
 
-from convert.geometry.Opencascade import decode_ascii_brep
+# this binding exists because shared behavior needs one stable value
+KGrooveTypeId = 'PartDesign::Groove'
 
-from convert.adapters.freecad.Archive import DOCUMENT_ENTRY, NATIVE_DOCUMENT_SHA256_ATTRIBUTE, _MAX_ENTRY_SIZE, _MAX_EXTERNAL_FILES, _MAX_TOTAL_SIZE, _validated_archive_members, _validated_document_xml, _validated_entry_name, _validated_object_name, extract_manifest_from_fcstd
-from convert.adapters.freecad.Format import FORMAT_ID, SUFFIX
-from convert.adapters.freecad.Protocol import ASSEMBLY_JOINT_GROUP_TYPE_ID, ASSEMBLY_OBJECT_TYPE_PREFIX, ASSEMBLY_ROOT_TYPE_ID, BODY_CONTAINER_TYPE_IDS, CONSTRAINT_KIND_BY_CODE, CONSTRAINT_POINT_BY_INDEX, CONSTRAINT_VALUE_KIND_BY_CODE, DIMENSIONAL_CONSTRAINT_CODES, EXTRUSION_TYPE_BY_CODE, FEATURE_KIND_BY_TYPE_ID, GEOMETRY_KIND_BY_TYPE_ID, JOINT_GROUND_PROPERTY, JOINT_REFERENCE_PROPERTIES, JOINT_RESERVED_LINK_PROPERTIES, JOINT_TYPE_PROPERTIES, MATE_KIND_BY_JOINT_TYPE, MATE_KINDS_USING_DISTANCE, MATE_KINDS_USING_SECOND_DISTANCE, NON_FEATURE_OBJECT_TYPE_IDS, PERMISSIVE_TRUE_VALUES, POCKET_TYPE_ID, PRIMITIVE_FEATURE_TYPE_IDS, SCALAR_PROPERTY_KINDS, SKETCH_TYPE_ID, SPLINE_GEOMETRY_TYPE_IDS, STRING_HASHER_TAGS, SUBELEMENT_KIND_BY_PREFIX, SUPPORT_PLANE_TYPE_IDS, XML_TRUE_VALUES
+# this binding exists because shared behavior needs one stable value
+KSubtractiveTypeIds = frozenset({PocketTypeId, KGrooveTypeId})
 
-_MAX_EXTERNAL_DEPTH = 16
-_MIN_OBJECT_GRAPH_SCHEMA_VERSION = 2
-_GROOVE_TYPE_ID = "PartDesign::Groove"
-_SUBTRACTIVE_TYPE_IDS = frozenset({POCKET_TYPE_ID, _GROOVE_TYPE_ID})
-_SUBTRACTIVE_CAPABLE_KINDS = frozenset({FeatureKind.EXTRUSION, FeatureKind.REVOLUTION})
+# this binding exists because shared behavior needs one stable value
+KSubtractiveCapableKinds = frozenset({FeatureKind.EXTRUSION, FeatureKind.REVOLUTION})
 
+# this definition exists because focused behavior needs one stable owner
+class NativeFreeCad(ValueError):
+    KSlots = ()
 
-class NativeFreeCADError(ValueError):
-    __slots__ = ()
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
+class NativeObject:
+    locals().setdefault('__annotations__', {})
+    __annotations__['name'] = str
+    __annotations__['type_id'] = str
+    __annotations__['index'] = int
+    __annotations__['object_id'] = str
+    __annotations__['touched'] = bool
+    __annotations__['dependencies'] = tuple[str, ...]
+    __annotations__['extensions'] = tuple[XmlTree.Element, ...]
+    __annotations__['transient_properties'] = tuple[XmlTree.Element, ...]
+    __annotations__['properties'] = dict[str, XmlTree.Element]
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
+class NativeArchive:
+    locals().setdefault('__annotations__', {})
+    __annotations__['root'] = XmlTree.Element
+    __annotations__['objects'] = tuple[NativeObject, ...]
+    __annotations__['entries'] = dict[str, bytes]
+    __annotations__['document_xml'] = bytes
+    __annotations__['entry_order'] = tuple[str, ...]
 
-@dataclass(slots=True)
-class _NativeObject:
-    name: str
-    type_id: str
-    index: int
-    object_id: str
-    touched: bool
-    dependencies: tuple[str, ...]
-    extensions: tuple[ET.Element, ...]
-    transient_properties: tuple[ET.Element, ...]
-    properties: dict[str, ET.Element]
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(slots=True)
+class OuterState:
+    locals().setdefault('__annotations__', {})
+    __annotations__['root'] = PathValue
+    __annotations__['cache'] = dict[PathValue, CadDoc]
+    __annotations__['active'] = set[PathValue]
+    __annotations__['file_count'] = int
+    __annotations__['total_bytes'] = int
 
-
-@dataclass(slots=True)
-class _NativeArchive:
-    root: ET.Element
-    objects: tuple[_NativeObject, ...]
-    entries: dict[str, bytes]
-    document_xml: bytes
-    entry_order: tuple[str, ...]
-
-
-@dataclass(slots=True)
-class _ExternalState:
-    root: Path
-    cache: dict[Path, CadDocument]
-    active: set[Path]
-    file_count: int
-    total_bytes: int
-
-
-def _entry_name(name: str) -> str:
+# this definition exists because focused behavior needs one stable owner
+def EntryName(NameValue: str) -> str:
     try:
-        return _validated_entry_name(name)
+        return ValidatedEntryName(NameValue)
     except ValueError as exc:
-        raise NativeFreeCADError(str(exc)) from exc
+        raise NativeFreeCad(str(exc)) from exc
 
-
-def _declared_count(node: ET.Element, actual: int, label: str) -> None:
-    value = node.get("Count", node.get("count"))
-    if value is None:
+# this definition exists because focused behavior needs one stable owner
+def DeclaredCount(NodeValue: ET.Element, Actual: int, Label: str) -> None:
+    Value = NodeValue.get('Count', NodeValue.get('count'))
+    if Value is None:
         return
     try:
-        expected = int(value)
+        Expected = int(Value)
     except ValueError as exc:
-        raise NativeFreeCADError(f"FreeCAD {label} count is invalid") from exc
-    if expected != actual:
-        raise NativeFreeCADError(f"FreeCAD {label} count does not match its data")
+        raise NativeFreeCad(f'FreeCAD {Label} count is invalid') from exc
+    if Expected != Actual:
+        raise NativeFreeCad(f'FreeCAD {Label} count does not match its data')
 
-
-def _archive_members(data: bytes) -> tuple[zipfile.ZipFile, dict[str, zipfile.ZipInfo]]:
+# this definition exists because focused behavior needs one stable owner
+def ArchiveMembers(DataValue: bytes) -> tuple[Zipfile.ZipFile, dict[str, Zipfile.ZipInfo]]:
     try:
-        return _validated_archive_members(data)
+        return ValidatedArchiveMembers(DataValue)
     except ValueError as exc:
-        raise NativeFreeCADError(str(exc)) from exc
+        raise NativeFreeCad(str(exc)) from exc
 
-
-def _stored_count(node: ET.Element, name: str, actual: int, label: str) -> None:
-    value = node.get(name)
-    if value is None:
+# this definition exists because focused behavior needs one stable owner
+def StoredCount(NodeValue: ET.Element, NameValue: str, Actual: int, Label: str) -> None:
+    Value = NodeValue.get(NameValue)
+    if Value is None:
         return
     try:
-        expected = int(value)
+        Expected = int(Value)
     except ValueError as exc:
-        raise NativeFreeCADError(f"FreeCAD {label} count is invalid") from exc
-    if expected != actual:
-        raise NativeFreeCADError(f"FreeCAD {label} count does not match its data")
+        raise NativeFreeCad(f'FreeCAD {Label} count is invalid') from exc
+    if Expected != Actual:
+        raise NativeFreeCad(f'FreeCAD {Label} count does not match its data')
 
-
-def _parse_objects(root: ET.Element) -> tuple[_NativeObject, ...]:
-    objects_node = root.find("./Objects")
-    data_node = root.find("./ObjectData")
-    if objects_node is None or data_node is None:
-        raise NativeFreeCADError("FreeCAD Document.xml has no object graph")
-    declarations = objects_node.findall("./Object")
-    object_data = data_node.findall("./Object")
-    _declared_count(objects_node, len(declarations), "object")
-    _declared_count(data_node, len(object_data), "object data")
-    declaration_by_name: dict[str, tuple[str, int, str, bool]] = {}
-    ids: set[str] = set()
-    for index, node in enumerate(declarations):
-        name = node.get("name", "")
-        type_id = node.get("type", "")
-        object_id = node.get("id", "")
-        if not name or not type_id or name in declaration_by_name:
-            raise NativeFreeCADError("FreeCAD object declarations are malformed")
+# this definition exists because focused behavior needs one stable owner
+def ParseObjects(RootValue: ET.Element) -> tuple[NativeObject, ...]:
+    ObjectsNode = RootValue.find('./Objects')
+    DataNode = RootValue.find('./ObjectData')
+    if ObjectsNode is None or DataNode is None:
+        raise NativeFreeCad('FreeCAD Document.xml has no object graph')
+    Declarations = ObjectsNode.findall('./Object')
+    ObjectData = DataNode.findall('./Object')
+    DeclaredCount(ObjectsNode, len(Declarations), 'object')
+    DeclaredCount(DataNode, len(ObjectData), 'object data')
+    DeclByName: dict[str, tuple[str, int, str, bool]] = {}
+    IdsValue: set[str] = set()
+    for Index, NodeValue in enumerate(Declarations):
+        NameValue = NodeValue.get('name', '')
+        TypeId = NodeValue.get('type', '')
+        ObjectId = NodeValue.get('id', '')
+        if not NameValue or not TypeId or NameValue in DeclByName:
+            raise NativeFreeCad('FreeCAD object declarations are malformed')
         try:
-            _validated_object_name(name)
+            ValidatedObjectName(NameValue)
         except ValueError as exc:
-            raise NativeFreeCADError(str(exc)) from exc
-        if object_id and object_id in ids:
-            raise NativeFreeCADError(
-                "FreeCAD object declarations contain duplicate ids"
-            )
-        if object_id:
-            ids.add(object_id)
-        declaration_by_name[name] = (
-            type_id,
-            index,
-            object_id,
-            node.get("Touched") == "1",
-        )
-    data_by_name: dict[str, ET.Element] = {}
-    for node in object_data:
-        name = node.get("name", "")
-        if not name or name in data_by_name:
-            raise NativeFreeCADError("FreeCAD object data contains duplicate names")
-        data_by_name[name] = node
-    if set(declaration_by_name) != set(data_by_name):
-        raise NativeFreeCADError("FreeCAD object declarations and data do not match")
-    dependencies: dict[str, tuple[str, ...]] = {}
-    for node in objects_node.findall("./ObjectDeps"):
-        name = node.get("Name", "")
-        if not name or name in dependencies or name not in declaration_by_name:
-            raise NativeFreeCADError("FreeCAD dependency graph is malformed")
-        values = tuple(item.get("Name", "") for item in node.findall("./Dep"))
-        if any(not value or value not in declaration_by_name for value in values):
-            raise NativeFreeCADError("FreeCAD dependency graph has missing objects")
-        _declared_count(node, len(values), "dependency")
-        dependencies[name] = values
-    result: list[_NativeObject] = []
-    for name, (type_id, index, object_id, touched) in declaration_by_name.items():
-        property_nodes: dict[str, ET.Element] = {}
-        object_element = data_by_name[name]
-        properties_element = object_element.find("./Properties")
-        if properties_element is None:
-            raise NativeFreeCADError(f"FreeCAD object {name!r} has no properties")
-        properties = properties_element.findall("./Property")
-        transient_properties = tuple(properties_element.findall("./_Property"))
-        _stored_count(properties_element, "Count", len(properties), "property")
-        _stored_count(
-            properties_element,
-            "TransientCount",
-            len(transient_properties),
-            "transient property",
-        )
-        for node in properties:
-            property_name = node.get("name", "")
-            if not property_name or property_name in property_nodes:
-                raise NativeFreeCADError(
-                    f"FreeCAD object {name!r} has malformed properties"
-                )
-            property_nodes[property_name] = node
-        result.append(
-            _NativeObject(
-                name,
-                type_id,
-                index,
-                object_id,
-                touched,
-                dependencies.get(name, ()),
-                tuple(object_element.findall("./Extensions/Extension")),
-                transient_properties,
-                property_nodes,
-            )
-        )
-    return tuple(result)
+            raise NativeFreeCad(str(exc)) from exc
+        if ObjectId and ObjectId in IdsValue:
+            raise NativeFreeCad('FreeCAD object declarations contain duplicate ids')
+        if ObjectId:
+            IdsValue.add(ObjectId)
+        DeclByName[NameValue] = (TypeId, Index, ObjectId, NodeValue.get('Touched') == '1')
+    DataByName: dict[str, XmlTree.Element] = {}
+    for NodeValue in ObjectData:
+        NameValue = NodeValue.get('name', '')
+        if not NameValue or NameValue in DataByName:
+            raise NativeFreeCad('FreeCAD object data contains duplicate names')
+        DataByName[NameValue] = NodeValue
+    if set(DeclByName) != set(DataByName):
+        raise NativeFreeCad('FreeCAD object declarations and data do not match')
+    Dependencies: dict[str, tuple[str, ...]] = {}
+    for NodeValue in ObjectsNode.findall('./ObjectDeps'):
+        NameValue = NodeValue.get('Name', '')
+        if not NameValue or NameValue in Dependencies or NameValue not in DeclByName:
+            raise NativeFreeCad('FreeCAD dependency graph is malformed')
+        Values = tuple((ItemValue.get('Name', '') for ItemValue in NodeValue.findall('./Dep')))
+        if any((not Value or Value not in DeclByName for Value in Values)):
+            raise NativeFreeCad('FreeCAD dependency graph has missing objects')
+        DeclaredCount(NodeValue, len(Values), 'dependency')
+        Dependencies[NameValue] = Values
+    Result: list[NativeObject] = []
+    for NameValue, (TypeId, Index, ObjectId, Touched) in DeclByName.items():
+        PropNodes: dict[str, XmlTree.Element] = {}
+        ObjectElem = DataByName[NameValue]
+        PropertiesElem = ObjectElem.find('./Properties')
+        if PropertiesElem is None:
+            raise NativeFreeCad(f'FreeCAD object {NameValue!r} has no properties')
+        Properties = PropertiesElem.findall('./Property')
+        TransientProperties = tuple(PropertiesElem.findall('./_Property'))
+        StoredCount(PropertiesElem, 'Count', len(Properties), 'property')
+        StoredCount(PropertiesElem, 'TransientCount', len(TransientProperties), 'transient property')
+        for NodeValue in Properties:
+            PropName = NodeValue.get('name', '')
+            if not PropName or PropName in PropNodes:
+                raise NativeFreeCad(f'FreeCAD object {NameValue!r} has malformed properties')
+            PropNodes[PropName] = NodeValue
+        Result.append(NativeObject(NameValue, TypeId, Index, ObjectId, Touched, Dependencies.get(NameValue, ()), tuple(ObjectElem.findall('./Extensions/Extension')), TransientProperties, PropNodes))
+    return tuple(Result)
 
-
-def _load_native_archive(data: bytes, *, load_entries: bool = True) -> _NativeArchive:
-    archive, members = _archive_members(data)
-    with archive:
+# this definition exists because focused behavior needs one stable owner
+def LoadNative(DataValue: bytes, *, LoadEntries: bool=True) -> NativeArchive:
+    Archive, Members = ArchiveMembers(DataValue)
+    with Archive:
         try:
-            root, document_xml = _validated_document_xml(archive, members)
+            RootValue, DocXml = ValidatedDocXml(Archive, Members)
         except ValueError as exc:
-            raise NativeFreeCADError(str(exc)) from exc
+            raise NativeFreeCad(str(exc)) from exc
         try:
-            schema_version = int(root.get("SchemaVersion", ""))
+            SchemaVersion = int(RootValue.get('SchemaVersion', ''))
         except ValueError as exc:
-            raise NativeFreeCADError("FreeCAD schema version is invalid") from exc
-        if schema_version < _MIN_OBJECT_GRAPH_SCHEMA_VERSION:
-            raise NativeFreeCADError("FreeCAD schema version is not supported")
-        objects = _parse_objects(root)
-        referenced: set[str] = set()
-        for node in root.findall(".//*[@file]"):
-            if node.tag == "XLink":
+            raise NativeFreeCad('FreeCAD schema version is invalid') from exc
+        if SchemaVersion < KMinObjectGraphSchema:
+            raise NativeFreeCad('FreeCAD schema version is not supported')
+        Objects = ParseObjects(RootValue)
+        Referenced: set[str] = set()
+        for NodeValue in RootValue.findall('.//*[@file]'):
+            if NodeValue.tag == 'XLink':
                 continue
-            filename = node.get("file", "")
-            if filename:
-                referenced.add(_entry_name(filename))
-        missing = sorted(referenced.difference(members))
-        if missing:
-            raise NativeFreeCADError(
-                "FCStd archive is missing referenced data: " + ", ".join(missing)
-            )
-        entries: dict[str, bytes] = {}
-        if load_entries:
+            FileName = NodeValue.get('file', '')
+            if FileName:
+                Referenced.add(EntryName(FileName))
+        Missing = sorted(Referenced.difference(Members))
+        if Missing:
+            raise NativeFreeCad('FCStd archive is missing referenced data: ' + ', '.join(Missing))
+        Entries: dict[str, bytes] = {}
+        if LoadEntries:
             try:
-                entries = {name: archive.read(members[name]) for name in referenced}
-            except (
-                OSError,
-                RuntimeError,
-                NotImplementedError,
-                zipfile.BadZipFile,
-            ) as exc:
-                raise NativeFreeCADError(
-                    "FCStd archive contains unreadable referenced data"
-                ) from exc
-    return _NativeArchive(
-        root,
-        objects,
-        entries,
-        document_xml,
-        tuple(name for name in members if name in referenced),
-    )
+                Entries = {NameValue: Archive.read(Members[NameValue]) for NameValue in Referenced}
+            except (OSError, RuntimeError, NotImplementedError, Zipfile.BadZipFile) as exc:
+                raise NativeFreeCad('FCStd archive contains unreadable referenced data') from exc
+    return NativeArchive(RootValue, Objects, Entries, DocXml, tuple((NameValue for NameValue in Members if NameValue in Referenced)))
 
-
-def probe_native_fcstd(data: bytes) -> tuple[float, str]:
+# this definition exists because focused behavior needs one stable owner
+def ProbeNative(DataValue: bytes) -> tuple[float, str]:
     try:
-        native = _load_native_archive(data, load_entries=False)
-    except NativeFreeCADError as exc:
-        return 0.0, str(exc)
-    return (
-        0.95,
-        f"native FreeCAD schema {native.root.get('SchemaVersion')} document",
-    )
+        Native = LoadNative(DataValue, LoadEntries=False)
+    except NativeFreeCad as exc:
+        return (0.0, str(exc))
+    return (0.95, f"native FreeCAD schema {Native.root.get('SchemaVersion')} document")
 
+# this definition exists because focused behavior needs one stable owner
+def ElemData(NodeValue: ET.Element) -> dict[str, AnyValue]:
+    Result: dict[str, AnyValue] = {'tag': NodeValue.tag, 'attributes': dict(sorted(NodeValue.attrib.items()))}
+    TextValue = (NodeValue.text or '').strip()
+    if TextValue:
+        Result['text'] = TextValue
+    Children = [ElemData(Child) for Child in NodeValue]
+    if Children:
+        Result['children'] = Children
+    return Result
 
-def _element_data(node: ET.Element) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "tag": node.tag,
-        "attributes": dict(sorted(node.attrib.items())),
-    }
-    text = (node.text or "").strip()
-    if text:
-        result["text"] = text
-    children = [_element_data(child) for child in node]
-    if children:
-        result["children"] = children
-    return result
+# this definition exists because focused behavior needs one stable owner
+def NativeObjectA(ObjValue: _NativeObject) -> dict[str, AnyValue]:
+    return {'name': ObjValue.name, 'type_id': ObjValue.type_id, 'order': ObjValue.index, 'object_id': ObjValue.object_id, 'touched': ObjValue.touched, 'dependencies': list(ObjValue.dependencies), 'extensions': [ElemData(NodeValue) for NodeValue in ObjValue.extensions], 'transient_properties': [ElemData(NodeValue) for NodeValue in ObjValue.transient_properties], 'property_order': list(ObjValue.properties), 'properties': {NameValue: ElemData(NodeValue) for NameValue, NodeValue in ObjValue.properties.items()}}
 
-
-def _native_object_data(obj: _NativeObject) -> dict[str, Any]:
-    return {
-        "name": obj.name,
-        "type_id": obj.type_id,
-        "order": obj.index,
-        "object_id": obj.object_id,
-        "touched": obj.touched,
-        "dependencies": list(obj.dependencies),
-        "extensions": [_element_data(node) for node in obj.extensions],
-        "transient_properties": [
-            _element_data(node) for node in obj.transient_properties
-        ],
-        "property_order": list(obj.properties),
-        "properties": {
-            name: _element_data(node) for name, node in obj.properties.items()
-        },
-    }
-
-
-def _string_hasher_data(native: _NativeArchive) -> dict[str, Any] | None:
-    nodes = [
-        _element_data(node) for node in native.root if node.tag in STRING_HASHER_TAGS
-    ]
-    entries: list[dict[str, Any]] = []
-    for node in native.root:
-        if node.tag not in STRING_HASHER_TAGS:
+# this definition exists because focused behavior needs one stable owner
+def StringHasher(Native: _NativeArchive) -> dict[str, AnyValue] | None:
+    Nodes = [ElemData(NodeValue) for NodeValue in Native.root if NodeValue.tag in StringHasherTags]
+    Entries: list[dict[str, AnyValue]] = []
+    for NodeValue in Native.root:
+        if NodeValue.tag not in StringHasherTags:
             continue
-        for child in node.iter():
-            filename = child.get("file", "")
-            if filename and filename in native.entries:
-                entries.append(
-                    {
-                        "source_stream": filename,
-                        "data": native.entries[filename],
-                    }
-                )
-    attribute = native.root.get("StringHasher", "")
-    if not attribute and not nodes and not entries:
+        for Child in NodeValue.iter():
+            FileName = Child.get('file', '')
+            if FileName and FileName in Native.entries:
+                Entries.append({'source_stream': FileName, 'data': Native.entries[FileName]})
+    AttrValue = Native.root.get('StringHasher', '')
+    if not AttrValue and (not Nodes) and (not Entries):
         return None
-    return {
-        "attribute": attribute,
-        "nodes": nodes,
-        "entries": entries,
-    }
+    return {'attribute': AttrValue, 'nodes': Nodes, 'entries': Entries}
 
-
-def _other_entry_data(native: _NativeArchive) -> list[dict[str, Any]]:
-    represented: set[str] = set()
-    for obj in native.objects:
-        for node in obj.properties.values():
-            if node.find("./Part") is None:
+# this definition exists because focused behavior needs one stable owner
+def OtherEntryData(Native: _NativeArchive) -> list[dict[str, AnyValue]]:
+    Represented: set[str] = set()
+    for ObjValue in Native.objects:
+        for NodeValue in ObjValue.properties.values():
+            if NodeValue.find('./Part') is None:
                 continue
-            represented.update(
-                filename
-                for child in node.findall(".//*[@file]")
-                if (filename := child.get("file", ""))
-            )
-    for node in native.root:
-        if node.tag not in STRING_HASHER_TAGS:
+            Represented.update((FileName for Child in NodeValue.findall('.//*[@file]') if (FileName := Child.get('file', ''))))
+    for NodeValue in Native.root:
+        if NodeValue.tag not in StringHasherTags:
             continue
-        represented.update(
-            filename for child in node.iter() if (filename := child.get("file", ""))
-        )
-    return [
-        {"source_stream": name, "data": native.entries[name]}
-        for name in native.entry_order
-        if name in native.entries and name not in represented
-    ]
+        Represented.update((FileName for Child in NodeValue.iter() if (FileName := Child.get('file', ''))))
+    return [{'source_stream': NameValue, 'data': Native.entries[NameValue]} for NameValue in Native.entry_order if NameValue in Native.entries and NameValue not in Represented]
 
+# this definition exists because focused behavior needs one stable owner
+def NativeDoc(Native: _NativeArchive, DataValue: bytes, SourcePath: str) -> tuple[BrepPayload, BrepPayload]:
+    NativeDigest = Hashlib.sha256(DataValue).digest()
+    NativeName = PathValue(SourcePath).name if SourcePath else f'Document{Suffix}'
+    DocValue = BrepPayload('freecad:native-document', FormatId, 'native_document', f"FreeCAD Schema {Native.root.get('SchemaVersion', '')}", NativeDigest.hex(), data=DataValue, source_stream=NativeName, provenance=Provenance(FormatId, DocEntry, spans=(ProvenanceSpan(DocEntry, 0, len(Native.document_xml), 'xml'),)), attributes={'object_count': len(Native.objects), 'entry_order': list(Native.entry_order)}, role=PayloadRole.DOCUMENT, file_extension=Suffix)
+    Binding = BrepPayload('freecad:native-document-binding', f'{FormatId}.sha256', 'native_document_binding', 'sha256', Hashlib.sha256(NativeDigest).hexdigest(), data=NativeDigest, source_stream=NativeName, provenance=Provenance(FormatId, NativeDigest.hex()), role=PayloadRole.VERIFICATION, file_extension='.sha256')
+    return (DocValue, Binding)
 
-def _native_document_payloads(
-    native: _NativeArchive, data: bytes, source_path: str
-) -> tuple[BrepPayload, BrepPayload]:
-    native_digest = hashlib.sha256(data).digest()
-    native_name = Path(source_path).name if source_path else f"Document{SUFFIX}"
-    document = BrepPayload(
-        "freecad:native-document",
-        FORMAT_ID,
-        "native_document",
-        f"FreeCAD Schema {native.root.get('SchemaVersion', '')}",
-        native_digest.hex(),
-        data=data,
-        source_stream=native_name,
-        provenance=Provenance(
-            FORMAT_ID,
-            DOCUMENT_ENTRY,
-            spans=(ProvenanceSpan(DOCUMENT_ENTRY, 0, len(native.document_xml), "xml"),),
-        ),
-        attributes={
-            "object_count": len(native.objects),
-            "entry_order": list(native.entry_order),
-        },
-        role=PayloadRole.DOCUMENT,
-        file_extension=SUFFIX,
-    )
-    binding = BrepPayload(
-        "freecad:native-document-binding",
-        f"{FORMAT_ID}.sha256",
-        "native_document_binding",
-        "sha256",
-        hashlib.sha256(native_digest).hexdigest(),
-        data=native_digest,
-        source_stream=native_name,
-        provenance=Provenance(FORMAT_ID, native_digest.hex()),
-        role=PayloadRole.VERIFICATION,
-        file_extension=".sha256",
-    )
-    return document, binding
-
-
-def _child(obj: _NativeObject, name: str, tag: str | None = None) -> ET.Element | None:
-    node = obj.properties.get(name)
-    if node is None:
+# this definition exists because focused behavior needs one stable owner
+def Child(ObjValue: _NativeObject, NameValue: str, TagValue: str | None=None) -> XmlTree.Element | None:
+    NodeValue = ObjValue.properties.get(NameValue)
+    if NodeValue is None:
         return None
-    if tag is not None:
-        return node.find(f"./{tag}")
-    return next(iter(node), None)
+    if TagValue is not None:
+        return NodeValue.find(f'./{TagValue}')
+    return next(iter(NodeValue), None)
 
-
-def _number(value: str | None, default: float = 0.0) -> float:
+# this definition exists because focused behavior needs one stable owner
+def Number(Value: str | None, Default: float=0.0) -> float:
     try:
-        result = float(value)
+        Result = float(Value)
     except (TypeError, ValueError):
-        return default
-    return result if math.isfinite(result) else default
+        return Default
+    return Result if MathValue.isfinite(Result) else Default
 
-
-def _integer(value: str | None, default: int = 0) -> int:
+# this definition exists because focused behavior needs one stable owner
+def Integer(Value: str | None, Default: int=0) -> int:
     try:
-        return int(value)
+        return int(Value)
     except (TypeError, ValueError):
-        return default
+        return Default
 
+# this definition exists because focused behavior needs one stable owner
+def String(ObjValue: _NativeObject, NameValue: str, Default: str='') -> str:
+    NodeValue = Child(ObjValue, NameValue, 'String')
+    return Default if NodeValue is None else NodeValue.get('value', Default)
 
-def _string(obj: _NativeObject, name: str, default: str = "") -> str:
-    node = _child(obj, name, "String")
-    return default if node is None else node.get("value", default)
+# this definition exists because focused behavior needs one stable owner
+def BoolAction(ObjValue: _NativeObject, NameValue: str, Default: bool=False) -> bool:
+    NodeValue = Child(ObjValue, NameValue, 'Bool')
+    if NodeValue is None:
+        return Default
+    return NodeValue.get('value', 'false').casefold() in PermissiveTrueValues
 
+# this definition exists because focused behavior needs one stable owner
+def Float(ObjValue: _NativeObject, NameValue: str, Default: float=0.0) -> float:
+    NodeValue = Child(ObjValue, NameValue, 'Float')
+    return Default if NodeValue is None else Number(NodeValue.get('value'), Default)
 
-def _bool(obj: _NativeObject, name: str, default: bool = False) -> bool:
-    node = _child(obj, name, "Bool")
-    if node is None:
-        return default
-    return node.get("value", "false").casefold() in PERMISSIVE_TRUE_VALUES
+# this definition exists because focused behavior needs one stable owner
+def EnumAction(ObjValue: _NativeObject, NameValue: str, Default: int=0) -> int:
+    NodeValue = Child(ObjValue, NameValue, 'Integer')
+    return Default if NodeValue is None else Integer(NodeValue.get('value'), Default)
 
+# this definition exists because focused behavior needs one stable owner
+def LinkAction(ObjValue: _NativeObject, NameValue: str) -> str:
+    NodeValue = ObjValue.properties.get(NameValue)
+    if NodeValue is None:
+        return ''
+    Child = NodeValue.find('./Link')
+    if Child is not None:
+        return Child.get('value', '')
+    Child = NodeValue.find('./LinkSub')
+    if Child is not None:
+        return Child.get('value', '')
+    Child = NodeValue.find('./XLink')
+    if Child is not None:
+        return Child.get('name', '')
+    return ''
 
-def _float(obj: _NativeObject, name: str, default: float = 0.0) -> float:
-    node = _child(obj, name, "Float")
-    return default if node is None else _number(node.get("value"), default)
-
-
-def _enum(obj: _NativeObject, name: str, default: int = 0) -> int:
-    node = _child(obj, name, "Integer")
-    return default if node is None else _integer(node.get("value"), default)
-
-
-def _link(obj: _NativeObject, name: str) -> str:
-    node = obj.properties.get(name)
-    if node is None:
-        return ""
-    child = node.find("./Link")
-    if child is not None:
-        return child.get("value", "")
-    child = node.find("./LinkSub")
-    if child is not None:
-        return child.get("value", "")
-    child = node.find("./XLink")
-    if child is not None:
-        return child.get("name", "")
-    return ""
-
-
-def _link_list(obj: _NativeObject, name: str) -> tuple[str, ...]:
-    node = obj.properties.get(name)
-    if node is None:
+# this definition exists because focused behavior needs one stable owner
+def LinkList(ObjValue: _NativeObject, NameValue: str) -> tuple[str, ...]:
+    NodeValue = ObjValue.properties.get(NameValue)
+    if NodeValue is None:
         return ()
-    values: list[str] = []
-    for path, attribute in (
-        ("./LinkList/Link", "value"),
-        ("./XLinkList/XLink", "name"),
-        ("./LinkSubList/Link", "obj"),
-    ):
-        values.extend(
-            value for child in node.findall(path) if (value := child.get(attribute, ""))
-        )
-    return tuple(values)
+    Values: list[str] = []
+    for PathValue, AttrValue in (('./LinkList/Link', 'value'), ('./XLinkList/XLink', 'name'), ('./LinkSubList/Link', 'obj')):
+        Values.extend((Value for Child in NodeValue.findall(PathValue) if (Value := Child.get(AttrValue, ''))))
+    return tuple(Values)
 
+# this definition exists because focused behavior needs one stable owner
+def PlacementElem(ObjValue: _NativeObject, NameValue: str) -> XmlTree.Element | None:
+    return Child(ObjValue, NameValue, 'PropertyPlacement')
 
-def _placement_element(obj: _NativeObject, name: str) -> ET.Element | None:
-    return _child(obj, name, "PropertyPlacement")
-
-
-def _placement_matrix(node: ET.Element | None) -> tuple[float, ...]:
-    if node is None:
-        return (
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-        )
-    x = _number(node.get("Q0"))
-    y = _number(node.get("Q1"))
-    z = _number(node.get("Q2"))
-    w = _number(node.get("Q3"), 1.0)
-    norm = math.sqrt(x * x + y * y + z * z + w * w)
-    if norm <= 1e-15:
-        x, y, z, w = 0.0, 0.0, 0.0, 1.0
+# this definition exists because focused behavior needs one stable owner
+def PlacementMatrix(NodeValue: ET.Element | None) -> tuple[float, ...]:
+    if NodeValue is None:
+        return (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+    FirstCoord = Number(NodeValue.get('Q0'))
+    SecondCoord = Number(NodeValue.get('Q1'))
+    ThirdCoord = Number(NodeValue.get('Q2'))
+    WidthValue = Number(NodeValue.get('Q3'), 1.0)
+    NormValue = MathValue.sqrt(FirstCoord * FirstCoord + SecondCoord * SecondCoord + ThirdCoord * ThirdCoord + WidthValue * WidthValue)
+    if NormValue <= 1e-15:
+        FirstCoord, SecondCoord, ThirdCoord, WidthValue = (0.0, 0.0, 0.0, 1.0)
     else:
-        x, y, z, w = x / norm, y / norm, z / norm, w / norm
-    return (
-        1.0 - 2.0 * (y * y + z * z),
-        2.0 * (x * y - z * w),
-        2.0 * (x * z + y * w),
-        _number(node.get("Px")),
-        2.0 * (x * y + z * w),
-        1.0 - 2.0 * (x * x + z * z),
-        2.0 * (y * z - x * w),
-        _number(node.get("Py")),
-        2.0 * (x * z - y * w),
-        2.0 * (y * z + x * w),
-        1.0 - 2.0 * (x * x + y * y),
-        _number(node.get("Pz")),
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-    )
+        FirstCoord, SecondCoord, ThirdCoord, WidthValue = (FirstCoord / NormValue, SecondCoord / NormValue, ThirdCoord / NormValue, WidthValue / NormValue)
+    return (1.0 - 2.0 * (SecondCoord * SecondCoord + ThirdCoord * ThirdCoord), 2.0 * (FirstCoord * SecondCoord - ThirdCoord * WidthValue), 2.0 * (FirstCoord * ThirdCoord + SecondCoord * WidthValue), Number(NodeValue.get('Px')), 2.0 * (FirstCoord * SecondCoord + ThirdCoord * WidthValue), 1.0 - 2.0 * (FirstCoord * FirstCoord + ThirdCoord * ThirdCoord), 2.0 * (SecondCoord * ThirdCoord - FirstCoord * WidthValue), Number(NodeValue.get('Py')), 2.0 * (FirstCoord * ThirdCoord - SecondCoord * WidthValue), 2.0 * (SecondCoord * ThirdCoord + FirstCoord * WidthValue), 1.0 - 2.0 * (FirstCoord * FirstCoord + SecondCoord * SecondCoord), Number(NodeValue.get('Pz')), 0.0, 0.0, 0.0, 1.0)
 
+# this definition exists because focused behavior needs one stable owner
+def TransformA(NodeValue: ET.Element | None) -> Transform:
+    Values = PlacementMatrix(NodeValue)
+    return Transform(origin=VectorThree(Values[3], Values[7], Values[11]), x_axis=VectorThree(Values[0], Values[4], Values[8]), y_axis=VectorThree(Values[1], Values[5], Values[9]), z_axis=VectorThree(Values[2], Values[6], Values[10]))
 
-def _transform(node: ET.Element | None) -> Transform:
-    values = _placement_matrix(node)
-    return Transform(
-        origin=Vector3(values[3], values[7], values[11]),
-        x_axis=Vector3(values[0], values[4], values[8]),
-        y_axis=Vector3(values[1], values[5], values[9]),
-        z_axis=Vector3(values[2], values[6], values[10]),
-    )
-
-
-def _expressions(obj: _NativeObject) -> dict[str, str]:
-    node = obj.properties.get("ExpressionEngine")
-    if node is None:
+# this definition exists because focused behavior needs one stable owner
+def Expressions(ObjValue: _NativeObject) -> dict[str, str]:
+    NodeValue = ObjValue.properties.get('ExpressionEngine')
+    if NodeValue is None:
         return {}
-    values: dict[str, str] = {}
-    for child in node.findall("./ExpressionEngine/Expression"):
-        path = child.get("path", "").lstrip(".")
-        expression = child.get("expression", "")
-        if path and expression:
-            values[path] = expression
-    return values
+    Values: dict[str, str] = {}
+    for Child in NodeValue.findall('./ExpressionEngine/Expression'):
+        PathValue = Child.get('path', '').lstrip('.')
+        Expression = Child.get('expression', '')
+        if PathValue and Expression:
+            Values[PathValue] = Expression
+    return Values
 
-
-def _property_parameter_value(node: ET.Element) -> ParameterValue | None:
-    type_id = node.get("type", "")
-    if type_id == "App::PropertyEnumeration":
-        child = node.find("./Integer")
-        if child is None:
+# this definition exists because focused behavior needs one stable owner
+def PropParamValue(NodeValue: ET.Element) -> ParamValue | None:
+    TypeId = NodeValue.get('type', '')
+    if TypeId == 'App::PropertyEnumeration':
+        Child = NodeValue.find('./Integer')
+        if Child is None:
             return None
-        choices = [
-            item.get("value", "") for item in node.findall("./CustomEnumList/Enum")
-        ]
-        index = _integer(child.get("value"))
-        value: str | int = choices[index] if 0 <= index < len(choices) else index
-        return ParameterValue(value, ValueKind.STRING if choices else ValueKind.INTEGER)
-    kind_and_unit = SCALAR_PROPERTY_KINDS.get(type_id)
-    if kind_and_unit is None:
+        Choices = [ItemValue.get('value', '') for ItemValue in NodeValue.findall('./CustomEnumList/Enum')]
+        Index = Integer(Child.get('value'))
+        Value: str | int = Choices[Index] if 0 <= Index < len(Choices) else Index
+        return ParamValue(Value, ValueKind.STRING if Choices else ValueKind.INTEGER)
+    KindAndUnit = ScalarPropKinds.get(TypeId)
+    if KindAndUnit is None:
         return None
-    kind, unit, tag = kind_and_unit
-    child = node.find(f"./{tag}")
-    if child is None:
+    KindValue, UnitValue, TagValue = KindAndUnit
+    Child = NodeValue.find(f'./{TagValue}')
+    if Child is None:
         return None
-    if kind == ValueKind.BOOLEAN:
-        value = child.get("value", "false").casefold() in PERMISSIVE_TRUE_VALUES
-    elif kind == ValueKind.INTEGER:
-        value = _integer(child.get("value"))
-    elif kind == ValueKind.STRING:
-        value = child.get("value", "")
-    elif tag == "Integer":
-        value = _integer(child.get("value"))
+    if KindValue == ValueKind.BOOLEAN:
+        Value = Child.get('value', 'false').casefold() in PermissiveTrueValues
+    elif KindValue == ValueKind.INTEGER:
+        Value = Integer(Child.get('value'))
+    elif KindValue == ValueKind.STRING:
+        Value = Child.get('value', '')
+    elif TagValue == 'Integer':
+        Value = Integer(Child.get('value'))
     else:
-        value = _number(child.get("value"))
-    return ParameterValue(value, kind, unit)
+        Value = Number(Child.get('value'))
+    return ParamValue(Value, KindValue, UnitValue)
 
+# this definition exists because focused behavior needs one stable owner
+def GeomAction(NodeValue: ET.Element, EntityId: str) -> tuple[GeomKind, AnyValue]:
+    TypeId = NodeValue.get('type', '')
+    if TypeId == 'Part::GeomLineSegment':
+        Value = NodeValue.find('./LineSegment')
+        if Value is not None:
+            return (GeomKind.LINE, LineGeom(VectorTwo(Number(Value.get('StartX')), Number(Value.get('StartY'))), VectorTwo(Number(Value.get('EndX')), Number(Value.get('EndY')))))
+    if TypeId == 'Part::GeomCircle':
+        Value = NodeValue.find('./Circle')
+        if Value is not None:
+            return (GeomKind.CIRCLE, CircleGeom(VectorTwo(Number(Value.get('CenterX')), Number(Value.get('CenterY'))), abs(Number(Value.get('Radius')))))
+    if TypeId == 'Part::GeomArcOfCircle':
+        Value = NodeValue.find('./ArcOfCircle')
+        if Value is not None:
+            return (GeomKind.ARC, ArcGeom(VectorTwo(Number(Value.get('CenterX')), Number(Value.get('CenterY'))), abs(Number(Value.get('Radius'))), Number(Value.get('StartAngle')), Number(Value.get('EndAngle'))))
+    if TypeId == 'Part::GeomPoint':
+        Value = NodeValue.find('./GeomPoint')
+        if Value is None:
+            Value = NodeValue.find('./Point')
+        if Value is not None:
+            return (GeomKind.POINT, PointGeom(VectorTwo(Number(Value.get('X')), Number(Value.get('Y')))))
+    if TypeId == 'Part::GeomEllipse':
+        Value = NodeValue.find('./Ellipse')
+        if Value is not None:
+            Center = VectorTwo(Number(Value.get('CenterX')), Number(Value.get('CenterY')))
+            AxisValue = GeomAxis(Value)
+            return (GeomKind.ELLIPSE, EllipseGeom(Center, AxisValue, abs(Number(Value.get('MajorRadius'))), abs(Number(Value.get('MinorRadius')))))
+    if TypeId == 'Part::GeomArcOfEllipse':
+        Value = NodeValue.find('./ArcOfEllipse')
+        if Value is not None:
+            return (GeomKind.ARC_ELLIPSE, ArcEllipseGeom(VectorTwo(Number(Value.get('CenterX')), Number(Value.get('CenterY'))), GeomAxis(Value), abs(Number(Value.get('MajorRadius'))), abs(Number(Value.get('MinorRadius'))), Number(Value.get('StartAngle')), Number(Value.get('EndAngle'))))
+    if TypeId in {'Part::GeomHyperbola', 'Part::GeomArcOfHyperbola'}:
+        TagValue = 'Hyperbola' if TypeId == 'Part::GeomHyperbola' else 'ArcOfHyperbola'
+        Value = NodeValue.find(f'./{TagValue}')
+        if Value is not None:
+            Arguments = (VectorTwo(Number(Value.get('CenterX')), Number(Value.get('CenterY'))), GeomAxis(Value), abs(Number(Value.get('MajorRadius'))), abs(Number(Value.get('MinorRadius'))))
+            if TypeId == 'Part::GeomHyperbola':
+                return (GeomKind.HYPERBOLA, HyperbolaGeom(*Arguments))
+            return (GeomKind.ARC_HYPERBOLA, ArcHyperbolaGeom(*Arguments, Number(Value.get('StartAngle')), Number(Value.get('EndAngle'))))
+    if TypeId in {'Part::GeomParabola', 'Part::GeomArcOfParabola'}:
+        TagValue = 'Parabola' if TypeId == 'Part::GeomParabola' else 'ArcOfParabola'
+        Value = NodeValue.find(f'./{TagValue}')
+        if Value is not None:
+            Arguments = (VectorTwo(Number(Value.get('CenterX')), Number(Value.get('CenterY'))), GeomAxis(Value), abs(Number(Value.get('Focal'))))
+            if TypeId == 'Part::GeomParabola':
+                return (GeomKind.PARABOLA, ParabolaGeom(*Arguments))
+            return (GeomKind.ARC_PARABOLA, ArcParabolaGeom(*Arguments, Number(Value.get('StartAngle')), Number(Value.get('EndAngle'))))
+    if TypeId in SplineGeomTypeIds:
+        Value = NodeValue.find('./BSplineCurve')
+        if Value is None:
+            Value = NodeValue.find('./BezierCurve')
+        if Value is not None:
+            Points = tuple((VectorTwo(Number(ItemValue.get('X')), Number(ItemValue.get('Y'))) for ItemValue in Value.findall('.//*[@X][@Y]')))
+            if Points:
+                return (GeomKindByTypeId[TypeId], SplineGeom(Points, max(1, len(Points) - 1) if TypeId == 'Part::GeomBezierCurve' else max(1, Integer(Value.get('Degree'), 3)), knots=tuple((Number(ItemValue.get('Value')) for ItemValue in Value.findall('./Knot'))), multiplicities=tuple((Integer(ItemValue.get('Mult'), 1) for ItemValue in Value.findall('./Knot'))), weights=tuple((Number(ItemValue.get('Weight'), 1.0) for ItemValue in Value.findall('./Pole'))), periodic=Value.get('IsPeriodic', Value.get('Periodic', 'false')).casefold() in XmlTrueValues))
+    return (GeomKindByTypeId.get(TypeId, GeomKind.NATIVE), NativeGeom(FormatId, TypeId or 'unknown', ElemData(NodeValue)))
 
-def _geometry(node: ET.Element, entity_id: str) -> tuple[GeometryKind, Any]:
-    type_id = node.get("type", "")
-    if type_id == "Part::GeomLineSegment":
-        value = node.find("./LineSegment")
-        if value is not None:
-            return GeometryKind.LINE, LineGeometry(
-                Vector2(_number(value.get("StartX")), _number(value.get("StartY"))),
-                Vector2(_number(value.get("EndX")), _number(value.get("EndY"))),
-            )
-    if type_id == "Part::GeomCircle":
-        value = node.find("./Circle")
-        if value is not None:
-            return GeometryKind.CIRCLE, CircleGeometry(
-                Vector2(_number(value.get("CenterX")), _number(value.get("CenterY"))),
-                abs(_number(value.get("Radius"))),
-            )
-    if type_id == "Part::GeomArcOfCircle":
-        value = node.find("./ArcOfCircle")
-        if value is not None:
-            return GeometryKind.ARC, ArcGeometry(
-                Vector2(_number(value.get("CenterX")), _number(value.get("CenterY"))),
-                abs(_number(value.get("Radius"))),
-                _number(value.get("StartAngle")),
-                _number(value.get("EndAngle")),
-            )
-    if type_id == "Part::GeomPoint":
-        value = node.find("./GeomPoint")
-        if value is None:
-            value = node.find("./Point")
-        if value is not None:
-            return GeometryKind.POINT, PointGeometry(
-                Vector2(_number(value.get("X")), _number(value.get("Y")))
-            )
-    if type_id == "Part::GeomEllipse":
-        value = node.find("./Ellipse")
-        if value is not None:
-            center = Vector2(
-                _number(value.get("CenterX")), _number(value.get("CenterY"))
-            )
-            axis = _geometry_axis(value)
-            return GeometryKind.ELLIPSE, EllipseGeometry(
-                center,
-                axis,
-                abs(_number(value.get("MajorRadius"))),
-                abs(_number(value.get("MinorRadius"))),
-            )
-    if type_id == "Part::GeomArcOfEllipse":
-        value = node.find("./ArcOfEllipse")
-        if value is not None:
-            return GeometryKind.ARC_ELLIPSE, ArcEllipseGeometry(
-                Vector2(_number(value.get("CenterX")), _number(value.get("CenterY"))),
-                _geometry_axis(value),
-                abs(_number(value.get("MajorRadius"))),
-                abs(_number(value.get("MinorRadius"))),
-                _number(value.get("StartAngle")),
-                _number(value.get("EndAngle")),
-            )
-    if type_id in {"Part::GeomHyperbola", "Part::GeomArcOfHyperbola"}:
-        tag = "Hyperbola" if type_id == "Part::GeomHyperbola" else "ArcOfHyperbola"
-        value = node.find(f"./{tag}")
-        if value is not None:
-            arguments = (
-                Vector2(_number(value.get("CenterX")), _number(value.get("CenterY"))),
-                _geometry_axis(value),
-                abs(_number(value.get("MajorRadius"))),
-                abs(_number(value.get("MinorRadius"))),
-            )
-            if type_id == "Part::GeomHyperbola":
-                return GeometryKind.HYPERBOLA, HyperbolaGeometry(*arguments)
-            return GeometryKind.ARC_HYPERBOLA, ArcHyperbolaGeometry(
-                *arguments,
-                _number(value.get("StartAngle")),
-                _number(value.get("EndAngle")),
-            )
-    if type_id in {"Part::GeomParabola", "Part::GeomArcOfParabola"}:
-        tag = "Parabola" if type_id == "Part::GeomParabola" else "ArcOfParabola"
-        value = node.find(f"./{tag}")
-        if value is not None:
-            arguments = (
-                Vector2(_number(value.get("CenterX")), _number(value.get("CenterY"))),
-                _geometry_axis(value),
-                abs(_number(value.get("Focal"))),
-            )
-            if type_id == "Part::GeomParabola":
-                return GeometryKind.PARABOLA, ParabolaGeometry(*arguments)
-            return GeometryKind.ARC_PARABOLA, ArcParabolaGeometry(
-                *arguments,
-                _number(value.get("StartAngle")),
-                _number(value.get("EndAngle")),
-            )
-    if type_id in SPLINE_GEOMETRY_TYPE_IDS:
-        value = node.find("./BSplineCurve")
-        if value is None:
-            value = node.find("./BezierCurve")
-        if value is not None:
-            points = tuple(
-                Vector2(_number(item.get("X")), _number(item.get("Y")))
-                for item in value.findall(".//*[@X][@Y]")
-            )
-            if points:
-                return GEOMETRY_KIND_BY_TYPE_ID[type_id], SplineGeometry(
-                    points,
-                    (
-                        max(1, len(points) - 1)
-                        if type_id == "Part::GeomBezierCurve"
-                        else max(1, _integer(value.get("Degree"), 3))
-                    ),
-                    knots=tuple(
-                        _number(item.get("Value")) for item in value.findall("./Knot")
-                    ),
-                    multiplicities=tuple(
-                        _integer(item.get("Mult"), 1)
-                        for item in value.findall("./Knot")
-                    ),
-                    weights=tuple(
-                        _number(item.get("Weight"), 1.0)
-                        for item in value.findall("./Pole")
-                    ),
-                    periodic=value.get(
-                        "IsPeriodic", value.get("Periodic", "false")
-                    ).casefold()
-                    in XML_TRUE_VALUES,
-                )
-    return GEOMETRY_KIND_BY_TYPE_ID.get(type_id, GeometryKind.NATIVE), NativeGeometry(
-        FORMAT_ID, type_id or "unknown", _element_data(node)
-    )
+# this definition exists because focused behavior needs one stable owner
+def GeomAxis(Value: ET.Element) -> VectorTwo:
+    if Value.get('MajorAxisX') is not None:
+        return VectorTwo(Number(Value.get('MajorAxisX'), 1.0), Number(Value.get('MajorAxisY')))
+    Angle = Number(Value.get('AngleXU'))
+    return VectorTwo(MathValue.cos(Angle), MathValue.sin(Angle))
 
+# this definition exists because focused behavior needs one stable owner
+def PointsClose(First: Vector2, Second: Vector2, Tolerance: float=1e-07) -> bool:
+    return MathValue.hypot(First.x - Second.x, First.y - Second.y) <= Tolerance
 
-def _geometry_axis(value: ET.Element) -> Vector2:
-    if value.get("MajorAxisX") is not None:
-        return Vector2(
-            _number(value.get("MajorAxisX"), 1.0),
-            _number(value.get("MajorAxisY")),
-        )
-    angle = _number(value.get("AngleXU"))
-    return Vector2(math.cos(angle), math.sin(angle))
+# this definition exists because focused behavior needs one stable owner
+def Segment(First: Vector2, Second: Vector2, Third: Vector2) -> float:
+    return (Second.x - First.x) * (Third.y - First.y) - (Second.y - First.y) * (Third.x - First.x)
 
+# this definition exists because focused behavior needs one stable owner
+def PointOnSegment(Point: Vector2, First: Vector2, Second: Vector2, Tolerance: float=1e-07) -> bool:
+    return abs(Segment(First, Second, Point)) <= Tolerance and min(First.x, Second.x) - Tolerance <= Point.x <= max(First.x, Second.x) + Tolerance and (min(First.y, Second.y) - Tolerance <= Point.y <= max(First.y, Second.y) + Tolerance)
 
-def _points_close(first: Vector2, second: Vector2, tolerance: float = 1e-7) -> bool:
-    return math.hypot(first.x - second.x, first.y - second.y) <= tolerance
-
-
-def _segment_orientation(first: Vector2, second: Vector2, third: Vector2) -> float:
-    return (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (
-        third.x - first.x
-    )
-
-
-def _point_on_segment(
-    point: Vector2,
-    first: Vector2,
-    second: Vector2,
-    tolerance: float = 1e-7,
-) -> bool:
-    return (
-        abs(_segment_orientation(first, second, point)) <= tolerance
-        and min(first.x, second.x) - tolerance
-        <= point.x
-        <= max(first.x, second.x) + tolerance
-        and min(first.y, second.y) - tolerance
-        <= point.y
-        <= max(first.y, second.y) + tolerance
-    )
-
-
-def _segments_intersect_or_touch(
-    first_start: Vector2,
-    first_end: Vector2,
-    second_start: Vector2,
-    second_end: Vector2,
-    tolerance: float = 1e-7,
-) -> bool:
-    first_a = _segment_orientation(first_start, first_end, second_start)
-    first_b = _segment_orientation(first_start, first_end, second_end)
-    second_a = _segment_orientation(second_start, second_end, first_start)
-    second_b = _segment_orientation(second_start, second_end, first_end)
-    if (
-        (first_a > tolerance and first_b < -tolerance)
-        or (first_a < -tolerance and first_b > tolerance)
-    ) and (
-        (second_a > tolerance and second_b < -tolerance)
-        or (second_a < -tolerance and second_b > tolerance)
-    ):
+# this definition exists because focused behavior needs one stable owner
+def SegmentsOrTouch(FirstStart: Vector2, FirstEnd: Vector2, SecondStart: Vector2, SecondEnd: Vector2, Tolerance: float=1e-07) -> bool:
+    FirstA = Segment(FirstStart, FirstEnd, SecondStart)
+    FirstB = Segment(FirstStart, FirstEnd, SecondEnd)
+    SecondA = Segment(SecondStart, SecondEnd, FirstStart)
+    SecondB = Segment(SecondStart, SecondEnd, FirstEnd)
+    if (FirstA > Tolerance and FirstB < -Tolerance or (FirstA < -Tolerance and FirstB > Tolerance)) and (SecondA > Tolerance and SecondB < -Tolerance or (SecondA < -Tolerance and SecondB > Tolerance)):
         return True
-    return any(
-        abs(value) <= tolerance and _point_on_segment(point, start, end, tolerance)
-        for value, point, start, end in (
-            (first_a, second_start, first_start, first_end),
-            (first_b, second_end, first_start, first_end),
-            (second_a, first_start, second_start, second_end),
-            (second_b, first_end, second_start, second_end),
-        )
-    )
+    return any((abs(Value) <= Tolerance and PointOnSegment(Point, Start, EndValue, Tolerance) for Value, Point, Start, EndValue in ((FirstA, SecondStart, FirstStart, FirstEnd), (FirstB, SecondEnd, FirstStart, FirstEnd), (SecondA, FirstStart, SecondStart, SecondEnd), (SecondB, FirstEnd, SecondStart, SecondEnd))))
 
-
-def _closed_profile_entity_ids(
-    entities: tuple[SketchEntity, ...],
-) -> tuple[tuple[str, ...], ...]:
-    candidates = tuple(entity for entity in entities if not entity.construction)
-    if not candidates:
+# this definition exists because focused behavior needs one stable owner
+def ClosedProfile(Entities: tuple[SketchEntity, ...]) -> tuple[tuple[str, ...], ...]:
+    Candidates = tuple((Entity for Entity in Entities if not Entity.construction))
+    if not Candidates:
         return ()
-    closed = tuple(
-        entity
-        for entity in candidates
-        if isinstance(entity.geometry, (CircleGeometry, EllipseGeometry))
-    )
-    lines = tuple(
-        (index, entity)
-        for index, entity in enumerate(candidates)
-        if isinstance(entity.geometry, LineGeometry)
-    )
-    if len(closed) + len(lines) != len(candidates):
+    Closed = tuple((Entity for Entity in Candidates if isinstance(Entity.geometry, (CircleGeom, EllipseGeom))))
+    Lines = tuple(((Index, Entity) for Index, Entity in enumerate(Candidates) if isinstance(Entity.geometry, LineGeom)))
+    if len(Closed) + len(Lines) != len(Candidates):
         return ()
-    if closed:
-        if lines or any(
-            (
-                isinstance(entity.geometry, CircleGeometry)
-                and entity.geometry.radius <= 1e-9
-            )
-            or (
-                isinstance(entity.geometry, EllipseGeometry)
-                and min(
-                    entity.geometry.major_radius,
-                    entity.geometry.minor_radius,
-                )
-                <= 1e-9
-            )
-            for entity in closed
-        ):
+    if Closed:
+        if Lines or any((isinstance(Entity.geometry, CircleGeom) and Entity.geometry.radius <= 1e-09 or (isinstance(Entity.geometry, EllipseGeom) and min(Entity.geometry.major_radius, Entity.geometry.minor_radius) <= 1e-09) for Entity in Closed)):
             return ()
-        return tuple((entity.id,) for entity in closed)
-    endpoints = tuple(
-        point
-        for _, entity in lines
-        for point in (entity.geometry.start, entity.geometry.end)
-    )
-    parents = list(range(len(endpoints)))
+        return tuple(((Entity.id,) for Entity in Closed))
+    Endpoints = tuple((Point for Ignored, Entity in Lines for Point in (Entity.geometry.start, Entity.geometry.end)))
+    Parents = list(range(len(Endpoints)))
 
-    def root(index: int) -> int:
-        while parents[index] != index:
-            parents[index] = parents[parents[index]]
-            index = parents[index]
-        return index
+    # this definition exists because focused behavior needs one stable owner
+    def RootAction(Index: int) -> int:
+        while Parents[Index] != Index:
+            Parents[Index] = Parents[Parents[Index]]
+            Index = Parents[Index]
+        return Index
 
-    def union(first: int, second: int) -> None:
-        first_root = root(first)
-        second_root = root(second)
-        if first_root != second_root:
-            parents[max(first_root, second_root)] = min(first_root, second_root)
-
-    for first in range(len(endpoints)):
-        for second in range(first + 1, len(endpoints)):
-            if _points_close(endpoints[first], endpoints[second]):
-                union(first, second)
-    clusters: dict[int, list[int]] = {}
-    for index in range(len(endpoints)):
-        clusters.setdefault(root(index), []).append(index)
-    if any(
-        not _points_close(endpoints[first], endpoints[second])
-        for members in clusters.values()
-        for position, first in enumerate(members)
-        for second in members[position + 1 :]
-    ):
+    # this definition exists because focused behavior needs one stable owner
+    def Union(First: int, Second: int) -> None:
+        FirstRoot = RootAction(First)
+        SecondRoot = RootAction(Second)
+        if FirstRoot != SecondRoot:
+            Parents[max(FirstRoot, SecondRoot)] = min(FirstRoot, SecondRoot)
+    for First in range(len(Endpoints)):
+        for Second in range(First + 1, len(Endpoints)):
+            if PointsClose(Endpoints[First], Endpoints[Second]):
+                Union(First, Second)
+    Clusters: dict[int, list[int]] = {}
+    for Index in range(len(Endpoints)):
+        Clusters.setdefault(RootAction(Index), []).append(Index)
+    if any((not PointsClose(Endpoints[First], Endpoints[Second]) for Members in Clusters.values() for Position, First in enumerate(Members) for Second in Members[Position + 1:])):
         return ()
-    roots = tuple(root(index) for index in range(len(endpoints)))
-    incident: dict[int, list[int]] = {}
-    for edge_index in range(len(lines)):
-        start = roots[edge_index * 2]
-        end = roots[edge_index * 2 + 1]
-        if start == end:
+    Roots = tuple((RootAction(Index) for Index in range(len(Endpoints))))
+    Incident: dict[int, list[int]] = {}
+    for EdgeIndex in range(len(Lines)):
+        Start = Roots[EdgeIndex * 2]
+        EndValue = Roots[EdgeIndex * 2 + 1]
+        if Start == EndValue:
             return ()
-        incident.setdefault(start, []).append(edge_index)
-        incident.setdefault(end, []).append(edge_index)
-    if any(len(values) != 2 for values in incident.values()):
+        Incident.setdefault(Start, []).append(EdgeIndex)
+        Incident.setdefault(EndValue, []).append(EdgeIndex)
+    if any((len(Values) != 2 for Values in Incident.values())):
         return ()
-    remaining = set(range(len(lines)))
-    profiles: list[tuple[int, tuple[str, ...], tuple[Vector2, ...]]] = []
-    while remaining:
-        first_edge = min(remaining, key=lambda value: lines[value][0])
-        start_vertex = roots[first_edge * 2]
-        current_vertex = roots[first_edge * 2 + 1]
-        ordered = [first_edge]
-        vertices = [endpoints[first_edge * 2], endpoints[first_edge * 2 + 1]]
-        remaining.remove(first_edge)
-        while current_vertex != start_vertex:
-            next_edges = [
-                value for value in incident[current_vertex] if value in remaining
-            ]
-            if len(next_edges) != 1:
+    Remaining = set(range(len(Lines)))
+    Profiles: list[tuple[int, tuple[str, ...], tuple[VectorTwo, ...]]] = []
+    while Remaining:
+
+        # this callback exists because local behavior needs one focused transformation
+        FirstEdge = min(Remaining, key=lambda Value: Lines[Value][0])
+        StartVertex = Roots[FirstEdge * 2]
+        CurrentVertex = Roots[FirstEdge * 2 + 1]
+        Ordered = [FirstEdge]
+        Vertices = [Endpoints[FirstEdge * 2], Endpoints[FirstEdge * 2 + 1]]
+        Remaining.remove(FirstEdge)
+        while CurrentVertex != StartVertex:
+            NextEdges = [Value for Value in Incident[CurrentVertex] if Value in Remaining]
+            if len(NextEdges) != 1:
                 return ()
-            edge_index = next_edges[0]
-            edge_start = roots[edge_index * 2]
-            edge_end = roots[edge_index * 2 + 1]
-            if current_vertex == edge_start:
-                current_vertex = edge_end
-                vertices.append(endpoints[edge_index * 2 + 1])
-            elif current_vertex == edge_end:
-                current_vertex = edge_start
-                vertices.append(endpoints[edge_index * 2])
+            EdgeIndex = NextEdges[0]
+            EdgeStart = Roots[EdgeIndex * 2]
+            EdgeEnd = Roots[EdgeIndex * 2 + 1]
+            if CurrentVertex == EdgeStart:
+                CurrentVertex = EdgeEnd
+                Vertices.append(Endpoints[EdgeIndex * 2 + 1])
+            elif CurrentVertex == EdgeEnd:
+                CurrentVertex = EdgeStart
+                Vertices.append(Endpoints[EdgeIndex * 2])
             else:
                 return ()
-            ordered.append(edge_index)
-            remaining.remove(edge_index)
-        if len(ordered) < 3 or len(set(vertices[:-1])) != len(vertices) - 1:
+            Ordered.append(EdgeIndex)
+            Remaining.remove(EdgeIndex)
+        if len(Ordered) < 3 or len(set(Vertices[:-1])) != len(Vertices) - 1:
             return ()
-        area = abs(
-            sum(
-                first.x * second.y - second.x * first.y
-                for first, second in zip(vertices[:-1], vertices[1:], strict=True)
-            )
-        )
-        if area <= 1e-9:
+        AreaValue = abs(sum((First.x * Second.y - Second.x * First.y for First, Second in zip(Vertices[:-1], Vertices[1:], strict=True))))
+        if AreaValue <= 1e-09:
             return ()
-        segments = list(zip(vertices[:-1], vertices[1:], strict=True))
-        for first_index, first_segment in enumerate(segments):
-            for second_index in range(first_index + 1, len(segments)):
-                if second_index in {
-                    first_index + 1,
-                    (first_index - 1) % len(segments),
-                }:
+        Segments = list(zip(Vertices[:-1], Vertices[1:], strict=True))
+        for FirstIndex, FirstSegment in enumerate(Segments):
+            for SecondIndex in range(FirstIndex + 1, len(Segments)):
+                if SecondIndex in {FirstIndex + 1, (FirstIndex - 1) % len(Segments)}:
                     continue
-                if _segments_intersect_or_touch(
-                    *first_segment,
-                    *segments[second_index],
-                ):
+                if SegmentsOrTouch(*FirstSegment, *Segments[SecondIndex]):
                     return ()
-        profiles.append(
-            (
-                min(lines[index][0] for index in ordered),
-                tuple(lines[index][1].id for index in ordered),
-                tuple(vertices[:-1]),
-            )
-        )
-    for first_index, (_, _, first_vertices) in enumerate(profiles):
-        first_segments = tuple(
-            zip(
-                first_vertices,
-                (*first_vertices[1:], first_vertices[0]),
-                strict=True,
-            )
-        )
-        for _, _, second_vertices in profiles[first_index + 1 :]:
-            second_segments = tuple(
-                zip(
-                    second_vertices,
-                    (*second_vertices[1:], second_vertices[0]),
-                    strict=True,
-                )
-            )
-            if any(
-                _segments_intersect_or_touch(*first_segment, *second_segment)
-                for first_segment in first_segments
-                for second_segment in second_segments
-            ):
+        Profiles.append((min((Lines[Index][0] for Index in Ordered)), tuple((Lines[Index][1].id for Index in Ordered)), tuple(Vertices[:-1])))
+    for FirstIndex, (Ignored, Ignored, FirstVertices) in enumerate(Profiles):
+        FirstSegments = tuple(zip(FirstVertices, (*FirstVertices[1:], FirstVertices[0]), strict=True))
+        for Ignored, Ignored, SecondVertices in Profiles[FirstIndex + 1:]:
+            SecondSegments = tuple(zip(SecondVertices, (*SecondVertices[1:], SecondVertices[0]), strict=True))
+            if any((SegmentsOrTouch(*FirstSegment, *SecondSegment) for FirstSegment in FirstSegments for SecondSegment in SecondSegments)):
                 return ()
-    return tuple(profile for _, profile, _ in sorted(profiles))
+    return tuple((Profile for Ignored, Profile, Ignored in sorted(Profiles)))
 
+# this binding exists because shared behavior needs one stable value
+KOriginPlaneFrames = {'XY_Plane': (0, Transform(), Transform()), 'XZ_Plane': (1, Transform(x_axis=VectorThree(1.0, 0.0, 0.0), y_axis=VectorThree(0.0, 0.0, 1.0), z_axis=VectorThree(0.0, -1.0, 0.0)), Transform(x_axis=VectorThree(1.0, 0.0, 0.0), y_axis=VectorThree(0.0, 0.0, -1.0), z_axis=VectorThree(0.0, 1.0, 0.0))), 'YZ_Plane': (2, Transform(x_axis=VectorThree(0.0, 1.0, 0.0), y_axis=VectorThree(0.0, 0.0, 1.0), z_axis=VectorThree(1.0, 0.0, 0.0)), Transform(x_axis=VectorThree(0.0, 0.0, -1.0), y_axis=VectorThree(0.0, 1.0, 0.0), z_axis=VectorThree(1.0, 0.0, 0.0)))}
 
-_ORIGIN_PLANE_FRAMES = {
-    "XY_Plane": (
-        0,
-        Transform(),
-        Transform(),
-    ),
-    "XZ_Plane": (
-        1,
-        Transform(
-            x_axis=Vector3(1.0, 0.0, 0.0),
-            y_axis=Vector3(0.0, 0.0, 1.0),
-            z_axis=Vector3(0.0, -1.0, 0.0),
-        ),
-        Transform(
-            x_axis=Vector3(1.0, 0.0, 0.0),
-            y_axis=Vector3(0.0, 0.0, -1.0),
-            z_axis=Vector3(0.0, 1.0, 0.0),
-        ),
-    ),
-    "YZ_Plane": (
-        2,
-        Transform(
-            x_axis=Vector3(0.0, 1.0, 0.0),
-            y_axis=Vector3(0.0, 0.0, 1.0),
-            z_axis=Vector3(1.0, 0.0, 0.0),
-        ),
-        Transform(
-            x_axis=Vector3(0.0, 0.0, -1.0),
-            y_axis=Vector3(0.0, 1.0, 0.0),
-            z_axis=Vector3(1.0, 0.0, 0.0),
-        ),
-    ),
-}
+# this definition exists because focused behavior needs one stable owner
+def TransformClose(First: Transform, Second: Transform, Tolerance: float=1e-09) -> bool:
+    return all((MathValue.isclose(LeftValue, Right, rel_tol=0.0, abs_tol=Tolerance) for FirstVector, SecondVector in ((First.origin, Second.origin), (First.x_axis, Second.x_axis), (First.y_axis, Second.y_axis), (First.z_axis, Second.z_axis)) for LeftValue, Right in zip((FirstVector.x, FirstVector.y, FirstVector.z), (SecondVector.x, SecondVector.y, SecondVector.z), strict=True)))
 
-
-def _transform_close(
-    first: Transform,
-    second: Transform,
-    tolerance: float = 1e-9,
-) -> bool:
-    return all(
-        math.isclose(left, right, rel_tol=0.0, abs_tol=tolerance)
-        for first_vector, second_vector in (
-            (first.origin, second.origin),
-            (first.x_axis, second.x_axis),
-            (first.y_axis, second.y_axis),
-            (first.z_axis, second.z_axis),
-        )
-        for left, right in zip(
-            (first_vector.x, first_vector.y, first_vector.z),
-            (second_vector.x, second_vector.y, second_vector.z),
-            strict=True,
-        )
-    )
-
-
-def _origin_plane_frame(
-    obj: _NativeObject,
-    transform: Transform,
-) -> tuple[int, Transform] | None:
-    value = _ORIGIN_PLANE_FRAMES.get(obj.name)
-    if (
-        value is None
-        or obj.type_id != "App::Plane"
-        or _string(obj, "Role") != obj.name
-        or not _transform_close(transform, value[1])
-    ):
+# this definition exists because focused behavior needs one stable owner
+def OriginPlane(ObjValue: _NativeObject, Transform: Transform) -> tuple[int, Transform] | None:
+    Value = KOriginPlaneFrames.get(ObjValue.name)
+    if Value is None or ObjValue.type_id != 'App::Plane' or String(ObjValue, 'Role') != ObjValue.name or (not TransformClose(Transform, Value[1])):
         return None
-    return value[0], value[2]
+    return (Value[0], Value[2])
 
+# this definition exists because focused behavior needs one stable owner
+def DotAction(First: Vector3, Second: Vector3) -> float:
+    return First.x * Second.x + First.y * Second.y + First.z * Second.z
 
-def _dot(first: Vector3, second: Vector3) -> float:
-    return first.x * second.x + first.y * second.y + first.z * second.z
+# this definition exists because focused behavior needs one stable owner
+def PlaneReframe(Source: Transform, Target: Transform) -> tuple[float, float, float, float, float, float]:
+    Delta = VectorThree(Source.origin.x - Target.origin.x, Source.origin.y - Target.origin.y, Source.origin.z - Target.origin.z)
+    return (DotAction(Source.x_axis, Target.x_axis), DotAction(Source.y_axis, Target.x_axis), DotAction(Delta, Target.x_axis), DotAction(Source.x_axis, Target.y_axis), DotAction(Source.y_axis, Target.y_axis), DotAction(Delta, Target.y_axis))
 
+# this definition exists because focused behavior needs one stable owner
+def ReframeGeom(GeomValue: Any, Reframe: tuple[float, float, float, float, float, float]) -> AnyValue:
+    XxValue, XyValue, TxValue, YxValue, YyValue, TyValue = Reframe
 
-def _plane_reframe(
-    source: Transform,
-    target: Transform,
-) -> tuple[float, float, float, float, float, float]:
-    delta = Vector3(
-        source.origin.x - target.origin.x,
-        source.origin.y - target.origin.y,
-        source.origin.z - target.origin.z,
-    )
-    return (
-        _dot(source.x_axis, target.x_axis),
-        _dot(source.y_axis, target.x_axis),
-        _dot(delta, target.x_axis),
-        _dot(source.x_axis, target.y_axis),
-        _dot(source.y_axis, target.y_axis),
-        _dot(delta, target.y_axis),
-    )
+    # this definition exists because focused behavior needs one stable owner
+    def Point(Value: Vector2) -> VectorTwo:
+        return VectorTwo(XxValue * Value.x + XyValue * Value.y + TxValue, YxValue * Value.x + YyValue * Value.y + TyValue)
 
+    # this definition exists because focused behavior needs one stable owner
+    def Direction(Value: Vector2) -> VectorTwo:
+        return VectorTwo(XxValue * Value.x + XyValue * Value.y, YxValue * Value.x + YyValue * Value.y)
+    Determinant = XxValue * YyValue - XyValue * YxValue
+    Rotation = MathValue.atan2(YxValue, XxValue)
 
-def _reframe_geometry(
-    geometry: Any,
-    reframe: tuple[float, float, float, float, float, float],
-) -> Any:
-    xx, xy, tx, yx, yy, ty = reframe
+    # this definition exists because focused behavior needs one stable owner
+    def CircularAngles(Start: float, EndValue: float) -> tuple[float, float]:
+        if Determinant < 0.0:
+            return (Rotation - EndValue, Rotation - Start)
+        return (Start + Rotation, EndValue + Rotation)
 
-    def point(value: Vector2) -> Vector2:
-        return Vector2(
-            xx * value.x + xy * value.y + tx,
-            yx * value.x + yy * value.y + ty,
-        )
+    # this definition exists because focused behavior needs one stable owner
+    def ConicAngles(Start: float, EndValue: float) -> tuple[float, float]:
+        return (-EndValue, -Start) if Determinant < 0.0 else (Start, EndValue)
+    if isinstance(GeomValue, PointGeom):
+        return Replace(GeomValue, point=Point(GeomValue.point))
+    if isinstance(GeomValue, LineGeom):
+        return Replace(GeomValue, start=Point(GeomValue.start), end=Point(GeomValue.end))
+    if isinstance(GeomValue, CircleGeom):
+        return Replace(GeomValue, center=Point(GeomValue.center))
+    if isinstance(GeomValue, ArcGeom):
+        Start, EndValue = CircularAngles(GeomValue.start_angle, GeomValue.end_angle)
+        return Replace(GeomValue, center=Point(GeomValue.center), start_angle=Start, end_angle=EndValue)
+    if isinstance(GeomValue, EllipseGeom):
+        return Replace(GeomValue, center=Point(GeomValue.center), major_axis=Direction(GeomValue.major_axis))
+    if isinstance(GeomValue, (ArcEllipseGeom, ArcHyperbolaGeom)):
+        Start, EndValue = ConicAngles(GeomValue.start_angle, GeomValue.end_angle)
+        return Replace(GeomValue, center=Point(GeomValue.center), major_axis=Direction(GeomValue.major_axis), start_angle=Start, end_angle=EndValue)
+    if isinstance(GeomValue, HyperbolaGeom):
+        return Replace(GeomValue, center=Point(GeomValue.center), major_axis=Direction(GeomValue.major_axis))
+    if isinstance(GeomValue, ParabolaGeom):
+        return Replace(GeomValue, center=Point(GeomValue.center), axis=Direction(GeomValue.axis))
+    if isinstance(GeomValue, ArcParabolaGeom):
+        Start, EndValue = ConicAngles(GeomValue.start_angle, GeomValue.end_angle)
+        return Replace(GeomValue, center=Point(GeomValue.center), axis=Direction(GeomValue.axis), start_angle=Start, end_angle=EndValue)
+    if isinstance(GeomValue, SplineGeom):
+        return Replace(GeomValue, control_points=tuple((Point(Value) for Value in GeomValue.control_points)))
+    return GeomValue
 
-    def direction(value: Vector2) -> Vector2:
-        return Vector2(
-            xx * value.x + xy * value.y,
-            yx * value.x + yy * value.y,
-        )
-
-    determinant = xx * yy - xy * yx
-    rotation = math.atan2(yx, xx)
-
-    def circular_angles(start: float, end: float) -> tuple[float, float]:
-        if determinant < 0.0:
-            return rotation - end, rotation - start
-        return start + rotation, end + rotation
-
-    def conic_angles(start: float, end: float) -> tuple[float, float]:
-        return (-end, -start) if determinant < 0.0 else (start, end)
-
-    if isinstance(geometry, PointGeometry):
-        return replace(geometry, point=point(geometry.point))
-    if isinstance(geometry, LineGeometry):
-        return replace(
-            geometry,
-            start=point(geometry.start),
-            end=point(geometry.end),
-        )
-    if isinstance(geometry, CircleGeometry):
-        return replace(geometry, center=point(geometry.center))
-    if isinstance(geometry, ArcGeometry):
-        start, end = circular_angles(geometry.start_angle, geometry.end_angle)
-        return replace(
-            geometry,
-            center=point(geometry.center),
-            start_angle=start,
-            end_angle=end,
-        )
-    if isinstance(geometry, EllipseGeometry):
-        return replace(
-            geometry,
-            center=point(geometry.center),
-            major_axis=direction(geometry.major_axis),
-        )
-    if isinstance(geometry, (ArcEllipseGeometry, ArcHyperbolaGeometry)):
-        start, end = conic_angles(geometry.start_angle, geometry.end_angle)
-        return replace(
-            geometry,
-            center=point(geometry.center),
-            major_axis=direction(geometry.major_axis),
-            start_angle=start,
-            end_angle=end,
-        )
-    if isinstance(geometry, HyperbolaGeometry):
-        return replace(
-            geometry,
-            center=point(geometry.center),
-            major_axis=direction(geometry.major_axis),
-        )
-    if isinstance(geometry, ParabolaGeometry):
-        return replace(
-            geometry,
-            center=point(geometry.center),
-            axis=direction(geometry.axis),
-        )
-    if isinstance(geometry, ArcParabolaGeometry):
-        start, end = conic_angles(geometry.start_angle, geometry.end_angle)
-        return replace(
-            geometry,
-            center=point(geometry.center),
-            axis=direction(geometry.axis),
-            start_angle=start,
-            end_angle=end,
-        )
-    if isinstance(geometry, SplineGeometry):
-        return replace(
-            geometry,
-            control_points=tuple(point(value) for value in geometry.control_points),
-        )
-    return geometry
-
-
-def _support_target(obj: _NativeObject) -> str:
-    for name in ("AttachmentSupport", "Support"):
-        node = obj.properties.get(name)
-        if node is None:
+# this definition exists because focused behavior needs one stable owner
+def SupportTarget(ObjValue: _NativeObject) -> str:
+    for NameValue in ('AttachmentSupport', 'Support'):
+        NodeValue = ObjValue.properties.get(NameValue)
+        if NodeValue is None:
             continue
-        for path, attribute in (
-            ("./LinkSubList/Link", "obj"),
-            ("./LinkSub", "value"),
-            ("./Link", "value"),
-            ("./XLink", "name"),
-        ):
-            link = node.find(path)
-            if link is not None and link.get(attribute, ""):
-                return link.get(attribute, "")
-    return ""
+        for PathValue, AttrValue in (('./LinkSubList/Link', 'obj'), ('./LinkSub', 'value'), ('./Link', 'value'), ('./XLink', 'name')):
+            LinkValue = NodeValue.find(PathValue)
+            if LinkValue is not None and LinkValue.get(AttrValue, ''):
+                return LinkValue.get(AttrValue, '')
+    return ''
 
-
-def _is_support_plane_object(obj: _NativeObject, support_targets: set[str]) -> bool:
-    if obj.type_id in SUPPORT_PLANE_TYPE_IDS or obj.name in support_targets:
+# this definition exists because focused behavior needs one stable owner
+def IsSupportPlane(ObjValue: _NativeObject, SupportTargets: set[str]) -> bool:
+    if ObjValue.type_id in SupportPlaneTypeIds or ObjValue.name in SupportTargets:
         return True
-    marker = f"{obj.type_id} {_proxy_class(obj)}".casefold()
-    properties = set(obj.properties)
-    return (
-        "plane" in marker
-        and bool({"Placement", "AttachmentOffset"} & properties)
-        and bool(
-            {"Support", "AttachmentSupport", "AttachmentOffset", "MapMode"} & properties
-        )
-    )
+    Marker = f'{ObjValue.type_id} {ProxyClass(ObjValue)}'.casefold()
+    Properties = set(ObjValue.properties)
+    return 'plane' in Marker and bool({'Placement', 'AttachmentOffset'} & Properties) and bool({'Support', 'AttachmentSupport', 'AttachmentOffset', 'MapMode'} & Properties)
 
+# this definition exists because focused behavior needs one stable owner
+def RuleExpression(Expressions: dict[str, str], Index: int, NameValue: str) -> str:
+    Candidates = [f'Constraints[{Index}]', f'Constraints.{NameValue}']
+    return next((Expressions[Value] for Value in Candidates if Value in Expressions), '')
 
-def _constraint_expression(expressions: dict[str, str], index: int, name: str) -> str:
-    candidates = [f"Constraints[{index}]", f"Constraints.{name}"]
-    return next(
-        (expressions[value] for value in candidates if value in expressions), ""
-    )
+# this definition exists because focused behavior needs one stable owner
+def RuleElemSlots(NodeValue: ET.Element) -> tuple[tuple[int, int], ...]:
+    ElemIds = NodeValue.get('ElementIds')
+    ElemPositions = NodeValue.get('ElementPositions')
+    Values: list[tuple[int, int]] = []
+    if ElemIds is not None and ElemPositions is not None:
+        IdsValue = ElemIds.split()
+        Positions = ElemPositions.split()
+        if len(IdsValue) == len(Positions):
+            Values = [(Integer(EntityId, -2000), Integer(Position)) for EntityId, Position in zip(IdsValue, Positions, strict=True)]
+    while len(Values) < 3:
+        Values.append((-2000, 0))
+    for Index, Prefix in enumerate(('First', 'Second', 'Third')):
+        if NodeValue.get(Prefix) is not None:
+            Values[Index] = (Integer(NodeValue.get(Prefix), -2000), Integer(NodeValue.get(Prefix + 'Pos')))
+    return tuple(Values)
 
-
-def _constraint_element_slots(node: ET.Element) -> tuple[tuple[int, int], ...]:
-    element_ids = node.get("ElementIds")
-    element_positions = node.get("ElementPositions")
-    values: list[tuple[int, int]] = []
-    if element_ids is not None and element_positions is not None:
-        ids = element_ids.split()
-        positions = element_positions.split()
-        if len(ids) == len(positions):
-            values = [
-                (_integer(entity_id, -2000), _integer(position))
-                for entity_id, position in zip(ids, positions, strict=True)
-            ]
-    while len(values) < 3:
-        values.append((-2000, 0))
-    for index, prefix in enumerate(("First", "Second", "Third")):
-        if node.get(prefix) is not None:
-            values[index] = (
-                _integer(node.get(prefix), -2000),
-                _integer(node.get(prefix + "Pos")),
-            )
-    return tuple(values)
-
-
-def _parse_sketches(
-    objects: tuple[_NativeObject, ...],
-    parameters: list[Parameter],
-    consumed_expressions: set[tuple[str, str]],
-) -> tuple[tuple[SupportPlane, ...], tuple[Sketch, ...]]:
-    planes: list[SupportPlane] = []
-    plane_ids: dict[str, str] = {}
-    source_plane_transforms: dict[str, Transform] = {}
-    plane_transforms: dict[str, Transform] = {}
-    support_targets = {
-        target
-        for obj in objects
-        if obj.type_id == SKETCH_TYPE_ID and (target := _support_target(obj))
-    }
-    plane_objects = {
-        obj.name: obj
-        for obj in objects
-        if _is_support_plane_object(obj, support_targets)
-    }
-    origin_frames: dict[str, tuple[int, Transform]] = {}
-    for name, obj in plane_objects.items():
-        transform = _transform(_placement_element(obj, "Placement"))
-        source_plane_transforms[name] = transform
-        frame = _origin_plane_frame(obj, transform)
-        if frame is not None:
-            origin_frames[name] = frame
-    blocked_origin_frames: set[str] = set()
-    for obj in objects:
-        if obj.type_id != SKETCH_TYPE_ID:
+# this definition exists because focused behavior needs one stable owner
+def ParseSketches(Objects: tuple[_NativeObject, ...], Parameters: list[Parameter], ConsumedExpressions: set[tuple[str, str]]) -> tuple[tuple[SupportPlane, ...], tuple[Sketch, ...]]:
+    Planes: list[SupportPlane] = []
+    PlaneIds: dict[str, str] = {}
+    SourcePlaneTransforms: dict[str, Transform] = {}
+    PlaneTransforms: dict[str, Transform] = {}
+    SupportTargets = {Target for ObjValue in Objects if ObjValue.type_id == SketchTypeId and (Target := SupportTarget(ObjValue))}
+    PlaneObjects = {ObjValue.name: ObjValue for ObjValue in Objects if IsSupportPlane(ObjValue, SupportTargets)}
+    OriginFrames: dict[str, tuple[int, Transform]] = {}
+    for NameValue, ObjValue in PlaneObjects.items():
+        Transform = TransformA(PlacementElem(ObjValue, 'Placement'))
+        SourcePlaneTransforms[NameValue] = Transform
+        Frame = OriginPlane(ObjValue, Transform)
+        if Frame is not None:
+            OriginFrames[NameValue] = Frame
+    BlockedOriginFrames: set[str] = set()
+    for ObjValue in Objects:
+        if ObjValue.type_id != SketchTypeId:
             continue
-        support_name = _support_target(obj)
-        frame = origin_frames.get(support_name)
-        source_transform = source_plane_transforms.get(support_name)
-        if (
-            frame is None
-            or source_transform is None
-            or _transform_close(source_transform, frame[1])
-        ):
+        SupportName = SupportTarget(ObjValue)
+        Frame = OriginFrames.get(SupportName)
+        SourceTransform = SourcePlaneTransforms.get(SupportName)
+        if Frame is None or SourceTransform is None or TransformClose(SourceTransform, Frame[1]):
             continue
-        constraint_list = _child(obj, "Constraints", "ConstraintList")
-        if constraint_list is not None and constraint_list.findall("./Constrain"):
-            blocked_origin_frames.add(support_name)
+        RuleList = Child(ObjValue, 'Constraints', 'ConstraintList')
+        if RuleList is not None and RuleList.findall('./Constrain'):
+            BlockedOriginFrames.add(SupportName)
             continue
-        geometry_list = _child(obj, "Geometry", "GeometryList")
-        geometry_nodes = (
-            [] if geometry_list is None else geometry_list.findall("./Geometry")
-        )
-        if any(
-            isinstance(_geometry(node, "")[1], NativeGeometry)
-            for node in geometry_nodes
-        ):
-            blocked_origin_frames.add(support_name)
-    for obj in objects:
-        if not _is_support_plane_object(obj, support_targets):
+        GeomList = Child(ObjValue, 'Geometry', 'GeometryList')
+        GeomNodes = [] if GeomList is None else GeomList.findall('./Geometry')
+        if any((isinstance(GeomAction(NodeValue, '')[1], NativeGeom) for NodeValue in GeomNodes)):
+            BlockedOriginFrames.add(SupportName)
+    for ObjValue in Objects:
+        if not IsSupportPlane(ObjValue, SupportTargets):
             continue
-        plane_id = f"freecad:plane:{obj.name}"
-        plane_ids[obj.name] = plane_id
-        source_transform = source_plane_transforms[obj.name]
-        frame = origin_frames.get(obj.name)
-        principal = frame is not None and obj.name not in blocked_origin_frames
-        transform = frame[1] if principal else source_transform
-        plane_transforms[obj.name] = transform
-        attributes: dict[str, Any] = {"freecad": _native_object_data(obj)}
-        if principal and frame is not None:
-            attributes.update(
-                {
-                    "principal_index": frame[0],
-                    "principal_role": obj.name,
-                }
-            )
-        planes.append(
-            SupportPlane(
-                plane_id,
-                _string(obj, "Label", obj.name),
-                transform,
-                attributes=attributes,
-            )
-        )
-    sketches: list[Sketch] = []
-    for obj in objects:
-        if obj.type_id != SKETCH_TYPE_ID:
+        PlaneId = f'freecad:plane:{ObjValue.name}'
+        PlaneIds[ObjValue.name] = PlaneId
+        SourceTransform = SourcePlaneTransforms[ObjValue.name]
+        Frame = OriginFrames.get(ObjValue.name)
+        Principal = Frame is not None and ObjValue.name not in BlockedOriginFrames
+        Transform = Frame[1] if Principal else SourceTransform
+        PlaneTransforms[ObjValue.name] = Transform
+        Attributes: dict[str, AnyValue] = {'freecad': NativeObjectA(ObjValue)}
+        if Principal and Frame is not None:
+            Attributes.update({'principal_index': Frame[0], 'principal_role': ObjValue.name})
+        Planes.append(SupportPlane(PlaneId, String(ObjValue, 'Label', ObjValue.name), Transform, attributes=Attributes))
+    Sketches: list[Sketch] = []
+    for ObjValue in Objects:
+        if ObjValue.type_id != SketchTypeId:
             continue
-        sketch_id = f"freecad:sketch:{obj.name}"
-        support_name = _support_target(obj)
-        support_id = plane_ids.get(support_name)
-        if support_id is None:
-            support_id = f"freecad:plane:{obj.name}:support"
-            plane_ids[f"{obj.name}:support"] = support_id
-            planes.append(
-                SupportPlane(
-                    support_id,
-                    support_name or f"{obj.name} support",
-                    _transform(_placement_element(obj, "Placement")),
-                    attributes={
-                        "freecad_support": support_name,
-                        "freecad_attachment_offset": (
-                            _element_data(obj.properties["AttachmentOffset"])
-                            if "AttachmentOffset" in obj.properties
-                            else {}
-                        ),
-                    },
-                )
-            )
-        geometry_list = _child(obj, "Geometry", "GeometryList")
-        geometry_nodes = (
-            [] if geometry_list is None else geometry_list.findall("./Geometry")
-        )
-        constraint_list = _child(obj, "Constraints", "ConstraintList")
-        constraint_nodes = (
-            [] if constraint_list is None else constraint_list.findall("./Constrain")
-        )
-        source_transform = source_plane_transforms.get(support_name)
-        target_transform = plane_transforms.get(support_name)
-        reframe = (
-            _plane_reframe(source_transform, target_transform)
-            if source_transform is not None
-            and target_transform is not None
-            and not _transform_close(source_transform, target_transform)
-            else None
-        )
-        fixed_indices = {
-            _constraint_element_slots(node)[0][0]
-            for node in constraint_nodes
-            if _integer(node.get("Type"), -1) == 17
-        }
-        entities: list[SketchEntity] = []
-        for index, node in enumerate(geometry_nodes):
-            entity_id = f"{sketch_id}:entity:{index}"
-            kind, geometry = _geometry(node, entity_id)
-            if reframe is not None:
-                geometry = _reframe_geometry(geometry, reframe)
-            construction_node = node.find("./Construction")
-            construction = (
-                construction_node is not None
-                and construction_node.get("value", "0").casefold() in XML_TRUE_VALUES
-            )
-            if not construction:
-                extension = node.find(
-                    "./GeoExtensions/GeoExtension[@type='Sketcher::SketchGeometryExtension']"
-                )
-                flags = (
-                    "" if extension is None else extension.get("geometryModeFlags", "")
-                )
-                construction = bool(flags and flags[-2:] == "10")
-            entities.append(
-                SketchEntity(
-                    entity_id,
-                    kind,
-                    geometry,
-                    construction=construction,
-                    fixed=index in fixed_indices,
-                    attributes={
-                        "freecad_geometry_id": node.get("id", ""),
-                        "freecad": _element_data(node),
-                    },
-                )
-            )
-        expressions = _expressions(obj)
-        constraints: list[SketchConstraint] = []
-        sketch_parameter_ids: list[str] = []
-        for index, node in enumerate(constraint_nodes):
-            code = _integer(node.get("Type"), -1)
-            name = node.get("Name", "") or str(index)
-            constraint_id = f"{sketch_id}:constraint:{index}"
-            references: list[ConstraintReference] = []
-            reference_slots: list[dict[str, Any]] = []
-            for slot_index, (entity_index, point_index) in enumerate(
-                _constraint_element_slots(node)
-            ):
-                point = CONSTRAINT_POINT_BY_INDEX.get(point_index, "")
-                entity_id = (
-                    entities[entity_index].id
-                    if 0 <= entity_index < len(entities)
-                    else ""
-                )
-                reference_slots.append(
-                    {
-                        "slot": (
-                            ("first", "second", "third")[slot_index]
-                            if slot_index < 3
-                            else f"element_{slot_index}"
-                        ),
-                        "entity_id": entity_id,
-                        "point": point,
-                        "freecad_geometry_index": entity_index,
-                        "freecad_point_index": point_index,
-                    }
-                )
-                if 0 <= entity_index < len(entities):
-                    references.append(ConstraintReference(entity_id, point))
-            parameter_id: str | None = None
-            if code in DIMENSIONAL_CONSTRAINT_CODES:
-                parameter_id = f"freecad:parameter:{obj.name}:constraint:{index}"
-                value_kind, unit = CONSTRAINT_VALUE_KIND_BY_CODE[code]
-                expression_source = _constraint_expression(expressions, index, name)
-                if expression_source:
-                    for path, source in expressions.items():
-                        if source == expression_source and path in {
-                            f"Constraints[{index}]",
-                            f"Constraints.{name}",
-                        }:
-                            consumed_expressions.add((obj.name, path))
-                parameters.append(
-                    Parameter(
-                        parameter_id,
-                        f"{_string(obj, 'Label', obj.name)}.{name}",
-                        ParameterValue(_number(node.get("Value")), value_kind, unit),
-                        expression=(
-                            Expression(expression_source, language="freecad")
-                            if expression_source
-                            else None
-                        ),
-                        owner_id=sketch_id,
-                        attributes={
-                            "freecad_path": f"Constraints[{index}]",
-                            "freecad_constraint": dict(node.attrib),
-                        },
-                    )
-                )
-                sketch_parameter_ids.append(parameter_id)
-            constraints.append(
-                SketchConstraint(
-                    constraint_id,
-                    CONSTRAINT_KIND_BY_CODE.get(code, ConstraintKind.NATIVE),
-                    tuple(references),
-                    parameter_id=parameter_id,
-                    driving=node.get("IsDriving", "1") != "0",
-                    suppressed=node.get("IsActive", "1") == "0",
-                    attributes={
-                        "freecad_type_code": code,
-                        "freecad": dict(node.attrib),
-                        "freecad_reference_slots": reference_slots,
-                    },
-                )
-            )
-        entity_values = tuple(entities)
-        sketches.append(
-            Sketch(
-                sketch_id,
-                _string(obj, "Label", obj.name),
-                support_id,
-                entity_values,
-                constraints=tuple(constraints),
-                parameter_ids=tuple(sketch_parameter_ids),
-                closed_profile_entity_ids=_closed_profile_entity_ids(entity_values),
-                suppressed=not _bool(obj, "Visibility", True),
-                attributes={
-                    "freecad": _native_object_data(obj),
-                    "fully_constrained": _bool(obj, "FullyConstrained"),
-                    "external_geometry": (
-                        _element_data(obj.properties["ExternalGeometry"])
-                        if "ExternalGeometry" in obj.properties
-                        else {}
-                    ),
-                },
-            )
-        )
-    return tuple(planes), tuple(sketches)
+        SketchId = f'freecad:sketch:{ObjValue.name}'
+        SupportName = SupportTarget(ObjValue)
+        SupportId = PlaneIds.get(SupportName)
+        if SupportId is None:
+            SupportId = f'freecad:plane:{ObjValue.name}:support'
+            PlaneIds[f'{ObjValue.name}:support'] = SupportId
+            Planes.append(SupportPlane(SupportId, SupportName or f'{ObjValue.name} support', TransformA(PlacementElem(ObjValue, 'Placement')), attributes={'freecad_support': SupportName, 'freecad_attachment_offset': ElemData(ObjValue.properties['AttachmentOffset']) if 'AttachmentOffset' in ObjValue.properties else {}}))
+        GeomList = Child(ObjValue, 'Geometry', 'GeometryList')
+        GeomNodes = [] if GeomList is None else GeomList.findall('./Geometry')
+        RuleList = Child(ObjValue, 'Constraints', 'ConstraintList')
+        RuleNodes = [] if RuleList is None else RuleList.findall('./Constrain')
+        SourceTransform = SourcePlaneTransforms.get(SupportName)
+        TargetTransform = PlaneTransforms.get(SupportName)
+        Reframe = PlaneReframe(SourceTransform, TargetTransform) if SourceTransform is not None and TargetTransform is not None and (not TransformClose(SourceTransform, TargetTransform)) else None
+        FixedIndices = {RuleElemSlots(NodeValue)[0][0] for NodeValue in RuleNodes if Integer(NodeValue.get('Type'), -1) == 17}
+        Entities: list[SketchEntity] = []
+        for Index, NodeValue in enumerate(GeomNodes):
+            EntityId = f'{SketchId}:entity:{Index}'
+            KindValue, GeomValue = GeomAction(NodeValue, EntityId)
+            if Reframe is not None:
+                GeomValue = ReframeGeom(GeomValue, Reframe)
+            ConstructionNode = NodeValue.find('./Construction')
+            Construction = ConstructionNode is not None and ConstructionNode.get('value', '0').casefold() in XmlTrueValues
+            if not Construction:
+                Extension = NodeValue.find("./GeoExtensions/GeoExtension[@type='Sketcher::SketchGeometryExtension']")
+                Flags = '' if Extension is None else Extension.get('geometryModeFlags', '')
+                Construction = bool(Flags and Flags[-2:] == '10')
+            Entities.append(SketchEntity(EntityId, KindValue, GeomValue, construction=Construction, fixed=Index in FixedIndices, attributes={'freecad_geometry_id': NodeValue.get('id', ''), 'freecad': ElemData(NodeValue)}))
+        Expressions = Expressions(ObjValue)
+        Constraints: list[SketchRule] = []
+        SketchParamIds: list[str] = []
+        for Index, NodeValue in enumerate(RuleNodes):
+            CodeValue = Integer(NodeValue.get('Type'), -1)
+            NameValue = NodeValue.get('Name', '') or str(Index)
+            RuleId = f'{SketchId}:constraint:{Index}'
+            References: list[RuleRef] = []
+            RefSlots: list[dict[str, AnyValue]] = []
+            for SlotIndex, (EntityIndex, PointIndex) in enumerate(RuleElemSlots(NodeValue)):
+                Point = RulePointByIndex.get(PointIndex, '')
+                EntityId = Entities[EntityIndex].id if 0 <= EntityIndex < len(Entities) else ''
+                RefSlots.append({'slot': ('first', 'second', 'third')[SlotIndex] if SlotIndex < 3 else f'element_{SlotIndex}', 'entity_id': EntityId, 'point': Point, 'freecad_geometry_index': EntityIndex, 'freecad_point_index': PointIndex})
+                if 0 <= EntityIndex < len(Entities):
+                    References.append(RuleRef(EntityId, Point))
+            ParamId: str | None = None
+            if CodeValue in DimensionalRuleCodes:
+                ParamId = f'freecad:parameter:{ObjValue.name}:constraint:{Index}'
+                ValueKind, UnitValue = RuleValueKindByCode[CodeValue]
+                ExpressionSource = RuleExpression(Expressions, Index, NameValue)
+                if ExpressionSource:
+                    for PathValue, Source in Expressions.items():
+                        if Source == ExpressionSource and PathValue in {f'Constraints[{Index}]', f'Constraints.{NameValue}'}:
+                            ConsumedExpressions.add((ObjValue.name, PathValue))
+                Parameters.append(Param(ParamId, f"{String(ObjValue, 'Label', ObjValue.name)}.{NameValue}", ParamValue(Number(NodeValue.get('Value')), ValueKind, UnitValue), expression=Expression(ExpressionSource, language='freecad') if ExpressionSource else None, owner_id=SketchId, attributes={'freecad_path': f'Constraints[{Index}]', 'freecad_constraint': dict(NodeValue.attrib)}))
+                SketchParamIds.append(ParamId)
+            Constraints.append(SketchRule(RuleId, RuleKindByCode.get(CodeValue, RuleKind.NATIVE), tuple(References), parameter_id=ParamId, driving=NodeValue.get('IsDriving', '1') != '0', suppressed=NodeValue.get('IsActive', '1') == '0', attributes={'freecad_type_code': CodeValue, 'freecad': dict(NodeValue.attrib), 'freecad_reference_slots': RefSlots}))
+        EntityValues = tuple(Entities)
+        Sketches.append(Sketch(SketchId, String(ObjValue, 'Label', ObjValue.name), SupportId, EntityValues, constraints=tuple(Constraints), parameter_ids=tuple(SketchParamIds), closed_profile_entity_ids=ClosedProfile(EntityValues), suppressed=not BoolAction(ObjValue, 'Visibility', True), attributes={'freecad': NativeObjectA(ObjValue), 'fully_constrained': BoolAction(ObjValue, 'FullyConstrained'), 'external_geometry': ElemData(ObjValue.properties['ExternalGeometry']) if 'ExternalGeometry' in ObjValue.properties else {}}))
+    return (tuple(Planes), tuple(Sketches))
 
+# this definition exists because focused behavior needs one stable owner
+def HasShapeProp(ObjValue: _NativeObject) -> bool:
+    return any((NodeValue.find('./Part') is not None for NodeValue in ObjValue.properties.values()))
 
-def _has_shape_property(obj: _NativeObject) -> bool:
-    return any(node.find("./Part") is not None for node in obj.properties.values())
-
-
-def _is_feature_object(obj: _NativeObject) -> bool:
-    if obj.type_id in NON_FEATURE_OBJECT_TYPE_IDS or obj.type_id.startswith(
-        ASSEMBLY_OBJECT_TYPE_PREFIX
-    ):
+# this definition exists because focused behavior needs one stable owner
+def IsFeatureObject(ObjValue: _NativeObject) -> bool:
+    if ObjValue.type_id in NonFeatureObjectTypeIds or ObjValue.type_id.startswith(AsmObjectTypePrefix):
         return False
-    if (
-        obj.type_id in FEATURE_KIND_BY_TYPE_ID
-        or obj.type_id in PRIMITIVE_FEATURE_TYPE_IDS
-    ):
+    if ObjValue.type_id in FeatureKindByTypeId or ObjValue.type_id in PrimitiveFeatureTypeIds:
         return True
-    return _has_shape_property(obj)
+    return HasShapeProp(ObjValue)
 
+# this definition exists because focused behavior needs one stable owner
+def OrderedFeatures(Objects: tuple[_NativeObject, ...]) -> tuple[NativeObject, ...]:
+    Candidates = [ObjValue for ObjValue in Objects if IsFeatureObject(ObjValue)]
+    Names = {ObjValue.name for ObjValue in Candidates}
+    Remaining = list(Candidates)
+    Result: list[NativeObject] = []
+    Resolved: set[str] = set()
+    while Remaining:
+        Ready = [ObjValue for ObjValue in Remaining if not {Value for Value in ObjValue.dependencies if Value in Names} - Resolved]
+        if not Ready:
+            raise NativeFreeCad('FreeCAD feature dependency graph contains a cycle')
 
-def _ordered_features(objects: tuple[_NativeObject, ...]) -> tuple[_NativeObject, ...]:
-    candidates = [obj for obj in objects if _is_feature_object(obj)]
-    names = {obj.name for obj in candidates}
-    remaining = list(candidates)
-    result: list[_NativeObject] = []
-    resolved: set[str] = set()
-    while remaining:
-        ready = [
-            obj
-            for obj in remaining
-            if not ({value for value in obj.dependencies if value in names} - resolved)
-        ]
-        if not ready:
-            raise NativeFreeCADError(
-                "FreeCAD feature dependency graph contains a cycle"
-            )
-        ready.sort(key=lambda item: item.index)
-        for obj in ready:
-            result.append(obj)
-            resolved.add(obj.name)
-            remaining.remove(obj)
-    return tuple(result)
+        # this callback exists because local behavior needs one focused transformation
+        Ready.sort(key=lambda ItemValue: ItemValue.index)
+        for ObjValue in Ready:
+            Result.append(ObjValue)
+            Resolved.add(ObjValue.name)
+            Remaining.remove(ObjValue)
+    return tuple(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def IsBodyContainer(ObjValue: _NativeObject) -> bool:
+    return ObjValue.type_id in BodyContainerTypeIds or (ObjValue.type_id == 'App::DocumentObjectGroup' and 'SourceBodyJSON' in ObjValue.properties and ('Tip' in ObjValue.properties))
 
-def _is_body_container(obj: _NativeObject) -> bool:
-    return obj.type_id in BODY_CONTAINER_TYPE_IDS or (
-        obj.type_id == "App::DocumentObjectGroup"
-        and "SourceBodyJSON" in obj.properties
-        and "Tip" in obj.properties
-    )
-
-
-def _feature_kind(obj: _NativeObject) -> FeatureKind:
-    declared = _string(obj, "FeatureKind").casefold()
-    if declared:
+# this definition exists because focused behavior needs one stable owner
+def FeatureKindA(ObjValue: _NativeObject) -> FeatureKind:
+    Declared = String(ObjValue, 'FeatureKind').casefold()
+    if Declared:
         try:
-            declared_kind = FeatureKind(declared)
+            DeclaredKind = FeatureKind(Declared)
         except ValueError:
-            declared_kind = None
-        if declared_kind is not None:
-            return declared_kind
-    if obj.type_id == "Part::Feature":
+            DeclaredKind = None
+        if DeclaredKind is not None:
+            return DeclaredKind
+    if ObjValue.type_id == 'Part::Feature':
         return FeatureKind.IMPORTED
-    if obj.type_id in PRIMITIVE_FEATURE_TYPE_IDS:
+    if ObjValue.type_id in PrimitiveFeatureTypeIds:
         return FeatureKind.PRIMITIVE
-    return FEATURE_KIND_BY_TYPE_ID.get(obj.type_id, FeatureKind.NATIVE)
+    return FeatureKindByTypeId.get(ObjValue.type_id, FeatureKind.NATIVE)
 
+# this definition exists because focused behavior needs one stable owner
+def FeatureA(ObjValue: _NativeObject) -> tuple[Selection, ...]:
+    Values: list[tuple[str, str, str]] = []
+    for PropName, PropElem in ObjValue.properties.items():
+        for LinkValue in PropElem.findall('./LinkSub'):
+            Target = LinkValue.get('value', '')
+            Values.extend(((PropName, Target, SubElem) for Child in LinkValue.findall('./Sub') if (SubElem := Child.get('value', ''))))
+        for LinkValue in PropElem.findall('./XLink'):
+            Target = LinkValue.get('name', '')
+            Values.extend(((PropName, Target, SubElem) for Child in LinkValue.findall('./Sub') if (SubElem := Child.get('value', ''))))
+        for LinkValue in PropElem.findall('./LinkSubList/Link'):
+            Target = LinkValue.get('obj', LinkValue.get('value', ''))
+            Subelements = [Child.get('value', '') for Child in LinkValue.findall('./Sub')]
+            if LinkValue.get('sub', ''):
+                Subelements.append(LinkValue.get('sub', ''))
+            Values.extend(((PropName, Target, SubElem) for SubElem in Subelements if SubElem))
+        for LinkValue in PropElem.findall('./XLinkSubList/XLink'):
+            Target = LinkValue.get('name', '')
+            Values.extend(((PropName, Target, SubElem) for Child in LinkValue.findall('./Sub') if (SubElem := Child.get('value', ''))))
+    Result: list[Selection] = []
+    for Index, (PropName, Target, SubElem) in enumerate(Values):
+        Token = SubElem.rsplit('.', 1)[-1]
+        EntityKind = next((KindValue.value for Prefix, KindValue in SubElemKindByPrefix.items() if Token.startswith(Prefix)), MateEntityKind.NATIVE.value)
+        SelectionId = f'freecad:selection:{ObjValue.name}:{PropName}:{Index}'
+        Result.append(Selection(SelectionId, f"{String(ObjValue, 'Label', ObjValue.name)}.{PropName}.{SubElem}", (SelectionPathElem(EntityKind, Target, SubElem),), provenance=Provenance(FormatId, f'{ObjValue.name}.{PropName}.{SubElem}'), attributes={'freecad_object': ObjValue.name, 'freecad_property': PropName, 'freecad_target': Target, 'freecad_subelement': SubElem}))
+    return tuple(Result)
 
-def _feature_selections(obj: _NativeObject) -> tuple[Selection, ...]:
-    values: list[tuple[str, str, str]] = []
-    for property_name, property_element in obj.properties.items():
-        for link in property_element.findall("./LinkSub"):
-            target = link.get("value", "")
-            values.extend(
-                (property_name, target, subelement)
-                for child in link.findall("./Sub")
-                if (subelement := child.get("value", ""))
-            )
-        for link in property_element.findall("./XLink"):
-            target = link.get("name", "")
-            values.extend(
-                (property_name, target, subelement)
-                for child in link.findall("./Sub")
-                if (subelement := child.get("value", ""))
-            )
-        for link in property_element.findall("./LinkSubList/Link"):
-            target = link.get("obj", link.get("value", ""))
-            subelements = [child.get("value", "") for child in link.findall("./Sub")]
-            if link.get("sub", ""):
-                subelements.append(link.get("sub", ""))
-            values.extend(
-                (property_name, target, subelement)
-                for subelement in subelements
-                if subelement
-            )
-        for link in property_element.findall("./XLinkSubList/XLink"):
-            target = link.get("name", "")
-            values.extend(
-                (property_name, target, subelement)
-                for child in link.findall("./Sub")
-                if (subelement := child.get("value", ""))
-            )
-    result: list[Selection] = []
-    for index, (property_name, target, subelement) in enumerate(values):
-        token = subelement.rsplit(".", 1)[-1]
-        entity_kind = next(
-            (
-                kind.value
-                for prefix, kind in SUBELEMENT_KIND_BY_PREFIX.items()
-                if token.startswith(prefix)
-            ),
-            MateEntityKind.NATIVE.value,
-        )
-        selection_id = f"freecad:selection:{obj.name}:{property_name}:{index}"
-        result.append(
-            Selection(
-                selection_id,
-                f"{_string(obj, 'Label', obj.name)}.{property_name}.{subelement}",
-                (SelectionPathElement(entity_kind, target, subelement),),
-                provenance=Provenance(
-                    FORMAT_ID, f"{obj.name}.{property_name}.{subelement}"
-                ),
-                attributes={
-                    "freecad_object": obj.name,
-                    "freecad_property": property_name,
-                    "freecad_target": target,
-                    "freecad_subelement": subelement,
-                },
-            )
-        )
-    return tuple(result)
-
-
-def _explicit_selections(objects: tuple[_NativeObject, ...]) -> tuple[Selection, ...]:
-    result: list[Selection] = []
-    for obj in objects:
-        selection_id = _string(obj, "KitSelectionId")
-        node = obj.properties.get("Selection")
-        if not selection_id or node is None:
+# this definition exists because focused behavior needs one stable owner
+def Explicit(Objects: tuple[_NativeObject, ...]) -> tuple[Selection, ...]:
+    Result: list[Selection] = []
+    for ObjValue in Objects:
+        SelectionId = String(ObjValue, 'KitSelectionId')
+        NodeValue = ObjValue.properties.get('Selection')
+        if not SelectionId or NodeValue is None:
             continue
-        kinds_node = obj.properties.get("EntityKinds")
-        kinds = (
-            [
-                child.get("value", "")
-                for child in kinds_node.findall("./StringList/String")
-            ]
-            if kinds_node is not None
-            else []
-        )
-        paths: list[SelectionPathElement] = []
-        for index, link in enumerate(node.findall("./LinkSubList/Link")):
-            target = link.get("obj", link.get("value", ""))
-            subelements = [
-                value
-                for child in link.findall("./Sub")
-                if (value := child.get("value", ""))
-            ]
-            if link.get("sub") is not None:
-                subelements.insert(0, link.get("sub", ""))
-            if not subelements:
-                subelements.append("")
-            for subelement in subelements:
-                token = subelement.rsplit(".", 1)[-1]
-                inferred = next(
-                    (
-                        kind.value
-                        for prefix, kind in SUBELEMENT_KIND_BY_PREFIX.items()
-                        if token.startswith(prefix)
-                    ),
-                    MateEntityKind.NATIVE.value,
-                )
-                paths.append(
-                    SelectionPathElement(
-                        (
-                            kinds[index]
-                            if index < len(kinds) and kinds[index]
-                            else inferred
-                        ),
-                        target,
-                        subelement,
-                    )
-                )
-        point_node = _child(obj, "SelectionPoint", "PropertyVector")
-        point = (
-            Vector3(
-                _number(point_node.get("valueX")),
-                _number(point_node.get("valueY")),
-                _number(point_node.get("valueZ")),
-            )
-            if point_node is not None
-            else None
-        )
-        result.append(
-            Selection(
-                selection_id,
-                _string(obj, "Label", obj.name),
-                tuple(paths),
-                point=point,
-                provenance=Provenance(FORMAT_ID, obj.name),
-                attributes={"freecad": _native_object_data(obj)},
-            )
-        )
-    return tuple(result)
+        KindsNode = ObjValue.properties.get('EntityKinds')
+        Kinds = [Child.get('value', '') for Child in KindsNode.findall('./StringList/String')] if KindsNode is not None else []
+        Paths: list[SelectionPathElem] = []
+        for Index, LinkValue in enumerate(NodeValue.findall('./LinkSubList/Link')):
+            Target = LinkValue.get('obj', LinkValue.get('value', ''))
+            Subelements = [Value for Child in LinkValue.findall('./Sub') if (Value := Child.get('value', ''))]
+            if LinkValue.get('sub') is not None:
+                Subelements.insert(0, LinkValue.get('sub', ''))
+            if not Subelements:
+                Subelements.append('')
+            for SubElem in Subelements:
+                Token = SubElem.rsplit('.', 1)[-1]
+                Inferred = next((KindValue.value for Prefix, KindValue in SubElemKindByPrefix.items() if Token.startswith(Prefix)), MateEntityKind.NATIVE.value)
+                Paths.append(SelectionPathElem(Kinds[Index] if Index < len(Kinds) and Kinds[Index] else Inferred, Target, SubElem))
+        PointNode = Child(ObjValue, 'SelectionPoint', 'PropertyVector')
+        Point = VectorThree(Number(PointNode.get('valueX')), Number(PointNode.get('valueY')), Number(PointNode.get('valueZ'))) if PointNode is not None else None
+        Result.append(Selection(SelectionId, String(ObjValue, 'Label', ObjValue.name), tuple(Paths), point=Point, provenance=Provenance(FormatId, ObjValue.name), attributes={'freecad': NativeObjectA(ObjValue)}))
+    return tuple(Result)
 
-
-def _feature_parameters(
-    obj: _NativeObject,
-    feature_id: str,
-    parameters: list[Parameter],
-    consumed_expressions: set[tuple[str, str]],
-) -> tuple[str, ...]:
-    result: list[str] = []
-    expressions = _expressions(obj)
-    for name, node in obj.properties.items():
-        value = _property_parameter_value(node)
-        if value is None:
+# this definition exists because focused behavior needs one stable owner
+def Feature(ObjValue: _NativeObject, FeatureId: str, Parameters: list[Parameter], ConsumedExpressions: set[tuple[str, str]]) -> tuple[str, ...]:
+    Result: list[str] = []
+    Expressions = Expressions(ObjValue)
+    for NameValue, NodeValue in ObjValue.properties.items():
+        Value = PropParamValue(NodeValue)
+        if Value is None:
             continue
-        parameter_id = f"freecad:parameter:{obj.name}:{name}"
-        expression_source = expressions.get(name, "")
-        if expression_source:
-            consumed_expressions.add((obj.name, name))
-        parameters.append(
-            Parameter(
-                parameter_id,
-                f"{_string(obj, 'Label', obj.name)}.{name}",
-                value,
-                expression=(
-                    Expression(expression_source, language="freecad")
-                    if expression_source
-                    else None
-                ),
-                owner_id=feature_id,
-                attributes={
-                    "freecad_path": name,
-                    "freecad_property_type": node.get("type", ""),
-                    "freecad_property": _element_data(node),
-                },
-            )
-        )
-        result.append(parameter_id)
-    return tuple(result)
+        ParamId = f'freecad:parameter:{ObjValue.name}:{NameValue}'
+        ExpressionSource = Expressions.get(NameValue, '')
+        if ExpressionSource:
+            ConsumedExpressions.add((ObjValue.name, NameValue))
+        Parameters.append(Param(ParamId, f"{String(ObjValue, 'Label', ObjValue.name)}.{NameValue}", Value, expression=Expression(ExpressionSource, language='freecad') if ExpressionSource else None, owner_id=FeatureId, attributes={'freecad_path': NameValue, 'freecad_property_type': NodeValue.get('type', ''), 'freecad_property': ElemData(NodeValue)}))
+        Result.append(ParamId)
+    return tuple(Result)
 
-
-def _extrusion_end_condition(
-    type_code: int, object_type_id: str
-) -> ExtrusionEndCondition:
-    extrusion_type = EXTRUSION_TYPE_BY_CODE.get(type_code)
-    if extrusion_type is None:
+# this definition exists because focused behavior needs one stable owner
+def ExtrusionEnd(TypeCode: int, ObjectTypeId: str) -> ExtrusionEndCondition:
+    ExtrusionType = ExtrusionTypeByCode.get(TypeCode)
+    if ExtrusionType is None:
         return ExtrusionEndCondition.NATIVE
-    if (
-        object_type_id == POCKET_TYPE_ID
-        and extrusion_type.pocket_end_condition is not None
-    ):
-        return extrusion_type.pocket_end_condition
-    return extrusion_type.end_condition
+    if ObjectTypeId == PocketTypeId and ExtrusionType.pocket_end_condition is not None:
+        return ExtrusionType.pocket_end_condition
+    return ExtrusionType.end_condition
 
+# this definition exists because focused behavior needs one stable owner
+def Extrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
+    EndCondition = ExtrusionEnd(EnumAction(ObjValue, 'Type'), ObjValue.type_id)
+    SideType = EnumAction(ObjValue, 'SideType', -1)
+    SecondEndCondition = ExtrusionEnd(EnumAction(ObjValue, 'Type2'), ObjValue.type_id) if SideType == 1 else None
+    DirectionNode = Child(ObjValue, 'Direction', 'PropertyVector')
+    Direction = None
+    if DirectionNode is not None:
+        Direction = VectorThree(Number(DirectionNode.get('valueX')), Number(DirectionNode.get('valueY')), Number(DirectionNode.get('valueZ')))
+    return ExtrusionFeature(ParamValue(Float(ObjValue, 'Length'), ValueKind.LENGTH, 'mm'), end_condition=EndCondition, reversed=BoolAction(ObjValue, 'Reversed'), symmetric=SideType == 2 or BoolAction(ObjValue, 'Midplane'), direction=Direction, second_length=ParamValue(Float(ObjValue, 'Length2'), ValueKind.LENGTH, 'mm') if 'Length2' in ObjValue.properties else None, second_end_condition=SecondEndCondition, offset=ParamValue(Float(ObjValue, 'Offset'), ValueKind.LENGTH, 'mm') if 'Offset' in ObjValue.properties else None, second_offset=ParamValue(Float(ObjValue, 'Offset2'), ValueKind.LENGTH, 'mm') if 'Offset2' in ObjValue.properties else None, draft_angle=ParamValue(Float(ObjValue, 'TaperAngle'), ValueKind.ANGLE, 'deg') if 'TaperAngle' in ObjValue.properties else None, second_draft_angle=ParamValue(Float(ObjValue, 'TaperAngle2'), ValueKind.ANGLE, 'deg') if 'TaperAngle2' in ObjValue.properties else None, up_to_reference=LinkAction(ObjValue, 'UpToFace') or LinkAction(ObjValue, 'UpToShape'), second_up_to_reference=LinkAction(ObjValue, 'UpToFace2') or LinkAction(ObjValue, 'UpToShape2'))
 
-def _extrusion_definition(obj: _NativeObject) -> ExtrusionFeature:
-    end_condition = _extrusion_end_condition(_enum(obj, "Type"), obj.type_id)
-    side_type = _enum(obj, "SideType", -1)
-    second_end_condition = (
-        _extrusion_end_condition(_enum(obj, "Type2"), obj.type_id)
-        if side_type == 1
-        else None
-    )
-    direction_node = _child(obj, "Direction", "PropertyVector")
-    direction = None
-    if direction_node is not None:
-        direction = Vector3(
-            _number(direction_node.get("valueX")),
-            _number(direction_node.get("valueY")),
-            _number(direction_node.get("valueZ")),
-        )
-    return ExtrusionFeature(
-        ParameterValue(_float(obj, "Length"), ValueKind.LENGTH, "mm"),
-        end_condition=end_condition,
-        reversed=_bool(obj, "Reversed"),
-        symmetric=side_type == 2 or _bool(obj, "Midplane"),
-        direction=direction,
-        second_length=(
-            ParameterValue(_float(obj, "Length2"), ValueKind.LENGTH, "mm")
-            if "Length2" in obj.properties
-            else None
-        ),
-        second_end_condition=second_end_condition,
-        offset=(
-            ParameterValue(_float(obj, "Offset"), ValueKind.LENGTH, "mm")
-            if "Offset" in obj.properties
-            else None
-        ),
-        second_offset=(
-            ParameterValue(_float(obj, "Offset2"), ValueKind.LENGTH, "mm")
-            if "Offset2" in obj.properties
-            else None
-        ),
-        draft_angle=(
-            ParameterValue(_float(obj, "TaperAngle"), ValueKind.ANGLE, "deg")
-            if "TaperAngle" in obj.properties
-            else None
-        ),
-        second_draft_angle=(
-            ParameterValue(_float(obj, "TaperAngle2"), ValueKind.ANGLE, "deg")
-            if "TaperAngle2" in obj.properties
-            else None
-        ),
-        up_to_reference=_link(obj, "UpToFace") or _link(obj, "UpToShape"),
-        second_up_to_reference=_link(obj, "UpToFace2") or _link(obj, "UpToShape2"),
-    )
+# this definition exists because focused behavior needs one stable owner
+def PartExtrusion(ObjValue: _NativeObject) -> ExtrusionFeature:
+    DirectionNode = Child(ObjValue, 'Dir', 'PropertyVector')
+    Direction = None
+    if DirectionNode is not None:
+        Direction = VectorThree(Number(DirectionNode.get('valueX')), Number(DirectionNode.get('valueY')), Number(DirectionNode.get('valueZ')))
+    Forward = Float(ObjValue, 'LengthFwd')
+    Reverse = Float(ObjValue, 'LengthRev')
+    return ExtrusionFeature(ParamValue(Forward, ValueKind.LENGTH, 'mm'), end_condition=ExtrusionEndCondition.BLIND, reversed=False, symmetric=Forward > 0.0 and Reverse > 0.0 and (abs(Forward - Reverse) <= 1e-12), direction=Direction, second_length=ParamValue(Reverse, ValueKind.LENGTH, 'mm'))
 
-
-def _part_extrusion_definition(obj: _NativeObject) -> ExtrusionFeature:
-    direction_node = _child(obj, "Dir", "PropertyVector")
-    direction = None
-    if direction_node is not None:
-        direction = Vector3(
-            _number(direction_node.get("valueX")),
-            _number(direction_node.get("valueY")),
-            _number(direction_node.get("valueZ")),
-        )
-    forward = _float(obj, "LengthFwd")
-    reverse = _float(obj, "LengthRev")
-    return ExtrusionFeature(
-        ParameterValue(forward, ValueKind.LENGTH, "mm"),
-        end_condition=ExtrusionEndCondition.BLIND,
-        reversed=False,
-        symmetric=forward > 0.0 and reverse > 0.0 and abs(forward - reverse) <= 1e-12,
-        direction=direction,
-        second_length=ParameterValue(reverse, ValueKind.LENGTH, "mm"),
-    )
-
-
-def _build_brep_payloads(
-    native: _NativeArchive, feature_ids: dict[str, str], body_ids: dict[str, str]
-) -> tuple[tuple[BrepPayload, ...], dict[str, list[str]]]:
-    payloads: list[BrepPayload] = []
-    owner_payloads: dict[str, list[str]] = {}
-    for obj in native.objects:
-        for property_name, node in obj.properties.items():
-            part = node.find("./Part")
-            if part is None:
+# this definition exists because focused behavior needs one stable owner
+def BuildBrep(Native: _NativeArchive, FeatureIds: dict[str, str], BodyIds: dict[str, str]) -> tuple[tuple[BrepPayload, ...], dict[str, list[str]]]:
+    Payloads: list[BrepPayload] = []
+    OwnerPayloads: dict[str, list[str]] = {}
+    for ObjValue in Native.objects:
+        for PropName, NodeValue in ObjValue.properties.items():
+            PartValue = NodeValue.find('./Part')
+            if PartValue is None:
                 continue
-            filename = "" if part is None else part.get("file", "")
-            if not filename:
+            FileName = '' if PartValue is None else PartValue.get('file', '')
+            if not FileName:
                 continue
-            data = native.entries.get(filename)
-            if data is None:
+            DataValue = Native.entries.get(FileName)
+            if DataValue is None:
                 continue
-            payload_id = f"freecad:brep:{obj.name}:{property_name}"
-            header = data[:256].decode("ascii", "ignore")
-            match = re.search(r"CASCADE Topology V\d+", header)
-            attributes: dict[str, Any] = {
-                "freecad_object": obj.name,
-                "freecad_object_type": obj.type_id,
-                "freecad_property": property_name,
-                "freecad_property_data": _element_data(node),
-                "freecad_part_attributes": (
-                    dict(part.attrib) if part is not None else {}
-                ),
-            }
-            sidecars = []
-            for child in node.findall(".//*[@file]"):
-                sidecar_name = child.get("file", "")
-                if not sidecar_name or sidecar_name == filename:
+            PayloadId = f'freecad:brep:{ObjValue.name}:{PropName}'
+            Header = DataValue[:256].decode('ascii', 'ignore')
+            Match = RegexLib.search('CASCADE Topology V\\d+', Header)
+            Attributes: dict[str, AnyValue] = {'freecad_object': ObjValue.name, 'freecad_object_type': ObjValue.type_id, 'freecad_property': PropName, 'freecad_property_data': ElemData(NodeValue), 'freecad_part_attributes': dict(PartValue.attrib) if PartValue is not None else {}}
+            Sidecars = []
+            for Child in NodeValue.findall('.//*[@file]'):
+                SidecarName = Child.get('file', '')
+                if not SidecarName or SidecarName == FileName:
                     continue
-                sidecar_data = native.entries.get(sidecar_name)
-                if sidecar_data is not None:
-                    sidecars.append(
-                        {"source_stream": sidecar_name, "data": sidecar_data}
-                    )
-            if sidecars:
-                attributes["freecad_sidecars"] = sidecars
-            if property_name == "Shape" and obj.name in feature_ids:
-                attributes["feature_id"] = feature_ids[obj.name]
-            if property_name == "Shape" and obj.name in body_ids:
-                attributes["body_id"] = body_ids[obj.name]
-            payloads.append(
-                BrepPayload(
-                    payload_id,
-                    "opencascade",
-                    "shape",
-                    match.group(0) if match else "FreeCAD PartShape",
-                    hashlib.sha256(data).hexdigest(),
-                    data=data,
-                    source_stream=filename,
-                    provenance=Provenance(FORMAT_ID, f"{obj.name}.{property_name}"),
-                    attributes=attributes,
-                    role=PayloadRole.BREP,
-                    file_extension=".brep",
-                )
-            )
-            owner_payloads.setdefault(obj.name, []).append(payload_id)
-    return tuple(payloads), owner_payloads
+                SidecarData = Native.entries.get(SidecarName)
+                if SidecarData is not None:
+                    Sidecars.append({'source_stream': SidecarName, 'data': SidecarData})
+            if Sidecars:
+                Attributes['freecad_sidecars'] = Sidecars
+            if PropName == 'Shape' and ObjValue.name in FeatureIds:
+                Attributes['feature_id'] = FeatureIds[ObjValue.name]
+            if PropName == 'Shape' and ObjValue.name in BodyIds:
+                Attributes['body_id'] = BodyIds[ObjValue.name]
+            Payloads.append(BrepPayload(PayloadId, 'opencascade', 'shape', Match.group(0) if Match else 'FreeCAD PartShape', Hashlib.sha256(DataValue).hexdigest(), data=DataValue, source_stream=FileName, provenance=Provenance(FormatId, f'{ObjValue.name}.{PropName}'), attributes=Attributes, role=PayloadRole.BREP, file_extension='.brep'))
+            OwnerPayloads.setdefault(ObjValue.name, []).append(PayloadId)
+    return (tuple(Payloads), OwnerPayloads)
 
-
-def _decoded_document_brep(
-    payloads: tuple[BrepPayload, ...], bodies: tuple[Body, ...]
-) -> BrepModel | None:
-    if not bodies:
+# this definition exists because focused behavior needs one stable owner
+def DecodedDocBrep(Payloads: tuple[BrepPayload, ...], Bodies: tuple[Body, ...]) -> BrepModel | None:
+    if not Bodies:
         return None
-    selected: set[str] = set()
-    models: list[BrepModel] = []
-    for body in bodies:
-        BodyMatches = tuple(
-            payload
-            for payload in payloads
-            if payload.role == PayloadRole.BREP
-            and payload.data is not None
-            and payload.attributes.get("body_id") == body.id
-        )
-        FeatureMatches = tuple(
-            payload
-            for payload in payloads
-            if payload.role == PayloadRole.BREP
-            and payload.data is not None
-            and payload.attributes.get("feature_id") == body.final_feature_id
-        )
+    Selected: set[str] = set()
+    Models: list[BrepModel] = []
+    for BodyValue in Bodies:
+        BodyMatches = tuple((Payload for Payload in Payloads if Payload.role == PayloadRole.BREP and Payload.data is not None and (Payload.attributes.get('body_id') == BodyValue.id)))
+        FeatureMatches = tuple((Payload for Payload in Payloads if Payload.role == PayloadRole.BREP and Payload.data is not None and (Payload.attributes.get('feature_id') == BodyValue.final_feature_id)))
         Matches = BodyMatches or FeatureMatches
-        if len(Matches) != 1 or Matches[0].id in selected:
+        if len(Matches) != 1 or Matches[0].id in Selected:
             return None
-        payload = Matches[0]
-        selected.add(payload.id)
-        digest = hashlib.sha256(payload.id.encode("utf-8")).hexdigest()[:20]
-        model = decode_ascii_brep(
-            payload.data,
-            id_prefix=f"freecad:occ:{digest}",
-            design_body_id=body.id,
-            attributes={
-                "brep_payload_id": payload.id,
-                "feature_id": body.final_feature_id,
-            },
-        )
-        if model is None:
+        Payload = Matches[0]
+        Selected.add(Payload.id)
+        Digest = Hashlib.sha256(Payload.id.encode('utf-8')).hexdigest()[:20]
+        Model = DecodeAsciiBrep(Payload.data, id_prefix=f'freecad:occ:{Digest}', design_body_id=BodyValue.id, attributes={'brep_payload_id': Payload.id, 'feature_id': BodyValue.final_feature_id})
+        if Model is None:
             return None
-        models.append(model)
-    return BrepModel(
-        curves=tuple(value for model in models for value in model.curves),
-        pcurves=tuple(value for model in models for value in model.pcurves),
-        surfaces=tuple(value for model in models for value in model.surfaces),
-        vertices=tuple(value for model in models for value in model.vertices),
-        edges=tuple(value for model in models for value in model.edges),
-        coedges=tuple(value for model in models for value in model.coedges),
-        loops=tuple(value for model in models for value in model.loops),
-        wires=tuple(value for model in models for value in model.wires),
-        faces=tuple(value for model in models for value in model.faces),
-        face_uses=tuple(value for model in models for value in model.face_uses),
-        shells=tuple(value for model in models for value in model.shells),
-        shell_uses=tuple(value for model in models for value in model.shell_uses),
-        regions=tuple(value for model in models for value in model.regions),
-        bodies=tuple(value for model in models for value in model.bodies),
-    )
+        Models.append(Model)
+    return BrepModel(curves=tuple((Value for Model in Models for Value in Model.curves)), pcurves=tuple((Value for Model in Models for Value in Model.pcurves)), surfaces=tuple((Value for Model in Models for Value in Model.surfaces)), vertices=tuple((Value for Model in Models for Value in Model.vertices)), edges=tuple((Value for Model in Models for Value in Model.edges)), coedges=tuple((Value for Model in Models for Value in Model.coedges)), loops=tuple((Value for Model in Models for Value in Model.loops)), wires=tuple((Value for Model in Models for Value in Model.wires)), faces=tuple((Value for Model in Models for Value in Model.faces)), face_uses=tuple((Value for Model in Models for Value in Model.face_uses)), shells=tuple((Value for Model in Models for Value in Model.shells)), shell_uses=tuple((Value for Model in Models for Value in Model.shell_uses)), regions=tuple((Value for Model in Models for Value in Model.regions)), bodies=tuple((Value for Model in Models for Value in Model.bodies)))
 
-
-def _parse_meshes(native: _NativeArchive) -> tuple[Mesh, ...]:
-    result: list[Mesh] = []
-    for obj in native.objects:
-        for property_name, property_element in obj.properties.items():
-            value = property_element.find("./Mesh")
-            if value is None:
+# this definition exists because focused behavior needs one stable owner
+def ParseMeshes(Native: _NativeArchive) -> tuple[MeshValue, ...]:
+    Result: list[MeshValue] = []
+    for ObjValue in Native.objects:
+        for PropName, PropElem in ObjValue.properties.items():
+            Value = PropElem.find('./Mesh')
+            if Value is None:
                 continue
-            filename = value.get("file", "")
-            data = native.entries.get(filename)
-            vertices: tuple[Vector3, ...] = ()
-            triangles: tuple[tuple[int, int, int], ...] = ()
-            if data is not None and len(data) >= 296:
+            FileName = Value.get('file', '')
+            DataValue = Native.entries.get(FileName)
+            Vertices: tuple[VectorThree, ...] = ()
+            Triangles: tuple[tuple[int, int, int], ...] = ()
+            if DataValue is not None and len(DataValue) >= 296:
                 try:
-                    endian = "<"
-                    magic, version = struct.unpack_from("<II", data)
-                    if (magic, version) != (0xA0B0C0D0, 0x00010000):
-                        magic, version = struct.unpack_from(">II", data)
-                        endian = ">"
-                    vertex_count, triangle_count = struct.unpack_from(
-                        f"{endian}II", data, 264
-                    )
-                    expected = 272 + vertex_count * 12 + triangle_count * 24 + 24
-                    if (
-                        magic == 0xA0B0C0D0
-                        and version == 0x00010000
-                        and expected <= len(data)
-                    ):
-                        vertices = tuple(
-                            Vector3(
-                                *struct.unpack_from(
-                                    f"{endian}fff", data, 272 + index * 12
-                                )
-                            )
-                            for index in range(vertex_count)
-                        )
-                        triangle_offset = 272 + vertex_count * 12
-                        triangles = tuple(
-                            struct.unpack_from(
-                                f"{endian}III",
-                                data,
-                                triangle_offset + index * 24,
-                            )
-                            for index in range(triangle_count)
-                        )
-                except struct.error:
-                    vertices = ()
-                    triangles = ()
-            elif value.find("./Points") is not None:
-                vertices = tuple(
-                    Vector3(
-                        _number(point.get("x")),
-                        _number(point.get("y")),
-                        _number(point.get("z")),
-                    )
-                    for point in value.findall("./Points/P")
-                )
-                triangles = tuple(
-                    (
-                        _integer(face.get("p0"), -1),
-                        _integer(face.get("p1"), -1),
-                        _integer(face.get("p2"), -1),
-                    )
-                    for face in value.findall("./Faces/F")
-                )
-            if not vertices and not triangles:
+                    Endian = '<'
+                    Magic, Version = Struct.unpack_from('<II', DataValue)
+                    if (Magic, Version) != (2695938256, 65536):
+                        Magic, Version = Struct.unpack_from('>II', DataValue)
+                        Endian = '>'
+                    VertexCount, TriangleCount = Struct.unpack_from(f'{Endian}II', DataValue, 264)
+                    Expected = 272 + VertexCount * 12 + TriangleCount * 24 + 24
+                    if Magic == 2695938256 and Version == 65536 and (Expected <= len(DataValue)):
+                        Vertices = tuple((VectorThree(*Struct.unpack_from(f'{Endian}fff', DataValue, 272 + Index * 12)) for Index in range(VertexCount)))
+                        TriangleOffset = 272 + VertexCount * 12
+                        Triangles = tuple((Struct.unpack_from(f'{Endian}III', DataValue, TriangleOffset + Index * 24) for Index in range(TriangleCount)))
+                except Struct.error:
+                    Vertices = ()
+                    Triangles = ()
+            elif Value.find('./Points') is not None:
+                Vertices = tuple((VectorThree(Number(Point.get('x')), Number(Point.get('y')), Number(Point.get('z'))) for Point in Value.findall('./Points/P')))
+                Triangles = tuple(((Integer(FaceValue.get('p0'), -1), Integer(FaceValue.get('p1'), -1), Integer(FaceValue.get('p2'), -1)) for FaceValue in Value.findall('./Faces/F')))
+            if not Vertices and (not Triangles):
                 continue
-            if any(
-                any(index < 0 or index >= len(vertices) for index in triangle)
-                for triangle in triangles
-            ):
+            if any((any((Index < 0 or Index >= len(Vertices) for Index in Triangle)) for Triangle in Triangles)):
                 continue
-            result.append(
-                Mesh(
-                    f"freecad:mesh:{obj.name}:{property_name}",
-                    _string(obj, "Label", obj.name),
-                    vertices,
-                    triangles,
-                    provenance=Provenance(FORMAT_ID, f"{obj.name}.{property_name}"),
-                    attributes={
-                        "freecad": _native_object_data(obj),
-                        "source_stream": filename,
-                    },
-                )
-            )
-    return tuple(result)
+            Result.append(MeshValue(f'freecad:mesh:{ObjValue.name}:{PropName}', String(ObjValue, 'Label', ObjValue.name), Vertices, Triangles, provenance=Provenance(FormatId, f'{ObjValue.name}.{PropName}'), attributes={'freecad': NativeObjectA(ObjValue), 'source_stream': FileName}))
+    return tuple(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def ProxyClass(ObjValue: _NativeObject) -> str:
+    NodeValue = ObjValue.properties.get('Proxy')
+    if NodeValue is None:
+        return ''
+    Value = NodeValue.find('./Python')
+    return '' if Value is None else Value.get('class', '')
 
-def _proxy_class(obj: _NativeObject) -> str:
-    node = obj.properties.get("Proxy")
-    if node is None:
-        return ""
-    value = node.find("./Python")
-    return "" if value is None else value.get("class", "")
+# this definition exists because focused behavior needs one stable owner
+def Enumeration(ObjValue: _NativeObject, NameValue: str) -> str:
+    NodeValue = ObjValue.properties.get(NameValue)
+    if NodeValue is None:
+        return ''
+    Selected = NodeValue.find('./Integer')
+    if Selected is None:
+        return ''
+    Index = Integer(Selected.get('value'), -1)
+    Choices = [Child.get('value', '') for Child in NodeValue.findall('./CustomEnumList/Enum')]
+    return Choices[Index] if 0 <= Index < len(Choices) else str(Index)
 
+# this definition exists because focused behavior needs one stable owner
+def XlinkData(ObjValue: _NativeObject, NameValue: str) -> dict[str, AnyValue]:
+    NodeValue = ObjValue.properties.get(NameValue)
+    if NodeValue is None:
+        return {'file': '', 'stamp': '', 'name': '', 'subelements': []}
+    Value = NodeValue.find('./XLink')
+    if Value is None:
+        return {'file': '', 'stamp': '', 'name': '', 'subelements': []}
+    Subelements = [Child.get('value', '') for Child in Value.findall('./Sub')]
+    if not Subelements and Value.get('name', ''):
+        Subelements.append('')
+    return {'file': Value.get('file', ''), 'stamp': Value.get('stamp', ''), 'name': Value.get('name', ''), 'subelements': Subelements}
 
-def _enumeration_choice(obj: _NativeObject, name: str) -> str:
-    node = obj.properties.get(name)
-    if node is None:
-        return ""
-    selected = node.find("./Integer")
-    if selected is None:
-        return ""
-    index = _integer(selected.get("value"), -1)
-    choices = [
-        child.get("value", "") for child in node.findall("./CustomEnumList/Enum")
-    ]
-    return choices[index] if 0 <= index < len(choices) else str(index)
+# this definition exists because focused behavior needs one stable owner
+def LinkedObjectA(ObjValue: _NativeObject) -> str:
+    Linked = ObjValue.properties.get('LinkedObject')
+    if Linked is not None and Linked.find('./XLink') is not None:
+        return 'LinkedObject'
+    Marker = ' '.join((ObjValue.type_id, ProxyClass(ObjValue), *(Extension.get('type', '') for Extension in ObjValue.extensions))).casefold()
+    if 'link' not in Marker:
+        return ''
+    Candidates = [NameValue for NameValue, NodeValue in ObjValue.properties.items() if NodeValue.find('./XLink') is not None and NameValue not in JointReservedLink]
+    Named = next((NameValue for NameValue in Candidates if 'link' in NameValue.casefold()), '')
+    return Named or (Candidates[0] if len(Candidates) == 1 else '')
 
+# this definition exists because focused behavior needs one stable owner
+def LinkedObject(ObjValue: _NativeObject) -> dict[str, AnyValue]:
+    PropName = LinkedObjectA(ObjValue)
+    return XlinkData(ObjValue, PropName) if PropName else XlinkData(ObjValue, '')
 
-def _xlink_data(obj: _NativeObject, name: str) -> dict[str, Any]:
-    node = obj.properties.get(name)
-    if node is None:
-        return {"file": "", "stamp": "", "name": "", "subelements": []}
-    value = node.find("./XLink")
-    if value is None:
-        return {"file": "", "stamp": "", "name": "", "subelements": []}
-    subelements = [child.get("value", "") for child in value.findall("./Sub")]
-    if not subelements and value.get("name", ""):
-        subelements.append("")
-    return {
-        "file": value.get("file", ""),
-        "stamp": value.get("stamp", ""),
-        "name": value.get("name", ""),
-        "subelements": subelements,
-    }
+# this definition exists because focused behavior needs one stable owner
+def IsLinkObject(ObjValue: _NativeObject) -> bool:
+    return bool(LinkedObjectA(ObjValue))
 
+# this definition exists because focused behavior needs one stable owner
+def IsAsmLinkObject(ObjValue: _NativeObject) -> bool:
+    return IsLinkObject(ObjValue) and {'Group', 'Rigid'}.issubset(ObjValue.properties)
 
-def _linked_object_property(obj: _NativeObject) -> str:
-    linked = obj.properties.get("LinkedObject")
-    if linked is not None and linked.find("./XLink") is not None:
-        return "LinkedObject"
-    marker = " ".join(
-        (
-            obj.type_id,
-            _proxy_class(obj),
-            *(extension.get("type", "") for extension in obj.extensions),
-        )
-    ).casefold()
-    if "link" not in marker:
-        return ""
-    candidates = [
-        name
-        for name, node in obj.properties.items()
-        if node.find("./XLink") is not None
-        and name not in JOINT_RESERVED_LINK_PROPERTIES
-    ]
-    named = next(
-        (name for name in candidates if "link" in name.casefold()),
-        "",
-    )
-    return named or (candidates[0] if len(candidates) == 1 else "")
+# this definition exists because focused behavior needs one stable owner
+def IsGroundedJoint(ObjValue: _NativeObject) -> bool:
+    Proxy = ProxyClass(ObjValue).casefold()
+    return 'groundedjoint' in Proxy or JointGroundProp in ObjValue.properties
 
-
-def _linked_object_data(obj: _NativeObject) -> dict[str, Any]:
-    property_name = _linked_object_property(obj)
-    return _xlink_data(obj, property_name) if property_name else _xlink_data(obj, "")
-
-
-def _is_link_object(obj: _NativeObject) -> bool:
-    return bool(_linked_object_property(obj))
-
-
-def _is_assembly_link_object(obj: _NativeObject) -> bool:
-    return _is_link_object(obj) and {"Group", "Rigid"}.issubset(obj.properties)
-
-
-def _is_grounded_joint_object(obj: _NativeObject) -> bool:
-    proxy = _proxy_class(obj).casefold()
-    return "groundedjoint" in proxy or JOINT_GROUND_PROPERTY in obj.properties
-
-
-def _is_joint_object(obj: _NativeObject) -> bool:
-    if _is_grounded_joint_object(obj):
+# this definition exists because focused behavior needs one stable owner
+def IsJointObject(ObjValue: _NativeObject) -> bool:
+    if IsGroundedJoint(ObjValue):
         return True
-    marker = f"{obj.type_id} {_proxy_class(obj)}".casefold()
-    has_reference = bool(set(JOINT_REFERENCE_PROPERTIES) & set(obj.properties))
-    return (
-        ("joint" in marker and has_reference)
-        or has_reference
-        and bool(JOINT_TYPE_PROPERTIES & set(obj.properties))
-    )
+    Marker = f'{ObjValue.type_id} {ProxyClass(ObjValue)}'.casefold()
+    HasRef = bool(set(JointRefProperties) & set(ObjValue.properties))
+    return 'joint' in Marker and HasRef or (HasRef and bool(JointTypeProperties & set(ObjValue.properties)))
 
+# this definition exists because focused behavior needs one stable owner
+def JointGroup(Objects: tuple[_NativeObject, ...], ByName: dict[str, _NativeObject]) -> NativeObject | None:
+    Exact = next((ObjValue for ObjValue in Objects if ObjValue.type_id == AsmJointGroupTypeId), None)
+    if Exact is not None:
+        return Exact
+    Candidates: list[NativeObject] = []
+    for ObjValue in Objects:
+        Members = [ByName[NameValue] for NameValue in LinkList(ObjValue, 'Group') if NameValue in ByName]
+        JointMembers = [Member for Member in Members if IsJointObject(Member)]
+        Marker = f'{ObjValue.type_id} {ProxyClass(ObjValue)}'.casefold()
+        if JointMembers and ('jointgroup' in Marker or len(JointMembers) == len(Members)):
+            Candidates.append(ObjValue)
+    return Candidates[0] if len(Candidates) == 1 else None
 
-def _joint_group_object(
-    objects: tuple[_NativeObject, ...], by_name: dict[str, _NativeObject]
-) -> _NativeObject | None:
-    exact = next(
-        (obj for obj in objects if obj.type_id == ASSEMBLY_JOINT_GROUP_TYPE_ID),
-        None,
-    )
-    if exact is not None:
-        return exact
-    candidates: list[_NativeObject] = []
-    for obj in objects:
-        members = [
-            by_name[name] for name in _link_list(obj, "Group") if name in by_name
-        ]
-        joint_members = [member for member in members if _is_joint_object(member)]
-        marker = f"{obj.type_id} {_proxy_class(obj)}".casefold()
-        if joint_members and (
-            "jointgroup" in marker or len(joint_members) == len(members)
-        ):
-            candidates.append(obj)
-    return candidates[0] if len(candidates) == 1 else None
-
-
-def _assembly_root_object(objects: tuple[_NativeObject, ...]) -> _NativeObject | None:
-    exact = next(
-        (obj for obj in objects if obj.type_id == ASSEMBLY_ROOT_TYPE_ID),
-        None,
-    )
-    if exact is not None:
-        return exact
-    by_name = {obj.name: obj for obj in objects}
-    grouped_names = {
-        name for obj in objects for name in _link_list(obj, "Group") if name in by_name
-    }
-    candidates: list[tuple[tuple[int, int, int, int], _NativeObject]] = []
-    for obj in objects:
-        if _is_link_object(obj) or _is_joint_object(obj):
+# this definition exists because focused behavior needs one stable owner
+def AsmRootObject(Objects: tuple[_NativeObject, ...]) -> NativeObject | None:
+    Exact = next((ObjValue for ObjValue in Objects if ObjValue.type_id == AsmRootTypeId), None)
+    if Exact is not None:
+        return Exact
+    ByName = {ObjValue.name: ObjValue for ObjValue in Objects}
+    GroupedNames = {NameValue for ObjValue in Objects for NameValue in LinkList(ObjValue, 'Group') if NameValue in ByName}
+    Candidates: list[tuple[tuple[int, int, int, int], NativeObject]] = []
+    for ObjValue in Objects:
+        if IsLinkObject(ObjValue) or IsJointObject(ObjValue):
             continue
-        links = [
-            by_name[name]
-            for name in _link_list(obj, "Group")
-            if name in by_name and _is_link_object(by_name[name])
-        ]
-        if not links:
+        Links = [ByName[NameValue] for NameValue in LinkList(ObjValue, 'Group') if NameValue in ByName and IsLinkObject(ByName[NameValue])]
+        if not Links:
             continue
-        marker = f"{obj.type_id} {_proxy_class(obj)} {_string(obj, 'Type')}".casefold()
-        score = (
-            int("assembly" in marker),
-            int(obj.name not in grouped_names),
-            sum(_is_assembly_link_object(link) for link in links),
-            len(links),
-        )
-        candidates.append((score, obj))
-    if not candidates:
+        Marker = f"{ObjValue.type_id} {ProxyClass(ObjValue)} {String(ObjValue, 'Type')}".casefold()
+        Score = (int('assembly' in Marker), int(ObjValue.name not in GroupedNames), sum((IsAsmLinkObject(LinkValue) for LinkValue in Links)), len(Links))
+        Candidates.append((Score, ObjValue))
+    if not Candidates:
         return None
-    return max(candidates, key=lambda value: (value[0], -value[1].index))[1]
 
+    # this callback exists because local behavior needs one focused transformation
+    return max(Candidates, key=lambda Value: (Value[0], -Value[1].index))[1]
 
-def _mate_entity_kind(value: str) -> MateEntityKind:
-    token = value.rsplit(".", 1)[-1]
-    for prefix, kind in SUBELEMENT_KIND_BY_PREFIX.items():
-        if token.startswith(prefix):
-            return kind
+# this definition exists because focused behavior needs one stable owner
+def MateEntityKindA(Value: str) -> MateEntityKind:
+    Token = Value.rsplit('.', 1)[-1]
+    for Prefix, KindValue in SubElemKindByPrefix.items():
+        if Token.startswith(Prefix):
+            return KindValue
     return MateEntityKind.NATIVE
 
-
-def _mate_values(
-    obj: _NativeObject,
-    kind: MateKind | str,
-    mate_id: str,
-    parameters: list[Parameter],
-    consumed_expressions: set[tuple[str, str]],
-) -> tuple[ParameterValue | None, tuple[str, ...]]:
-    value_properties: list[tuple[str, ValueKind, str]] = []
-    primary_property = ""
-    if kind == MateKind.ANGLE:
-        primary_property = "Angle"
-        value_properties.append(("Angle", ValueKind.ANGLE, "deg"))
-    elif kind in MATE_KINDS_USING_DISTANCE:
-        primary_property = "Distance"
-        value_properties.append(("Distance", ValueKind.LENGTH, "mm"))
-    if kind in MATE_KINDS_USING_SECOND_DISTANCE:
-        value_properties.append(("Distance2", ValueKind.LENGTH, "mm"))
-    for enable_name, property_name, value_kind, unit in (
-        ("EnableLengthMin", "LengthMin", ValueKind.LENGTH, "mm"),
-        ("EnableLengthMax", "LengthMax", ValueKind.LENGTH, "mm"),
-        ("EnableAngleMin", "AngleMin", ValueKind.ANGLE, "deg"),
-        ("EnableAngleMax", "AngleMax", ValueKind.ANGLE, "deg"),
-    ):
-        if _bool(obj, enable_name):
-            value_properties.append((property_name, value_kind, unit))
-    expressions = _expressions(obj)
-    primary_value: ParameterValue | None = None
-    parameter_ids: list[str] = []
-    for property_name, value_kind, unit in value_properties:
-        if property_name not in obj.properties:
+# this definition exists because focused behavior needs one stable owner
+def MateValues(ObjValue: _NativeObject, KindValue: MateKind | str, MateId: str, Parameters: list[Parameter], ConsumedExpressions: set[tuple[str, str]]) -> tuple[ParamValue | None, tuple[str, ...]]:
+    ValueProperties: list[tuple[str, ValueKind, str]] = []
+    PrimaryProp = ''
+    if KindValue == MateKind.ANGLE:
+        PrimaryProp = 'Angle'
+        ValueProperties.append(('Angle', ValueKind.ANGLE, 'deg'))
+    elif KindValue in MateKindsUsingDistance:
+        PrimaryProp = 'Distance'
+        ValueProperties.append(('Distance', ValueKind.LENGTH, 'mm'))
+    if KindValue in MateKindsUsingSecond:
+        ValueProperties.append(('Distance2', ValueKind.LENGTH, 'mm'))
+    for EnableName, PropName, ValueKind, UnitValue in (('EnableLengthMin', 'LengthMin', ValueKind.LENGTH, 'mm'), ('EnableLengthMax', 'LengthMax', ValueKind.LENGTH, 'mm'), ('EnableAngleMin', 'AngleMin', ValueKind.ANGLE, 'deg'), ('EnableAngleMax', 'AngleMax', ValueKind.ANGLE, 'deg')):
+        if BoolAction(ObjValue, EnableName):
+            ValueProperties.append((PropName, ValueKind, UnitValue))
+    Expressions = Expressions(ObjValue)
+    PrimaryValue: ParamValue | None = None
+    ParamIds: list[str] = []
+    for PropName, ValueKind, UnitValue in ValueProperties:
+        if PropName not in ObjValue.properties:
             continue
-        value = ParameterValue(_float(obj, property_name), value_kind, unit)
-        if property_name == primary_property:
-            primary_value = value
-        parameter_id = f"freecad:parameter:{obj.name}:{property_name}"
-        expression_source = expressions.get(property_name, "")
-        if expression_source:
-            consumed_expressions.add((obj.name, property_name))
-        parameters.append(
-            Parameter(
-                parameter_id,
-                f"{_string(obj, 'Label', obj.name)}.{property_name}",
-                value,
-                expression=(
-                    Expression(expression_source, language="freecad")
-                    if expression_source
-                    else None
-                ),
-                owner_id=mate_id,
-                attributes={
-                    "freecad_path": property_name,
-                    "freecad_property": _element_data(obj.properties[property_name]),
-                },
-            )
-        )
-        parameter_ids.append(parameter_id)
-    return primary_value, tuple(parameter_ids)
+        Value = ParamValue(Float(ObjValue, PropName), ValueKind, UnitValue)
+        if PropName == PrimaryProp:
+            PrimaryValue = Value
+        ParamId = f'freecad:parameter:{ObjValue.name}:{PropName}'
+        ExpressionSource = Expressions.get(PropName, '')
+        if ExpressionSource:
+            ConsumedExpressions.add((ObjValue.name, PropName))
+        Parameters.append(Param(ParamId, f"{String(ObjValue, 'Label', ObjValue.name)}.{PropName}", Value, expression=Expression(ExpressionSource, language='freecad') if ExpressionSource else None, owner_id=MateId, attributes={'freecad_path': PropName, 'freecad_property': ElemData(ObjValue.properties[PropName])}))
+        ParamIds.append(ParamId)
+    return (PrimaryValue, tuple(ParamIds))
 
-
-def _stored_mate_value(obj: _NativeObject) -> ParameterValue | None:
-    source = _string(obj, "MateValueJSON")
-    if not source:
+# this definition exists because focused behavior needs one stable owner
+def StoredMateValue(ObjValue: _NativeObject) -> ParamValue | None:
+    Source = String(ObjValue, 'MateValueJSON')
+    if not Source:
         return None
     try:
-        value = json.loads(source)
-    except (json.JSONDecodeError, RecursionError):
+        Value = JsonValue.loads(Source)
+    except (JsonValue.JSONDecodeError, RecursionError):
         return None
-    if not isinstance(value, dict) or "value" not in value:
+    if not isinstance(Value, dict) or 'value' not in Value:
         return None
-    kind_value = value.get("kind", ValueKind.NUMBER)
-    if isinstance(kind_value, dict):
-        kind_value = kind_value.get("value", ValueKind.NUMBER)
+    KindValueA = Value.get('kind', ValueKind.NUMBER)
+    if isinstance(KindValueA, dict):
+        KindValueA = KindValueA.get('value', ValueKind.NUMBER)
     try:
-        kind = ValueKind(str(kind_value))
+        KindValue = ValueKind(str(KindValueA))
     except ValueError:
-        kind = ValueKind.NUMBER
-    raw = value.get("value")
-    if not isinstance(raw, (str, int, float, bool)):
+        KindValue = ValueKind.NUMBER
+    RawValue = Value.get('value')
+    if not isinstance(RawValue, (str, int, float, bool)):
         return None
-    return ParameterValue(raw, kind, str(value.get("unit", "")))
+    return ParamValue(RawValue, KindValue, str(Value.get('unit', '')))
 
+# this definition exists because focused behavior needs one stable owner
+def EmbeddedDoc(Target: str, TargetObj: _NativeObject | None, Identity: str, Payloads: tuple[BrepPayload, ...]) -> tuple[str, CadDoc, tuple[str, ...]]:
+    Digest = Hashlib.sha256(Identity.encode('utf-8')).hexdigest()[:20]
+    DocId = f'freecad:component-document:{Digest}'
+    FeatureId = f'freecad:component-feature:{Digest}'
+    ComponentPayloads = tuple((Replace(Payload, id=f'{Payload.id}:component:{Digest}', attributes={**dict(Payload.attributes), 'feature_id': FeatureId}) for Payload in Payloads))
+    Label = String(TargetObj, 'Label', Target) if TargetObj is not None else Target
+    Feature = FeatureStep(FeatureId, Label, FeatureKind.IMPORTED if ComponentPayloads else FeatureKind.NATIVE, 0, provenance=Provenance(FormatId, Target), attributes={'freecad': NativeObjectA(TargetObj) if TargetObj is not None else {}, 'brep_payload_ids': [Payload.id for Payload in ComponentPayloads]})
+    Component = CadDoc(CadSource(FormatId, Identity, Hashlib.sha256(''.join((Payload.sha256 for Payload in ComponentPayloads)).encode('ascii')).hexdigest()), (Config(f'{DocId}:configuration', 'Default', active=True),), (), (), (), (), (Feature,), (), brep_payloads=ComponentPayloads, metadata={'freecad_component_target': Target, 'freecad_identity': Identity})
+    Component = Replace(Component, capabilities=InferCapabilities(Component, roundtrip_metadata=True))
+    Component.assert_valid()
+    return (DocId, Component, ())
 
-def _embedded_component_document(
-    target: str,
-    target_obj: _NativeObject | None,
-    identity: str,
-    payloads: tuple[BrepPayload, ...],
-) -> tuple[str, CadDocument, tuple[str, ...]]:
-    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
-    document_id = f"freecad:component-document:{digest}"
-    feature_id = f"freecad:component-feature:{digest}"
-    component_payloads = tuple(
-        replace(
-            payload,
-            id=f"{payload.id}:component:{digest}",
-            attributes={**dict(payload.attributes), "feature_id": feature_id},
-        )
-        for payload in payloads
-    )
-    label = _string(target_obj, "Label", target) if target_obj is not None else target
-    feature = FeatureStep(
-        feature_id,
-        label,
-        FeatureKind.IMPORTED if component_payloads else FeatureKind.NATIVE,
-        0,
-        provenance=Provenance(FORMAT_ID, target),
-        attributes={
-            "freecad": (
-                _native_object_data(target_obj) if target_obj is not None else {}
-            ),
-            "brep_payload_ids": [payload.id for payload in component_payloads],
-        },
-    )
-    component = CadDocument(
-        CadSource(
-            FORMAT_ID,
-            identity,
-            hashlib.sha256(
-                "".join(payload.sha256 for payload in component_payloads).encode(
-                    "ascii"
-                )
-            ).hexdigest(),
-        ),
-        (Configuration(f"{document_id}:configuration", "Default", active=True),),
-        (),
-        (),
-        (),
-        (),
-        (feature,),
-        (),
-        brep_payloads=component_payloads,
-        metadata={"freecad_component_target": target, "freecad_identity": identity},
-    )
-    component = replace(
-        component,
-        capabilities=infer_capabilities(component, roundtrip_metadata=True),
-    )
-    component.assert_valid()
-    return document_id, component, ()
-
-
-def _resolved_source_path(source_path: str) -> Path | None:
-    if not source_path:
+# this definition exists because focused behavior needs one stable owner
+def ResolvedSource(SourcePath: str) -> PathValue | None:
+    if not SourcePath:
         return None
     try:
-        path = Path(source_path).expanduser().resolve(strict=True)
+        PathValue = PathValue(SourcePath).expanduser().resolve(strict=True)
     except (OSError, RuntimeError):
         return None
-    return path if path.is_file() else None
+    return PathValue if PathValue.is_file() else None
 
-
-def _is_reparse_path(path: Path, root: Path) -> bool:
-    current = path
+# this definition exists because focused behavior needs one stable owner
+def IsReparsePath(PathValue: Path, RootValue: Path) -> bool:
+    Current = PathValue
     while True:
         try:
-            details = current.lstat()
+            Details = Current.lstat()
         except OSError:
             return True
-        if current.is_symlink() or getattr(details, "st_file_attributes", 0) & 0x400:
+        if Current.is_symlink() or getattr(Details, 'st_file_attributes', 0) & 1024:
             return True
-        if current == root:
+        if Current == RootValue:
             return False
-        if root not in current.parents:
+        if RootValue not in Current.parents:
             return True
-        current = current.parent
+        Current = Current.parent
 
-
-def _external_documents(
-    native: _NativeArchive,
-    source_path: str,
-    state: _ExternalState | None,
-    depth: int,
-) -> tuple[dict[str, tuple[str, CadDocument]], list[dict[str, str]]]:
-    source = _resolved_source_path(source_path)
-    files = sorted(
-        {
-            str(linked["file"])
-            for obj in native.objects
-            if _is_link_object(obj) and (linked := _linked_object_data(obj))["file"]
-        }
-    )
-    resolved: dict[str, tuple[str, CadDocument]] = {}
-    unresolved: list[dict[str, str]] = []
-    for filename in files:
-        reason = ""
-        candidate: Path | None = None
-        if source is None or state is None:
-            reason = "source location is unavailable"
-        elif depth >= _MAX_EXTERNAL_DEPTH:
-            reason = "external reference depth exceeds safe limits"
-        elif Path(filename).is_absolute():
-            reason = "absolute external paths are not allowed"
+# this definition exists because focused behavior needs one stable owner
+def OuterDocuments(Native: _NativeArchive, SourcePath: str, State: _ExternalState | None, Depth: int) -> tuple[dict[str, tuple[str, CadDoc]], list[dict[str, str]]]:
+    Source = ResolvedSource(SourcePath)
+    Files = sorted({str(Linked['file']) for ObjValue in Native.objects if IsLinkObject(ObjValue) and (Linked := LinkedObject(ObjValue))['file']})
+    Resolved: dict[str, tuple[str, CadDoc]] = {}
+    Unresolved: list[dict[str, str]] = []
+    for FileName in Files:
+        Reason = ''
+        Choice: PathValue | None = None
+        if Source is None or State is None:
+            Reason = 'source location is unavailable'
+        elif Depth >= KMaxOuterDepth:
+            Reason = 'external reference depth exceeds safe limits'
+        elif PathValue(FileName).is_absolute():
+            Reason = 'absolute external paths are not allowed'
         else:
             try:
-                candidate = (source.parent / filename).resolve(strict=True)
-                candidate.relative_to(state.root)
+                Choice = (Source.parent / FileName).resolve(strict=True)
+                Choice.relative_to(State.root)
             except (OSError, RuntimeError, ValueError):
-                reason = "external reference is missing or outside the document root"
-        if (
-            not reason
-            and candidate is not None
-            and _is_reparse_path(candidate, state.root)
-        ):
-            reason = "external reference traverses a reparse point"
-        if (
-            not reason
-            and candidate is not None
-            and candidate.suffix.casefold() != SUFFIX.casefold()
-        ):
-            reason = "external reference is not an FCStd document"
-        if not reason and candidate is not None and candidate in state.active:
-            reason = "external reference cycle detected"
-        if reason:
-            unresolved.append({"file": filename, "reason": reason})
+                Reason = 'external reference is missing or outside the document root'
+        if not Reason and Choice is not None and IsReparsePath(Choice, State.root):
+            Reason = 'external reference traverses a reparse point'
+        if not Reason and Choice is not None and (Choice.suffix.casefold() != Suffix.casefold()):
+            Reason = 'external reference is not an FCStd document'
+        if not Reason and Choice is not None and (Choice in State.active):
+            Reason = 'external reference cycle detected'
+        if Reason:
+            Unresolved.append({'file': FileName, 'reason': Reason})
             continue
-        if candidate is None:
-            unresolved.append(
-                {"file": filename, "reason": "external reference is invalid"}
-            )
+        if Choice is None:
+            Unresolved.append({'file': FileName, 'reason': 'external reference is invalid'})
             continue
-        identity = candidate.relative_to(state.root).as_posix()
-        cached = state.cache.get(candidate)
-        if cached is not None:
-            resolved[filename] = (identity, cached)
+        Identity = Choice.relative_to(State.root).as_posix()
+        Cached = State.cache.get(Choice)
+        if Cached is not None:
+            Resolved[FileName] = (Identity, Cached)
             continue
         try:
-            size = candidate.stat().st_size
+            SizeValue = Choice.stat().st_size
         except OSError:
-            unresolved.append(
-                {"file": filename, "reason": "external reference is unreadable"}
-            )
+            Unresolved.append({'file': FileName, 'reason': 'external reference is unreadable'})
             continue
-        if (
-            size < 0
-            or size > _MAX_ENTRY_SIZE
-            or state.file_count >= _MAX_EXTERNAL_FILES
-            or state.total_bytes + size > _MAX_TOTAL_SIZE
-        ):
-            unresolved.append(
-                {"file": filename, "reason": "external reference exceeds safe limits"}
-            )
+        if SizeValue < 0 or SizeValue > MaxEntrySize or State.file_count >= MaxOuterFiles or (State.total_bytes + SizeValue > MaxTotalSize):
+            Unresolved.append({'file': FileName, 'reason': 'external reference exceeds safe limits'})
             continue
         try:
-            child_data = candidate.read_bytes()
+            ChildData = Choice.read_bytes()
         except OSError:
-            unresolved.append(
-                {"file": filename, "reason": "external reference is unreadable"}
-            )
+            Unresolved.append({'file': FileName, 'reason': 'external reference is unreadable'})
             continue
-        state.file_count += 1
-        state.total_bytes += len(child_data)
-        state.active.add(candidate)
+        State.file_count += 1
+        State.total_bytes += len(ChildData)
+        State.active.add(Choice)
         try:
             try:
-                manifest = extract_manifest_from_fcstd(child_data)
+                Manifest = ExtractManifestFromFcstd(ChildData)
             except ValueError as exc:
-                if str(exc) != "FCStd archive has no embedded Kit interchange document":
-                    raise NativeFreeCADError(str(exc)) from exc
-                child = read_native_fcstd(
-                    child_data,
-                    str(candidate),
-                    _external_state=state,
-                    _external_depth=depth + 1,
-                )
+                if str(exc) != 'FCStd archive has no embedded Kit interchange document':
+                    raise NativeFreeCad(str(exc)) from exc
+                Child = ReadNativeFcstd(ChildData, str(Choice), OuterState=State, OuterDepth=Depth + 1)
             else:
-                child = CadDocument.from_dict(manifest)
-        except (NativeFreeCADError, TypeError, ValueError, RecursionError) as exc:
-            unresolved.append({"file": filename, "reason": str(exc)})
+                Child = CadDoc.from_dict(Manifest)
+        except (NativeFreeCad, TypeError, ValueError, RecursionError) as exc:
+            Unresolved.append({'file': FileName, 'reason': str(exc)})
             continue
         finally:
-            state.active.discard(candidate)
-        state.cache[candidate] = child
-        resolved[filename] = (identity, child)
-    return resolved, unresolved
+            State.active.discard(Choice)
+        State.cache[Choice] = Child
+        Resolved[FileName] = (Identity, Child)
+    return (Resolved, Unresolved)
 
-
-def _parse_assembly(
-    native: _NativeArchive,
-    owner_payloads: dict[str, list[str]],
-    brep_payloads: tuple[BrepPayload, ...],
-    external_documents: dict[str, tuple[str, CadDocument]],
-    unresolved_external: list[dict[str, str]],
-    parameters: list[Parameter],
-    consumed_expressions: set[tuple[str, str]],
-) -> AssemblyData | None:
-    root = _assembly_root_object(native.objects)
-    if root is None:
+# this definition exists because focused behavior needs one stable owner
+def ParseAsm(Native: _NativeArchive, OwnerPayloads: dict[str, list[str]], BrepPayloads: tuple[BrepPayload, ...], OuterDocuments: dict[str, tuple[str, CadDocument]], UnresolvedOuter: list[dict[str, str]], Parameters: list[Parameter], ConsumedExpressions: set[tuple[str, str]]) -> AsmData | None:
+    RootValue = AsmRootObject(Native.objects)
+    if RootValue is None:
         return None
-    objects = {obj.name: obj for obj in native.objects}
-    root_definition_id = f"freecad:definition:{root.name}"
-    root_group = _link_list(root, "Group")
-    links = [
-        objects[name]
-        for name in root_group
-        if name in objects and _is_link_object(objects[name])
-    ]
-    if links:
-        grouped_names = {obj.name for obj in links}
-        links.extend(
-            obj
-            for obj in native.objects
-            if obj.name not in grouped_names
-            and _is_link_object(obj)
-            and _linked_object_data(obj)["file"]
-        )
+    Objects = {ObjValue.name: ObjValue for ObjValue in Native.objects}
+    RootDefinitionId = f'freecad:definition:{RootValue.name}'
+    RootGroup = LinkList(RootValue, 'Group')
+    Links = [Objects[NameValue] for NameValue in RootGroup if NameValue in Objects and IsLinkObject(Objects[NameValue])]
+    if Links:
+        GroupedNames = {ObjValue.name for ObjValue in Links}
+        Links.extend((ObjValue for ObjValue in Native.objects if ObjValue.name not in GroupedNames and IsLinkObject(ObjValue) and LinkedObject(ObjValue)['file']))
     else:
-        links = [obj for obj in native.objects if _is_link_object(obj)]
-    joint_group = _joint_group_object(native.objects, objects)
-    joint_names = _link_list(joint_group, "Group") if joint_group is not None else ()
-    if not joint_names:
-        joint_names = tuple(obj.name for obj in native.objects if _is_joint_object(obj))
-    joint_objects = [objects[name] for name in joint_names if name in objects]
-    grounded_by_target = {
-        target: obj
-        for obj in joint_objects
-        if _is_grounded_joint_object(obj)
-        and (target := _link(obj, JOINT_GROUND_PROPERTY))
-    }
-    grounded_targets = set(grounded_by_target)
-    definitions: list[ComponentDefinition] = [
-        ComponentDefinition(
-            root_definition_id,
-            _string(root, "Label", root.name),
-            ComponentKind.ASSEMBLY,
-            provenance=Provenance(FORMAT_ID, root.name),
-            attributes={"freecad": _native_object_data(root)},
-        )
-    ]
-    definition_ids: dict[tuple[str, str], str] = {}
-    documents: list[ComponentDocument] = []
-    instances: list[ComponentInstance] = []
-    instance_ids: dict[str, str] = {}
-    for order, link_obj in enumerate(links):
-        linked = _linked_object_data(link_obj)
-        target = str(linked["name"]) or link_obj.name
-        source_file = str(linked["file"]).replace("\\", "/")
-        external = external_documents.get(str(linked["file"]))
-        source_identity = (
-            external[0]
-            if external is not None
-            else PurePosixPath(source_file).as_posix() if source_file else ""
-        )
-        definition_key = (source_identity, target)
-        definition_id = definition_ids.get(definition_key)
-        if definition_id is None:
-            identity = f"{source_identity}#{target}"
-            digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
-            definition_id = f"freecad:definition:{digest}"
-            definition_ids[definition_key] = definition_id
-            target_obj = objects.get(target)
-            target_payload_ids = set(owner_payloads.get(target, []))
-            target_payloads = tuple(
-                payload
-                for payload in brep_payloads
-                if payload.id in target_payload_ids
-                and payload.attributes.get("freecad_property") == "Shape"
-            )
-            if external is not None:
-                component = external[1]
-                document_id = f"freecad:component-document:{digest}"
-                body_ids = tuple(body.id for body in component.bodies)
+        Links = [ObjValue for ObjValue in Native.objects if IsLinkObject(ObjValue)]
+    JointGroup = JointGroup(Native.objects, Objects)
+    JointNames = LinkList(JointGroup, 'Group') if JointGroup is not None else ()
+    if not JointNames:
+        JointNames = tuple((ObjValue.name for ObjValue in Native.objects if IsJointObject(ObjValue)))
+    JointObjects = [Objects[NameValue] for NameValue in JointNames if NameValue in Objects]
+    GroundedByTarget = {Target: ObjValue for ObjValue in JointObjects if IsGroundedJoint(ObjValue) and (Target := LinkAction(ObjValue, JointGroundProp))}
+    GroundedTargets = set(GroundedByTarget)
+    Definitions: list[ComponentDefinition] = [ComponentDefinition(RootDefinitionId, String(RootValue, 'Label', RootValue.name), ComponentKind.ASSEMBLY, provenance=Provenance(FormatId, RootValue.name), attributes={'freecad': NativeObjectA(RootValue)})]
+    DefinitionIds: dict[tuple[str, str], str] = {}
+    Documents: list[ComponentDoc] = []
+    Instances: list[ComponentInstance] = []
+    InstanceIds: dict[str, str] = {}
+    for Order, LinkObj in enumerate(Links):
+        Linked = LinkedObject(LinkObj)
+        Target = str(Linked['name']) or LinkObj.name
+        SourceFile = str(Linked['file']).replace('\\', '/')
+        Outer = OuterDocuments.get(str(Linked['file']))
+        SourceIdentity = Outer[0] if Outer is not None else PurePosixPath(SourceFile).as_posix() if SourceFile else ''
+        DefinitionKey = (SourceIdentity, Target)
+        DefinitionId = DefinitionIds.get(DefinitionKey)
+        if DefinitionId is None:
+            Identity = f'{SourceIdentity}#{Target}'
+            Digest = Hashlib.sha256(Identity.encode('utf-8')).hexdigest()[:20]
+            DefinitionId = f'freecad:definition:{Digest}'
+            DefinitionIds[DefinitionKey] = DefinitionId
+            TargetObj = Objects.get(Target)
+            TargetPayloadIds = set(OwnerPayloads.get(Target, []))
+            TargetPayloads = tuple((Payload for Payload in BrepPayloads if Payload.id in TargetPayloadIds and Payload.attributes.get('freecad_property') == 'Shape'))
+            if Outer is not None:
+                Component = Outer[1]
+                DocId = f'freecad:component-document:{Digest}'
+                BodyIds = tuple((BodyValue.id for BodyValue in Component.bodies))
             else:
-                document_id, component, body_ids = _embedded_component_document(
-                    target, target_obj, identity, target_payloads
-                )
-            documents.append(ComponentDocument(document_id, component))
-            definitions.append(
-                ComponentDefinition(
-                    definition_id,
-                    (
-                        _string(target_obj, "Label", target)
-                        if target_obj is not None
-                        else target
-                    ),
-                    (
-                        ComponentKind.ASSEMBLY
-                        if _is_assembly_link_object(link_obj)
-                        or component.assembly is not None
-                        else ComponentKind.PART
-                    ),
-                    document_id=document_id,
-                    body_ids=body_ids,
-                    source_path=source_file,
-                    source_format_id=FORMAT_ID,
-                    source_sha256=component.source.sha256,
-                    provenance=Provenance(FORMAT_ID, target),
-                    attributes={
-                        "freecad": (
-                            _native_object_data(target_obj)
-                            if target_obj is not None
-                            else {}
-                        ),
-                        "brep_payload_ids": owner_payloads.get(target, []),
-                        "linked_object": linked,
-                    },
-                )
-            )
-        instance_id = f"freecad:instance:{link_obj.name}"
-        instance_ids[link_obj.name] = instance_id
-        instances.append(
-            ComponentInstance(
-                instance_id,
-                _string(link_obj, "Label", link_obj.name),
-                definition_id,
-                root_definition_id,
-                Matrix4(_placement_matrix(_placement_element(link_obj, "Placement"))),
-                order=order,
-                reference_number=str(order + 1),
-                hidden=not _bool(link_obj, "Visibility", True),
-                fixed=link_obj.name in grounded_targets,
-                provenance=Provenance(FORMAT_ID, link_obj.name),
-                attributes={
-                    "freecad": _native_object_data(link_obj),
-                    "linked_object": linked,
-                    "link_placement": list(
-                        _placement_matrix(_placement_element(link_obj, "LinkPlacement"))
-                    ),
-                    "grounded_joint": (
-                        _native_object_data(grounded_by_target[link_obj.name])
-                        if link_obj.name in grounded_by_target
-                        else {}
-                    ),
-                },
-            )
-        )
-    mate_entities: list[MateEntity] = []
-    mates: list[MateConstraint] = []
-    mate_ids_by_name: dict[str, str] = {}
-    for order, obj in enumerate(joint_objects):
-        if _is_grounded_joint_object(obj):
+                DocId, Component, BodyIds = EmbeddedDoc(Target, TargetObj, Identity, TargetPayloads)
+            Documents.append(ComponentDoc(DocId, Component))
+            Definitions.append(ComponentDefinition(DefinitionId, String(TargetObj, 'Label', Target) if TargetObj is not None else Target, ComponentKind.ASSEMBLY if IsAsmLinkObject(LinkObj) or Component.assembly is not None else ComponentKind.PART, document_id=DocId, body_ids=BodyIds, source_path=SourceFile, source_format_id=FormatId, source_sha256=Component.source.sha256, provenance=Provenance(FormatId, Target), attributes={'freecad': NativeObjectA(TargetObj) if TargetObj is not None else {}, 'brep_payload_ids': OwnerPayloads.get(Target, []), 'linked_object': Linked}))
+        InstanceId = f'freecad:instance:{LinkObj.name}'
+        InstanceIds[LinkObj.name] = InstanceId
+        Instances.append(ComponentInstance(InstanceId, String(LinkObj, 'Label', LinkObj.name), DefinitionId, RootDefinitionId, MatrixFour(PlacementMatrix(PlacementElem(LinkObj, 'Placement'))), order=Order, reference_number=str(Order + 1), hidden=not BoolAction(LinkObj, 'Visibility', True), fixed=LinkObj.name in GroundedTargets, provenance=Provenance(FormatId, LinkObj.name), attributes={'freecad': NativeObjectA(LinkObj), 'linked_object': Linked, 'link_placement': list(PlacementMatrix(PlacementElem(LinkObj, 'LinkPlacement'))), 'grounded_joint': NativeObjectA(GroundedByTarget[LinkObj.name]) if LinkObj.name in GroundedByTarget else {}}))
+    MateEntities: list[MateEntity] = []
+    Mates: list[MateRule] = []
+    MateIdsByName: dict[str, str] = {}
+    for Order, ObjValue in enumerate(JointObjects):
+        if IsGroundedJoint(ObjValue):
             continue
-        mate_id = f"freecad:mate:{obj.name}"
-        mate_ids_by_name[obj.name] = mate_id
-        entity_ids: list[str] = []
-        references: list[dict[str, Any]] = []
-        joint_type = _enumeration_choice(obj, "JointType")
-        stored_kind = _string(obj, "MateType")
-        if stored_kind:
+        MateId = f'freecad:mate:{ObjValue.name}'
+        MateIdsByName[ObjValue.name] = MateId
+        EntityIds: list[str] = []
+        References: list[dict[str, AnyValue]] = []
+        JointType = Enumeration(ObjValue, 'JointType')
+        StoredKind = String(ObjValue, 'MateType')
+        if StoredKind:
             try:
-                kind: MateKind | str = MateKind(stored_kind)
+                KindValue: MateKind | str = MateKind(StoredKind)
             except ValueError:
-                kind = stored_kind
+                KindValue = StoredKind
         else:
-            kind = MATE_KIND_BY_JOINT_TYPE.get(joint_type, MateKind.NATIVE)
-        for reference_index, property_name in enumerate(
-            JOINT_REFERENCE_PROPERTIES, start=1
-        ):
-            reference = _xlink_data(obj, property_name)
-            references.append(reference)
-            placement = _placement_element(obj, f"Placement{reference_index}")
-            frame = None if placement is None else Matrix4(_placement_matrix(placement))
-            for sub_index, subelement in enumerate(reference["subelements"]):
-                component_name, separator, source_entity_id = str(subelement).partition(
-                    "."
-                )
-                if not separator:
-                    source_entity_id = component_name
-                    component_name = ""
-                entity_id = (
-                    f"freecad:mate-entity:{obj.name}:{reference_index}:{sub_index}"
-                )
-                entity_ids.append(entity_id)
-                mate_entities.append(
-                    MateEntity(
-                        entity_id,
-                        root_definition_id,
-                        (
-                            (instance_ids[component_name],)
-                            if component_name in instance_ids
-                            else ()
-                        ),
-                        _mate_entity_kind(source_entity_id),
-                        source_entity_id=source_entity_id,
-                        frame=frame,
-                        provenance=Provenance(FORMAT_ID, f"{obj.name}.{property_name}"),
-                        attributes={
-                            "freecad_reference": reference,
-                            "freecad_subelement": subelement,
-                            "reference_property": property_name,
-                        },
-                    )
-                )
-        value, parameter_ids = _mate_values(
-            obj, kind, mate_id, parameters, consumed_expressions
-        )
-        stored_value = _stored_mate_value(obj)
-        if stored_value is not None:
-            value = stored_value
-        if not entity_ids:
+            KindValue = MateKindByJointType.get(JointType, MateKind.NATIVE)
+        for RefIndex, PropName in enumerate(JointRefProperties, start=1):
+            RefValue = XlinkData(ObjValue, PropName)
+            References.append(RefValue)
+            Placement = PlacementElem(ObjValue, f'Placement{RefIndex}')
+            Frame = None if Placement is None else MatrixFour(PlacementMatrix(Placement))
+            for SubIndex, SubElem in enumerate(RefValue['subelements']):
+                ComponentName, Separator, SourceEntityId = str(SubElem).partition('.')
+                if not Separator:
+                    SourceEntityId = ComponentName
+                    ComponentName = ''
+                EntityId = f'freecad:mate-entity:{ObjValue.name}:{RefIndex}:{SubIndex}'
+                EntityIds.append(EntityId)
+                MateEntities.append(MateEntity(EntityId, RootDefinitionId, (InstanceIds[ComponentName],) if ComponentName in InstanceIds else (), MateEntityKindA(SourceEntityId), source_entity_id=SourceEntityId, frame=Frame, provenance=Provenance(FormatId, f'{ObjValue.name}.{PropName}'), attributes={'freecad_reference': RefValue, 'freecad_subelement': SubElem, 'reference_property': PropName}))
+        Value, ParamIds = MateValues(ObjValue, KindValue, MateId, Parameters, ConsumedExpressions)
+        StoredValue = StoredMateValue(ObjValue)
+        if StoredValue is not None:
+            Value = StoredValue
+        if not EntityIds:
             continue
-        mates.append(
-            MateConstraint(
-                mate_id,
-                _string(obj, "Label", obj.name),
-                kind,
-                root_definition_id,
-                tuple(entity_ids),
-                order=order,
-                value=value,
-                parameter_ids=parameter_ids,
-                alignment=_string(obj, "Alignment", "unknown"),
-                suppressed=_bool(obj, "SourceSuppressed", _bool(obj, "Suppressed")),
-                driving=_bool(obj, "Driving", True),
-                provenance=Provenance(FORMAT_ID, obj.name),
-                attributes={
-                    "freecad": _native_object_data(obj),
-                    "joint_type": _enumeration_choice(obj, "JointType"),
-                    "references": references,
-                },
-            )
-        )
-    groups: tuple[MateGroup, ...] = ()
-    if mates and joint_group is not None:
-        group_id = f"freecad:mate-group:{joint_group.name}"
-        ordered_mate_ids = tuple(
-            mate_ids_by_name[name]
-            for name in joint_names
-            if name in mate_ids_by_name
-            and any(mate.id == mate_ids_by_name[name] for mate in mates)
-        )
-        groups = (
-            MateGroup(
-                group_id,
-                _string(joint_group, "Label", joint_group.name),
-                root_definition_id,
-                ordered_mate_ids,
-                provenance=Provenance(FORMAT_ID, joint_group.name),
-                attributes={"freecad": _native_object_data(joint_group)},
-            ),
-        )
-    return AssemblyData(
-        root_definition_id,
-        tuple(definitions),
-        tuple(instances),
-        documents=tuple(documents),
-        mate_entities=tuple(mate_entities),
-        mates=tuple(mates),
-        mate_groups=groups,
-        attributes={
-            "freecad": _native_object_data(root),
-            "unresolved_external_documents": unresolved_external,
-        },
-    )
+        Mates.append(MateRule(MateId, String(ObjValue, 'Label', ObjValue.name), KindValue, RootDefinitionId, tuple(EntityIds), order=Order, value=Value, parameter_ids=ParamIds, alignment=String(ObjValue, 'Alignment', 'unknown'), suppressed=BoolAction(ObjValue, 'SourceSuppressed', BoolAction(ObjValue, 'Suppressed')), driving=BoolAction(ObjValue, 'Driving', True), provenance=Provenance(FormatId, ObjValue.name), attributes={'freecad': NativeObjectA(ObjValue), 'joint_type': Enumeration(ObjValue, 'JointType'), 'references': References}))
+    Groups: tuple[MateGroup, ...] = ()
+    if Mates and JointGroup is not None:
+        GroupId = f'freecad:mate-group:{JointGroup.name}'
+        OrderedMateIds = tuple((MateIdsByName[NameValue] for NameValue in JointNames if NameValue in MateIdsByName and any((MateValue.id == MateIdsByName[NameValue] for MateValue in Mates))))
+        Groups = (MateGroup(GroupId, String(JointGroup, 'Label', JointGroup.name), RootDefinitionId, OrderedMateIds, provenance=Provenance(FormatId, JointGroup.name), attributes={'freecad': NativeObjectA(JointGroup)}),)
+    return AsmData(RootDefinitionId, tuple(Definitions), tuple(Instances), documents=tuple(Documents), mate_entities=tuple(MateEntities), mates=tuple(Mates), mate_groups=Groups, attributes={'freecad': NativeObjectA(RootValue), 'unresolved_external_documents': UnresolvedOuter})
 
-
-def _remaining_expressions(
-    objects: tuple[_NativeObject, ...],
-    parameters: list[Parameter],
-    consumed: set[tuple[str, str]],
-) -> None:
-    existing_ids = {parameter.id for parameter in parameters}
-    for obj in objects:
-        for path, source in _expressions(obj).items():
-            if (obj.name, path) in consumed:
+# this definition exists because focused behavior needs one stable owner
+def Remaining(Objects: tuple[_NativeObject, ...], Parameters: list[Parameter], Consumed: set[tuple[str, str]]) -> None:
+    ExistingIds = {Param.id for Param in Parameters}
+    for ObjValue in Objects:
+        for PathValue, Source in Expressions(ObjValue).items():
+            if (ObjValue.name, PathValue) in Consumed:
                 continue
-            base = re.sub(r"[^A-Za-z0-9_.:-]+", "_", path).strip("_") or "expression"
-            parameter_id = f"freecad:parameter:{obj.name}:expression:{base}"
-            suffix = 2
-            while parameter_id in existing_ids:
-                parameter_id = (
-                    f"freecad:parameter:{obj.name}:expression:{base}:{suffix}"
-                )
-                suffix += 1
-            existing_ids.add(parameter_id)
-            parameters.append(
-                Parameter(
-                    parameter_id,
-                    f"{_string(obj, 'Label', obj.name)}.{path}",
-                    ParameterValue(0.0, ValueKind.NUMBER),
-                    expression=Expression(source, language="freecad"),
-                    owner_id=f"freecad:object:{obj.name}",
-                    attributes={"freecad_path": path},
-                )
-            )
+            BaseValue = RegexLib.sub('[^A-Za-z0-9_.:-]+', '_', PathValue).strip('_') or 'expression'
+            ParamId = f'freecad:parameter:{ObjValue.name}:expression:{BaseValue}'
+            Suffix = 2
+            while ParamId in ExistingIds:
+                ParamId = f'freecad:parameter:{ObjValue.name}:expression:{BaseValue}:{Suffix}'
+                Suffix += 1
+            ExistingIds.add(ParamId)
+            Parameters.append(Param(ParamId, f"{String(ObjValue, 'Label', ObjValue.name)}.{PathValue}", ParamValue(0.0, ValueKind.NUMBER), expression=Expression(Source, language='freecad'), owner_id=f'freecad:object:{ObjValue.name}', attributes={'freecad_path': PathValue}))
 
+# this definition exists because focused behavior needs one stable owner
+def Native(Objects: tuple[_NativeObject, ...], FeatureIds: dict[str, str]) -> tuple[Config, ...]:
+    Values = [ObjValue for ObjValue in Objects if String(ObjValue, 'KitConfigurationId')]
+    if not Values:
+        return (Config('freecad:configuration:default', 'Default', active=True),)
+    IdsValue = {ObjValue.name: String(ObjValue, 'KitConfigurationId') for ObjValue in Values}
+    return tuple((Config(IdsValue[ObjValue.name], String(ObjValue, 'Label', ObjValue.name), active=BoolAction(ObjValue, 'Active'), parent_id=IdsValue.get(LinkAction(ObjValue, 'ParentConfiguration')), suppressed_feature_ids=tuple((FeatureIds[NameValue] for NameValue in LinkList(ObjValue, 'SuppressedFeatures') if NameValue in FeatureIds)), attributes={'freecad': NativeObjectA(ObjValue)}) for ObjValue in Values))
 
-def _native_configurations(
-    objects: tuple[_NativeObject, ...], feature_ids: dict[str, str]
-) -> tuple[Configuration, ...]:
-    values = [obj for obj in objects if _string(obj, "KitConfigurationId")]
-    if not values:
-        return (Configuration("freecad:configuration:default", "Default", active=True),)
-    ids = {obj.name: _string(obj, "KitConfigurationId") for obj in values}
-    return tuple(
-        Configuration(
-            ids[obj.name],
-            _string(obj, "Label", obj.name),
-            active=_bool(obj, "Active"),
-            parent_id=ids.get(_link(obj, "ParentConfiguration")),
-            suppressed_feature_ids=tuple(
-                feature_ids[name]
-                for name in _link_list(obj, "SuppressedFeatures")
-                if name in feature_ids
-            ),
-            attributes={"freecad": _native_object_data(obj)},
-        )
-        for obj in values
-    )
-
-
-def read_native_fcstd(
-    data: bytes,
-    source_path: str = "",
-    *,
-    _external_state: _ExternalState | None = None,
-    _external_depth: int = 0,
-) -> CadDocument:
-    native = _load_native_archive(data)
-    source_file = _resolved_source_path(source_path)
-    external_state = _external_state
-    if external_state is None and source_file is not None:
-        external_state = _ExternalState(
-            source_file.parent,
-            {},
-            {source_file},
-            1,
-            len(data),
-        )
-    resolved_external, unresolved_external = _external_documents(
-        native, source_path, external_state, _external_depth
-    )
-    parameters: list[Parameter] = []
-    consumed_expressions: set[tuple[str, str]] = set()
-    support_planes, sketches = _parse_sketches(
-        native.objects, parameters, consumed_expressions
-    )
-    sketch_ids = {
-        obj.name: f"freecad:sketch:{obj.name}"
-        for obj in native.objects
-        if obj.type_id == SKETCH_TYPE_ID
-    }
-    feature_objects = _ordered_features(native.objects)
-    feature_ids = {obj.name: f"freecad:feature:{obj.name}" for obj in feature_objects}
-    body_ids = {
-        obj.name: f"freecad:body:{obj.name}"
-        for obj in native.objects
-        if _is_body_container(obj)
-    }
-    brep_payloads, owner_payloads = _build_brep_payloads(native, feature_ids, body_ids)
-    native_document_sha256 = hashlib.sha256(data).hexdigest()
-    brep_payloads = tuple(
-        replace(
-            payload,
-            attributes={
-                **payload.attributes,
-                NATIVE_DOCUMENT_SHA256_ATTRIBUTE: native_document_sha256,
-            },
-        )
-        for payload in brep_payloads
-    )
-    meshes = _parse_meshes(native)
-    features: list[FeatureStep] = []
-    selections: list[Selection] = list(_explicit_selections(native.objects))
-    for order, obj in enumerate(feature_objects):
-        feature_id = feature_ids[obj.name]
-        kind = _feature_kind(obj)
-        feature_selections = _feature_selections(obj)
-        selections.extend(feature_selections)
-        parameter_ids = _feature_parameters(
-            obj, feature_id, parameters, consumed_expressions
-        )
-        dependencies = tuple(
-            feature_ids[value]
-            for value in dict.fromkeys(obj.dependencies)
-            if value in feature_ids
-            and feature_objects.index(
-                next(item for item in feature_objects if item.name == value)
-            )
-            < order
-        )
-        profile = _link(obj, "Profile") or _link(obj, "Base")
-        sketch_id = sketch_ids.get(profile)
-        operation: BooleanOperation | str | None = None
-        declared_operation = _string(obj, "Operation").casefold()
-        if declared_operation:
+# this definition exists because focused behavior needs one stable owner
+def ReadNativeFcstd(DataValue: bytes, SourcePath: str='', *, OuterState: _ExternalState | None=None, OuterDepth: int=0) -> CadDoc:
+    Native = LoadNative(DataValue)
+    SourceFile = ResolvedSource(SourcePath)
+    OuterStateA = OuterState
+    if OuterStateA is None and SourceFile is not None:
+        OuterStateA = OuterState(SourceFile.parent, {}, {SourceFile}, 1, len(DataValue))
+    ResolvedOuter, UnresolvedOuter = OuterDocuments(Native, SourcePath, OuterStateA, OuterDepth)
+    Parameters: list[Param] = []
+    ConsumedExpressions: set[tuple[str, str]] = set()
+    SupportPlanes, Sketches = ParseSketches(Native.objects, Parameters, ConsumedExpressions)
+    SketchIds = {ObjValue.name: f'freecad:sketch:{ObjValue.name}' for ObjValue in Native.objects if ObjValue.type_id == SketchTypeId}
+    FeatureObjects = OrderedFeatures(Native.objects)
+    FeatureIds = {ObjValue.name: f'freecad:feature:{ObjValue.name}' for ObjValue in FeatureObjects}
+    BodyIds = {ObjValue.name: f'freecad:body:{ObjValue.name}' for ObjValue in Native.objects if IsBodyContainer(ObjValue)}
+    BrepPayloads, OwnerPayloads = BuildBrep(Native, FeatureIds, BodyIds)
+    NativeDocShaTwoFiveSix = Hashlib.sha256(DataValue).hexdigest()
+    BrepPayloads = tuple((Replace(Payload, attributes={**Payload.attributes, NativeDocShaTwoFiveSix: NativeDocShaTwoFiveSix}) for Payload in BrepPayloads))
+    Meshes = ParseMeshes(Native)
+    Features: list[FeatureStep] = []
+    Selections: list[Selection] = list(Explicit(Native.objects))
+    for Order, ObjValue in enumerate(FeatureObjects):
+        FeatureId = FeatureIds[ObjValue.name]
+        KindValue = FeatureKindA(ObjValue)
+        FeatureSelections = FeatureA(ObjValue)
+        Selections.extend(FeatureSelections)
+        ParamIds = Feature(ObjValue, FeatureId, Parameters, ConsumedExpressions)
+        Dependencies = tuple((FeatureIds[Value] for Value in dict.fromkeys(ObjValue.dependencies) if Value in FeatureIds and FeatureObjects.index(next((ItemValue for ItemValue in FeatureObjects if ItemValue.name == Value))) < Order))
+        Profile = LinkAction(ObjValue, 'Profile') or LinkAction(ObjValue, 'Base')
+        SketchId = SketchIds.get(Profile)
+        Operation: BoolOperation | str | None = None
+        DeclaredOperation = String(ObjValue, 'Operation').casefold()
+        if DeclaredOperation:
             try:
-                operation = BooleanOperation(declared_operation)
+                Operation = BoolOperation(DeclaredOperation)
             except ValueError:
-                operation = declared_operation
-        definition: FeatureDefinition | None = None
-        if kind in _SUBTRACTIVE_CAPABLE_KINDS:
-            if obj.type_id in _SUBTRACTIVE_TYPE_IDS:
-                operation = BooleanOperation.CUT
-            elif dependencies:
-                operation = BooleanOperation.JOIN
+                Operation = DeclaredOperation
+        Definition: FeatureDefinition | None = None
+        if KindValue in KSubtractiveCapableKinds:
+            if ObjValue.type_id in KSubtractiveTypeIds:
+                Operation = BoolOperation.CUT
+            elif Dependencies:
+                Operation = BoolOperation.JOIN
             else:
-                operation = BooleanOperation.CREATE
-        if kind == FeatureKind.EXTRUSION:
-            definition = (
-                _part_extrusion_definition(obj)
-                if obj.type_id == "Part::Extrusion"
-                else _extrusion_definition(obj)
-            )
-        elif kind == FeatureKind.FILLET:
-            radius = _float(obj, "Radius", _float(obj, "DrivingRadius"))
-            definition = FilletFeature(
-                ParameterValue(abs(radius), ValueKind.LENGTH, "mm")
-            )
-        elif kind == FeatureKind.CHAMFER:
-            ChamferType = _enum(obj, "ChamferType")
-            ChamferMode = {
-                0: "equal_distance",
-                1: "two_distances",
-                2: "distance_angle",
-            }.get(ChamferType, f"native:{ChamferType}")
-            definition = ChamferFeature(
-                distance=ParameterValue(
-                    abs(_float(obj, "Size")), ValueKind.LENGTH, "mm"
-                ),
-                mode=ChamferMode,
-                second_distance=(
-                    ParameterValue(abs(_float(obj, "Size2")), ValueKind.LENGTH, "mm")
-                    if ChamferType == 1
-                    else None
-                ),
-                angle=(
-                    ParameterValue(abs(_float(obj, "Angle")), ValueKind.ANGLE, "deg")
-                    if ChamferType == 2
-                    else None
-                ),
-            )
-        elif kind == FeatureKind.SHELL:
-            definition = ShellFeature(
-                thickness=ParameterValue(
-                    abs(_float(obj, "Value")), ValueKind.LENGTH, "mm"
-                ),
-                outward=not _bool(obj, "Reversed"),
-            )
-        elif obj.type_id == "PartDesign::LinearPattern":
-            OccurrenceCount = _enum(obj, "Occurrences", 1)
-            LengthValue = abs(_float(obj, "Length"))
-            OffsetValue = abs(_float(obj, "Offset"))
-            SpacingValue = (
-                LengthValue / (OccurrenceCount - 1)
-                if _enum(obj, "Mode") == 0 and OccurrenceCount > 1
-                else OffsetValue
-            )
-            definition = LinearPatternFeature(
-                spacing=ParameterValue(SpacingValue, ValueKind.LENGTH, "mm"),
-                instance_count=OccurrenceCount,
-                direction_selection_id=(
-                    feature_selections[0].id if feature_selections else ""
-                ),
-                reversed=_bool(obj, "Reversed"),
-            )
-        elif obj.type_id == "PartDesign::PolarPattern":
-            definition = CircularPatternFeature(
-                angle=ParameterValue(
-                    abs(_float(obj, "Angle")),
-                    ValueKind.ANGLE,
-                    "deg",
-                ),
-                instance_count=_enum(obj, "Occurrences", 1),
-                axis_selection_id=(
-                    feature_selections[0].id if feature_selections else ""
-                ),
-                reversed=_bool(obj, "Reversed"),
-            )
+                Operation = BoolOperation.CREATE
+        if KindValue == FeatureKind.EXTRUSION:
+            Definition = PartExtrusion(ObjValue) if ObjValue.type_id == 'Part::Extrusion' else Extrusion(ObjValue)
+        elif KindValue == FeatureKind.FILLET:
+            Radius = Float(ObjValue, 'Radius', Float(ObjValue, 'DrivingRadius'))
+            Definition = FilletFeature(ParamValue(abs(Radius), ValueKind.LENGTH, 'mm'))
+        elif KindValue == FeatureKind.CHAMFER:
+            ChamferType = EnumAction(ObjValue, 'ChamferType')
+            ChamferMode = {0: 'equal_distance', 1: 'two_distances', 2: 'distance_angle'}.get(ChamferType, f'native:{ChamferType}')
+            Definition = ChamferFeature(distance=ParamValue(abs(Float(ObjValue, 'Size')), ValueKind.LENGTH, 'mm'), mode=ChamferMode, second_distance=ParamValue(abs(Float(ObjValue, 'Size2')), ValueKind.LENGTH, 'mm') if ChamferType == 1 else None, angle=ParamValue(abs(Float(ObjValue, 'Angle')), ValueKind.ANGLE, 'deg') if ChamferType == 2 else None)
+        elif KindValue == FeatureKind.SHELL:
+            Definition = ShellFeature(thickness=ParamValue(abs(Float(ObjValue, 'Value')), ValueKind.LENGTH, 'mm'), outward=not BoolAction(ObjValue, 'Reversed'))
+        elif ObjValue.type_id == 'PartDesign::LinearPattern':
+            ItemCount = EnumAction(ObjValue, 'Occurrences', 1)
+            LengthValue = abs(Float(ObjValue, 'Length'))
+            OffsetValue = abs(Float(ObjValue, 'Offset'))
+            SpacingValue = LengthValue / (ItemCount - 1) if EnumAction(ObjValue, 'Mode') == 0 and ItemCount > 1 else OffsetValue
+            Definition = LinearPatternFeature(spacing=ParamValue(SpacingValue, ValueKind.LENGTH, 'mm'), instance_count=ItemCount, direction_selection_id=FeatureSelections[0].id if FeatureSelections else '', reversed=BoolAction(ObjValue, 'Reversed'))
+        elif ObjValue.type_id == 'PartDesign::PolarPattern':
+            Definition = CircularPatternFeature(angle=ParamValue(abs(Float(ObjValue, 'Angle')), ValueKind.ANGLE, 'deg'), instance_count=EnumAction(ObjValue, 'Occurrences', 1), axis_selection_id=FeatureSelections[0].id if FeatureSelections else '', reversed=BoolAction(ObjValue, 'Reversed'))
         else:
-            definition = NativeFeatureDefinition(
-                FORMAT_ID, obj.type_id, _native_object_data(obj)
-            )
-        features.append(
-            FeatureStep(
-                feature_id,
-                _string(obj, "Label", obj.name),
-                kind,
-                order,
-                input_feature_ids=dependencies,
-                sketch_id=sketch_id,
-                parameter_ids=parameter_ids,
-                operation=operation,
-                definition=definition,
-                selection_ids=tuple(selection.id for selection in feature_selections),
-                suppressed=_bool(obj, "Suppressed"),
-                provenance=Provenance(FORMAT_ID, obj.name),
-                attributes={
-                    "freecad": _native_object_data(obj),
-                    "brep_payload_ids": owner_payloads.get(obj.name, []),
-                },
-            )
-        )
-    bodies: list[Body] = []
-    for obj in native.objects:
-        if not _is_body_container(obj):
+            Definition = NativeFeatureDefinition(FormatId, ObjValue.type_id, NativeObjectA(ObjValue))
+        Features.append(FeatureStep(FeatureId, String(ObjValue, 'Label', ObjValue.name), KindValue, Order, input_feature_ids=Dependencies, sketch_id=SketchId, parameter_ids=ParamIds, operation=Operation, definition=Definition, selection_ids=tuple((Selection.id for Selection in FeatureSelections)), suppressed=BoolAction(ObjValue, 'Suppressed'), provenance=Provenance(FormatId, ObjValue.name), attributes={'freecad': NativeObjectA(ObjValue), 'brep_payload_ids': OwnerPayloads.get(ObjValue.name, [])}))
+    Bodies: list[BodyValue] = []
+    for ObjValue in Native.objects:
+        if not IsBodyContainer(ObjValue):
             continue
-        final_name = _link(obj, "Tip")
-        if final_name not in feature_ids:
-            final_name = next(
-                (
-                    value
-                    for value in reversed(_link_list(obj, "Group"))
-                    if value in feature_ids
-                ),
-                "",
-            )
-        if not final_name:
+        FinalName = LinkAction(ObjValue, 'Tip')
+        if FinalName not in FeatureIds:
+            FinalName = next((Value for Value in reversed(LinkList(ObjValue, 'Group')) if Value in FeatureIds), '')
+        if not FinalName:
             continue
-        bodies.append(
-            Body(
-                body_ids[obj.name],
-                _string(obj, "Label", obj.name),
-                feature_ids[final_name],
-                TopologySummary(),
-                material_id=_string(obj, "MaterialId") or None,
-                provenance=Provenance(FORMAT_ID, obj.name),
-                attributes={
-                    "freecad": _native_object_data(obj),
-                    "tip": final_name,
-                    "brep_payload_ids": owner_payloads.get(obj.name, []),
-                },
-            )
-        )
-    has_assembly = _assembly_root_object(native.objects) is not None
-    if not bodies and features and not has_assembly:
-        final = features[-1]
-        bodies.append(
-            Body(
-                "freecad:body:default",
-                "Body",
-                final.id,
-                attributes={"freecad_generated": True},
-            )
-        )
-    decoded_brep = _decoded_document_brep(brep_payloads, tuple(bodies))
-    assembly = _parse_assembly(
-        native,
-        owner_payloads,
-        brep_payloads,
-        resolved_external,
-        unresolved_external,
-        parameters,
-        consumed_expressions,
-    )
-    native_document, native_binding = _native_document_payloads(
-        native, data, source_path
-    )
-    brep_payloads = (*brep_payloads, native_document, native_binding)
-    _remaining_expressions(native.objects, parameters, consumed_expressions)
-    native_feature_types = sorted(
-        {
-            obj.type_id
-            for obj in feature_objects
-            if _feature_kind(obj) == FeatureKind.NATIVE
-        }
-    )
-    diagnostics: tuple[Diagnostic, ...] = (
-        (
-            Diagnostic(
-                "freecad.native_features_preserved",
-                "FreeCAD feature types were preserved as native operations",
-                Severity.INFO,
-                attributes={"type_ids": native_feature_types},
-            ),
-        )
-        if native_feature_types
-        else ()
-    )
-    mesh_property_count = sum(
-        1
-        for obj in native.objects
-        for node in obj.properties.values()
-        if node.find("./Mesh") is not None
-    )
-    if mesh_property_count > len(meshes):
-        diagnostics += (
-            Diagnostic(
-                "freecad.unparsed_mesh_data",
-                "FreeCAD mesh data was preserved but could not be normalized",
-                Severity.WARNING,
-                attributes={
-                    "property_count": mesh_property_count,
-                    "normalized_count": len(meshes),
-                },
-            ),
-        )
-    if unresolved_external:
-        diagnostics += (
-            Diagnostic(
-                "freecad.unresolved_external_documents",
-                "FreeCAD external component documents could not be resolved",
-                Severity.WARNING,
-                attributes={"references": unresolved_external},
-            ),
-        )
-    source = CadSource(
-        FORMAT_ID,
-        source_path,
-        hashlib.sha256(data).hexdigest(),
-        container_version=native.root.get("FileVersion", ""),
-        application_version=native.root.get("ProgramVersion", ""),
-        attributes={"freecad_schema_version": native.root.get("SchemaVersion", "")},
-    )
-    freecad_metadata: dict[str, Any] = {
-        "schema_version": native.root.get("SchemaVersion", ""),
-        "file_version": native.root.get("FileVersion", ""),
-        "program_version": native.root.get("ProgramVersion", ""),
-        "entry_order": list(native.entry_order),
-        "objects": [_native_object_data(obj) for obj in native.objects],
-    }
-    document_properties = native.root.find("./Properties")
-    if document_properties is not None:
-        freecad_metadata["document_properties"] = _element_data(document_properties)
-    string_hasher = _string_hasher_data(native)
-    if string_hasher is not None:
-        freecad_metadata["string_hasher"] = string_hasher
-    other_entries = _other_entry_data(native)
-    if other_entries:
-        freecad_metadata["entries"] = other_entries
-    if assembly is None and resolved_external:
-        freecad_metadata["external_documents"] = [
-            {
-                "file": filename,
-                "identity": identity,
-                "document": linked_document,
-            }
-            for filename, (identity, linked_document) in resolved_external.items()
-        ]
-    configurations = _native_configurations(native.objects, feature_ids)
-    document = CadDocument(
-        source,
-        configurations,
-        tuple(parameters),
-        support_planes,
-        sketches,
-        tuple(selections),
-        tuple(features),
-        tuple(bodies),
-        meshes=meshes,
-        brep=decoded_brep,
-        brep_payloads=brep_payloads,
-        diagnostics=diagnostics,
-        metadata={"freecad": freecad_metadata},
-        assembly=assembly,
-    )
-    capabilities = infer_capabilities(document, roundtrip_metadata=True)
-    if resolved_external or unresolved_external:
-        capabilities |= {Capability.EXTERNAL_REFERENCES}
-    document = replace(document, capabilities=capabilities)
-    document.assert_valid()
-    return document
+        Bodies.append(BodyValue(BodyIds[ObjValue.name], String(ObjValue, 'Label', ObjValue.name), FeatureIds[FinalName], TopologySummary(), material_id=String(ObjValue, 'MaterialId') or None, provenance=Provenance(FormatId, ObjValue.name), attributes={'freecad': NativeObjectA(ObjValue), 'tip': FinalName, 'brep_payload_ids': OwnerPayloads.get(ObjValue.name, [])}))
+    HasAsm = AsmRootObject(Native.objects) is not None
+    if not Bodies and Features and (not HasAsm):
+        Final = Features[-1]
+        Bodies.append(BodyValue('freecad:body:default', 'Body', Final.id, attributes={'freecad_generated': True}))
+    DecodedBrep = DecodedDocBrep(BrepPayloads, tuple(Bodies))
+    AsmValue = ParseAsm(Native, OwnerPayloads, BrepPayloads, ResolvedOuter, UnresolvedOuter, Parameters, ConsumedExpressions)
+    NativeDoc, NativeBinding = NativeDoc(Native, DataValue, SourcePath)
+    BrepPayloads = (*BrepPayloads, NativeDoc, NativeBinding)
+    Remaining(Native.objects, Parameters, ConsumedExpressions)
+    NativeFeatureTypes = sorted({ObjValue.type_id for ObjValue in FeatureObjects if FeatureKindA(ObjValue) == FeatureKind.NATIVE})
+    Diagnostics: tuple[DiagValue, ...] = (DiagValue('freecad.native_features_preserved', 'FreeCAD feature types were preserved as native operations', Severity.INFO, attributes={'type_ids': NativeFeatureTypes}),) if NativeFeatureTypes else ()
+    MeshPropCount = sum((1 for ObjValue in Native.objects for NodeValue in ObjValue.properties.values() if NodeValue.find('./Mesh') is not None))
+    if MeshPropCount > len(Meshes):
+        Diagnostics += (DiagValue('freecad.unparsed_mesh_data', 'FreeCAD mesh data was preserved but could not be normalized', Severity.WARNING, attributes={'property_count': MeshPropCount, 'normalized_count': len(Meshes)}),)
+    if UnresolvedOuter:
+        Diagnostics += (DiagValue('freecad.unresolved_external_documents', 'FreeCAD external component documents could not be resolved', Severity.WARNING, attributes={'references': UnresolvedOuter}),)
+    Source = CadSource(FormatId, SourcePath, Hashlib.sha256(DataValue).hexdigest(), container_version=Native.root.get('FileVersion', ''), application_version=Native.root.get('ProgramVersion', ''), attributes={'freecad_schema_version': Native.root.get('SchemaVersion', '')})
+    FreecadMeta: dict[str, AnyValue] = {'schema_version': Native.root.get('SchemaVersion', ''), 'file_version': Native.root.get('FileVersion', ''), 'program_version': Native.root.get('ProgramVersion', ''), 'entry_order': list(Native.entry_order), 'objects': [NativeObjectA(ObjValue) for ObjValue in Native.objects]}
+    DocProperties = Native.root.find('./Properties')
+    if DocProperties is not None:
+        FreecadMeta['document_properties'] = ElemData(DocProperties)
+    StringHasher = StringHasher(Native)
+    if StringHasher is not None:
+        FreecadMeta['string_hasher'] = StringHasher
+    OtherEntries = OtherEntryData(Native)
+    if OtherEntries:
+        FreecadMeta['entries'] = OtherEntries
+    if AsmValue is None and ResolvedOuter:
+        FreecadMeta['external_documents'] = [{'file': FileName, 'identity': Identity, 'document': LinkedDoc} for FileName, (Identity, LinkedDoc) in ResolvedOuter.items()]
+    Configurations = Native(Native.objects, FeatureIds)
+    DocValue = CadDoc(Source, Configurations, tuple(Parameters), SupportPlanes, Sketches, tuple(Selections), tuple(Features), tuple(Bodies), meshes=Meshes, brep=DecodedBrep, brep_payloads=BrepPayloads, diagnostics=Diagnostics, metadata={'freecad': FreecadMeta}, assembly=AsmValue)
+    Capabilities = InferCapabilities(DocValue, roundtrip_metadata=True)
+    if ResolvedOuter or UnresolvedOuter:
+        Capabilities |= {Capability.EXTERNAL_REFERENCES}
+    DocValue = Replace(DocValue, capabilities=Capabilities)
+    DocValue.assert_valid()
+    return DocValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['ASSEMBLY_JOINT_GROUP_TYPE_ID'] = AsmJointGroupTypeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['ASSEMBLY_OBJECT_TYPE_PREFIX'] = AsmObjectTypePrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['ASSEMBLY_ROOT_TYPE_ID'] = AsmRootTypeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['Any'] = AnyValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['ArcEllipseGeometry'] = ArcEllipseGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['ArcGeometry'] = ArcGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['ArcHyperbolaGeometry'] = ArcHyperbolaGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['ArcParabolaGeometry'] = ArcParabolaGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['AssemblyData'] = AsmData
+
+# this binding exists because shared behavior needs one stable value
+globals()['BODY_CONTAINER_TYPE_IDS'] = BodyContainerTypeIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['Body'] = BodyValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['BooleanOperation'] = BoolOperation
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONSTRAINT_KIND_BY_CODE'] = RuleKindByCode
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONSTRAINT_POINT_BY_INDEX'] = RulePointByIndex
+
+# this binding exists because shared behavior needs one stable value
+globals()['CONSTRAINT_VALUE_KIND_BY_CODE'] = RuleValueKindByCode
+
+# this binding exists because shared behavior needs one stable value
+globals()['CadDocument'] = CadDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['CircleGeometry'] = CircleGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['ComponentDocument'] = ComponentDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['Configuration'] = Config
+
+# this binding exists because shared behavior needs one stable value
+globals()['ConstraintKind'] = RuleKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['ConstraintReference'] = RuleRef
+
+# this binding exists because shared behavior needs one stable value
+globals()['DIMENSIONAL_CONSTRAINT_CODES'] = DimensionalRuleCodes
+
+# this binding exists because shared behavior needs one stable value
+globals()['DOCUMENT_ENTRY'] = DocEntry
+
+# this binding exists because shared behavior needs one stable value
+globals()['Diagnostic'] = DiagValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['ET'] = XmlTree
+
+# this binding exists because shared behavior needs one stable value
+globals()['EXTRUSION_TYPE_BY_CODE'] = ExtrusionTypeByCode
+
+# this binding exists because shared behavior needs one stable value
+globals()['EllipseGeometry'] = EllipseGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['FEATURE_KIND_BY_TYPE_ID'] = FeatureKindByTypeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['FORMAT_ID'] = FormatId
+
+# this binding exists because shared behavior needs one stable value
+globals()['GEOMETRY_KIND_BY_TYPE_ID'] = GeomKindByTypeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['GeometryKind'] = GeomKind
+
+# this binding exists because shared behavior needs one stable value
+globals()['HyperbolaGeometry'] = HyperbolaGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['JOINT_GROUND_PROPERTY'] = JointGroundProp
+
+# this binding exists because shared behavior needs one stable value
+globals()['JOINT_REFERENCE_PROPERTIES'] = JointRefProperties
+
+# this binding exists because shared behavior needs one stable value
+globals()['JOINT_RESERVED_LINK_PROPERTIES'] = JointReservedLink
+
+# this binding exists because shared behavior needs one stable value
+globals()['JOINT_TYPE_PROPERTIES'] = JointTypeProperties
+
+# this binding exists because shared behavior needs one stable value
+globals()['LineGeometry'] = LineGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['MATE_KINDS_USING_DISTANCE'] = MateKindsUsingDistance
+
+# this binding exists because shared behavior needs one stable value
+globals()['MATE_KINDS_USING_SECOND_DISTANCE'] = MateKindsUsingSecond
+
+# this binding exists because shared behavior needs one stable value
+globals()['MATE_KIND_BY_JOINT_TYPE'] = MateKindByJointType
+
+# this binding exists because shared behavior needs one stable value
+globals()['MateConstraint'] = MateRule
+
+# this binding exists because shared behavior needs one stable value
+globals()['Matrix4'] = MatrixFour
+
+# this binding exists because shared behavior needs one stable value
+globals()['Mesh'] = MeshValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['NATIVE_DOCUMENT_SHA256_ATTRIBUTE'] = NativeDocShaTwoFiveSix
+
+# this binding exists because shared behavior needs one stable value
+globals()['NON_FEATURE_OBJECT_TYPE_IDS'] = NonFeatureObjectTypeIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeFreeCADError'] = NativeFreeCad
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeGeometry'] = NativeGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['PERMISSIVE_TRUE_VALUES'] = PermissiveTrueValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['POCKET_TYPE_ID'] = PocketTypeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['PRIMITIVE_FEATURE_TYPE_IDS'] = PrimitiveFeatureTypeIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['ParabolaGeometry'] = ParabolaGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['Parameter'] = Param
+
+# this binding exists because shared behavior needs one stable value
+globals()['ParameterValue'] = ParamValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['Path'] = PathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['PointGeometry'] = PointGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['SCALAR_PROPERTY_KINDS'] = ScalarPropKinds
+
+# this binding exists because shared behavior needs one stable value
+globals()['SKETCH_TYPE_ID'] = SketchTypeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['SPLINE_GEOMETRY_TYPE_IDS'] = SplineGeomTypeIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['STRING_HASHER_TAGS'] = StringHasherTags
+
+# this binding exists because shared behavior needs one stable value
+globals()['SUBELEMENT_KIND_BY_PREFIX'] = SubElemKindByPrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['SUFFIX'] = Suffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['SUPPORT_PLANE_TYPE_IDS'] = SupportPlaneTypeIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['SelectionPathElement'] = SelectionPathElem
+
+# this binding exists because shared behavior needs one stable value
+globals()['SketchConstraint'] = SketchRule
+
+# this binding exists because shared behavior needs one stable value
+globals()['SplineGeometry'] = SplineGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['Vector2'] = VectorTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['Vector3'] = VectorThree
+
+# this binding exists because shared behavior needs one stable value
+globals()['XML_TRUE_VALUES'] = XmlTrueValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ExternalState'] = OuterState
+
+# this binding exists because shared behavior needs one stable value
+globals()['_GROOVE_TYPE_ID'] = KGrooveTypeId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_ENTRY_SIZE'] = MaxEntrySize
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_EXTERNAL_DEPTH'] = KMaxOuterDepth
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_EXTERNAL_FILES'] = MaxOuterFiles
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_TOTAL_SIZE'] = MaxTotalSize
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MIN_OBJECT_GRAPH_SCHEMA_VERSION'] = KMinObjectGraphSchema
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NativeArchive'] = NativeArchive
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NativeObject'] = NativeObject
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ORIGIN_PLANE_FRAMES'] = KOriginPlaneFrames
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SUBTRACTIVE_CAPABLE_KINDS'] = KSubtractiveCapableKinds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SUBTRACTIVE_TYPE_IDS'] = KSubtractiveTypeIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['_archive_members'] = ArchiveMembers
+
+# this binding exists because shared behavior needs one stable value
+globals()['_assembly_root_object'] = AsmRootObject
+
+# this binding exists because shared behavior needs one stable value
+globals()['_bool'] = BoolAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_build_brep_payloads'] = BuildBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['_child'] = Child
+
+# this binding exists because shared behavior needs one stable value
+globals()['_closed_profile_entity_ids'] = ClosedProfile
+
+# this binding exists because shared behavior needs one stable value
+globals()['_constraint_element_slots'] = RuleElemSlots
+
+# this binding exists because shared behavior needs one stable value
+globals()['_constraint_expression'] = RuleExpression
+
+# this binding exists because shared behavior needs one stable value
+globals()['_declared_count'] = DeclaredCount
+
+# this binding exists because shared behavior needs one stable value
+globals()['_decoded_document_brep'] = DecodedDocBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['_dot'] = DotAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_element_data'] = ElemData
+
+# this binding exists because shared behavior needs one stable value
+globals()['_embedded_component_document'] = EmbeddedDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_entry_name'] = EntryName
+
+# this binding exists because shared behavior needs one stable value
+globals()['_enum'] = EnumAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_enumeration_choice'] = Enumeration
+
+# this binding exists because shared behavior needs one stable value
+globals()['_explicit_selections'] = Explicit
+
+# this binding exists because shared behavior needs one stable value
+globals()['_expressions'] = Expressions
+
+# this binding exists because shared behavior needs one stable value
+globals()['_external_documents'] = OuterDocuments
+
+# this binding exists because shared behavior needs one stable value
+globals()['_extrusion_definition'] = Extrusion
+
+# this binding exists because shared behavior needs one stable value
+globals()['_extrusion_end_condition'] = ExtrusionEnd
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_kind'] = FeatureKindA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_parameters'] = Feature
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_selections'] = FeatureA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_float'] = Float
+
+# this binding exists because shared behavior needs one stable value
+globals()['_geometry'] = GeomAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_geometry_axis'] = GeomAxis
+
+# this binding exists because shared behavior needs one stable value
+globals()['_has_shape_property'] = HasShapeProp
+
+# this binding exists because shared behavior needs one stable value
+globals()['_integer'] = Integer
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_assembly_link_object'] = IsAsmLinkObject
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_body_container'] = IsBodyContainer
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_feature_object'] = IsFeatureObject
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_grounded_joint_object'] = IsGroundedJoint
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_joint_object'] = IsJointObject
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_link_object'] = IsLinkObject
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_reparse_path'] = IsReparsePath
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_support_plane_object'] = IsSupportPlane
+
+# this binding exists because shared behavior needs one stable value
+globals()['_joint_group_object'] = JointGroup
+
+# this binding exists because shared behavior needs one stable value
+globals()['_link'] = LinkAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_link_list'] = LinkList
+
+# this binding exists because shared behavior needs one stable value
+globals()['_linked_object_data'] = LinkedObject
+
+# this binding exists because shared behavior needs one stable value
+globals()['_linked_object_property'] = LinkedObjectA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_load_native_archive'] = LoadNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_entity_kind'] = MateEntityKindA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_values'] = MateValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_configurations'] = Native
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_document_payloads'] = NativeDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_object_data'] = NativeObjectA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_number'] = Number
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ordered_features'] = OrderedFeatures
+
+# this binding exists because shared behavior needs one stable value
+globals()['_origin_plane_frame'] = OriginPlane
+
+# this binding exists because shared behavior needs one stable value
+globals()['_other_entry_data'] = OtherEntryData
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_assembly'] = ParseAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_meshes'] = ParseMeshes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_objects'] = ParseObjects
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parse_sketches'] = ParseSketches
+
+# this binding exists because shared behavior needs one stable value
+globals()['_part_extrusion_definition'] = PartExtrusion
+
+# this binding exists because shared behavior needs one stable value
+globals()['_placement_element'] = PlacementElem
+
+# this binding exists because shared behavior needs one stable value
+globals()['_placement_matrix'] = PlacementMatrix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_plane_reframe'] = PlaneReframe
+
+# this binding exists because shared behavior needs one stable value
+globals()['_point_on_segment'] = PointOnSegment
+
+# this binding exists because shared behavior needs one stable value
+globals()['_points_close'] = PointsClose
+
+# this binding exists because shared behavior needs one stable value
+globals()['_property_parameter_value'] = PropParamValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['_proxy_class'] = ProxyClass
+
+# this binding exists because shared behavior needs one stable value
+globals()['_reframe_geometry'] = ReframeGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['_remaining_expressions'] = Remaining
+
+# this binding exists because shared behavior needs one stable value
+globals()['_resolved_source_path'] = ResolvedSource
+
+# this binding exists because shared behavior needs one stable value
+globals()['_segment_orientation'] = Segment
+
+# this binding exists because shared behavior needs one stable value
+globals()['_segments_intersect_or_touch'] = SegmentsOrTouch
+
+# this binding exists because shared behavior needs one stable value
+globals()['_stored_count'] = StoredCount
+
+# this binding exists because shared behavior needs one stable value
+globals()['_stored_mate_value'] = StoredMateValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['_string'] = String
+
+# this binding exists because shared behavior needs one stable value
+globals()['_string_hasher_data'] = StringHasher
+
+# this binding exists because shared behavior needs one stable value
+globals()['_support_target'] = SupportTarget
+
+# this binding exists because shared behavior needs one stable value
+globals()['_transform'] = TransformA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_transform_close'] = TransformClose
+
+# this binding exists because shared behavior needs one stable value
+globals()['_validated_archive_members'] = ValidatedArchiveMembers
+
+# this binding exists because shared behavior needs one stable value
+globals()['_validated_document_xml'] = ValidatedDocXml
+
+# this binding exists because shared behavior needs one stable value
+globals()['_validated_entry_name'] = ValidatedEntryName
+
+# this binding exists because shared behavior needs one stable value
+globals()['_validated_object_name'] = ValidatedObjectName
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xlink_data'] = XlinkData
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['dataclass'] = Dataclass
+
+# this binding exists because shared behavior needs one stable value
+globals()['decode_ascii_brep'] = DecodeAsciiBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['extract_manifest_from_fcstd'] = ExtractManifestFromFcstd
+
+# this binding exists because shared behavior needs one stable value
+globals()['hashlib'] = Hashlib
+
+# this binding exists because shared behavior needs one stable value
+globals()['infer_capabilities'] = InferCapabilities
+
+# this binding exists because shared behavior needs one stable value
+globals()['json'] = JsonValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['math'] = MathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['probe_native_fcstd'] = ProbeNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['re'] = RegexLib
+
+# this binding exists because shared behavior needs one stable value
+globals()['read_native_fcstd'] = ReadNativeFcstd
+
+# this binding exists because shared behavior needs one stable value
+globals()['replace'] = Replace
+
+# this binding exists because shared behavior needs one stable value
+globals()['struct'] = Struct
+
+# this binding exists because shared behavior needs one stable value
+globals()['zipfile'] = Zipfile

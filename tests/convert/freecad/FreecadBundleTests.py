@@ -6,282 +6,248 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
+from __future__ import annotations as Annotations
+from dataclasses import replace as Replace
+from datetime import datetime as Datetime, timezone as Timezone
+import io as IoStream
+from pathlib import Path as PathValue
+import xml.etree.ElementTree as XmlTree
+import zipfile as Zipfile
+import convert.adapters.freecad.Adapter as FreecadAdapter
+from convert.adapters.freecad import read_freecad as ReadFreecad, write_freecad as WriteFreecad
+from interchange import Capability, ComponentDocument as ComponentDoc, Mesh as MeshValue, Vector3 as VectorThree
+from tests.interchange.assembly.AssemblyTests import assembly_document as AsmDoc
 
-from dataclasses import replace
-from datetime import datetime, timezone
-import io
-from pathlib import Path
-import xml.etree.ElementTree as ET
-import zipfile
+# this definition exists because focused behavior needs one stable owner
+def XmlAction(PathValue: Path) -> XmlTree.Element:
+    with Zipfile.ZipFile(PathValue) as Archive:
+        return XmlTree.fromstring(Archive.read('Document.xml'))
 
-import convert.adapters.freecad.Adapter as freecad_adapter
-from convert.adapters.freecad import read_freecad, write_freecad
-from interchange import Capability, ComponentDocument, Mesh, Vector3
-from tests.interchange.assembly.AssemblyTests import assembly_document
+# this definition exists because focused behavior needs one stable owner
+def LinkedObject(RootValue: ET.Element) -> XmlTree.Element:
+    Result = next((Value for Value in RootValue.findall("./ObjectData/Object/Properties/Property[@name='LinkedObject']/XLink") if Value.get('file')))
+    return Result
 
+# this definition exists because focused behavior needs one stable owner
+def DocTimestamp(RootValue: ET.Element, PropName: str) -> str:
+    Result = RootValue.find(f"./Properties/Property[@name='{PropName}']/String")
+    assert Result is not None
+    return Result.get('value', '')
 
-def _xml(path: Path) -> ET.Element:
-    with zipfile.ZipFile(path) as archive:
-        return ET.fromstring(archive.read("Document.xml"))
+# this definition exists because focused behavior needs one stable owner
+def Representation(RootValue: ET.Element, Target: str) -> str:
+    Result = RootValue.find(f"./ObjectData/Object[@name='{Target}']/Properties/Property[@name='Representation']/String")
+    assert Result is not None
+    return Result.get('value', '')
 
+# this definition exists because focused behavior needs one stable owner
+def MeshSource(Linked: bool):
+    Source = AsmDoc()
+    AsmValue = Source.assembly
+    assert AsmValue is not None
+    MeshValue = MeshValue('mesh:part', 'Part geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),))
+    Definitions = tuple((Replace(Definition, document_id=Definition.document_id if Linked else '', body_ids=Definition.body_ids if Linked else (), mesh_ids=(MeshValue.id,), source_path='C:\\Toolbox\\Piston.SLDPRT', source_format_id='solidworks.sldprt') if Definition.id == 'definition:part' else Definition for Definition in AsmValue.definitions))
+    Instances = (AsmValue.instances[0], Replace(AsmValue.instances[1], owner_definition_id=AsmValue.root_definition_id))
+    MateEntities = (AsmValue.mate_entities[0], Replace(AsmValue.mate_entities[1], instance_path=(AsmValue.instances[1].id,)))
+    return (Replace(Source, meshes=(MeshValue,), assembly=Replace(AsmValue, definitions=Definitions, instances=Instances, documents=AsmValue.documents if Linked else (), mate_entities=MateEntities)), MeshValue)
 
-def _linked_object(root: ET.Element) -> ET.Element:
-    result = next(
-        value
-        for value in root.findall(
-            "./ObjectData/Object/Properties/Property[@name='LinkedObject']/XLink"
-        )
-        if value.get("file")
-    )
-    return result
+# this definition exists because focused behavior needs one stable owner
+def TestPathAsmWith(TempPath: Path) -> None:
+    Source, MeshValue = MeshSource(Linked=True)
+    Output = TempPath / 'assembly.FCStd'
+    Result = WriteFreecad(Source, Output)
+    Component = TempPath / 'assembly' / 'Piston.FCStd'
+    assert Component.is_file()
+    RootValue = XmlAction(Output)
+    LinkValue = LinkedObject(RootValue)
+    assert LinkValue.get('file') == 'assembly/Piston.FCStd'
+    Stamp = Datetime.fromtimestamp(Component.stat().st_mtime, Timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    assert LinkValue.get('stamp') == Stamp
+    ComponentRoot = XmlAction(Component)
+    for PropName in ('CreationDate', 'LastModifiedDate'):
+        assert DocTimestamp(ComponentRoot, PropName) == Stamp
+    assert DocTimestamp(RootValue, 'LastModifiedDate') == Stamp
+    Target = ComponentRoot.find("./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String")
+    assert Target is not None
+    assert LinkValue.get('name') == Target.get('value')
+    TargetObject = ComponentRoot.find(f"./Objects/Object[@name='{Target.get('value')}']")
+    assert TargetObject is not None
+    assert TargetObject.get('type') == 'Part::Feature'
+    assert Representation(ComponentRoot, Target.get('value', '')) == 'faceted'
+    AsmValue = Source.assembly
+    assert AsmValue is not None
+    Linked = AsmValue.documents[0].document
+    Restored = ReadFreecad(Component)
+    assert Restored == Replace(Linked, meshes=(MeshValue,), capabilities=Linked.capabilities | {Capability.TESSELLATION})
+    assert Result.metadata['component_file_count'] == 1
+    assert Result.metadata['component_bytes_written'] == Component.stat().st_size
 
+# this definition exists because focused behavior needs one stable owner
+def TestPathAsmOne(TempPath: Path, MonkeyPatch) -> None:
+    Fixed = Datetime(2026, 8, 1, 18, 0, 0, tzinfo=Timezone.utc)
 
-def _document_timestamp(root: ET.Element, property_name: str) -> str:
-    result = root.find(f"./Properties/Property[@name='{property_name}']/String")
-    assert result is not None
-    return result.get("value", "")
+    # this definition exists because focused behavior needs one stable owner
+    class FixedDateTime(Datetime):
 
-
-def _representation(root: ET.Element, target: str) -> str:
-    result = root.find(
-        f"./ObjectData/Object[@name='{target}']/Properties/"
-        "Property[@name='Representation']/String"
-    )
-    assert result is not None
-    return result.get("value", "")
-
-
-def _mesh_source(linked: bool):
-    source = assembly_document()
-    assembly = source.assembly
-    assert assembly is not None
-    mesh = Mesh(
-        "mesh:part",
-        "Part geometry",
-        (
-            Vector3(0.0, 0.0, 0.0),
-            Vector3(1.0, 0.0, 0.0),
-            Vector3(0.0, 1.0, 0.0),
-        ),
-        ((0, 1, 2),),
-    )
-    definitions = tuple(
-        (
-            replace(
-                definition,
-                document_id=definition.document_id if linked else "",
-                body_ids=definition.body_ids if linked else (),
-                mesh_ids=(mesh.id,),
-                source_path="C:\\Toolbox\\Piston.SLDPRT",
-                source_format_id="solidworks.sldprt",
-            )
-            if definition.id == "definition:part"
-            else definition
-        )
-        for definition in assembly.definitions
-    )
-    instances = (
-        assembly.instances[0],
-        replace(
-            assembly.instances[1],
-            owner_definition_id=assembly.root_definition_id,
-        ),
-    )
-    mate_entities = (
-        assembly.mate_entities[0],
-        replace(
-            assembly.mate_entities[1],
-            instance_path=(assembly.instances[1].id,),
-        ),
-    )
-    return (
-        replace(
-            source,
-            meshes=(mesh,),
-            assembly=replace(
-                assembly,
-                definitions=definitions,
-                instances=instances,
-                documents=assembly.documents if linked else (),
-                mate_entities=mate_entities,
-            ),
-        ),
-        mesh,
-    )
-
-
-def test_path_assembly_writes_relative_component_with_document_and_mesh(
-    tmp_path: Path,
-) -> None:
-    source, mesh = _mesh_source(linked=True)
-    output = tmp_path / "assembly.FCStd"
-    result = write_freecad(source, output)
-    component = tmp_path / "assembly" / "Piston.FCStd"
-    assert component.is_file()
-    root = _xml(output)
-    link = _linked_object(root)
-    assert link.get("file") == "assembly/Piston.FCStd"
-    stamp = datetime.fromtimestamp(component.stat().st_mtime, timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
-    assert link.get("stamp") == stamp
-    component_root = _xml(component)
-    for property_name in ("CreationDate", "LastModifiedDate"):
-        assert _document_timestamp(component_root, property_name) == stamp
-    assert _document_timestamp(root, "LastModifiedDate") == stamp
-    target = component_root.find(
-        "./ObjectData/Object[@name='KitMetadata']/Properties/"
-        "Property[@name='ExternalLinkTarget']/String"
-    )
-    assert target is not None
-    assert link.get("name") == target.get("value")
-    target_object = component_root.find(
-        f"./Objects/Object[@name='{target.get('value')}']"
-    )
-    assert target_object is not None
-    assert target_object.get("type") == "Part::Feature"
-    assert _representation(component_root, target.get("value", "")) == "faceted"
-    assembly = source.assembly
-    assert assembly is not None
-    linked = assembly.documents[0].document
-    restored = read_freecad(component)
-    assert restored == replace(
-        linked,
-        meshes=(mesh,),
-        capabilities=linked.capabilities | {Capability.TESSELLATION},
-    )
-    assert result.metadata["component_file_count"] == 1
-    assert result.metadata["component_bytes_written"] == component.stat().st_size
-
-
-def test_path_assembly_overwrite_advances_one_bundle_timestamp(
-    tmp_path: Path, monkeypatch
-) -> None:
-    fixed = datetime(2026, 8, 1, 18, 0, 0, tzinfo=timezone.utc)
-
-    class FixedDateTime(datetime):
+        # this definition exists because focused behavior needs one stable owner
         @classmethod
-        def now(cls, tz=None):
-            return fixed if tz is not None else fixed.replace(tzinfo=None)
+        def NowAction(ClassType, TzValue=None):
+            return Fixed if TzValue is not None else Fixed.replace(tzinfo=None)
+    MonkeyPatch.setattr(FreecadAdapter, 'datetime', FixedDateTime)
+    Source, Ignored = MeshSource(Linked=True)
+    Output = TempPath / 'assembly.FCStd'
+    Component = TempPath / 'assembly' / 'Piston.FCStd'
+    WriteFreecad(Source, Output)
+    FirstRoot = XmlAction(Output)
+    FirstComponent = XmlAction(Component)
+    FirstStamp = '2026-08-01T18:00:00Z'
+    assert LinkedObject(FirstRoot).get('stamp') == FirstStamp
+    for RootValue in (FirstRoot, FirstComponent):
+        assert DocTimestamp(RootValue, 'CreationDate') == FirstStamp
+        assert DocTimestamp(RootValue, 'LastModifiedDate') == FirstStamp
+    WriteFreecad(Source, Output, overwrite=True)
+    SecondRoot = XmlAction(Output)
+    SecondComponent = XmlAction(Component)
+    SecondStamp = '2026-08-01T18:00:01Z'
+    assert LinkedObject(SecondRoot).get('stamp') == SecondStamp
+    for RootValue in (SecondRoot, SecondComponent):
+        assert DocTimestamp(RootValue, 'CreationDate') == SecondStamp
+        assert DocTimestamp(RootValue, 'LastModifiedDate') == SecondStamp
+    SecondEpoch = Fixed.timestamp() + 1.0
+    assert Output.stat().st_mtime == SecondEpoch
+    assert Component.stat().st_mtime == SecondEpoch
 
-    monkeypatch.setattr(freecad_adapter, "datetime", FixedDateTime)
-    source, _ = _mesh_source(linked=True)
-    output = tmp_path / "assembly.FCStd"
-    component = tmp_path / "assembly" / "Piston.FCStd"
-    write_freecad(source, output)
-    first_root = _xml(output)
-    first_component = _xml(component)
-    first_stamp = "2026-08-01T18:00:00Z"
-    assert _linked_object(first_root).get("stamp") == first_stamp
-    for root in (first_root, first_component):
-        assert _document_timestamp(root, "CreationDate") == first_stamp
-        assert _document_timestamp(root, "LastModifiedDate") == first_stamp
-    write_freecad(source, output, overwrite=True)
-    second_root = _xml(output)
-    second_component = _xml(component)
-    second_stamp = "2026-08-01T18:00:01Z"
-    assert _linked_object(second_root).get("stamp") == second_stamp
-    for root in (second_root, second_component):
-        assert _document_timestamp(root, "CreationDate") == second_stamp
-        assert _document_timestamp(root, "LastModifiedDate") == second_stamp
-    second_epoch = fixed.timestamp() + 1.0
-    assert output.stat().st_mtime == second_epoch
-    assert component.stat().st_mtime == second_epoch
+# this definition exists because focused behavior needs one stable owner
+def TestNestedAsmTo(TempPath: Path) -> None:
+    Source, Ignored = MeshSource(Linked=True)
+    AsmValue = Source.assembly
+    assert AsmValue is not None
+    Nested, Ignored = MeshSource(Linked=True)
+    NestedAsm = Nested.assembly
+    assert NestedAsm is not None
+    Nested = Replace(Nested, meshes=(), assembly=Replace(NestedAsm, definitions=tuple((Replace(Definition, mesh_ids=()) if Definition.id == 'definition:part' else Definition for Definition in NestedAsm.definitions))))
+    Definitions = tuple((Replace(Definition, document_id='document:subassembly') if Definition.id == 'definition:subassembly' else Definition for Definition in AsmValue.definitions))
+    Source = Replace(Source, assembly=Replace(AsmValue, definitions=Definitions, documents=(*AsmValue.documents, ComponentDoc('document:subassembly', Nested))))
+    Output = TempPath / 'nested.FCStd'
+    WriteFreecad(Source, Output)
+    AsmComponent = TempPath / 'nested' / 'Piston.FCStd'
+    PartComponent = TempPath / 'nested' / 'Piston_2.FCStd'
+    AsmRoot = XmlAction(AsmComponent)
+    PartRoot = XmlAction(PartComponent)
+    LinkValue = LinkedObject(AsmRoot)
+    assert LinkValue.get('file') == 'Piston_2.FCStd'
+    Target = LinkValue.get('name', '')
+    TargetObject = PartRoot.find(f"./Objects/Object[@name='{Target}']")
+    assert TargetObject is not None
+    assert TargetObject.get('type') == 'Part::Feature'
+    assert Representation(PartRoot, Target) == 'faceted'
+    AsmTarget = AsmRoot.find("./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String")
+    assert AsmTarget is not None
+    AsmObject = AsmRoot.find(f"./Objects/Object[@name='{AsmTarget.get('value')}']")
+    assert AsmObject is not None
+    assert AsmObject.get('type') == 'Assembly::AssemblyObject'
 
+# this definition exists because focused behavior needs one stable owner
+def TestPathAsmMesh(TempPath: Path) -> None:
+    Source, MeshValue = MeshSource(Linked=False)
+    Output = TempPath / 'toolbox.FCStd'
+    WriteFreecad(Source, Output)
+    Component = TempPath / 'toolbox' / 'Piston.FCStd'
+    RootValue = XmlAction(Output)
+    LinkValue = LinkedObject(RootValue)
+    assert LinkValue.get('file') == 'toolbox/Piston.FCStd'
+    Restored = ReadFreecad(Component)
+    assert Restored.meshes == (MeshValue,)
+    assert Restored.feature_timeline == ()
+    assert Restored.assembly is None
+    assert Restored.source.path == 'C:\\Toolbox\\Piston.SLDPRT'
 
-def test_nested_assembly_links_to_sibling_part_component(tmp_path: Path) -> None:
-    source, _ = _mesh_source(linked=True)
-    assembly = source.assembly
-    assert assembly is not None
-    nested, _ = _mesh_source(linked=True)
-    nested_assembly = nested.assembly
-    assert nested_assembly is not None
-    nested = replace(
-        nested,
-        meshes=(),
-        assembly=replace(
-            nested_assembly,
-            definitions=tuple(
-                (
-                    replace(definition, mesh_ids=())
-                    if definition.id == "definition:part"
-                    else definition
-                )
-                for definition in nested_assembly.definitions
-            ),
-        ),
-    )
-    definitions = tuple(
-        (
-            replace(definition, document_id="document:subassembly")
-            if definition.id == "definition:subassembly"
-            else definition
-        )
-        for definition in assembly.definitions
-    )
-    source = replace(
-        source,
-        assembly=replace(
-            assembly,
-            definitions=definitions,
-            documents=(
-                *assembly.documents,
-                ComponentDocument("document:subassembly", nested),
-            ),
-        ),
-    )
-    output = tmp_path / "nested.FCStd"
-    write_freecad(source, output)
-    assembly_component = tmp_path / "nested" / "Piston.FCStd"
-    part_component = tmp_path / "nested" / "Piston_2.FCStd"
-    assembly_root = _xml(assembly_component)
-    part_root = _xml(part_component)
-    link = _linked_object(assembly_root)
-    assert link.get("file") == "Piston_2.FCStd"
-    target = link.get("name", "")
-    target_object = part_root.find(f"./Objects/Object[@name='{target}']")
-    assert target_object is not None
-    assert target_object.get("type") == "Part::Feature"
-    assert _representation(part_root, target) == "faceted"
-    assembly_target = assembly_root.find(
-        "./ObjectData/Object[@name='KitMetadata']/Properties/"
-        "Property[@name='ExternalLinkTarget']/String"
-    )
-    assert assembly_target is not None
-    assembly_object = assembly_root.find(
-        f"./Objects/Object[@name='{assembly_target.get('value')}']"
-    )
-    assert assembly_object is not None
-    assert assembly_object.get("type") == "Assembly::AssemblyObject"
+# this definition exists because focused behavior needs one stable owner
+def TestBinaryAsm() -> None:
+    Stream = IoStream.BytesIO()
+    Result = WriteFreecad(AsmDoc(), Stream)
+    Stream.seek(0)
+    with Zipfile.ZipFile(Stream) as Archive:
+        RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
+    Links = RootValue.findall("./ObjectData/Object/Properties/Property[@name='LinkedObject']/XLink")
+    assert Links
+    assert all((not LinkValue.get('file') for LinkValue in Links))
+    assert Result.path is None
+    assert Result.metadata['component_file_count'] == 0
+    assert Result.metadata['component_bytes_written'] == 0
 
+# this binding exists because shared behavior needs one stable value
+globals()['ComponentDocument'] = ComponentDoc
 
-def test_path_assembly_writes_mesh_only_missing_component(tmp_path: Path) -> None:
-    source, mesh = _mesh_source(linked=False)
-    output = tmp_path / "toolbox.FCStd"
-    write_freecad(source, output)
-    component = tmp_path / "toolbox" / "Piston.FCStd"
-    root = _xml(output)
-    link = _linked_object(root)
-    assert link.get("file") == "toolbox/Piston.FCStd"
-    restored = read_freecad(component)
-    assert restored.meshes == (mesh,)
-    assert restored.feature_timeline == ()
-    assert restored.assembly is None
-    assert restored.source.path == "C:\\Toolbox\\Piston.SLDPRT"
+# this binding exists because shared behavior needs one stable value
+globals()['ET'] = XmlTree
 
+# this binding exists because shared behavior needs one stable value
+globals()['Mesh'] = MeshValue
 
-def test_binary_assembly_remains_embedded() -> None:
-    stream = io.BytesIO()
-    result = write_freecad(assembly_document(), stream)
-    stream.seek(0)
-    with zipfile.ZipFile(stream) as archive:
-        root = ET.fromstring(archive.read("Document.xml"))
-    links = root.findall(
-        "./ObjectData/Object/Properties/Property[@name='LinkedObject']/XLink"
-    )
-    assert links
-    assert all(not link.get("file") for link in links)
-    assert result.path is None
-    assert result.metadata["component_file_count"] == 0
-    assert result.metadata["component_bytes_written"] == 0
+# this binding exists because shared behavior needs one stable value
+globals()['Path'] = PathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['Vector3'] = VectorThree
+
+# this binding exists because shared behavior needs one stable value
+globals()['_document_timestamp'] = DocTimestamp
+
+# this binding exists because shared behavior needs one stable value
+globals()['_linked_object'] = LinkedObject
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mesh_source'] = MeshSource
+
+# this binding exists because shared behavior needs one stable value
+globals()['_representation'] = Representation
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml'] = XmlAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['assembly_document'] = AsmDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['datetime'] = Datetime
+
+# this binding exists because shared behavior needs one stable value
+globals()['freecad_adapter'] = FreecadAdapter
+
+# this binding exists because shared behavior needs one stable value
+globals()['io'] = IoStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['read_freecad'] = ReadFreecad
+
+# this binding exists because shared behavior needs one stable value
+globals()['replace'] = Replace
+
+# this binding exists because shared behavior needs one stable value
+globals()['test_binary_assembly_remains_embedded'] = TestBinaryAsm
+
+# this binding exists because shared behavior needs one stable value
+globals()['test_nested_assembly_links_to_sibling_part_component'] = TestNestedAsmTo
+
+# this binding exists because shared behavior needs one stable value
+globals()['test_path_assembly_overwrite_advances_one_bundle_timestamp'] = TestPathAsmOne
+
+# this binding exists because shared behavior needs one stable value
+globals()['test_path_assembly_writes_mesh_only_missing_component'] = TestPathAsmMesh
+
+# this binding exists because shared behavior needs one stable value
+globals()['test_path_assembly_writes_relative_component_with_document_and_mesh'] = TestPathAsmWith
+
+# this binding exists because shared behavior needs one stable value
+globals()['timezone'] = Timezone
+
+# this binding exists because shared behavior needs one stable value
+globals()['write_freecad'] = WriteFreecad
+
+# this binding exists because shared behavior needs one stable value
+globals()['zipfile'] = Zipfile
+setattr(FixedDateTime, 'now', FixedDateTime.NowAction)

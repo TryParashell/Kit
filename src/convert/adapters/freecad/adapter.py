@@ -6,2183 +6,1640 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
+from __future__ import annotations as Annotations
 from collections.abc import Callable, Mapping, Sequence
-from contextlib import suppress
-from dataclasses import replace
-from datetime import datetime, timezone
-import hashlib
-import io
-import json
-import math
-import os
-from pathlib import Path
-import re
-import tempfile
-from typing import Any
-import xml.etree.ElementTree as ET
-import zipfile
-
-from convert.adapters.base import (
-    AdapterInfo,
-    CarrierReason,
-    CapabilityTransfer,
-    Destination,
-    ProbeResult,
-    ReadOptions,
-    Source,
-    TransferMode,
-    WriteOptions,
-    WriteResult,
-    is_binary_destination,
-    is_windows_device_name,
-)
-from interchange import (
-    BrepPayload,
-    CadDocument,
-    CadSource,
-    Capability,
-    ChamferFeature,
-    ComponentDefinition,
-    ComponentKind,
-    Configuration,
-    Diagnostic,
-    ExtrusionEndCondition,
-    ExtrusionFeature,
-    FeatureKind,
-    FilletFeature,
-    Mesh,
-    PayloadRole,
-    Severity,
-    filter_document,
-    frozen_mapping,
-    infer_capabilities,
-    semantic_metadata,
-    source_payload_indexes,
-)
+from contextlib import suppress as Suppress
+from dataclasses import replace as Replace
+from datetime import datetime as Datetime, timezone as Timezone
+import hashlib as Hashlib
+import io as IoStream
+import json as JsonValue
+import math as MathValue
+import os as OsModule
+from pathlib import Path as PathValue
+import re as RegexLib
+import tempfile as Tempfile
+from typing import Any as AnyValue
+import xml.etree.ElementTree as XmlTree
+import zipfile as Zipfile
+from convert.adapters.base import AdapterInfo, CarrierReason, CapabilityTransfer, Destination as Target, ProbeResult, ReadOptions, Source, TransferMode, WriteOptions, WriteResult, is_binary_destination as IsBinaryTarget, is_windows_device_name as IsWindowsDeviceName
+from interchange import BrepPayload, CadDocument as CadDoc, CadSource, Capability, ChamferFeature, ComponentDefinition, ComponentKind, Configuration as Config, Diagnostic as DiagValue, ExtrusionEndCondition, ExtrusionFeature, FeatureKind, FilletFeature, Mesh as MeshValue, PayloadRole, Severity, filter_document as FilterDoc, frozen_mapping as FrozenMapping, infer_capabilities as InferCapabilities, semantic_metadata as SemanticMeta, source_payload_indexes as SourcePayloadIndexes
 from interchange.serialization import ToData
+from convert.adapters.freecad.Archive import DOCUMENT_ENTRY as DocEntry, MANIFEST_ENTRY as ManifestEntry, NATIVE_DOCUMENT_SHA256_ATTRIBUTE as NativeDocShaTwoFiveSix, NativeBrepKey, _MAX_ENTRY_SIZE as MaxEntrySize, _MAX_EXTERNAL_FILES as MaxOuterFiles, _MAX_TOTAL_SIZE as MaxTotalSize, _native_brep_key as ManifestNativeBrepKey, _validated_archive_members as ValidatedArchiveMembers, _validated_document_xml as ValidatedDocXml, build_fcstd_archive as BuildFcstdArchive, extract_manifest_from_fcstd as ExtractManifestFromFcstd, native_expression_parts as NativeExpressionParts, native_shape_feature_count as NativeShapeFeatureCount, native_sketch_carrier_reasons as NativeSketchCarrier, native_sketch_parts as NativeSketchParts
+from convert.adapters.freecad.Brep import FreeCADBrepWriteError as FreeCadBrepWriteError, brep_model_brep as BrepModelBrep, proven_ascii_brep as ProvenAsciiBrep
+from convert.adapters.freecad.Format import CAPABILITY_CARRIER_REASONS as CapabilityCarrierReasons, INFO as InfoValue, SUFFIX as Suffix
+from convert.adapters.freecad.Native import NativeFreeCADError as NativeFreeCadError, probe_native_fcstd as ProbeNativeFcstd, read_native_fcstd as ReadNativeFcstd
+from convert.adapters.freecad.Protocol import FEATURE_WRITE_KINDS as FeatureWriteKinds, FREECAD_BREP_FORMAT_IDS as FreecadBrepFormatIds, MATE_WRITE_KINDS as MateWriteKinds, XML_TRUE_VALUES as XmlTrueValues
 
-from convert.adapters.freecad.Archive import DOCUMENT_ENTRY, MANIFEST_ENTRY, NATIVE_DOCUMENT_SHA256_ATTRIBUTE, NativeBrepKey, _MAX_ENTRY_SIZE, _MAX_EXTERNAL_FILES, _MAX_TOTAL_SIZE, _native_brep_key as _manifest_native_brep_key, _validated_archive_members, _validated_document_xml, build_fcstd_archive, extract_manifest_from_fcstd, native_expression_parts, native_shape_feature_count, native_sketch_carrier_reasons, native_sketch_parts
-from convert.adapters.freecad.Brep import FreeCADBrepWriteError, brep_model_brep, proven_ascii_brep
-from convert.adapters.freecad.Format import CAPABILITY_CARRIER_REASONS, INFO, SUFFIX
-from convert.adapters.freecad.Native import NativeFreeCADError, probe_native_fcstd, read_native_fcstd
-from convert.adapters.freecad.Protocol import FEATURE_WRITE_KINDS, FREECAD_BREP_FORMAT_IDS, MATE_WRITE_KINDS, XML_TRUE_VALUES
+# this binding exists because shared behavior needs one stable value
+KNativeDocId = 'freecad:native-document'
 
-_NATIVE_DOCUMENT_ID = "freecad:native-document"
-_NATIVE_DOCUMENT_BINDING_ID = "freecad:native-document-binding"
-_REPLAY_SEMANTIC_ATTRIBUTE = "freecad.replay_semantic_sha256"
-_NATIVE_EXTRUSION_END_CONDITIONS = frozenset(
-    {
-        ExtrusionEndCondition.BLIND.value,
-        ExtrusionEndCondition.TWO_LENGTHS.value,
-        ExtrusionEndCondition.MID_PLANE.value,
-    }
-)
-_FEATURE_WRITE_VALUES = frozenset(kind.value for kind in FEATURE_WRITE_KINDS)
-_MATE_WRITE_VALUES = frozenset(kind.value for kind in MATE_WRITE_KINDS)
+# this binding exists because shared behavior needs one stable value
+KNativeDocBindingId = 'freecad:native-document-binding'
 
+# this binding exists because shared behavior needs one stable value
+KReplaySemanticAttr = 'freecad.replay_semantic_sha256'
 
-class FreeCADAdapterError(RuntimeError):
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
+# this binding exists because shared behavior needs one stable value
+KNativeExtrusionEnd = frozenset({ExtrusionEndCondition.BLIND.value, ExtrusionEndCondition.TWO_LENGTHS.value, ExtrusionEndCondition.MID_PLANE.value})
 
+# this binding exists because shared behavior needs one stable value
+KFeatureWriteValues = frozenset((KindValue.value for KindValue in FeatureWriteKinds))
 
-def document_to_manifest(document: Any) -> dict[str, Any]:
-    manifest = ToData(document)
-    if not isinstance(manifest, dict):
-        raise TypeError("CadDocument.to_dict() must produce a mapping")
-    if manifest.get("$type") == "CadDocument":
-        required = set(document.to_dict())
-        missing = sorted(required.difference(manifest))
-        if missing:
-            raise ValueError("CadDocument manifest is missing: " + ", ".join(missing))
-    return manifest
+# this binding exists because shared behavior needs one stable value
+KMateWriteValues = frozenset((KindValue.value for KindValue in MateWriteKinds))
 
+# this definition exists because focused behavior needs one stable owner
+class FreeCadAdapterA(RuntimeError):
 
-def _source_bytes(source: Source) -> bytes:
-    if isinstance(source, bytes):
-        return source
-    if isinstance(source, bytearray):
-        return bytes(source)
-    if isinstance(source, (str, Path)):
-        return Path(source).expanduser().resolve().read_bytes()
-    reader = getattr(source, "read", None)
-    if callable(reader):
-        position = None
-        tell = getattr(source, "tell", None)
-        seek = getattr(source, "seek", None)
-        if callable(tell):
+    # this definition exists because focused behavior needs one stable owner
+    def InitAction(Instance, Message: str) -> None:
+        super().__init__(Message)
+
+# this definition exists because focused behavior needs one stable owner
+def DocToManifest(DocValue: Any) -> dict[str, AnyValue]:
+    Manifest = ToData(DocValue)
+    if not isinstance(Manifest, dict):
+        raise TypeError('CadDocument.to_dict() must produce a mapping')
+    if Manifest.get('$type') == 'CadDocument':
+        Required = set(DocValue.to_dict())
+        Missing = sorted(Required.difference(Manifest))
+        if Missing:
+            raise ValueError('CadDocument manifest is missing: ' + ', '.join(Missing))
+    return Manifest
+
+# this definition exists because focused behavior needs one stable owner
+def SourceBytes(Source: Source) -> bytes:
+    if isinstance(Source, bytes):
+        return Source
+    if isinstance(Source, bytearray):
+        return bytes(Source)
+    if isinstance(Source, (str, PathValue)):
+        return PathValue(Source).expanduser().resolve().read_bytes()
+    Reader = getattr(Source, 'read', None)
+    if callable(Reader):
+        Position = None
+        TellValue = getattr(Source, 'tell', None)
+        SeekValue = getattr(Source, 'seek', None)
+        if callable(TellValue):
             try:
-                position = tell()
+                Position = TellValue()
             except (OSError, ValueError):
-                position = None
-        data = reader()
-        if position is not None and callable(seek):
+                Position = None
+        DataValue = Reader()
+        if Position is not None and callable(SeekValue):
             try:
-                seek(position)
+                SeekValue(Position)
             except (OSError, ValueError):
-                position = None
-        if isinstance(data, str):
-            raise TypeError("FCStd input must be opened in binary mode")
-        if isinstance(data, (bytes, bytearray)):
-            return bytes(data)
-    raise TypeError("source must be a path, bytes, or binary stream")
+                Position = None
+        if isinstance(DataValue, str):
+            raise TypeError('FCStd input must be opened in binary mode')
+        if isinstance(DataValue, (bytes, bytearray)):
+            return bytes(DataValue)
+    raise TypeError('source must be a path, bytes, or binary stream')
 
-
-def _destination_path(destination: Destination) -> Path | None:
-    if isinstance(destination, (str, Path)):
-        return Path(destination).expanduser().resolve()
+# this definition exists because focused behavior needs one stable owner
+def TargetPath(Target: Destination) -> PathValue | None:
+    if isinstance(Target, (str, PathValue)):
+        return PathValue(Target).expanduser().resolve()
     return None
 
+# this definition exists because focused behavior needs one stable owner
+def SourcePath(Source: Source) -> str:
+    if isinstance(Source, (str, PathValue)):
+        return str(PathValue(Source).expanduser().resolve())
+    NameValue = getattr(Source, 'name', '')
+    return str(NameValue) if isinstance(NameValue, (str, PathValue)) else ''
 
-def _source_path(source: Source) -> str:
-    if isinstance(source, (str, Path)):
-        return str(Path(source).expanduser().resolve())
-    name = getattr(source, "name", "")
-    return str(name) if isinstance(name, (str, Path)) else ""
-
-
-def _filtered_document(document: CadDocument, settings: ReadOptions) -> CadDocument:
-    filtered = filter_document(
-        document,
-        include_brep=settings.include_brep,
-        include_tessellation=settings.include_tessellation,
-        keep_payload_records=False,
-    )
-    metadata: Mapping[str, Any] = filtered.metadata
-    freecad = metadata.get("freecad", {}) if isinstance(metadata, Mapping) else {}
-    external = (
-        freecad.get("external_documents", []) if isinstance(freecad, Mapping) else []
-    )
-    if isinstance(external, Sequence) and not isinstance(
-        external, (str, bytes, bytearray)
-    ):
-        stripped_external: list[Any] = []
-        changed = False
-        for value in external:
-            if not isinstance(value, Mapping):
-                stripped_external.append(value)
+# this definition exists because focused behavior needs one stable owner
+def FilteredDoc(DocValue: CadDocument, Settings: ReadOptions) -> CadDoc:
+    Filtered = FilterDoc(DocValue, include_brep=Settings.include_brep, include_tessellation=Settings.include_tessellation, keep_payload_records=False)
+    MetaValue: Mapping[str, AnyValue] = Filtered.metadata
+    Freecad = MetaValue.get('freecad', {}) if isinstance(MetaValue, Mapping) else {}
+    Outer = Freecad.get('external_documents', []) if isinstance(Freecad, Mapping) else []
+    if isinstance(Outer, Sequence) and (not isinstance(Outer, (str, bytes, bytearray))):
+        StrippedOuter: list[AnyValue] = []
+        Changed = False
+        for Value in Outer:
+            if not isinstance(Value, Mapping):
+                StrippedOuter.append(Value)
                 continue
-            linked = value.get("document")
-            mapped = isinstance(linked, Mapping)
-            if mapped:
+            Linked = Value.get('document')
+            Mapped = isinstance(Linked, Mapping)
+            if Mapped:
                 try:
-                    linked = CadDocument.from_dict(linked)
+                    Linked = CadDoc.from_dict(Linked)
                 except (TypeError, ValueError, RecursionError):
-                    stripped_external.append(value)
+                    StrippedOuter.append(Value)
                     continue
-            if not isinstance(linked, CadDocument):
-                stripped_external.append(value)
+            if not isinstance(Linked, CadDoc):
+                StrippedOuter.append(Value)
                 continue
-            item = dict(value)
-            stripped = _filtered_document(linked, settings)
-            item["document"] = stripped.to_dict() if mapped else stripped
-            stripped_external.append(item)
-            changed = True
-        if changed:
-            freecad_copy = dict(freecad)
-            freecad_copy["external_documents"] = stripped_external
-            metadata_copy = dict(metadata)
-            metadata_copy["freecad"] = freecad_copy
-            metadata = metadata_copy
-    return replace(
-        filtered,
-        metadata=metadata,
-    )
+            ItemValue = dict(Value)
+            Stripped = FilteredDoc(Linked, Settings)
+            ItemValue['document'] = Stripped.to_dict() if Mapped else Stripped
+            StrippedOuter.append(ItemValue)
+            Changed = True
+        if Changed:
+            FreecadCopy = dict(Freecad)
+            FreecadCopy['external_documents'] = StrippedOuter
+            MetaCopy = dict(MetaValue)
+            MetaCopy['freecad'] = FreecadCopy
+            MetaValue = MetaCopy
+    return Replace(Filtered, metadata=MetaValue)
 
+# this definition exists because focused behavior needs one stable owner
+def IsNativeDoc(Payload: BrepPayload) -> bool:
+    return Payload.id == KNativeDocId and Payload.format_id == InfoValue.format_id and (Payload.kind == 'native_document') and (Payload.role == PayloadRole.DOCUMENT)
 
-def _is_native_document(payload: BrepPayload) -> bool:
-    return (
-        payload.id == _NATIVE_DOCUMENT_ID
-        and payload.format_id == INFO.format_id
-        and payload.kind == "native_document"
-        and payload.role == PayloadRole.DOCUMENT
-    )
+# this definition exists because focused behavior needs one stable owner
+def IsNativeDocA(Payload: BrepPayload) -> bool:
+    return Payload.id == KNativeDocBindingId and Payload.format_id == f'{InfoValue.format_id}.sha256' and (Payload.kind == 'native_document_binding') and (Payload.schema == 'sha256') and (Payload.role == PayloadRole.VERIFICATION)
 
+# this definition exists because focused behavior needs one stable owner
+def IsNative(Payload: BrepPayload) -> bool:
+    return IsNativeDoc(Payload) or IsNativeDocA(Payload)
 
-def _is_native_document_binding(payload: BrepPayload) -> bool:
-    return (
-        payload.id == _NATIVE_DOCUMENT_BINDING_ID
-        and payload.format_id == f"{INFO.format_id}.sha256"
-        and payload.kind == "native_document_binding"
-        and payload.schema == "sha256"
-        and payload.role == PayloadRole.VERIFICATION
-    )
-
-
-def _is_native_envelope(payload: BrepPayload) -> bool:
-    return _is_native_document(payload) or _is_native_document_binding(payload)
-
-
-def _native_document_pair(
-    document: CadDocument,
-) -> tuple[BrepPayload, BrepPayload] | None:
-    documents = tuple(
-        payload for payload in document.brep_payloads if _is_native_document(payload)
-    )
-    bindings = tuple(
-        payload
-        for payload in document.brep_payloads
-        if _is_native_document_binding(payload)
-    )
-    if len(documents) != 1 or len(bindings) != 1:
+# this definition exists because focused behavior needs one stable owner
+def NativeDocPair(DocValue: CadDocument) -> tuple[BrepPayload, BrepPayload] | None:
+    Documents = tuple((Payload for Payload in DocValue.brep_payloads if IsNativeDoc(Payload)))
+    Bindings = tuple((Payload for Payload in DocValue.brep_payloads if IsNativeDocA(Payload)))
+    if len(Documents) != 1 or len(Bindings) != 1:
         return None
-    native_document = documents[0]
-    binding = bindings[0]
+    NativeDoc = Documents[0]
+    Binding = Bindings[0]
     try:
-        native_digest = bytes.fromhex(native_document.sha256)
+        NativeDigest = bytes.fromhex(NativeDoc.sha256)
     except ValueError:
         return None
-    if len(native_digest) != hashlib.sha256().digest_size:
+    if len(NativeDigest) != Hashlib.sha256().digest_size:
         return None
-    if (
-        native_document.data is None
-        or hashlib.sha256(native_document.data).digest() != native_digest
-        or binding.data != native_digest
-        or binding.sha256 != hashlib.sha256(native_digest).hexdigest()
-    ):
+    if NativeDoc.data is None or Hashlib.sha256(NativeDoc.data).digest() != NativeDigest or Binding.data != NativeDigest or (Binding.sha256 != Hashlib.sha256(NativeDigest).hexdigest()):
         return None
-    return native_document, binding
+    return (NativeDoc, Binding)
 
-
-def _mapped_external_documents(
-    metadata: Mapping[str, Any],
-    transform: Callable[[CadDocument], CadDocument],
-) -> Mapping[str, Any]:
-    freecad = metadata.get("freecad", {})
-    if not isinstance(freecad, Mapping):
-        return metadata
-    values = freecad.get("external_documents", [])
-    if not isinstance(values, Sequence) or isinstance(values, (str, bytes, bytearray)):
-        return metadata
-    changed = False
-    mapped: list[Any] = []
-    for value in values:
-        if not isinstance(value, Mapping):
-            mapped.append(value)
+# this definition exists because focused behavior needs one stable owner
+def MappedOuter(MetaValue: Mapping[str, Any], Transform: Callable[[CadDocument], CadDocument]) -> Mapping[str, AnyValue]:
+    Freecad = MetaValue.get('freecad', {})
+    if not isinstance(Freecad, Mapping):
+        return MetaValue
+    Values = Freecad.get('external_documents', [])
+    if not isinstance(Values, Sequence) or isinstance(Values, (str, bytes, bytearray)):
+        return MetaValue
+    Changed = False
+    Mapped: list[AnyValue] = []
+    for Value in Values:
+        if not isinstance(Value, Mapping):
+            Mapped.append(Value)
             continue
-        linked = value.get("document")
-        if not isinstance(linked, CadDocument):
-            mapped.append(value)
+        Linked = Value.get('document')
+        if not isinstance(Linked, CadDoc):
+            Mapped.append(Value)
             continue
-        item = dict(value)
-        item["document"] = transform(linked)
-        mapped.append(item)
-        changed = True
-    if not changed:
-        return metadata
-    freecad_copy = dict(freecad)
-    freecad_copy["external_documents"] = mapped
-    result = dict(metadata)
-    result["freecad"] = freecad_copy
-    return frozen_mapping(result)
+        ItemValue = dict(Value)
+        ItemValue['document'] = Transform(Linked)
+        Mapped.append(ItemValue)
+        Changed = True
+    if not Changed:
+        return MetaValue
+    FreecadCopy = dict(Freecad)
+    FreecadCopy['external_documents'] = Mapped
+    Result = dict(MetaValue)
+    Result['freecad'] = FreecadCopy
+    return FrozenMapping(Result)
 
+# this definition exists because focused behavior needs one stable owner
+def SemanticDoc(DocValue: CadDocument) -> CadDoc:
+    EnvelopeIndexes = SourcePayloadIndexes(DocValue)
+    AsmValue = DocValue.assembly
+    if AsmValue is not None:
+        AsmValue = Replace(AsmValue, documents=tuple((Replace(ItemValue, document=SemanticDoc(ItemValue.document) if isinstance(ItemValue.document, CadDoc) else ItemValue.document) for ItemValue in AsmValue.documents)))
+    Payloads = tuple((Replace(Payload, data=None, sha256=Hashlib.sha256(Payload.data).hexdigest() if Payload.data is not None else Payload.sha256, attributes=FrozenMapping({KeyValue: Value for KeyValue, Value in Payload.attributes.items() if KeyValue != KReplaySemanticAttr})) for Index, Payload in enumerate(DocValue.brep_payloads) if Index not in EnvelopeIndexes and (not IsNative(Payload))))
+    MetaValue = MappedOuter(DocValue.metadata, SemanticDoc)
+    return Replace(DocValue, source=CadSource('', '', ''), brep_payloads=Payloads, metadata=SemanticMeta(MetaValue), assembly=AsmValue)
 
-def _semantic_document(document: CadDocument) -> CadDocument:
-    envelope_indexes = source_payload_indexes(document)
-    assembly = document.assembly
-    if assembly is not None:
-        assembly = replace(
-            assembly,
-            documents=tuple(
-                replace(
-                    item,
-                    document=(
-                        _semantic_document(item.document)
-                        if isinstance(item.document, CadDocument)
-                        else item.document
-                    ),
-                )
-                for item in assembly.documents
-            ),
-        )
-    payloads = tuple(
-        replace(
-            payload,
-            data=None,
-            sha256=(
-                hashlib.sha256(payload.data).hexdigest()
-                if payload.data is not None
-                else payload.sha256
-            ),
-            attributes=frozen_mapping(
-                {
-                    key: value
-                    for key, value in payload.attributes.items()
-                    if key != _REPLAY_SEMANTIC_ATTRIBUTE
-                }
-            ),
-        )
-        for index, payload in enumerate(document.brep_payloads)
-        if index not in envelope_indexes and not _is_native_envelope(payload)
-    )
-    metadata = _mapped_external_documents(document.metadata, _semantic_document)
-    return replace(
-        document,
-        source=CadSource("", "", ""),
-        brep_payloads=payloads,
-        metadata=semantic_metadata(metadata),
-        assembly=assembly,
-    )
+# this definition exists because focused behavior needs one stable owner
+def SemanticDigest(DocValue: CadDocument) -> str:
+    DataValue = SemanticDoc(DocValue).to_json(indent=None).encode('utf-8')
+    return Hashlib.sha256(DataValue).hexdigest()
 
+# this definition exists because focused behavior needs one stable owner
+def AnnotateNative(DocValue: CadDocument) -> CadDoc:
+    AsmValue = DocValue.assembly
+    if AsmValue is not None:
+        AsmValue = Replace(AsmValue, documents=tuple((Replace(ItemValue, document=AnnotateNative(ItemValue.document) if isinstance(ItemValue.document, CadDoc) else ItemValue.document) for ItemValue in AsmValue.documents)))
+    MetaValue = MappedOuter(DocValue.metadata, AnnotateNative)
+    Annotated = Replace(DocValue, metadata=MetaValue, assembly=AsmValue)
+    PairValue = NativeDocPair(Annotated)
+    if PairValue is None:
+        return Annotated
+    NativeDoc, Ignored = PairValue
+    Digest = SemanticDigest(Annotated)
+    Payloads = tuple((Replace(Payload, attributes=FrozenMapping({**Payload.attributes, KReplaySemanticAttr: Digest})) if Payload.id == NativeDoc.id and IsNativeDoc(Payload) else Payload for Payload in Annotated.brep_payloads))
+    return Replace(Annotated, brep_payloads=Payloads)
 
-def _semantic_digest(document: CadDocument) -> str:
-    data = _semantic_document(document).to_json(indent=None).encode("utf-8")
-    return hashlib.sha256(data).hexdigest()
-
-
-def _annotate_native_sources(document: CadDocument) -> CadDocument:
-    assembly = document.assembly
-    if assembly is not None:
-        assembly = replace(
-            assembly,
-            documents=tuple(
-                replace(
-                    item,
-                    document=(
-                        _annotate_native_sources(item.document)
-                        if isinstance(item.document, CadDocument)
-                        else item.document
-                    ),
-                )
-                for item in assembly.documents
-            ),
-        )
-    metadata = _mapped_external_documents(document.metadata, _annotate_native_sources)
-    annotated = replace(document, metadata=metadata, assembly=assembly)
-    pair = _native_document_pair(annotated)
-    if pair is None:
-        return annotated
-    native_document, _ = pair
-    digest = _semantic_digest(annotated)
-    payloads = tuple(
-        (
-            replace(
-                payload,
-                attributes=frozen_mapping(
-                    {
-                        **payload.attributes,
-                        _REPLAY_SEMANTIC_ATTRIBUTE: digest,
-                    }
-                ),
-            )
-            if payload.id == native_document.id and _is_native_document(payload)
-            else payload
-        )
-        for payload in annotated.brep_payloads
-    )
-    return replace(annotated, brep_payloads=payloads)
-
-
-def _unchanged_native_source(document: CadDocument) -> bytes | None:
-    pair = _native_document_pair(document)
-    if pair is None:
+# this definition exists because focused behavior needs one stable owner
+def UnchangedNative(DocValue: CadDocument) -> bytes | None:
+    PairValue = NativeDocPair(DocValue)
+    if PairValue is None:
         return None
-    native_document, _ = pair
-    expected = native_document.attributes.get(_REPLAY_SEMANTIC_ATTRIBUTE)
-    if not isinstance(expected, str) or expected != _semantic_digest(document):
+    NativeDoc, Ignored = PairValue
+    Expected = NativeDoc.attributes.get(KReplaySemanticAttr)
+    if not isinstance(Expected, str) or Expected != SemanticDigest(DocValue):
         return None
-    data = native_document.data
-    if data is None:
+    DataValue = NativeDoc.data
+    if DataValue is None:
         return None
     try:
-        archive, _ = _validated_archive_members(data)
-        archive.close()
-    except (OSError, ValueError, zipfile.BadZipFile):
+        Archive, Ignored = ValidatedArchiveMembers(DataValue)
+        Archive.close()
+    except (OSError, ValueError, Zipfile.BadZipFile):
         return None
     try:
-        reparsed = read_native_fcstd(data, document.source.path)
-    except (NativeFreeCADError, OSError, TypeError, ValueError):
+        Reparsed = ReadNativeFcstd(DataValue, DocValue.source.path)
+    except (NativeFreeCadError, OSError, TypeError, ValueError):
         return None
-    if _semantic_digest(reparsed) != expected:
+    if SemanticDigest(Reparsed) != Expected:
         return None
-    return data
+    return DataValue
 
+# this definition exists because focused behavior needs one stable owner
+def EnumText(Value: Any) -> str:
+    return str(getattr(Value, 'value', Value) or '').casefold()
 
-def _enum_text(value: Any) -> str:
-    return str(getattr(value, "value", value) or "").casefold()
-
-
-def _document_tree(document: CadDocument) -> tuple[CadDocument, ...]:
-    pending = [document]
-    result: list[CadDocument] = []
-    seen: set[int] = set()
-    while pending:
-        item = pending.pop()
-        identity = id(item)
-        if identity in seen:
+# this definition exists because focused behavior needs one stable owner
+def DocTree(DocValue: CadDocument) -> tuple[CadDoc, ...]:
+    Pending = [DocValue]
+    Result: list[CadDoc] = []
+    SeenValue: set[int] = set()
+    while Pending:
+        ItemValue = Pending.pop()
+        Identity = id(ItemValue)
+        if Identity in SeenValue:
             continue
-        seen.add(identity)
-        result.append(item)
-        if item.assembly is not None:
-            pending.extend(
-                component.document
-                for component in reversed(item.assembly.documents)
-                if isinstance(component.document, CadDocument)
-            )
-    return tuple(result)
+        SeenValue.add(Identity)
+        Result.append(ItemValue)
+        if ItemValue.assembly is not None:
+            Pending.extend((Component.document for Component in reversed(ItemValue.assembly.documents) if isinstance(Component.document, CadDoc)))
+    return tuple(Result)
 
-
-def _has_native_freecad_graph(document: CadDocument) -> bool:
-    freecad = document.metadata.get("freecad", {})
-    if not isinstance(freecad, Mapping):
+# this definition exists because focused behavior needs one stable owner
+def HasNativeGraph(DocValue: CadDocument) -> bool:
+    Freecad = DocValue.metadata.get('freecad', {})
+    if not isinstance(Freecad, Mapping):
         return False
-    objects = freecad.get("objects", ())
-    return (
-        isinstance(objects, Sequence)
-        and not isinstance(objects, (str, bytes, bytearray))
-        and bool(objects)
-    )
+    Objects = Freecad.get('objects', ())
+    return isinstance(Objects, Sequence) and (not isinstance(Objects, (str, bytes, bytearray))) and bool(Objects)
 
-
-def _feature_has_native_edges(document: CadDocument, feature: Any) -> bool:
-    attributes = feature.attributes
-    for name in (
-        "selected_native_local_edge_ids",
-        "native_local_edge_ids",
-        "edge_ids",
-        "edges",
-    ):
-        values = attributes.get(name, ())
-        if (
-            isinstance(values, Sequence)
-            and not isinstance(values, (str, bytes, bytearray))
-            and any(isinstance(value, (int, float)) and value > 0 for value in values)
-        ):
+# this definition exists because focused behavior needs one stable owner
+def FeatureHasEdges(DocValue: CadDocument, Feature: Any) -> bool:
+    Attributes = Feature.attributes
+    for NameValue in ('selected_native_local_edge_ids', 'native_local_edge_ids', 'edge_ids', 'edges'):
+        Values = Attributes.get(NameValue, ())
+        if isinstance(Values, Sequence) and (not isinstance(Values, (str, bytes, bytearray))) and any((isinstance(Value, (int, float)) and Value > 0 for Value in Values)):
             return True
-    selections = {selection.id: selection for selection in document.selections}
-    for selection_id in feature.selection_ids:
-        selection = selections.get(selection_id)
-        if selection is None:
+    Selections = {Selection.id: Selection for Selection in DocValue.selections}
+    for SelectionId in Feature.selection_ids:
+        Selection = Selections.get(SelectionId)
+        if Selection is None:
             continue
-        if any(
-            re.fullmatch(r"(?:Edge|edge:)(\d+)", item.subelement, re.IGNORECASE)
-            for item in selection.path
-        ):
+        if any((RegexLib.fullmatch('(?:Edge|edge:)(\\d+)', ItemValue.subelement, RegexLib.IGNORECASE) for ItemValue in Selection.path)):
             return True
-        if selection.query.get("topology_role") == (
-            "extrusion_terminal_profile_boundary"
-        ):
+        if Selection.query.get('topology_role') == 'extrusion_terminal_profile_boundary':
             return True
-        if any(
-            isinstance(selection.query.get(name), (int, float))
-            and selection.query[name] > 0
-            for name in ("edge_index", "native_local_id", "index")
-        ):
+        if any((isinstance(Selection.query.get(NameValue), (int, float)) and Selection.query[NameValue] > 0 for NameValue in ('edge_index', 'native_local_id', 'index'))):
             return True
     return False
 
+# this definition exists because focused behavior needs one stable owner
+def ExtrusionIs(Feature: Any) -> bool:
+    Definition = Feature.definition
+    if not isinstance(Definition, ExtrusionFeature):
+        return False
+    if EnumText(Definition.end_condition) not in KNativeExtrusionEnd:
+        return False
+    if Definition.second_end_condition is not None and EnumText(Definition.second_end_condition) not in KNativeExtrusionEnd:
+        return False
+    if any((Value is not None for Value in (Definition.offset, Definition.second_offset, Definition.draft_angle, Definition.second_draft_angle))):
+        return False
+    if Definition.up_to_reference or Definition.second_up_to_reference:
+        return False
+    return EnumText(Feature.operation) in {'', 'create', 'join', 'cut', 'intersect'}
 
-def _extrusion_is_native(feature: Any) -> bool:
-    definition = feature.definition
-    if not isinstance(definition, ExtrusionFeature):
-        return False
-    if _enum_text(definition.end_condition) not in _NATIVE_EXTRUSION_END_CONDITIONS:
-        return False
-    if (
-        definition.second_end_condition is not None
-        and _enum_text(definition.second_end_condition)
-        not in _NATIVE_EXTRUSION_END_CONDITIONS
-    ):
-        return False
-    if any(
-        value is not None
-        for value in (
-            definition.offset,
-            definition.second_offset,
-            definition.draft_angle,
-            definition.second_draft_angle,
-        )
-    ):
-        return False
-    if definition.up_to_reference or definition.second_up_to_reference:
-        return False
-    return _enum_text(feature.operation) in {
-        "",
-        "create",
-        "join",
-        "cut",
-        "intersect",
-    }
-
-
-def _feature_parts(
-    document: CadDocument,
-    sketch_native: Mapping[str, bool],
-    sketch_carrier_reasons: Mapping[str, CarrierReason],
-) -> tuple[int, int, frozenset[CarrierReason]]:
-    dependent_feature_ids = {
-        feature_id
-        for feature in document.feature_timeline
-        for feature_id in feature.input_feature_ids
-    }
-    final_feature_ids = {body.final_feature_id for body in document.bodies}
-    features = tuple(
-        feature
-        for feature in document.feature_timeline
-        if _enum_text(feature.kind) != FeatureKind.IMPORTED.value
-        and not (
-            _enum_text(feature.kind) == FeatureKind.REFERENCE.value
-            and str(feature.attributes.get("native_type", "")).casefold()
-            in {"plane", "sketch"}
-        )
-        and not (
-            _enum_text(feature.kind) == FeatureKind.NATIVE.value
-            and feature.id not in dependent_feature_ids
-            and feature.id not in final_feature_ids
-            and not feature.input_feature_ids
-            and feature.sketch_id is None
-            and not feature.parameter_ids
-            and not feature.selection_ids
-        )
-    )
-    if _has_native_freecad_graph(document) and document.assembly is None:
-        return len(features), 0, frozenset()
-    native = 0
-    carrier = 0
-    reasons: set[CarrierReason] = set()
-    for feature in features:
-        kind = _enum_text(feature.kind)
-        writable = not feature.suppressed and kind in _FEATURE_WRITE_VALUES
-        if kind == FeatureKind.EXTRUSION.value:
-            writable = (
-                writable
-                and bool(feature.sketch_id)
-                and sketch_native.get(feature.sketch_id or "", False)
-                and _extrusion_is_native(feature)
-            )
-        elif kind == FeatureKind.FILLET.value:
-            writable = (
-                writable
-                and isinstance(feature.definition, FilletFeature)
-                and not feature.definition.variable_radius_parameter_ids
-                and bool(feature.input_feature_ids)
-                and _feature_has_native_edges(document, feature)
-            )
-        elif kind == FeatureKind.CHAMFER.value:
-            writable = (
-                writable
-                and isinstance(feature.definition, ChamferFeature)
-                and feature.definition.mode == "equal_distance"
-                and feature.definition.second_distance is None
-                and feature.definition.angle is None
-                and bool(feature.input_feature_ids)
-                and _feature_has_native_edges(document, feature)
-            )
+# this definition exists because focused behavior needs one stable owner
+def FeatureParts(DocValue: CadDocument, SketchNative: Mapping[str, bool], SketchCarrierReasons: Mapping[str, CarrierReason]) -> tuple[int, int, frozenset[CarrierReason]]:
+    DependentFeatureIds = {FeatureId for Feature in DocValue.feature_timeline for FeatureId in Feature.input_feature_ids}
+    FinalFeatureIds = {BodyValue.final_feature_id for BodyValue in DocValue.bodies}
+    Features = tuple((Feature for Feature in DocValue.feature_timeline if EnumText(Feature.kind) != FeatureKind.IMPORTED.value and (not (EnumText(Feature.kind) == FeatureKind.REFERENCE.value and str(Feature.attributes.get('native_type', '')).casefold() in {'plane', 'sketch'})) and (not (EnumText(Feature.kind) == FeatureKind.NATIVE.value and Feature.id not in DependentFeatureIds and (Feature.id not in FinalFeatureIds) and (not Feature.input_feature_ids) and (Feature.sketch_id is None) and (not Feature.parameter_ids) and (not Feature.selection_ids)))))
+    if HasNativeGraph(DocValue) and DocValue.assembly is None:
+        return (len(Features), 0, frozenset())
+    Native = 0
+    Carrier = 0
+    Reasons: set[CarrierReason] = set()
+    for Feature in Features:
+        KindValue = EnumText(Feature.kind)
+        Writable = not Feature.suppressed and KindValue in KFeatureWriteValues
+        if KindValue == FeatureKind.EXTRUSION.value:
+            Writable = Writable and bool(Feature.sketch_id) and SketchNative.get(Feature.sketch_id or '', False) and ExtrusionIs(Feature)
+        elif KindValue == FeatureKind.FILLET.value:
+            Writable = Writable and isinstance(Feature.definition, FilletFeature) and (not Feature.definition.variable_radius_parameter_ids) and bool(Feature.input_feature_ids) and FeatureHasEdges(DocValue, Feature)
+        elif KindValue == FeatureKind.CHAMFER.value:
+            Writable = Writable and isinstance(Feature.definition, ChamferFeature) and (Feature.definition.mode == 'equal_distance') and (Feature.definition.second_distance is None) and (Feature.definition.angle is None) and bool(Feature.input_feature_ids) and FeatureHasEdges(DocValue, Feature)
         else:
-            writable = False
-        native += 1
-        if not writable:
-            carrier += 1
-            feature_reasons: set[CarrierReason] = set()
-            if feature.suppressed:
-                feature_reasons.add(CarrierReason.TARGET_UNSUPPORTED)
-            elif kind == FeatureKind.REFERENCE.value:
-                feature_reasons.add(CarrierReason.TARGET_UNSUPPORTED)
-            elif kind == FeatureKind.NATIVE.value:
-                feature_reasons.add(CarrierReason.SOURCE_OPAQUE)
+            Writable = False
+        Native += 1
+        if not Writable:
+            Carrier += 1
+            FeatureReasons: set[CarrierReason] = set()
+            if Feature.suppressed:
+                FeatureReasons.add(CarrierReason.TARGET_UNSUPPORTED)
+            elif KindValue == FeatureKind.REFERENCE.value:
+                FeatureReasons.add(CarrierReason.TARGET_UNSUPPORTED)
+            elif KindValue == FeatureKind.NATIVE.value:
+                FeatureReasons.add(CarrierReason.SOURCE_OPAQUE)
             else:
-                if kind == FeatureKind.EXTRUSION.value:
-                    sketch_reason = sketch_carrier_reasons.get(feature.sketch_id or "")
-                    if sketch_reason is not None:
-                        feature_reasons.add(sketch_reason)
-                    if not feature.sketch_id or not _extrusion_is_native(feature):
-                        feature_reasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
-                if not feature_reasons:
-                    feature_reasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
-            reasons.update(feature_reasons)
-    return native, carrier, frozenset(reasons)
+                if KindValue == FeatureKind.EXTRUSION.value:
+                    SketchReason = SketchCarrierReasons.get(Feature.sketch_id or '')
+                    if SketchReason is not None:
+                        FeatureReasons.add(SketchReason)
+                    if not Feature.sketch_id or not ExtrusionIs(Feature):
+                        FeatureReasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
+                if not FeatureReasons:
+                    FeatureReasons.add(CarrierReason.WRITER_UNIMPLEMENTED)
+            Reasons.update(FeatureReasons)
+    return (Native, Carrier, frozenset(Reasons))
 
-
-def _selection_parts(document: CadDocument) -> tuple[int, int]:
-    targets = {
-        *(plane.id for plane in document.support_planes),
-        *(sketch.id for sketch in document.sketches),
-        *(feature.id for feature in document.feature_timeline),
-        *(body.id for body in document.bodies),
-    }
-    native = 0
-    carrier = 0
-    for selection in document.selections:
-        native_path = bool(selection.path) and all(
-            item.entity_id in targets for item in selection.path
-        )
-        native_point = selection.point is not None
-        if native_path or native_point:
-            native += 1
+# this definition exists because focused behavior needs one stable owner
+def SelectionParts(DocValue: CadDocument) -> tuple[int, int]:
+    Targets = {*(Plane.id for Plane in DocValue.support_planes), *(Sketch.id for Sketch in DocValue.sketches), *(Feature.id for Feature in DocValue.feature_timeline), *(BodyValue.id for BodyValue in DocValue.bodies)}
+    Native = 0
+    Carrier = 0
+    for Selection in DocValue.selections:
+        NativePath = bool(Selection.path) and all((ItemValue.entity_id in Targets for ItemValue in Selection.path))
+        NativePoint = Selection.point is not None
+        if NativePath or NativePoint:
+            Native += 1
         else:
-            carrier += 1
-        if selection.query:
-            carrier += 1
-    return native, carrier
+            Carrier += 1
+        if Selection.query:
+            Carrier += 1
+    return (Native, Carrier)
 
-
-def _configuration_parts(document: CadDocument) -> tuple[int, int]:
-    native = 0
-    carrier = 0
-    for configuration in document.configurations:
-        if (
-            len(document.configurations) == 1
-            and configuration.active
-            and configuration.parent_id is None
-            and not configuration.overrides
-            and not configuration.suppressed_feature_ids
-        ):
-            native += 1
+# this definition exists because focused behavior needs one stable owner
+def ConfigParts(DocValue: CadDocument) -> tuple[int, int]:
+    Native = 0
+    Carrier = 0
+    for Config in DocValue.configurations:
+        if len(DocValue.configurations) == 1 and Config.active and (Config.parent_id is None) and (not Config.overrides) and (not Config.suppressed_feature_ids):
+            Native += 1
         else:
-            carrier += 1
-    return native, carrier
+            Carrier += 1
+    return (Native, Carrier)
 
-
-def _mate_parts(document: CadDocument) -> tuple[int, int]:
-    assembly = document.assembly
-    if assembly is None:
-        return 0, 0
-    entities = {entity.id: entity for entity in assembly.mate_entities}
-    instance_ids = {instance.id for instance in assembly.instances}
-    native = 0
-    carrier = 0
-    for mate in assembly.mates:
-        attributes = mate.attributes
-        references = attributes.get("references", ())
-        has_native_references = (
-            isinstance(references, Sequence)
-            and not isinstance(references, (str, bytes, bytearray))
-            and len(references) >= 2
-        )
-        linked = [entities.get(entity_id) for entity_id in mate.entity_ids[:2]]
-        has_occurrence_references = len(linked) == 2 and all(
-            entity is not None
-            and bool(entity.instance_path)
-            and all(instance_id in instance_ids for instance_id in entity.instance_path)
-            for entity in linked
-        )
-        if _enum_text(mate.kind) in _MATE_WRITE_VALUES and (
-            has_native_references or has_occurrence_references
-        ):
-            native += 1
+# this definition exists because focused behavior needs one stable owner
+def MateParts(DocValue: CadDocument) -> tuple[int, int]:
+    AsmValue = DocValue.assembly
+    if AsmValue is None:
+        return (0, 0)
+    Entities = {Entity.id: Entity for Entity in AsmValue.mate_entities}
+    InstanceIds = {Instance.id for Instance in AsmValue.instances}
+    Native = 0
+    Carrier = 0
+    for MateValue in AsmValue.mates:
+        Attributes = MateValue.attributes
+        References = Attributes.get('references', ())
+        HasNativeReferences = isinstance(References, Sequence) and (not isinstance(References, (str, bytes, bytearray))) and (len(References) >= 2)
+        Linked = [Entities.get(EntityId) for EntityId in MateValue.entity_ids[:2]]
+        HasItemReferences = len(Linked) == 2 and all((Entity is not None and bool(Entity.instance_path) and all((InstanceId in InstanceIds for InstanceId in Entity.instance_path)) for Entity in Linked))
+        if EnumText(MateValue.kind) in KMateWriteValues and (HasNativeReferences or HasItemReferences):
+            Native += 1
         else:
-            carrier += 1
-    return native, carrier
+            Carrier += 1
+    return (Native, Carrier)
 
+# this definition exists because focused behavior needs one stable owner
+def PayloadIsExact(Payload: BrepPayload) -> bool:
+    DataValue = Payload.data
+    Provenance = Payload.provenance
+    Attributes = Payload.attributes
+    FreecadObject = Attributes.get('freecad_object')
+    FreecadObjectType = Attributes.get('freecad_object_type')
+    FreecadProp = Attributes.get('freecad_property')
+    NativeDocShaTwoFiveSix = Attributes.get(NativeDocShaTwoFiveSix)
+    PropData = Attributes.get('freecad_property_data')
+    PropAttributes = PropData.get('attributes', {}) if isinstance(PropData, Mapping) else {}
+    PropChildren = PropData.get('children', ()) if isinstance(PropData, Mapping) else ()
+    PartFiles = tuple((ChildAttributes.get('file') for Child in PropChildren if isinstance(Child, Mapping) and Child.get('tag') == 'Part' and isinstance((ChildAttributes := Child.get('attributes')), Mapping)))
+    return Payload.role == PayloadRole.BREP and DataValue is not None and (Payload.format_id.casefold() in FreecadBrepFormatIds) and (Payload.kind == 'shape') and Payload.schema.startswith('CASCADE Topology V') and (Payload.sha256 == Hashlib.sha256(DataValue).hexdigest()) and (Provenance is not None) and (Provenance.adapter == InfoValue.format_id) and (Provenance.confidence == 1.0) and isinstance(FreecadObject, str) and bool(FreecadObject) and isinstance(FreecadObjectType, str) and bool(FreecadObjectType) and isinstance(FreecadProp, str) and bool(FreecadProp) and isinstance(NativeDocShaTwoFiveSix, str) and (RegexLib.fullmatch('[0-9a-f]{64}', NativeDocShaTwoFiveSix) is not None) and (Provenance.native_id == f'{FreecadObject}.{FreecadProp}') and (Payload.source_stream == f'{FreecadObject}.{FreecadProp}.brp') and isinstance(PropData, Mapping) and (PropData.get('tag') == 'Property') and (PropAttributes.get('name') == FreecadProp) and (PropAttributes.get('type') == 'Part::PropertyPartShape') and (PartFiles == (Payload.source_stream,))
 
-def _payload_is_exact_native_brep(payload: BrepPayload) -> bool:
-    data = payload.data
-    provenance = payload.provenance
-    attributes = payload.attributes
-    freecad_object = attributes.get("freecad_object")
-    freecad_object_type = attributes.get("freecad_object_type")
-    freecad_property = attributes.get("freecad_property")
-    native_document_sha256 = attributes.get(NATIVE_DOCUMENT_SHA256_ATTRIBUTE)
-    property_data = attributes.get("freecad_property_data")
-    property_attributes = (
-        property_data.get("attributes", {})
-        if isinstance(property_data, Mapping)
-        else {}
-    )
-    property_children = (
-        property_data.get("children", ()) if isinstance(property_data, Mapping) else ()
-    )
-    part_files = tuple(
-        child_attributes.get("file")
-        for child in property_children
-        if isinstance(child, Mapping)
-        and child.get("tag") == "Part"
-        and isinstance((child_attributes := child.get("attributes")), Mapping)
-    )
-    return (
-        payload.role == PayloadRole.BREP
-        and data is not None
-        and payload.format_id.casefold() in FREECAD_BREP_FORMAT_IDS
-        and payload.kind == "shape"
-        and payload.schema.startswith("CASCADE Topology V")
-        and payload.sha256 == hashlib.sha256(data).hexdigest()
-        and provenance is not None
-        and provenance.adapter == INFO.format_id
-        and provenance.confidence == 1.0
-        and isinstance(freecad_object, str)
-        and bool(freecad_object)
-        and isinstance(freecad_object_type, str)
-        and bool(freecad_object_type)
-        and isinstance(freecad_property, str)
-        and bool(freecad_property)
-        and isinstance(native_document_sha256, str)
-        and re.fullmatch(r"[0-9a-f]{64}", native_document_sha256) is not None
-        and provenance.native_id == f"{freecad_object}.{freecad_property}"
-        and payload.source_stream == f"{freecad_object}.{freecad_property}.brp"
-        and isinstance(property_data, Mapping)
-        and property_data.get("tag") == "Property"
-        and property_attributes.get("name") == freecad_property
-        and property_attributes.get("type") == "Part::PropertyPartShape"
-        and part_files == (payload.source_stream,)
-    )
-
-
-def _manifest_brep_payloads(document: CadDocument) -> tuple[Mapping[str, Any], ...]:
-    values = document_to_manifest(document).get("brep_payloads", ())
-    if isinstance(values, Mapping):
-        values = values.get("$tuple", ())
-    if not isinstance(values, Sequence) or isinstance(values, (str, bytes, bytearray)):
+# this definition exists because focused behavior needs one stable owner
+def ManifestBrep(DocValue: CadDocument) -> tuple[Mapping[str, AnyValue], ...]:
+    Values = DocToManifest(DocValue).get('brep_payloads', ())
+    if isinstance(Values, Mapping):
+        Values = Values.get('$tuple', ())
+    if not isinstance(Values, Sequence) or isinstance(Values, (str, bytes, bytearray)):
         return ()
-    result = tuple(value for value in values if isinstance(value, Mapping))
-    return result if len(result) == len(document.brep_payloads) else ()
+    Result = tuple((Value for Value in Values if isinstance(Value, Mapping)))
+    return Result if len(Result) == len(DocValue.brep_payloads) else ()
 
+# this definition exists because focused behavior needs one stable owner
+def NativeDocShaTwo(DocValue: CadDocument) -> str:
+    PairValue = NativeDocPair(DocValue)
+    if PairValue is not None and PairValue[0].data is not None:
+        return Hashlib.sha256(PairValue[0].data).hexdigest()
+    Values = {Value for Payload in DocValue.brep_payloads if isinstance((Value := Payload.attributes.get(NativeDocShaTwoFiveSix)), str) and RegexLib.fullmatch('[0-9a-f]{64}', Value) is not None}
+    return next(iter(Values)) if len(Values) == 1 else ''
 
-def _native_document_sha256(document: CadDocument) -> str:
-    pair = _native_document_pair(document)
-    if pair is not None and pair[0].data is not None:
-        return hashlib.sha256(pair[0].data).hexdigest()
-    values = {
-        value
-        for payload in document.brep_payloads
-        if isinstance(
-            (value := payload.attributes.get(NATIVE_DOCUMENT_SHA256_ATTRIBUTE)),
-            str,
-        )
-        and re.fullmatch(r"[0-9a-f]{64}", value) is not None
-    }
-    return next(iter(values)) if len(values) == 1 else ""
+# this definition exists because focused behavior needs one stable owner
+def XmlElemData(NodeValue: ET.Element) -> dict[str, AnyValue]:
+    Result: dict[str, AnyValue] = {'tag': NodeValue.tag, 'attributes': dict(sorted(NodeValue.attrib.items()))}
+    TextValue = (NodeValue.text or '').strip()
+    if TextValue:
+        Result['text'] = TextValue
+    Children = [XmlElemData(Child) for Child in NodeValue]
+    if Children:
+        Result['children'] = Children
+    return Result
 
-
-def _xml_element_data(node: ET.Element) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "tag": node.tag,
-        "attributes": dict(sorted(node.attrib.items())),
-    }
-    text = (node.text or "").strip()
-    if text:
-        result["text"] = text
-    children = [_xml_element_data(child) for child in node]
-    if children:
-        result["children"] = children
-    return result
-
-
-def _archive_member_data(
-    archive: zipfile.ZipFile,
-    members: Mapping[str, zipfile.ZipInfo],
-    name: str,
-) -> bytes | None:
-    info = members.get(name)
-    if info is None or info.is_dir():
+# this definition exists because focused behavior needs one stable owner
+def ArchiveMember(Archive: zipfile.ZipFile, Members: Mapping[str, zipfile.ZipInfo], NameValue: str) -> bytes | None:
+    InfoValue = Members.get(NameValue)
+    if InfoValue is None or InfoValue.is_dir():
         return None
     try:
-        return archive.read(info)
-    except (OSError, RuntimeError, NotImplementedError, zipfile.BadZipFile):
+        return Archive.read(InfoValue)
+    except (OSError, RuntimeError, NotImplementedError, Zipfile.BadZipFile):
         return None
 
-
-def _payload_matches_native_archive(
-    payload: BrepPayload,
-    archive: zipfile.ZipFile,
-    members: Mapping[str, zipfile.ZipInfo],
-    root: ET.Element,
-    native_document_sha256: str,
-) -> bool:
-    if not _payload_is_exact_native_brep(payload) or payload.data is None:
+# this definition exists because focused behavior needs one stable owner
+def PayloadMatches(Payload: BrepPayload, Archive: zipfile.ZipFile, Members: Mapping[str, zipfile.ZipInfo], RootValue: ET.Element, NativeDocShaTwoFiveSix: str) -> bool:
+    if not PayloadIsExact(Payload) or Payload.data is None:
         return False
-    if _archive_member_data(archive, members, payload.source_stream) != payload.data:
+    if ArchiveMember(Archive, Members, Payload.source_stream) != Payload.data:
         return False
-    attributes = payload.attributes
-    if attributes[NATIVE_DOCUMENT_SHA256_ATTRIBUTE] != native_document_sha256:
+    Attributes = Payload.attributes
+    if Attributes[NativeDocShaTwoFiveSix] != NativeDocShaTwoFiveSix:
         return False
-    object_name = str(attributes["freecad_object"])
-    object_type = str(attributes["freecad_object_type"])
-    property_name = str(attributes["freecad_property"])
-    declarations = tuple(
-        value
-        for value in root.findall("./Objects/Object")
-        if value.get("name") == object_name and value.get("type") == object_type
-    )
-    objects = tuple(
-        value
-        for value in root.findall("./ObjectData/Object")
-        if value.get("name") == object_name
-    )
-    if len(declarations) != 1 or len(objects) != 1:
+    ObjectName = str(Attributes['freecad_object'])
+    ObjectType = str(Attributes['freecad_object_type'])
+    PropName = str(Attributes['freecad_property'])
+    Declarations = tuple((Value for Value in RootValue.findall('./Objects/Object') if Value.get('name') == ObjectName and Value.get('type') == ObjectType))
+    Objects = tuple((Value for Value in RootValue.findall('./ObjectData/Object') if Value.get('name') == ObjectName))
+    if len(Declarations) != 1 or len(Objects) != 1:
         return False
-    properties = tuple(
-        value
-        for value in objects[0].findall("./Properties/Property")
-        if value.get("name") == property_name
-    )
-    if len(properties) != 1:
+    Properties = tuple((Value for Value in Objects[0].findall('./Properties/Property') if Value.get('name') == PropName))
+    if len(Properties) != 1:
         return False
-    property_element = properties[0]
-    if _xml_element_data(property_element) != attributes["freecad_property_data"]:
+    PropElem = Properties[0]
+    if XmlElemData(PropElem) != Attributes['freecad_property_data']:
         return False
-    referenced_sidecars = tuple(
-        name
-        for child in property_element.findall(".//*[@file]")
-        if (name := child.get("file", "")) and name != payload.source_stream
-    )
-    sidecars = attributes.get("freecad_sidecars", ())
-    if not isinstance(sidecars, Sequence) or isinstance(
-        sidecars, (str, bytes, bytearray)
-    ):
+    ReferencedSidecars = tuple((NameValue for Child in PropElem.findall('.//*[@file]') if (NameValue := Child.get('file', '')) and NameValue != Payload.source_stream))
+    Sidecars = Attributes.get('freecad_sidecars', ())
+    if not isinstance(Sidecars, Sequence) or isinstance(Sidecars, (str, bytes, bytearray)):
         return False
-    if len(sidecars) != len(referenced_sidecars):
+    if len(Sidecars) != len(ReferencedSidecars):
         return False
-    for sidecar, source_stream in zip(sidecars, referenced_sidecars, strict=True):
-        if not isinstance(sidecar, Mapping):
+    for Sidecar, SourceStream in zip(Sidecars, ReferencedSidecars, strict=True):
+        if not isinstance(Sidecar, Mapping):
             return False
-        sidecar_data = sidecar.get("data")
-        if (
-            sidecar.get("source_stream") != source_stream
-            or not isinstance(sidecar_data, bytes)
-            or _archive_member_data(archive, members, source_stream) != sidecar_data
-        ):
+        SidecarData = Sidecar.get('data')
+        if Sidecar.get('source_stream') != SourceStream or not isinstance(SidecarData, bytes) or ArchiveMember(Archive, Members, SourceStream) != SidecarData:
             return False
     return True
 
-
-def _trusted_native_breps(
-    document: CadDocument,
-) -> frozenset[NativeBrepKey]:
-    trusted: set[NativeBrepKey] = set()
-    for item in _document_tree(document):
-        native_source = _unchanged_native_source(item)
-        mapped_payloads = _manifest_brep_payloads(item)
-        if native_source is None or not mapped_payloads:
+# this definition exists because focused behavior needs one stable owner
+def TrustedNative(DocValue: CadDocument) -> frozenset[NativeBrepKey]:
+    Trusted: set[NativeBrepKey] = set()
+    for ItemValue in DocTree(DocValue):
+        NativeSource = UnchangedNative(ItemValue)
+        MappedPayloads = ManifestBrep(ItemValue)
+        if NativeSource is None or not MappedPayloads:
             continue
         try:
-            archive, members = _validated_archive_members(native_source)
-            root, _ = _validated_document_xml(archive, members)
-        except (OSError, TypeError, ValueError, zipfile.BadZipFile):
+            Archive, Members = ValidatedArchiveMembers(NativeSource)
+            RootValue, Ignored = ValidatedDocXml(Archive, Members)
+        except (OSError, TypeError, ValueError, Zipfile.BadZipFile):
             continue
         try:
-            native_document_sha256 = hashlib.sha256(native_source).hexdigest()
-            for payload, mapped in zip(
-                item.brep_payloads,
-                mapped_payloads,
-                strict=True,
-            ):
-                if not _payload_matches_native_archive(
-                    payload,
-                    archive,
-                    members,
-                    root,
-                    native_document_sha256,
-                ):
+            NativeDocShaTwoFiveSix = Hashlib.sha256(NativeSource).hexdigest()
+            for Payload, Mapped in zip(ItemValue.brep_payloads, MappedPayloads, strict=True):
+                if not PayloadMatches(Payload, Archive, Members, RootValue, NativeDocShaTwoFiveSix):
                     continue
-                if payload.data is None:
+                if Payload.data is None:
                     continue
-                key = _manifest_native_brep_key(
-                    mapped,
-                    payload.data,
-                    native_document_sha256,
-                )
-                if key is not None:
-                    trusted.add(key)
+                KeyValue = ManifestNativeBrepKey(Mapped, Payload.data, NativeDocShaTwoFiveSix)
+                if KeyValue is not None:
+                    Trusted.add(KeyValue)
         finally:
-            archive.close()
-    return frozenset(trusted)
+            Archive.close()
+    return frozenset(Trusted)
 
-
-def _payload_native_brep(
-    payload: BrepPayload,
-    mapped_payload: Mapping[str, Any] | None = None,
-    native_document_sha256: str = "",
-    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
-) -> bytes | None:
-    if not (
-        payload.role == PayloadRole.BREP
-        and payload.data is not None
-        and payload.format_id.casefold() in FREECAD_BREP_FORMAT_IDS
-    ):
+# this definition exists because focused behavior needs one stable owner
+def PayloadNative(Payload: BrepPayload, MappedPayload: Mapping[str, Any] | None=None, NativeDocShaTwoFiveSix: str='', TrustedNativeBreps: frozenset[NativeBrepKey]=frozenset()) -> bytes | None:
+    if not (Payload.role == PayloadRole.BREP and Payload.data is not None and (Payload.format_id.casefold() in FreecadBrepFormatIds)):
         return None
-    if mapped_payload is not None:
-        key = _manifest_native_brep_key(
-            mapped_payload,
-            payload.data,
-            native_document_sha256,
-        )
-        if key in trusted_native_breps:
-            return payload.data
-    return proven_ascii_brep(payload.data)
+    if MappedPayload is not None:
+        KeyValue = ManifestNativeBrepKey(MappedPayload, Payload.data, NativeDocShaTwoFiveSix)
+        if KeyValue in TrustedNativeBreps:
+            return Payload.data
+    return ProvenAsciiBrep(Payload.data)
 
+# this definition exists because focused behavior needs one stable owner
+def PayloadIsBrep(Payload: BrepPayload, MappedPayload: Mapping[str, Any] | None=None, NativeDocShaTwoFiveSix: str='', TrustedNativeBreps: frozenset[NativeBrepKey]=frozenset()) -> bool:
+    return PayloadNative(Payload, MappedPayload, NativeDocShaTwoFiveSix, TrustedNativeBreps) is not None
 
-def _payload_is_reattachable_brep(
-    payload: BrepPayload,
-    mapped_payload: Mapping[str, Any] | None = None,
-    native_document_sha256: str = "",
-    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
-) -> bool:
-    return (
-        _payload_native_brep(
-            payload,
-            mapped_payload,
-            native_document_sha256,
-            trusted_native_breps,
-        )
-        is not None
-    )
-
-
-def _neutral_brep_is_native(document: CadDocument) -> bool:
-    if document.brep is None:
+# this definition exists because focused behavior needs one stable owner
+def NeutralBrepIs(DocValue: CadDocument) -> bool:
+    if DocValue.brep is None:
         return False
     try:
-        brep_model_brep(document.brep)
-    except FreeCADBrepWriteError:
+        BrepModelBrep(DocValue.brep)
+    except FreeCadBrepWriteError:
         return False
     return True
 
-
-def _mesh_is_usable(mesh: Mesh) -> bool:
-    points = tuple((value.x, value.y, value.z) for value in mesh.vertices)
-    if not points or any(not all(map(math.isfinite, point)) for point in points):
+# this definition exists because focused behavior needs one stable owner
+def MeshIsUsable(MeshValue: Mesh) -> bool:
+    Points = tuple(((Value.x, Value.y, Value.z) for Value in MeshValue.vertices))
+    if not Points or any((not all(map(MathValue.isfinite, Point)) for Point in Points)):
         return False
-    for triangle in mesh.triangles:
-        if len(set(triangle)) != 3 or any(
-            index < 0 or index >= len(points) for index in triangle
-        ):
+    for Triangle in MeshValue.triangles:
+        if len(set(Triangle)) != 3 or any((Index < 0 or Index >= len(Points) for Index in Triangle)):
             continue
-        first, second, third = (points[index] for index in triangle)
-        left = tuple(second[index] - first[index] for index in range(3))
-        right = tuple(third[index] - first[index] for index in range(3))
-        cross = (
-            left[1] * right[2] - left[2] * right[1],
-            left[2] * right[0] - left[0] * right[2],
-            left[0] * right[1] - left[1] * right[0],
-        )
-        if sum(value * value for value in cross) > 1e-24:
+        First, Second, Third = (Points[Index] for Index in Triangle)
+        LeftValue = tuple((Second[Index] - First[Index] for Index in range(3)))
+        Right = tuple((Third[Index] - First[Index] for Index in range(3)))
+        Cross = (LeftValue[1] * Right[2] - LeftValue[2] * Right[1], LeftValue[2] * Right[0] - LeftValue[0] * Right[2], LeftValue[0] * Right[1] - LeftValue[1] * Right[0])
+        if sum((Value * Value for Value in Cross)) > 1e-24:
             return True
     return False
 
-
-def _native_geometry_is_usable(
-    document: CadDocument,
-    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
-) -> bool:
-    items = [document]
-    if document.assembly is not None:
-        documents = {
-            item.id: item.document
-            for item in document.assembly.documents
-            if isinstance(item.document, CadDocument)
-        }
-        for definition in document.assembly.definitions:
-            if definition.id == document.assembly.root_definition_id:
+# this definition exists because focused behavior needs one stable owner
+def NativeGeomIs(DocValue: CadDocument, TrustedNativeBreps: frozenset[NativeBrepKey]=frozenset()) -> bool:
+    Items = [DocValue]
+    if DocValue.assembly is not None:
+        Documents = {ItemValue.id: ItemValue.document for ItemValue in DocValue.assembly.documents if isinstance(ItemValue.document, CadDoc)}
+        for Definition in DocValue.assembly.definitions:
+            if Definition.id == DocValue.assembly.root_definition_id:
                 continue
-            component = _component_document(document, definition, documents)
-            if component is not None:
-                items.append(component)
-    for item in items:
-        if item.assembly is not None:
+            Component = ComponentDoc(DocValue, Definition, Documents)
+            if Component is not None:
+                Items.append(Component)
+    for ItemValue in Items:
+        if ItemValue.assembly is not None:
             continue
-        mapped_payloads = _manifest_brep_payloads(item)
-        mapped_by_identity = (
-            {
-                id(payload): mapped
-                for payload, mapped in zip(
-                    item.brep_payloads,
-                    mapped_payloads,
-                    strict=True,
-                )
-            }
-            if mapped_payloads
-            else {}
-        )
-        native_document_sha256 = _native_document_sha256(item)
-        raw_breps = tuple(
-            payload
-            for payload in item.brep_payloads
-            if payload.role == PayloadRole.BREP and payload.data is not None
-        )
-        if item.brep is None and not raw_breps:
+        MappedPayloads = ManifestBrep(ItemValue)
+        MappedByIdentity = {id(Payload): Mapped for Payload, Mapped in zip(ItemValue.brep_payloads, MappedPayloads, strict=True)} if MappedPayloads else {}
+        NativeDocShaTwoFiveSix = NativeDocShaTwo(ItemValue)
+        RawBreps = tuple((Payload for Payload in ItemValue.brep_payloads if Payload.role == PayloadRole.BREP and Payload.data is not None))
+        if ItemValue.brep is None and (not RawBreps):
             continue
-        if item.brep is not None and _neutral_brep_is_native(item):
+        if ItemValue.brep is not None and NeutralBrepIs(ItemValue):
             continue
-        if any(
-            _payload_is_reattachable_brep(
-                payload,
-                mapped_by_identity.get(id(payload)),
-                native_document_sha256,
-                trusted_native_breps,
-            )
-            for payload in raw_breps
-        ):
+        if any((PayloadIsBrep(Payload, MappedByIdentity.get(id(Payload)), NativeDocShaTwoFiveSix, TrustedNativeBreps) for Payload in RawBreps)):
             continue
-        if any(_mesh_is_usable(mesh) for mesh in item.meshes):
+        if any((MeshIsUsable(MeshValue) for MeshValue in ItemValue.meshes)):
             continue
-        if (
-            item.source.format_id.casefold() != INFO.format_id.casefold()
-            and native_shape_feature_count(document_to_manifest(item)) > 0
-        ):
+        if ItemValue.source.format_id.casefold() != InfoValue.format_id.casefold() and NativeShapeFeatureCount(DocToManifest(ItemValue)) > 0:
             continue
         return False
     return True
 
-
-def _transfer_mode(parts: Sequence[bool]) -> TransferMode:
-    if parts and all(parts):
+# this definition exists because focused behavior needs one stable owner
+def TransferModeA(Parts: Sequence[bool]) -> TransferMode:
+    if Parts and all(Parts):
         return TransferMode.NATIVE
-    if any(parts):
+    if any(Parts):
         return TransferMode.MIXED
     return TransferMode.CARRIER
 
+# this definition exists because focused behavior needs one stable owner
+def CarrierReasonA(Capability: Capability, Reasons: Mapping[Capability, set[CarrierReason]]) -> CarrierReason:
+    Values = Reasons[Capability]
+    for Reason in (CarrierReason.SOURCE_OPAQUE, CarrierReason.WRITER_UNIMPLEMENTED, CarrierReason.TARGET_UNSUPPORTED):
+        if Reason in Values:
+            return Reason
+    return CapabilityCarrierReasons[Capability]
 
-def _carrier_reason(
-    capability: Capability,
-    reasons: Mapping[Capability, set[CarrierReason]],
-) -> CarrierReason:
-    values = reasons[capability]
-    for reason in (
-        CarrierReason.SOURCE_OPAQUE,
-        CarrierReason.WRITER_UNIMPLEMENTED,
-        CarrierReason.TARGET_UNSUPPORTED,
-    ):
-        if reason in values:
-            return reason
-    return CAPABILITY_CARRIER_REASONS[capability]
+# this definition exists because focused behavior needs one stable owner
+def CapabilityA(DocValue: CadDocument, TargetPath: Path | None, Portable: bool, Exact: bool, TrustedNativeBreps: frozenset[NativeBrepKey]=frozenset()) -> tuple[CapabilityTransfer, ...]:
+    Required = DocValue.capabilities | InferCapabilities(DocValue, roundtrip_metadata=Capability.ROUNDTRIP_METADATA in DocValue.capabilities)
+    if Exact:
 
-
-def _capability_transfers(
-    document: CadDocument,
-    destination_path: Path | None,
-    portable: bool,
-    exact: bool,
-    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
-) -> tuple[CapabilityTransfer, ...]:
-    required = document.capabilities | infer_capabilities(
-        document,
-        roundtrip_metadata=(Capability.ROUNDTRIP_METADATA in document.capabilities),
-    )
-    if exact:
-        return tuple(
-            CapabilityTransfer(capability, TransferMode.NATIVE)
-            for capability in sorted(required, key=lambda value: value.value)
-        )
-    parts = {capability: [] for capability in Capability}
-    carrier_reasons = {capability: set() for capability in Capability}
-    for item in _document_tree(document):
-        source_native = _has_native_freecad_graph(item)
-        manifest = document_to_manifest(item)
-        mapped_payloads = _manifest_brep_payloads(item)
-        mapped_by_identity = (
-            {
-                id(payload): mapped
-                for payload, mapped in zip(
-                    item.brep_payloads,
-                    mapped_payloads,
-                    strict=True,
-                )
-            }
-            if mapped_payloads
-            else {}
-        )
-        native_document_sha256 = _native_document_sha256(item)
-        sketch_parts = native_sketch_parts(manifest)
-        sketch_reason_parts = native_sketch_carrier_reasons(manifest)
-        sketch_native: dict[str, bool] = {}
-        sketch_carrier_reasons: dict[str, CarrierReason] = {}
-        for sketch, (native_count, carrier_count), reason_values in zip(
-            item.sketches, sketch_parts, sketch_reason_parts, strict=True
-        ):
-            parts[Capability.EDITABLE_SKETCHES].extend(
-                [True] * native_count + [False] * carrier_count
-            )
-            if carrier_count:
-                sketch_reasons = {CarrierReason(value) for value in reason_values} or {
-                    CarrierReason.WRITER_UNIMPLEMENTED
-                }
-                sketch_reason = next(
-                    reason
-                    for reason in (
-                        CarrierReason.SOURCE_OPAQUE,
-                        CarrierReason.WRITER_UNIMPLEMENTED,
-                        CarrierReason.TARGET_UNSUPPORTED,
-                    )
-                    if reason in sketch_reasons
-                )
-                sketch_carrier_reasons[sketch.id] = sketch_reason
-                carrier_reasons[Capability.EDITABLE_SKETCHES].update(sketch_reasons)
-            sketch_native[sketch.id] = carrier_count == 0
-        parts[Capability.PARAMETERS].extend(True for _ in item.parameters)
-        feature_native, feature_carrier, feature_reasons = _feature_parts(
-            item, sketch_native, sketch_carrier_reasons
-        )
-        parts[Capability.PARAMETRIC_HISTORY].extend(
-            [True] * feature_native + [False] * feature_carrier
-        )
-        carrier_reasons[Capability.PARAMETRIC_HISTORY].update(feature_reasons)
-        parts[Capability.SUPPORT_PLANES].extend(True for _ in item.support_planes)
-        if source_native:
-            parts[Capability.SELECTIONS].extend(True for _ in item.selections)
+        # this callback exists because local behavior needs one focused transformation
+        return tuple((CapabilityTransfer(Capability, TransferMode.NATIVE) for Capability in sorted(Required, key=lambda Value: Value.value)))
+    Parts = {Capability: [] for Capability in Capability}
+    CarrierReasons = {Capability: set() for Capability in Capability}
+    for ItemValue in DocTree(DocValue):
+        SourceNative = HasNativeGraph(ItemValue)
+        Manifest = DocToManifest(ItemValue)
+        MappedPayloads = ManifestBrep(ItemValue)
+        MappedByIdentity = {id(Payload): Mapped for Payload, Mapped in zip(ItemValue.brep_payloads, MappedPayloads, strict=True)} if MappedPayloads else {}
+        NativeDocShaTwoFiveSix = NativeDocShaTwo(ItemValue)
+        SketchParts = NativeSketchParts(Manifest)
+        SketchReasonParts = NativeSketchCarrier(Manifest)
+        SketchNative: dict[str, bool] = {}
+        SketchCarrierReasons: dict[str, CarrierReason] = {}
+        for Sketch, (NativeCount, CarrierCount), ReasonValues in zip(ItemValue.sketches, SketchParts, SketchReasonParts, strict=True):
+            Parts[Capability.EDITABLE_SKETCHES].extend([True] * NativeCount + [False] * CarrierCount)
+            if CarrierCount:
+                SketchReasons = {CarrierReason(Value) for Value in ReasonValues} or {CarrierReason.WRITER_UNIMPLEMENTED}
+                SketchReason = next((Reason for Reason in (CarrierReason.SOURCE_OPAQUE, CarrierReason.WRITER_UNIMPLEMENTED, CarrierReason.TARGET_UNSUPPORTED) if Reason in SketchReasons))
+                SketchCarrierReasons[Sketch.id] = SketchReason
+                CarrierReasons[Capability.EDITABLE_SKETCHES].update(SketchReasons)
+            SketchNative[Sketch.id] = CarrierCount == 0
+        Parts[Capability.PARAMETERS].extend((True for Ignored in ItemValue.parameters))
+        FeatureNative, FeatureCarrier, FeatureReasons = FeatureParts(ItemValue, SketchNative, SketchCarrierReasons)
+        Parts[Capability.PARAMETRIC_HISTORY].extend([True] * FeatureNative + [False] * FeatureCarrier)
+        CarrierReasons[Capability.PARAMETRIC_HISTORY].update(FeatureReasons)
+        Parts[Capability.SUPPORT_PLANES].extend((True for Ignored in ItemValue.support_planes))
+        if SourceNative:
+            Parts[Capability.SELECTIONS].extend((True for Ignored in ItemValue.selections))
         else:
-            native_selections, carrier_selections = _selection_parts(item)
-            parts[Capability.SELECTIONS].extend(
-                [True] * native_selections + [False] * carrier_selections
-            )
-        parts[Capability.BODY_STRUCTURE].extend(True for _ in item.bodies)
-        native_configurations, carrier_configurations = _configuration_parts(item)
-        parts[Capability.CONFIGURATIONS].extend(
-            [True] * native_configurations + [False] * carrier_configurations
-        )
-        if source_native:
-            expression_count = sum(
-                parameter.expression is not None for parameter in item.parameters
-            )
-            native_expressions, carrier_expressions = expression_count, 0
+            NativeSelections, CarrierSelections = SelectionParts(ItemValue)
+            Parts[Capability.SELECTIONS].extend([True] * NativeSelections + [False] * CarrierSelections)
+        Parts[Capability.BODY_STRUCTURE].extend((True for Ignored in ItemValue.bodies))
+        NativeConfigurations, CarrierConfigurations = ConfigParts(ItemValue)
+        Parts[Capability.CONFIGURATIONS].extend([True] * NativeConfigurations + [False] * CarrierConfigurations)
+        if SourceNative:
+            ExpressionCount = sum((Param.expression is not None for Param in ItemValue.parameters))
+            NativeExpressions, CarrierExpressions = (ExpressionCount, 0)
         else:
-            native_expressions, carrier_expressions = native_expression_parts(manifest)
-        parts[Capability.EXPRESSIONS].extend(
-            [True] * native_expressions + [False] * carrier_expressions
-        )
-        raw_breps = [
-            _payload_is_reattachable_brep(
-                payload,
-                mapped_by_identity.get(id(payload)),
-                native_document_sha256,
-                trusted_native_breps,
-            )
-            for payload in item.brep_payloads
-            if payload.role == PayloadRole.BREP and payload.data is not None
-        ]
-        if item.brep is not None:
-            native_brep = _neutral_brep_is_native(item) or any(raw_breps)
-            parts[Capability.BREP].append(native_brep)
-            if not native_brep:
-                carrier_reasons[Capability.BREP].add(CarrierReason.WRITER_UNIMPLEMENTED)
+            NativeExpressions, CarrierExpressions = NativeExpressionParts(Manifest)
+        Parts[Capability.EXPRESSIONS].extend([True] * NativeExpressions + [False] * CarrierExpressions)
+        RawBreps = [PayloadIsBrep(Payload, MappedByIdentity.get(id(Payload)), NativeDocShaTwoFiveSix, TrustedNativeBreps) for Payload in ItemValue.brep_payloads if Payload.role == PayloadRole.BREP and Payload.data is not None]
+        if ItemValue.brep is not None:
+            NativeBrep = NeutralBrepIs(ItemValue) or any(RawBreps)
+            Parts[Capability.BREP].append(NativeBrep)
+            if not NativeBrep:
+                CarrierReasons[Capability.BREP].add(CarrierReason.WRITER_UNIMPLEMENTED)
         else:
-            parts[Capability.BREP].extend(raw_breps)
-            if any(not value for value in raw_breps):
-                carrier_reasons[Capability.BREP].add(CarrierReason.SOURCE_OPAQUE)
-        rebuilt_shape_features = (
-            native_shape_feature_count(manifest)
-            if item.source.format_id.casefold() != INFO.format_id.casefold()
-            else 0
-        )
-        if rebuilt_shape_features and not all(parts[Capability.BREP]):
-            parts[Capability.BREP].extend(True for _ in range(rebuilt_shape_features))
-        parts[Capability.TESSELLATION].extend(True for _ in item.meshes)
-        parts[Capability.TESSELLATION].extend(
-            False
-            for payload in item.brep_payloads
-            if payload.role == PayloadRole.TESSELLATION and payload.data is not None
-        )
-        if item.assembly is not None:
-            parts[Capability.ASSEMBLIES].append(True)
-            native_mates, carrier_mates = _mate_parts(item)
-            parts[Capability.ASSEMBLY_MATES].extend(
-                [True] * native_mates + [False] * carrier_mates
-            )
-            native_documents = destination_path is not None
-            parts[Capability.COMPONENT_DOCUMENTS].extend(
-                native_documents for _ in item.assembly.documents
-            )
-            native_external = destination_path is not None and portable
-            parts[Capability.EXTERNAL_REFERENCES].extend(
-                native_external
-                for definition in item.assembly.definitions
-                if definition.source_path
-            )
-        parts[Capability.EXTERNAL_REFERENCES].extend(
-            destination_path is not None and portable
-            for _ in _native_external_documents(item)
-        )
-        parts[Capability.MATERIALS].extend(
-            True for body in item.bodies if body.material_id
-        )
-        envelope_indexes = source_payload_indexes(item)
-        for index, payload in enumerate(item.brep_payloads):
-            if index in envelope_indexes:
+            Parts[Capability.BREP].extend(RawBreps)
+            if any((not Value for Value in RawBreps)):
+                CarrierReasons[Capability.BREP].add(CarrierReason.SOURCE_OPAQUE)
+        RebuiltShapeFeatures = NativeShapeFeatureCount(Manifest) if ItemValue.source.format_id.casefold() != InfoValue.format_id.casefold() else 0
+        if RebuiltShapeFeatures and (not all(Parts[Capability.BREP])):
+            Parts[Capability.BREP].extend((True for Ignored in range(RebuiltShapeFeatures)))
+        Parts[Capability.TESSELLATION].extend((True for Ignored in ItemValue.meshes))
+        Parts[Capability.TESSELLATION].extend((False for Payload in ItemValue.brep_payloads if Payload.role == PayloadRole.TESSELLATION and Payload.data is not None))
+        if ItemValue.assembly is not None:
+            Parts[Capability.ASSEMBLIES].append(True)
+            NativeMates, CarrierMates = MateParts(ItemValue)
+            Parts[Capability.ASSEMBLY_MATES].extend([True] * NativeMates + [False] * CarrierMates)
+            NativeDocuments = TargetPath is not None
+            Parts[Capability.COMPONENT_DOCUMENTS].extend((NativeDocuments for Ignored in ItemValue.assembly.documents))
+            NativeOuter = TargetPath is not None and Portable
+            Parts[Capability.EXTERNAL_REFERENCES].extend((NativeOuter for Definition in ItemValue.assembly.definitions if Definition.source_path))
+        Parts[Capability.EXTERNAL_REFERENCES].extend((TargetPath is not None and Portable for Ignored in NativeOuter(ItemValue)))
+        Parts[Capability.MATERIALS].extend((True for BodyValue in ItemValue.bodies if BodyValue.material_id))
+        EnvelopeIndexes = SourcePayloadIndexes(ItemValue)
+        for Index, Payload in enumerate(ItemValue.brep_payloads):
+            if Index in EnvelopeIndexes:
                 continue
-            native_payload = _payload_native_brep(
-                payload,
-                mapped_by_identity.get(id(payload)),
-                native_document_sha256,
-                trusted_native_breps,
-            )
-            if native_payload is not None:
-                parts[Capability.NATIVE_PAYLOADS].append(True)
-                if native_payload != payload.data:
-                    parts[Capability.NATIVE_PAYLOADS].append(False)
-                    carrier_reasons[Capability.NATIVE_PAYLOADS].add(
-                        CarrierReason.WRITER_UNIMPLEMENTED
-                    )
+            NativePayload = PayloadNative(Payload, MappedByIdentity.get(id(Payload)), NativeDocShaTwoFiveSix, TrustedNativeBreps)
+            if NativePayload is not None:
+                Parts[Capability.NATIVE_PAYLOADS].append(True)
+                if NativePayload != Payload.data:
+                    Parts[Capability.NATIVE_PAYLOADS].append(False)
+                    CarrierReasons[Capability.NATIVE_PAYLOADS].add(CarrierReason.WRITER_UNIMPLEMENTED)
                 continue
-            parts[Capability.NATIVE_PAYLOADS].append(False)
-            carrier_reasons[Capability.NATIVE_PAYLOADS].add(
-                (
-                    CarrierReason.TARGET_UNSUPPORTED
-                    if payload.role == PayloadRole.BREP and item.brep is not None
-                    else CarrierReason.SOURCE_OPAQUE
-                )
-            )
-        provenance_values = (
-            *item.parameters,
-            *item.support_planes,
-            *item.sketches,
-            *item.selections,
-            *item.feature_timeline,
-            *item.bodies,
-            *item.meshes,
-            *item.brep_payloads,
-        )
-        parts[Capability.PROVENANCE].extend(
-            False for value in provenance_values if value.provenance is not None
-        )
-    parts[Capability.ROUNDTRIP_METADATA].append(False)
-    return tuple(
-        CapabilityTransfer(
-            capability,
-            (mode := _transfer_mode(parts[capability])),
-            (
-                None
-                if mode is TransferMode.NATIVE
-                else _carrier_reason(capability, carrier_reasons)
-            ),
-        )
-        for capability in sorted(required, key=lambda value: value.value)
-    )
+            Parts[Capability.NATIVE_PAYLOADS].append(False)
+            CarrierReasons[Capability.NATIVE_PAYLOADS].add(CarrierReason.TARGET_UNSUPPORTED if Payload.role == PayloadRole.BREP and ItemValue.brep is not None else CarrierReason.SOURCE_OPAQUE)
+        ProvenanceValues = (*ItemValue.parameters, *ItemValue.support_planes, *ItemValue.sketches, *ItemValue.selections, *ItemValue.feature_timeline, *ItemValue.bodies, *ItemValue.meshes, *ItemValue.brep_payloads)
+        Parts[Capability.PROVENANCE].extend((False for Value in ProvenanceValues if Value.provenance is not None))
+    Parts[Capability.ROUNDTRIP_METADATA].append(False)
 
+    # this callback exists because local behavior needs one focused transformation
+    return tuple((CapabilityTransfer(Capability, (ModeValue := TransferModeA(Parts[Capability])), None if ModeValue is TransferMode.NATIVE else CarrierReasonA(Capability, CarrierReasons)) for Capability in sorted(Required, key=lambda Value: Value.value)))
 
-def _write_bytes(destination: Destination, data: bytes, overwrite: bool) -> Path | None:
-    path = _destination_path(destination)
-    if path is None:
-        writer = getattr(destination, "write", None)
-        if not callable(writer):
-            raise TypeError("destination must be a path or binary stream")
+# this definition exists because focused behavior needs one stable owner
+def WriteBytes(Target: Destination, DataValue: bytes, Overwrite: bool) -> PathValue | None:
+    PathValue = TargetPath(Target)
+    if PathValue is None:
+        Writer = getattr(Target, 'write', None)
+        if not callable(Writer):
+            raise TypeError('destination must be a path or binary stream')
         try:
-            written = writer(data)
+            Written = Writer(DataValue)
         except TypeError as exc:
-            raise TypeError("FCStd destination must be opened in binary mode") from exc
-        if written is not None and written != len(data):
-            raise OSError(
-                f"short FCStd write: expected {len(data)} bytes, wrote {written}"
-            )
+            raise TypeError('FCStd destination must be opened in binary mode') from exc
+        if Written is not None and Written != len(DataValue):
+            raise OSError(f'short FCStd write: expected {len(DataValue)} bytes, wrote {Written}')
         return None
-    if path.suffix.casefold() != SUFFIX.casefold():
-        raise ValueError(f"FreeCAD destination must end in {SUFFIX}")
-    if path.exists() and not overwrite:
-        raise FileExistsError(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=path.name + ".", suffix=".tmp", dir=path.parent
-    )
+    if PathValue.suffix.casefold() != Suffix.casefold():
+        raise ValueError(f'FreeCAD destination must end in {Suffix}')
+    if PathValue.exists() and (not Overwrite):
+        raise FileExistsError(PathValue)
+    PathValue.parent.mkdir(parents=True, exist_ok=True)
+    Descriptor, TemporaryName = Tempfile.mkstemp(prefix=PathValue.name + '.', suffix='.tmp', dir=PathValue.parent)
     try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary_name, path)
+        with OsModule.fdopen(Descriptor, 'wb') as Stream:
+            Stream.write(DataValue)
+            Stream.flush()
+            OsModule.fsync(Stream.fileno())
+        OsModule.replace(TemporaryName, PathValue)
     except BaseException:
-        with suppress(FileNotFoundError):
-            os.unlink(temporary_name)
+        with Suppress(FileNotFoundError):
+            OsModule.unlink(TemporaryName)
         raise
-    return path
+    return PathValue
 
+# this definition exists because focused behavior needs one stable owner
+def ComponentStem(Value: str) -> str:
+    StemValue = RegexLib.sub('[<>:"/\\\\|?*\\x00-\\x1f]', '_', Value).strip(' .')
+    StemValue = StemValue or 'Component'
+    if IsWindowsDeviceName(StemValue):
+        StemValue = f'_{StemValue}'
+    return StemValue[:120].rstrip(' .') or 'Component'
 
-def _component_stem(value: str) -> str:
-    stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", value).strip(" .")
-    stem = stem or "Component"
-    if is_windows_device_name(stem):
-        stem = f"_{stem}"
-    return stem[:120].rstrip(" .") or "Component"
-
-
-def _component_paths(document: CadDocument, destination: Path) -> dict[str, Path]:
-    assembly = document.assembly
-    if assembly is None:
+# this definition exists because focused behavior needs one stable owner
+def ComponentPaths(DocValue: CadDocument, Target: Path) -> dict[str, PathValue]:
+    AsmValue = DocValue.assembly
+    if AsmValue is None:
         return {}
-    documents = {item.id for item in assembly.documents}
-    directory = destination.parent / destination.stem
-    used: set[str] = set()
-    result: dict[str, Path] = {}
-    for definition in assembly.definitions:
-        if definition.id == assembly.root_definition_id:
+    Documents = {ItemValue.id for ItemValue in AsmValue.documents}
+    Folder = Target.parent / Target.stem
+    UsedValue: set[str] = set()
+    Result: dict[str, PathValue] = {}
+    for Definition in AsmValue.definitions:
+        if Definition.id == AsmValue.root_definition_id:
             continue
-        if definition.document_id not in documents and not definition.mesh_ids:
+        if Definition.document_id not in Documents and (not Definition.mesh_ids):
             continue
-        base = _component_stem(definition.name or definition.id)
-        candidate = base
-        suffix = 1
-        while candidate.casefold() in used:
-            suffix += 1
-            ending = f"_{suffix}"
-            candidate = base[: 120 - len(ending)].rstrip(" .") + ending
-        used.add(candidate.casefold())
-        result[definition.id] = directory / f"{candidate}{SUFFIX}"
-    return result
+        BaseValue = ComponentStem(Definition.name or Definition.id)
+        Choice = BaseValue
+        Suffix = 1
+        while Choice.casefold() in UsedValue:
+            Suffix += 1
+            Ending = f'_{Suffix}'
+            Choice = BaseValue[:120 - len(Ending)].rstrip(' .') + Ending
+        UsedValue.add(Choice.casefold())
+        Result[Definition.id] = Folder / f'{Choice}{Suffix}'
+    return Result
 
+# this definition exists because focused behavior needs one stable owner
+def SelectedMeshes(DocValue: CadDocument, Definition: ComponentDefinition) -> tuple[MeshValue, ...]:
+    Meshes = {ItemValue.id: ItemValue for ItemValue in DocValue.meshes}
+    Missing = [MeshId for MeshId in Definition.mesh_ids if MeshId not in Meshes]
+    if Missing:
+        raise FreeCadAdapterA(f'component definition {Definition.id!r} references missing meshes: ' + ', '.join(Missing))
+    return tuple((Meshes[MeshId] for MeshId in Definition.mesh_ids))
 
-def _selected_meshes(
-    document: CadDocument, definition: ComponentDefinition
-) -> tuple[Mesh, ...]:
-    meshes = {item.id: item for item in document.meshes}
-    missing = [mesh_id for mesh_id in definition.mesh_ids if mesh_id not in meshes]
-    if missing:
-        raise FreeCADAdapterError(
-            f"component definition {definition.id!r} references missing meshes: "
-            + ", ".join(missing)
-        )
-    return tuple(meshes[mesh_id] for mesh_id in definition.mesh_ids)
+# this definition exists because focused behavior needs one stable owner
+def MeshComponent(DocValue: CadDocument, Definition: ComponentDefinition, Meshes: tuple[Mesh, ...]) -> CadDoc:
+    Source = CadSource(format_id=Definition.source_format_id or DocValue.source.format_id, path=Definition.source_path or Definition.name or Definition.id, sha256=Definition.source_sha256, container_version=DocValue.source.container_version, application_version=DocValue.source.application_version, attributes=Definition.attributes)
+    ConfigName = Definition.configuration_name or 'Default'
+    ConfigId = Definition.configuration_id or f'{Definition.id}:configuration:default'
+    return CadDoc(source=Source, configurations=(Config(ConfigId, ConfigName, active=True),), parameters=(), support_planes=(), sketches=(), selections=(), feature_timeline=(), bodies=(), meshes=Meshes, capabilities=frozenset({Capability.TESSELLATION}), units=DocValue.units, schema_version=DocValue.schema_version)
 
+# this definition exists because focused behavior needs one stable owner
+def ComponentDoc(DocValue: CadDocument, Definition: ComponentDefinition, Documents: Mapping[str, CadDocument]) -> CadDoc | None:
+    SelectedMeshes = SelectedMeshes(DocValue, Definition)
+    Linked = Documents.get(Definition.document_id)
+    if Linked is None:
+        return MeshComponent(DocValue, Definition, SelectedMeshes) if SelectedMeshes else None
+    SelectedIds = {MeshValue.id for MeshValue in SelectedMeshes}
+    Meshes = (*SelectedMeshes, *(MeshValue for MeshValue in Linked.meshes if MeshValue.id not in SelectedIds))
+    Capabilities = Linked.capabilities
+    if Meshes:
+        Capabilities = Capabilities | {Capability.TESSELLATION}
+    return Replace(Linked, meshes=Meshes, capabilities=Capabilities)
 
-def _mesh_component_document(
-    document: CadDocument,
-    definition: ComponentDefinition,
-    meshes: tuple[Mesh, ...],
-) -> CadDocument:
-    source = CadSource(
-        format_id=definition.source_format_id or document.source.format_id,
-        path=definition.source_path or definition.name or definition.id,
-        sha256=definition.source_sha256,
-        container_version=document.source.container_version,
-        application_version=document.source.application_version,
-        attributes=definition.attributes,
-    )
-    configuration_name = definition.configuration_name or "Default"
-    configuration_id = (
-        definition.configuration_id or f"{definition.id}:configuration:default"
-    )
-    return CadDocument(
-        source=source,
-        configurations=(
-            Configuration(configuration_id, configuration_name, active=True),
-        ),
-        parameters=(),
-        support_planes=(),
-        sketches=(),
-        selections=(),
-        feature_timeline=(),
-        bodies=(),
-        meshes=meshes,
-        capabilities=frozenset({Capability.TESSELLATION}),
-        units=document.units,
-        schema_version=document.schema_version,
-    )
+# this definition exists because focused behavior needs one stable owner
+def XmlString(NodeValue: ET.Element, NameValue: str, Default: str='') -> str:
+    Value = NodeValue.find(f"./Properties/Property[@name='{NameValue}']/String")
+    return Default if Value is None else Value.get('value', Default)
 
+# this definition exists because focused behavior needs one stable owner
+def XmlBool(NodeValue: ET.Element, NameValue: str, Default: bool=False) -> bool:
+    Value = NodeValue.find(f"./Properties/Property[@name='{NameValue}']/Bool")
+    if Value is None:
+        return Default
+    return Value.get('value', 'false').casefold() in XmlTrueValues
 
-def _component_document(
-    document: CadDocument,
-    definition: ComponentDefinition,
-    documents: Mapping[str, CadDocument],
-) -> CadDocument | None:
-    selected_meshes = _selected_meshes(document, definition)
-    linked = documents.get(definition.document_id)
-    if linked is None:
-        return (
-            _mesh_component_document(document, definition, selected_meshes)
-            if selected_meshes
-            else None
-        )
-    selected_ids = {mesh.id for mesh in selected_meshes}
-    meshes = (
-        *selected_meshes,
-        *(mesh for mesh in linked.meshes if mesh.id not in selected_ids),
-    )
-    capabilities = linked.capabilities
-    if meshes:
-        capabilities = capabilities | {Capability.TESSELLATION}
-    return replace(linked, meshes=meshes, capabilities=capabilities)
+# this definition exists because focused behavior needs one stable owner
+def XmlStringList(NodeValue: ET.Element, NameValue: str) -> list[str]:
+    return [Value.get('value', '') for Value in NodeValue.findall(f"./Properties/Property[@name='{NameValue}']/StringList/String")]
 
+# this definition exists because focused behavior needs one stable owner
+def XmlLinkList(NodeValue: ET.Element, NameValue: str) -> list[str]:
+    return [Value.get('value', '') for Value in NodeValue.findall(f"./Properties/Property[@name='{NameValue}']/LinkList/Link")]
 
-def _xml_string(node: ET.Element, name: str, default: str = "") -> str:
-    value = node.find(f"./Properties/Property[@name='{name}']/String")
-    return default if value is None else value.get("value", default)
-
-
-def _xml_bool(node: ET.Element, name: str, default: bool = False) -> bool:
-    value = node.find(f"./Properties/Property[@name='{name}']/Bool")
-    if value is None:
-        return default
-    return value.get("value", "false").casefold() in XML_TRUE_VALUES
-
-
-def _xml_string_list(node: ET.Element, name: str) -> list[str]:
-    return [
-        value.get("value", "")
-        for value in node.findall(
-            f"./Properties/Property[@name='{name}']/StringList/String"
-        )
-    ]
-
-
-def _xml_link_list(node: ET.Element, name: str) -> list[str]:
-    return [
-        value.get("value", "")
-        for value in node.findall(
-            f"./Properties/Property[@name='{name}']/LinkList/Link"
-        )
-    ]
-
-
-def _xml_number(value: str | None, default: float) -> float:
+# this definition exists because focused behavior needs one stable owner
+def XmlNumber(Value: str | None, Default: float) -> float:
     try:
-        return float(value)
+        return float(Value)
     except (TypeError, ValueError):
-        return default
+        return Default
 
-
-def _xml_transform(node: ET.Element) -> list[float]:
-    value = node.find("./Properties/Property[@name='Placement']/PropertyPlacement")
-    if value is None:
-        return [
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-        ]
-    x = _xml_number(value.get("Q0"), 0.0)
-    y = _xml_number(value.get("Q1"), 0.0)
-    z = _xml_number(value.get("Q2"), 0.0)
-    w = _xml_number(value.get("Q3"), 1.0)
-    norm = (x * x + y * y + z * z + w * w) ** 0.5
-    if norm <= 1e-15:
-        x, y, z, w = 0.0, 0.0, 0.0, 1.0
+# this definition exists because focused behavior needs one stable owner
+def XmlTransform(NodeValue: ET.Element) -> list[float]:
+    Value = NodeValue.find("./Properties/Property[@name='Placement']/PropertyPlacement")
+    if Value is None:
+        return [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+    FirstCoord = XmlNumber(Value.get('Q0'), 0.0)
+    SecondCoord = XmlNumber(Value.get('Q1'), 0.0)
+    ThirdCoord = XmlNumber(Value.get('Q2'), 0.0)
+    WidthValue = XmlNumber(Value.get('Q3'), 1.0)
+    NormValue = (FirstCoord * FirstCoord + SecondCoord * SecondCoord + ThirdCoord * ThirdCoord + WidthValue * WidthValue) ** 0.5
+    if NormValue <= 1e-15:
+        FirstCoord, SecondCoord, ThirdCoord, WidthValue = (0.0, 0.0, 0.0, 1.0)
     else:
-        x, y, z, w = x / norm, y / norm, z / norm, w / norm
-    xx, yy, zz = x * x, y * y, z * z
-    xy, xz, yz = x * y, x * z, y * z
-    xw, yw, zw = x * w, y * w, z * w
-    return [
-        1.0 - 2.0 * (yy + zz),
-        2.0 * (xy - zw),
-        2.0 * (xz + yw),
-        _xml_number(value.get("Px"), 0.0),
-        2.0 * (xy + zw),
-        1.0 - 2.0 * (xx + zz),
-        2.0 * (yz - xw),
-        _xml_number(value.get("Py"), 0.0),
-        2.0 * (xz - yw),
-        2.0 * (yz + xw),
-        1.0 - 2.0 * (xx + yy),
-        _xml_number(value.get("Pz"), 0.0),
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-    ]
+        FirstCoord, SecondCoord, ThirdCoord, WidthValue = (FirstCoord / NormValue, SecondCoord / NormValue, ThirdCoord / NormValue, WidthValue / NormValue)
+    XxValue, YyValue, ZzValue = (FirstCoord * FirstCoord, SecondCoord * SecondCoord, ThirdCoord * ThirdCoord)
+    XyValue, XzValue, YzValue = (FirstCoord * SecondCoord, FirstCoord * ThirdCoord, SecondCoord * ThirdCoord)
+    XwValue, YwValue, ZwValue = (FirstCoord * WidthValue, SecondCoord * WidthValue, ThirdCoord * WidthValue)
+    return [1.0 - 2.0 * (YyValue + ZzValue), 2.0 * (XyValue - ZwValue), 2.0 * (XzValue + YwValue), XmlNumber(Value.get('Px'), 0.0), 2.0 * (XyValue + ZwValue), 1.0 - 2.0 * (XxValue + ZzValue), 2.0 * (YzValue - XwValue), XmlNumber(Value.get('Py'), 0.0), 2.0 * (XzValue - YwValue), 2.0 * (YzValue + XwValue), 1.0 - 2.0 * (XxValue + YyValue), XmlNumber(Value.get('Pz'), 0.0), 0.0, 0.0, 0.0, 1.0]
 
-
-def _xml_scale(node: ET.Element) -> list[float]:
-    value = node.find("./Properties/Property[@name='ScaleVector']/PropertyVector")
-    if value is None:
+# this definition exists because focused behavior needs one stable owner
+def XmlScale(NodeValue: ET.Element) -> list[float]:
+    Value = NodeValue.find("./Properties/Property[@name='ScaleVector']/PropertyVector")
+    if Value is None:
         return [1.0, 1.0, 1.0]
-    return [
-        _xml_number(value.get("valueX"), 1.0),
-        _xml_number(value.get("valueY"), 1.0),
-        _xml_number(value.get("valueZ"), 1.0),
-    ]
+    return [XmlNumber(Value.get('valueX'), 1.0), XmlNumber(Value.get('valueY'), 1.0), XmlNumber(Value.get('valueZ'), 1.0)]
 
+# this definition exists because focused behavior needs one stable owner
+def OuterLink(DataValue: bytes) -> tuple[str, list[dict[str, AnyValue]]]:
+    with Zipfile.ZipFile(IoStream.BytesIO(DataValue)) as Archive:
+        RootValue = XmlTree.fromstring(Archive.read(DocEntry))
+    Value = RootValue.find("./ObjectData/Object[@name='KitMetadata']/Properties/Property[@name='ExternalLinkTarget']/String")
+    Target = '' if Value is None else Value.get('value', '')
+    if not Target:
+        raise FreeCadAdapterA('component FCStd has no external link target')
+    Types = {ItemValue.get('name', ''): ItemValue.get('type', '') for ItemValue in RootValue.findall('./Objects/Object')}
+    Objects = {ItemValue.get('name', ''): ItemValue for ItemValue in RootValue.findall('./ObjectData/Object')}
 
-def _external_link_details(data: bytes) -> tuple[str, list[dict[str, Any]]]:
-    with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        root = ET.fromstring(archive.read(DOCUMENT_ENTRY))
-    value = root.find(
-        "./ObjectData/Object[@name='KitMetadata']/Properties/"
-        "Property[@name='ExternalLinkTarget']/String"
-    )
-    target = "" if value is None else value.get("value", "")
-    if not target:
-        raise FreeCADAdapterError("component FCStd has no external link target")
-    types = {
-        item.get("name", ""): item.get("type", "")
-        for item in root.findall("./Objects/Object")
-    }
-    objects = {
-        item.get("name", ""): item for item in root.findall("./ObjectData/Object")
-    }
-
-    def occurrence(name: str, active: frozenset[str]) -> dict[str, Any] | None:
-        node = objects.get(name)
-        type_id = types.get(name, "")
-        if (
-            node is None
-            or name in active
-            or node.find("./Properties/Property[@name='LinkedObject']/XLink") is None
-        ):
+    # this definition exists because focused behavior needs one stable owner
+    def ItemAction(NameValue: str, Active: frozenset[str]) -> dict[str, AnyValue] | None:
+        NodeValue = Objects.get(NameValue)
+        TypeId = Types.get(NameValue, '')
+        if NodeValue is None or NameValue in Active or NodeValue.find("./Properties/Property[@name='LinkedObject']/XLink") is None:
             return None
-        instance_id = _xml_string(node, "InstanceId")
-        if not instance_id:
+        InstanceId = XmlString(NodeValue, 'InstanceId')
+        if not InstanceId:
             return None
-        link_fields = tuple(
-            sorted(
-                property_element.get("name", "")
-                for property_element in node.findall("./Properties/Property")
-                if property_element.get("name", "")
-            )
-        )
-        raw_instance_data = _xml_string(node, "InstanceDataJSON")
-        instance_data: Any = {}
-        if raw_instance_data:
+        LinkFields = tuple(sorted((PropElem.get('name', '') for PropElem in NodeValue.findall('./Properties/Property') if PropElem.get('name', ''))))
+        RawInstanceData = XmlString(NodeValue, 'InstanceDataJSON')
+        InstanceData: AnyValue = {}
+        if RawInstanceData:
             try:
-                instance_data = json.loads(raw_instance_data)
-            except json.JSONDecodeError:
-                instance_data = {}
-        children = [
-            child
-            for child_name in _xml_link_list(node, "Group")
-            if (child := occurrence(child_name, active | {name})) is not None
-        ]
-        return {
-            "target": name,
-            "type_id": type_id,
-            "link_fields": link_fields,
-            "label": _xml_string(node, "Label", name),
-            "instance_id": instance_id,
-            "definition_id": _xml_string(node, "DefinitionId"),
-            "owner_definition_id": _xml_string(node, "OwnerDefinitionId"),
-            "instance_path": _xml_string_list(node, "InstancePath"),
-            "reference_number": _xml_string(node, "ReferenceNumber"),
-            "configuration_name": _xml_string(node, "ConfigurationName"),
-            "configuration_id": _xml_string(node, "ConfigurationId"),
-            "suppressed": _xml_bool(node, "Suppressed"),
-            "hidden": _xml_bool(node, "Hidden"),
-            "fixed": _xml_bool(node, "Fixed"),
-            "flexible": _xml_bool(node, "Flexible"),
-            "exclude_from_bom": _xml_bool(node, "ExcludeFromBOM"),
-            "visibility": _xml_bool(node, "Visibility", True),
-            "rigid": _xml_bool(node, "Rigid", True),
-            "transform": _xml_transform(node),
-            "scale": _xml_scale(node),
-            "instance_data": instance_data,
-            "occurrences": children,
-        }
+                InstanceData = JsonValue.loads(RawInstanceData)
+            except JsonValue.JSONDecodeError:
+                InstanceData = {}
+        Children = [Child for ChildName in XmlLinkList(NodeValue, 'Group') if (Child := ItemAction(ChildName, Active | {NameValue})) is not None]
+        return {'target': NameValue, 'type_id': TypeId, 'link_fields': LinkFields, 'label': XmlString(NodeValue, 'Label', NameValue), 'instance_id': InstanceId, 'definition_id': XmlString(NodeValue, 'DefinitionId'), 'owner_definition_id': XmlString(NodeValue, 'OwnerDefinitionId'), 'instance_path': XmlStringList(NodeValue, 'InstancePath'), 'reference_number': XmlString(NodeValue, 'ReferenceNumber'), 'configuration_name': XmlString(NodeValue, 'ConfigurationName'), 'configuration_id': XmlString(NodeValue, 'ConfigurationId'), 'suppressed': XmlBool(NodeValue, 'Suppressed'), 'hidden': XmlBool(NodeValue, 'Hidden'), 'fixed': XmlBool(NodeValue, 'Fixed'), 'flexible': XmlBool(NodeValue, 'Flexible'), 'exclude_from_bom': XmlBool(NodeValue, 'ExcludeFromBOM'), 'visibility': XmlBool(NodeValue, 'Visibility', True), 'rigid': XmlBool(NodeValue, 'Rigid', True), 'transform': XmlTransform(NodeValue), 'scale': XmlScale(NodeValue), 'instance_data': InstanceData, 'occurrences': Children}
+    TargetNode = Objects.get(Target)
+    Occurrences = [ItemValue for ChildName in XmlLinkList(TargetNode, 'Group') if (ItemValue := ItemAction(ChildName, frozenset())) is not None] if TargetNode is not None else []
+    return (Target, Occurrences)
 
-    target_node = objects.get(target)
-    occurrences = (
-        [
-            item
-            for child_name in _xml_link_list(target_node, "Group")
-            if (item := occurrence(child_name, frozenset())) is not None
-        ]
-        if target_node is not None
-        else []
-    )
-    return target, occurrences
+# this definition exists because focused behavior needs one stable owner
+def OuterLinkTarget(DataValue: bytes) -> str:
+    return OuterLink(DataValue)[0]
 
-
-def _external_link_target(data: bytes) -> str:
-    return _external_link_details(data)[0]
-
-
-def _parsed_timestamp(value: str) -> float | None:
+# this definition exists because focused behavior needs one stable owner
+def ParsedTimestamp(Value: str) -> float | None:
     try:
-        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
-            tzinfo=timezone.utc
-        )
+        Parsed = Datetime.strptime(Value, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=Timezone.utc)
     except ValueError:
         return None
-    return parsed.timestamp()
+    return Parsed.timestamp()
 
-
-def _existing_timestamps(path: Path) -> tuple[float, ...]:
-    values: list[float] = []
+# this definition exists because focused behavior needs one stable owner
+def Existing(PathValue: Path) -> tuple[float, ...]:
+    Values: list[float] = []
     try:
-        values.append(path.stat().st_mtime)
+        Values.append(PathValue.stat().st_mtime)
     except OSError:
         return ()
     try:
-        with zipfile.ZipFile(path) as archive:
-            root = ET.fromstring(archive.read("Document.xml"))
-    except (OSError, KeyError, ET.ParseError, zipfile.BadZipFile):
-        return tuple(values)
-    for property_name in ("CreationDate", "LastModifiedDate"):
-        element = root.find(f"./Properties/Property[@name='{property_name}']/String")
-        parsed = _parsed_timestamp("" if element is None else element.get("value", ""))
-        if parsed is not None:
-            values.append(parsed)
-    for element in root.findall(".//XLink"):
-        parsed = _parsed_timestamp(element.get("stamp", ""))
-        if parsed is not None:
-            values.append(parsed)
-    return tuple(values)
+        with Zipfile.ZipFile(PathValue) as Archive:
+            RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
+    except (OSError, KeyError, XmlTree.ParseError, Zipfile.BadZipFile):
+        return tuple(Values)
+    for PropName in ('CreationDate', 'LastModifiedDate'):
+        ElemValue = RootValue.find(f"./Properties/Property[@name='{PropName}']/String")
+        Parsed = ParsedTimestamp('' if ElemValue is None else ElemValue.get('value', ''))
+        if Parsed is not None:
+            Values.append(Parsed)
+    for ElemValue in RootValue.findall('.//XLink'):
+        Parsed = ParsedTimestamp(ElemValue.get('stamp', ''))
+        if Parsed is not None:
+            Values.append(Parsed)
+    return tuple(Values)
 
-
-def _bundle_timestamp(destination: Path) -> tuple[str, float]:
-    now = datetime.now(timezone.utc).replace(microsecond=0).timestamp()
-    files = [destination]
-    directory = destination.parent / destination.stem
-    if directory.is_dir():
+# this definition exists because focused behavior needs one stable owner
+def BundleTimestamp(Target: Path) -> tuple[str, float]:
+    NowValue = Datetime.now(Timezone.utc).replace(microsecond=0).timestamp()
+    Files = [Target]
+    Folder = Target.parent / Target.stem
+    if Folder.is_dir():
         try:
-            component_files = tuple(
-                path
-                for path in directory.iterdir()
-                if path.is_file() and path.suffix.casefold() == SUFFIX.casefold()
-            )
+            ComponentFiles = tuple((PathValue for PathValue in Folder.iterdir() if PathValue.is_file() and PathValue.suffix.casefold() == Suffix.casefold()))
         except OSError:
-            component_files = ()
-        files.extend(component_files)
-    existing = [timestamp for path in files for timestamp in _existing_timestamps(path)]
-    epoch = int(now)
-    if existing:
-        epoch = max(epoch, int(max(existing)) + 1)
-    modified = datetime.fromtimestamp(epoch, timezone.utc)
-    return modified.strftime("%Y-%m-%dT%H:%M:%SZ"), float(epoch)
+            ComponentFiles = ()
+        Files.extend(ComponentFiles)
+    Existing = [Timestamp for PathValue in Files for Timestamp in Existing(PathValue)]
+    Epoch = int(NowValue)
+    if Existing:
+        Epoch = max(Epoch, int(max(Existing)) + 1)
+    Modified = Datetime.fromtimestamp(Epoch, Timezone.utc)
+    return (Modified.strftime('%Y-%m-%dT%H:%M:%SZ'), float(Epoch))
 
+# this definition exists because focused behavior needs one stable owner
+def Definition(Definition: ComponentDefinition, Documents: Mapping[str, CadDocument]) -> frozenset[tuple[str, str, str]]:
+    Config = Definition.configuration_id or Definition.configuration_name
+    Scope = f'{Definition.kind.value}:{Config}'
+    Values: set[tuple[str, str, str]] = set()
 
-def _definition_sources(
-    definition: ComponentDefinition, documents: Mapping[str, CadDocument]
-) -> frozenset[tuple[str, str, str]]:
-    configuration = definition.configuration_id or definition.configuration_name
-    scope = f"{definition.kind.value}:{configuration}"
-    values: set[tuple[str, str, str]] = set()
+    # this definition exists because focused behavior needs one stable owner
+    def AddAction(ShaTwoFiveSix: str, PathValue: str) -> None:
+        if ShaTwoFiveSix:
+            Values.add(('sha256', ShaTwoFiveSix.casefold(), Scope))
+        if PathValue:
+            Normalized = OsModule.path.normpath(PathValue).replace('\\', '/').casefold()
+            Segments = [Value for Value in Normalized.split('/') if Value]
+            Values.add(('path', Normalized, Scope))
+            Values.add(('path-tail', '/'.join(Segments[-2:]), Scope))
+    AddAction(Definition.source_sha256, Definition.source_path)
+    if Definition.name:
+        Values.add(('name', Definition.name.casefold(), Scope))
+    Linked = Documents.get(Definition.document_id)
+    if Linked is not None:
+        AddAction(Linked.source.sha256, Linked.source.path)
+    return frozenset(Values)
 
-    def add(sha256: str, path: str) -> None:
-        if sha256:
-            values.add(("sha256", sha256.casefold(), scope))
-        if path:
-            normalized = os.path.normpath(path).replace("\\", "/").casefold()
-            segments = [value for value in normalized.split("/") if value]
-            values.add(("path", normalized, scope))
-            values.add(("path-tail", "/".join(segments[-2:]), scope))
-
-    add(definition.source_sha256, definition.source_path)
-    if definition.name:
-        values.add(("name", definition.name.casefold(), scope))
-    linked = documents.get(definition.document_id)
-    if linked is not None:
-        add(linked.source.sha256, linked.source.path)
-    return frozenset(values)
-
-
-def _matching_component_link(
-    definition: ComponentDefinition,
-    documents: Mapping[str, CadDocument],
-    root_definitions: Mapping[str, ComponentDefinition],
-    root_documents: Mapping[str, CadDocument],
-    links: Mapping[str, Mapping[str, Any]],
-) -> Mapping[str, Any] | None:
-    sources = _definition_sources(definition, documents)
-    if not sources:
+# this definition exists because focused behavior needs one stable owner
+def MatchingLink(Definition: ComponentDefinition, Documents: Mapping[str, CadDocument], RootDefinitions: Mapping[str, ComponentDefinition], RootDocuments: Mapping[str, CadDocument], Links: Mapping[str, Mapping[str, Any]]) -> Mapping[str, AnyValue] | None:
+    Sources = Definition(Definition, Documents)
+    if not Sources:
         return None
-    matches = [
-        link
-        for definition_id, link in links.items()
-        if sources
-        & _definition_sources(root_definitions[definition_id], root_documents)
-    ]
-    identities = {
-        (
-            str(link.get("path", "")),
-            str(link.get("target", "")),
-            str(link.get("stamp", "")),
-        )
-        for link in matches
-    }
-    return matches[0] if len(identities) == 1 else None
+    Matches = [LinkValue for DefinitionId, LinkValue in Links.items() if Sources & Definition(RootDefinitions[DefinitionId], RootDocuments)]
+    Identities = {(str(LinkValue.get('path', '')), str(LinkValue.get('target', '')), str(LinkValue.get('stamp', ''))) for LinkValue in Matches}
+    return Matches[0] if len(Identities) == 1 else None
 
-
-def _nested_external_links(
-    component: CadDocument,
-    component_path: Path,
-    root_definitions: Mapping[str, ComponentDefinition],
-    root_documents: Mapping[str, CadDocument],
-    links: Mapping[str, Mapping[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    assembly = component.assembly
-    if assembly is None:
+# this definition exists because focused behavior needs one stable owner
+def NestedOuter(Component: CadDocument, ComponentPath: Path, RootDefinitions: Mapping[str, ComponentDefinition], RootDocuments: Mapping[str, CadDocument], Links: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, AnyValue]]:
+    AsmValue = Component.assembly
+    if AsmValue is None:
         return {}
-    documents = {
-        item.id: item.document
-        for item in assembly.documents
-        if isinstance(item.document, CadDocument)
-    }
-    result: dict[str, dict[str, Any]] = {}
-    for definition in assembly.definitions:
-        if definition.id == assembly.root_definition_id:
+    Documents = {ItemValue.id: ItemValue.document for ItemValue in AsmValue.documents if isinstance(ItemValue.document, CadDoc)}
+    Result: dict[str, dict[str, AnyValue]] = {}
+    for Definition in AsmValue.definitions:
+        if Definition.id == AsmValue.root_definition_id:
             continue
-        link = _matching_component_link(
-            definition,
-            documents,
-            root_definitions,
-            root_documents,
-            links,
-        )
-        if link is None:
+        LinkValue = MatchingLink(Definition, Documents, RootDefinitions, RootDocuments, Links)
+        if LinkValue is None:
             continue
-        path = Path(link["path"])
-        result[definition.id] = {
-            "file": Path(os.path.relpath(path, component_path.parent)).as_posix(),
-            "stamp": str(link.get("stamp", "")),
-            "target": str(link.get("target", "")),
-            "occurrences": list(link.get("occurrences", [])),
-        }
-    return result
+        PathValue = PathValue(LinkValue['path'])
+        Result[Definition.id] = {'file': PathValue(OsModule.path.relpath(PathValue, ComponentPath.parent)).as_posix(), 'stamp': str(LinkValue.get('stamp', '')), 'target': str(LinkValue.get('target', '')), 'occurrences': list(LinkValue.get('occurrences', []))}
+    return Result
 
+# this definition exists because focused behavior needs one stable owner
+def WriteComponents(DocValue: CadDocument, Target: Path, Overwrite: bool, Validate: bool, DocTimestamp: str, TimestampEpoch: float, TrustedNativeBreps: frozenset[NativeBrepKey]=frozenset()) -> tuple[dict[str, dict[str, AnyValue]], int]:
+    AsmValue = DocValue.assembly
+    if AsmValue is None:
+        return ({}, 0)
+    Paths = ComponentPaths(DocValue, Target)
+    if not Overwrite:
+        Existing = next((PathValue for PathValue in Paths.values() if PathValue.exists()), None)
+        if Existing is not None:
+            raise FileExistsError(Existing)
+    Documents = {ItemValue.id: ItemValue.document for ItemValue in AsmValue.documents if isinstance(ItemValue.document, CadDoc)}
+    Definitions = {ItemValue.id: ItemValue for ItemValue in AsmValue.definitions}
+    Plans: list[tuple[str, PathValue, ComponentDefinition, CadDoc]] = []
+    for DefinitionId, PathValue in Paths.items():
+        Definition = Definitions[DefinitionId]
+        Component = ComponentDoc(DocValue, Definition, Documents)
+        if Component is not None:
+            Plans.append((DefinitionId, PathValue, Definition, Component))
 
-def _write_components(
-    document: CadDocument,
-    destination: Path,
-    overwrite: bool,
-    validate: bool,
-    document_timestamp: str,
-    timestamp_epoch: float,
-    trusted_native_breps: frozenset[NativeBrepKey] = frozenset(),
-) -> tuple[dict[str, dict[str, Any]], int]:
-    assembly = document.assembly
-    if assembly is None:
-        return {}, 0
-    paths = _component_paths(document, destination)
-    if not overwrite:
-        existing = next((path for path in paths.values() if path.exists()), None)
-        if existing is not None:
-            raise FileExistsError(existing)
-    documents = {
-        item.id: item.document
-        for item in assembly.documents
-        if isinstance(item.document, CadDocument)
-    }
-    definitions = {item.id: item for item in assembly.definitions}
-    plans: list[tuple[str, Path, ComponentDefinition, CadDocument]] = []
-    for definition_id, path in paths.items():
-        definition = definitions[definition_id]
-        component = _component_document(document, definition, documents)
-        if component is not None:
-            plans.append((definition_id, path, definition, component))
-    plans.sort(key=lambda item: item[2].kind == ComponentKind.ASSEMBLY)
-    component_links: dict[str, dict[str, Any]] = {}
-    external_links: dict[str, dict[str, Any]] = {}
-    bytes_written = 0
-    for definition_id, path, definition, component in plans:
-        if validate:
-            component.assert_valid()
-        nested_links = (
-            _nested_external_links(
-                component,
-                path,
-                definitions,
-                documents,
-                component_links,
-            )
-            if definition.kind == ComponentKind.ASSEMBLY
-            else {}
-        )
-        data = build_fcstd_archive(
-            document_to_manifest(component),
-            external_links=nested_links,
-            document_timestamp=document_timestamp,
-            trusted_native_breps=trusted_native_breps,
-        )
-        target, occurrences = _external_link_details(data)
-        _write_bytes(path, data, overwrite)
-        os.utime(path, (timestamp_epoch, timestamp_epoch))
-        component_links[definition_id] = {
-            "path": path,
-            "stamp": document_timestamp,
-            "target": target,
-            "occurrences": occurrences,
-        }
-        external_links[definition_id] = {
-            "file": path.relative_to(destination.parent).as_posix(),
-            "stamp": document_timestamp,
-            "target": target,
-            "occurrences": occurrences,
-        }
-        bytes_written += len(data)
-    return external_links, bytes_written
+    # this callback exists because local behavior needs one focused transformation
+    Plans.sort(key=lambda ItemValue: ItemValue[2].kind == ComponentKind.ASSEMBLY)
+    ComponentLinks: dict[str, dict[str, AnyValue]] = {}
+    OuterLinks: dict[str, dict[str, AnyValue]] = {}
+    BytesWritten = 0
+    for DefinitionId, PathValue, Definition, Component in Plans:
+        if Validate:
+            Component.assert_valid()
+        NestedLinks = NestedOuter(Component, PathValue, Definitions, Documents, ComponentLinks) if Definition.kind == ComponentKind.ASSEMBLY else {}
+        DataValue = BuildFcstdArchive(DocToManifest(Component), external_links=NestedLinks, document_timestamp=DocTimestamp, trusted_native_breps=TrustedNativeBreps)
+        TargetA, Occurrences = OuterLink(DataValue)
+        WriteBytes(PathValue, DataValue, Overwrite)
+        OsModule.utime(PathValue, (TimestampEpoch, TimestampEpoch))
+        ComponentLinks[DefinitionId] = {'path': PathValue, 'stamp': DocTimestamp, 'target': TargetA, 'occurrences': Occurrences}
+        OuterLinks[DefinitionId] = {'file': PathValue.relative_to(Target.parent).as_posix(), 'stamp': DocTimestamp, 'target': TargetA, 'occurrences': Occurrences}
+        BytesWritten += len(DataValue)
+    return (OuterLinks, BytesWritten)
 
-
-def _native_external_documents(document: CadDocument) -> list[tuple[str, CadDocument]]:
-    metadata = document.metadata
-    freecad = metadata.get("freecad", {}) if isinstance(metadata, Mapping) else {}
-    values = (
-        freecad.get("external_documents", []) if isinstance(freecad, Mapping) else []
-    )
-    if not isinstance(values, Sequence) or isinstance(values, (str, bytes, bytearray)):
-        raise FreeCADAdapterError(
-            "native FreeCAD external document metadata is invalid"
-        )
-    result: list[tuple[str, CadDocument]] = []
-    seen: set[str] = set()
-    total = 0
-    for value in values:
-        if not isinstance(value, Mapping):
-            raise FreeCADAdapterError(
-                "native FreeCAD external document metadata is invalid"
-            )
-        source_file = str(value.get("file", ""))
-        linked = value.get("document")
-        if isinstance(linked, Mapping):
+# this definition exists because focused behavior needs one stable owner
+def NativeOuter(DocValue: CadDocument) -> list[tuple[str, CadDoc]]:
+    MetaValue = DocValue.metadata
+    Freecad = MetaValue.get('freecad', {}) if isinstance(MetaValue, Mapping) else {}
+    Values = Freecad.get('external_documents', []) if isinstance(Freecad, Mapping) else []
+    if not isinstance(Values, Sequence) or isinstance(Values, (str, bytes, bytearray)):
+        raise FreeCadAdapterA('native FreeCAD external document metadata is invalid')
+    Result: list[tuple[str, CadDoc]] = []
+    SeenValue: set[str] = set()
+    Total = 0
+    for Value in Values:
+        if not isinstance(Value, Mapping):
+            raise FreeCadAdapterA('native FreeCAD external document metadata is invalid')
+        SourceFile = str(Value.get('file', ''))
+        Linked = Value.get('document')
+        if isinstance(Linked, Mapping):
             try:
-                linked = CadDocument.from_dict(linked)
+                Linked = CadDoc.from_dict(Linked)
             except (TypeError, ValueError, RecursionError) as exc:
-                raise FreeCADAdapterError(
-                    "native FreeCAD external document metadata is invalid"
-                ) from exc
-        if not source_file or not isinstance(linked, CadDocument):
-            raise FreeCADAdapterError(
-                "native FreeCAD external document metadata is invalid"
-            )
-        if source_file in seen:
-            raise FreeCADAdapterError(
-                "native FreeCAD external document metadata contains duplicates"
-            )
-        seen.add(source_file)
-        native_payload_size = sum(
-            len(payload.data)
-            for payload in linked.brep_payloads
-            if payload.role == PayloadRole.DOCUMENT and payload.data is not None
-        )
-        total += native_payload_size
-        if len(result) >= _MAX_EXTERNAL_FILES or total > _MAX_TOTAL_SIZE:
-            raise FreeCADAdapterError(
-                "native FreeCAD external documents exceed safe limits"
-            )
-        result.append((source_file, linked))
-    return result
+                raise FreeCadAdapterA('native FreeCAD external document metadata is invalid') from exc
+        if not SourceFile or not isinstance(Linked, CadDoc):
+            raise FreeCadAdapterA('native FreeCAD external document metadata is invalid')
+        if SourceFile in SeenValue:
+            raise FreeCadAdapterA('native FreeCAD external document metadata contains duplicates')
+        SeenValue.add(SourceFile)
+        NativePayloadSize = sum((len(Payload.data) for Payload in Linked.brep_payloads if Payload.role == PayloadRole.DOCUMENT and Payload.data is not None))
+        Total += NativePayloadSize
+        if len(Result) >= MaxOuterFiles or Total > MaxTotalSize:
+            raise FreeCadAdapterA('native FreeCAD external documents exceed safe limits')
+        Result.append((SourceFile, Linked))
+    return Result
 
+# this definition exists because focused behavior needs one stable owner
+def WriteNative(DocValue: CadDocument, Target: Path, Overwrite: bool, Validate: bool) -> tuple[dict[str, str], int]:
+    Records = NativeOuter(DocValue)
+    Folder = Target.parent / Target.stem
+    UsedValue: set[str] = set()
+    Links: dict[str, str] = {}
+    BytesWritten = 0
+    for SourceFile, Linked in Records:
+        SourceName = PathValue(SourceFile).name
+        Suffix = PathValue(SourceName).suffix or Suffix
+        BaseValue = ComponentStem(PathValue(SourceName).stem)
+        Choice = BaseValue
+        Index = 1
+        while (Choice + Suffix).casefold() in UsedValue:
+            Index += 1
+            Ending = f'_{Index}'
+            Choice = BaseValue[:120 - len(Ending)].rstrip(' .') + Ending
+        FileName = Choice + Suffix
+        UsedValue.add(FileName.casefold())
+        Output = Folder / FileName
+        Result = FreeCadAdapter().write(Linked, Output, WriteOptions(overwrite=Overwrite, validate=Validate, values={'portable': True}))
+        if Result.bytes_written > MaxEntrySize:
+            raise FreeCadAdapterA('native FreeCAD external document exceeds safe limits')
+        BytesWritten += Result.bytes_written
+        if BytesWritten > MaxTotalSize:
+            raise FreeCadAdapterA('native FreeCAD external documents exceed safe limits')
+        Links[SourceFile] = Output.relative_to(Target.parent).as_posix()
+    return (Links, BytesWritten)
 
-def _write_native_external_documents(
-    document: CadDocument,
-    destination: Path,
-    overwrite: bool,
-    validate: bool,
-) -> tuple[dict[str, str], int]:
-    records = _native_external_documents(document)
-    directory = destination.parent / destination.stem
-    used: set[str] = set()
-    links: dict[str, str] = {}
-    bytes_written = 0
-    for source_file, linked in records:
-        source_name = Path(source_file).name
-        suffix = Path(source_name).suffix or SUFFIX
-        base = _component_stem(Path(source_name).stem)
-        candidate = base
-        index = 1
-        while (candidate + suffix).casefold() in used:
-            index += 1
-            ending = f"_{index}"
-            candidate = base[: 120 - len(ending)].rstrip(" .") + ending
-        filename = candidate + suffix
-        used.add(filename.casefold())
-        output = directory / filename
-        result = FreeCADAdapter().write(
-            linked,
-            output,
-            WriteOptions(
-                overwrite=overwrite,
-                validate=validate,
-                values={"portable": True},
-            ),
-        )
-        if result.bytes_written > _MAX_ENTRY_SIZE:
-            raise FreeCADAdapterError(
-                "native FreeCAD external document exceeds safe limits"
-            )
-        bytes_written += result.bytes_written
-        if bytes_written > _MAX_TOTAL_SIZE:
-            raise FreeCADAdapterError(
-                "native FreeCAD external documents exceed safe limits"
-            )
-        links[source_file] = output.relative_to(destination.parent).as_posix()
-    return links, bytes_written
-
-
-def _manifest_document(value: Mapping[str, Any]) -> CadDocument:
+# this definition exists because focused behavior needs one stable owner
+def ManifestDoc(Value: Mapping[str, Any]) -> CadDoc:
     try:
-        return CadDocument.from_dict(value)
+        return CadDoc.from_dict(Value)
     except (TypeError, ValueError, RecursionError) as exc:
-        raise FreeCADAdapterError(
-            "embedded neutral document cannot be restored"
-        ) from exc
+        raise FreeCadAdapterA('embedded neutral document cannot be restored') from exc
 
+# this definition exists because focused behavior needs one stable owner
+def Selected(Configurations: tuple[Configuration, ...], Selected: str | None) -> tuple[Config, ...]:
+    if Selected is None:
+        return Configurations
+    Matches = {Config.id for Config in Configurations if Selected in {Config.id, Config.name}}
+    if not Matches:
+        raise FreeCadAdapterA(f'configuration {Selected!r} is unavailable')
+    return tuple((Replace(Config, active=Config.id in Matches) for Config in Configurations))
 
-def _selected_configurations(
-    configurations: tuple[Configuration, ...], selected: str | None
-) -> tuple[Configuration, ...]:
-    if selected is None:
-        return configurations
-    matches = {
-        configuration.id
-        for configuration in configurations
-        if selected in {configuration.id, configuration.name}
-    }
-    if not matches:
-        raise FreeCADAdapterError(f"configuration {selected!r} is unavailable")
-    return tuple(
-        replace(configuration, active=configuration.id in matches)
-        for configuration in configurations
-    )
+# this definition exists because focused behavior needs one stable owner
+class FreeCadAdapter:
 
-
-class FreeCADAdapter:
+    # this definition exists because focused behavior needs one stable owner
     @property
-    def info(self) -> AdapterInfo:
-        return INFO
+    def InfoAction(Instance) -> AdapterInfo:
+        return InfoValue
 
-    def probe(self, source: Source) -> ProbeResult:
+    # this definition exists because focused behavior needs one stable owner
+    def Probe(Instance, Source: Source) -> ProbeResult:
         try:
-            data = _source_bytes(source)
-            archive, members = _validated_archive_members(data)
-            archive.close()
-            if MANIFEST_ENTRY in members:
+            DataValue = SourceBytes(Source)
+            Archive, Members = ValidatedArchiveMembers(DataValue)
+            Archive.close()
+            if ManifestEntry in Members:
                 try:
-                    value = extract_manifest_from_fcstd(data)
-                    _manifest_document(value)
-                except (ValueError, FreeCADAdapterError) as exc:
-                    return ProbeResult(self.info.format_id, 0.0, str(exc))
-                return ProbeResult(self.info.format_id, 1.0, "Kit FCStd archive")
-            if "Document.xml" in members:
+                    Value = ExtractManifestFromFcstd(DataValue)
+                    ManifestDoc(Value)
+                except (ValueError, FreeCadAdapterA) as exc:
+                    return ProbeResult(Instance.info.format_id, 0.0, str(exc))
+                return ProbeResult(Instance.info.format_id, 1.0, 'Kit FCStd archive')
+            if 'Document.xml' in Members:
                 try:
-                    value = extract_manifest_from_fcstd(data)
+                    Value = ExtractManifestFromFcstd(DataValue)
                 except ValueError as exc:
-                    if (
-                        str(exc)
-                        != "FCStd archive has no embedded Kit interchange document"
-                    ):
-                        return ProbeResult(self.info.format_id, 0.0, str(exc))
+                    if str(exc) != 'FCStd archive has no embedded Kit interchange document':
+                        return ProbeResult(Instance.info.format_id, 0.0, str(exc))
                 else:
                     try:
-                        _manifest_document(value)
-                    except FreeCADAdapterError as exc:
-                        return ProbeResult(self.info.format_id, 0.0, str(exc))
-                    return ProbeResult(self.info.format_id, 1.0, "Kit FCStd archive")
-                confidence, reason = probe_native_fcstd(data)
-                return ProbeResult(self.info.format_id, confidence, reason)
-        except (OSError, TypeError, ValueError, zipfile.BadZipFile) as exc:
-            return ProbeResult(self.info.format_id, 0.0, str(exc))
-        return ProbeResult(
-            self.info.format_id, 0.0, "ZIP archive has no FreeCAD document"
-        )
+                        ManifestDoc(Value)
+                    except FreeCadAdapterA as exc:
+                        return ProbeResult(Instance.info.format_id, 0.0, str(exc))
+                    return ProbeResult(Instance.info.format_id, 1.0, 'Kit FCStd archive')
+                Confidence, Reason = ProbeNativeFcstd(DataValue)
+                return ProbeResult(Instance.info.format_id, Confidence, Reason)
+        except (OSError, TypeError, ValueError, Zipfile.BadZipFile) as exc:
+            return ProbeResult(Instance.info.format_id, 0.0, str(exc))
+        return ProbeResult(Instance.info.format_id, 0.0, 'ZIP archive has no FreeCAD document')
 
-    def read(self, source: Source, options: ReadOptions | None = None) -> CadDocument:
-        settings = options or ReadOptions(include_tessellation=True)
-        data = _source_bytes(source)
-        native = False
+    # this definition exists because focused behavior needs one stable owner
+    def ReadAction(Instance, Source: Source, Options: ReadOptions | None=None) -> CadDoc:
+        Settings = Options or ReadOptions(include_tessellation=True)
+        DataValue = SourceBytes(Source)
+        Native = False
         try:
-            value = extract_manifest_from_fcstd(data)
+            Value = ExtractManifestFromFcstd(DataValue)
         except ValueError as exc:
-            if str(exc) != "FCStd archive has no embedded Kit interchange document":
-                raise FreeCADAdapterError(str(exc)) from exc
+            if str(exc) != 'FCStd archive has no embedded Kit interchange document':
+                raise FreeCadAdapterA(str(exc)) from exc
             try:
-                document = read_native_fcstd(data, _source_path(source))
-            except (NativeFreeCADError, TypeError, ValueError) as native_exc:
-                raise FreeCADAdapterError(str(native_exc)) from native_exc
-            native = True
+                DocValue = ReadNativeFcstd(DataValue, SourcePath(Source))
+            except (NativeFreeCadError, TypeError, ValueError) as native_exc:
+                raise FreeCadAdapterA(str(native_exc)) from native_exc
+            Native = True
         else:
-            document = _manifest_document(value)
-        if native:
-            document = _annotate_native_sources(document)
-        document = replace(
-            document,
-            configurations=_selected_configurations(
-                document.configurations, settings.configuration
-            ),
-        )
-        document = _filtered_document(document, settings)
-        if settings.strict:
-            document.assert_valid()
-        return document
+            DocValue = ManifestDoc(Value)
+        if Native:
+            DocValue = AnnotateNative(DocValue)
+        DocValue = Replace(DocValue, configurations=Selected(DocValue.configurations, Settings.configuration))
+        DocValue = FilteredDoc(DocValue, Settings)
+        if Settings.strict:
+            DocValue.assert_valid()
+        return DocValue
 
-    def supports(self, document: CadDocument, destination: Destination) -> bool:
-        path = _destination_path(destination)
-        if path is not None:
-            return path.suffix.casefold() == SUFFIX.casefold()
-        if not is_binary_destination(destination):
+    # this definition exists because focused behavior needs one stable owner
+    def Supports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+        PathValue = TargetPath(Target)
+        if PathValue is not None:
+            return PathValue.suffix.casefold() == Suffix.casefold()
+        if not IsBinaryTarget(Target):
             return False
-        writable = getattr(destination, "writable", None)
-        if callable(writable):
+        Writable = getattr(Target, 'writable', None)
+        if callable(Writable):
             try:
-                return bool(writable())
+                return bool(Writable())
             except (OSError, ValueError):
                 return False
         return True
 
-    def write(
-        self,
-        document: CadDocument,
-        destination: Destination,
-        options: WriteOptions | None = None,
-        *,
-        overwrite: bool | None = None,
-    ) -> WriteResult:
-        selected = options or WriteOptions()
-        should_overwrite = selected.overwrite if overwrite is None else overwrite
-        if selected.validate:
-            document.assert_valid()
-        if not self.supports(document, destination):
-            raise FreeCADAdapterError(
-                f"FreeCAD destination must be a {SUFFIX} path or writable binary stream"
-            )
-        destination_path = _destination_path(destination)
-        if (
-            destination_path is not None
-            and destination_path.exists()
-            and not should_overwrite
-        ):
-            raise FileExistsError(destination_path)
-        portable = selected.values.get("portable", True) is True
-        native_external_documents = _native_external_documents(document)
-        verified_native_source = _unchanged_native_source(document)
-        trusted_native_breps = _trusted_native_breps(document)
-        native_source = (
-            None
-            if selected.values.get("rebuild", False) is True
-            or (
-                portable
-                and (document.assembly is not None or bool(native_external_documents))
-            )
-            else verified_native_source
-        )
-        if native_source is not None:
-            path = _write_bytes(destination, native_source, should_overwrite)
-            external_requirements = document.assembly is not None or bool(
-                native_external_documents
-            )
-            requirements = (
-                ("referenced FreeCAD component files",) if external_requirements else ()
-            )
-            return WriteResult(
-                path=path,
-                adapter=self.info.format_id,
-                bytes_written=len(native_source),
-                diagnostics=document.diagnostics,
-                transfers=_capability_transfers(
-                    document,
-                    destination_path,
-                    portable,
-                    True,
-                ),
-                metadata={
-                    "mode": "exact_native_roundtrip",
-                    "compatibility": "native-exact",
-                    "vendor_loadable": True,
-                    "application_usable": True,
-                    "native_self_contained": not external_requirements,
-                    "referenced_files_written": 0,
-                    "runtime": "python-stdlib",
-                },
-                requirements=requirements,
-                application_usable=True,
-                vendor_loadable=True,
-            )
-        external_links: dict[str, dict[str, Any]] = {}
-        native_external_links: dict[str, str] = {}
-        component_bytes_written = 0
-        native_external_bytes_written = 0
-        document_timestamp: str | None = None
-        timestamp_epoch: float | None = None
-        carrier_only_references = (
-            destination_path is None
-            and portable
-            and (bool(native_external_documents) or document.assembly is not None)
-        )
-        if destination_path is not None and document.assembly is not None:
-            document_timestamp, timestamp_epoch = _bundle_timestamp(destination_path)
-            external_links, component_bytes_written = _write_components(
-                document,
-                destination_path,
-                should_overwrite,
-                selected.validate,
-                document_timestamp,
-                timestamp_epoch,
-                trusted_native_breps,
-            )
-        if destination_path is not None and native_external_documents and portable:
-            native_external_links, native_external_bytes_written = (
-                _write_native_external_documents(
-                    document,
-                    destination_path,
-                    should_overwrite,
-                    selected.validate,
-                )
-            )
-        manifest = document_to_manifest(document)
-        data = build_fcstd_archive(
-            manifest,
-            external_links=external_links,
-            native_external_links=native_external_links,
-            document_timestamp=document_timestamp,
-            trusted_native_breps=trusted_native_breps,
-        )
-        path = _write_bytes(destination, data, should_overwrite)
-        if path is not None and timestamp_epoch is not None:
-            os.utime(path, (timestamp_epoch, timestamp_epoch))
-        transfers = _capability_transfers(
-            document,
-            destination_path,
-            portable,
-            False,
-            trusted_native_breps,
-        )
-        application_usable = not carrier_only_references and _native_geometry_is_usable(
-            document,
-            trusted_native_breps,
-        )
-        metadata = {
-            "schema_version": document.schema_version,
-            "sketch_count": len(document.sketches),
-            "timeline_count": len(document.feature_timeline),
-            "native_payload_count": len(document.brep_payloads),
-            "assembly_occurrence_count": (
-                len(document.assembly.instances) if document.assembly is not None else 0
-            ),
-            "assembly_mate_count": (
-                len(document.assembly.mates) if document.assembly is not None else 0
-            ),
-            "component_file_count": len(external_links),
-            "component_bytes_written": component_bytes_written,
-            "external_document_file_count": len(native_external_links),
-            "external_document_bytes_written": native_external_bytes_written,
-            "runtime": "python-stdlib",
-            "recompute_required": True,
-            "native_referenced_files_emitted": not carrier_only_references,
-            "carrier_embedded_reference_count": (
-                len(native_external_documents)
-                + (
-                    len(document.assembly.documents)
-                    if document.assembly is not None
-                    else 0
-                )
-            ),
-            "application_usable": application_usable,
-            "vendor_loadable": True,
-        }
-        diagnostics = document.diagnostics
-        if carrier_only_references:
-            diagnostics = (
-                *diagnostics,
-                Diagnostic(
-                    "freecad.references_embedded_without_files",
-                    "Referenced documents are retained in the Kit carrier but cannot be exposed as native relative files from a stream destination",
-                    Severity.WARNING,
-                ),
-            )
-        return WriteResult(
-            path=path,
-            adapter=self.info.format_id,
-            bytes_written=len(data),
-            diagnostics=diagnostics,
-            metadata=metadata,
-            transfers=transfers,
-            application_usable=application_usable,
-            vendor_loadable=True,
-        )
+    # this definition exists because focused behavior needs one stable owner
+    def Write(Instance, DocValue: CadDocument, Target: Destination, Options: WriteOptions | None=None, *, Overwrite: bool | None=None) -> WriteResult:
+        Selected = Options or WriteOptions()
+        ShouldOverwrite = Selected.overwrite if Overwrite is None else Overwrite
+        if Selected.validate:
+            DocValue.assert_valid()
+        if not Instance.supports(DocValue, Target):
+            raise FreeCadAdapterA(f'FreeCAD destination must be a {Suffix} path or writable binary stream')
+        TargetPath = TargetPath(Target)
+        if TargetPath is not None and TargetPath.exists() and (not ShouldOverwrite):
+            raise FileExistsError(TargetPath)
+        Portable = Selected.values.get('portable', True) is True
+        NativeOuterDocuments = NativeOuter(DocValue)
+        VerifiedNativeSource = UnchangedNative(DocValue)
+        TrustedNativeBreps = TrustedNative(DocValue)
+        NativeSource = None if Selected.values.get('rebuild', False) is True or (Portable and (DocValue.assembly is not None or bool(NativeOuterDocuments))) else VerifiedNativeSource
+        if NativeSource is not None:
+            PathValue = WriteBytes(Target, NativeSource, ShouldOverwrite)
+            OuterRequirements = DocValue.assembly is not None or bool(NativeOuterDocuments)
+            Requirements = ('referenced FreeCAD component files',) if OuterRequirements else ()
+            return WriteResult(path=PathValue, adapter=Instance.info.format_id, bytes_written=len(NativeSource), diagnostics=DocValue.diagnostics, transfers=CapabilityA(DocValue, TargetPath, Portable, True), metadata={'mode': 'exact_native_roundtrip', 'compatibility': 'native-exact', 'vendor_loadable': True, 'application_usable': True, 'native_self_contained': not OuterRequirements, 'referenced_files_written': 0, 'runtime': 'python-stdlib'}, requirements=Requirements, application_usable=True, vendor_loadable=True)
+        OuterLinks: dict[str, dict[str, AnyValue]] = {}
+        NativeOuterLinks: dict[str, str] = {}
+        ComponentBytesWritten = 0
+        NativeOuterBytesWritten = 0
+        DocTimestamp: str | None = None
+        TimestampEpoch: float | None = None
+        CarrierOnlyReferences = TargetPath is None and Portable and (bool(NativeOuterDocuments) or DocValue.assembly is not None)
+        if TargetPath is not None and DocValue.assembly is not None:
+            DocTimestamp, TimestampEpoch = BundleTimestamp(TargetPath)
+            OuterLinks, ComponentBytesWritten = WriteComponents(DocValue, TargetPath, ShouldOverwrite, Selected.validate, DocTimestamp, TimestampEpoch, TrustedNativeBreps)
+        if TargetPath is not None and NativeOuterDocuments and Portable:
+            NativeOuterLinks, NativeOuterBytesWritten = WriteNative(DocValue, TargetPath, ShouldOverwrite, Selected.validate)
+        Manifest = DocToManifest(DocValue)
+        DataValue = BuildFcstdArchive(Manifest, external_links=OuterLinks, native_external_links=NativeOuterLinks, document_timestamp=DocTimestamp, trusted_native_breps=TrustedNativeBreps)
+        PathValue = WriteBytes(Target, DataValue, ShouldOverwrite)
+        if PathValue is not None and TimestampEpoch is not None:
+            OsModule.utime(PathValue, (TimestampEpoch, TimestampEpoch))
+        Transfers = CapabilityA(DocValue, TargetPath, Portable, False, TrustedNativeBreps)
+        AppUsable = not CarrierOnlyReferences and NativeGeomIs(DocValue, TrustedNativeBreps)
+        MetaValue = {'schema_version': DocValue.schema_version, 'sketch_count': len(DocValue.sketches), 'timeline_count': len(DocValue.feature_timeline), 'native_payload_count': len(DocValue.brep_payloads), 'assembly_occurrence_count': len(DocValue.assembly.instances) if DocValue.assembly is not None else 0, 'assembly_mate_count': len(DocValue.assembly.mates) if DocValue.assembly is not None else 0, 'component_file_count': len(OuterLinks), 'component_bytes_written': ComponentBytesWritten, 'external_document_file_count': len(NativeOuterLinks), 'external_document_bytes_written': NativeOuterBytesWritten, 'runtime': 'python-stdlib', 'recompute_required': True, 'native_referenced_files_emitted': not CarrierOnlyReferences, 'carrier_embedded_reference_count': len(NativeOuterDocuments) + (len(DocValue.assembly.documents) if DocValue.assembly is not None else 0), 'application_usable': AppUsable, 'vendor_loadable': True}
+        Diagnostics = DocValue.diagnostics
+        if CarrierOnlyReferences:
+            Diagnostics = (*Diagnostics, DiagValue('freecad.references_embedded_without_files', 'Referenced documents are retained in the Kit carrier but cannot be exposed as native relative files from a stream destination', Severity.WARNING))
+        return WriteResult(path=PathValue, adapter=Instance.info.format_id, bytes_written=len(DataValue), diagnostics=Diagnostics, metadata=MetaValue, transfers=Transfers, application_usable=AppUsable, vendor_loadable=True)
 
+# this definition exists because focused behavior needs one stable owner
+def ExtractFreecad(Source: Source) -> dict[str, AnyValue]:
+    return ExtractManifestFromFcstd(SourceBytes(Source))
 
-def extract_freecad_manifest(source: Source) -> dict[str, Any]:
-    return extract_manifest_from_fcstd(_source_bytes(source))
+# this definition exists because focused behavior needs one stable owner
+def ReadFreecad(Source: Source, Options: ReadOptions | None=None) -> CadDoc:
+    return FreeCadAdapter().read(Source, Options)
 
+# this definition exists because focused behavior needs one stable owner
+def WriteFreecad(DocValue: CadDocument, Target: Destination, *, Overwrite: bool=False, Validate: bool=True) -> WriteResult:
+    return FreeCadAdapter().write(DocValue, Target, WriteOptions(overwrite=Overwrite, validate=Validate))
 
-def read_freecad(source: Source, options: ReadOptions | None = None) -> CadDocument:
-    return FreeCADAdapter().read(source, options)
+# this binding exists because shared behavior needs one stable value
+globals()['Any'] = AnyValue
 
+# this binding exists because shared behavior needs one stable value
+globals()['CAPABILITY_CARRIER_REASONS'] = CapabilityCarrierReasons
 
-def write_freecad(
-    document: CadDocument,
-    destination: Destination,
-    *,
-    overwrite: bool = False,
-    validate: bool = True,
-) -> WriteResult:
-    return FreeCADAdapter().write(
-        document, destination, WriteOptions(overwrite=overwrite, validate=validate)
-    )
+# this binding exists because shared behavior needs one stable value
+globals()['CadDocument'] = CadDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['Configuration'] = Config
+
+# this binding exists because shared behavior needs one stable value
+globals()['DOCUMENT_ENTRY'] = DocEntry
+
+# this binding exists because shared behavior needs one stable value
+globals()['Destination'] = Target
+
+# this binding exists because shared behavior needs one stable value
+globals()['Diagnostic'] = DiagValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['ET'] = XmlTree
+
+# this binding exists because shared behavior needs one stable value
+globals()['FEATURE_WRITE_KINDS'] = FeatureWriteKinds
+
+# this binding exists because shared behavior needs one stable value
+globals()['FREECAD_BREP_FORMAT_IDS'] = FreecadBrepFormatIds
+
+# this binding exists because shared behavior needs one stable value
+globals()['FreeCADAdapter'] = FreeCadAdapter
+
+# this binding exists because shared behavior needs one stable value
+globals()['FreeCADAdapterError'] = FreeCadAdapterA
+
+# this binding exists because shared behavior needs one stable value
+globals()['FreeCADBrepWriteError'] = FreeCadBrepWriteError
+
+# this binding exists because shared behavior needs one stable value
+globals()['INFO'] = InfoValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['MANIFEST_ENTRY'] = ManifestEntry
+
+# this binding exists because shared behavior needs one stable value
+globals()['MATE_WRITE_KINDS'] = MateWriteKinds
+
+# this binding exists because shared behavior needs one stable value
+globals()['Mesh'] = MeshValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['NATIVE_DOCUMENT_SHA256_ATTRIBUTE'] = NativeDocShaTwoFiveSix
+
+# this binding exists because shared behavior needs one stable value
+globals()['NativeFreeCADError'] = NativeFreeCadError
+
+# this binding exists because shared behavior needs one stable value
+globals()['Path'] = PathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['SUFFIX'] = Suffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['XML_TRUE_VALUES'] = XmlTrueValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_FEATURE_WRITE_VALUES'] = KFeatureWriteValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MATE_WRITE_VALUES'] = KMateWriteValues
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_ENTRY_SIZE'] = MaxEntrySize
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_EXTERNAL_FILES'] = MaxOuterFiles
+
+# this binding exists because shared behavior needs one stable value
+globals()['_MAX_TOTAL_SIZE'] = MaxTotalSize
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NATIVE_DOCUMENT_BINDING_ID'] = KNativeDocBindingId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NATIVE_DOCUMENT_ID'] = KNativeDocId
+
+# this binding exists because shared behavior needs one stable value
+globals()['_NATIVE_EXTRUSION_END_CONDITIONS'] = KNativeExtrusionEnd
+
+# this binding exists because shared behavior needs one stable value
+globals()['_REPLAY_SEMANTIC_ATTRIBUTE'] = KReplaySemanticAttr
+
+# this binding exists because shared behavior needs one stable value
+globals()['_annotate_native_sources'] = AnnotateNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_archive_member_data'] = ArchiveMember
+
+# this binding exists because shared behavior needs one stable value
+globals()['_bundle_timestamp'] = BundleTimestamp
+
+# this binding exists because shared behavior needs one stable value
+globals()['_capability_transfers'] = CapabilityA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_carrier_reason'] = CarrierReasonA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_component_document'] = ComponentDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_component_paths'] = ComponentPaths
+
+# this binding exists because shared behavior needs one stable value
+globals()['_component_stem'] = ComponentStem
+
+# this binding exists because shared behavior needs one stable value
+globals()['_configuration_parts'] = ConfigParts
+
+# this binding exists because shared behavior needs one stable value
+globals()['_definition_sources'] = Definition
+
+# this binding exists because shared behavior needs one stable value
+globals()['_destination_path'] = TargetPath
+
+# this binding exists because shared behavior needs one stable value
+globals()['_document_tree'] = DocTree
+
+# this binding exists because shared behavior needs one stable value
+globals()['_enum_text'] = EnumText
+
+# this binding exists because shared behavior needs one stable value
+globals()['_existing_timestamps'] = Existing
+
+# this binding exists because shared behavior needs one stable value
+globals()['_external_link_details'] = OuterLink
+
+# this binding exists because shared behavior needs one stable value
+globals()['_external_link_target'] = OuterLinkTarget
+
+# this binding exists because shared behavior needs one stable value
+globals()['_extrusion_is_native'] = ExtrusionIs
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_has_native_edges'] = FeatureHasEdges
+
+# this binding exists because shared behavior needs one stable value
+globals()['_feature_parts'] = FeatureParts
+
+# this binding exists because shared behavior needs one stable value
+globals()['_filtered_document'] = FilteredDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_has_native_freecad_graph'] = HasNativeGraph
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_native_document'] = IsNativeDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_native_document_binding'] = IsNativeDocA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_is_native_envelope'] = IsNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_manifest_brep_payloads'] = ManifestBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['_manifest_document'] = ManifestDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_manifest_native_brep_key'] = ManifestNativeBrepKey
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mapped_external_documents'] = MappedOuter
+
+# this binding exists because shared behavior needs one stable value
+globals()['_matching_component_link'] = MatchingLink
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mate_parts'] = MateParts
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mesh_component_document'] = MeshComponent
+
+# this binding exists because shared behavior needs one stable value
+globals()['_mesh_is_usable'] = MeshIsUsable
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_document_pair'] = NativeDocPair
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_document_sha256'] = NativeDocShaTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_external_documents'] = NativeOuter
+
+# this binding exists because shared behavior needs one stable value
+globals()['_native_geometry_is_usable'] = NativeGeomIs
+
+# this binding exists because shared behavior needs one stable value
+globals()['_nested_external_links'] = NestedOuter
+
+# this binding exists because shared behavior needs one stable value
+globals()['_neutral_brep_is_native'] = NeutralBrepIs
+
+# this binding exists because shared behavior needs one stable value
+globals()['_parsed_timestamp'] = ParsedTimestamp
+
+# this binding exists because shared behavior needs one stable value
+globals()['_payload_is_exact_native_brep'] = PayloadIsExact
+
+# this binding exists because shared behavior needs one stable value
+globals()['_payload_is_reattachable_brep'] = PayloadIsBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['_payload_matches_native_archive'] = PayloadMatches
+
+# this binding exists because shared behavior needs one stable value
+globals()['_payload_native_brep'] = PayloadNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_selected_configurations'] = Selected
+
+# this binding exists because shared behavior needs one stable value
+globals()['_selected_meshes'] = SelectedMeshes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_selection_parts'] = SelectionParts
+
+# this binding exists because shared behavior needs one stable value
+globals()['_semantic_digest'] = SemanticDigest
+
+# this binding exists because shared behavior needs one stable value
+globals()['_semantic_document'] = SemanticDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['_source_bytes'] = SourceBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_source_path'] = SourcePath
+
+# this binding exists because shared behavior needs one stable value
+globals()['_transfer_mode'] = TransferModeA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_trusted_native_breps'] = TrustedNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_unchanged_native_source'] = UnchangedNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_validated_archive_members'] = ValidatedArchiveMembers
+
+# this binding exists because shared behavior needs one stable value
+globals()['_validated_document_xml'] = ValidatedDocXml
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_bytes'] = WriteBytes
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_components'] = WriteComponents
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_native_external_documents'] = WriteNative
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_bool'] = XmlBool
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_element_data'] = XmlElemData
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_link_list'] = XmlLinkList
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_number'] = XmlNumber
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_scale'] = XmlScale
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_string'] = XmlString
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_string_list'] = XmlStringList
+
+# this binding exists because shared behavior needs one stable value
+globals()['_xml_transform'] = XmlTransform
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['brep_model_brep'] = BrepModelBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['build_fcstd_archive'] = BuildFcstdArchive
+
+# this binding exists because shared behavior needs one stable value
+globals()['datetime'] = Datetime
+
+# this binding exists because shared behavior needs one stable value
+globals()['document_to_manifest'] = DocToManifest
+
+# this binding exists because shared behavior needs one stable value
+globals()['extract_freecad_manifest'] = ExtractFreecad
+
+# this binding exists because shared behavior needs one stable value
+globals()['extract_manifest_from_fcstd'] = ExtractManifestFromFcstd
+
+# this binding exists because shared behavior needs one stable value
+globals()['filter_document'] = FilterDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['frozen_mapping'] = FrozenMapping
+
+# this binding exists because shared behavior needs one stable value
+globals()['hashlib'] = Hashlib
+
+# this binding exists because shared behavior needs one stable value
+globals()['infer_capabilities'] = InferCapabilities
+
+# this binding exists because shared behavior needs one stable value
+globals()['io'] = IoStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['is_binary_destination'] = IsBinaryTarget
+
+# this binding exists because shared behavior needs one stable value
+globals()['is_windows_device_name'] = IsWindowsDeviceName
+
+# this binding exists because shared behavior needs one stable value
+globals()['json'] = JsonValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['math'] = MathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['native_expression_parts'] = NativeExpressionParts
+
+# this binding exists because shared behavior needs one stable value
+globals()['native_shape_feature_count'] = NativeShapeFeatureCount
+
+# this binding exists because shared behavior needs one stable value
+globals()['native_sketch_carrier_reasons'] = NativeSketchCarrier
+
+# this binding exists because shared behavior needs one stable value
+globals()['native_sketch_parts'] = NativeSketchParts
+
+# this binding exists because shared behavior needs one stable value
+globals()['os'] = OsModule
+
+# this binding exists because shared behavior needs one stable value
+globals()['probe_native_fcstd'] = ProbeNativeFcstd
+
+# this binding exists because shared behavior needs one stable value
+globals()['proven_ascii_brep'] = ProvenAsciiBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['re'] = RegexLib
+
+# this binding exists because shared behavior needs one stable value
+globals()['read_freecad'] = ReadFreecad
+
+# this binding exists because shared behavior needs one stable value
+globals()['read_native_fcstd'] = ReadNativeFcstd
+
+# this binding exists because shared behavior needs one stable value
+globals()['replace'] = Replace
+
+# this binding exists because shared behavior needs one stable value
+globals()['semantic_metadata'] = SemanticMeta
+
+# this binding exists because shared behavior needs one stable value
+globals()['source_payload_indexes'] = SourcePayloadIndexes
+
+# this binding exists because shared behavior needs one stable value
+globals()['suppress'] = Suppress
+
+# this binding exists because shared behavior needs one stable value
+globals()['tempfile'] = Tempfile
+
+# this binding exists because shared behavior needs one stable value
+globals()['timezone'] = Timezone
+
+# this binding exists because shared behavior needs one stable value
+globals()['write_freecad'] = WriteFreecad
+
+# this binding exists because shared behavior needs one stable value
+globals()['zipfile'] = Zipfile
+setattr(FreeCadAdapterA, '__init__', FreeCadAdapterA.InitAction)
+setattr(FreeCadAdapter, 'info', FreeCadAdapter.InfoAction)
+setattr(FreeCadAdapter, 'probe', FreeCadAdapter.Probe)
+setattr(FreeCadAdapter, 'read', FreeCadAdapter.ReadAction)
+setattr(FreeCadAdapter, 'supports', FreeCadAdapter.Supports)
+setattr(FreeCadAdapter, 'write', FreeCadAdapter.Write)

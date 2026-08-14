@@ -6,7 +6,41 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from convert.adapters.catia.Adapter import CatiaAdapter, CatiaAdapterError, read_catia, write_catia
-from convert.adapters.catia.Container import Cfv2Archive, Cfv2Declaration, Cfv2Directory, Cfv2Extent, Cfv2FormatError, Cfv2Stream, OsmxArchive, OsmxFormatError, OsmxSymbol, append_cfv2_stream, build_cfv2, build_declaration
+from convert.adapters.catia.Adapter import CatiaAdapter, CatiaAdapterError, read_catia as ReadCatia, write_catia as WriteCatia
+from convert.adapters.catia.Container import Cfv2Archive as CfvTwoArchive, Cfv2Declaration as CfvTwoDecl, Cfv2Directory as CfvTwoFolder, Cfv2Extent as CfvTwoExtent, Cfv2FormatError as CfvTwoFormatError, Cfv2Stream as CfvTwoStream, OsmxArchive, OsmxFormatError, OsmxSymbol, append_cfv2_stream as AppendCfvTwoStream, build_cfv2 as BuildCfvTwo, build_declaration as BuildDecl
 
-__all__ = [name for name in globals() if not name.startswith("_")]
+# this binding exists because shared behavior needs one stable value
+KAllValue = [NameValue for NameValue in globals() if not NameValue.startswith('_')]
+
+# this binding exists because shared behavior needs one stable value
+globals()['Cfv2Archive'] = CfvTwoArchive
+
+# this binding exists because shared behavior needs one stable value
+globals()['Cfv2Declaration'] = CfvTwoDecl
+
+# this binding exists because shared behavior needs one stable value
+globals()['Cfv2Directory'] = CfvTwoFolder
+
+# this binding exists because shared behavior needs one stable value
+globals()['Cfv2Extent'] = CfvTwoExtent
+
+# this binding exists because shared behavior needs one stable value
+globals()['Cfv2FormatError'] = CfvTwoFormatError
+
+# this binding exists because shared behavior needs one stable value
+globals()['Cfv2Stream'] = CfvTwoStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['append_cfv2_stream'] = AppendCfvTwoStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['build_cfv2'] = BuildCfvTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['build_declaration'] = BuildDecl
+
+# this binding exists because shared behavior needs one stable value
+globals()['read_catia'] = ReadCatia
+
+# this binding exists because shared behavior needs one stable value
+globals()['write_catia'] = WriteCatia

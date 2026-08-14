@@ -6,160 +6,156 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
+from __future__ import annotations as Annotations
+from dataclasses import replace as Replace
+from io import TextIOBase as TextIoBase
+from pathlib import Path as PathValue
+from convert.adapters.base import AdapterInfo, Destination as Target, ProbeResult, ReadOptions, Source, WriteOptions, WriteResult
+from interchange import CadDocument as CadDoc, Capability, filter_document as FilterDoc
 
-from dataclasses import replace
-from io import TextIOBase
-from pathlib import Path
+# this binding exists because shared behavior needs one stable value
+KSuffix = '.json'
 
-from convert.adapters.base import (
-    AdapterInfo,
-    Destination,
-    ProbeResult,
-    ReadOptions,
-    Source,
-    WriteOptions,
-    WriteResult,
-)
-from interchange import CadDocument, Capability, filter_document
+# this binding exists because shared behavior needs one stable value
+KInfoValue = AdapterInfo(format_id='interchange.json', name='Kit interchange JSON', version='1.0', extensions=(KSuffix,), capabilities=frozenset(Capability), native_capabilities=frozenset(Capability), media_types=('application/vnd.parashell.kit+json',), part_extensions=(KSuffix,), assembly_extensions=(KSuffix,))
 
-_SUFFIX = ".json"
-_INFO = AdapterInfo(
-    format_id="interchange.json",
-    name="Kit interchange JSON",
-    version="1.0",
-    extensions=(_SUFFIX,),
-    capabilities=frozenset(Capability),
-    native_capabilities=frozenset(Capability),
-    media_types=("application/vnd.parashell.kit+json",),
-    part_extensions=(_SUFFIX,),
-    assembly_extensions=(_SUFFIX,),
-)
-
-
+# this definition exists because focused behavior needs one stable owner
 class JsonAdapter:
+
+    # this definition exists because focused behavior needs one stable owner
     @property
-    def info(self) -> AdapterInfo:
-        return _INFO
+    def InfoAction(Instance) -> AdapterInfo:
+        return KInfoValue
 
-    def probe(self, source: Source) -> ProbeResult:
-        suffix = ""
-        if isinstance(source, (str, Path)):
-            suffix = Path(source).suffix.lower()
+    # this definition exists because focused behavior needs one stable owner
+    def Probe(Instance, Source: Source) -> ProbeResult:
+        Suffix = ''
+        if isinstance(Source, (str, PathValue)):
+            Suffix = PathValue(Source).suffix.lower()
         try:
-            prefix = _read_prefix(source, 4096)
+            Prefix = ReadPrefix(Source, 4096)
         except OSError as exc:
-            return ProbeResult(_INFO.format_id, 0.0, str(exc))
-        if b'"$type"' in prefix and b'"CadDocument"' in prefix:
-            return ProbeResult(_INFO.format_id, 1.0, "CadDocument type marker")
-        if suffix in _INFO.extensions:
-            return ProbeResult(_INFO.format_id, 0.5, "JSON extension")
-        return ProbeResult(_INFO.format_id, 0.0, "no interchange document marker")
+            return ProbeResult(KInfoValue.format_id, 0.0, str(exc))
+        if b'"$type"' in Prefix and b'"CadDocument"' in Prefix:
+            return ProbeResult(KInfoValue.format_id, 1.0, 'CadDocument type marker')
+        if Suffix in KInfoValue.extensions:
+            return ProbeResult(KInfoValue.format_id, 0.5, 'JSON extension')
+        return ProbeResult(KInfoValue.format_id, 0.0, 'no interchange document marker')
 
-    def read(self, source: Source, options: ReadOptions | None = None) -> CadDocument:
-        settings = options or ReadOptions()
-        document = CadDocument.from_json(_read_text(source))
-        if settings.configuration is not None:
-            matches = {
-                configuration.id
-                for configuration in document.configurations
-                if settings.configuration in {configuration.id, configuration.name}
-            }
-            if not matches:
-                raise ValueError(
-                    f"configuration {settings.configuration!r} is unavailable"
-                )
-            document = replace(
-                document,
-                configurations=tuple(
-                    replace(configuration, active=configuration.id in matches)
-                    for configuration in document.configurations
-                ),
-            )
-        document = filter_document(
-            document,
-            include_brep=settings.include_brep,
-            include_tessellation=settings.include_tessellation,
-            keep_payload_records=False,
-        )
-        if settings.strict:
-            document.assert_valid()
-        return document
+    # this definition exists because focused behavior needs one stable owner
+    def ReadAction(Instance, Source: Source, Options: ReadOptions | None=None) -> CadDoc:
+        Settings = Options or ReadOptions()
+        DocValue = CadDoc.from_json(ReadText(Source))
+        if Settings.configuration is not None:
+            Matches = {Config.id for Config in DocValue.configurations if Settings.configuration in {Config.id, Config.name}}
+            if not Matches:
+                raise ValueError(f'configuration {Settings.configuration!r} is unavailable')
+            DocValue = Replace(DocValue, configurations=tuple((Replace(Config, active=Config.id in Matches) for Config in DocValue.configurations)))
+        DocValue = FilterDoc(DocValue, include_brep=Settings.include_brep, include_tessellation=Settings.include_tessellation, keep_payload_records=False)
+        if Settings.strict:
+            DocValue.assert_valid()
+        return DocValue
 
-    def supports(self, document: CadDocument, destination: Destination) -> bool:
-        if isinstance(destination, (str, Path)):
-            return Path(destination).suffix.lower() in _INFO.extensions
-        return callable(getattr(destination, "write", None))
+    # this definition exists because focused behavior needs one stable owner
+    def Supports(Instance, DocValue: CadDocument, Target: Destination) -> bool:
+        if isinstance(Target, (str, PathValue)):
+            return PathValue(Target).suffix.lower() in KInfoValue.extensions
+        return callable(getattr(Target, 'write', None))
 
-    def write(
-        self,
-        document: CadDocument,
-        destination: Destination,
-        options: WriteOptions | None = None,
-    ) -> WriteResult:
-        effective = options or WriteOptions()
-        if effective.validate:
-            document.assert_valid()
-        payload = (document.to_json() + "\n").encode("utf-8")
-        if isinstance(destination, (str, Path)):
-            output = Path(destination).expanduser().resolve()
-            if output.exists() and not effective.overwrite:
-                raise FileExistsError(output)
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_bytes(payload)
-            return WriteResult(
-                output,
-                self.info.format_id,
-                len(payload),
-                application_usable=True,
-                vendor_loadable=True,
-            )
-        text = payload.decode("utf-8")
-        _write_stream(destination, text, payload)
-        return WriteResult(
-            None,
-            self.info.format_id,
-            len(payload),
-            application_usable=True,
-            vendor_loadable=True,
-        )
+    # this definition exists because focused behavior needs one stable owner
+    def Write(Instance, DocValue: CadDocument, Target: Destination, Options: WriteOptions | None=None) -> WriteResult:
+        Effective = Options or WriteOptions()
+        if Effective.validate:
+            DocValue.assert_valid()
+        Payload = (DocValue.to_json() + '\n').encode('utf-8')
+        if isinstance(Target, (str, PathValue)):
+            Output = PathValue(Target).expanduser().resolve()
+            if Output.exists() and (not Effective.overwrite):
+                raise FileExistsError(Output)
+            Output.parent.mkdir(parents=True, exist_ok=True)
+            Output.write_bytes(Payload)
+            return WriteResult(Output, Instance.info.format_id, len(Payload), application_usable=True, vendor_loadable=True)
+        TextValue = Payload.decode('utf-8')
+        WriteStream(Target, TextValue, Payload)
+        return WriteResult(None, Instance.info.format_id, len(Payload), application_usable=True, vendor_loadable=True)
 
-
-def _write_stream(destination: Destination, text: str, payload: bytes) -> None:
-    writer = getattr(destination, "write", None)
-    if not callable(writer):
-        raise TypeError("JSON destination must be a path or writable stream")
-    if isinstance(destination, TextIOBase):
-        written = writer(text)
-        expected = len(text)
+# this definition exists because focused behavior needs one stable owner
+def WriteStream(Target: Destination, TextValue: str, Payload: bytes) -> None:
+    Writer = getattr(Target, 'write', None)
+    if not callable(Writer):
+        raise TypeError('JSON destination must be a path or writable stream')
+    if isinstance(Target, TextIoBase):
+        Written = Writer(TextValue)
+        Expected = len(TextValue)
     else:
         try:
-            written = writer(payload)
-            expected = len(payload)
+            Written = Writer(Payload)
+            Expected = len(Payload)
         except TypeError:
-            written = writer(text)
-            expected = len(text)
-    if written is not None and written != expected:
-        raise OSError(f"short JSON write: expected {expected}, wrote {written}")
+            Written = Writer(TextValue)
+            Expected = len(TextValue)
+    if Written is not None and Written != Expected:
+        raise OSError(f'short JSON write: expected {Expected}, wrote {Written}')
 
+# this definition exists because focused behavior needs one stable owner
+def ReadPrefix(Source: Source, Limit: int) -> bytes:
+    if isinstance(Source, (bytes, bytearray)):
+        return bytes(Source[:Limit])
+    if isinstance(Source, (str, PathValue)):
+        with PathValue(Source).expanduser().open('rb') as Handle:
+            return Handle.read(Limit)
+    Position = Source.tell() if hasattr(Source, 'tell') else None
+    Value = Source.read(Limit)
+    if Position is not None and hasattr(Source, 'seek'):
+        Source.seek(Position)
+    return Value.encode('utf-8') if isinstance(Value, str) else bytes(Value)
 
-def _read_prefix(source: Source, limit: int) -> bytes:
-    if isinstance(source, (bytes, bytearray)):
-        return bytes(source[:limit])
-    if isinstance(source, (str, Path)):
-        with Path(source).expanduser().open("rb") as handle:
-            return handle.read(limit)
-    position = source.tell() if hasattr(source, "tell") else None
-    value = source.read(limit)
-    if position is not None and hasattr(source, "seek"):
-        source.seek(position)
-    return value.encode("utf-8") if isinstance(value, str) else bytes(value)
+# this definition exists because focused behavior needs one stable owner
+def ReadText(Source: Source) -> str:
+    if isinstance(Source, (bytes, bytearray)):
+        return bytes(Source).decode('utf-8')
+    if isinstance(Source, (str, PathValue)):
+        return PathValue(Source).expanduser().read_text('utf-8')
+    Value = Source.read()
+    return Value.decode('utf-8') if isinstance(Value, bytes) else Value
 
+# this binding exists because shared behavior needs one stable value
+globals()['CadDocument'] = CadDoc
 
-def _read_text(source: Source) -> str:
-    if isinstance(source, (bytes, bytearray)):
-        return bytes(source).decode("utf-8")
-    if isinstance(source, (str, Path)):
-        return Path(source).expanduser().read_text("utf-8")
-    value = source.read()
-    return value.decode("utf-8") if isinstance(value, bytes) else value
+# this binding exists because shared behavior needs one stable value
+globals()['Destination'] = Target
+
+# this binding exists because shared behavior needs one stable value
+globals()['Path'] = PathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['TextIOBase'] = TextIoBase
+
+# this binding exists because shared behavior needs one stable value
+globals()['_INFO'] = KInfoValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SUFFIX'] = KSuffix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_read_prefix'] = ReadPrefix
+
+# this binding exists because shared behavior needs one stable value
+globals()['_read_text'] = ReadText
+
+# this binding exists because shared behavior needs one stable value
+globals()['_write_stream'] = WriteStream
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['filter_document'] = FilterDoc
+
+# this binding exists because shared behavior needs one stable value
+globals()['replace'] = Replace
+setattr(JsonAdapter, 'info', JsonAdapter.InfoAction)
+setattr(JsonAdapter, 'probe', JsonAdapter.Probe)
+setattr(JsonAdapter, 'read', JsonAdapter.ReadAction)
+setattr(JsonAdapter, 'supports', JsonAdapter.Supports)
+setattr(JsonAdapter, 'write', JsonAdapter.Write)

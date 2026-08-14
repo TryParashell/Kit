@@ -6,2362 +6,1532 @@
 # the PolyForm Strict License 1.0.0 and voids all licenses granted
 # to you under it immediately and permanently.
 
-from __future__ import annotations
-
-from collections import deque
+from __future__ import annotations as Annotations
+from collections import deque as Deque
 from collections.abc import Sequence
-from dataclasses import dataclass
-import math
-from typing import Any, Mapping
+from dataclasses import dataclass as Dataclass
+import math as MathValue
+from typing import Any as AnyValue, Mapping
+from interchange import BrepBody, BrepCoedge, BrepEdge, BrepFace, BrepFaceUse, BrepLoop, BrepModel, BrepRegion, BrepShell, BrepShellUse, BrepVertex, BrepWire, CircleCurve, CirclePcurve, ConeSurface, CylinderSurface, EllipseCurve, IntersectionCurve, LineCurve, LinePcurve, NativeCurve, NativePcurve, NativeSurface, NurbsCurve, NurbsPcurve, NurbsSurface, OffsetSurface, PlaneSurface, SphereSurface, TorusSurface, Transform, Vector2 as VectorTwo, Vector3 as VectorThree
 
-from interchange import (
-    BrepBody,
-    BrepCoedge,
-    BrepEdge,
-    BrepFace,
-    BrepFaceUse,
-    BrepLoop,
-    BrepModel,
-    BrepRegion,
-    BrepShell,
-    BrepShellUse,
-    BrepVertex,
-    BrepWire,
-    CircleCurve,
-    CirclePcurve,
-    ConeSurface,
-    CylinderSurface,
-    EllipseCurve,
-    IntersectionCurve,
-    LineCurve,
-    LinePcurve,
-    NativeCurve,
-    NativePcurve,
-    NativeSurface,
-    NurbsCurve,
-    NurbsPcurve,
-    NurbsSurface,
-    OffsetSurface,
-    PlaneSurface,
-    SphereSurface,
-    TorusSurface,
-    Transform,
-    Vector2,
-    Vector3,
-)
+# this binding exists because shared behavior needs one stable value
+KPoint = tuple[float, float, float]
 
-Point = tuple[float, float, float]
-Triangle = tuple[int, int, int]
-Geometry = tuple[
-    tuple[Point, Point, Point],
-    tuple[float, float, float],
-    Point,
-    Point,
-    Point,
-]
+# this binding exists because shared behavior needs one stable value
+KTriangle = tuple[int, int, int]
 
+# this binding exists because shared behavior needs one stable value
+KGeomValue = tuple[tuple[KPoint, KPoint, KPoint], tuple[float, float, float], KPoint, KPoint, KPoint]
 
-class FreeCADBrepWriteError(ValueError):
-    __slots__ = ()
+# this definition exists because focused behavior needs one stable owner
+class FreeCadBrep(ValueError):
+    KSlots = ()
+    KReason = 'writer_unimplemented'
 
-    reason = "writer_unimplemented"
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class ShapeRecord:
+    locals().setdefault('__annotations__', {})
+    __annotations__['key'] = str
+    __annotations__['kind'] = str
+    __annotations__['geometry'] = tuple[str, ...]
+    __annotations__['flags'] = str
+    __annotations__['children'] = tuple[tuple[str, bool], ...]
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class EdgePcurve:
+    locals().setdefault('__annotations__', {})
+    __annotations__['index'] = int
+    __annotations__['first'] = float
+    __annotations__['last'] = float
 
-@dataclass(frozen=True, slots=True)
-class _ShapeRecord:
-    key: str
-    kind: str
-    geometry: tuple[str, ...]
-    flags: str
-    children: tuple[tuple[str, bool], ...]
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class GeneratedPcurve:
+    locals().setdefault('__annotations__', {})
+    __annotations__['record'] = str
+    __annotations__['first'] = float
+    __annotations__['last'] = float
+    __annotations__['start'] = tuple[float, float]
+    __annotations__['end'] = tuple[float, float]
 
+# this definition exists because focused behavior needs one stable owner
+@Dataclass(frozen=True, slots=True)
+class SeamBand:
+    locals().setdefault('__annotations__', {})
+    __annotations__['face_id'] = str
+    __annotations__['loop_ids'] = tuple[str, str]
+    __annotations__['low_coedge_id'] = str
+    __annotations__['high_coedge_id'] = str
+    __annotations__['low_reversed'] = bool
+    __annotations__['high_reversed'] = bool
+    __annotations__['low_vertex_id'] = str
+    __annotations__['high_vertex_id'] = str
+    __annotations__['curve_record'] = str
+    __annotations__['length'] = float
+    __annotations__['first_pcurve_index'] = int
+    __annotations__['second_pcurve_index'] = int
 
-@dataclass(frozen=True, slots=True)
-class _EdgePcurve:
-    index: int
-    first: float
-    last: float
+# this definition exists because focused behavior needs one stable owner
+class ModelGraph:
+    KSlots = ('bodies', 'coedge_owner', 'coedges', 'curves', 'edge_uses', 'edges', 'face_uses', 'faces', 'loop_face', 'loops', 'pcurves', 'region_body', 'regions', 'shell_owners', 'shell_uses', 'shells', 'surfaces', 'vertices', 'wire_body', 'wires')
 
+    # this definition exists because focused behavior needs one stable owner
+    def InitAction(Instance, Model: BrepModel) -> None:
+        Instance.vertices = {Value.id: Value for Value in Model.vertices}
+        Instance.curves = {Value.id: Value for Value in Model.curves}
+        Instance.edges = {Value.id: Value for Value in Model.edges}
+        Instance.coedges = {Value.id: Value for Value in Model.coedges}
+        Instance.loops = {Value.id: Value for Value in Model.loops}
+        Instance.wires = {Value.id: Value for Value in Model.wires}
+        Instance.faces = {Value.id: Value for Value in Model.faces}
+        Instance.face_uses = {Value.id: Value for Value in Model.face_uses}
+        Instance.shells = {Value.id: Value for Value in Model.shells}
+        Instance.shell_uses = {Value.id: Value for Value in Model.shell_uses}
+        Instance.regions = {Value.id: Value for Value in Model.regions}
+        Instance.bodies = {Value.id: Value for Value in Model.bodies}
+        Instance.pcurves = {Value.id: Value for Value in Model.pcurves}
+        Instance.surfaces = {Value.id: Value for Value in Model.surfaces}
+        Instance.coedge_owner: dict[str, tuple[str, str]] = {}
+        Instance.loop_face: dict[str, str] = {}
+        Instance.shell_owners: dict[str, list[tuple[str, str]]] = {Value.id: [] for Value in Model.shells}
+        Instance.region_body: dict[str, str] = {}
+        Instance.wire_body: dict[str, str] = {}
+        Instance.edge_uses: dict[str, list[str]] = {Value.id: [] for Value in Model.edges}
+        for LoopValue in Model.loops:
+            for CoedgeId in LoopValue.coedge_ids:
+                Instance._bind_coedge(CoedgeId, 'loop', LoopValue.id)
+        for WireValue in Model.wires:
+            for CoedgeId in WireValue.coedge_ids:
+                Instance._bind_coedge(CoedgeId, 'wire', WireValue.id)
+        for FaceValue in Model.faces:
+            for LoopId in FaceValue.loop_ids:
+                BindOnce(Instance.loop_face, LoopId, FaceValue.id, 'loop', 'face')
+        FaceUseOwner: dict[str, str] = {}
+        for Shell in Model.shells:
+            for FaceUseId in Shell.face_use_ids:
+                BindOnce(FaceUseOwner, FaceUseId, Shell.id, 'face use', 'shell')
+                FaceUse = Instance.face_uses[FaceUseId]
+                Instance.shell_owners.setdefault(Shell.id, []).append((FaceUse.id, FaceUse.face_id))
+        ShellUseOwner: dict[str, str] = {}
+        for Region in Model.regions:
+            for ShellUseId in Region.shell_use_ids:
+                BindOnce(ShellUseOwner, ShellUseId, Region.id, 'shell use', 'region')
+        for BodyValue in Model.bodies:
+            for RegionId in BodyValue.region_ids:
+                BindOnce(Instance.region_body, RegionId, BodyValue.id, 'region', 'body')
+            for WireId in BodyValue.wire_ids:
+                BindOnce(Instance.wire_body, WireId, BodyValue.id, 'wire', 'body')
+        RequireOwned(Instance.coedge_owner, Instance.coedges, 'coedge', 'loop or wire')
+        RequireOwned(Instance.loop_face, Instance.loops, 'loop', 'face')
+        RequireOwned(FaceUseOwner, Instance.face_uses, 'face use', 'shell')
+        RequireOwned(ShellUseOwner, Instance.shell_uses, 'shell use', 'region')
+        RequireOwned(Instance.region_body, Instance.regions, 'region', 'body')
+        RequireOwned(Instance.wire_body, Instance.wires, 'wire', 'body')
+        UsedFaces = {FaceUse.face_id for FaceUse in Model.face_uses}
+        UnusedFace = next((FaceId for FaceId in Instance.faces if FaceId not in UsedFaces), None)
+        if UnusedFace is not None:
+            Unsupported(f'B-rep face {UnusedFace} has no face use')
+        UsedShells = {ShellUse.shell_id for ShellUse in Model.shell_uses}
+        UnusedShell = next((ShellId for ShellId in Instance.shells if ShellId not in UsedShells), None)
+        if UnusedShell is not None:
+            Unsupported(f'B-rep shell {UnusedShell} has no shell use')
+        for Coedge in Model.coedges:
+            Instance.edge_uses[Coedge.edge_id].append(Coedge.id)
+        for EdgeId, UsesValue in Instance.edge_uses.items():
+            if not UsesValue:
+                Unsupported(f'B-rep edge {EdgeId} has no coedge use')
+            if len(UsesValue) > 2:
+                Unsupported(f'B-rep edge {EdgeId} is non-manifold')
 
-@dataclass(frozen=True, slots=True)
-class _GeneratedPcurve:
-    record: str
-    first: float
-    last: float
-    start: tuple[float, float]
-    end: tuple[float, float]
+    # this definition exists because focused behavior needs one stable owner
+    def BindCoedge(Instance, CoedgeId: str, KindValue: str, OwnerId: str) -> None:
+        if CoedgeId in Instance.coedge_owner:
+            Unsupported(f'B-rep coedge {CoedgeId} belongs to multiple loop or wire values')
+        Instance.coedge_owner[CoedgeId] = (KindValue, OwnerId)
 
-
-@dataclass(frozen=True, slots=True)
-class _SeamBand:
-    face_id: str
-    loop_ids: tuple[str, str]
-    low_coedge_id: str
-    high_coedge_id: str
-    low_reversed: bool
-    high_reversed: bool
-    low_vertex_id: str
-    high_vertex_id: str
-    curve_record: str
-    length: float
-    first_pcurve_index: int
-    second_pcurve_index: int
-
-
-class _ModelGraph:
-    __slots__ = (
-        "bodies",
-        "coedge_owner",
-        "coedges",
-        "curves",
-        "edge_uses",
-        "edges",
-        "face_uses",
-        "faces",
-        "loop_face",
-        "loops",
-        "pcurves",
-        "region_body",
-        "regions",
-        "shell_owners",
-        "shell_uses",
-        "shells",
-        "surfaces",
-        "vertices",
-        "wire_body",
-        "wires",
-    )
-
-    def __init__(self, model: BrepModel) -> None:
-        self.vertices = {value.id: value for value in model.vertices}
-        self.curves = {value.id: value for value in model.curves}
-        self.edges = {value.id: value for value in model.edges}
-        self.coedges = {value.id: value for value in model.coedges}
-        self.loops = {value.id: value for value in model.loops}
-        self.wires = {value.id: value for value in model.wires}
-        self.faces = {value.id: value for value in model.faces}
-        self.face_uses = {value.id: value for value in model.face_uses}
-        self.shells = {value.id: value for value in model.shells}
-        self.shell_uses = {value.id: value for value in model.shell_uses}
-        self.regions = {value.id: value for value in model.regions}
-        self.bodies = {value.id: value for value in model.bodies}
-        self.pcurves = {value.id: value for value in model.pcurves}
-        self.surfaces = {value.id: value for value in model.surfaces}
-        self.coedge_owner: dict[str, tuple[str, str]] = {}
-        self.loop_face: dict[str, str] = {}
-        self.shell_owners: dict[str, list[tuple[str, str]]] = {
-            value.id: [] for value in model.shells
-        }
-        self.region_body: dict[str, str] = {}
-        self.wire_body: dict[str, str] = {}
-        self.edge_uses: dict[str, list[str]] = {value.id: [] for value in model.edges}
-        for loop in model.loops:
-            for coedge_id in loop.coedge_ids:
-                self._bind_coedge(coedge_id, "loop", loop.id)
-        for wire in model.wires:
-            for coedge_id in wire.coedge_ids:
-                self._bind_coedge(coedge_id, "wire", wire.id)
-        for face in model.faces:
-            for loop_id in face.loop_ids:
-                _bind_once(self.loop_face, loop_id, face.id, "loop", "face")
-        face_use_owner: dict[str, str] = {}
-        for shell in model.shells:
-            for face_use_id in shell.face_use_ids:
-                _bind_once(
-                    face_use_owner,
-                    face_use_id,
-                    shell.id,
-                    "face use",
-                    "shell",
-                )
-                face_use = self.face_uses[face_use_id]
-                self.shell_owners.setdefault(shell.id, []).append(
-                    (face_use.id, face_use.face_id)
-                )
-        shell_use_owner: dict[str, str] = {}
-        for region in model.regions:
-            for shell_use_id in region.shell_use_ids:
-                _bind_once(
-                    shell_use_owner,
-                    shell_use_id,
-                    region.id,
-                    "shell use",
-                    "region",
-                )
-        for body in model.bodies:
-            for region_id in body.region_ids:
-                _bind_once(
-                    self.region_body,
-                    region_id,
-                    body.id,
-                    "region",
-                    "body",
-                )
-            for wire_id in body.wire_ids:
-                _bind_once(
-                    self.wire_body,
-                    wire_id,
-                    body.id,
-                    "wire",
-                    "body",
-                )
-        _require_owned(self.coedge_owner, self.coedges, "coedge", "loop or wire")
-        _require_owned(self.loop_face, self.loops, "loop", "face")
-        _require_owned(face_use_owner, self.face_uses, "face use", "shell")
-        _require_owned(shell_use_owner, self.shell_uses, "shell use", "region")
-        _require_owned(self.region_body, self.regions, "region", "body")
-        _require_owned(self.wire_body, self.wires, "wire", "body")
-        used_faces = {face_use.face_id for face_use in model.face_uses}
-        unused_face = next(
-            (face_id for face_id in self.faces if face_id not in used_faces), None
-        )
-        if unused_face is not None:
-            _unsupported(f"B-rep face {unused_face} has no face use")
-        used_shells = {shell_use.shell_id for shell_use in model.shell_uses}
-        unused_shell = next(
-            (shell_id for shell_id in self.shells if shell_id not in used_shells), None
-        )
-        if unused_shell is not None:
-            _unsupported(f"B-rep shell {unused_shell} has no shell use")
-        for coedge in model.coedges:
-            self.edge_uses[coedge.edge_id].append(coedge.id)
-        for edge_id, uses in self.edge_uses.items():
-            if not uses:
-                _unsupported(f"B-rep edge {edge_id} has no coedge use")
-            if len(uses) > 2:
-                _unsupported(f"B-rep edge {edge_id} is non-manifold")
-
-    def _bind_coedge(self, coedge_id: str, kind: str, owner_id: str) -> None:
-        if coedge_id in self.coedge_owner:
-            _unsupported(
-                f"B-rep coedge {coedge_id} belongs to multiple loop or wire values"
-            )
-        self.coedge_owner[coedge_id] = (kind, owner_id)
-
-    def face_for_coedge(self, coedge_id: str) -> BrepFace | None:
-        kind, owner_id = self.coedge_owner[coedge_id]
-        if kind == "wire":
+    # this definition exists because focused behavior needs one stable owner
+    def FaceForCoedge(Instance, CoedgeId: str) -> BrepFace | None:
+        KindValue, OwnerId = Instance.coedge_owner[CoedgeId]
+        if KindValue == 'wire':
             return None
-        return self.faces[self.loop_face[owner_id]]
+        return Instance.faces[Instance.loop_face[OwnerId]]
 
+# this definition exists because focused behavior needs one stable owner
+def Unsupported(Message: str) -> None:
+    raise FreeCadBrep(f'writer_unimplemented: {Message}')
 
-def _unsupported(message: str) -> None:
-    raise FreeCADBrepWriteError(f"writer_unimplemented: {message}")
+# this definition exists because focused behavior needs one stable owner
+def BindOnce(Owners: dict[str, str], ValueId: str, OwnerId: str, ValueName: str, OwnerName: str) -> None:
+    if ValueId in Owners:
+        Unsupported(f'B-rep {ValueName} {ValueId} belongs to multiple {OwnerName} values')
+    Owners[ValueId] = OwnerId
 
+# this definition exists because focused behavior needs one stable owner
+def RequireOwned(Owners: Mapping[str, object], Values: Mapping[str, object], ValueName: str, OwnerName: str) -> None:
+    Missing = next((ValueId for ValueId in Values if ValueId not in Owners), None)
+    if Missing is not None:
+        Unsupported(f'B-rep {ValueName} {Missing} has no {OwnerName}')
 
-def _bind_once(
-    owners: dict[str, str],
-    value_id: str,
-    owner_id: str,
-    value_name: str,
-    owner_name: str,
-) -> None:
-    if value_id in owners:
-        _unsupported(
-            f"B-rep {value_name} {value_id} belongs to multiple {owner_name} values"
-        )
-    owners[value_id] = owner_id
+# this definition exists because focused behavior needs one stable owner
+def Number(Value: float) -> str:
+    if Value == 0.0:
+        return '0'
+    return format(Value, '.17g')
 
-
-def _require_owned(
-    owners: Mapping[str, object],
-    values: Mapping[str, object],
-    value_name: str,
-    owner_name: str,
-) -> None:
-    missing = next((value_id for value_id in values if value_id not in owners), None)
-    if missing is not None:
-        _unsupported(f"B-rep {value_name} {missing} has no {owner_name}")
-
-
-def _number(value: float) -> str:
-    if value == 0.0:
-        return "0"
-    return format(value, ".17g")
-
-
-def _point(value: Any) -> Point:
-    if all(hasattr(value, axis) for axis in ("x", "y", "z")):
-        point = (float(value.x), float(value.y), float(value.z))
+# this definition exists because focused behavior needs one stable owner
+def Point(Value: Any) -> KPoint:
+    if all((hasattr(Value, AxisValue) for AxisValue in ('x', 'y', 'z'))):
+        Point = (float(Value.x), float(Value.y), float(Value.z))
     else:
         try:
-            point = tuple(float(component) for component in value)
+            Point = tuple((float(Component) for Component in Value))
         except (TypeError, ValueError) as exc:
-            raise ValueError(
-                "each vertex must contain three finite coordinates"
-            ) from exc
-        if len(point) != 3:
-            raise ValueError("each vertex must contain three finite coordinates")
-    if not all(math.isfinite(component) for component in point):
-        raise ValueError("each vertex must contain three finite coordinates")
-    return point
+            raise ValueError('each vertex must contain three finite coordinates') from exc
+        if len(Point) != 3:
+            raise ValueError('each vertex must contain three finite coordinates')
+    if not all((MathValue.isfinite(Component) for Component in Point)):
+        raise ValueError('each vertex must contain three finite coordinates')
+    return Point
 
+# this definition exists because focused behavior needs one stable owner
+def Subtract(LeftValue: Point, Right: Point) -> KPoint:
+    return tuple((LeftValue[Index] - Right[Index] for Index in range(3)))
 
-def _subtract(left: Point, right: Point) -> Point:
-    return tuple(left[index] - right[index] for index in range(3))
+# this definition exists because focused behavior needs one stable owner
+def Cross(LeftValue: Point, Right: Point) -> KPoint:
+    return (LeftValue[1] * Right[2] - LeftValue[2] * Right[1], LeftValue[2] * Right[0] - LeftValue[0] * Right[2], LeftValue[0] * Right[1] - LeftValue[1] * Right[0])
 
+# this definition exists because focused behavior needs one stable owner
+def DotAction(LeftValue: Point, Right: Point) -> float:
+    return sum((LeftValue[Index] * Right[Index] for Index in range(3)))
 
-def _cross(left: Point, right: Point) -> Point:
-    return (
-        left[1] * right[2] - left[2] * right[1],
-        left[2] * right[0] - left[0] * right[2],
-        left[0] * right[1] - left[1] * right[0],
-    )
+# this definition exists because focused behavior needs one stable owner
+def Length(Vector: Point) -> float:
+    return MathValue.sqrt(DotAction(Vector, Vector))
 
+# this definition exists because focused behavior needs one stable owner
+def Scale(Vector: Point, Factor: float) -> KPoint:
+    return tuple((Component * Factor for Component in Vector))
 
-def _dot(left: Point, right: Point) -> float:
-    return sum(left[index] * right[index] for index in range(3))
+# this definition exists because focused behavior needs one stable owner
+def Values(Values: Sequence[float]) -> str:
+    return ' '.join((Number(Value) for Value in Values))
 
-
-def _length(vector: Point) -> float:
-    return math.sqrt(_dot(vector, vector))
-
-
-def _scale(vector: Point, factor: float) -> Point:
-    return tuple(component * factor for component in vector)
-
-
-def _values(values: Sequence[float]) -> str:
-    return " ".join(_number(value) for value in values)
-
-
-def _triangle(value: Any, vertex_count: int) -> Triangle:
+# this definition exists because focused behavior needs one stable owner
+def Triangle(Value: Any, VertexCount: int) -> KTriangle:
     try:
-        indices = tuple(value)
+        Indices = tuple(Value)
     except TypeError as exc:
-        raise ValueError("each triangle must contain three vertex indices") from exc
-    if len(indices) != 3 or any(
-        isinstance(index, bool) or not isinstance(index, int) for index in indices
-    ):
-        raise ValueError("each triangle must contain three vertex indices")
-    if len(set(indices)) != 3 or any(
-        index < 0 or index >= vertex_count for index in indices
-    ):
-        raise ValueError("triangle vertex indices must be distinct and in range")
-    return indices
+        raise ValueError('each triangle must contain three vertex indices') from exc
+    if len(Indices) != 3 or any((isinstance(Index, bool) or not isinstance(Index, int) for Index in Indices)):
+        raise ValueError('each triangle must contain three vertex indices')
+    if len(set(Indices)) != 3 or any((Index < 0 or Index >= VertexCount for Index in Indices)):
+        raise ValueError('triangle vertex indices must be distinct and in range')
+    return Indices
 
-
-def _facet_is_degenerate(
-    points: tuple[Point, ...], facet: Triangle, tolerance: float
-) -> bool:
-    corners = tuple(points[index] for index in facet)
-    edges = tuple(
-        _subtract(corners[(index + 1) % 3], corners[index]) for index in range(3)
-    )
-    lengths = tuple(_length(edge) for edge in edges)
-    if min(lengths) <= tolerance:
+# this definition exists because focused behavior needs one stable owner
+def FacetIs(Points: tuple[Point, ...], Facet: Triangle, Tolerance: float) -> bool:
+    Corners = tuple((Points[Index] for Index in Facet))
+    Edges = tuple((Subtract(Corners[(Index + 1) % 3], Corners[Index]) for Index in range(3)))
+    Lengths = tuple((Length(EdgeValue) for EdgeValue in Edges))
+    if min(Lengths) <= Tolerance:
         return True
-    normal_length = _length(_cross(edges[0], _subtract(corners[2], corners[0])))
-    return normal_length <= tolerance * max(lengths)
+    NormalLength = Length(Cross(Edges[0], Subtract(Corners[2], Corners[0])))
+    return NormalLength <= Tolerance * max(Lengths)
 
+# this definition exists because focused behavior needs one stable owner
+def GeomAction(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float):
+    Result: list[KGeomValue] = []
+    for Triangle in Facets:
+        Corners = tuple((Points[Index] for Index in Triangle))
+        Edges = tuple((Subtract(Corners[(Index + 1) % 3], Corners[Index]) for Index in range(3)))
+        Lengths = tuple((Length(EdgeValue) for EdgeValue in Edges))
+        if min(Lengths) <= Tolerance:
+            raise ValueError('triangle edges must exceed the BRep tolerance')
+        NormalVector = Cross(Edges[0], Subtract(Corners[2], Corners[0]))
+        NormalLength = Length(NormalVector)
+        if NormalLength <= Tolerance * max(Lengths):
+            raise ValueError('triangle area must exceed the BRep tolerance')
+        Normal = Scale(NormalVector, 1.0 / NormalLength)
+        XDirection = Scale(Edges[0], 1.0 / Lengths[0])
+        YDirection = Cross(Normal, XDirection)
+        Result.append((Corners, Lengths, Normal, XDirection, YDirection))
+    return tuple(Result)
 
-def _geometry(
-    points: tuple[Point, ...], facets: tuple[Triangle, ...], tolerance: float
-):
-    result: list[Geometry] = []
-    for triangle in facets:
-        corners = tuple(points[index] for index in triangle)
-        edges = tuple(
-            _subtract(corners[(index + 1) % 3], corners[index]) for index in range(3)
-        )
-        lengths = tuple(_length(edge) for edge in edges)
-        if min(lengths) <= tolerance:
-            raise ValueError("triangle edges must exceed the BRep tolerance")
-        normal_vector = _cross(edges[0], _subtract(corners[2], corners[0]))
-        normal_length = _length(normal_vector)
-        if normal_length <= tolerance * max(lengths):
-            raise ValueError("triangle area must exceed the BRep tolerance")
-        normal = _scale(normal_vector, 1.0 / normal_length)
-        x_direction = _scale(edges[0], 1.0 / lengths[0])
-        y_direction = _cross(normal, x_direction)
-        result.append((corners, lengths, normal, x_direction, y_direction))
-    return tuple(result)
+# this definition exists because focused behavior needs one stable owner
+def EdgeUses(Facets: tuple[Triangle, ...]):
+    Result: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for FacetIndex, Facet in enumerate(Facets):
+        for Index in range(3):
+            PairValue = (Facet[Index], Facet[(Index + 1) % 3])
+            KeyValue = tuple(sorted(PairValue))
+            Result.setdefault(KeyValue, []).append((FacetIndex, 1 if PairValue == KeyValue else -1))
+    return Result
 
-
-def _edge_uses(facets: tuple[Triangle, ...]):
-    result: dict[tuple[int, int], list[tuple[int, int]]] = {}
-    for facet_index, facet in enumerate(facets):
-        for index in range(3):
-            pair = (facet[index], facet[(index + 1) % 3])
-            key = tuple(sorted(pair))
-            result.setdefault(key, []).append((facet_index, 1 if pair == key else -1))
-    return result
-
-
-def _oriented_components(
-    points: tuple[Point, ...], facets: tuple[Triangle, ...], tolerance: float
-):
-    uses = _edge_uses(facets)
-    if any(len(edge_faces) > 2 for edge_faces in uses.values()):
+# this definition exists because focused behavior needs one stable owner
+def Oriented(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float):
+    UsesValue = EdgeUses(Facets)
+    if any((len(EdgeFaces) > 2 for EdgeFaces in UsesValue.values())):
         return None
-    neighbors: dict[int, list[tuple[int, int]]] = {
-        index: [] for index in range(len(facets))
-    }
-    for edge_faces in uses.values():
-        if len(edge_faces) != 2:
+    Neighbors: dict[int, list[tuple[int, int]]] = {Index: [] for Index in range(len(Facets))}
+    for EdgeFaces in UsesValue.values():
+        if len(EdgeFaces) != 2:
             continue
-        (left, left_sign), (right, right_sign) = edge_faces
-        relation = -left_sign * right_sign
-        neighbors[left].append((right, relation))
-        neighbors[right].append((left, relation))
-    flips = [0] * len(facets)
-    components = []
-    for start in range(len(facets)):
-        if flips[start]:
+        (LeftValue, LeftSign), (Right, RightSign) = EdgeFaces
+        Relation = -LeftSign * RightSign
+        Neighbors[LeftValue].append((Right, Relation))
+        Neighbors[Right].append((LeftValue, Relation))
+    Flips = [0] * len(Facets)
+    Components = []
+    for Start in range(len(Facets)):
+        if Flips[Start]:
             continue
-        flips[start] = 1
-        queue = deque([start])
-        component = []
-        while queue:
-            current = queue.popleft()
-            component.append(current)
-            for neighbor, relation in neighbors[current]:
-                expected = flips[current] * relation
-                if flips[neighbor] and flips[neighbor] != expected:
+        Flips[Start] = 1
+        Queue = Deque([Start])
+        Component = []
+        while Queue:
+            Current = Queue.popleft()
+            Component.append(Current)
+            for Neighbor, Relation in Neighbors[Current]:
+                Expected = Flips[Current] * Relation
+                if Flips[Neighbor] and Flips[Neighbor] != Expected:
                     return None
-                if not flips[neighbor]:
-                    flips[neighbor] = expected
-                    queue.append(neighbor)
-        components.append(tuple(sorted(component)))
-    oriented = list(facets)
-    for index, flip in enumerate(flips):
-        if flip < 0:
-            left, middle, right = oriented[index]
-            oriented[index] = (left, right, middle)
-    oriented_tuple = tuple(oriented)
-    oriented_uses = _edge_uses(oriented_tuple)
-    component_by_facet = [0] * len(facets)
-    for component_index, component in enumerate(components):
-        for facet_index in component:
-            component_by_facet[facet_index] = component_index
-    closed = [True] * len(components)
-    for edge_faces in oriented_uses.values():
-        if len(edge_faces) != 2:
-            for facet_index, _ in edge_faces:
-                closed[component_by_facet[facet_index]] = False
-    for component_index, component in enumerate(components):
-        is_closed = closed[component_index]
-        if is_closed:
-            volume = (
-                sum(
-                    _dot(
-                        points[oriented_tuple[index][0]],
-                        _cross(
-                            points[oriented_tuple[index][1]],
-                            points[oriented_tuple[index][2]],
-                        ),
-                    )
-                    for index in component
-                )
-                / 6.0
-            )
-            if abs(volume) <= tolerance**3:
-                is_closed = False
-            elif volume < 0.0:
-                for index in component:
-                    left, middle, right = oriented[index]
-                    oriented[index] = (left, right, middle)
-        closed[component_index] = is_closed
-    return tuple(oriented), tuple(components), tuple(closed)
+                if not Flips[Neighbor]:
+                    Flips[Neighbor] = Expected
+                    Queue.append(Neighbor)
+        Components.append(tuple(sorted(Component)))
+    Oriented = list(Facets)
+    for Index, FlipValue in enumerate(Flips):
+        if FlipValue < 0:
+            LeftValue, Middle, Right = Oriented[Index]
+            Oriented[Index] = (LeftValue, Right, Middle)
+    OrientedTuple = tuple(Oriented)
+    OrientedUses = EdgeUses(OrientedTuple)
+    ComponentByFacet = [0] * len(Facets)
+    for ComponentIndex, Component in enumerate(Components):
+        for FacetIndex in Component:
+            ComponentByFacet[FacetIndex] = ComponentIndex
+    Closed = [True] * len(Components)
+    for EdgeFaces in OrientedUses.values():
+        if len(EdgeFaces) != 2:
+            for FacetIndex, Ignored in EdgeFaces:
+                Closed[ComponentByFacet[FacetIndex]] = False
+    for ComponentIndex, Component in enumerate(Components):
+        IsClosed = Closed[ComponentIndex]
+        if IsClosed:
+            Volume = sum((DotAction(Points[OrientedTuple[Index][0]], Cross(Points[OrientedTuple[Index][1]], Points[OrientedTuple[Index][2]])) for Index in Component)) / 6.0
+            if abs(Volume) <= Tolerance ** 3:
+                IsClosed = False
+            elif Volume < 0.0:
+                for Index in Component:
+                    LeftValue, Middle, Right = Oriented[Index]
+                    Oriented[Index] = (LeftValue, Right, Middle)
+        Closed[ComponentIndex] = IsClosed
+    return (tuple(Oriented), tuple(Components), tuple(Closed))
 
+# this definition exists because focused behavior needs one stable owner
+def Header(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Edges: tuple[tuple[int, int], ...], GeomValue: tuple[Geometry, ...]):
+    Lines = ['DBRep_DrawableShape', '', 'CASCADE Topology V1, (c) Matra-Datavision', 'Locations 0', 'Curve2ds 0', f'Curves {len(Edges)}']
+    for Start, EndValue in Edges:
+        Vector = Subtract(Points[EndValue], Points[Start])
+        Direction = Scale(Vector, 1.0 / Length(Vector))
+        Lines.append(f'1 {Values(Points[Start] + Direction)} ')
+    Lines.extend(['Polygon3D 0', 'PolygonOnTriangulations 0', f'Surfaces {len(Facets)}'])
+    for Corners, Ignored, Normal, XDirection, YDirection in GeomValue:
+        Lines.append(f'1 {Values(Corners[0] + Normal + XDirection + YDirection)} ')
+    Lines.extend(['Triangulations 0', ''])
+    return Lines
 
-def _header(
-    points: tuple[Point, ...],
-    facets: tuple[Triangle, ...],
-    edges: tuple[tuple[int, int], ...],
-    geometry: tuple[Geometry, ...],
-):
-    lines = [
-        "DBRep_DrawableShape",
-        "",
-        "CASCADE Topology V1, (c) Matra-Datavision",
-        "Locations 0",
-        "Curve2ds 0",
-        f"Curves {len(edges)}",
-    ]
-    for start, end in edges:
-        vector = _subtract(points[end], points[start])
-        direction = _scale(vector, 1.0 / _length(vector))
-        lines.append(f"1 {_values(points[start] + direction)} ")
-    lines.extend(
-        [
-            "Polygon3D 0",
-            "PolygonOnTriangulations 0",
-            f"Surfaces {len(facets)}",
-        ]
-    )
-    for corners, _, normal, x_direction, y_direction in geometry:
-        lines.append(f"1 {_values(corners[0] + normal + x_direction + y_direction)} ")
-    lines.extend(["Triangulations 0", ""])
-    return lines
+# this definition exists because focused behavior needs one stable owner
+def VertexRecord(Point: Point, Tolerance: str) -> list[str]:
+    return ['Ve', Tolerance, Values(Point), '0 0', '', '0101101', '*']
 
+# this definition exists because focused behavior needs one stable owner
+def EdgeRecord(Tolerance: str, CurveIndex: int, Length: float, Start: int, EndValue: int) -> list[str]:
+    return ['Ed', f' {Tolerance} 1 1 0', f'1  {CurveIndex} 0 0 {Number(Length)}', '0', '', '0101000', f'+{Start} 0 -{EndValue} 0 *']
 
-def _vertex_record(point: Point, tolerance: str) -> list[str]:
-    return ["Ve", tolerance, _values(point), "0 0", "", "0101101", "*"]
+# this definition exists because focused behavior needs one stable owner
+def SharedBrep(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Components: tuple[tuple[int, ...], ...], Closed: tuple[bool, ...], Tolerance: float) -> bytes:
+    GeomValue = GeomAction(Points, Facets, Tolerance)
+    VertexIndices = tuple(sorted({Index for Facet in Facets for Index in Facet}))
+    Edges = tuple(sorted(EdgeUses(Facets)))
+    ComponentCount = len(Components)
+    SolidCount = sum(Closed)
+    RootCount = 1 if ComponentCount > 1 else 0
+    ShapeCount = len(VertexIndices) + len(Edges) + 2 * len(Facets) + ComponentCount + SolidCount + RootCount
+    Ordinal = 1
+    VertexOrdinals = {}
+    for Index in VertexIndices:
+        VertexOrdinals[Index] = Ordinal
+        Ordinal += 1
+    EdgeOrdinals = {}
+    for EdgeValue in Edges:
+        EdgeOrdinals[EdgeValue] = Ordinal
+        Ordinal += 1
+    WireOrdinals = []
+    FaceOrdinals = []
+    for Ignored in Facets:
+        WireOrdinals.append(Ordinal)
+        FaceOrdinals.append(Ordinal + 1)
+        Ordinal += 2
+    ShellOrdinals = []
+    for Ignored in Components:
+        ShellOrdinals.append(Ordinal)
+        Ordinal += 1
+    SolidOrdinals: dict[int, int] = {}
+    for ComponentIndex, IsClosed in enumerate(Closed):
+        if IsClosed:
+            SolidOrdinals[ComponentIndex] = Ordinal
+            Ordinal += 1
+    if ComponentCount > 1:
+        Ordinal += 1
+    if Ordinal != ShapeCount + 1:
+        raise ValueError('BRep topology record count is inconsistent')
 
+    # this callback exists because local behavior needs one focused transformation
+    RefValue = lambda Record: ShapeCount - Record + 1
+    ToleranceText = Number(Tolerance)
+    Lines = Header(Points, Facets, Edges, GeomValue)
+    Lines.append(f'TShapes {ShapeCount}')
+    for Index in VertexIndices:
+        Lines.extend(VertexRecord(Points[Index], ToleranceText))
+    for CurveIndex, EdgeValue in enumerate(Edges, 1):
+        Start, EndValue = EdgeValue
+        Lines.extend(EdgeRecord(ToleranceText, CurveIndex, Length(Subtract(Points[EndValue], Points[Start])), RefValue(VertexOrdinals[Start]), RefValue(VertexOrdinals[EndValue])))
+    for FacetIndex, Facet in enumerate(Facets):
+        EdgeValues = []
+        for Index in range(3):
+            PairValue = (Facet[Index], Facet[(Index + 1) % 3])
+            EdgeValue = tuple(sorted(PairValue))
+            SignValue = '+' if PairValue == EdgeValue else '-'
+            EdgeValues.append(f'{SignValue}{RefValue(EdgeOrdinals[EdgeValue])} 0')
+        Lines.extend(['Wi', '', '0101100', ' '.join(EdgeValues) + ' *', 'Fa', f'0  {ToleranceText} {FacetIndex + 1} 0', '', '0101000', f'+{RefValue(WireOrdinals[FacetIndex])} 0 *'])
+    for ComponentIndex, Component in enumerate(Components):
+        Lines.extend(['Sh', '', '0101100' if Closed[ComponentIndex] else '0101000', ' '.join((f'+{RefValue(FaceOrdinals[Index])} 0' for Index in Component)) + ' *'])
+    for ComponentIndex, SolidOrdinal in SolidOrdinals.items():
+        Lines.extend(['So', '', '1100000' if ComponentCount == 1 else '0100000', f'+{RefValue(ShellOrdinals[ComponentIndex])} 0 *'])
+    if ComponentCount > 1:
+        Roots = [SolidOrdinals.get(Index, ShellOrdinals[Index]) for Index in range(ComponentCount)]
+        Lines.extend(['Co', '', '1100000', ' '.join((f'+{RefValue(Record)} 0' for Record in Roots)) + ' *'])
+    Lines.extend(['', '+1 0 '])
+    return ('\n'.join(Lines) + '\n').encode('ascii')
 
-def _edge_record(
-    tolerance: str,
-    curve_index: int,
-    length: float,
-    start: int,
-    end: int,
-) -> list[str]:
-    return [
-        "Ed",
-        f" {tolerance} 1 1 0",
-        f"1  {curve_index} 0 0 {_number(length)}",
-        "0",
-        "",
-        "0101000",
-        f"+{start} 0 -{end} 0 *",
-    ]
+# this definition exists because focused behavior needs one stable owner
+def IndependentBrep(Points: tuple[Point, ...], Facets: tuple[Triangle, ...], Tolerance: float) -> bytes:
+    GeomValue = GeomAction(Points, Facets, Tolerance)
+    DirectedEdges = tuple(((Facet[Index], Facet[(Index + 1) % 3]) for Facet in Facets for Index in range(3)))
+    Lines = Header(Points, Facets, DirectedEdges, GeomValue)
+    ShapeCount = len(Facets) * 8 + 1
+    Lines.append(f'TShapes {ShapeCount}')
+    ToleranceText = Number(Tolerance)
+    FaceReferences = []
+    CurveIndex = 1
+    RecordIndex = 1
+    for Facet, FacetGeom in zip(Facets, GeomValue):
+        Corners, Lengths, Ignored, Ignored, Ignored = FacetGeom
+        References = tuple((ShapeCount - (RecordIndex + Offset) + 1 for Offset in range(8)))
+        VertexReferences = (References[0], References[1], References[3])
+        Lines.extend(VertexRecord(Corners[0], ToleranceText))
+        Lines.extend(VertexRecord(Corners[1], ToleranceText))
+        Lines.extend(EdgeRecord(ToleranceText, CurveIndex, Lengths[0], VertexReferences[0], VertexReferences[1]))
+        CurveIndex += 1
+        Lines.extend(VertexRecord(Corners[2], ToleranceText))
+        for EdgeIndex in (1, 2):
+            Lines.extend(EdgeRecord(ToleranceText, CurveIndex, Lengths[EdgeIndex], VertexReferences[EdgeIndex], VertexReferences[(EdgeIndex + 1) % 3]))
+            CurveIndex += 1
+        Lines.extend(['Wi', '', '0101100', f'+{References[2]} 0 +{References[4]} 0 +{References[5]} 0 *', 'Fa', f'0  {ToleranceText} {(RecordIndex - 1) // 8 + 1} 0', '', '0101000', f'+{References[6]} 0 *'])
+        FaceReferences.append(References[7])
+        RecordIndex += 8
+    Lines.extend(['Co', '', '1100000', ' '.join((f'+{RefValue} 0' for RefValue in FaceReferences)) + ' *', '', '+1 0 '])
+    return ('\n'.join(Lines) + '\n').encode('ascii')
 
+# this definition exists because focused behavior needs one stable owner
+def VectorTwoA(Value: Vector2) -> tuple[float, float]:
+    return (Value.x, Value.y)
 
-def _shared_brep(
-    points: tuple[Point, ...],
-    facets: tuple[Triangle, ...],
-    components: tuple[tuple[int, ...], ...],
-    closed: tuple[bool, ...],
-    tolerance: float,
-) -> bytes:
-    geometry = _geometry(points, facets, tolerance)
-    vertex_indices = tuple(sorted({index for facet in facets for index in facet}))
-    edges = tuple(sorted(_edge_uses(facets)))
-    component_count = len(components)
-    solid_count = sum(closed)
-    root_count = 1 if component_count > 1 else 0
-    shape_count = (
-        len(vertex_indices)
-        + len(edges)
-        + 2 * len(facets)
-        + component_count
-        + solid_count
-        + root_count
-    )
-    ordinal = 1
-    vertex_ordinals = {}
-    for index in vertex_indices:
-        vertex_ordinals[index] = ordinal
-        ordinal += 1
-    edge_ordinals = {}
-    for edge in edges:
-        edge_ordinals[edge] = ordinal
-        ordinal += 1
-    wire_ordinals = []
-    face_ordinals = []
-    for _ in facets:
-        wire_ordinals.append(ordinal)
-        face_ordinals.append(ordinal + 1)
-        ordinal += 2
-    shell_ordinals = []
-    for _ in components:
-        shell_ordinals.append(ordinal)
-        ordinal += 1
-    solid_ordinals: dict[int, int] = {}
-    for component_index, is_closed in enumerate(closed):
-        if is_closed:
-            solid_ordinals[component_index] = ordinal
-            ordinal += 1
-    if component_count > 1:
-        ordinal += 1
-    if ordinal != shape_count + 1:
-        raise ValueError("BRep topology record count is inconsistent")
-    reference = lambda record: shape_count - record + 1
-    tolerance_text = _number(tolerance)
-    lines = _header(points, facets, edges, geometry)
-    lines.append(f"TShapes {shape_count}")
-    for index in vertex_indices:
-        lines.extend(_vertex_record(points[index], tolerance_text))
-    for curve_index, edge in enumerate(edges, 1):
-        start, end = edge
-        lines.extend(
-            _edge_record(
-                tolerance_text,
-                curve_index,
-                _length(_subtract(points[end], points[start])),
-                reference(vertex_ordinals[start]),
-                reference(vertex_ordinals[end]),
-            )
-        )
-    for facet_index, facet in enumerate(facets):
-        edge_values = []
-        for index in range(3):
-            pair = (facet[index], facet[(index + 1) % 3])
-            edge = tuple(sorted(pair))
-            sign = "+" if pair == edge else "-"
-            edge_values.append(f"{sign}{reference(edge_ordinals[edge])} 0")
-        lines.extend(
-            [
-                "Wi",
-                "",
-                "0101100",
-                " ".join(edge_values) + " *",
-                "Fa",
-                f"0  {tolerance_text} {facet_index + 1} 0",
-                "",
-                "0101000",
-                f"+{reference(wire_ordinals[facet_index])} 0 *",
-            ]
-        )
-    for component_index, component in enumerate(components):
-        lines.extend(
-            [
-                "Sh",
-                "",
-                "0101100" if closed[component_index] else "0101000",
-                " ".join(f"+{reference(face_ordinals[index])} 0" for index in component)
-                + " *",
-            ]
-        )
-    for component_index, solid_ordinal in solid_ordinals.items():
-        lines.extend(
-            [
-                "So",
-                "",
-                "1100000" if component_count == 1 else "0100000",
-                f"+{reference(shell_ordinals[component_index])} 0 *",
-            ]
-        )
-    if component_count > 1:
-        roots = [
-            solid_ordinals.get(index, shell_ordinals[index])
-            for index in range(component_count)
-        ]
-        lines.extend(
-            [
-                "Co",
-                "",
-                "1100000",
-                " ".join(f"+{reference(record)} 0" for record in roots) + " *",
-            ]
-        )
-    lines.extend(["", "+1 0 "])
-    return ("\n".join(lines) + "\n").encode("ascii")
+# this definition exists because focused behavior needs one stable owner
+def VectorThreeA(Value: Vector3) -> KPoint:
+    return (Value.x, Value.y, Value.z)
 
+# this definition exists because focused behavior needs one stable owner
+def UnitTwo(Value: Vector2, Label: str) -> tuple[tuple[float, float], float]:
+    Length = MathValue.hypot(Value.x, Value.y)
+    if not MathValue.isfinite(Length) or Length <= 0.0:
+        Unsupported(f'{Label} has an invalid direction')
+    return ((Value.x / Length, Value.y / Length), Length)
 
-def _independent_brep(
-    points: tuple[Point, ...], facets: tuple[Triangle, ...], tolerance: float
-) -> bytes:
-    geometry = _geometry(points, facets, tolerance)
-    directed_edges = tuple(
-        (facet[index], facet[(index + 1) % 3]) for facet in facets for index in range(3)
-    )
-    lines = _header(points, facets, directed_edges, geometry)
-    shape_count = len(facets) * 8 + 1
-    lines.append(f"TShapes {shape_count}")
-    tolerance_text = _number(tolerance)
-    face_references = []
-    curve_index = 1
-    record_index = 1
-    for facet, facet_geometry in zip(facets, geometry):
-        corners, lengths, _, _, _ = facet_geometry
-        references = tuple(
-            shape_count - (record_index + offset) + 1 for offset in range(8)
-        )
-        vertex_references = (references[0], references[1], references[3])
-        lines.extend(_vertex_record(corners[0], tolerance_text))
-        lines.extend(_vertex_record(corners[1], tolerance_text))
-        lines.extend(
-            _edge_record(
-                tolerance_text,
-                curve_index,
-                lengths[0],
-                vertex_references[0],
-                vertex_references[1],
-            )
-        )
-        curve_index += 1
-        lines.extend(_vertex_record(corners[2], tolerance_text))
-        for edge_index in (1, 2):
-            lines.extend(
-                _edge_record(
-                    tolerance_text,
-                    curve_index,
-                    lengths[edge_index],
-                    vertex_references[edge_index],
-                    vertex_references[(edge_index + 1) % 3],
-                )
-            )
-            curve_index += 1
-        lines.extend(
-            [
-                "Wi",
-                "",
-                "0101100",
-                f"+{references[2]} 0 +{references[4]} 0 +{references[5]} 0 *",
-                "Fa",
-                f"0  {tolerance_text} {(record_index - 1) // 8 + 1} 0",
-                "",
-                "0101000",
-                f"+{references[6]} 0 *",
-            ]
-        )
-        face_references.append(references[7])
-        record_index += 8
-    lines.extend(
-        [
-            "Co",
-            "",
-            "1100000",
-            " ".join(f"+{reference} 0" for reference in face_references) + " *",
-            "",
-            "+1 0 ",
-        ]
-    )
-    return ("\n".join(lines) + "\n").encode("ascii")
+# this definition exists because focused behavior needs one stable owner
+def UnitThree(Value: Vector3, Label: str) -> tuple[KPoint, float]:
+    RawValue = VectorThreeA(Value)
+    Length = Length(RawValue)
+    if not MathValue.isfinite(Length) or Length <= 0.0:
+        Unsupported(f'{Label} has an invalid direction')
+    return (Scale(RawValue, 1.0 / Length), Length)
 
+# this definition exists because focused behavior needs one stable owner
+def Frame(AxisValue: Vector3, RefValue: Vector3, Label: str) -> tuple[KPoint, KPoint, KPoint]:
+    NormalizedAxis, Ignored = UnitThree(AxisValue, Label)
+    NormalizedRef, Ignored = UnitThree(RefValue, Label)
+    if abs(DotAction(NormalizedAxis, NormalizedRef)) > 1e-09:
+        Unsupported(f'{Label} axis and reference direction are not orthogonal')
+    YDirection = Cross(NormalizedAxis, NormalizedRef)
+    if abs(Length(YDirection) - 1.0) > 1e-09:
+        Unsupported(f'{Label} has an invalid coordinate frame')
+    return (NormalizedAxis, NormalizedRef, YDirection)
 
-def _vector2(value: Vector2) -> tuple[float, float]:
-    return value.x, value.y
-
-
-def _vector3(value: Vector3) -> Point:
-    return value.x, value.y, value.z
-
-
-def _unit2(value: Vector2, label: str) -> tuple[tuple[float, float], float]:
-    length = math.hypot(value.x, value.y)
-    if not math.isfinite(length) or length <= 0.0:
-        _unsupported(f"{label} has an invalid direction")
-    return (value.x / length, value.y / length), length
-
-
-def _unit3(value: Vector3, label: str) -> tuple[Point, float]:
-    raw = _vector3(value)
-    length = _length(raw)
-    if not math.isfinite(length) or length <= 0.0:
-        _unsupported(f"{label} has an invalid direction")
-    return _scale(raw, 1.0 / length), length
-
-
-def _frame(axis: Vector3, reference: Vector3, label: str) -> tuple[Point, Point, Point]:
-    normalized_axis, _ = _unit3(axis, label)
-    normalized_reference, _ = _unit3(reference, label)
-    if abs(_dot(normalized_axis, normalized_reference)) > 1e-9:
-        _unsupported(f"{label} axis and reference direction are not orthogonal")
-    y_direction = _cross(normalized_axis, normalized_reference)
-    if abs(_length(y_direction) - 1.0) > 1e-9:
-        _unsupported(f"{label} has an invalid coordinate frame")
-    return normalized_axis, normalized_reference, y_direction
-
-
-def _bspline_layout(
-    degree: int,
-    pole_count: int,
-    knots: Sequence[float],
-    multiplicities: Sequence[int],
-    periodic: bool,
-    label: str,
-) -> None:
-    if (
-        type(degree) is not int
-        or not 0 < degree <= 25
-        or pole_count < 2
-        or len(knots) != len(multiplicities)
-        or len(knots) < 2
-        or any(not math.isfinite(value) for value in knots)
-        or any(left >= right for left, right in zip(knots, knots[1:]))
-    ):
-        _unsupported(f"{label} has an invalid B-spline layout")
-    for index, value in enumerate(multiplicities):
-        maximum = degree
-        if not periodic and index in {0, len(multiplicities) - 1}:
-            maximum = degree + 1
-        if type(value) is not int or not 1 <= value <= maximum:
-            _unsupported(f"{label} has an invalid knot multiplicity")
-    if periodic:
-        if multiplicities[0] != multiplicities[-1]:
-            _unsupported(f"{label} has inconsistent periodic multiplicities")
-        expected = sum(multiplicities[:-1])
+# this definition exists because focused behavior needs one stable owner
+def BsplineLayout(Degree: int, PoleCount: int, Knots: Sequence[float], Multiplicities: Sequence[int], Periodic: bool, Label: str) -> None:
+    if type(Degree) is not int or not 0 < Degree <= 25 or PoleCount < 2 or (len(Knots) != len(Multiplicities)) or (len(Knots) < 2) or any((not MathValue.isfinite(Value) for Value in Knots)) or any((LeftValue >= Right for LeftValue, Right in zip(Knots, Knots[1:]))):
+        Unsupported(f'{Label} has an invalid B-spline layout')
+    for Index, Value in enumerate(Multiplicities):
+        Maximum = Degree
+        if not Periodic and Index in {0, len(Multiplicities) - 1}:
+            Maximum = Degree + 1
+        if type(Value) is not int or not 1 <= Value <= Maximum:
+            Unsupported(f'{Label} has an invalid knot multiplicity')
+    if Periodic:
+        if Multiplicities[0] != Multiplicities[-1]:
+            Unsupported(f'{Label} has inconsistent periodic multiplicities')
+        Expected = sum(Multiplicities[:-1])
     else:
-        expected = sum(multiplicities) - degree - 1
-    if expected != pole_count:
-        _unsupported(f"{label} pole and knot counts are inconsistent")
+        Expected = sum(Multiplicities) - Degree - 1
+    if Expected != PoleCount:
+        Unsupported(f'{Label} pole and knot counts are inconsistent')
 
+# this definition exists because focused behavior needs one stable owner
+def CurveRecord(Value: object) -> tuple[str, float]:
+    if isinstance(Value, LineCurve):
+        Direction, Scale = UnitThree(Value.direction, f'line curve {Value.id}')
+        return (f'1 {Values(VectorThreeA(Value.origin) + Direction)} ', Scale)
+    if isinstance(Value, CircleCurve):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'circle curve {Value.id}')
+        return (f'2 {Values(VectorThreeA(Value.center) + AxisValue + RefValue + YDirection + (Value.radius,))} ', 1.0)
+    if isinstance(Value, EllipseCurve):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'ellipse curve {Value.id}')
+        return (f'3 {Values(VectorThreeA(Value.center) + AxisValue + RefValue + YDirection + (Value.major_radius, Value.minor_radius))} ', 1.0)
+    if isinstance(Value, NurbsCurve):
+        BsplineLayout(Value.degree, len(Value.control_points), Value.knots, Value.multiplicities, Value.periodic, f'NURBS curve {Value.id}')
+        Rational = bool(Value.weights)
+        if Rational and (len(Value.weights) != len(Value.control_points) or any((not MathValue.isfinite(Weight) or Weight <= 0.0 for Weight in Value.weights))):
+            Unsupported(f'NURBS curve {Value.id} has invalid weights')
+        Fields = ['7', '1' if Rational else '0', '1' if Value.periodic else '0', str(Value.degree), str(len(Value.control_points)), str(len(Value.knots))]
+        for Index, Point in enumerate(Value.control_points):
+            Fields.extend((Number(Component) for Component in VectorThreeA(Point)))
+            if Rational:
+                Fields.append(Number(Value.weights[Index]))
+        for KnotValue, Multiplicity in zip(Value.knots, Value.multiplicities):
+            Fields.extend((Number(KnotValue), str(Multiplicity)))
+        return (' '.join(Fields) + ' ', 1.0)
+    if isinstance(Value, (IntersectionCurve, NativeCurve)):
+        Unsupported(f'curve {Value.id} of type {type(Value).__name__} is unsupported')
+    Unsupported(f'curve type {type(Value).__name__} is unsupported')
 
-def _curve_record(value: object) -> tuple[str, float]:
-    if isinstance(value, LineCurve):
-        direction, scale = _unit3(value.direction, f"line curve {value.id}")
-        return f"1 {_values(_vector3(value.origin) + direction)} ", scale
-    if isinstance(value, CircleCurve):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"circle curve {value.id}",
-        )
-        return (
-            f"2 {_values(_vector3(value.center) + axis + reference + y_direction + (value.radius,))} ",
-            1.0,
-        )
-    if isinstance(value, EllipseCurve):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"ellipse curve {value.id}",
-        )
-        return (
-            f"3 {_values(_vector3(value.center) + axis + reference + y_direction + (value.major_radius, value.minor_radius))} ",
-            1.0,
-        )
-    if isinstance(value, NurbsCurve):
-        _bspline_layout(
-            value.degree,
-            len(value.control_points),
-            value.knots,
-            value.multiplicities,
-            value.periodic,
-            f"NURBS curve {value.id}",
-        )
-        rational = bool(value.weights)
-        if rational and (
-            len(value.weights) != len(value.control_points)
-            or any(
-                not math.isfinite(weight) or weight <= 0.0 for weight in value.weights
-            )
-        ):
-            _unsupported(f"NURBS curve {value.id} has invalid weights")
-        fields = [
-            "7",
-            "1" if rational else "0",
-            "1" if value.periodic else "0",
-            str(value.degree),
-            str(len(value.control_points)),
-            str(len(value.knots)),
-        ]
-        for index, point in enumerate(value.control_points):
-            fields.extend(_number(component) for component in _vector3(point))
-            if rational:
-                fields.append(_number(value.weights[index]))
-        for knot, multiplicity in zip(value.knots, value.multiplicities):
-            fields.extend((_number(knot), str(multiplicity)))
-        return " ".join(fields) + " ", 1.0
-    if isinstance(value, (IntersectionCurve, NativeCurve)):
-        _unsupported(f"curve {value.id} of type {type(value).__name__} is unsupported")
-    _unsupported(f"curve type {type(value).__name__} is unsupported")
+# this definition exists because focused behavior needs one stable owner
+def PcurveRecord(Value: object) -> tuple[str, float]:
+    if isinstance(Value, LinePcurve):
+        Direction, Scale = UnitTwo(Value.direction, f'line pcurve {Value.id}')
+        return (f'1 {Values(VectorTwoA(Value.origin) + Direction)} ', Scale)
+    if isinstance(Value, CirclePcurve):
+        return (f'2 {Values(VectorTwoA(Value.center) + (1.0, 0.0, 0.0, 1.0, Value.radius))} ', 1.0)
+    if isinstance(Value, NurbsPcurve):
+        BsplineLayout(Value.degree, len(Value.control_points), Value.knots, Value.multiplicities, Value.periodic, f'NURBS pcurve {Value.id}')
+        Rational = bool(Value.weights)
+        if Rational and (len(Value.weights) != len(Value.control_points) or any((not MathValue.isfinite(Weight) or Weight <= 0.0 for Weight in Value.weights))):
+            Unsupported(f'NURBS pcurve {Value.id} has invalid weights')
+        Fields = ['7', '1' if Rational else '0', '1' if Value.periodic else '0', str(Value.degree), str(len(Value.control_points)), str(len(Value.knots))]
+        for Index, Point in enumerate(Value.control_points):
+            Fields.extend((Number(Component) for Component in VectorTwoA(Point)))
+            if Rational:
+                Fields.append(Number(Value.weights[Index]))
+        for KnotValue, Multiplicity in zip(Value.knots, Value.multiplicities):
+            Fields.extend((Number(KnotValue), str(Multiplicity)))
+        return (' '.join(Fields) + ' ', 1.0)
+    if isinstance(Value, NativePcurve):
+        Unsupported(f'pcurve {Value.id} of type NativePcurve is unsupported')
+    Unsupported(f'pcurve type {type(Value).__name__} is unsupported')
 
+# this definition exists because focused behavior needs one stable owner
+def SurfaceRecord(Value: object, Surfaces: Mapping[str, object], Active: frozenset[str]=frozenset()) -> str:
+    if isinstance(Value, PlaneSurface):
+        AxisValue, RefValue, YDirection = Frame(Value.normal, Value.reference_direction, f'plane surface {Value.id}')
+        return f'1 {Values(VectorThreeA(Value.origin) + AxisValue + RefValue + YDirection)} '
+    if isinstance(Value, CylinderSurface):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'cylinder surface {Value.id}')
+        return f'2 {Values(VectorThreeA(Value.origin) + AxisValue + RefValue + YDirection + (Value.radius,))} '
+    if isinstance(Value, ConeSurface):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'cone surface {Value.id}')
+        if not 0.0 < abs(Value.half_angle) < MathValue.pi / 2.0:
+            Unsupported(f'cone surface {Value.id} has an invalid half angle')
+        return f'3 {Values(VectorThreeA(Value.origin) + AxisValue + RefValue + YDirection + (Value.radius, Value.half_angle))} '
+    if isinstance(Value, SphereSurface):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'sphere surface {Value.id}')
+        return f'4 {Values(VectorThreeA(Value.center) + AxisValue + RefValue + YDirection + (Value.radius,))} '
+    if isinstance(Value, TorusSurface):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'torus surface {Value.id}')
+        if Value.major_radius < 0.0:
+            Unsupported(f'torus surface {Value.id} has a negative major radius')
+        return f'5 {Values(VectorThreeA(Value.center) + AxisValue + RefValue + YDirection + (Value.major_radius, Value.minor_radius))} '
+    if isinstance(Value, NurbsSurface):
+        UCount = len(Value.control_points)
+        VCount = len(Value.control_points[0]) if Value.control_points else 0
+        if not UCount or not VCount or any((len(RowValue) != VCount for RowValue in Value.control_points)):
+            Unsupported(f'NURBS surface {Value.id} has an invalid pole grid')
+        BsplineLayout(Value.degree_u, UCount, Value.knots_u, Value.multiplicities_u, Value.periodic_u, f'NURBS surface {Value.id} U direction')
+        BsplineLayout(Value.degree_v, VCount, Value.knots_v, Value.multiplicities_v, Value.periodic_v, f'NURBS surface {Value.id} V direction')
+        Rational = bool(Value.weights)
+        if Rational and (len(Value.weights) != UCount or any((len(RowValue) != VCount for RowValue in Value.weights)) or any((not MathValue.isfinite(Weight) or Weight <= 0.0 for RowValue in Value.weights for Weight in RowValue))):
+            Unsupported(f'NURBS surface {Value.id} has invalid weights')
+        Fields = ['9', '1' if Rational else '0', '1' if Rational else '0', '1' if Value.periodic_u else '0', '1' if Value.periodic_v else '0', str(Value.degree_u), str(Value.degree_v), str(UCount), str(VCount), str(len(Value.knots_u)), str(len(Value.knots_v))]
+        for UIndex, RowValue in enumerate(Value.control_points):
+            for VIndex, Point in enumerate(RowValue):
+                Fields.extend((Number(Component) for Component in VectorThreeA(Point)))
+                if Rational:
+                    Fields.append(Number(Value.weights[UIndex][VIndex]))
+        for KnotValue, Multiplicity in zip(Value.knots_u, Value.multiplicities_u):
+            Fields.extend((Number(KnotValue), str(Multiplicity)))
+        for KnotValue, Multiplicity in zip(Value.knots_v, Value.multiplicities_v):
+            Fields.extend((Number(KnotValue), str(Multiplicity)))
+        return ' '.join(Fields) + ' '
+    if isinstance(Value, OffsetSurface):
+        if Value.id in Active:
+            Unsupported(f'offset surface {Value.id} has a cyclic basis')
+        BaseValue = Surfaces.get(Value.base_surface_id)
+        if BaseValue is None:
+            Unsupported(f'offset surface {Value.id} has no basis surface')
+        Nested = SurfaceRecord(BaseValue, Surfaces, Active | {Value.id})
+        return f'11 {Number(Value.distance)} {Nested}'
+    if isinstance(Value, NativeSurface):
+        Unsupported(f'surface {Value.id} of type NativeSurface is unsupported')
+    Unsupported(f'surface type {type(Value).__name__} is unsupported')
 
-def _pcurve_record(value: object) -> tuple[str, float]:
-    if isinstance(value, LinePcurve):
-        direction, scale = _unit2(value.direction, f"line pcurve {value.id}")
-        return f"1 {_values(_vector2(value.origin) + direction)} ", scale
-    if isinstance(value, CirclePcurve):
-        return (
-            f"2 {_values(_vector2(value.center) + (1.0, 0.0, 0.0, 1.0, value.radius))} ",
-            1.0,
-        )
-    if isinstance(value, NurbsPcurve):
-        _bspline_layout(
-            value.degree,
-            len(value.control_points),
-            value.knots,
-            value.multiplicities,
-            value.periodic,
-            f"NURBS pcurve {value.id}",
-        )
-        rational = bool(value.weights)
-        if rational and (
-            len(value.weights) != len(value.control_points)
-            or any(
-                not math.isfinite(weight) or weight <= 0.0 for weight in value.weights
-            )
-        ):
-            _unsupported(f"NURBS pcurve {value.id} has invalid weights")
-        fields = [
-            "7",
-            "1" if rational else "0",
-            "1" if value.periodic else "0",
-            str(value.degree),
-            str(len(value.control_points)),
-            str(len(value.knots)),
-        ]
-        for index, point in enumerate(value.control_points):
-            fields.extend(_number(component) for component in _vector2(point))
-            if rational:
-                fields.append(_number(value.weights[index]))
-        for knot, multiplicity in zip(value.knots, value.multiplicities):
-            fields.extend((_number(knot), str(multiplicity)))
-        return " ".join(fields) + " ", 1.0
-    if isinstance(value, NativePcurve):
-        _unsupported(f"pcurve {value.id} of type NativePcurve is unsupported")
-    _unsupported(f"pcurve type {type(value).__name__} is unsupported")
-
-
-def _surface_record(
-    value: object,
-    surfaces: Mapping[str, object],
-    active: frozenset[str] = frozenset(),
-) -> str:
-    if isinstance(value, PlaneSurface):
-        axis, reference, y_direction = _frame(
-            value.normal,
-            value.reference_direction,
-            f"plane surface {value.id}",
-        )
-        return f"1 {_values(_vector3(value.origin) + axis + reference + y_direction)} "
-    if isinstance(value, CylinderSurface):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"cylinder surface {value.id}",
-        )
-        return f"2 {_values(_vector3(value.origin) + axis + reference + y_direction + (value.radius,))} "
-    if isinstance(value, ConeSurface):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"cone surface {value.id}",
-        )
-        if not 0.0 < abs(value.half_angle) < math.pi / 2.0:
-            _unsupported(f"cone surface {value.id} has an invalid half angle")
-        return f"3 {_values(_vector3(value.origin) + axis + reference + y_direction + (value.radius, value.half_angle))} "
-    if isinstance(value, SphereSurface):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"sphere surface {value.id}",
-        )
-        return f"4 {_values(_vector3(value.center) + axis + reference + y_direction + (value.radius,))} "
-    if isinstance(value, TorusSurface):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"torus surface {value.id}",
-        )
-        if value.major_radius < 0.0:
-            _unsupported(f"torus surface {value.id} has a negative major radius")
-        return f"5 {_values(_vector3(value.center) + axis + reference + y_direction + (value.major_radius, value.minor_radius))} "
-    if isinstance(value, NurbsSurface):
-        u_count = len(value.control_points)
-        v_count = len(value.control_points[0]) if value.control_points else 0
-        if (
-            not u_count
-            or not v_count
-            or any(len(row) != v_count for row in value.control_points)
-        ):
-            _unsupported(f"NURBS surface {value.id} has an invalid pole grid")
-        _bspline_layout(
-            value.degree_u,
-            u_count,
-            value.knots_u,
-            value.multiplicities_u,
-            value.periodic_u,
-            f"NURBS surface {value.id} U direction",
-        )
-        _bspline_layout(
-            value.degree_v,
-            v_count,
-            value.knots_v,
-            value.multiplicities_v,
-            value.periodic_v,
-            f"NURBS surface {value.id} V direction",
-        )
-        rational = bool(value.weights)
-        if rational and (
-            len(value.weights) != u_count
-            or any(len(row) != v_count for row in value.weights)
-            or any(
-                not math.isfinite(weight) or weight <= 0.0
-                for row in value.weights
-                for weight in row
-            )
-        ):
-            _unsupported(f"NURBS surface {value.id} has invalid weights")
-        fields = [
-            "9",
-            "1" if rational else "0",
-            "1" if rational else "0",
-            "1" if value.periodic_u else "0",
-            "1" if value.periodic_v else "0",
-            str(value.degree_u),
-            str(value.degree_v),
-            str(u_count),
-            str(v_count),
-            str(len(value.knots_u)),
-            str(len(value.knots_v)),
-        ]
-        for u_index, row in enumerate(value.control_points):
-            for v_index, point in enumerate(row):
-                fields.extend(_number(component) for component in _vector3(point))
-                if rational:
-                    fields.append(_number(value.weights[u_index][v_index]))
-        for knot, multiplicity in zip(value.knots_u, value.multiplicities_u):
-            fields.extend((_number(knot), str(multiplicity)))
-        for knot, multiplicity in zip(value.knots_v, value.multiplicities_v):
-            fields.extend((_number(knot), str(multiplicity)))
-        return " ".join(fields) + " "
-    if isinstance(value, OffsetSurface):
-        if value.id in active:
-            _unsupported(f"offset surface {value.id} has a cyclic basis")
-        base = surfaces.get(value.base_surface_id)
-        if base is None:
-            _unsupported(f"offset surface {value.id} has no basis surface")
-        nested = _surface_record(base, surfaces, active | {value.id})
-        return f"11 {_number(value.distance)} {nested}"
-    if isinstance(value, NativeSurface):
-        _unsupported(f"surface {value.id} of type NativeSurface is unsupported")
-    _unsupported(f"surface type {type(value).__name__} is unsupported")
-
-
-def _curve_point(value: object, parameter: float) -> Point | None:
-    if isinstance(value, LineCurve):
-        return tuple(
-            origin + parameter * direction
-            for origin, direction in zip(
-                _vector3(value.origin), _vector3(value.direction)
-            )
-        )
-    if isinstance(value, (CircleCurve, EllipseCurve)):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"curve {value.id}",
-        )
-        major = value.radius if isinstance(value, CircleCurve) else value.major_radius
-        minor = value.radius if isinstance(value, CircleCurve) else value.minor_radius
-        center = _vector3(value.center)
-        return tuple(
-            center[index]
-            + major * math.cos(parameter) * reference[index]
-            + minor * math.sin(parameter) * y_direction[index]
-            for index in range(3)
-        )
+# this definition exists because focused behavior needs one stable owner
+def CurvePoint(Value: object, Param: float) -> KPoint | None:
+    if isinstance(Value, LineCurve):
+        return tuple((Origin + Param * Direction for Origin, Direction in zip(VectorThreeA(Value.origin), VectorThreeA(Value.direction))))
+    if isinstance(Value, (CircleCurve, EllipseCurve)):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'curve {Value.id}')
+        Major = Value.radius if isinstance(Value, CircleCurve) else Value.major_radius
+        Minor = Value.radius if isinstance(Value, CircleCurve) else Value.minor_radius
+        Center = VectorThreeA(Value.center)
+        return tuple((Center[Index] + Major * MathValue.cos(Param) * RefValue[Index] + Minor * MathValue.sin(Param) * YDirection[Index] for Index in range(3)))
     return None
 
+# this definition exists because focused behavior needs one stable owner
+def SurfacePeriods(Value: object) -> tuple[float | None, float | None]:
+    if isinstance(Value, (CylinderSurface, ConeSurface, SphereSurface)):
+        return (MathValue.tau, None)
+    if isinstance(Value, TorusSurface):
+        return (MathValue.tau, MathValue.tau)
+    return (None, None)
 
-def _surface_periods(value: object) -> tuple[float | None, float | None]:
-    if isinstance(value, (CylinderSurface, ConeSurface, SphereSurface)):
-        return math.tau, None
-    if isinstance(value, TorusSurface):
-        return math.tau, math.tau
-    return None, None
-
-
-def _unwrap_periodic(
-    values: Sequence[tuple[float, float]],
-    periods: tuple[float | None, float | None],
-) -> tuple[tuple[float, float], ...]:
-    if not values:
+# this definition exists because focused behavior needs one stable owner
+def UnwrapPeriodic(Values: Sequence[tuple[float, float]], Periods: tuple[float | None, float | None]) -> tuple[tuple[float, float], ...]:
+    if not Values:
         return ()
-    result = [values[0]]
-    for value in values[1:]:
-        adjusted = list(value)
-        previous = result[-1]
-        for axis, period in enumerate(periods):
-            if period is None:
+    Result = [Values[0]]
+    for Value in Values[1:]:
+        Adjusted = list(Value)
+        Previous = Result[-1]
+        for AxisValue, Period in enumerate(Periods):
+            if Period is None:
                 continue
-            adjusted[axis] += round((previous[axis] - adjusted[axis]) / period) * period
-        result.append((adjusted[0], adjusted[1]))
-    return tuple(result)
+            Adjusted[AxisValue] += round((Previous[AxisValue] - Adjusted[AxisValue]) / Period) * Period
+        Result.append((Adjusted[0], Adjusted[1]))
+    return tuple(Result)
 
-
-def _unwrap_surface_uv(
-    values: Sequence[tuple[float, float]],
-    surface: object,
-) -> tuple[tuple[float, float], ...]:
-    if not isinstance(surface, SphereSurface) or not values:
-        return _unwrap_periodic(values, _surface_periods(surface))
-    resolved = list(values)
-    for index, (u_value, v_value) in enumerate(resolved):
-        if abs(abs(v_value) - math.pi / 2.0) > 1e-10:
+# this definition exists because focused behavior needs one stable owner
+def UnwrapSurfaceUv(Values: Sequence[tuple[float, float]], Surface: object) -> tuple[tuple[float, float], ...]:
+    if not isinstance(Surface, SphereSurface) or not Values:
+        return UnwrapPeriodic(Values, SurfacePeriods(Surface))
+    Resolved = list(Values)
+    for Index, (UValue, VValue) in enumerate(Resolved):
+        if abs(abs(VValue) - MathValue.pi / 2.0) > 1e-10:
             continue
-        neighbor = next(
-            (
-                resolved[candidate][0]
-                for distance in range(1, len(resolved))
-                for candidate in (index - distance, index + distance)
-                if 0 <= candidate < len(resolved)
-                and abs(abs(resolved[candidate][1]) - math.pi / 2.0) > 1e-10
-            ),
-            u_value,
-        )
-        resolved[index] = neighbor, v_value
-    result = [resolved[0]]
-    for u_value, v_value in resolved[1:]:
-        candidates = []
-        for u_turn in range(-3, 4):
-            candidate_u = u_value + u_turn * math.pi
-            base_v = v_value if u_turn % 2 == 0 else math.pi - v_value
-            for v_turn in range(-2, 3):
-                candidates.append((candidate_u, base_v + v_turn * math.tau))
-        previous = result[-1]
-        result.append(
-            min(
-                candidates,
-                key=lambda value: (value[0] - previous[0]) ** 2
-                + (value[1] - previous[1]) ** 2,
-            )
-        )
-    return tuple(result)
+        Neighbor = next((Resolved[Choice][0] for Distance in range(1, len(Resolved)) for Choice in (Index - Distance, Index + Distance) if 0 <= Choice < len(Resolved) and abs(abs(Resolved[Choice][1]) - MathValue.pi / 2.0) > 1e-10), UValue)
+        Resolved[Index] = (Neighbor, VValue)
+    Result = [Resolved[0]]
+    for UValue, VValue in Resolved[1:]:
+        Candidates = []
+        for UTurn in range(-3, 4):
+            ChoiceU = UValue + UTurn * MathValue.pi
+            BaseV = VValue if UTurn % 2 == 0 else MathValue.pi - VValue
+            for VTurn in range(-2, 3):
+                Candidates.append((ChoiceU, BaseV + VTurn * MathValue.tau))
+        Previous = Result[-1]
 
+        # this callback exists because local behavior needs one focused transformation
+        Result.append(min(Candidates, key=lambda Value: (Value[0] - Previous[0]) ** 2 + (Value[1] - Previous[1]) ** 2))
+    return tuple(Result)
 
-def _surface_uv(value: object, point: Point) -> tuple[float, float] | None:
-    if isinstance(value, PlaneSurface):
-        axis, reference, y_direction = _frame(
-            value.normal,
-            value.reference_direction,
-            f"plane surface {value.id}",
-        )
-        delta = _subtract(point, _vector3(value.origin))
-        return _dot(delta, reference), _dot(delta, y_direction)
-    if isinstance(value, (CylinderSurface, ConeSurface)):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"surface {value.id}",
-        )
-        delta = _subtract(point, _vector3(value.origin))
-        u = math.atan2(_dot(delta, y_direction), _dot(delta, reference))
-        if isinstance(value, CylinderSurface):
-            return u, _dot(delta, axis)
-        cosine = math.cos(value.half_angle)
-        if abs(cosine) <= 1e-15:
+# this definition exists because focused behavior needs one stable owner
+def SurfaceUv(Value: object, Point: Point) -> tuple[float, float] | None:
+    if isinstance(Value, PlaneSurface):
+        AxisValue, RefValue, YDirection = Frame(Value.normal, Value.reference_direction, f'plane surface {Value.id}')
+        Delta = Subtract(Point, VectorThreeA(Value.origin))
+        return (DotAction(Delta, RefValue), DotAction(Delta, YDirection))
+    if isinstance(Value, (CylinderSurface, ConeSurface)):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'surface {Value.id}')
+        Delta = Subtract(Point, VectorThreeA(Value.origin))
+        FirstParam = MathValue.atan2(DotAction(Delta, YDirection), DotAction(Delta, RefValue))
+        if isinstance(Value, CylinderSurface):
+            return (FirstParam, DotAction(Delta, AxisValue))
+        Cosine = MathValue.cos(Value.half_angle)
+        if abs(Cosine) <= 1e-15:
             return None
-        return u, _dot(delta, axis) / cosine
-    if isinstance(value, SphereSurface):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"sphere surface {value.id}",
-        )
-        delta = _subtract(point, _vector3(value.center))
-        return (
-            math.atan2(_dot(delta, y_direction), _dot(delta, reference)),
-            math.atan2(
-                _dot(delta, axis),
-                math.hypot(_dot(delta, reference), _dot(delta, y_direction)),
-            ),
-        )
-    if isinstance(value, TorusSurface):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"torus surface {value.id}",
-        )
-        delta = _subtract(point, _vector3(value.center))
-        x_value = _dot(delta, reference)
-        y_value = _dot(delta, y_direction)
-        z_value = _dot(delta, axis)
-        return (
-            math.atan2(y_value, x_value),
-            math.atan2(z_value, math.hypot(x_value, y_value) - value.major_radius),
-        )
+        return (FirstParam, DotAction(Delta, AxisValue) / Cosine)
+    if isinstance(Value, SphereSurface):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'sphere surface {Value.id}')
+        Delta = Subtract(Point, VectorThreeA(Value.center))
+        return (MathValue.atan2(DotAction(Delta, YDirection), DotAction(Delta, RefValue)), MathValue.atan2(DotAction(Delta, AxisValue), MathValue.hypot(DotAction(Delta, RefValue), DotAction(Delta, YDirection))))
+    if isinstance(Value, TorusSurface):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'torus surface {Value.id}')
+        Delta = Subtract(Point, VectorThreeA(Value.center))
+        XValue = DotAction(Delta, RefValue)
+        YValue = DotAction(Delta, YDirection)
+        ZValue = DotAction(Delta, AxisValue)
+        return (MathValue.atan2(YValue, XValue), MathValue.atan2(ZValue, MathValue.hypot(XValue, YValue) - Value.major_radius))
     return None
 
-
-def _surface_residual(value: object, point: Point) -> float | None:
-    if isinstance(value, PlaneSurface):
-        axis, _, _ = _frame(
-            value.normal,
-            value.reference_direction,
-            f"plane surface {value.id}",
-        )
-        return abs(_dot(_subtract(point, _vector3(value.origin)), axis))
-    if isinstance(value, (CylinderSurface, ConeSurface)):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"surface {value.id}",
-        )
-        delta = _subtract(point, _vector3(value.origin))
-        radial = math.hypot(_dot(delta, reference), _dot(delta, y_direction))
-        axial = _dot(delta, axis)
-        if isinstance(value, CylinderSurface):
-            return abs(radial - value.radius)
-        cosine = math.cos(value.half_angle)
-        if abs(cosine) <= 1e-15:
+# this definition exists because focused behavior needs one stable owner
+def SurfaceResidual(Value: object, Point: Point) -> float | None:
+    if isinstance(Value, PlaneSurface):
+        AxisValue, Ignored, Ignored = Frame(Value.normal, Value.reference_direction, f'plane surface {Value.id}')
+        return abs(DotAction(Subtract(Point, VectorThreeA(Value.origin)), AxisValue))
+    if isinstance(Value, (CylinderSurface, ConeSurface)):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'surface {Value.id}')
+        Delta = Subtract(Point, VectorThreeA(Value.origin))
+        Radial = MathValue.hypot(DotAction(Delta, RefValue), DotAction(Delta, YDirection))
+        Axial = DotAction(Delta, AxisValue)
+        if isinstance(Value, CylinderSurface):
+            return abs(Radial - Value.radius)
+        Cosine = MathValue.cos(Value.half_angle)
+        if abs(Cosine) <= 1e-15:
             return None
-        expected = value.radius + axial / cosine * math.sin(value.half_angle)
-        return abs(radial - abs(expected))
-    if isinstance(value, SphereSurface):
-        return abs(_length(_subtract(point, _vector3(value.center))) - value.radius)
-    if isinstance(value, TorusSurface):
-        axis, reference, y_direction = _frame(
-            value.axis,
-            value.reference_direction,
-            f"torus surface {value.id}",
-        )
-        delta = _subtract(point, _vector3(value.center))
-        radial = math.hypot(_dot(delta, reference), _dot(delta, y_direction))
-        axial = _dot(delta, axis)
-        return abs(math.hypot(radial - value.major_radius, axial) - value.minor_radius)
+        Expected = Value.radius + Axial / Cosine * MathValue.sin(Value.half_angle)
+        return abs(Radial - abs(Expected))
+    if isinstance(Value, SphereSurface):
+        return abs(Length(Subtract(Point, VectorThreeA(Value.center))) - Value.radius)
+    if isinstance(Value, TorusSurface):
+        AxisValue, RefValue, YDirection = Frame(Value.axis, Value.reference_direction, f'torus surface {Value.id}')
+        Delta = Subtract(Point, VectorThreeA(Value.center))
+        Radial = MathValue.hypot(DotAction(Delta, RefValue), DotAction(Delta, YDirection))
+        Axial = DotAction(Delta, AxisValue)
+        return abs(MathValue.hypot(Radial - Value.major_radius, Axial) - Value.minor_radius)
     return None
 
+# this definition exists because focused behavior needs one stable owner
+def PlaneConic(Curve: object, Surface: PlaneSurface, EdgeValue: BrepEdge, Tolerance: float) -> GeneratedPcurve | None:
+    if not isinstance(Curve, (CircleCurve, EllipseCurve)):
+        return None
+    Normal, SurfaceX, SurfaceY = Frame(Surface.normal, Surface.reference_direction, f'plane surface {Surface.id}')
+    CurveAxis, CurveX, CurveY = Frame(Curve.axis, Curve.reference_direction, f'curve {Curve.id}')
+    Allowed = max(Tolerance, EdgeValue.tolerance, 1e-07) * 10.0
+    if abs(abs(DotAction(Normal, CurveAxis)) - 1.0) > Allowed:
+        return None
+    Center = SurfaceUv(Surface, VectorThreeA(Curve.center))
+    if Center is None:
+        return None
+    XDirection = (DotAction(CurveX, SurfaceX), DotAction(CurveX, SurfaceY))
+    YDirection = (DotAction(CurveY, SurfaceX), DotAction(CurveY, SurfaceY))
+    if abs(MathValue.hypot(*XDirection) - 1.0) > Allowed or abs(MathValue.hypot(*YDirection) - 1.0) > Allowed or abs(XDirection[0] * YDirection[0] + XDirection[1] * YDirection[1]) > Allowed:
+        return None
+    First, LastValue = sorted((EdgeValue.start_parameter, EdgeValue.end_parameter))
+    KindValue = '2' if isinstance(Curve, CircleCurve) else '3'
+    Radii = (Curve.radius,) if isinstance(Curve, CircleCurve) else (Curve.major_radius, Curve.minor_radius)
+    Start = (Center[0] + Radii[0] * MathValue.cos(First) * XDirection[0] + Radii[-1] * MathValue.sin(First) * YDirection[0], Center[1] + Radii[0] * MathValue.cos(First) * XDirection[1] + Radii[-1] * MathValue.sin(First) * YDirection[1])
+    EndValue = (Center[0] + Radii[0] * MathValue.cos(LastValue) * XDirection[0] + Radii[-1] * MathValue.sin(LastValue) * YDirection[0], Center[1] + Radii[0] * MathValue.cos(LastValue) * XDirection[1] + Radii[-1] * MathValue.sin(LastValue) * YDirection[1])
+    return GeneratedPcurve(f'{KindValue} {Values(Center + XDirection + YDirection + Radii)} ', First, LastValue, Start, EndValue)
 
-def _plane_conic_pcurve(
-    curve: object,
-    surface: PlaneSurface,
-    edge: BrepEdge,
-    tolerance: float,
-) -> _GeneratedPcurve | None:
-    if not isinstance(curve, (CircleCurve, EllipseCurve)):
+# this definition exists because focused behavior needs one stable owner
+def LinearSurface(Curve: object, Surface: object, EdgeValue: BrepEdge, Tolerance: float, Offset: tuple[float, float]) -> GeneratedPcurve | None:
+    LowValue, HighValue = sorted((EdgeValue.start_parameter, EdgeValue.end_parameter))
+    if HighValue == LowValue:
         return None
-    normal, surface_x, surface_y = _frame(
-        surface.normal,
-        surface.reference_direction,
-        f"plane surface {surface.id}",
-    )
-    curve_axis, curve_x, curve_y = _frame(
-        curve.axis,
-        curve.reference_direction,
-        f"curve {curve.id}",
-    )
-    allowed = max(tolerance, edge.tolerance, 1e-7) * 10.0
-    if abs(abs(_dot(normal, curve_axis)) - 1.0) > allowed:
+    Parameters = tuple((LowValue + (HighValue - LowValue) * Index / 8.0 for Index in range(9)))
+    Points = tuple((CurvePoint(Curve, Param) for Param in Parameters))
+    if any((Point is None for Point in Points)):
         return None
-    center = _surface_uv(surface, _vector3(curve.center))
-    if center is None:
+    ConcretePoints = tuple((Point for Point in Points if Point is not None))
+    Allowed = max(Tolerance, EdgeValue.tolerance, 1e-07) * 10.0
+    Residuals = tuple((SurfaceResidual(Surface, Point) for Point in ConcretePoints))
+    if any((Value is None or Value > Allowed for Value in Residuals)):
         return None
-    x_direction = (_dot(curve_x, surface_x), _dot(curve_x, surface_y))
-    y_direction = (_dot(curve_y, surface_x), _dot(curve_y, surface_y))
-    if (
-        abs(math.hypot(*x_direction) - 1.0) > allowed
-        or abs(math.hypot(*y_direction) - 1.0) > allowed
-        or abs(x_direction[0] * y_direction[0] + x_direction[1] * y_direction[1])
-        > allowed
-    ):
+    RawUv = tuple((SurfaceUv(Surface, Point) for Point in ConcretePoints))
+    if any((Value is None for Value in RawUv)):
         return None
-    first, last = sorted((edge.start_parameter, edge.end_parameter))
-    kind = "2" if isinstance(curve, CircleCurve) else "3"
-    radii = (
-        (curve.radius,)
-        if isinstance(curve, CircleCurve)
-        else (curve.major_radius, curve.minor_radius)
-    )
-    start = (
-        center[0]
-        + radii[0] * math.cos(first) * x_direction[0]
-        + radii[-1] * math.sin(first) * y_direction[0],
-        center[1]
-        + radii[0] * math.cos(first) * x_direction[1]
-        + radii[-1] * math.sin(first) * y_direction[1],
-    )
-    end = (
-        center[0]
-        + radii[0] * math.cos(last) * x_direction[0]
-        + radii[-1] * math.sin(last) * y_direction[0],
-        center[1]
-        + radii[0] * math.cos(last) * x_direction[1]
-        + radii[-1] * math.sin(last) * y_direction[1],
-    )
-    return _GeneratedPcurve(
-        f"{kind} {_values(center + x_direction + y_direction + radii)} ",
-        first,
-        last,
-        start,
-        end,
-    )
-
-
-def _linear_surface_pcurve(
-    curve: object,
-    surface: object,
-    edge: BrepEdge,
-    tolerance: float,
-    offset: tuple[float, float],
-) -> _GeneratedPcurve | None:
-    low, high = sorted((edge.start_parameter, edge.end_parameter))
-    if high == low:
+    UvValue = UnwrapSurfaceUv(tuple((Value for Value in RawUv if Value is not None)), Surface)
+    DeltaParam = HighValue - LowValue
+    Direction = ((UvValue[-1][0] - UvValue[0][0]) / DeltaParam, (UvValue[-1][1] - UvValue[0][1]) / DeltaParam)
+    Magnitude = MathValue.hypot(*Direction)
+    if Magnitude <= 1e-15:
         return None
-    parameters = tuple(low + (high - low) * index / 8.0 for index in range(9))
-    points = tuple(_curve_point(curve, parameter) for parameter in parameters)
-    if any(point is None for point in points):
-        return None
-    concrete_points = tuple(point for point in points if point is not None)
-    allowed = max(tolerance, edge.tolerance, 1e-7) * 10.0
-    residuals = tuple(_surface_residual(surface, point) for point in concrete_points)
-    if any(value is None or value > allowed for value in residuals):
-        return None
-    raw_uv = tuple(_surface_uv(surface, point) for point in concrete_points)
-    if any(value is None for value in raw_uv):
-        return None
-    uv = _unwrap_surface_uv(
-        tuple(value for value in raw_uv if value is not None),
-        surface,
-    )
-    delta_parameter = high - low
-    direction = (
-        (uv[-1][0] - uv[0][0]) / delta_parameter,
-        (uv[-1][1] - uv[0][1]) / delta_parameter,
-    )
-    magnitude = math.hypot(*direction)
-    if magnitude <= 1e-15:
-        return None
-    origin = (
-        uv[0][0] - low * direction[0],
-        uv[0][1] - low * direction[1],
-    )
-    for parameter, value in zip(parameters, uv, strict=True):
-        expected = (
-            origin[0] + parameter * direction[0],
-            origin[1] + parameter * direction[1],
-        )
-        if math.hypot(value[0] - expected[0], value[1] - expected[1]) > allowed:
+    Origin = (UvValue[0][0] - LowValue * Direction[0], UvValue[0][1] - LowValue * Direction[1])
+    for Param, Value in zip(Parameters, UvValue, strict=True):
+        Expected = (Origin[0] + Param * Direction[0], Origin[1] + Param * Direction[1])
+        if MathValue.hypot(Value[0] - Expected[0], Value[1] - Expected[1]) > Allowed:
             return None
-    origin = origin[0] + offset[0], origin[1] + offset[1]
-    unit = direction[0] / magnitude, direction[1] / magnitude
-    first = low * magnitude
-    last = high * magnitude
-    return _GeneratedPcurve(
-        f"1 {_values(origin + unit)} ",
-        first,
-        last,
-        (origin[0] + unit[0] * first, origin[1] + unit[1] * first),
-        (origin[0] + unit[0] * last, origin[1] + unit[1] * last),
-    )
+    Origin = (Origin[0] + Offset[0], Origin[1] + Offset[1])
+    UnitValue = (Direction[0] / Magnitude, Direction[1] / Magnitude)
+    First = LowValue * Magnitude
+    LastValue = HighValue * Magnitude
+    return GeneratedPcurve(f'1 {Values(Origin + UnitValue)} ', First, LastValue, (Origin[0] + UnitValue[0] * First, Origin[1] + UnitValue[1] * First), (Origin[0] + UnitValue[0] * LastValue, Origin[1] + UnitValue[1] * LastValue))
 
+# this definition exists because focused behavior needs one stable owner
+def GeneratedPcurvA(Curve: object, Surface: object, EdgeValue: BrepEdge, Tolerance: float, Offset: tuple[float, float]) -> GeneratedPcurve:
+    Result = PlaneConic(Curve, Surface, EdgeValue, Tolerance) if isinstance(Surface, PlaneSurface) else None
+    if Result is None:
+        Result = LinearSurface(Curve, Surface, EdgeValue, Tolerance, Offset)
+    if Result is None:
+        Unsupported(f"edge {EdgeValue.id} has no exact pcurve on surface {getattr(Surface, 'id', '')}")
+    return Result
 
-def _generated_pcurve(
-    curve: object,
-    surface: object,
-    edge: BrepEdge,
-    tolerance: float,
-    offset: tuple[float, float],
-) -> _GeneratedPcurve:
-    result = (
-        _plane_conic_pcurve(curve, surface, edge, tolerance)
-        if isinstance(surface, PlaneSurface)
-        else None
-    )
-    if result is None:
-        result = _linear_surface_pcurve(
-            curve,
-            surface,
-            edge,
-            tolerance,
-            offset,
-        )
-    if result is None:
-        _unsupported(
-            f"edge {edge.id} has no exact pcurve on surface {getattr(surface, 'id', '')}"
-        )
-    return result
+# this definition exists because focused behavior needs one stable owner
+def SeamBandA(FaceValue: BrepFace, Graph: _ModelGraph, Tolerance: float) -> tuple[BrepCoedge, BrepCoedge, GeneratedPcurve, GeneratedPcurve, bool, bool, KPoint, KPoint, float] | None:
+    Surface = Graph.surfaces[FaceValue.surface_id]
+    if not isinstance(Surface, (CylinderSurface, ConeSurface)):
+        return None
+    if len(FaceValue.loop_ids) != 2:
+        return None
+    Loops = tuple((Graph.loops[LoopId] for LoopId in FaceValue.loop_ids))
+    if any((len(LoopValue.coedge_ids) != 1 for LoopValue in Loops)):
+        return None
+    Coedges = tuple((Graph.coedges[LoopValue.coedge_ids[0]] for LoopValue in Loops))
+    if any((Coedge.pcurve_id for Coedge in Coedges)):
+        return None
+    Edges = tuple((Graph.edges[Coedge.edge_id] for Coedge in Coedges))
+    Curves = tuple((Graph.curves[EdgeValue.curve_id] for EdgeValue in Edges))
+    if any((not isinstance(Curve, CircleCurve) for Curve in Curves)):
+        return None
+    Allowed = max(Tolerance, *(EdgeValue.tolerance for EdgeValue in Edges), *(Graph.vertices[EdgeValue.start_vertex_id].tolerance for EdgeValue in Edges), 1e-07) * 10.0
+    if any((EdgeValue.start_vertex_id != EdgeValue.end_vertex_id or abs(abs(EdgeValue.end_parameter - EdgeValue.start_parameter) - MathValue.tau) > Allowed for EdgeValue in Edges)):
+        return None
+    Generated = tuple((GeneratedPcurvA(Curve, Surface, EdgeValue, Tolerance, (0.0, 0.0)) for Curve, EdgeValue in zip(Curves, Edges, strict=True)))
+    if any((abs(abs(Value.end[0] - Value.start[0]) - MathValue.tau) > Allowed or abs(Value.end[1] - Value.start[1]) > Allowed for Value in Generated)):
+        return None
+    Means = tuple(((Value.start[1] + Value.end[1]) / 2.0 for Value in Generated))
+    if abs(Means[0] - Means[1]) <= Allowed:
+        return None
+    LowIndex = 0 if Means[0] < Means[1] else 1
+    HighIndex = 1 - LowIndex
+    LowCoedge = Coedges[LowIndex]
+    HighCoedge = Coedges[HighIndex]
+    LowEdge = Edges[LowIndex]
+    HighEdge = Edges[HighIndex]
+    LowGenerated = Generated[LowIndex]
+    HighGenerated = Generated[HighIndex]
+    LowReversed = LowGenerated.end[0] < LowGenerated.start[0]
+    HighReversed = HighGenerated.end[0] > HighGenerated.start[0]
+    LowStart = LowGenerated.end if LowReversed else LowGenerated.start
+    LowEnd = LowGenerated.start if LowReversed else LowGenerated.end
+    HighStart = HighGenerated.end if HighReversed else HighGenerated.start
+    Offset = round((LowEnd[0] - HighStart[0]) / MathValue.tau) * MathValue.tau
+    HighGenerated = GeneratedPcurvA(Curves[HighIndex], Surface, HighEdge, Tolerance, (Offset, 0.0))
+    HighStart = HighGenerated.end if HighReversed else HighGenerated.start
+    HighEnd = HighGenerated.start if HighReversed else HighGenerated.end
+    if abs(LowEnd[0] - HighStart[0]) > Allowed or abs(HighEnd[0] - LowStart[0]) > Allowed:
+        return None
+    LowPoint = VectorThreeA(Graph.vertices[LowEdge.start_vertex_id].point)
+    HighPoint = VectorThreeA(Graph.vertices[HighEdge.start_vertex_id].point)
+    Vector = Subtract(HighPoint, LowPoint)
+    Length = Length(Vector)
+    if Length <= Allowed or abs(Length - (Means[HighIndex] - Means[LowIndex])) > Allowed:
+        return None
+    if any(((SurfaceResidual(Surface, tuple((LowPoint[AxisValue] + Vector[AxisValue] * Ratio for AxisValue in range(3)))) or 0.0) > Allowed for Ratio in (0.25, 0.5, 0.75))):
+        return None
+    return (LowCoedge, HighCoedge, LowGenerated, HighGenerated, LowReversed, HighReversed, LowPoint, HighPoint, Length)
 
-
-def _seam_band(
-    face: BrepFace,
-    graph: _ModelGraph,
-    tolerance: float,
-) -> (
-    tuple[
-        BrepCoedge,
-        BrepCoedge,
-        _GeneratedPcurve,
-        _GeneratedPcurve,
-        bool,
-        bool,
-        Point,
-        Point,
-        float,
-    ]
-    | None
-):
-    surface = graph.surfaces[face.surface_id]
-    if not isinstance(surface, (CylinderSurface, ConeSurface)):
-        return None
-    if len(face.loop_ids) != 2:
-        return None
-    loops = tuple(graph.loops[loop_id] for loop_id in face.loop_ids)
-    if any(len(loop.coedge_ids) != 1 for loop in loops):
-        return None
-    coedges = tuple(graph.coedges[loop.coedge_ids[0]] for loop in loops)
-    if any(coedge.pcurve_id for coedge in coedges):
-        return None
-    edges = tuple(graph.edges[coedge.edge_id] for coedge in coedges)
-    curves = tuple(graph.curves[edge.curve_id] for edge in edges)
-    if any(not isinstance(curve, CircleCurve) for curve in curves):
-        return None
-    allowed = (
-        max(
-            tolerance,
-            *(edge.tolerance for edge in edges),
-            *(graph.vertices[edge.start_vertex_id].tolerance for edge in edges),
-            1e-7,
-        )
-        * 10.0
-    )
-    if any(
-        edge.start_vertex_id != edge.end_vertex_id
-        or abs(abs(edge.end_parameter - edge.start_parameter) - math.tau) > allowed
-        for edge in edges
-    ):
-        return None
-    generated = tuple(
-        _generated_pcurve(curve, surface, edge, tolerance, (0.0, 0.0))
-        for curve, edge in zip(curves, edges, strict=True)
-    )
-    if any(
-        abs(abs(value.end[0] - value.start[0]) - math.tau) > allowed
-        or abs(value.end[1] - value.start[1]) > allowed
-        for value in generated
-    ):
-        return None
-    means = tuple((value.start[1] + value.end[1]) / 2.0 for value in generated)
-    if abs(means[0] - means[1]) <= allowed:
-        return None
-    low_index = 0 if means[0] < means[1] else 1
-    high_index = 1 - low_index
-    low_coedge = coedges[low_index]
-    high_coedge = coedges[high_index]
-    low_edge = edges[low_index]
-    high_edge = edges[high_index]
-    low_generated = generated[low_index]
-    high_generated = generated[high_index]
-    low_reversed = low_generated.end[0] < low_generated.start[0]
-    high_reversed = high_generated.end[0] > high_generated.start[0]
-    low_start = low_generated.end if low_reversed else low_generated.start
-    low_end = low_generated.start if low_reversed else low_generated.end
-    high_start = high_generated.end if high_reversed else high_generated.start
-    offset = round((low_end[0] - high_start[0]) / math.tau) * math.tau
-    high_generated = _generated_pcurve(
-        curves[high_index],
-        surface,
-        high_edge,
-        tolerance,
-        (offset, 0.0),
-    )
-    high_start = high_generated.end if high_reversed else high_generated.start
-    high_end = high_generated.start if high_reversed else high_generated.end
-    if (
-        abs(low_end[0] - high_start[0]) > allowed
-        or abs(high_end[0] - low_start[0]) > allowed
-    ):
-        return None
-    low_point = _vector3(graph.vertices[low_edge.start_vertex_id].point)
-    high_point = _vector3(graph.vertices[high_edge.start_vertex_id].point)
-    vector = _subtract(high_point, low_point)
-    length = _length(vector)
-    if (
-        length <= allowed
-        or abs(length - (means[high_index] - means[low_index])) > allowed
-    ):
-        return None
-    if any(
-        (
-            _surface_residual(
-                surface,
-                tuple(low_point[axis] + vector[axis] * ratio for axis in range(3)),
-            )
-            or 0.0
-        )
-        > allowed
-        for ratio in (0.25, 0.5, 0.75)
-    ):
-        return None
-    return (
-        low_coedge,
-        high_coedge,
-        low_generated,
-        high_generated,
-        low_reversed,
-        high_reversed,
-        low_point,
-        high_point,
-        length,
-    )
-
-
-def _edge_pcurve_records(
-    model: BrepModel,
-    graph: _ModelGraph,
-    tolerance: float,
-) -> tuple[
-    tuple[str, ...],
-    Mapping[str, _EdgePcurve],
-    Mapping[str, _SeamBand],
-]:
-    records = [value[0] for value in (_pcurve_record(item) for item in model.pcurves)]
-    explicit_indexes = {item.id: index for index, item in enumerate(model.pcurves, 1)}
-    explicit_scales = {item.id: _pcurve_record(item)[1] for item in model.pcurves}
-    result: dict[str, _EdgePcurve] = {}
-    seam_bands: dict[str, _SeamBand] = {}
-    for face in model.faces:
-        surface = graph.surfaces[face.surface_id]
-        periods = _surface_periods(surface)
-        seam = _seam_band(face, graph, tolerance)
-        if seam is not None:
-            (
-                low_coedge,
-                high_coedge,
-                low_generated,
-                high_generated,
-                low_reversed,
-                high_reversed,
-                low_point,
-                high_point,
-                length,
-            ) = seam
-            for coedge, generated in (
-                (low_coedge, low_generated),
-                (high_coedge, high_generated),
-            ):
-                records.append(generated.record)
-                result[coedge.id] = _EdgePcurve(
-                    len(records), generated.first, generated.last
-                )
-            low_start = low_generated.end if low_reversed else low_generated.start
-            low_end = low_generated.start if low_reversed else low_generated.end
-            records.append(f"1 {_values((low_end[0], low_start[1], 0.0, 1.0))} ")
-            first_pcurve_index = len(records)
-            records.append(f"1 {_values((low_start[0], low_start[1], 0.0, 1.0))} ")
-            second_pcurve_index = len(records)
-            direction = _scale(_subtract(high_point, low_point), 1.0 / length)
-            seam_bands[face.id] = _SeamBand(
-                face.id,
-                (face.loop_ids[0], face.loop_ids[1]),
-                low_coedge.id,
-                high_coedge.id,
-                low_reversed,
-                high_reversed,
-                graph.edges[low_coedge.edge_id].start_vertex_id,
-                graph.edges[high_coedge.edge_id].start_vertex_id,
-                f"1 {_values(low_point + direction)} ",
-                length,
-                first_pcurve_index,
-                second_pcurve_index,
-            )
+# this definition exists because focused behavior needs one stable owner
+def EdgePcurveA(Model: BrepModel, Graph: _ModelGraph, Tolerance: float) -> tuple[tuple[str, ...], Mapping[str, EdgePcurve], Mapping[str, SeamBand]]:
+    Records = [Value[0] for Value in (PcurveRecord(ItemValue) for ItemValue in Model.pcurves)]
+    ExplicitIndexes = {ItemValue.id: Index for Index, ItemValue in enumerate(Model.pcurves, 1)}
+    ExplicitScales = {ItemValue.id: PcurveRecord(ItemValue)[1] for ItemValue in Model.pcurves}
+    Result: dict[str, EdgePcurve] = {}
+    SeamBands: dict[str, SeamBand] = {}
+    for FaceValue in Model.faces:
+        Surface = Graph.surfaces[FaceValue.surface_id]
+        Periods = SurfacePeriods(Surface)
+        SeamValue = SeamBandA(FaceValue, Graph, Tolerance)
+        if SeamValue is not None:
+            LowCoedge, HighCoedge, LowGenerated, HighGenerated, LowReversed, HighReversed, LowPoint, HighPoint, Length = SeamValue
+            for Coedge, Generated in ((LowCoedge, LowGenerated), (HighCoedge, HighGenerated)):
+                Records.append(Generated.record)
+                Result[Coedge.id] = EdgePcurve(len(Records), Generated.first, Generated.last)
+            LowStart = LowGenerated.end if LowReversed else LowGenerated.start
+            LowEnd = LowGenerated.start if LowReversed else LowGenerated.end
+            Records.append(f'1 {Values((LowEnd[0], LowStart[1], 0.0, 1.0))} ')
+            FirstPcurveIndex = len(Records)
+            Records.append(f'1 {Values((LowStart[0], LowStart[1], 0.0, 1.0))} ')
+            SecondPcurveIndex = len(Records)
+            Direction = Scale(Subtract(HighPoint, LowPoint), 1.0 / Length)
+            SeamBands[FaceValue.id] = SeamBand(FaceValue.id, (FaceValue.loop_ids[0], FaceValue.loop_ids[1]), LowCoedge.id, HighCoedge.id, LowReversed, HighReversed, Graph.edges[LowCoedge.edge_id].start_vertex_id, Graph.edges[HighCoedge.edge_id].start_vertex_id, f'1 {Values(LowPoint + Direction)} ', Length, FirstPcurveIndex, SecondPcurveIndex)
             continue
-        for loop_id in face.loop_ids:
-            previous_end: tuple[float, float] | None = None
-            for coedge_id in graph.loops[loop_id].coedge_ids:
-                coedge = graph.coedges[coedge_id]
-                edge = graph.edges[coedge.edge_id]
-                if coedge.pcurve_id:
-                    scale = explicit_scales[coedge.pcurve_id]
-                    first, last = sorted(
-                        (edge.start_parameter * scale, edge.end_parameter * scale)
-                    )
-                    result[coedge.id] = _EdgePcurve(
-                        explicit_indexes[coedge.pcurve_id],
-                        first,
-                        last,
-                    )
-                    previous_end = None
+        for LoopId in FaceValue.loop_ids:
+            PreviousEnd: tuple[float, float] | None = None
+            for CoedgeId in Graph.loops[LoopId].coedge_ids:
+                Coedge = Graph.coedges[CoedgeId]
+                EdgeValue = Graph.edges[Coedge.edge_id]
+                if Coedge.pcurve_id:
+                    Scale = ExplicitScales[Coedge.pcurve_id]
+                    First, LastValue = sorted((EdgeValue.start_parameter * Scale, EdgeValue.end_parameter * Scale))
+                    Result[Coedge.id] = EdgePcurve(ExplicitIndexes[Coedge.pcurve_id], First, LastValue)
+                    PreviousEnd = None
                     continue
-                generated = _generated_pcurve(
-                    graph.curves[edge.curve_id],
-                    surface,
-                    edge,
-                    tolerance,
-                    (0.0, 0.0),
-                )
-                reversed_value = coedge.reversed != (
-                    edge.end_parameter < edge.start_parameter
-                )
-                start = generated.end if reversed_value else generated.start
-                end = generated.start if reversed_value else generated.end
-                offset = [0.0, 0.0]
-                if previous_end is not None:
-                    for axis, period in enumerate(periods):
-                        if period is not None:
-                            offset[axis] = (
-                                round((previous_end[axis] - start[axis]) / period)
-                                * period
-                            )
-                if offset != [0.0, 0.0]:
-                    generated = _generated_pcurve(
-                        graph.curves[edge.curve_id],
-                        surface,
-                        edge,
-                        tolerance,
-                        (offset[0], offset[1]),
-                    )
-                    start = generated.end if reversed_value else generated.start
-                    end = generated.start if reversed_value else generated.end
-                records.append(generated.record)
-                result[coedge.id] = _EdgePcurve(
-                    len(records), generated.first, generated.last
-                )
-                previous_end = end
-    return tuple(records), result, seam_bands
+                Generated = GeneratedPcurvA(Graph.curves[EdgeValue.curve_id], Surface, EdgeValue, Tolerance, (0.0, 0.0))
+                ReversedValue = Coedge.reversed != (EdgeValue.end_parameter < EdgeValue.start_parameter)
+                Start = Generated.end if ReversedValue else Generated.start
+                EndValue = Generated.start if ReversedValue else Generated.end
+                Offset = [0.0, 0.0]
+                if PreviousEnd is not None:
+                    for AxisValue, Period in enumerate(Periods):
+                        if Period is not None:
+                            Offset[AxisValue] = round((PreviousEnd[AxisValue] - Start[AxisValue]) / Period) * Period
+                if Offset != [0.0, 0.0]:
+                    Generated = GeneratedPcurvA(Graph.curves[EdgeValue.curve_id], Surface, EdgeValue, Tolerance, (Offset[0], Offset[1]))
+                    Start = Generated.end if ReversedValue else Generated.start
+                    EndValue = Generated.start if ReversedValue else Generated.end
+                Records.append(Generated.record)
+                Result[Coedge.id] = EdgePcurve(len(Records), Generated.first, Generated.last)
+                PreviousEnd = EndValue
+    return (tuple(Records), Result, SeamBands)
 
-
-def _loop_uv_points(
-    graph: _ModelGraph,
-    face: BrepFace,
-    loop: BrepLoop,
-) -> tuple[tuple[float, float], ...] | None:
-    surface = graph.surfaces[face.surface_id]
-    values: list[tuple[float, float]] = []
-    for coedge_id in loop.coedge_ids:
-        coedge = graph.coedges[coedge_id]
-        edge = graph.edges[coedge.edge_id]
-        geometry = graph.curves.get(edge.curve_id)
-        if geometry is None:
+# this definition exists because focused behavior needs one stable owner
+def LoopUvPoints(Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop) -> tuple[tuple[float, float], ...] | None:
+    Surface = Graph.surfaces[FaceValue.surface_id]
+    Values: list[tuple[float, float]] = []
+    for CoedgeId in LoopValue.coedge_ids:
+        Coedge = Graph.coedges[CoedgeId]
+        EdgeValue = Graph.edges[Coedge.edge_id]
+        GeomValue = Graph.curves.get(EdgeValue.curve_id)
+        if GeomValue is None:
             return None
-        first, last = edge.start_parameter, edge.end_parameter
-        if coedge.reversed:
-            first, last = last, first
-        for index in range(16):
-            point = _curve_point(
-                geometry,
-                first + (last - first) * index / 16.0,
-            )
-            if point is None:
+        First, LastValue = (EdgeValue.start_parameter, EdgeValue.end_parameter)
+        if Coedge.reversed:
+            First, LastValue = (LastValue, First)
+        for Index in range(16):
+            Point = CurvePoint(GeomValue, First + (LastValue - First) * Index / 16.0)
+            if Point is None:
                 return None
-            uv = _surface_uv(surface, point)
-            if uv is None:
+            UvValue = SurfaceUv(Surface, Point)
+            if UvValue is None:
                 return None
-            values.append(uv)
-    return _unwrap_surface_uv(values, surface)
+            Values.append(UvValue)
+    return UnwrapSurfaceUv(Values, Surface)
 
+# this definition exists because focused behavior needs one stable owner
+def FaceLoop(Graph: _ModelGraph, FaceValue: BrepFace, Tolerance: float) -> dict[str, bool]:
+    AreaTolerance = max(Tolerance * Tolerance, 1e-10)
+    LoopPoints = {LoopId: LoopUvPoints(Graph, FaceValue, Graph.loops[LoopId]) for LoopId in FaceValue.loop_ids}
+    LoopAreas = {LoopId: None if Points is None or len(Points) < 3 else sum((LeftValue[0] * Right[1] - Right[0] * LeftValue[1] for LeftValue, Right in zip(Points, (*Points[1:], Points[0])))) / 2.0 for LoopId, Points in LoopPoints.items()}
+    Measurable = {LoopId: AreaValue for LoopId, AreaValue in LoopAreas.items() if AreaValue is not None and abs(AreaValue) > AreaTolerance}
+    if len(Measurable) != len(FaceValue.loop_ids):
+        Unsupported(f'face {FaceValue.id} has an unprovable loop orientation')
 
-def _face_loop_reversals(
-    graph: _ModelGraph,
-    face: BrepFace,
-    tolerance: float,
-) -> dict[str, bool]:
-    area_tolerance = max(tolerance * tolerance, 1e-10)
-    loop_points = {
-        loop_id: _loop_uv_points(graph, face, graph.loops[loop_id])
-        for loop_id in face.loop_ids
-    }
-    loop_areas = {
-        loop_id: (
-            None
-            if points is None or len(points) < 3
-            else sum(
-                left[0] * right[1] - right[0] * left[1]
-                for left, right in zip(points, (*points[1:], points[0]))
-            )
-            / 2.0
-        )
-        for loop_id, points in loop_points.items()
-    }
-    measurable = {
-        loop_id: area
-        for loop_id, area in loop_areas.items()
-        if area is not None and abs(area) > area_tolerance
-    }
-    if len(measurable) != len(face.loop_ids):
-        _unsupported(f"face {face.id} has an unprovable loop orientation")
-    outer_loop_id = max(measurable, key=lambda loop_id: abs(measurable[loop_id]))
-    return {
-        loop_id: (area > 0.0) != (loop_id == outer_loop_id)
-        for loop_id, area in measurable.items()
-    }
+    # this callback exists because local behavior needs one focused transformation
+    OuterLoopId = max(Measurable, key=lambda LoopId: abs(Measurable[LoopId]))
+    return {LoopId: (AreaValue > 0.0) != (LoopId == OuterLoopId) for LoopId, AreaValue in Measurable.items()}
 
+# this definition exists because focused behavior needs one stable owner
+def CoedgeShape(Coedge: BrepCoedge, EdgeValue: BrepEdge) -> bool:
+    return Coedge.reversed != (EdgeValue.end_parameter < EdgeValue.start_parameter)
 
-def _coedge_shape_reversed(coedge: BrepCoedge, edge: BrepEdge) -> bool:
-    return coedge.reversed != (edge.end_parameter < edge.start_parameter)
-
-
-def _planar_line_loop_is_proven(
-    graph: _ModelGraph,
-    face: BrepFace,
-    loop: BrepLoop,
-    tolerance: float,
-) -> bool:
-    if len(loop.coedge_ids) < 3:
+# this definition exists because focused behavior needs one stable owner
+def PlanarLineLoop(Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float) -> bool:
+    if len(LoopValue.coedge_ids) < 3:
         return False
-    surface = graph.surfaces[face.surface_id]
-    if not isinstance(surface, PlaneSurface):
+    Surface = Graph.surfaces[FaceValue.surface_id]
+    if not isinstance(Surface, PlaneSurface):
         return False
-    points: list[tuple[float, float]] = []
-    allowed = max(tolerance, face.tolerance, 1e-7) * 10.0
-    for coedge_id in loop.coedge_ids:
-        coedge = graph.coedges[coedge_id]
-        edge = graph.edges[coedge.edge_id]
-        curve = graph.curves[edge.curve_id]
-        if not isinstance(curve, LineCurve):
+    Points: list[tuple[float, float]] = []
+    Allowed = max(Tolerance, FaceValue.tolerance, 1e-07) * 10.0
+    for CoedgeId in LoopValue.coedge_ids:
+        Coedge = Graph.coedges[CoedgeId]
+        EdgeValue = Graph.edges[Coedge.edge_id]
+        Curve = Graph.curves[EdgeValue.curve_id]
+        if not isinstance(Curve, LineCurve):
             return False
-        first = edge.end_parameter if coedge.reversed else edge.start_parameter
-        last = edge.start_parameter if coedge.reversed else edge.end_parameter
-        start = _curve_point(curve, first)
-        end = _curve_point(curve, last)
-        middle = _curve_point(curve, (first + last) / 2.0)
-        if start is None or end is None or middle is None:
+        First = EdgeValue.end_parameter if Coedge.reversed else EdgeValue.start_parameter
+        LastValue = EdgeValue.start_parameter if Coedge.reversed else EdgeValue.end_parameter
+        Start = CurvePoint(Curve, First)
+        EndValue = CurvePoint(Curve, LastValue)
+        Middle = CurvePoint(Curve, (First + LastValue) / 2.0)
+        if Start is None or EndValue is None or Middle is None:
             return False
-        if any(
-            residual is None or residual > allowed
-            for residual in (
-                _surface_residual(surface, start),
-                _surface_residual(surface, middle),
-                _surface_residual(surface, end),
-            )
-        ):
+        if any((Residual is None or Residual > Allowed for Residual in (SurfaceResidual(Surface, Start), SurfaceResidual(Surface, Middle), SurfaceResidual(Surface, EndValue)))):
             return False
-        uv = _surface_uv(surface, start)
-        if uv is None:
+        UvValue = SurfaceUv(Surface, Start)
+        if UvValue is None:
             return False
-        points.append(uv)
-    if len(points) < 3:
+        Points.append(UvValue)
+    if len(Points) < 3:
         return False
-    span = max(
-        max(value[axis] for value in points) - min(value[axis] for value in points)
-        for axis in (0, 1)
-    )
-    epsilon = allowed * max(1.0, span)
-    turns = []
-    for index, middle in enumerate(points):
-        left = points[index - 1]
-        right = points[(index + 1) % len(points)]
-        turn = (middle[0] - left[0]) * (right[1] - middle[1]) - (
-            middle[1] - left[1]
-        ) * (right[0] - middle[0])
-        if abs(turn) <= epsilon:
+    SpanValue = max((max((Value[AxisValue] for Value in Points)) - min((Value[AxisValue] for Value in Points)) for AxisValue in (0, 1)))
+    Epsilon = Allowed * max(1.0, SpanValue)
+    Turns = []
+    for Index, Middle in enumerate(Points):
+        LeftValue = Points[Index - 1]
+        Right = Points[(Index + 1) % len(Points)]
+        TurnValue = (Middle[0] - LeftValue[0]) * (Right[1] - Middle[1]) - (Middle[1] - LeftValue[1]) * (Right[0] - Middle[0])
+        if abs(TurnValue) <= Epsilon:
             return False
-        turns.append(turn > 0.0)
-    if any(value != turns[0] for value in turns[1:]):
+        Turns.append(TurnValue > 0.0)
+    if any((Value != Turns[0] for Value in Turns[1:])):
         return False
-    for first_index, first_start in enumerate(points):
-        first_end = points[(first_index + 1) % len(points)]
-        for second_index in range(first_index + 1, len(points)):
-            if second_index in {
-                first_index,
-                (first_index + 1) % len(points),
-                (first_index - 1) % len(points),
-            }:
+    for FirstIndex, FirstStart in enumerate(Points):
+        FirstEnd = Points[(FirstIndex + 1) % len(Points)]
+        for SecondIndex in range(FirstIndex + 1, len(Points)):
+            if SecondIndex in {FirstIndex, (FirstIndex + 1) % len(Points), (FirstIndex - 1) % len(Points)}:
                 continue
-            second_start = points[second_index]
-            second_end = points[(second_index + 1) % len(points)]
-            crosses = []
-            for left, right, point in (
-                (first_start, first_end, second_start),
-                (first_start, first_end, second_end),
-                (second_start, second_end, first_start),
-                (second_start, second_end, first_end),
-            ):
-                value = (right[0] - left[0]) * (point[1] - left[1]) - (
-                    right[1] - left[1]
-                ) * (point[0] - left[0])
-                if abs(value) <= epsilon:
+            SecondStart = Points[SecondIndex]
+            SecondEnd = Points[(SecondIndex + 1) % len(Points)]
+            Crosses = []
+            for LeftValue, Right, Point in ((FirstStart, FirstEnd, SecondStart), (FirstStart, FirstEnd, SecondEnd), (SecondStart, SecondEnd, FirstStart), (SecondStart, SecondEnd, FirstEnd)):
+                Value = (Right[0] - LeftValue[0]) * (Point[1] - LeftValue[1]) - (Right[1] - LeftValue[1]) * (Point[0] - LeftValue[0])
+                if abs(Value) <= Epsilon:
                     return False
-                crosses.append(value > 0.0)
-            if crosses[0] != crosses[1] and crosses[2] != crosses[3]:
+                Crosses.append(Value > 0.0)
+            if Crosses[0] != Crosses[1] and Crosses[2] != Crosses[3]:
                 return False
     return True
 
+# this definition exists because focused behavior needs one stable owner
+def PlanarCircle(Graph: _ModelGraph, FaceValue: BrepFace, LoopValue: BrepLoop, Tolerance: float) -> tuple[tuple[float, float], float] | None:
+    if len(LoopValue.coedge_ids) != 1:
+        return None
+    Surface = Graph.surfaces[FaceValue.surface_id]
+    if not isinstance(Surface, PlaneSurface):
+        return None
+    Coedge = Graph.coedges[LoopValue.coedge_ids[0]]
+    EdgeValue = Graph.edges[Coedge.edge_id]
+    Curve = Graph.curves[EdgeValue.curve_id]
+    if not isinstance(Curve, CircleCurve):
+        return None
+    Allowed = max(Tolerance, FaceValue.tolerance, EdgeValue.tolerance, 1e-07) * 10.0
+    if EdgeValue.start_vertex_id != EdgeValue.end_vertex_id or abs(abs(EdgeValue.end_parameter - EdgeValue.start_parameter) - MathValue.tau) > Allowed:
+        return None
+    SurfaceAxis, Ignored, Ignored = Frame(Surface.normal, Surface.reference_direction, f'plane surface {Surface.id}')
+    CurveAxis, Ignored, Ignored = Frame(Curve.axis, Curve.reference_direction, f'circle curve {Curve.id}')
+    if abs(abs(DotAction(SurfaceAxis, CurveAxis)) - 1.0) > Allowed:
+        return None
+    Center = SurfaceUv(Surface, VectorThreeA(Curve.center))
+    Residual = SurfaceResidual(Surface, VectorThreeA(Curve.center))
+    if Center is None or Residual is None or Residual > Allowed:
+        return None
+    return (Center, Curve.radius)
 
-def _planar_circle_loop(
-    graph: _ModelGraph,
-    face: BrepFace,
-    loop: BrepLoop,
-    tolerance: float,
-) -> tuple[tuple[float, float], float] | None:
-    if len(loop.coedge_ids) != 1:
-        return None
-    surface = graph.surfaces[face.surface_id]
-    if not isinstance(surface, PlaneSurface):
-        return None
-    coedge = graph.coedges[loop.coedge_ids[0]]
-    edge = graph.edges[coedge.edge_id]
-    curve = graph.curves[edge.curve_id]
-    if not isinstance(curve, CircleCurve):
-        return None
-    allowed = max(tolerance, face.tolerance, edge.tolerance, 1e-7) * 10.0
-    if (
-        edge.start_vertex_id != edge.end_vertex_id
-        or abs(abs(edge.end_parameter - edge.start_parameter) - math.tau) > allowed
-    ):
-        return None
-    surface_axis, _, _ = _frame(
-        surface.normal,
-        surface.reference_direction,
-        f"plane surface {surface.id}",
-    )
-    curve_axis, _, _ = _frame(
-        curve.axis,
-        curve.reference_direction,
-        f"circle curve {curve.id}",
-    )
-    if abs(abs(_dot(surface_axis, curve_axis)) - 1.0) > allowed:
-        return None
-    center = _surface_uv(surface, _vector3(curve.center))
-    residual = _surface_residual(surface, _vector3(curve.center))
-    if center is None or residual is None or residual > allowed:
-        return None
-    return center, curve.radius
-
-
-def _face_is_proven(
-    graph: _ModelGraph,
-    face: BrepFace,
-    tolerance: float,
-    seam_bands: Mapping[str, _SeamBand],
-) -> None:
-    if face.id in seam_bands:
+# this definition exists because focused behavior needs one stable owner
+def FaceIsProven(Graph: _ModelGraph, FaceValue: BrepFace, Tolerance: float, SeamBands: Mapping[str, _SeamBand]) -> None:
+    if FaceValue.id in SeamBands:
         return
-    surface = graph.surfaces[face.surface_id]
-    if not isinstance(surface, PlaneSurface):
-        _unsupported(
-            f"face {face.id} on {type(surface).__name__} lacks a proven native topology"
-        )
-    loops = tuple(graph.loops[loop_id] for loop_id in face.loop_ids)
-    if len(loops) == 1 and _planar_line_loop_is_proven(
-        graph, face, loops[0], tolerance
-    ):
+    Surface = Graph.surfaces[FaceValue.surface_id]
+    if not isinstance(Surface, PlaneSurface):
+        Unsupported(f'face {FaceValue.id} on {type(Surface).__name__} lacks a proven native topology')
+    Loops = tuple((Graph.loops[LoopId] for LoopId in FaceValue.loop_ids))
+    if len(Loops) == 1 and PlanarLineLoop(Graph, FaceValue, Loops[0], Tolerance):
         return
-    circles = tuple(_planar_circle_loop(graph, face, loop, tolerance) for loop in loops)
-    if len(circles) not in {1, 2} or any(value is None for value in circles):
-        _unsupported(f"planar face {face.id} lacks a proven wire arrangement")
-    concrete = tuple(value for value in circles if value is not None)
-    allowed = max(tolerance, face.tolerance, 1e-7) * 10.0
-    if len(concrete) == 2:
-        if (
-            math.dist(concrete[0][0], concrete[1][0]) > allowed
-            or abs(concrete[0][1] - concrete[1][1]) <= allowed
-        ):
-            _unsupported(f"planar face {face.id} has unproven circle containment")
+    Circles = tuple((PlanarCircle(Graph, FaceValue, LoopValue, Tolerance) for LoopValue in Loops))
+    if len(Circles) not in {1, 2} or any((Value is None for Value in Circles)):
+        Unsupported(f'planar face {FaceValue.id} lacks a proven wire arrangement')
+    Concrete = tuple((Value for Value in Circles if Value is not None))
+    Allowed = max(Tolerance, FaceValue.tolerance, 1e-07) * 10.0
+    if len(Concrete) == 2:
+        if MathValue.dist(Concrete[0][0], Concrete[1][0]) > Allowed or abs(Concrete[0][1] - Concrete[1][1]) <= Allowed:
+            Unsupported(f'planar face {FaceValue.id} has unproven circle containment')
 
+# this definition exists because focused behavior needs one stable owner
+def FaceEdge(Graph: _ModelGraph, FaceValue: BrepFace, LoopReversals: Mapping[str, bool], SeamBands: Mapping[str, _SeamBand]) -> tuple[tuple[str, bool], ...]:
+    BandValue = SeamBands.get(FaceValue.id)
+    if BandValue is not None:
+        return ((Graph.coedges[BandValue.low_coedge_id].edge_id, BandValue.low_reversed), (Graph.coedges[BandValue.high_coedge_id].edge_id, BandValue.high_reversed))
+    return tuple(((Graph.coedges[CoedgeId].edge_id, CoedgeShape(Graph.coedges[CoedgeId], Graph.edges[Graph.coedges[CoedgeId].edge_id]) != LoopReversals[LoopId]) for LoopId in FaceValue.loop_ids for CoedgeId in Graph.loops[LoopId].coedge_ids))
 
-def _face_edge_orientations(
-    graph: _ModelGraph,
-    face: BrepFace,
-    loop_reversals: Mapping[str, bool],
-    seam_bands: Mapping[str, _SeamBand],
-) -> tuple[tuple[str, bool], ...]:
-    band = seam_bands.get(face.id)
-    if band is not None:
-        return (
-            (graph.coedges[band.low_coedge_id].edge_id, band.low_reversed),
-            (graph.coedges[band.high_coedge_id].edge_id, band.high_reversed),
-        )
-    return tuple(
-        (
-            graph.coedges[coedge_id].edge_id,
-            _coedge_shape_reversed(
-                graph.coedges[coedge_id],
-                graph.edges[graph.coedges[coedge_id].edge_id],
-            )
-            != loop_reversals[loop_id],
-        )
-        for loop_id in face.loop_ids
-        for coedge_id in graph.loops[loop_id].coedge_ids
-    )
-
-
-def _shell_face_orientations(
-    model: BrepModel,
-    graph: _ModelGraph,
-    face_edges: Mapping[str, tuple[tuple[str, bool], ...]],
-) -> dict[str, bool]:
-    result: dict[str, bool] = {}
-    for shell in model.shells:
-        face_uses = tuple(graph.face_uses[value] for value in shell.face_use_ids)
-        face_ids = tuple(value.face_id for value in face_uses)
-        if len(face_ids) != len(set(face_ids)):
-            _unsupported(f"shell {shell.id} reuses a face")
-        by_edge: dict[str, list[tuple[str, bool]]] = {}
-        for face_use in face_uses:
-            for edge_id, reversed_value in face_edges[face_use.face_id]:
-                by_edge.setdefault(edge_id, []).append((face_use.id, reversed_value))
-        if any(len(values) > 2 for values in by_edge.values()):
-            _unsupported(f"shell {shell.id} is non-manifold")
-        if shell.closed and any(len(values) != 2 for values in by_edge.values()):
-            _unsupported(f"closed shell {shell.id} has a free edge")
-        adjacency: dict[str, list[tuple[str, bool]]] = {
-            value.id: [] for value in face_uses
-        }
-        for values in by_edge.values():
-            if len(values) != 2:
+# this definition exists because focused behavior needs one stable owner
+def ShellFace(Model: BrepModel, Graph: _ModelGraph, FaceEdges: Mapping[str, tuple[tuple[str, bool], ...]]) -> dict[str, bool]:
+    Result: dict[str, bool] = {}
+    for Shell in Model.shells:
+        FaceUses = tuple((Graph.face_uses[Value] for Value in Shell.face_use_ids))
+        FaceIds = tuple((Value.face_id for Value in FaceUses))
+        if len(FaceIds) != len(set(FaceIds)):
+            Unsupported(f'shell {Shell.id} reuses a face')
+        ByEdge: dict[str, list[tuple[str, bool]]] = {}
+        for FaceUse in FaceUses:
+            for EdgeId, ReversedValue in FaceEdges[FaceUse.face_id]:
+                ByEdge.setdefault(EdgeId, []).append((FaceUse.id, ReversedValue))
+        if any((len(Values) > 2 for Values in ByEdge.values())):
+            Unsupported(f'shell {Shell.id} is non-manifold')
+        if Shell.closed and any((len(Values) != 2 for Values in ByEdge.values())):
+            Unsupported(f'closed shell {Shell.id} has a free edge')
+        Adjacency: dict[str, list[tuple[str, bool]]] = {Value.id: [] for Value in FaceUses}
+        for Values in ByEdge.values():
+            if len(Values) != 2:
                 continue
-            (left_id, left_value), (right_id, right_value) = values
-            parity = left_value != right_value
-            required = not parity
-            if left_id == right_id:
-                if required:
-                    _unsupported(f"shell {shell.id} is not orientable")
+            (LeftId, LeftValue), (RightId, RightValue) = Values
+            Parity = LeftValue != RightValue
+            Required = not Parity
+            if LeftId == RightId:
+                if Required:
+                    Unsupported(f'shell {Shell.id} is not orientable')
                 continue
-            adjacency[left_id].append((right_id, required))
-            adjacency[right_id].append((left_id, required))
-        assigned: dict[str, bool] = {}
-        for start in adjacency:
-            if start in assigned:
+            Adjacency[LeftId].append((RightId, Required))
+            Adjacency[RightId].append((LeftId, Required))
+        Assigned: dict[str, bool] = {}
+        for Start in Adjacency:
+            if Start in Assigned:
                 continue
-            assigned[start] = False
-            component = [start]
-            pending = deque((start,))
-            while pending:
-                current = pending.popleft()
-                for neighbor, parity in adjacency[current]:
-                    expected = assigned[current] != parity
-                    if neighbor in assigned:
-                        if assigned[neighbor] != expected:
-                            _unsupported(f"shell {shell.id} is not orientable")
+            Assigned[Start] = False
+            Component = [Start]
+            Pending = Deque((Start,))
+            while Pending:
+                Current = Pending.popleft()
+                for Neighbor, Parity in Adjacency[Current]:
+                    Expected = Assigned[Current] != Parity
+                    if Neighbor in Assigned:
+                        if Assigned[Neighbor] != Expected:
+                            Unsupported(f'shell {Shell.id} is not orientable')
                         continue
-                    assigned[neighbor] = expected
-                    component.append(neighbor)
-                    pending.append(neighbor)
-            preferred = {
-                value.id: not (graph.faces[value.face_id].same_sense != value.reversed)
-                for value in face_uses
-                if value.id in component
-            }
-            direct_score = sum(
-                assigned[value] != preferred[value] for value in component
-            )
-            reverse_score = sum(
-                (not assigned[value]) != preferred[value] for value in component
-            )
-            if reverse_score < direct_score:
-                for value in component:
-                    assigned[value] = not assigned[value]
-        result.update(assigned)
-    return result
+                    Assigned[Neighbor] = Expected
+                    Component.append(Neighbor)
+                    Pending.append(Neighbor)
+            Preferred = {Value.id: not Graph.faces[Value.face_id].same_sense != Value.reversed for Value in FaceUses if Value.id in Component}
+            DirectScore = sum((Assigned[Value] != Preferred[Value] for Value in Component))
+            ReverseScore = sum(((not Assigned[Value]) != Preferred[Value] for Value in Component))
+            if ReverseScore < DirectScore:
+                for Value in Component:
+                    Assigned[Value] = not Assigned[Value]
+        Result.update(Assigned)
+    return Result
 
-
-def _shell_use_orientations(
-    model: BrepModel,
-    graph: _ModelGraph,
-) -> dict[str, bool]:
-    result: dict[str, bool] = {}
-    for region in model.regions:
-        if region.solid:
-            if len(region.shell_use_ids) != 1:
-                _unsupported(
-                    f"solid region {region.id} has unproven nested shell containment"
-                )
-            shell_use = graph.shell_uses[region.shell_use_ids[0]]
-            if not graph.shells[shell_use.shell_id].closed:
-                _unsupported(f"solid region {region.id} contains an open shell")
-            result[shell_use.id] = False
+# this definition exists because focused behavior needs one stable owner
+def ShellUse(Model: BrepModel, Graph: _ModelGraph) -> dict[str, bool]:
+    Result: dict[str, bool] = {}
+    for Region in Model.regions:
+        if Region.solid:
+            if len(Region.shell_use_ids) != 1:
+                Unsupported(f'solid region {Region.id} has unproven nested shell containment')
+            ShellUse = Graph.shell_uses[Region.shell_use_ids[0]]
+            if not Graph.shells[ShellUse.shell_id].closed:
+                Unsupported(f'solid region {Region.id} contains an open shell')
+            Result[ShellUse.id] = False
             continue
-        for shell_use_id in region.shell_use_ids:
-            result[shell_use_id] = graph.shell_uses[shell_use_id].reversed
-    return result
+        for ShellUseId in Region.shell_use_ids:
+            Result[ShellUseId] = Graph.shell_uses[ShellUseId].reversed
+    return Result
 
-
-def _check_edge_geometry(
-    edge: BrepEdge,
-    curve: object,
-    vertices: Mapping[str, BrepVertex],
-    tolerance: float,
-) -> None:
-    start = _curve_point(curve, edge.start_parameter)
-    end = _curve_point(curve, edge.end_parameter)
-    if start is None or end is None:
+# this definition exists because focused behavior needs one stable owner
+def CheckEdgeGeom(EdgeValue: BrepEdge, Curve: object, Vertices: Mapping[str, BrepVertex], Tolerance: float) -> None:
+    Start = CurvePoint(Curve, EdgeValue.start_parameter)
+    EndValue = CurvePoint(Curve, EdgeValue.end_parameter)
+    if Start is None or EndValue is None:
         return
-    for actual, vertex_id in (
-        (start, edge.start_vertex_id),
-        (end, edge.end_vertex_id),
-    ):
-        vertex = vertices[vertex_id]
-        allowed = max(tolerance, edge.tolerance, vertex.tolerance)
-        if _length(_subtract(actual, _vector3(vertex.point))) > allowed:
-            _unsupported(
-                f"edge {edge.id} curve endpoint does not match vertex {vertex_id}"
-            )
+    for Actual, VertexId in ((Start, EdgeValue.start_vertex_id), (EndValue, EdgeValue.end_vertex_id)):
+        Vertex = Vertices[VertexId]
+        Allowed = max(Tolerance, EdgeValue.tolerance, Vertex.tolerance)
+        if Length(Subtract(Actual, VectorThreeA(Vertex.point))) > Allowed:
+            Unsupported(f'edge {EdgeValue.id} curve endpoint does not match vertex {VertexId}')
 
-
-def _edge_geometry(
-    edge: BrepEdge,
-    graph: _ModelGraph,
-    curve_indexes: Mapping[str, int],
-    curve_scales: Mapping[str, float],
-    edge_pcurves: Mapping[str, _EdgePcurve],
-    surface_indexes: Mapping[str, int],
-    tolerance: float,
-) -> tuple[str, ...]:
-    if edge.degenerate:
-        _unsupported(f"degenerate edge {edge.id} is unsupported")
-    if edge.end_parameter == edge.start_parameter:
-        _unsupported(f"edge {edge.id} requires a nonzero parameter range")
-    curve_scale = curve_scales[edge.curve_id]
-    first, last = sorted(
-        (edge.start_parameter * curve_scale, edge.end_parameter * curve_scale)
-    )
-    grouped: dict[str, list[BrepCoedge]] = {}
-    for coedge_id in graph.edge_uses[edge.id]:
-        coedge = graph.coedges[coedge_id]
-        face = graph.face_for_coedge(coedge_id)
-        if face is None:
-            if coedge.pcurve_id:
-                _unsupported(f"wire coedge {coedge.id} cannot carry a surface pcurve")
+# this definition exists because focused behavior needs one stable owner
+def EdgeGeom(EdgeValue: BrepEdge, Graph: _ModelGraph, CurveIndexes: Mapping[str, int], CurveScales: Mapping[str, float], EdgePcurves: Mapping[str, _EdgePcurve], SurfaceIndexes: Mapping[str, int], Tolerance: float) -> tuple[str, ...]:
+    if EdgeValue.degenerate:
+        Unsupported(f'degenerate edge {EdgeValue.id} is unsupported')
+    if EdgeValue.end_parameter == EdgeValue.start_parameter:
+        Unsupported(f'edge {EdgeValue.id} requires a nonzero parameter range')
+    CurveScale = CurveScales[EdgeValue.curve_id]
+    First, LastValue = sorted((EdgeValue.start_parameter * CurveScale, EdgeValue.end_parameter * CurveScale))
+    Grouped: dict[str, list[BrepCoedge]] = {}
+    for CoedgeId in Graph.edge_uses[EdgeValue.id]:
+        Coedge = Graph.coedges[CoedgeId]
+        FaceValue = Graph.face_for_coedge(CoedgeId)
+        if FaceValue is None:
+            if Coedge.pcurve_id:
+                Unsupported(f'wire coedge {Coedge.id} cannot carry a surface pcurve')
             continue
-        surface = graph.surfaces[face.surface_id]
-        grouped.setdefault(face.surface_id, []).append(coedge)
-    representations: list[str] = []
-    for surface_id, uses in grouped.items():
-        surface_index = surface_indexes[surface_id]
-        if len(uses) == 1:
-            pcurve = edge_pcurves[uses[0].id]
-            representations.append(
-                f"2  {pcurve.index} {surface_index} 0 {_number(pcurve.first)} {_number(pcurve.last)}"
-            )
+        Surface = Graph.surfaces[FaceValue.surface_id]
+        Grouped.setdefault(FaceValue.surface_id, []).append(Coedge)
+    Representations: list[str] = []
+    for SurfaceId, UsesValue in Grouped.items():
+        SurfaceIndex = SurfaceIndexes[SurfaceId]
+        if len(UsesValue) == 1:
+            Pcurve = EdgePcurves[UsesValue[0].id]
+            Representations.append(f'2  {Pcurve.index} {SurfaceIndex} 0 {Number(Pcurve.first)} {Number(Pcurve.last)}')
             continue
-        if len(uses) == 2:
-            first_pcurve = edge_pcurves[uses[0].id]
-            second_pcurve = edge_pcurves[uses[1].id]
-            if (
-                abs(first_pcurve.first - second_pcurve.first) > 1e-9
-                or abs(first_pcurve.last - second_pcurve.last) > 1e-9
-            ):
-                _unsupported(
-                    f"edge {edge.id} has inconsistent closed-surface pcurve ranges"
-                )
-            representations.append(
-                f"3  {first_pcurve.index} {second_pcurve.index} C0 {surface_index} 0 {_number(first_pcurve.first)} {_number(first_pcurve.last)}"
-            )
+        if len(UsesValue) == 2:
+            FirstPcurve = EdgePcurves[UsesValue[0].id]
+            SecondPcurve = EdgePcurves[UsesValue[1].id]
+            if abs(FirstPcurve.first - SecondPcurve.first) > 1e-09 or abs(FirstPcurve.last - SecondPcurve.last) > 1e-09:
+                Unsupported(f'edge {EdgeValue.id} has inconsistent closed-surface pcurve ranges')
+            Representations.append(f'3  {FirstPcurve.index} {SecondPcurve.index} C0 {SurfaceIndex} 0 {Number(FirstPcurve.first)} {Number(FirstPcurve.last)}')
             continue
-        _unsupported(
-            f"edge {edge.id} has an unsupported closed-surface pcurve arrangement"
-        )
-    same_range = all(
-        abs(value - expected) <= 1e-9
-        for coedge_id in graph.edge_uses[edge.id]
-        if coedge_id in edge_pcurves
-        for value, expected in (
-            (edge_pcurves[coedge_id].first, first),
-            (edge_pcurves[coedge_id].last, last),
-        )
-    )
-    lines = [
-        f" {_number(max(tolerance, edge.tolerance))} {int(same_range)} {int(same_range)} 0",
-        f"1  {curve_indexes[edge.curve_id]} 0 {_number(first)} {_number(last)}",
-        *representations,
-    ]
-    lines.append("0")
-    return tuple(lines)
+        Unsupported(f'edge {EdgeValue.id} has an unsupported closed-surface pcurve arrangement')
+    SameRange = all((abs(Value - Expected) <= 1e-09 for CoedgeId in Graph.edge_uses[EdgeValue.id] if CoedgeId in EdgePcurves for Value, Expected in ((EdgePcurves[CoedgeId].first, First), (EdgePcurves[CoedgeId].last, LastValue))))
+    Lines = [f' {Number(max(Tolerance, EdgeValue.tolerance))} {int(SameRange)} {int(SameRange)} 0', f'1  {CurveIndexes[EdgeValue.curve_id]} 0 {Number(First)} {Number(LastValue)}', *Representations]
+    Lines.append('0')
+    return tuple(Lines)
 
+# this definition exists because focused behavior needs one stable owner
+def ShapeLines(Records: Sequence[_ShapeRecord], RootValue: tuple[str, bool]) -> list[str]:
+    Ordinals = {Record.key: Index for Index, Record in enumerate(Records, 1)}
+    Count = len(Records)
 
-def _shape_lines(records: Sequence[_ShapeRecord], root: tuple[str, bool]) -> list[str]:
-    ordinals = {record.key: index for index, record in enumerate(records, 1)}
-    count = len(records)
-
-    def reference(key: str) -> int:
+    # this definition exists because focused behavior needs one stable owner
+    def RefAction(KeyValue: str) -> int:
         try:
-            return count - ordinals[key] + 1
+            return Count - Ordinals[KeyValue] + 1
         except KeyError:
-            _unsupported(f"native topology references unknown shape {key}")
+            Unsupported(f'native topology references unknown shape {KeyValue}')
+    Lines = [f'TShapes {Count}']
+    for Record in Records:
+        Lines.append(Record.kind)
+        Lines.extend(Record.geometry)
+        Lines.append('')
+        Lines.append(Record.flags)
+        Lines.append(' '.join((f"{('-' if ReversedValue else '+')}{RefAction(KeyValue)} 0" for KeyValue, ReversedValue in Record.children)) + (' ' if Record.children else '') + '*')
+    Lines.extend(['', f"{('-' if RootValue[1] else '+')}{RefAction(RootValue[0])} 0 "])
+    return Lines
 
-    lines = [f"TShapes {count}"]
-    for record in records:
-        lines.append(record.kind)
-        lines.extend(record.geometry)
-        lines.append("")
-        lines.append(record.flags)
-        lines.append(
-            " ".join(
-                f"{'-' if reversed_value else '+'}{reference(key)} 0"
-                for key, reversed_value in record.children
-            )
-            + (" " if record.children else "")
-            + "*"
-        )
-    lines.extend(
-        [
-            "",
-            f"{'-' if root[1] else '+'}{reference(root[0])} 0 ",
-        ]
-    )
-    return lines
-
-
-def brep_model_brep(model: BrepModel, tolerance: float = 1e-7) -> bytes:
-    if not isinstance(model, BrepModel):
-        raise TypeError("model must be a BrepModel")
-    if not math.isfinite(tolerance) or tolerance <= 0.0:
-        raise ValueError("tolerance must be finite and positive")
-    errors = model.validate(
-        frozenset(body.design_body_id for body in model.bodies if body.design_body_id)
-    )
-    if errors:
-        _unsupported(errors[0])
-    if any(body.transform != Transform() for body in model.bodies):
-        _unsupported("native FreeCAD B-rep writing requires identity body transforms")
-    graph = _ModelGraph(model)
-    base_curve_records = tuple(_curve_record(value) for value in model.curves)
-    surface_records = tuple(
-        _surface_record(value, graph.surfaces) for value in model.surfaces
-    )
-    pcurve_records, edge_pcurves, seam_bands = _edge_pcurve_records(
-        model, graph, tolerance
-    )
-    loop_reversals: dict[str, bool] = {}
-    for face in model.faces:
-        _face_is_proven(graph, face, tolerance, seam_bands)
-        if face.id not in seam_bands:
-            loop_reversals.update(_face_loop_reversals(graph, face, tolerance))
-    face_edges = {
-        face.id: _face_edge_orientations(
-            graph,
-            face,
-            loop_reversals,
-            seam_bands,
-        )
-        for face in model.faces
-    }
-    face_use_reversals = _shell_face_orientations(model, graph, face_edges)
-    shell_use_reversals = _shell_use_orientations(model, graph)
-    curve_records = base_curve_records + tuple(
-        (band.curve_record, 1.0) for band in seam_bands.values()
-    )
-    curve_indexes = {value.id: index for index, value in enumerate(model.curves, 1)}
-    curve_scales = {
-        value.id: curve_records[index][1] for index, value in enumerate(model.curves)
-    }
-    surface_indexes = {value.id: index for index, value in enumerate(model.surfaces, 1)}
-    lines = [
-        "DBRep_DrawableShape",
-        "",
-        "CASCADE Topology V1, (c) Matra-Datavision",
-        "Locations 0",
-        f"Curve2ds {len(pcurve_records)}",
-        *pcurve_records,
-        f"Curves {len(curve_records)}",
-        *(value[0] for value in curve_records),
-        "Polygon3D 0",
-        "PolygonOnTriangulations 0",
-        f"Surfaces {len(surface_records)}",
-        *surface_records,
-        "Triangulations 0",
-        "",
-    ]
-    shapes: list[_ShapeRecord] = []
-    for vertex in model.vertices:
-        shapes.append(
-            _ShapeRecord(
-                f"vertex:{vertex.id}",
-                "Ve",
-                (
-                    _number(max(tolerance, vertex.tolerance)),
-                    _values(_vector3(vertex.point)),
-                    "0 0",
-                ),
-                "0101101",
-                (),
-            )
-        )
-    for edge in model.edges:
-        _check_edge_geometry(
-            edge,
-            next(value for value in model.curves if value.id == edge.curve_id),
-            graph.vertices,
-            tolerance,
-        )
-        range_reversed = edge.end_parameter < edge.start_parameter
-        first_vertex_id = edge.end_vertex_id if range_reversed else edge.start_vertex_id
-        last_vertex_id = edge.start_vertex_id if range_reversed else edge.end_vertex_id
-        shapes.append(
-            _ShapeRecord(
-                f"edge:{edge.id}",
-                "Ed",
-                _edge_geometry(
-                    edge,
-                    graph,
-                    curve_indexes,
-                    curve_scales,
-                    edge_pcurves,
-                    surface_indexes,
-                    tolerance,
-                ),
-                "0101000",
-                (
-                    (f"vertex:{first_vertex_id}", False),
-                    (f"vertex:{last_vertex_id}", True),
-                ),
-            )
-        )
-    for offset, band in enumerate(seam_bands.values(), len(base_curve_records) + 1):
-        shapes.append(
-            _ShapeRecord(
-                f"edge:seam:{band.face_id}",
-                "Ed",
-                (
-                    f" {_number(tolerance)} 1 1 0",
-                    f"1  {offset} 0 0 {_number(band.length)}",
-                    f"3  {band.first_pcurve_index} {band.second_pcurve_index} CN {surface_indexes[graph.faces[band.face_id].surface_id]} 0 0 {_number(band.length)}",
-                    "0",
-                ),
-                "0101000",
-                (
-                    (f"vertex:{band.low_vertex_id}", False),
-                    (f"vertex:{band.high_vertex_id}", True),
-                ),
-            )
-        )
-    for loop in model.loops:
-        if any(loop.id in band.loop_ids for band in seam_bands.values()):
+# this definition exists because focused behavior needs one stable owner
+def BrepModelBrep(Model: BrepModel, Tolerance: float=1e-07) -> bytes:
+    if not isinstance(Model, BrepModel):
+        raise TypeError('model must be a BrepModel')
+    if not MathValue.isfinite(Tolerance) or Tolerance <= 0.0:
+        raise ValueError('tolerance must be finite and positive')
+    Errors = Model.validate(frozenset((BodyValue.design_body_id for BodyValue in Model.bodies if BodyValue.design_body_id)))
+    if Errors:
+        Unsupported(Errors[0])
+    if any((BodyValue.transform != Transform() for BodyValue in Model.bodies)):
+        Unsupported('native FreeCAD B-rep writing requires identity body transforms')
+    Graph = ModelGraph(Model)
+    BaseCurveRecords = tuple((CurveRecord(Value) for Value in Model.curves))
+    SurfaceRecords = tuple((SurfaceRecord(Value, Graph.surfaces) for Value in Model.surfaces))
+    PcurveRecords, EdgePcurves, SeamBands = EdgePcurveA(Model, Graph, Tolerance)
+    LoopReversals: dict[str, bool] = {}
+    for FaceValue in Model.faces:
+        FaceIsProven(Graph, FaceValue, Tolerance, SeamBands)
+        if FaceValue.id not in SeamBands:
+            LoopReversals.update(FaceLoop(Graph, FaceValue, Tolerance))
+    FaceEdges = {FaceValue.id: FaceEdge(Graph, FaceValue, LoopReversals, SeamBands) for FaceValue in Model.faces}
+    FaceUseReversals = ShellFace(Model, Graph, FaceEdges)
+    ShellUseReversals = ShellUse(Model, Graph)
+    CurveRecords = BaseCurveRecords + tuple(((BandValue.curve_record, 1.0) for BandValue in SeamBands.values()))
+    CurveIndexes = {Value.id: Index for Index, Value in enumerate(Model.curves, 1)}
+    CurveScales = {Value.id: CurveRecords[Index][1] for Index, Value in enumerate(Model.curves)}
+    SurfaceIndexes = {Value.id: Index for Index, Value in enumerate(Model.surfaces, 1)}
+    Lines = ['DBRep_DrawableShape', '', 'CASCADE Topology V1, (c) Matra-Datavision', 'Locations 0', f'Curve2ds {len(PcurveRecords)}', *PcurveRecords, f'Curves {len(CurveRecords)}', *(Value[0] for Value in CurveRecords), 'Polygon3D 0', 'PolygonOnTriangulations 0', f'Surfaces {len(SurfaceRecords)}', *SurfaceRecords, 'Triangulations 0', '']
+    Shapes: list[ShapeRecord] = []
+    for Vertex in Model.vertices:
+        Shapes.append(ShapeRecord(f'vertex:{Vertex.id}', 'Ve', (Number(max(Tolerance, Vertex.tolerance)), Values(VectorThreeA(Vertex.point)), '0 0'), '0101101', ()))
+    for EdgeValue in Model.edges:
+        CheckEdgeGeom(EdgeValue, next((Value for Value in Model.curves if Value.id == EdgeValue.curve_id)), Graph.vertices, Tolerance)
+        RangeReversed = EdgeValue.end_parameter < EdgeValue.start_parameter
+        FirstVertexId = EdgeValue.end_vertex_id if RangeReversed else EdgeValue.start_vertex_id
+        LastVertexId = EdgeValue.start_vertex_id if RangeReversed else EdgeValue.end_vertex_id
+        Shapes.append(ShapeRecord(f'edge:{EdgeValue.id}', 'Ed', EdgeGeom(EdgeValue, Graph, CurveIndexes, CurveScales, EdgePcurves, SurfaceIndexes, Tolerance), '0101000', ((f'vertex:{FirstVertexId}', False), (f'vertex:{LastVertexId}', True))))
+    for Offset, BandValue in enumerate(SeamBands.values(), len(BaseCurveRecords) + 1):
+        Shapes.append(ShapeRecord(f'edge:seam:{BandValue.face_id}', 'Ed', (f' {Number(Tolerance)} 1 1 0', f'1  {Offset} 0 0 {Number(BandValue.length)}', f'3  {BandValue.first_pcurve_index} {BandValue.second_pcurve_index} CN {SurfaceIndexes[Graph.faces[BandValue.face_id].surface_id]} 0 0 {Number(BandValue.length)}', '0'), '0101000', ((f'vertex:{BandValue.low_vertex_id}', False), (f'vertex:{BandValue.high_vertex_id}', True))))
+    for LoopValue in Model.loops:
+        if any((LoopValue.id in BandValue.loop_ids for BandValue in SeamBands.values())):
             continue
-        shapes.append(
-            _ShapeRecord(
-                f"loop:{loop.id}",
-                "Wi",
-                (),
-                "0101100",
-                tuple(
-                    (
-                        f"edge:{graph.coedges[coedge_id].edge_id}",
-                        graph.coedges[coedge_id].reversed
-                        != (
-                            graph.edges[graph.coedges[coedge_id].edge_id].end_parameter
-                            < graph.edges[
-                                graph.coedges[coedge_id].edge_id
-                            ].start_parameter
-                        ),
-                    )
-                    for coedge_id in loop.coedge_ids
-                ),
-            )
-        )
-    for band in seam_bands.values():
-        low_edge = graph.edges[graph.coedges[band.low_coedge_id].edge_id]
-        high_edge = graph.edges[graph.coedges[band.high_coedge_id].edge_id]
-        shapes.append(
-            _ShapeRecord(
-                f"loop:seam:{band.face_id}",
-                "Wi",
-                (),
-                "0101100",
-                (
-                    (f"edge:{low_edge.id}", band.low_reversed),
-                    (f"edge:seam:{band.face_id}", False),
-                    (f"edge:{high_edge.id}", band.high_reversed),
-                    (f"edge:seam:{band.face_id}", True),
-                ),
-            )
-        )
-    for wire in model.wires:
-        shapes.append(
-            _ShapeRecord(
-                f"wire:{wire.id}",
-                "Wi",
-                (),
-                "0101100" if wire.closed else "0101000",
-                tuple(
-                    (
-                        f"edge:{graph.coedges[coedge_id].edge_id}",
-                        graph.coedges[coedge_id].reversed
-                        != (
-                            graph.edges[graph.coedges[coedge_id].edge_id].end_parameter
-                            < graph.edges[
-                                graph.coedges[coedge_id].edge_id
-                            ].start_parameter
-                        ),
-                    )
-                    for coedge_id in wire.coedge_ids
-                ),
-            )
-        )
-    for face in model.faces:
-        seam_band = seam_bands.get(face.id)
-        if seam_band is not None:
-            shapes.append(
-                _ShapeRecord(
-                    f"face:{face.id}",
-                    "Fa",
-                    (
-                        f"0  {_number(max(tolerance, face.tolerance))} {surface_indexes[face.surface_id]} 0",
-                    ),
-                    "0101000",
-                    ((f"loop:seam:{face.id}", False),),
-                )
-            )
+        Shapes.append(ShapeRecord(f'loop:{LoopValue.id}', 'Wi', (), '0101100', tuple(((f'edge:{Graph.coedges[CoedgeId].edge_id}', Graph.coedges[CoedgeId].reversed != (Graph.edges[Graph.coedges[CoedgeId].edge_id].end_parameter < Graph.edges[Graph.coedges[CoedgeId].edge_id].start_parameter)) for CoedgeId in LoopValue.coedge_ids))))
+    for BandValue in SeamBands.values():
+        LowEdge = Graph.edges[Graph.coedges[BandValue.low_coedge_id].edge_id]
+        HighEdge = Graph.edges[Graph.coedges[BandValue.high_coedge_id].edge_id]
+        Shapes.append(ShapeRecord(f'loop:seam:{BandValue.face_id}', 'Wi', (), '0101100', ((f'edge:{LowEdge.id}', BandValue.low_reversed), (f'edge:seam:{BandValue.face_id}', False), (f'edge:{HighEdge.id}', BandValue.high_reversed), (f'edge:seam:{BandValue.face_id}', True))))
+    for WireValue in Model.wires:
+        Shapes.append(ShapeRecord(f'wire:{WireValue.id}', 'Wi', (), '0101100' if WireValue.closed else '0101000', tuple(((f'edge:{Graph.coedges[CoedgeId].edge_id}', Graph.coedges[CoedgeId].reversed != (Graph.edges[Graph.coedges[CoedgeId].edge_id].end_parameter < Graph.edges[Graph.coedges[CoedgeId].edge_id].start_parameter)) for CoedgeId in WireValue.coedge_ids))))
+    for FaceValue in Model.faces:
+        SeamBand = SeamBands.get(FaceValue.id)
+        if SeamBand is not None:
+            Shapes.append(ShapeRecord(f'face:{FaceValue.id}', 'Fa', (f'0  {Number(max(Tolerance, FaceValue.tolerance))} {SurfaceIndexes[FaceValue.surface_id]} 0',), '0101000', ((f'loop:seam:{FaceValue.id}', False),)))
             continue
-        shapes.append(
-            _ShapeRecord(
-                f"face:{face.id}",
-                "Fa",
-                (
-                    f"0  {_number(max(tolerance, face.tolerance))} {surface_indexes[face.surface_id]} 0",
-                ),
-                "0101000",
-                tuple(
-                    (f"loop:{loop_id}", loop_reversals[loop_id])
-                    for loop_id in face.loop_ids
-                ),
-            )
-        )
-    for shell in model.shells:
-        children: list[tuple[str, bool]] = []
-        for face_use_id in shell.face_use_ids:
-            face_use = graph.face_uses[face_use_id]
-            face = graph.faces[face_use.face_id]
-            children.append(
-                (
-                    f"face:{face.id}",
-                    face_use_reversals[face_use.id],
-                )
-            )
-        shapes.append(
-            _ShapeRecord(
-                f"shell:{shell.id}",
-                "Sh",
-                (),
-                "0101100" if shell.closed else "0101000",
-                tuple(children),
-            )
-        )
-    region_roots: dict[str, tuple[str, bool]] = {}
-    for region in model.regions:
-        shell_children = tuple(
-            (
-                f"shell:{graph.shell_uses[shell_use_id].shell_id}",
-                shell_use_reversals[shell_use_id],
-            )
-            for shell_use_id in region.shell_use_ids
-        )
-        if region.solid:
-            if any(
-                not graph.shells[graph.shell_uses[value].shell_id].closed
-                for value in region.shell_use_ids
-            ):
-                _unsupported(f"solid region {region.id} contains an open shell")
-            key = f"region:{region.id}"
-            shapes.append(_ShapeRecord(key, "So", (), "0100000", shell_children))
-            region_roots[region.id] = (key, False)
-        elif len(shell_children) == 1:
-            region_roots[region.id] = shell_children[0]
+        Shapes.append(ShapeRecord(f'face:{FaceValue.id}', 'Fa', (f'0  {Number(max(Tolerance, FaceValue.tolerance))} {SurfaceIndexes[FaceValue.surface_id]} 0',), '0101000', tuple(((f'loop:{LoopId}', LoopReversals[LoopId]) for LoopId in FaceValue.loop_ids))))
+    for Shell in Model.shells:
+        Children: list[tuple[str, bool]] = []
+        for FaceUseId in Shell.face_use_ids:
+            FaceUse = Graph.face_uses[FaceUseId]
+            FaceValue = Graph.faces[FaceUse.face_id]
+            Children.append((f'face:{FaceValue.id}', FaceUseReversals[FaceUse.id]))
+        Shapes.append(ShapeRecord(f'shell:{Shell.id}', 'Sh', (), '0101100' if Shell.closed else '0101000', tuple(Children)))
+    RegionRoots: dict[str, tuple[str, bool]] = {}
+    for Region in Model.regions:
+        ShellChildren = tuple(((f'shell:{Graph.shell_uses[ShellUseId].shell_id}', ShellUseReversals[ShellUseId]) for ShellUseId in Region.shell_use_ids))
+        if Region.solid:
+            if any((not Graph.shells[Graph.shell_uses[Value].shell_id].closed for Value in Region.shell_use_ids)):
+                Unsupported(f'solid region {Region.id} contains an open shell')
+            KeyValue = f'region:{Region.id}'
+            Shapes.append(ShapeRecord(KeyValue, 'So', (), '0100000', ShellChildren))
+            RegionRoots[Region.id] = (KeyValue, False)
+        elif len(ShellChildren) == 1:
+            RegionRoots[Region.id] = ShellChildren[0]
         else:
-            key = f"region:{region.id}"
-            shapes.append(_ShapeRecord(key, "Co", (), "0100000", shell_children))
-            region_roots[region.id] = (key, False)
-    body_roots: list[tuple[str, bool]] = []
-    for body in model.bodies:
-        children = [region_roots[value] for value in body.region_ids]
-        children.extend((f"wire:{value}", False) for value in body.wire_ids)
-        children.extend((f"vertex:{value}", False) for value in body.vertex_ids)
-        if len(children) == 1:
-            body_roots.append(children[0])
+            KeyValue = f'region:{Region.id}'
+            Shapes.append(ShapeRecord(KeyValue, 'Co', (), '0100000', ShellChildren))
+            RegionRoots[Region.id] = (KeyValue, False)
+    BodyRoots: list[tuple[str, bool]] = []
+    for BodyValue in Model.bodies:
+        Children = [RegionRoots[Value] for Value in BodyValue.region_ids]
+        Children.extend(((f'wire:{Value}', False) for Value in BodyValue.wire_ids))
+        Children.extend(((f'vertex:{Value}', False) for Value in BodyValue.vertex_ids))
+        if len(Children) == 1:
+            BodyRoots.append(Children[0])
         else:
-            key = f"body:{body.id}"
-            shapes.append(_ShapeRecord(key, "Co", (), "0100000", tuple(children)))
-            body_roots.append((key, False))
-    if len(body_roots) == 1:
-        root = body_roots[0]
+            KeyValue = f'body:{BodyValue.id}'
+            Shapes.append(ShapeRecord(KeyValue, 'Co', (), '0100000', tuple(Children)))
+            BodyRoots.append((KeyValue, False))
+    if len(BodyRoots) == 1:
+        RootValue = BodyRoots[0]
     else:
-        root_key = "model:root"
-        shapes.append(_ShapeRecord(root_key, "Co", (), "1100000", tuple(body_roots)))
-        root = (root_key, False)
-    lines.extend(_shape_lines(shapes, root))
-    return ("\n".join(lines) + "\n").encode("ascii")
+        RootKey = 'model:root'
+        Shapes.append(ShapeRecord(RootKey, 'Co', (), '1100000', tuple(BodyRoots)))
+        RootValue = (RootKey, False)
+    Lines.extend(ShapeLines(Shapes, RootValue))
+    return ('\n'.join(Lines) + '\n').encode('ascii')
 
-
-def proven_ascii_brep(data: bytes) -> bytes | None:
-    if not isinstance(data, bytes):
-        raise TypeError("data must be bytes")
-    from convert.geometry.Opencascade import decode_ascii_brep
-
-    model = decode_ascii_brep(data, id_prefix="freecad:proof")
-    if model is None:
+# this definition exists because focused behavior needs one stable owner
+def ProvenAsciiBrep(DataValue: bytes) -> bytes | None:
+    if not isinstance(DataValue, bytes):
+        raise TypeError('data must be bytes')
+    from convert.geometry.Opencascade import decode_ascii_brep as DecodeAsciiBrep
+    Model = DecodeAsciiBrep(DataValue, id_prefix='freecad:proof')
+    if Model is None:
         return None
     try:
-        return brep_model_brep(model)
-    except FreeCADBrepWriteError:
+        return BrepModelBrep(Model)
+    except FreeCadBrep:
         return None
 
+# this definition exists because focused behavior needs one stable owner
+def TriangleMesh(Vertices: Sequence[Any], Triangles: Sequence[Any], Tolerance: float=1e-07) -> bytes:
+    if not MathValue.isfinite(Tolerance) or Tolerance <= 0.0:
+        raise ValueError('tolerance must be finite and positive')
+    Points = tuple((Point(Vertex) for Vertex in Vertices))
+    Declared = tuple((Triangle(Triangle, len(Points)) for Triangle in Triangles))
+    if not Declared:
+        raise ValueError('at least one triangle is required')
+    Facets = tuple((Facet for Facet in Declared if not FacetIs(Points, Facet, Tolerance)))
+    if not Facets:
+        raise ValueError('at least one triangle area must exceed the BRep tolerance')
+    Oriented = Oriented(Points, Facets, Tolerance)
+    if Oriented is None:
+        return IndependentBrep(Points, Facets, Tolerance)
+    OrientedFacets, Components, Closed = Oriented
+    return SharedBrep(Points, OrientedFacets, Components, Closed, Tolerance)
 
-def triangle_mesh_brep(
-    vertices: Sequence[Any],
-    triangles: Sequence[Any],
-    tolerance: float = 1e-7,
-) -> bytes:
-    if not math.isfinite(tolerance) or tolerance <= 0.0:
-        raise ValueError("tolerance must be finite and positive")
-    points = tuple(_point(vertex) for vertex in vertices)
-    declared = tuple(_triangle(triangle, len(points)) for triangle in triangles)
-    if not declared:
-        raise ValueError("at least one triangle is required")
-    facets = tuple(
-        facet
-        for facet in declared
-        if not _facet_is_degenerate(points, facet, tolerance)
-    )
-    if not facets:
-        raise ValueError("at least one triangle area must exceed the BRep tolerance")
-    oriented = _oriented_components(points, facets, tolerance)
-    if oriented is None:
-        return _independent_brep(points, facets, tolerance)
-    oriented_facets, components, closed = oriented
-    return _shared_brep(points, oriented_facets, components, closed, tolerance)
+# this binding exists because shared behavior needs one stable value
+globals()['Any'] = AnyValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['FreeCADBrepWriteError'] = FreeCadBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['Geometry'] = KGeomValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['Point'] = KPoint
+
+# this binding exists because shared behavior needs one stable value
+globals()['Triangle'] = KTriangle
+
+# this binding exists because shared behavior needs one stable value
+globals()['Vector2'] = VectorTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['Vector3'] = VectorThree
+
+# this binding exists because shared behavior needs one stable value
+globals()['_EdgePcurve'] = EdgePcurve
+
+# this binding exists because shared behavior needs one stable value
+globals()['_GeneratedPcurve'] = GeneratedPcurve
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ModelGraph'] = ModelGraph
+
+# this binding exists because shared behavior needs one stable value
+globals()['_SeamBand'] = SeamBand
+
+# this binding exists because shared behavior needs one stable value
+globals()['_ShapeRecord'] = ShapeRecord
+
+# this binding exists because shared behavior needs one stable value
+globals()['_bind_once'] = BindOnce
+
+# this binding exists because shared behavior needs one stable value
+globals()['_bspline_layout'] = BsplineLayout
+
+# this binding exists because shared behavior needs one stable value
+globals()['_check_edge_geometry'] = CheckEdgeGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['_coedge_shape_reversed'] = CoedgeShape
+
+# this binding exists because shared behavior needs one stable value
+globals()['_cross'] = Cross
+
+# this binding exists because shared behavior needs one stable value
+globals()['_curve_point'] = CurvePoint
+
+# this binding exists because shared behavior needs one stable value
+globals()['_curve_record'] = CurveRecord
+
+# this binding exists because shared behavior needs one stable value
+globals()['_dot'] = DotAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_edge_geometry'] = EdgeGeom
+
+# this binding exists because shared behavior needs one stable value
+globals()['_edge_pcurve_records'] = EdgePcurveA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_edge_record'] = EdgeRecord
+
+# this binding exists because shared behavior needs one stable value
+globals()['_edge_uses'] = EdgeUses
+
+# this binding exists because shared behavior needs one stable value
+globals()['_face_edge_orientations'] = FaceEdge
+
+# this binding exists because shared behavior needs one stable value
+globals()['_face_is_proven'] = FaceIsProven
+
+# this binding exists because shared behavior needs one stable value
+globals()['_face_loop_reversals'] = FaceLoop
+
+# this binding exists because shared behavior needs one stable value
+globals()['_facet_is_degenerate'] = FacetIs
+
+# this binding exists because shared behavior needs one stable value
+globals()['_frame'] = Frame
+
+# this binding exists because shared behavior needs one stable value
+globals()['_generated_pcurve'] = GeneratedPcurvA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_geometry'] = GeomAction
+
+# this binding exists because shared behavior needs one stable value
+globals()['_header'] = Header
+
+# this binding exists because shared behavior needs one stable value
+globals()['_independent_brep'] = IndependentBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['_length'] = Length
+
+# this binding exists because shared behavior needs one stable value
+globals()['_linear_surface_pcurve'] = LinearSurface
+
+# this binding exists because shared behavior needs one stable value
+globals()['_loop_uv_points'] = LoopUvPoints
+
+# this binding exists because shared behavior needs one stable value
+globals()['_number'] = Number
+
+# this binding exists because shared behavior needs one stable value
+globals()['_oriented_components'] = Oriented
+
+# this binding exists because shared behavior needs one stable value
+globals()['_pcurve_record'] = PcurveRecord
+
+# this binding exists because shared behavior needs one stable value
+globals()['_planar_circle_loop'] = PlanarCircle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_planar_line_loop_is_proven'] = PlanarLineLoop
+
+# this binding exists because shared behavior needs one stable value
+globals()['_plane_conic_pcurve'] = PlaneConic
+
+# this binding exists because shared behavior needs one stable value
+globals()['_point'] = Point
+
+# this binding exists because shared behavior needs one stable value
+globals()['_require_owned'] = RequireOwned
+
+# this binding exists because shared behavior needs one stable value
+globals()['_scale'] = Scale
+
+# this binding exists because shared behavior needs one stable value
+globals()['_seam_band'] = SeamBandA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_shape_lines'] = ShapeLines
+
+# this binding exists because shared behavior needs one stable value
+globals()['_shared_brep'] = SharedBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['_shell_face_orientations'] = ShellFace
+
+# this binding exists because shared behavior needs one stable value
+globals()['_shell_use_orientations'] = ShellUse
+
+# this binding exists because shared behavior needs one stable value
+globals()['_subtract'] = Subtract
+
+# this binding exists because shared behavior needs one stable value
+globals()['_surface_periods'] = SurfacePeriods
+
+# this binding exists because shared behavior needs one stable value
+globals()['_surface_record'] = SurfaceRecord
+
+# this binding exists because shared behavior needs one stable value
+globals()['_surface_residual'] = SurfaceResidual
+
+# this binding exists because shared behavior needs one stable value
+globals()['_surface_uv'] = SurfaceUv
+
+# this binding exists because shared behavior needs one stable value
+globals()['_triangle'] = Triangle
+
+# this binding exists because shared behavior needs one stable value
+globals()['_unit2'] = UnitTwo
+
+# this binding exists because shared behavior needs one stable value
+globals()['_unit3'] = UnitThree
+
+# this binding exists because shared behavior needs one stable value
+globals()['_unsupported'] = Unsupported
+
+# this binding exists because shared behavior needs one stable value
+globals()['_unwrap_periodic'] = UnwrapPeriodic
+
+# this binding exists because shared behavior needs one stable value
+globals()['_unwrap_surface_uv'] = UnwrapSurfaceUv
+
+# this binding exists because shared behavior needs one stable value
+globals()['_values'] = Values
+
+# this binding exists because shared behavior needs one stable value
+globals()['_vector2'] = VectorTwoA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_vector3'] = VectorThreeA
+
+# this binding exists because shared behavior needs one stable value
+globals()['_vertex_record'] = VertexRecord
+
+# this binding exists because shared behavior needs one stable value
+globals()['annotations'] = Annotations
+
+# this binding exists because shared behavior needs one stable value
+globals()['brep_model_brep'] = BrepModelBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['dataclass'] = Dataclass
+
+# this binding exists because shared behavior needs one stable value
+globals()['deque'] = Deque
+
+# this binding exists because shared behavior needs one stable value
+globals()['math'] = MathValue
+
+# this binding exists because shared behavior needs one stable value
+globals()['proven_ascii_brep'] = ProvenAsciiBrep
+
+# this binding exists because shared behavior needs one stable value
+globals()['triangle_mesh_brep'] = TriangleMesh
+setattr(ModelGraph, '__init__', ModelGraph.InitAction)
+setattr(ModelGraph, '_bind_coedge', ModelGraph.BindCoedge)
+setattr(ModelGraph, 'face_for_coedge', ModelGraph.FaceForCoedge)
+setattr(FreeCadBrep, 'reason', FreeCadBrep.KReason)

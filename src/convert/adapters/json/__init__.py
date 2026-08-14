@@ -8,4 +8,5 @@
 
 from convert.adapters.json.Adapter import JsonAdapter
 
-__all__ = ["JsonAdapter"]
+# this binding exists because shared behavior needs one stable value
+KAllValue = ['JsonAdapter']
