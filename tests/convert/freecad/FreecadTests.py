@@ -1867,17 +1867,10 @@ def TestAsmObjects() -> None:
     References = {NodeValue.get('file', '') for NodeValue in RootValue.findall('.//*[@file]') if NodeValue.tag != 'XLink' and NodeValue.get('file', '')}
     assert References <= Names
 
-# this definition exists because focused behavior needs one stable owner
-def TestAsmWritesA() -> None:
-    Adapter = FreeCadAdapter()
-    DocValue = Adapter.read(NativeAsm())
-    Output = IoStream.BytesIO()
-    Adapter.write(DocValue, Output)
-    with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
-        RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
+# this definition exists because assembly link and grounded-object fields form one XML contract
+def VerifyAsmLinkAndGrounded(RootValue: ET.Element) -> None:
     Types = {ItemValue.get('name', ''): ItemValue.get('type', '') for ItemValue in RootValue.findall('./Objects/Object')}
     Objects = {ItemValue.get('name', ''): ItemValue for ItemValue in RootValue.findall('./ObjectData/Object')}
-    AsmName = next((NameValue for NameValue, TypeId in Types.items() if TypeId == 'Assembly::AssemblyObject'))
     LinkName = next((NameValue for NameValue, TypeId in Types.items() if TypeId == 'App::Link'))
     LinkProperties = {ItemValue.get('name', ''): ItemValue for ItemValue in Objects[LinkName].findall('./Properties/Property')}
     assert int(LinkProperties['Placement'].get('status', '0')) & 4
@@ -1895,6 +1888,16 @@ def TestAsmWritesA() -> None:
     assert GroundedLink.get('value') == LinkName
     assert GroundedProxy is not None
     assert GroundedProxy.attrib == {'value': 'bnVsbA==', 'encoded': 'yes', 'json': 'yes'}
+
+
+# this definition exists because assembly joint references and grouping form one XML contract
+def VerifyAsmJointAndGroup(RootValue: ET.Element) -> None:
+    Types = {ItemValue.get('name', ''): ItemValue.get('type', '') for ItemValue in RootValue.findall('./Objects/Object')}
+    Objects = {ItemValue.get('name', ''): ItemValue for ItemValue in RootValue.findall('./ObjectData/Object')}
+    AsmName = next((NameValue for NameValue, TypeId in Types.items() if TypeId == 'Assembly::AssemblyObject'))
+    LinkName = next((NameValue for NameValue, TypeId in Types.items() if TypeId == 'App::Link'))
+    Grounded = [ItemValue for ItemValue in Objects.values() if ItemValue.find("./Properties/Property[@name='ObjectToGround']") is not None]
+    GroundedName = Grounded[0].get('name', '')
     Joints = [ItemValue for ItemValue in Objects.values() if ItemValue.find("./Properties/Property[@name='JointType']") is not None]
     assert len(Joints) == 1
     JointName = Joints[0].get('name', '')
@@ -1911,6 +1914,18 @@ def TestAsmWritesA() -> None:
     GroupLinks = Objects[JointGroups[0]].findall("./Properties/Property[@name='Group']/LinkList/Link")
     assert [ItemValue.get('value') for ItemValue in GroupLinks] == [GroundedName, JointName]
     assert not any((ItemValue.find("./Properties/Property[@name='MateGroupId']") is not None for ItemValue in Objects.values()))
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestAsmWritesA() -> None:
+    Adapter = FreeCadAdapter()
+    DocValue = Adapter.read(NativeAsm())
+    Output = IoStream.BytesIO()
+    Adapter.write(DocValue, Output)
+    with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
+        RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
+    VerifyAsmLinkAndGrounded(RootValue)
+    VerifyAsmJointAndGroup(RootValue)
 
 # this definition exists because focused behavior needs one stable owner
 def TestAsmWrites() -> None:

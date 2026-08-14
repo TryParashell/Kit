@@ -2900,9 +2900,7 @@ def PatchNativeMut(
         )
     OriginalModel, PatchedModel = PatchModelsMut(DocValue, Streams)
     Native = NativePartCaps(DocValue, OriginalModel, PatchedModel)
-    NativeBrep, BrepNative = PatchBrepMut(
-        DocValue, Streams, OriginalStreams, Native
-    )
+    NativeBrep, BrepNative = PatchBrepMut(DocValue, Streams, OriginalStreams, Native)
     Divergences = PatchAsmCapsMut(DocValue, Streams, BundleNames, BrepNative, Native)
     return PatchResult(
         DocValue, Streams, OriginalStreams, NativeBrep, Native, Divergences
