@@ -17,7 +17,7 @@ import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import pytest as Pytest
 from convert.adapters.freecad import read_freecad as ReadFreecad, write_freecad as WriteFreecad
-from interchange import CadSource, ComponentDocument as ComponentDoc, MateKind, Matrix4 as MatrixFour, Mesh as MeshValue, Vector3 as VectorThree
+from interchange import CadSource, ComponentDocument as ComponentDoc, MateKind, Matrix4 as MatrixFour, Mesh as MeshRecord, Vector3 as VectorThree
 from tests.interchange.assembly.AssemblyTests import assembly_document as InterchangeAsmDoc
 from tests.interchange.document.DocumentTests import document as DocValue
 
@@ -43,7 +43,7 @@ def MeshDoc():
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
-    MeshValue = MeshValue('mesh:part', 'Part geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0), VectorThree(1.0, 1.0, 0.0)), ((0, 1, 2), (2, 1, 3)))
+    MeshValue = MeshRecord('mesh:part', 'Part geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0), VectorThree(1.0, 1.0, 0.0)), ((0, 1, 2), (2, 1, 3)))
     Definitions = list(AsmValue.definitions)
     Definitions[2] = Replace(Definitions[2], document_id='', body_ids=(), mesh_ids=(MeshValue.id,))
     PartInstance = Replace(AsmValue.instances[1], owner_definition_id=AsmValue.root_definition_id, transform=AsmValue.instances[0].transform)
@@ -55,7 +55,7 @@ def NestedAsmDoc():
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
-    PartMesh = MeshValue('mesh:nested-part', 'Nested part geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),))
+    PartMesh = MeshRecord('mesh:nested-part', 'Nested part geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),))
     PartDoc = Replace(AsmValue.documents[0].document, meshes=(PartMesh,))
     PartLink = Replace(AsmValue.documents[0], document=PartDoc)
     NestedAsm = Replace(AsmValue, root_definition_id='definition:subassembly', definitions=tuple((ItemValue for ItemValue in AsmValue.definitions if ItemValue.id in {'definition:subassembly', 'definition:part'})), instances=(AsmValue.instances[1],), documents=(PartLink,), mate_entities=(), mates=(), mate_groups=())
@@ -68,7 +68,7 @@ def GeomFree(Source):
     AsmValue = Source.assembly
     if AsmValue is not None:
         AsmValue = Replace(AsmValue, definitions=tuple((Replace(ItemValue, body_ids=()) for ItemValue in AsmValue.definitions)), documents=tuple((Replace(ItemValue, document=GeomFree(ItemValue.document)) for ItemValue in AsmValue.documents)))
-    return Replace(Source, parameters=(), support_planes=(), sketches=(), selections=(), feature_timeline=(), bodies=(), meshes=Source.meshes or (MeshValue('mesh:geometry-free', 'Geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),)),), assembly=AsmValue)
+    return Replace(Source, parameters=(), support_planes=(), sketches=(), selections=(), feature_timeline=(), bodies=(), meshes=Source.meshes or (MeshRecord('mesh:geometry-free', 'Geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),)),), assembly=AsmValue)
 
 # this definition exists because focused behavior needs one stable owner
 def TestFcstdAsmHas(TmpPath) -> None:
@@ -354,7 +354,7 @@ globals()['ET'] = XmlTree
 globals()['Matrix4'] = MatrixFour
 
 # this binding exists because shared behavior needs one stable value
-globals()['Mesh'] = MeshValue
+globals()['Mesh'] = MeshRecord
 
 # this binding exists because shared behavior needs one stable value
 globals()['ORACLE'] = KOracle

@@ -21,7 +21,7 @@ from convert.adapters.base import CarrierReason, TransferMode
 from convert.adapters.freecad import FreeCADAdapter as FreeCadAdapter
 from convert.adapters.freecad.Brep import FreeCADBrepWriteError as FreeCadBrepWriteError, brep_model_brep as BrepModelBrep, proven_ascii_brep as ProvenAsciiBrep, triangle_mesh_brep as TriangleMeshBrep
 from convert.geometry.Opencascade import decode_ascii_brep as DecodeAsciiBrep, is_structurally_valid_ascii_brep as IsStructurallyValidAscii
-from interchange import BrepBody, BrepCoedge, BrepEdge, BrepFace, BrepFaceUse, BrepLoop, BrepModel, BrepPayload, BrepRegion, BrepShell, BrepShellUse, BrepVertex, BrepWire, CadDocument as CadDoc, CadSource, CircleCurve, CirclePcurve, Capability, ConeSurface, Configuration as Config, CylinderSurface, EllipseCurve, LineCurve, LinePcurve, Mesh as MeshValue, NativeCurve, NurbsCurve, NurbsPcurve, NurbsSurface, OffsetSurface, PayloadRole, Provenance, SphereSurface, TorusSurface, Transform, Vector2 as VectorTwo, Vector3 as VectorThree, frozen_mapping as FrozenMapping
+from interchange import BrepBody, BrepCoedge, BrepEdge, BrepFace, BrepFaceUse, BrepLoop, BrepModel, BrepPayload, BrepRegion, BrepShell, BrepShellUse, BrepVertex, BrepWire, CadDocument as CadDoc, CadSource, CircleCurve, CirclePcurve, Capability, ConeSurface, Configuration as Config, CylinderSurface, EllipseCurve, LineCurve, LinePcurve, Mesh as MeshRecord, NativeCurve, NurbsCurve, NurbsPcurve, NurbsSurface, OffsetSurface, PayloadRole, Provenance, SphereSurface, TorusSurface, Transform, Vector2 as VectorTwo, Vector3 as VectorThree, frozen_mapping as FrozenMapping
 from tests.interchange.brep.BrepTests import triangle_brep as TriangleBrep
 
 # this binding exists because shared behavior needs one stable value
@@ -217,7 +217,7 @@ def TestUnprovenTo() -> None:
     Model = TriangleBrep()
     Surface = Model.surfaces[0]
     Unproven = Replace(Model, surfaces=(CylinderSurface(Surface.id, VectorThree(0.0, 0.0, 0.0), VectorThree(0.0, 0.0, 1.0), VectorThree(1.0, 0.0, 0.0), 1.0),), bodies=(Replace(Model.bodies[0], design_body_id=''),))
-    MeshValue = MeshValue('mesh:fallback', 'Fallback', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),))
+    MeshValue = MeshRecord('mesh:fallback', 'Fallback', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),))
     DocValue = CadDoc(source=CadSource('json', 'unproven.json', ''), configurations=(Config('default', 'Default', active=True),), parameters=(), support_planes=(), sketches=(), selections=(), feature_timeline=(), bodies=(), meshes=(MeshValue,), brep=Unproven, capabilities=frozenset({Capability.BREP, Capability.TESSELLATION}))
     Output = IoStream.BytesIO()
     Result = FreeCadAdapter().write(DocValue, Output)
@@ -368,7 +368,7 @@ globals()['FreeCADAdapter'] = FreeCadAdapter
 globals()['FreeCADBrepWriteError'] = FreeCadBrepWriteError
 
 # this binding exists because shared behavior needs one stable value
-globals()['Mesh'] = MeshValue
+globals()['Mesh'] = MeshRecord
 
 # this binding exists because shared behavior needs one stable value
 globals()['ORACLE'] = KOracle

@@ -15,7 +15,7 @@ import xml.etree.ElementTree as XmlTree
 import zipfile as Zipfile
 import convert.adapters.freecad.Adapter as FreecadAdapter
 from convert.adapters.freecad import read_freecad as ReadFreecad, write_freecad as WriteFreecad
-from interchange import Capability, ComponentDocument as ComponentDoc, Mesh as MeshValue, Vector3 as VectorThree
+from interchange import Capability, ComponentDocument as ComponentDoc, Mesh as MeshRecord, Vector3 as VectorThree
 from tests.interchange.assembly.AssemblyTests import assembly_document as AsmDoc
 
 # this definition exists because focused behavior needs one stable owner
@@ -45,7 +45,7 @@ def MeshSource(Linked: bool):
     Source = AsmDoc()
     AsmValue = Source.assembly
     assert AsmValue is not None
-    MeshValue = MeshValue('mesh:part', 'Part geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),))
+    MeshValue = MeshRecord('mesh:part', 'Part geometry', (VectorThree(0.0, 0.0, 0.0), VectorThree(1.0, 0.0, 0.0), VectorThree(0.0, 1.0, 0.0)), ((0, 1, 2),))
     Definitions = tuple((Replace(Definition, document_id=Definition.document_id if Linked else '', body_ids=Definition.body_ids if Linked else (), mesh_ids=(MeshValue.id,), source_path='C:\\Toolbox\\Piston.SLDPRT', source_format_id='solidworks.sldprt') if Definition.id == 'definition:part' else Definition for Definition in AsmValue.definitions))
     Instances = (AsmValue.instances[0], Replace(AsmValue.instances[1], owner_definition_id=AsmValue.root_definition_id))
     MateEntities = (AsmValue.mate_entities[0], Replace(AsmValue.mate_entities[1], instance_path=(AsmValue.instances[1].id,)))
@@ -184,7 +184,7 @@ globals()['ComponentDocument'] = ComponentDoc
 globals()['ET'] = XmlTree
 
 # this binding exists because shared behavior needs one stable value
-globals()['Mesh'] = MeshValue
+globals()['Mesh'] = MeshRecord
 
 # this binding exists because shared behavior needs one stable value
 globals()['Path'] = FilePath

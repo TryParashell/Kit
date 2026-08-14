@@ -44,7 +44,7 @@ class Duplicate(JsonAdapter):
     locals()['info'] = InfoAction
 
 # this definition exists because focused behavior needs one stable owner
-class Replacement(JsonAdapter):
+class SwapAdapter(JsonAdapter):
 
     # this definition exists because focused behavior needs one stable owner
     @property
@@ -239,7 +239,7 @@ def TestFailedDoes() -> None:
 def TestReplacement() -> None:
     Registry = AdapterRegistry()
     Registry.register(FirstAdapter())
-    Replacement = Replacement()
+    Replacement = SwapAdapter()
     Registry.register(Replacement, replace=True)
     with Pytest.raises(AdapterNotFoundError):
         Registry.reader('second')
@@ -290,7 +290,7 @@ globals()['PartialBytesIO'] = PartialBytesIo
 globals()['PartialStringIO'] = PartialStringIo
 
 # this binding exists because shared behavior needs one stable value
-globals()['ReplacementAdapter'] = Replacement
+globals()['ReplacementAdapter'] = SwapAdapter
 
 # this binding exists because shared behavior needs one stable value
 globals()['StringIO'] = StringIo
