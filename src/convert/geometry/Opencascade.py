@@ -8,12 +8,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from itertools import chain
-from math import isclose, isfinite, sqrt
-import re
-from sys import float_info
-from typing import Any, Mapping
+from dataclasses import dataclass as Dataclass
+from itertools import chain as Chain
+from math import isclose as IsClose, isfinite as IsFinite, sqrt as SquareRoot
+import re as RegexLib
+from sys import float_info as FloatInfo
+from typing import Any as AnyValue, Mapping
 
 from interchange import (
     BrepBody,
@@ -33,7 +33,7 @@ from interchange import (
     CylinderSurface,
     LineCurve,
     PlaneSurface,
-    Vector3,
+    Vector3 as VectorThree,
 )
 
 _MAX_BYTES = 128 * 1024 * 1024
