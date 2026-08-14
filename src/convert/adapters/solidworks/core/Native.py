@@ -2138,53 +2138,8 @@ def BuildBossShell(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | N
     )
 
 
-# this definition exists because focused behavior needs one stable owner
-def BuildBossLinear(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
-    if len(AuthoredObjs) != 3:
-        return None
-    SketchObject, PadObject, PatternObject = AuthoredObjs
-    BoundsValue = WriteRectangle(SketchObject)
-    PadCodes = ExtrusionEdit(PadObject.payload)
-    if (
-        SketchObject.class_name != "moProfileFeature_c"
-        or SketchObject.object_id != 26
-        or SketchObject.name != "Sketch1"
-        or (len(SketchObject.payload) < 4)
-        or (Struct.unpack_from("<I", SketchObject.payload)[0] != 2)
-        or (BoundsValue is None)
-        or (PadObject.class_name != "moExtrusion_c")
-        or (PadObject.object_id != 32)
-        or (PadObject.name != "Boss-Extrude1")
-        or (PadCodes != (0, 0))
-        or (len(PadObject.dimensions) != 1)
-        or (PatternObject.class_name != "moLPattern_c")
-        or (PatternObject.object_id != 40)
-        or (PatternObject.name != "LPattern1")
-        or (PatternObject.kind != "LPattern")
-        or (len(PatternObject.dimensions) != 2)
-        or (
-            tuple((ItemData.name for ItemData in PatternObject.dimensions))
-            != ("D1", "D3")
-        )
-        or PatternObject.payload
-    ):
-        return None
-    PadDepth = PadObject.dimensions[0].value_mm
-    CountNumber = PatternObject.dimensions[0].value_mm
-    SpacingValue = PatternObject.dimensions[1].value_mm
-    ItemCount = int(CountNumber)
-    MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
-    if (
-        not MathValue.isfinite(PadDepth)
-        or PadDepth <= 0.0
-        or (not MathValue.isfinite(CountNumber))
-        or (CountNumber != ItemCount)
-        or (not 2 <= ItemCount <= 1000)
-        or (not MathValue.isfinite(SpacingValue))
-        or (SpacingValue <= 0.0)
-        or (SpacingValue > PadDepth)
-    ):
-        return None
+# focused continuation isolates the remaining native serialization phase
+def FinishLinear(PadDepth, SpacingValue, MinimumX, MinimumY, MaximumX, MaximumY, ItemCount, BoundsValue):
     PadDepthMetres = PadDepth / KMillimetres
     SpacingMetres = SpacingValue / KMillimetres
     MinimumXMetres = MinimumX / KMillimetres
@@ -2256,6 +2211,56 @@ def BuildBossLinear(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | 
         None,
         "linear_pattern",
     )
+
+
+# this definition exists because focused behavior needs one stable owner
+def BuildBossLinear(AuthoredObjs: tuple[_WriteObject, ...]) -> VendorResolved | None:
+    if len(AuthoredObjs) != 3:
+        return None
+    SketchObject, PadObject, PatternObject = AuthoredObjs
+    BoundsValue = WriteRectangle(SketchObject)
+    PadCodes = ExtrusionEdit(PadObject.payload)
+    if (
+        SketchObject.class_name != "moProfileFeature_c"
+        or SketchObject.object_id != 26
+        or SketchObject.name != "Sketch1"
+        or (len(SketchObject.payload) < 4)
+        or (Struct.unpack_from("<I", SketchObject.payload)[0] != 2)
+        or (BoundsValue is None)
+        or (PadObject.class_name != "moExtrusion_c")
+        or (PadObject.object_id != 32)
+        or (PadObject.name != "Boss-Extrude1")
+        or (PadCodes != (0, 0))
+        or (len(PadObject.dimensions) != 1)
+        or (PatternObject.class_name != "moLPattern_c")
+        or (PatternObject.object_id != 40)
+        or (PatternObject.name != "LPattern1")
+        or (PatternObject.kind != "LPattern")
+        or (len(PatternObject.dimensions) != 2)
+        or (
+            tuple((ItemData.name for ItemData in PatternObject.dimensions))
+            != ("D1", "D3")
+        )
+        or PatternObject.payload
+    ):
+        return None
+    PadDepth = PadObject.dimensions[0].value_mm
+    CountNumber = PatternObject.dimensions[0].value_mm
+    SpacingValue = PatternObject.dimensions[1].value_mm
+    ItemCount = int(CountNumber)
+    MinimumX, MinimumY, MaximumX, MaximumY = BoundsValue
+    if (
+        not MathValue.isfinite(PadDepth)
+        or PadDepth <= 0.0
+        or (not MathValue.isfinite(CountNumber))
+        or (CountNumber != ItemCount)
+        or (not 2 <= ItemCount <= 1000)
+        or (not MathValue.isfinite(SpacingValue))
+        or (SpacingValue <= 0.0)
+        or (SpacingValue > PadDepth)
+    ):
+        return None
+    return FinishLinear(PadDepth, SpacingValue, MinimumX, MinimumY, MaximumX, MaximumY, ItemCount, BoundsValue)
 
 
 # this definition exists because focused behavior needs one stable owner

@@ -736,16 +736,8 @@ def TestPartdesignB() -> None:
     assert SelectionData.path[0].subelement == 'N_Axis'
     assert DocData.bodies[0].final_feature_id == PatternData.id
 
-# this definition exists because focused behavior needs one stable owner
-def TestNeutralAre() -> None:
-    Source = NeutralDoc()
-    FirstParam = Param('p:a', 'A', ParamValue(2.0))
-    SecondParam = Param('p:b', 'B', ParamValue(4.0), expression=Expression('p:a * 2', ('p:a',), 'kit'))
-    Selection = SelectionInfo('selection:face', 'Face selection', (SelectionPathElem('face', Source.feature_timeline[0].id, 'Face1'),))
-    Fallback = FeatureStep('feature:fallback', 'Revolve fallback', FeatureKind.REVOLUTION, 1, input_feature_ids=(Source.feature_timeline[0].id,), selection_ids=(Selection.id,))
-    DocValue = Replace(Source, parameters=(FirstParam, SecondParam), selections=(Selection,), feature_timeline=(*Source.feature_timeline, Fallback), bodies=(Replace(Source.bodies[0], final_feature_id=Fallback.id, material_id='material:steel'),), brep=TriangleBrep())
-    Output = IoStream.BytesIO()
-    Result = FreeCadAdapter().write(DocValue, Output)
+# this definition exists because native transfer modes form one independent write contract
+def VerifyNeutralTransferModes(Result) -> None:
     Transfers = {ItemValue.capability: ItemValue.mode for ItemValue in Result.transfers}
     assert Transfers[Capability.SUPPORT_PLANES] is TransferMode.NATIVE
     assert Transfers[Capability.BODY_STRUCTURE] is TransferMode.NATIVE
@@ -755,7 +747,11 @@ def TestNeutralAre() -> None:
     assert Transfers[Capability.CONFIGURATIONS] is TransferMode.NATIVE
     assert Transfers[Capability.BREP] is TransferMode.NATIVE
     assert Transfers[Capability.PARAMETRIC_HISTORY] is TransferMode.MIXED
-    with Zipfile.ZipFile(IoStream.BytesIO(Output.getvalue())) as Archive:
+
+
+# this definition exists because neutral XML objects must retain every native relationship
+def VerifyNeutralArchive(PayloadData: bytes) -> None:
+    with Zipfile.ZipFile(IoStream.BytesIO(PayloadData)) as Archive:
         RootValue = XmlTree.fromstring(Archive.read('Document.xml'))
         Declarations = {ItemValue.get('name', ''): ItemValue.get('type', '') for ItemValue in RootValue.findall('./Objects/Object')}
         assert Declarations['XY'] == 'App::Plane'
@@ -781,12 +777,32 @@ def TestNeutralAre() -> None:
         ShapeFile = Shape.get('file', '')
         assert ShapeFile
         assert IsStructurallyValidAscii(Archive.read(ShapeFile))
-    assert FreeCadAdapter().read(Output.getvalue()) == DocValue
-    Native = FreecadNativeModule.read_native_fcstd(Output.getvalue())
+
+
+# this definition exists because neutral readback must preserve interchange and native projections
+def VerifyNeutralReadback(PayloadData: bytes, DocValue) -> None:
+    assert FreeCadAdapter().read(PayloadData) == DocValue
+    Native = FreecadNativeModule.read_native_fcstd(PayloadData)
     assert len(Native.support_planes) == 1
     assert Native.bodies[0].material_id == 'material:steel'
     assert Native.configurations[0].id == 'config:default'
     assert any((ItemValue.id == Selection.id for ItemValue in Native.selections))
+
+
+# this definition exists because focused behavior needs one stable owner
+def TestNeutralAre() -> None:
+    Source = NeutralDoc()
+    FirstParam = Param('p:a', 'A', ParamValue(2.0))
+    SecondParam = Param('p:b', 'B', ParamValue(4.0), expression=Expression('p:a * 2', ('p:a',), 'kit'))
+    Selection = SelectionInfo('selection:face', 'Face selection', (SelectionPathElem('face', Source.feature_timeline[0].id, 'Face1'),))
+    Fallback = FeatureStep('feature:fallback', 'Revolve fallback', FeatureKind.REVOLUTION, 1, input_feature_ids=(Source.feature_timeline[0].id,), selection_ids=(Selection.id,))
+    DocValue = Replace(Source, parameters=(FirstParam, SecondParam), selections=(Selection,), feature_timeline=(*Source.feature_timeline, Fallback), bodies=(Replace(Source.bodies[0], final_feature_id=Fallback.id, material_id='material:steel'),), brep=TriangleBrep())
+    Output = IoStream.BytesIO()
+    Result = FreeCadAdapter().write(DocValue, Output)
+    PayloadData = Output.getvalue()
+    VerifyNeutralTransferModes(Result)
+    VerifyNeutralArchive(PayloadData)
+    VerifyNeutralReadback(PayloadData, DocValue)
 
 # this definition exists because focused behavior needs one stable owner
 def TestNeutralAnd() -> None:
